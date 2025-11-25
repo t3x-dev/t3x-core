@@ -1,4 +1,4 @@
-name: "🐛 Bug Report"
+name: "🐛 Bug"
 description: "Report a reproducible bug in ContextFlow"
 title: "[Bug]: "
 labels:
@@ -9,7 +9,7 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: "Scope / Module"
+      label: "Module"
       description: "Where does this bug occur?"
       options:
         - core
@@ -19,6 +19,17 @@ body:
         - agents
         - infra
         - not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - blocker
+        - major
+        - minor
+        - cosmetic
     validations:
       required: true
   - type: dropdown
@@ -45,14 +56,7 @@ body:
     id: steps
     attributes:
       label: "Steps to Reproduce"
-      placeholder: "1) ...\n2) ...\n3) ..."
-    validations:
-      required: true
-  - type: textarea
-    id: expected_actual
-    attributes:
-      label: "Expected vs Actual"
-      placeholder: "Expected: ...\nActual: ..."
+      placeholder: "Text or image description"
     validations:
       required: true
   - type: textarea
@@ -62,17 +66,6 @@ body:
       description: "Paste logs, or attach a minimal .contextflow bundle / JSONL snippet"
     validations:
       required: false
-  - type: dropdown
-    id: severity
-    attributes:
-      label: "Severity"
-      options:
-        - blocker
-        - major
-        - minor
-        - cosmetic
-    validations:
-      required: true
   - type: checkboxes
     id: confirmations
     attributes:
