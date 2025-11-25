@@ -8,7 +8,7 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: "Scope / Module"
+      label: "Module"
       options:
         - core
         - cli
@@ -16,27 +16,6 @@ body:
         - schema
         - agents
         - infra
-    validations:
-      required: true
-  - type: textarea
-    id: motivation
-    attributes:
-      label: "Background"
-      placeholder: "Why do we need this now?"
-    validations:
-      required: true
-  - type: textarea
-    id: plan
-    attributes:
-      label: "Scope & Plan"
-      placeholder: "- In scope: ...\n- Out of scope: ..."
-    validations:
-      required: true
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: "Acceptance criteria / Deliverables"
-      placeholder: "- [ ] tests pass\n- [ ] doc updated ..."
     validations:
       required: true
   - type: dropdown
@@ -50,6 +29,20 @@ body:
         - P3
     validations:
       required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Improvements"
+      placeholder: "Why do we need this now?"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      placeholder: "- [ ] tests pass\n- [ ] doc updated ..."
+    validations:
+      required: false
   - type: checkboxes
     id: confirmations
     attributes:
