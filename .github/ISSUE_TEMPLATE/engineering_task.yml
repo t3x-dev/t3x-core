@@ -1,0 +1,60 @@
+name: "🛠 Engineering Task"
+description: "Refactor, tests, CI, perf, dependency upgrades, chores"
+title: "[Task]: "
+labels:
+  - "type:task"
+  - "status:triage"
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "Scope / Module"
+      options:
+        - core
+        - cli
+        - webui
+        - schema
+        - agents
+        - infra
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Background"
+      placeholder: "Why do we need this now?"
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: "Scope & Plan"
+      placeholder: "- In scope: ...\n- Out of scope: ..."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria / Deliverables"
+      placeholder: "- [ ] tests pass\n- [ ] doc updated ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmation"
+      options:
+        - label: "This task is well-scoped and actionable"
+    validations:
+      required: false

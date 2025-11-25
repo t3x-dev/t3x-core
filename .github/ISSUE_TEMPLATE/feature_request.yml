@@ -1,0 +1,68 @@
+name: "✨ Feature Request"
+description: "Propose a new capability or improvement"
+title: "[Feature]: "
+labels:
+  - "type:feature"
+  - "status:needs-design"
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "Scope / Module"
+      options:
+        - core
+        - cli
+        - webui
+        - schema
+        - agents
+        - infra
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: "What"
+      description: "Describe the feature"
+      placeholder: "Describe the feature in 2-3 sentences"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why now"
+      placeholder: "What problem does it solve? For whom?"
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: "Suggested approach"
+      placeholder: "If you have an idea, sketch it briefly"
+    validations:
+      required: false
+  - type: textarea
+    id: dod
+    attributes:
+      label: "Success criteria / Definition of Done"
+      placeholder: "- [ ] ...\n- [ ] ..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: "Potential impact"
+      options:
+        - label: "May touch schema/contract"
+        - label: "May affect deterministic core"
+        - label: "Needs CLI/WebUI changes"
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmation"
+      options:
+        - label: "I checked existing issues/roadmap"
+    validations:
+      required: false
