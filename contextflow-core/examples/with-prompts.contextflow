@@ -1,0 +1,86 @@
+{
+  "contextflow_version": "1.0",
+  "$schema": "https://contextflow.dev/schema/v1.0.json",
+  "metadata": {
+    "id": "a3f5b8c9-2d4e-4b5a-8c7f-1e9d6a3b4c5d",
+    "created": "2025-10-06T15:00:00Z",
+    "modified": "2025-10-06T16:00:00Z",
+    "name": "Code Review Assistant",
+    "description": "Context and prompts for code review tasks",
+    "tags": [
+      "code-review",
+      "quality"
+    ]
+  },
+  "context": {
+    "system": {
+      "role": "You are a senior engineer doing code reviews"
+    },
+    "knowledge": [
+      {
+        "id": "k001",
+        "type": "text/markdown",
+        "topic": "Code review checklist",
+        "content": "# Code Review Checklist\n\n1. Code correctness and logic\n2. Test coverage\n3. Error handling\n4. Performance considerations\n5. Security issues\n6. Documentation",
+        "tags": [
+          "code-review",
+          "checklist"
+        ],
+        "created": "2025-10-06T15:00:00Z"
+      }
+    ],
+    "preferences": {
+      "languages": [
+        "python",
+        "typescript"
+      ],
+      "style": "Focus on maintainability and security"
+    }
+  },
+  "prompts": [
+    {
+      "id": "prompt-001",
+      "version": 1,
+      "name": "Code Review Prompt",
+      "description": "General purpose code review",
+      "content": "You are reviewing code. Focus on:\n1. Correctness\n2. Security\n3. Performance\n4. Maintainability\n\nUser preferences: Python with type hints, PEP 8 style.",
+      "target": "claude",
+      "task": "code_review",
+      "created": "2025-10-06T15:00:00Z",
+      "based_on": [
+        "k001"
+      ],
+      "performance": {
+        "used_count": 5,
+        "avg_rating": 4.0,
+        "feedback": [
+          "Good coverage",
+          "Sometimes too verbose"
+        ]
+      }
+    },
+    {
+      "id": "prompt-001",
+      "version": 2,
+      "name": "Code Review Prompt v2",
+      "description": "More concise code review",
+      "content": "Review this code for correctness, security, and performance. Be concise.\n\nStyle: Python PEP 8, type hints required.",
+      "target": "claude",
+      "task": "code_review",
+      "created": "2025-10-06T16:00:00Z",
+      "based_on": [
+        "k001"
+      ],
+      "parent_version": 1,
+      "changes": "Made more concise based on user feedback",
+      "performance": {
+        "used_count": 10,
+        "avg_rating": 4.7,
+        "feedback": [
+          "Much better!",
+          "Perfect balance"
+        ]
+      }
+    }
+  ]
+}

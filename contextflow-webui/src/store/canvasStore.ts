@@ -1,0 +1,816 @@
+import { create } from 'zustand'
+import { applyEdgeChanges, applyNodeChanges } from 'reactflow'
+import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
+import type { BranchType, CanvasNodeData, NodeKind } from '../types/nodes'
+
+type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
+type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
+
+type CanvasState = {
+  nodes: Node<CanvasNodeData>[]
+  edges: Edge[]
+  hasMainCommit: boolean
+  latestMainCommitId?: string
+  addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
+  updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
+  convertDraftToCommit: (id: string) => void
+  addDraftFromConversation: (conversationId: string) => void
+  addConversationFromCommit: (commitId: string) => void
+  addDraftFromCommit: (commitId: string) => void
+  getDraftBranchMode: (draftId: string) => DraftBranchMode
+  canCreateDraftFromConversation: (conversationId: string) => boolean
+  onNodesChange: (changes: NodeChange[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
+  onConnect: (connection: Connection) => void
+  getCommitTone: (commitId: string) => CommitTone
+  resetToSingleConversation: () => void
+}
+
+const connectionMatrix: Record<NodeKind, NodeKind[]> = {
+  conversation: ['draft', 'conversation'],
+  draft: ['commit'],
+  commit: ['conversation', 'draft'],
+}
+
+const canConnect = (
+  source?: Node<CanvasNodeData>,
+  target?: Node<CanvasNodeData>,
+) => {
+  if (!source || !target) {
+    return false
+  }
+  if (source.id === target.id) {
+    return false
+  }
+
+  return connectionMatrix[source.data.kind]?.includes(target.data.kind) ?? false
+}
+
+let nodeCounter = 4
+let edgeCounter = 3
+
+const nextNodeId = () => `node-${nodeCounter++}`
+const nextEdgeId = () => `edge-${edgeCounter++}`
+const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 }
+const edgeType: Edge['type'] = 'default'
+const conversationDraftOffset = 300
+const commitQuickOffset = conversationDraftOffset + 40
+const reactFlowGridSize = 16
+const conversationNodeHeight = reactFlowGridSize * 8
+const draftNodeHeight = reactFlowGridSize * 10
+const commitNodeHeight = reactFlowGridSize * 10
+
+const alignToGrid = (value: number) => Math.round(value / reactFlowGridSize) * reactFlowGridSize
+const snapPosition = (position: { x: number; y: number }) => ({
+  x: alignToGrid(position.x),
+  y: alignToGrid(position.y),
+})
+
+const getNodeHeightForKind = (kind: NodeKind) => {
+  if (kind === 'draft') {
+    return draftNodeHeight
+  }
+  if (kind === 'commit') {
+    return commitNodeHeight
+  }
+  return conversationNodeHeight
+}
+
+const computeAttachedPosition = (
+  source: Node<CanvasNodeData>,
+  childKind: NodeKind,
+  offsetX: number,
+) => {
+  const sourceHeight = getNodeHeightForKind(source.data.kind)
+  const targetHeight = getNodeHeightForKind(childKind)
+  const y = source.position.y + (sourceHeight - targetHeight) / 2
+  return snapPosition({
+    x: source.position.x + offsetX,
+    y,
+  })
+}
+
+const getNumericId = (id: string) => {
+  const match = /(\d+)$/.exec(id)
+  return match ? Number.parseInt(match[1], 10) : 0
+}
+
+const buildIncomingMap = (edges: Edge[]) => {
+  const incoming = new Map<string, string[]>()
+  edges.forEach((edge) => {
+    const list = incoming.get(edge.target) ?? []
+    list.push(edge.source)
+    incoming.set(edge.target, list)
+  })
+  return incoming
+}
+
+const buildOutgoingMap = (edges: Edge[]) => {
+  const outgoing = new Map<string, string[]>()
+  edges.forEach((edge) => {
+    const list = outgoing.get(edge.source) ?? []
+    list.push(edge.target)
+    outgoing.set(edge.source, list)
+  })
+  return outgoing
+}
+
+const collectAncestors = (startId: string, incomingMap: Map<string, string[]>) => {
+  const visited = new Set<string>()
+  const stack = [startId]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (visited.has(current)) {
+      continue
+    }
+    visited.add(current)
+    const sources = incomingMap.get(current) ?? []
+    sources.forEach((sourceId) => {
+      if (!visited.has(sourceId)) {
+        stack.push(sourceId)
+      }
+    })
+  }
+  return visited
+}
+
+const getLatestCommitIdsByBranch = (nodes: Node<CanvasNodeData>[]) => {
+  const latest = new Map<string, Node<CanvasNodeData>>()
+  nodes.forEach((node) => {
+    if (node.data.kind !== 'commit') {
+      return
+    }
+    const key =
+      node.data.branchType === 'main'
+        ? 'main'
+        : `branch:${(node.data.branchName ?? 'branch').toLowerCase()}`
+    const current = latest.get(key)
+    if (!current || getNumericId(node.id) > getNumericId(current.id)) {
+      latest.set(key, node)
+    }
+  })
+  return Array.from(latest.values()).map((node) => node.id)
+}
+
+const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
+  const incomingMap = buildIncomingMap(edges)
+  const locked = new Set<string>()
+  const latestCommits = getLatestCommitIdsByBranch(nodes)
+  latestCommits.forEach((commitId) => {
+    const ancestors = collectAncestors(commitId, incomingMap)
+    ancestors.forEach((nodeId) => locked.add(nodeId))
+  })
+  return locked
+}
+
+const isDescendantOf = (
+  nodeId: string,
+  ancestorId: string,
+  incomingMap: Map<string, string[]>,
+  visited = new Set<string>(),
+): boolean => {
+  if (nodeId === ancestorId) {
+    return true
+  }
+  if (visited.has(nodeId)) {
+    return false
+  }
+  visited.add(nodeId)
+  const sources = incomingMap.get(nodeId) ?? []
+  return sources.some((sourceId) => {
+    if (sourceId === ancestorId) {
+      return true
+    }
+    return isDescendantOf(sourceId, ancestorId, incomingMap, visited)
+  })
+}
+
+const hasCommitDescendant = (
+  nodeId: string,
+  nodeMap: Map<string, Node<CanvasNodeData>>,
+  outgoingMap: Map<string, string[]>,
+  visited = new Set<string>(),
+): boolean => {
+  if (visited.has(nodeId)) {
+    return false
+  }
+  visited.add(nodeId)
+  const targets = outgoingMap.get(nodeId) ?? []
+  for (const targetId of targets) {
+    const targetNode = nodeMap.get(targetId)
+    if (!targetNode) {
+      continue
+    }
+    if (targetNode.data.kind === 'commit') {
+      return true
+    }
+    if (hasCommitDescendant(targetId, nodeMap, outgoingMap, visited)) {
+      return true
+    }
+  }
+  return false
+}
+
+const resolveLatestMainCommitId = (
+  nodes: Node<CanvasNodeData>[],
+  preferredId?: string,
+): string | undefined => {
+  if (
+    preferredId &&
+    nodes.some(
+      (node) =>
+        node.id === preferredId && node.data.kind === 'commit' && node.data.branchType === 'main',
+    )
+  ) {
+    return preferredId
+  }
+  const mainCommits = nodes.filter(
+    (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
+  )
+  if (mainCommits.length === 0) {
+    return undefined
+  }
+  return mainCommits.reduce((latest, node) =>
+    getNumericId(node.id) > getNumericId(latest.id) ? node : latest,
+  ).id
+}
+
+const buildSeedConversationNode = (): Node<CanvasNodeData> => {
+  const id = nextNodeId()
+  return {
+    id,
+    type: 'conversation',
+    position: snapPosition({ x: 120, y: 120 }),
+    data: {
+      entryId: `CONV-${getNumericId(id)}`,
+      title: 'Conversation: new workflow seed',
+      summary: 'Start capturing context for this workflow.',
+      status: 'raw-input',
+      timestamp: 'just now',
+      tags: ['conversation'],
+      kind: 'conversation',
+    },
+  }
+}
+
+const computeCommitTone = (
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+  latestMainCommitId?: string,
+  commitId?: string,
+): CommitTone => {
+  if (!commitId) {
+    return 'branch-history'
+  }
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const commitNode = nodeMap.get(commitId)
+  if (!commitNode || commitNode.data.kind !== 'commit') {
+    return 'branch-history'
+  }
+  const outgoingMap = buildOutgoingMap(edges)
+  const descendantCache = new Map<string, boolean>()
+  const ensureHasDescendant = (nodeId: string) => {
+    if (descendantCache.has(nodeId)) {
+      return descendantCache.get(nodeId)!
+    }
+    const result = hasCommitDescendant(nodeId, nodeMap, outgoingMap)
+    descendantCache.set(nodeId, result)
+    return result
+  }
+  if (commitNode.data.branchType === 'main') {
+    const latest = resolveLatestMainCommitId(nodes, latestMainCommitId)
+    return commitId === latest ? 'main-latest' : 'main-history'
+  }
+  if (commitNode.data.branchType === 'branch') {
+    const branchKey = commitNode.data.branchName?.toLowerCase() ?? 'branch'
+    const branchCommits = nodes.filter(
+      (node) =>
+        node.data.kind === 'commit' &&
+        node.data.branchType === 'branch' &&
+        (node.data.branchName?.toLowerCase() ?? 'branch') === branchKey,
+    )
+    const activeCandidates = branchCommits.filter((node) => !ensureHasDescendant(node.id))
+    const activeCommit =
+      activeCandidates.length > 0
+        ? activeCandidates.reduce((latest, node) =>
+            getNumericId(node.id) > getNumericId(latest.id) ? node : latest,
+          )
+        : undefined
+    if (!activeCommit) {
+      return 'branch-history'
+    }
+    return activeCommit.id === commitId ? 'branch-latest' : 'branch-history'
+  }
+  return 'branch-history'
+}
+
+const hasPrimaryAncestor = (
+  nodeId: string,
+  nodeMap: Map<string, Node<CanvasNodeData>>,
+  incomingMap: Map<string, string[]>,
+  visited = new Set<string>(),
+): boolean => {
+  if (visited.has(nodeId)) {
+    return false
+  }
+  visited.add(nodeId)
+  const node = nodeMap.get(nodeId)
+  if (!node) {
+    return false
+  }
+  if (node.data.kind === 'commit') {
+    return node.data.branchType === 'main' || node.data.branchType === 'branch'
+  }
+  const sources = incomingMap.get(nodeId)
+  if (!sources || sources.length === 0) {
+    return false
+  }
+  return sources.some((sourceId) => hasPrimaryAncestor(sourceId, nodeMap, incomingMap, visited))
+}
+
+const determineDraftBranchMode = (state: CanvasState, draftId: string): DraftBranchMode => {
+  if (!state.hasMainCommit) {
+    return 'force-main'
+  }
+  const nodeMap = new Map(state.nodes.map((node) => [node.id, node]))
+  const incomingMap = buildIncomingMap(state.edges)
+  const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
+  const attachedToLatestMain =
+    latestMainId !== undefined && isDescendantOf(draftId, latestMainId, incomingMap)
+  if (attachedToLatestMain) {
+    return 'select'
+  }
+  return hasPrimaryAncestor(draftId, nodeMap, incomingMap) ? 'branch-only' : 'blocked'
+}
+
+const canConversationSeedDraft = (
+  conversationId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+  hasMainCommit: boolean,
+): boolean => {
+  if (!hasMainCommit) {
+    return true
+  }
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const incomingMap = buildIncomingMap(edges)
+  return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
+}
+
+const canAttachConversationToDraft = (
+  conversationId: string,
+  draftId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+  hasMainCommit: boolean,
+): boolean => {
+  if (!hasMainCommit) {
+    return true
+  }
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const incomingMap = buildIncomingMap(edges)
+  if (hasPrimaryAncestor(draftId, nodeMap, incomingMap)) {
+    return true
+  }
+  return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
+}
+
+const seedNodes: Node<CanvasNodeData>[] = [
+  {
+    id: 'node-1',
+    type: 'conversation',
+    position: snapPosition({ x: 120, y: 120 }),
+    data: {
+      entryId: 'CONV-18',
+      title: 'Conversation: food-heavy reiteration',
+      summary: '“I want neon, late-night ramen alleys, and buzzing markets.”',
+      status: 'ready for extraction',
+      timestamp: '14m ago',
+      tags: ['conversation', 'preference'],
+      kind: 'conversation',
+    },
+  },
+  {
+    id: 'node-2',
+    type: 'draft',
+    position: snapPosition({ x: 360, y: 240 }),
+    data: {
+      entryId: 'DRAFT-42',
+      title: 'Draft: Osaka nightlife shard',
+      summary: 'Includes Dotonbori, Kuromon, and Namba Yasaka blend.',
+      status: 'needs validator',
+      timestamp: '10m ago',
+      tags: ['draft', 'nightlife'],
+      kind: 'draft',
+      bridgePrompt: '/plan',
+      pendingBranch: 'branch',
+      pendingBranchName: '',
+    },
+  },
+  {
+    id: 'node-3',
+    type: 'commit',
+    position: snapPosition({ x: 620, y: 80 }),
+    data: {
+      entryId: 'COMMIT-27',
+      title: 'Commit: Osaka weekend v2',
+      summary: 'Validator-signed snapshot with 6 evidence links.',
+      status: 'signed · ready to diff',
+      timestamp: '2h ago',
+      tags: ['commit', 'stable'],
+      kind: 'commit',
+      branchType: 'main',
+    },
+  },
+]
+
+const seedEdges: Edge[] = [
+  {
+    id: 'edge-1',
+    source: 'node-1',
+    target: 'node-2',
+    type: edgeType,
+    animated: false,
+    style: edgeStyle,
+  },
+  {
+    id: 'edge-2',
+    source: 'node-2',
+    target: 'node-3',
+    type: edgeType,
+    animated: false,
+    style: edgeStyle,
+  },
+]
+
+const initialLatestMainCommitId = resolveLatestMainCommitId(seedNodes)
+
+export const useCanvasStore = create<CanvasState>((set, get) => ({
+  nodes: seedNodes,
+  edges: seedEdges,
+  hasMainCommit: seedNodes.some(
+    (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
+  ),
+  latestMainCommitId: initialLatestMainCommitId,
+
+  addNode: (kind, position) => {
+    const total = get().nodes.length
+    const basePosition =
+      position ?? {
+        x: 140 + (total % 3) * 220,
+        y: 100 + Math.floor(total / 3) * 180,
+      }
+    const snappedPosition = snapPosition(basePosition)
+    const newNode: Node<CanvasNodeData> = {
+      id: nextNodeId(),
+      type: kind,
+      position: snappedPosition,
+      data: {
+        entryId: kind.toUpperCase(),
+        title:
+          kind === 'conversation'
+            ? 'New Conversation'
+            : kind === 'draft'
+              ? 'New Draft'
+              : 'New Commit',
+        summary:
+          kind === 'conversation'
+            ? 'Capture the latest exchange before structuring.'
+            : kind === 'draft'
+              ? 'Blend conversations and commits, then validate.'
+              : 'Snapshot that passed validator.',
+        status:
+          kind === 'conversation'
+            ? 'raw-input'
+            : kind === 'draft'
+              ? 'working'
+              : 'stable',
+        timestamp: 'just now',
+        tags: [kind],
+        kind,
+        ...(kind === 'draft'
+          ? {
+              bridgePrompt: '/plan',
+              pendingBranch: 'branch' as const,
+              pendingBranchName: '',
+            }
+          : {}),
+        ...(kind === 'commit'
+          ? {
+              branchType: 'branch' as const,
+            }
+          : {}),
+      },
+    }
+
+    set((state) => ({
+      nodes: [...state.nodes, newNode],
+    }))
+  },
+
+  updateNode: (id, patch) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === id ? { ...node, data: { ...node.data, ...patch } } : node,
+      ),
+    })),
+
+  convertDraftToCommit: (id) =>
+    set((state) => {
+      const draftNode = state.nodes.find((node) => node.id === id && node.data.kind === 'draft')
+      if (!draftNode) {
+        return {}
+      }
+
+      const branchMode = determineDraftBranchMode(state, id)
+      if (branchMode === 'blocked') {
+        return {}
+      }
+      let branchType: BranchType = 'branch'
+
+      if (branchMode === 'force-main') {
+        branchType = 'main'
+      } else if (branchMode === 'select') {
+        branchType = draftNode.data.pendingBranch ?? 'branch'
+      }
+
+      const branchName =
+        branchType === 'branch'
+          ? draftNode.data.pendingBranchName?.trim() || `branch-${getNumericId(id)}`
+          : undefined
+
+      const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
+
+      const updatedNodes = state.nodes.map<Node<CanvasNodeData>>((node) => {
+        if (node.id !== id || node.data.kind !== 'draft') {
+          return node
+        }
+
+        return {
+          ...node,
+          type: 'commit',
+          data: {
+            ...node.data,
+            kind: 'commit',
+            status: 'Committed · awaiting diff',
+            tags: Array.from(new Set([...node.data.tags, 'commit'])),
+            branchType,
+            branchName,
+            pendingBranch: undefined,
+            pendingBranchName: undefined,
+          },
+        }
+      })
+
+      return {
+        nodes: updatedNodes,
+        hasMainCommit: state.hasMainCommit || branchType === 'main',
+        latestMainCommitId: branchType === 'main' ? id : latestMainId,
+      }
+    }),
+
+  addDraftFromConversation: (conversationId) =>
+    set((state) => {
+      const source = state.nodes.find((node) => node.id === conversationId)
+      if (!source || source.data.kind !== 'conversation') {
+        return {}
+      }
+      const canSeed = canConversationSeedDraft(
+        conversationId,
+        state.nodes,
+        state.edges,
+        state.hasMainCommit,
+      )
+      if (!canSeed) {
+        return {}
+      }
+
+      const newNode: Node<CanvasNodeData> = {
+        id: nextNodeId(),
+        type: 'draft',
+        position: computeAttachedPosition(source, 'draft', conversationDraftOffset),
+        data: {
+          entryId: `DRAFT-${nodeCounter}`,
+          title: `Draft from ${source.data.entryId}`,
+          summary: 'Refine this draft before validation.',
+          status: 'in progress',
+          timestamp: 'just now',
+          tags: ['draft'],
+          kind: 'draft',
+          bridgePrompt: '/plan',
+          pendingBranch: 'branch',
+          pendingBranchName: '',
+        },
+      }
+
+      const newEdge: Edge = {
+        id: nextEdgeId(),
+        source: source.id,
+        target: newNode.id,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+
+      return {
+        nodes: [...state.nodes, newNode],
+        edges: [...state.edges, newEdge],
+      }
+    }),
+
+  addConversationFromCommit: (commitId) =>
+    set((state) => {
+      const source = state.nodes.find(
+        (node) => node.id === commitId && node.data.kind === 'commit',
+      )
+      if (!source) {
+        return {}
+      }
+      const newNode: Node<CanvasNodeData> = {
+        id: nextNodeId(),
+        type: 'conversation',
+        position: computeAttachedPosition(source, 'conversation', commitQuickOffset),
+        data: {
+          entryId: `CONV-${nodeCounter}`,
+          title: `Conversation from ${source.data.entryId}`,
+          summary: 'Capture the next exchange after this commit.',
+          status: 'raw-input',
+          timestamp: 'just now',
+          tags: ['conversation'],
+          kind: 'conversation',
+        },
+      }
+      const newEdge: Edge = {
+        id: nextEdgeId(),
+        source: source.id,
+        target: newNode.id,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+      return {
+        nodes: [...state.nodes, newNode],
+        edges: [...state.edges, newEdge],
+      }
+    }),
+
+  addDraftFromCommit: (commitId) =>
+    set((state) => {
+      const source = state.nodes.find(
+        (node) => node.id === commitId && node.data.kind === 'commit',
+      )
+      if (!source) {
+        return {}
+      }
+      const newNode: Node<CanvasNodeData> = {
+        id: nextNodeId(),
+        type: 'draft',
+        position: computeAttachedPosition(source, 'draft', commitQuickOffset),
+        data: {
+          entryId: `DRAFT-${nodeCounter}`,
+          title: `Draft from ${source.data.entryId}`,
+          summary: 'Blend this commit into the next deliverable.',
+          status: 'in progress',
+          timestamp: 'just now',
+          tags: ['draft'],
+          kind: 'draft',
+          bridgePrompt: '/plan',
+          pendingBranch: 'branch',
+          pendingBranchName: '',
+        },
+      }
+      const newEdge: Edge = {
+        id: nextEdgeId(),
+        source: source.id,
+        target: newNode.id,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+      return {
+        nodes: [...state.nodes, newNode],
+        edges: [...state.edges, newEdge],
+      }
+    }),
+
+  getDraftBranchMode: (draftId) => determineDraftBranchMode(get(), draftId),
+  canCreateDraftFromConversation: (conversationId) => {
+    const state = get()
+    const node = state.nodes.find(
+      (candidate) => candidate.id === conversationId && candidate.data.kind === 'conversation',
+    )
+    if (!node) {
+      return false
+    }
+    return canConversationSeedDraft(conversationId, state.nodes, state.edges, state.hasMainCommit)
+  },
+
+  onNodesChange: (changes) =>
+    set((state) => {
+      if (changes.length === 0) {
+        return {}
+      }
+      const lockedNodes = getLockedNodeIds(state.nodes, state.edges)
+      const filteredChanges = changes.filter((change) => {
+        if (change.type !== 'remove') {
+          return true
+        }
+        return !lockedNodes.has(change.id)
+      })
+      if (filteredChanges.length === 0) {
+        return {}
+      }
+      return {
+        nodes: applyNodeChanges(filteredChanges, state.nodes).map((node) => ({
+          ...node,
+          position: snapPosition(node.position),
+        })),
+      }
+    }),
+
+  onEdgesChange: (changes) =>
+    set((state) => {
+      if (changes.length === 0) {
+        return {}
+      }
+      const lockedNodes = getLockedNodeIds(state.nodes, state.edges)
+      const filtered = changes.filter((change) => {
+        if (change.type !== 'remove') {
+          return true
+        }
+        const edge = state.edges.find((candidate) => candidate.id === change.id)
+        if (!edge) {
+          return false
+        }
+        const sourceLocked = lockedNodes.has(edge.source)
+        const targetLocked = lockedNodes.has(edge.target)
+        if (sourceLocked && targetLocked) {
+          return false
+        }
+        return true
+      })
+      if (filtered.length === 0) {
+        return {}
+      }
+      return {
+        edges: applyEdgeChanges(filtered, state.edges),
+      }
+    }),
+
+  onConnect: (connection) => {
+    const { nodes, edges, hasMainCommit } = get()
+    const source = nodes.find((node) => node.id === connection.source)
+    const target = nodes.find((node) => node.id === connection.target)
+
+    if (!canConnect(source, target)) {
+      return
+    }
+    if (
+      source?.data.kind === 'conversation' &&
+      target?.data.kind === 'draft' &&
+      !canAttachConversationToDraft(
+        source.id,
+        target.id,
+        nodes,
+        edges,
+        hasMainCommit,
+      )
+    ) {
+      return
+    }
+
+    const exists = edges.some(
+      (edge) => edge.source === connection.source && edge.target === connection.target,
+    )
+
+    if (exists) {
+      return
+    }
+
+    const newEdge: Edge = {
+      id: nextEdgeId(),
+      source: connection.source!,
+      target: connection.target!,
+      type: edgeType,
+      animated: false,
+      style: edgeStyle,
+    }
+
+    set({ edges: [...edges, newEdge] })
+  },
+  getCommitTone: (commitId) => {
+    const state = get()
+    return computeCommitTone(state.nodes, state.edges, state.latestMainCommitId, commitId)
+  },
+  resetToSingleConversation: () => {
+    nodeCounter = 1
+    edgeCounter = 1
+    const starter = buildSeedConversationNode()
+    set({
+      nodes: [starter],
+      edges: [],
+      hasMainCommit: false,
+      latestMainCommitId: undefined,
+    })
+  },
+}))

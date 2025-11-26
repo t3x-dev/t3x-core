@@ -1,0 +1,42 @@
+# Evidence Scoring Weights Configuration (v2.0)
+#
+# These weights control the hybrid scoring formula:
+# score = w.cos * cosine + w.bm25 * bm25 + w.rec * recency + w.role * role + w.typ * type
+#
+# Constraints:
+# - All weights must sum to 1.0
+# - Individual weights must be in range [0.0, 1.0]
+# - Deterministic: same weights → same scores
+
+weights:
+  # Semantic similarity (embedding cosine distance)
+  # Higher = prioritize semantic relevance
+  cosine: 0.45
+
+  # Keyword relevance (BM25 score)
+  # Higher = prioritize exact keyword matches
+  bm25: 0.25
+
+  # Temporal recency (exponential decay from timestamp)
+  # Higher = prioritize recent messages
+  recency: 0.10
+
+  # Role weighting (user vs assistant vs system)
+  # Higher = role matters more in scoring
+  role: 0.10
+
+  # Type matching (question/command/statement/acknowledgment)
+  # Higher = message type matters more
+  type: 0.10
+
+# Role-specific weights (applied when role component is active)
+# Used to boost/penalize evidence from specific roles
+role_mapping:
+  user: 1.2        # Boost user messages (usually contain preferences/requirements)
+  assistant: 1.0   # Neutral for assistant
+  system: 0.8      # Slightly penalize system messages (meta)
+
+# Notes:
+# - Default weights optimized for Evidence@1 > 80%
+# - Validated on 19-sample gold dataset
+# - For domain-specific tuning, see configs/weights.custom.yaml.example

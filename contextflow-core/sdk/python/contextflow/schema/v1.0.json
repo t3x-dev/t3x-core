@@ -1,0 +1,694 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextflow.dev/schema/v1.0.json",
+  "title": "ContextFlow Specification",
+  "description": "ContextFlow v1.0 - Open standard for portable AI context. Core philosophy: Simple format, smart tools. The format captures natural context (conversations, notes, preferences) while tools add intelligence (extraction, transformation, analytics).",
+  "type": "object",
+  "required": ["contextflow_version", "metadata"],
+  "properties": {
+    "contextflow_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "ContextFlow specification version"
+    },
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["created"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for this context"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when context was created"
+        },
+        "modified": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when context was last modified"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name for this context"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of this context's purpose"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Simple tags for organizing contexts (e.g., ['python', 'work', 'learning'])"
+        },
+        "version": {
+          "type": "string",
+          "description": "User-defined version for this context"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Current branch name tracked by ContextFlow tools (e.g., main, feature/add-merge)."
+        },
+        "signature": {
+          "type": "object",
+          "description": "Latest signature verification metadata recorded by tooling.",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["verified", "pending", "missing", "invalid", "skipped"],
+              "description": "Verification result for the most recent signature check."
+            },
+            "algorithm": {
+              "type": "string",
+              "description": "Signature algorithm that was used (e.g., ed25519)."
+            },
+            "verified_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Timestamp when the signature status was last confirmed."
+            },
+            "signer": {
+              "type": "string",
+              "description": "Identifier for the key or persona that produced the signature."
+            },
+            "commit": {
+              "type": "string",
+              "description": "Commit hash or identifier associated with the verification event."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Additional tooling notes about the signature verification."
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "conversations": {
+      "type": "array",
+      "description": "Conversation history - the core natural context. Import from ChatGPT, Claude, or create manually.",
+      "items": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique conversation identifier"
+          },
+          "title": {
+            "type": "string",
+            "description": "Conversation title"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When conversation started"
+          },
+          "messages": {
+            "type": "array",
+            "description": "The conversation messages in order",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["system", "user", "assistant"],
+                  "description": "Message sender role"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Message content"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When message was sent"
+                },
+                "api_call": {
+                  "type": "object",
+                  "description": "API metadata captured when using user's own token (optional, added by tools)",
+                  "properties": {
+                    "provider": {
+                      "type": "string",
+                      "description": "API provider (openai, anthropic, google, etc.)"
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "Exact model used (e.g., gpt-4-turbo-2024-04-09)"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "API request ID for debugging"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "description": "Model parameters used",
+                      "properties": {
+                        "temperature": {"type": "number"},
+                        "max_tokens": {"type": "integer"},
+                        "top_p": {"type": "number"},
+                        "frequency_penalty": {"type": "number"},
+                        "presence_penalty": {"type": "number"}
+                      },
+                      "additionalProperties": true
+                    },
+                    "usage": {
+                      "type": "object",
+                      "description": "Token usage statistics",
+                      "properties": {
+                        "prompt_tokens": {"type": "integer"},
+                        "completion_tokens": {"type": "integer"},
+                        "total_tokens": {"type": "integer"}
+                      }
+                    },
+                    "cost": {
+                      "type": "object",
+                      "description": "Cost breakdown (optional, calculated by tools)",
+                      "properties": {
+                        "input_cost": {"type": "number"},
+                        "output_cost": {"type": "number"},
+                        "total_cost": {"type": "number"},
+                        "currency": {"type": "string", "default": "USD"}
+                      }
+                    },
+                    "latency_ms": {
+                      "type": "integer",
+                      "description": "Response latency in milliseconds"
+                    },
+                    "finish_reason": {
+                      "type": "string",
+                      "description": "Why the response ended (stop, length, etc.)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "source": {
+            "type": "string",
+            "description": "Source platform (chatgpt, claude, gemini, manual, etc.)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Conversation-specific tags"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "description": "User-written notes and knowledge (optional). Use this for things you want to remember.",
+      "items": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique note identifier"
+          },
+          "title": {
+            "type": "string",
+            "description": "Note title"
+          },
+          "content": {
+            "type": "string",
+            "description": "Note content (supports Markdown)"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["text/plain", "text/markdown", "text/html"],
+            "default": "text/markdown",
+            "description": "Content format"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When note was created"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When note was last modified"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Note tags"
+          }
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "description": "User preferences and settings (optional). Define how you like to work.",
+      "properties": {
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Programming languages or natural languages preferred"
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Frameworks or libraries preferred"
+        },
+        "style": {
+          "type": "string",
+          "description": "Coding style or communication style preferences"
+        },
+        "tone": {
+          "type": "string",
+          "description": "Preferred communication tone (formal, casual, technical, etc.)"
+        }
+      },
+      "additionalProperties": true
+    },
+    "files": {
+      "type": "array",
+      "description": "Referenced files and documents (optional). Attach relevant files to your context.",
+      "items": {
+        "type": "object",
+        "required": ["path", "type"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique file identifier"
+          },
+          "path": {
+            "type": "string",
+            "description": "File path or URL"
+          },
+          "name": {
+            "type": "string",
+            "description": "File name"
+          },
+          "type": {
+            "type": "string",
+            "description": "File MIME type (text/plain, application/pdf, image/png, etc.)"
+          },
+          "content": {
+            "type": "string",
+            "description": "File content (for text files) or base64 encoded (for binary)"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this file contains or why it's relevant"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "prompts": {
+      "type": "array",
+      "description": "Generated prompts (optional, advanced use). Tools can generate task-specific prompts from your context.",
+      "items": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique prompt identifier"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prompt version number"
+          },
+          "name": {
+            "type": "string",
+            "description": "Prompt name"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this prompt does"
+          },
+          "content": {
+            "type": "string",
+            "description": "The prompt content"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target AI platform (claude, openai, gemini, generic)"
+          },
+          "task": {
+            "type": "string",
+            "description": "Task type (code_review, debug, docs, chat, etc.)"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this version was created"
+          },
+          "based_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs of notes/knowledge this prompt references"
+          },
+          "performance": {
+            "type": "object",
+            "description": "Usage metrics (optional, tracked by tools)",
+            "properties": {
+              "used_count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many times used"
+              },
+              "avg_rating": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5,
+                "description": "Average user rating"
+              },
+              "feedback": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "User feedback"
+              }
+            }
+          },
+          "parent_version": {
+            "type": "integer",
+            "description": "Parent version number if this is an iteration"
+          },
+          "changes": {
+            "type": "string",
+            "description": "Description of changes from parent version"
+          }
+        }
+      }
+    },
+    "_tooling": {
+      "type": "object",
+      "description": "Tool-specific metadata (optional, for advanced workflows). Tools use this for lineage tracking, transformations, etc. Normal users can ignore this.",
+      "properties": {
+        "context_type": {
+          "type": "string",
+          "enum": ["source", "derived", "materialized", "snapshot"],
+          "description": "Type of context file for transformation pipelines (used by CLI tools)"
+        },
+        "lineage": {
+          "type": "object",
+          "description": "Dependency tracking for transformations",
+          "properties": {
+            "derived_from": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "file_id": {"type": "string"},
+                  "context_type": {"type": "string"},
+                  "fields_used": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  }
+                }
+              }
+            },
+            "transformation": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string"},
+                "tool": {"type": "string"},
+                "timestamp": {"type": "string", "format": "date-time"},
+                "provider": {"type": "string"},
+                "config": {"type": "object"}
+              }
+            },
+            "current_branch": {
+              "type": "string",
+              "description": "Branch currently checked out when the artifact was generated."
+            },
+            "branches": {
+              "type": "object",
+              "description": "Branch heads tracked locally by the tooling.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "head": {
+                    "type": "string",
+                    "description": "Latest commit hash recorded for this branch."
+                  },
+                  "parent": {
+                    "type": "string",
+                    "description": "Optional parent branch for visualization."
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the branch pointer was created."
+                  },
+                  "updated_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the branch pointer was last updated."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Human-readable description for the branch."
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "merges": {
+              "type": "array",
+              "description": "Recorded merge operations with provenance.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Source branch name."
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Target branch name."
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": ["fast-forward", "squash", "three-way", "manual", "rebase"],
+                    "description": "Merge strategy that was attempted."
+                  },
+                  "commit": {
+                    "type": "string",
+                    "description": "Resulting merge commit hash, if completed."
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the merge was recorded."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["pending", "completed", "failed"],
+                    "description": "Outcome of the merge operation."
+                  },
+                  "conflicts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of conflicting aspect identifiers or files."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional context about the merge decision."
+                  }
+                },
+                "required": ["source", "target", "strategy"],
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "snapshot": {
+          "type": "object",
+          "description": "Snapshot-specific metadata",
+          "properties": {
+            "snapshot_of": {"type": "string"},
+            "snapshot_timestamp": {"type": "string", "format": "date-time"},
+            "message": {"type": "string"}
+          }
+        },
+        "semantic": {
+          "type": "object",
+          "description": "Semantic pipeline configuration used to generate the current state.",
+          "properties": {
+            "extractor": {
+              "type": "object",
+              "description": "Extractor pipeline configuration (e.g., spaCy/Stanza/Spark NLP).",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["clustering", "spacy", "stanza", "spark_nlp", "custom"],
+                  "description": "Extractor implementation identifier."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Model name or package used by the extractor."
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Version of the extractor pipeline."
+                },
+                "language": {
+                  "type": "string",
+                  "description": "Language or locale handled by the extractor."
+                },
+                "settings": {
+                  "type": "object",
+                  "description": "Additional extractor configuration (thresholds, patterns, etc.)."
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            },
+            "validator": {
+              "type": "object",
+              "description": "Semantic validator configuration (e.g., MiniLM paraphrase checks).",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["minilm", "bert", "custom"],
+                  "description": "Validator implementation identifier."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Embedding or validation model used."
+                },
+                "threshold": {
+                  "type": "number",
+                  "description": "Score threshold for accepting matches."
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Version of the validator pipeline."
+                },
+                "settings": {
+                  "type": "object",
+                  "description": "Additional validator configuration."
+                }
+              },
+              "additionalProperties": true
+            },
+            "intent_mode": {
+              "type": "string",
+              "enum": ["knowledge", "decision", "analysis", "creative", "plan", "custom"],
+              "description": "Intent mode active when semantic extraction was run."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["active", "disabled", "experimental"],
+              "description": "Lifecycle state for the semantic pipeline."
+            },
+            "last_updated": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the semantic pipeline configuration last changed."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Additional notes about the semantic configuration."
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "usage_summary": {
+      "type": "object",
+      "description": "Aggregated usage analytics (optional, auto-computed by tools)",
+      "properties": {
+        "total_conversations": {"type": "integer"},
+        "total_messages": {"type": "integer"},
+        "total_cost": {"type": "number"},
+        "currency": {"type": "string", "default": "USD"},
+        "by_provider": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "conversations": {"type": "integer"},
+              "total_tokens": {"type": "integer"},
+              "total_cost": {"type": "number"}
+            }
+          }
+        },
+        "by_model": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "calls": {"type": "integer"},
+              "avg_latency_ms": {"type": "number"},
+              "total_cost": {"type": "number"}
+            }
+          }
+        },
+        "last_diff": {
+          "type": "object",
+          "description": "Metadata about the most recent diff operation.",
+          "properties": {
+            "from_commit": {"type": "string"},
+            "to_commit": {"type": "string"},
+            "generated_at": {"type": "string", "format": "date-time"},
+            "summary": {"type": "string"},
+            "aspect_changes": {"type": "integer"},
+            "stats": {"type": "object"}
+          },
+          "additionalProperties": true
+        },
+        "operations": {
+          "type": "array",
+          "description": "Aggregated CLI operations for usage analytics.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Operation name (e.g., commit, diff, verify)."
+              },
+              "count": {
+                "type": "integer",
+                "description": "Number of times the operation was executed."
+              },
+              "last_used": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Last time the operation was recorded."
+              }
+            },
+            "required": ["name"],
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}

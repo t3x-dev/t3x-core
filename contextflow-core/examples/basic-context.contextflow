@@ -1,0 +1,64 @@
+{
+  "contextflow_version": "1.0",
+  "$schema": "https://contextflow.dev/schema/v1.0.json",
+  "metadata": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "created": "2025-10-06T12:00:00Z",
+    "modified": "2025-10-06T12:00:00Z",
+    "name": "My Coding Preferences",
+    "description": "Personal preferences for software development",
+    "tags": [
+      "coding",
+      "preferences"
+    ],
+    "version": "1.0"
+  },
+  "context": {
+    "system": {
+      "role": "You are an expert software developer",
+      "instructions": [
+        "Always use type hints in Python",
+        "Prefer functional programming patterns",
+        "Write comprehensive tests"
+      ]
+    },
+    "knowledge": [
+      {
+        "id": "k001",
+        "type": "text/markdown",
+        "topic": "Python best practices",
+        "content": "# Python Best Practices\n\n- Use type hints for all function signatures\n- Follow PEP 8 style guide\n- Prefer list comprehensions over loops when readable",
+        "tags": [
+          "python",
+          "best-practices"
+        ],
+        "created": "2025-10-06T12:00:00Z"
+      },
+      {
+        "id": "k002",
+        "type": "text/markdown",
+        "topic": "FastAPI patterns",
+        "content": "When building APIs with FastAPI:\n- Use dependency injection for database sessions\n- Implement proper error handling\n- Add comprehensive OpenAPI documentation",
+        "tags": [
+          "fastapi",
+          "api",
+          "python"
+        ],
+        "created": "2025-10-06T12:00:00Z"
+      }
+    ],
+    "preferences": {
+      "languages": [
+        "python",
+        "typescript",
+        "rust"
+      ],
+      "frameworks": [
+        "FastAPI",
+        "React",
+        "Svelte"
+      ],
+      "style": "PEP 8 for Python, Prettier for JavaScript/TypeScript"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextflow.dev/schema/narrative_patch/v1.0.json",
+  "title": "ContextFlow Narrative Patch",
+  "type": "object",
+  "properties": {
+    "patch_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "from_commit": {
+      "type": ["string", "null"]
+    },
+    "to_commit": {
+      "type": ["string", "null"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "slot_type", "value", "confidence"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["added", "removed", "modified", "conflict"]
+          },
+          "slot_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "previous_value": {
+            "type": ["string", "null"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["turn_id"],
+              "properties": {
+                "turn_id": {
+                  "type": "string"
+                },
+                "weight_tag": {
+                  "type": "string",
+                  "enum": ["must", "should", "neutral", "mustnt"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "human_hint": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["patch_version", "generated_at", "changes"],
+  "additionalProperties": false
+}

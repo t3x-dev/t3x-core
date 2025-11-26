@@ -1,0 +1,29 @@
+rules:
+  - name: budget-with-keyword-before
+    slot_type: budget
+    pattern: "(?:budget|cost|price|spend|cap).*?(\\$\\s*[\\d,]{3,7})"
+    normalize: currency
+    weight_tag: must
+    case_insensitive: true
+    confidence: 0.9
+
+  - name: budget-with-keyword-after
+    slot_type: budget
+    pattern: "(\\$\\s*[\\d,]{3,7})\\s+budget"
+    normalize: currency
+    weight_tag: must
+    case_insensitive: true
+    confidence: 0.9
+
+  - name: location-city
+    slot_type: location
+    choices: ["tokyo", "osaka", "kyoto", "paris", "london", "new york"]
+    case_insensitive: true
+    confidence: 0.85
+
+  - name: travel-month
+    slot_type: time
+    pattern: "((?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4})"
+    normalize: date
+    case_insensitive: true
+    confidence: 0.8

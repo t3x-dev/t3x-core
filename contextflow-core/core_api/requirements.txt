@@ -1,0 +1,25 @@
+# ContextFlow Core API 依赖
+
+# Web 框架
+fastapi>=0.104.0,<1.0.0
+uvicorn[standard]>=0.24.0,<1.0.0
+
+# 数据验证和设置
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+
+# 可选：更好的 JSON 性能
+orjson>=3.9.0,<4.0.0
+
+# NLP 处理 (core.extractors)
+spacy>=3.5.0,<4.0.0
+
+# 中文分词 (core.extractors.jieba_extractor)
+jieba>=0.42.0
+
+# Embedding (core.diff)
+sentence-transformers>=2.2.0,<3.0.0
+
+# LLM SDK (Agentic Layer - Draft API)
+anthropic>=0.18.0,<1.0.0
+openai>=1.0.0,<2.0.0
