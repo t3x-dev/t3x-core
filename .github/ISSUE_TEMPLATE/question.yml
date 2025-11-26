@@ -1,0 +1,36 @@
+name: "❓ Question"
+description: "Ask a question; consider using Discussions"
+title: "[Question]: "
+labels:
+  - "type:question"
+body:
+  - type: markdown
+    attributes:
+      value: "For open-ended topics, please use Discussions:"
+  - type: textarea
+    id: question
+    attributes:
+      label: "Your question"
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "Related scope"
+      options:
+        - core
+        - cli
+        - webui
+        - schema
+        - agents
+        - other
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmation"
+      options:
+        - label: "I searched docs/README"
+    validations:
+      required: false

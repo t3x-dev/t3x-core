@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ContextFlow Discussions
+    url: https://github.com/contextflow/contextflow/discussions
+    about: "Use Discussions for brainstorming or support threads."
+  - name: ContextFlow Docs
+    url: https://contextflow.dev/docs
+    about: "Reference architecture notes, schema specs, and user guides."

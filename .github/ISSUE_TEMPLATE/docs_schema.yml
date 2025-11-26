@@ -1,0 +1,49 @@
+name: "📚 Docs/Schema"
+description: "Problems or suggestions about docs/spec/schema"
+title: "[Docs]: "
+labels:
+  - "type:docs"
+  - "scope:schema"
+  - "status:triage"
+body:
+  - type: dropdown
+    id: docs_type
+    attributes:
+      label: "Docs Type"
+      options:
+        - ARCHITECTURE
+        - STORAGE_ARCHITECTURE
+        - schema(v1.0.json)
+        - README
+        - other
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: "Document location"
+      placeholder: "file path + section header / URL"
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: "Problem description"
+      placeholder: "What’s unclear/wrong?"
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: "Suggested change"
+      placeholder: "Proposed wording / structure"
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmation"
+      options:
+        - label: "I verified against latest main"
+    validations:
+      required: false
