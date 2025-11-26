@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "description": "Deterministic tokenizer configuration for reproducible evidence scoring",
+  "tokenizer": {
+    "type": "deterministic",
+    "language": "en",
+    "stopwords": {
+      "source": "NLTK frozen at commit time",
+      "count": 127,
+      "hash_algorithm": "sha256",
+      "hash": "7e3f8a9c2d1b5e4f",
+      "note": "First 16 chars of SHA-256 hash of sorted stopwords joined by '|'"
+    },
+    "cjk_support": {
+      "enabled": true,
+      "languages": ["zh", "ja", "ko"],
+      "method": "character_bigrams",
+      "note": "For CJK languages, use character bigrams instead of word tokens"
+    }
+  },
+  "normalization": {
+    "lowercase": true,
+    "strip_whitespace": true,
+    "remove_punctuation": false,
+    "note": "Punctuation preserved for code/technical terms"
+  },
+  "performance": {
+    "expected_latency_ms": 1,
+    "max_text_length": 10000,
+    "note": "Tokenization should complete in <1ms for typical messages"
+  },
+  "validation": {
+    "test_input": "Hello, World! This is a test.",
+    "expected_tokens": ["hello", "world", "test"],
+    "expected_token_count": 3,
+    "note": "Stopwords ('this', 'is', 'a') are removed"
+  },
+  "changelog": [
+    {
+      "version": "2.0.0",
+      "date": "2025-11-07",
+      "changes": [
+        "Added CJK language support (character bigrams)",
+        "Pinned stopwords hash for reproducibility",
+        "Added validation test case"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-10-29",
+      "changes": [
+        "Initial deterministic tokenizer",
+        "Frozen English stopwords from NLTK"
+      ]
+    }
+  ]
+}

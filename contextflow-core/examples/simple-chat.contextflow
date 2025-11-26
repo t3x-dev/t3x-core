@@ -1,0 +1,49 @@
+{
+  "contextflow_version": "1.0",
+  "metadata": {
+    "created": "2025-10-09T12:00:00.000Z",
+    "name": "Simple Chat Example",
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview"
+  },
+  "conversations": [
+    {
+      "id": "conv-example-001",
+      "created": "2025-10-09T12:00:00.000Z",
+      "messages": [
+        {
+          "id": "turn-001",
+          "role": "user",
+          "content": "What is ContextFlow?",
+          "timestamp": "2025-10-09T12:00:00.000Z",
+          "prev_turn_hash": null,
+          "hash": "c7f8e1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0"
+        },
+        {
+          "id": "turn-002",
+          "role": "assistant",
+          "content": "ContextFlow is a semantic git for agent memory - it provides version control for AI conversations with the same guarantees as git (immutability, cryptographic verification, branching).",
+          "timestamp": "2025-10-09T12:00:05.000Z",
+          "prev_turn_hash": "c7f8e1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+          "hash": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8"
+        },
+        {
+          "id": "turn-003",
+          "role": "user",
+          "content": "How does it work?",
+          "timestamp": "2025-10-09T12:00:10.000Z",
+          "prev_turn_hash": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8",
+          "hash": "e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9"
+        },
+        {
+          "id": "turn-004",
+          "role": "assistant",
+          "content": "Every turn in a conversation gets a unique hash using SHA-256, and each turn links to the previous one via prev_turn_hash, creating an immutable chain.",
+          "timestamp": "2025-10-09T12:00:15.000Z",
+          "prev_turn_hash": "e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9",
+          "hash": "f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0"
+        }
+      ]
+    }
+  ]
+}

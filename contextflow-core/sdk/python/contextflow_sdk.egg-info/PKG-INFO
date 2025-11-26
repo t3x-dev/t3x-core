@@ -1,0 +1,328 @@
+Metadata-Version: 2.1
+Name: contextflow-sdk
+Version: 0.1.0
+Summary: Official Python SDK for the ContextFlow specification
+Home-page: https://github.com/yourusername/contextflow
+Author: ContextFlow Contributors
+Author-email: 
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+
+# ContextFlow Python SDK
+
+Official Python SDK for ContextFlow.
+
+## Installation
+
+```bash
+pip install contextflow-sdk
+```
+
+For development:
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Quick Start
+
+### Load and Save ContextFlow Files
+
+```python
+from contextflow import load, save
+
+# Load an existing ContextFlow file
+contextflow_data = load('my-context.contextflow')
+
+# Modify it
+contextflow_data.metadata.description = "Updated context"
+
+# Save it back
+save('my-context.contextflow', contextflow_data)
+```
+
+### Import from ChatGPT
+
+```python
+from contextflow import ContextFlow
+from contextflow.importers import ImporterConfig
+
+sdk = ContextFlow()
+
+# Import ChatGPT export
+with open('chatgpt-export.json', 'r') as f:
+    chatgpt_data = f.read()
+
+contextflow_data = sdk.import_data(
+    chatgpt_data,
+    importer_name='chatgpt',  # Optional - will auto-detect
+    config=ImporterConfig(tags=['imported', 'work'])
+)
+
+# Save as ContextFlow
+save('my-chatgpt-context.contextflow', contextflow_data)
+```
+
+### Export to Claude or OpenAI
+
+```python
+from contextflow import load, ContextFlow
+from contextflow.exporters import ExporterConfig
+
+# Load ContextFlow file
+contextflow_data = load('my-context.contextflow')
+
+sdk = ContextFlow()
+
+# Export to Claude (Markdown system prompt)
+claude_prompt = sdk.export_data(
+    contextflow_data,
+    exporter_name='claude',
+    config=ExporterConfig(max_conversations=5)
+)
+
+print(claude_prompt)
+
+# Export to OpenAI (request format)
+openai_request = sdk.export_data(
+    contextflow_data,
+    exporter_name='openai',
+    config=ExporterConfig(max_conversations=5)
+)
+
+# Use with OpenAI API
+import openai
+response = openai.chat.completions.create(**openai_request)
+```
+
+### Create ContextFlow from Scratch
+
+```python
+from datetime import datetime
+from contextflow import ContextFlowFile, ContextFlowMetadata, Conversation, Message, save
+
+contextflow_data = ContextFlowFile(
+    contextflow_version="1.0",
+    metadata=ContextFlowMetadata(
+        created=datetime.utcnow().isoformat() + "Z",
+        name="My Project Context",
+        description="Context for my coding project"
+    ),
+    conversations=[
+        Conversation(
+            title="Planning Discussion",
+            messages=[
+                Message(role="user", content="Let's plan the architecture"),
+                Message(role="assistant", content="Great! Let's start with...")
+            ]
+        )
+    ]
+)
+
+save('project-context.contextflow', contextflow_data)
+```
+
+## API Reference
+
+### Main Classes
+
+#### `ContextFlow`
+
+Main SDK class for import/export operations.
+
+```python
+sdk = ContextFlow()
+
+# Import data
+contextflow_data = sdk.import_data(input_data, importer_name='chatgpt')
+
+# Export data
+output = sdk.export_data(contextflow_data, exporter_name='claude')
+
+# List available importers/exporters
+print(sdk.list_importers())  # ['chatgpt']
+print(sdk.list_exporters())  # ['claude', 'openai']
+```
+
+#### `ContextFlowFile`
+
+Main ContextFlow data structure (Pydantic model).
+
+```python
+from contextflow import ContextFlowFile, ContextFlowMetadata
+
+contextflow = ContextFlowFile(
+    contextflow_version="1.0",
+    metadata=ContextFlowMetadata(created="2025-10-06T12:00:00Z"),
+    conversations=[...],
+    notes=[...],
+    preferences={...}
+)
+```
+
+### Importers
+
+#### Built-in Importers
+
+- **`chatgpt`**: Import ChatGPT conversation exports
+
+#### Custom Importers
+
+```python
+from contextflow.importers import BaseImporter, ImporterConfig
+from contextflow import ContextFlowFile
+
+class MyImporter(BaseImporter):
+    @property
+    def name(self) -> str:
+        return "my-importer"
+
+    @property
+    def supported_formats(self):
+        return ["application/json"]
+
+    def can_import(self, data):
+        # Detection logic
+        return isinstance(data, dict) and "my_format" in data
+
+    def import_data(self, input_data, config=None):
+        # Import logic
+        return ContextFlowFile(...)
+
+# Register custom importer
+from contextflow.importers import register_importer
+register_importer(MyImporter())
+```
+
+### Exporters
+
+#### Built-in Exporters
+
+- **`claude`**: Export to Claude Markdown system prompt
+- **`openai`**: Export to OpenAI Chat Completions format
+
+#### Custom Exporters
+
+```python
+from contextflow.exporters import BaseExporter, ExporterConfig
+from contextflow import ContextFlowFile
+
+class MyExporter(BaseExporter):
+    @property
+    def name(self) -> str:
+        return "my-exporter"
+
+    @property
+    def output_format(self) -> str:
+        return "text/plain"
+
+    def export(self, contextflow: ContextFlowFile, config=None):
+        # Export logic
+        return "exported content"
+
+# Register custom exporter
+from contextflow.exporters import register_exporter
+register_exporter(MyExporter())
+```
+
+### Configuration
+
+#### `ImporterConfig`
+
+```python
+from contextflow.importers import ImporterConfig
+
+config = ImporterConfig(
+    preserve_metadata=True,
+    auto_extract_knowledge=False,
+    tags=["imported", "work"]
+)
+```
+
+#### `ExporterConfig`
+
+```python
+from contextflow.exporters import ExporterConfig
+
+config = ExporterConfig(
+    include_conversations=True,
+    include_notes=True,
+    include_preferences=True,
+    max_conversations=10,
+    tags=["important"]
+)
+```
+
+### Connectors
+
+Fetch conversations directly from upstream APIs using connectors and convert them to the ContextFlow schema in one step:
+
+```python
+from contextflow import ContextFlow, HTTPConnectorConfig
+
+contextflow = ContextFlow()
+contextflow_file = contextflow.ingest_from_connector(
+    "http",
+    connector_config=HTTPConnectorConfig(
+        base_url="https://api.example.com",
+        endpoint="/exports/chatgpt",
+        auth_token="token-123",
+        params={"limit": 25},
+    ),
+    importer_name="chatgpt",
+)
+```
+
+Custom connectors can be registered via `contextflow.register_connector(...)` for non-HTTP sources or bespoke payload formats.
+
+## Type Definitions
+
+All ContextFlow types are Pydantic models with full validation:
+
+```python
+from contextflow import (
+    ContextFlowFile,
+    Conversation,
+    Message,
+    Note,
+    Preferences,
+    APICallMetadata,
+    UsageSummary,
+)
+```
+
+See `contextflow/types.py` for complete type definitions.
+
+## Development
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Type checking
+mypy contextflow
+
+# Linting
+ruff check contextflow
+black contextflow
+```
+
+## License
+
+MIT
+
+

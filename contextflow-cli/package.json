@@ -1,0 +1,29 @@
+{
+  "name": "contextflow-cli",
+  "version": "0.1.0",
+  "description": "ContextFlow Chat CLI MVP for local-first conversational logging.",
+  "license": "MIT",
+  "main": "dist/bin/contextflow.js",
+  "bin": {
+    "contextflow": "./dist/bin/contextflow.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/bin/contextflow.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "commander": "^12.1.0",
+    "json-canonicalize": "^2.0.0",
+    "yaml": "^2.4.2",
+    "undici": "^6.21.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

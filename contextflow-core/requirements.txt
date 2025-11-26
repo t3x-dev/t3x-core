@@ -1,0 +1,32 @@
+# ContextFlow Core 运行依赖
+# 按照 docs/ARCHITECTURE.zh.md 要求的决定论框架
+
+# NLP 引擎（Ring 1/2/3 提取器）
+spacy>=3.7.0,<4.0.0
+
+# 中文分词（中文 Ring 提取器）
+jieba>=0.42.0
+
+# YAML 解析（Bridge 模板加载器）
+PyYAML>=6.0,<7.0
+
+# 嵌入模型（Draft Workflow 的相似度计算）
+sentence-transformers>=2.2.0,<3.0.0
+
+# LLM Provider（Draft Polish 和 Merge 冲突解决 - 可选）
+openai>=1.0.0,<2.0.0
+
+# 数据库（SQLite 索引层 - Python 标准库已包含，无需额外安装）
+# sqlite3 是 Python 标准库
+
+# 哈希与序列化（JSONL 主账本 - Python 标准库已包含）
+# hashlib, json 是 Python 标准库
+
+# spaCy 模型下载（安装后需手动执行）:
+# python -m spacy download en_core_web_sm
+# python -m spacy download zh_core_web_sm  # 中文支持（可选）
+
+# 注意：
+# 1. spaCy 模型需要额外下载，请在安装依赖后运行上述命令
+# 2. sentence-transformers 首次使用时会自动下载 MiniLM 模型
+# 3. 如需使用其他 NLP 引擎（Stanza、Spark NLP），请参考 docs/ARCHITECTURE.zh.md

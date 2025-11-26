@@ -1,0 +1,97 @@
+# ContextFlow Configuration Example
+# Copy this file to ~/.contextflow/config.yml and customize
+
+# API Provider Credentials
+providers:
+  # OpenAI configuration
+  openai:
+    apiKey: ${OPENAI_API_KEY}  # Or set directly: sk-...
+    organizationId: org-...     # Optional
+    endpoint: https://api.openai.com/v1  # Optional custom endpoint
+
+  # Anthropic (Claude) configuration
+  anthropic:
+    apiKey: ${ANTHROPIC_API_KEY}  # Or set directly: sk-ant-...
+    endpoint: https://api.anthropic.com  # Optional custom endpoint
+
+  # Google AI configuration
+  google:
+    apiKey: ${GOOGLE_AI_API_KEY}
+    endpoint: https://generativelanguage.googleapis.com
+
+  # Custom provider example
+  custom:
+    apiKey: your-api-key
+    endpoint: https://your-api.example.com
+
+# Default Settings
+defaults:
+  # Default importer (auto-detect if not set)
+  importer: chatgpt
+
+  # Default exporter
+  exporter: claude
+
+  # Default output directory for CLI commands
+  outputDir: ./contextflow-output
+
+  # Default tags to add on import
+  tags:
+    - imported
+
+# Storage Configuration
+storage:
+  # Local storage
+  local:
+    path: ~/.contextflow/storage
+    autoBackup: true
+    maxBackups: 10
+
+  # Cloud storage (optional)
+  cloud:
+    provider: s3  # s3, gcs, azure
+    bucket: my-contextflow-bucket
+    region: us-east-1
+    # Credentials typically from AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+# Import Settings
+import:
+  # Preserve original metadata when importing
+  preserveMetadata: true
+
+  # Automatically extract knowledge from conversations
+  autoExtractKnowledge: false
+
+  # Filter conversations by date
+  dateFrom: 2024-01-01
+  dateTo: 2024-12-31
+
+# Export Settings
+export:
+  # Include sections in exports
+  includeConversations: true
+  includeNotes: true
+  includePreferences: true
+
+  # Maximum conversations to include
+  maxConversations: 10
+
+  # Filter by tags
+  tags:
+    - important
+
+# Advanced Settings
+advanced:
+  # Enable debug logging
+  debug: false
+
+  # API request timeout (ms)
+  timeout: 30000
+
+  # Retry failed requests
+  retries: 3
+
+  # Cache API responses
+  cache:
+    enabled: true
+    ttl: 3600  # seconds
