@@ -1,0 +1,77 @@
+name: "🐛 Bug"
+description: "Report a reproducible bug in ContextFlow"
+title: "[Bug]: "
+labels:
+  - "type:bug"
+  - "status:triage"
+assignees: []
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "Module"
+      description: "Where does this bug occur?"
+      options:
+        - core
+        - cli
+        - webui
+        - schema
+        - agents
+        - infra
+        - not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - blocker
+        - major
+        - minor
+        - cosmetic
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: "Layer (optional)"
+      options:
+        - Ledger
+        - Insight
+        - Narrative
+        - Agentic
+        - N/A
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: "Version"
+      description: "commit sha / tag / npm/pip version"
+      placeholder: "commit sha / tag / npm/pip version"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      placeholder: "Text or image description"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs / Screenshots / Minimal Sample"
+      description: "Paste logs, or attach a minimal .contextflow bundle / JSONL snippet"
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmation"
+      options:
+        - label: "I searched existing issues"
+        - label: "I can reproduce this on latest main"
+    validations:
+      required: true
