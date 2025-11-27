@@ -417,31 +417,33 @@ export default function CanvasWorkspace() {
           <Background gap={GRID_SIZE} size={1} color="#cbd5e1" />
         </ReactFlow>
       </div>
-      <NodeModal
-        node={modalNode}
-        onClose={() => setOpenNodeId(undefined)}
-        onUpdate={(patch) => modalNode && updateNode(modalNode.id, patch)}
-        onConvertDraft={
-          modalNode?.data.kind === 'draft' && draftBranchMode !== 'blocked'
-            ? () => {
-                convertDraftToCommit(modalNode.id)
-                setOpenNodeId(undefined)
-              }
-            : undefined
-        }
-        draftBranchMode={draftBranchMode}
-        onBranchChange={
-          modalNode?.data.kind === 'draft'
-            ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
-            : undefined
-        }
-        onBranchNameChange={
-          modalNode?.data.kind === 'draft'
-            ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
-            : undefined
-        }
-        quickActions={modalQuickActions}
-      />
+      {modalNode && (
+        <NodeModal
+          node={modalNode}
+          onClose={() => setOpenNodeId(undefined)}
+          onUpdate={(patch) => updateNode(modalNode.id, patch)}
+          onConvertDraft={
+            modalNode.data.kind === 'draft' && draftBranchMode !== 'blocked'
+              ? () => {
+                  convertDraftToCommit(modalNode.id)
+                  setOpenNodeId(undefined)
+                }
+              : undefined
+          }
+          draftBranchMode={draftBranchMode}
+          onBranchChange={
+            modalNode.data.kind === 'draft'
+              ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
+              : undefined
+          }
+          onBranchNameChange={
+            modalNode.data.kind === 'draft'
+              ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
+              : undefined
+          }
+          quickActions={modalQuickActions}
+        />
+      )}
     </div>
   )
 }

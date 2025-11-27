@@ -6,10 +6,11 @@ import {
   type ReactNode,
   type MouseEvent as ReactMouseEvent,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { X, Sparkles, Database, Settings, WandSparkles, Check } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData } from '../types/nodes'
+import type { CanvasNodeData, MergeConfig } from '../types/nodes'
 
 const bridgePrompts = ['/plan', '/story', '/merge', '/refine']
 
@@ -21,7 +22,8 @@ export type NodeQuickAction = {
   disabled?: boolean
 }
 
-type DiffDecisionMap = Record<string, 'accept' | 'reject' | undefined>
+type DiffDecision = 'accept' | 'reject'
+type DiffDecisionMap = Partial<Record<string, DiffDecision>>
 
 interface NodeModalProps {
   node?: Node<CanvasNodeData>
@@ -52,11 +54,15 @@ export function NodeModal({
   const isDraft = data.kind === 'draft'
   const isCommit = data.kind === 'commit'
   const isConversation = data.kind === 'conversation'
-  const shouldShowBranchSelect = draftBranchMode === 'select' || draftBranchMode === 'branch-only'
+  const isMergeDraft = isDraft && data.bridgePrompt === '/merge' && !!data.mergeConfig
+  const mergeConfig = data.mergeConfig
+  const shouldShowBranchSelect =
+    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
   const requireBranchName =
-    (draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
-    draftBranchMode === 'branch-only'
-
+    !isMergeDraft &&
+    ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
+      draftBranchMode === 'branch-only')
+  const baselineSourceSummary = data.baselineSummary ?? ''
   const [paneRatio, setPaneRatio] = useState(0.3)
   const [isResizing, setIsResizing] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -79,15 +85,15 @@ export function NodeModal({
   const MIN_DRAFT_RIGHT = 0.35
   const chatHistory = useMemo(
     () => [
-      { id: `${node.id}-user`, role: 'user' as const, content: data.status || 'No status description added yet.' },
-      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || 'No summary available.' },
+      { id: `${node.id}-user`, role: 'user' as const, content: data.status || 'No status provided yet.' },
+      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || 'No summary captured yet.' },
     ],
     [data.status, data.summary, node.id],
   )
   const diffData = useMemo(() => {
     const baselineLines =
-      data.baselineSummary && data.baselineSummary.length > 0
-        ? data.baselineSummary.split('\n')
+      baselineSourceSummary && baselineSourceSummary.length > 0
+        ? baselineSourceSummary.split('\n')
         : []
     const draftLines = (data.summary ?? '').split('\n')
     const m = baselineLines.length
@@ -132,8 +138,14 @@ export function NodeModal({
       j += 1
     }
     return { baselineLines, draftLines, baselineStatuses, draftStatuses, removals }
-  }, [data.baselineSummary, data.summary])
+  }, [baselineSourceSummary, data.summary])
   const { baselineLines, draftLines, baselineStatuses, draftStatuses, removals } = diffData
+  const updateMergeConfig = (patch: Partial<MergeConfig>) => {
+    if (!mergeConfig) {
+      return
+    }
+    onUpdate({ mergeConfig: { ...mergeConfig, ...patch } })
+  }
 
   useEffect(() => {
     if (!isConversation) {
@@ -143,12 +155,12 @@ export function NodeModal({
       {
         id: `${node.id}-ai`,
         role: 'ai',
-        content: data.summary || 'No summary available, start conversation to capture context.',
+        content: data.summary || 'No summary yet—start the chat to capture context.',
       },
       {
         id: `${node.id}-user`,
         role: 'user',
-        content: data.status || 'No status set yet',
+        content: data.status || 'Status not set yet.',
       },
     ])
   }, [isConversation, data.summary, data.status, node.id])
@@ -255,16 +267,86 @@ export function NodeModal({
     setDiffDecisions({})
   }, [node.id])
 
-  const handleSendMessage = (event?: FormEvent) => {
-    event?.preventDefault()
-    if (!chatInput.trim()) {
+  const toggleDiffDecision = (key: string, value: DiffDecision) => {
+    setDiffDecisions((current) => {
+      const next: DiffDecisionMap = { ...current }
+      if (next[key] === value) {
+        delete next[key]
+      } else {
+        next[key] = value
+      }
+      return next
+    })
+  }
+
+  const shiftDiffDecisionsAfterRemoval = (removedIndex: number) => {
+    setDiffDecisions((current) => {
+      const entries = Object.entries(current)
+      if (entries.length === 0) {
+        return current
+      }
+      const next: DiffDecisionMap = {}
+      let changed = false
+      entries.forEach(([key, value]) => {
+        if (!value) {
+          return
+        }
+        if (!key.startsWith('add-')) {
+          next[key] = value
+          return
+        }
+        const indexValue = Number.parseInt(key.slice(4), 10)
+        if (Number.isNaN(indexValue)) {
+          next[key] = value
+          return
+        }
+        if (indexValue === removedIndex) {
+          changed = true
+          return
+        }
+        const newIndex = indexValue > removedIndex ? indexValue - 1 : indexValue
+        const newKey = `add-${newIndex}`
+        if (newKey !== key) {
+          changed = true
+        }
+        next[newKey] = value
+      })
+      return changed ? next : current
+    })
+  }
+
+  const handleRejectDraftLine = (lineIndex: number) => {
+    const lines = (data.summary ?? '').split('\n')
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+      return
+    }
+    lines.splice(lineIndex, 1)
+    onUpdate({ summary: lines.join('\n') })
+    shiftDiffDecisionsAfterRemoval(lineIndex)
+  }
+
+  const sendMessage = () => {
+    const trimmed = chatInput.trim()
+    if (!trimmed) {
       return
     }
     setChatMessages((messages) => [
       ...messages,
-      { id: `${node.id}-user-${messages.length}`, role: 'user', content: chatInput.trim() },
+      { id: `${node.id}-user-${messages.length}`, role: 'user', content: trimmed },
     ])
     setChatInput('')
+  }
+
+  const handleSendMessage = (event?: FormEvent) => {
+    event?.preventDefault()
+    sendMessage()
+  }
+
+  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      sendMessage()
+    }
   }
 
   if (isConversation) {
@@ -308,7 +390,7 @@ export function NodeModal({
                 <Database size={18} />
                 <div>
                   <strong>Upstream Context</strong>
-                  <span>Library / Documentation</span>
+                  <span>Library / Docs</span>
                 </div>
               </div>
               <div className="conversation-context__cards">
@@ -320,7 +402,7 @@ export function NodeModal({
                 <article className="context-card">
                   <span>Status</span>
                   <strong>{data.status}</strong>
-                  <p>Current tracking marker</p>
+                  <p>Current tracking label</p>
                 </article>
                 <article className="context-card">
                   <span>Active Tags</span>
@@ -383,7 +465,7 @@ export function NodeModal({
               <div className="conversation-chat__header">
                 <div>
                   <strong>{data.title}</strong>
-                  <span>Workspace / Chat</span>
+                  <span>Writing Desk / Chat</span>
                 </div>
                 <button className="conversation-chat__settings-btn" type="button">
                   <Settings size={18} />
@@ -409,10 +491,8 @@ export function NodeModal({
                   placeholder="Summarize or add new context..."
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
                 />
-                <button className="primary-btn" type="submit">
-                  Send
-                </button>
               </form>
             </section>
           </div>
@@ -435,7 +515,7 @@ export function NodeModal({
         id: 'commit',
         title: `Commit Snapshot`,
         subtitle: data.branchType === 'main' ? 'Main' : 'Feature',
-        content: <p>{data.baselineSummary || 'No upstream commit summary yet.'}</p>,
+        content: <p>{baselineSourceSummary || 'No upstream commit summary captured yet.'}</p>,
       },
       {
         id: 'conversation',
@@ -463,7 +543,7 @@ export function NodeModal({
         id: check.id,
         title: check.label,
         subtitle: `Validation · ${check.status}`,
-        content: <p>{data.summary || 'No description available.'}</p>,
+        content: <p>{data.summary || 'No description yet.'}</p>,
       })),
     ]
 
@@ -499,7 +579,7 @@ export function NodeModal({
             <section className="draft-section draft-section--sidebar" style={{ flexBasis: `${leftBasis * 100}%` }}>
               <div className="draft-sidebar__header">
                 <span>Upstream Context</span>
-                <p>Reference upstream evidence for comparison</p>
+                <p>Reference upstream evidence as you work</p>
               </div>
               <div className="draft-evidence__list">
                 {evidenceCards.map((card) => (
@@ -530,7 +610,7 @@ export function NodeModal({
             >
               <div className="draft-config__header">
                 <strong>Draft Settings</strong>
-                <span>Configure bridge logic and targets</span>
+                <span>Configure bridging logic & target</span>
               </div>
               <div className="draft-config__form">
                 <label>
@@ -594,7 +674,7 @@ export function NodeModal({
                     rows={5}
                     value={data.draftInstructions ?? ''}
                     onChange={(event) => onUpdate({ draftInstructions: event.target.value })}
-                    placeholder="e.g.: More formal tone, highlight key validation points..."
+                    placeholder="For example: tighten tone, highlight validator insights..."
                   />
                 </label>
                 <button
@@ -652,7 +732,7 @@ export function NodeModal({
                   className="draft-editor__textarea"
                   value={data.summary}
                   onChange={(event) => onUpdate({ summary: event.target.value })}
-                  placeholder="Edit draft here, supports Markdown / rich text..."
+                  placeholder="Draft here with Markdown / rich text support..."
                 />
               ) : (
                 <div className="draft-diff">
@@ -665,7 +745,7 @@ export function NodeModal({
                     </header>
                     <div className="draft-diff__lines">
                       {baselineLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">(No upstream commit)</div>
+                        <div className="diff-line diff-line--neutral">No upstream commit attached.</div>
                       ) : (
                         baselineLines.map((text, index) => {
                           const status = baselineStatuses[index]
@@ -673,9 +753,10 @@ export function NodeModal({
                             status === 'removed'
                               ? 'diff-line diff-line--removed'
                               : 'diff-line diff-line--neutral'
+                          const displayText = text.trim().length > 0 ? text : '\u00A0'
                           return (
                             <div key={`commit-${index}`} className={classes}>
-                              {text || '(Empty line)'}
+                              {displayText}
                             </div>
                           )
                         })
@@ -697,51 +778,33 @@ export function NodeModal({
                     </header>
                     <div className="draft-diff__lines draft-diff__lines--interactive">
                       {draftLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">(No draft content)</div>
+                        <div className="diff-line diff-line--neutral">No draft content yet.</div>
                       ) : (
                         draftLines.map((text, index) => {
                           const status = draftStatuses[index]
                           const key = status === 'added' ? `add-${index}` : `same-${index}`
-                          const classes =
-                            status === 'added' ? 'diff-line diff-line--added' : 'diff-line diff-line--neutral'
                           const decision = diffDecisions[key]
+                          const classes =
+                            status === 'added' && decision !== 'accept'
+                              ? 'diff-line diff-line--added'
+                              : 'diff-line diff-line--neutral'
+                          const displayText = text.trim().length > 0 ? text : '\u00A0'
                           return (
                             <div key={`draft-${key}`} className={classes}>
-                              <span>{text || '(Empty line)'}</span>
+                              <span>{displayText}</span>
                               {status === 'added' && (
                                 <div className="diff-line__actions">
                                   <button
                                     type="button"
                                     className={decision === 'accept' ? 'active' : undefined}
-                                    onClick={() =>
-                                      setDiffDecisions((current) => {
-                                        const next: DiffDecisionMap = { ...current }
-                                        if (next[key] === 'accept') {
-                                          delete next[key]
-                                        } else {
-                                          next[key] = 'accept'
-                                        }
-                                        return next
-                                      })
-                                    }
+                                    onClick={() => toggleDiffDecision(key, 'accept')}
                                     aria-label="Accept change"
                                   >
                                     <Check size={16} />
                                   </button>
                                   <button
                                     type="button"
-                                    className={decision === 'reject' ? 'active' : undefined}
-                                    onClick={() =>
-                                      setDiffDecisions((current) => {
-                                        const next: DiffDecisionMap = { ...current }
-                                        if (next[key] === 'reject') {
-                                          delete next[key]
-                                        } else {
-                                          next[key] = 'reject'
-                                        }
-                                        return next
-                                      })
-                                    }
+                                    onClick={() => handleRejectDraftLine(index)}
                                     aria-label="Reject change"
                                   >
                                     <X size={16} />
@@ -753,44 +816,34 @@ export function NodeModal({
                         })
                       )}
                       {removals.map((segment) => {
+                        const trimmed = segment.text.trim()
+                        if (!trimmed) {
+                          return null
+                        }
                         const decision = diffDecisions[segment.key]
+                        if (decision === 'reject') {
+                          return null
+                        }
+                        const classes =
+                          decision === 'accept'
+                            ? 'diff-line diff-line--neutral'
+                            : 'diff-line diff-line--removed'
                         return (
-                          <div key={`draft-${segment.key}`} className="diff-line diff-line--ghost">
-                            <span>(delete) {segment.text || '(Empty line)'}</span>
+                          <div key={`draft-${segment.key}`} className={classes}>
+                            <span>Removed · {trimmed}</span>
                             <div className="diff-line__actions">
                               <button
                                 type="button"
                                 className={decision === 'accept' ? 'active' : undefined}
-                                onClick={() =>
-                                  setDiffDecisions((current) => {
-                                    const next: DiffDecisionMap = { ...current }
-                                    if (next[segment.key] === 'accept') {
-                                      delete next[segment.key]
-                                    } else {
-                                      next[segment.key] = 'accept'
-                                    }
-                                    return next
-                                  })
-                                }
-                                aria-label="Accept deletion"
+                                onClick={() => toggleDiffDecision(segment.key, 'accept')}
+                                aria-label="Accept removal"
                               >
                                 <Check size={16} />
                               </button>
                               <button
                                 type="button"
-                                className={decision === 'reject' ? 'active' : undefined}
-                                onClick={() =>
-                                  setDiffDecisions((current) => {
-                                    const next: DiffDecisionMap = { ...current }
-                                    if (next[segment.key] === 'reject') {
-                                      delete next[segment.key]
-                                    } else {
-                                      next[segment.key] = 'reject'
-                                    }
-                                    return next
-                                  })
-                                }
-                                aria-label="Reject deletion"
+                                onClick={() => toggleDiffDecision(segment.key, 'reject')}
+                                aria-label="Reject removal"
                               >
                                 <X size={16} />
                               </button>
@@ -802,6 +855,88 @@ export function NodeModal({
                   </div>
                 </div>
               )}
+            </section>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isCommit) {
+    const branchLabel =
+      data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
+    const headerActions = quickActions ?? []
+    return (
+      <div className="node-modal__overlay" role="dialog" aria-modal="true">
+        <div className="commit-modal">
+          <header className="commit-modal__header">
+            <div className="commit-modal__title">
+              <span>{data.entryId}</span>
+              <strong>{data.title}</strong>
+            </div>
+            <div className="commit-modal__actions">
+              {headerActions.map((action) => (
+                <button
+                  key={action.key}
+                  className="secondary-btn"
+                  onClick={() => {
+                    action.onClick()
+                    onClose()
+                  }}
+                  disabled={action.disabled}
+                  type="button"
+                >
+                  {action.icon}
+                  <span>{action.label}</span>
+                </button>
+              ))}
+              <button className="text-btn" onClick={onClose} aria-label="Close commit modal">
+                <X size={20} />
+              </button>
+            </div>
+          </header>
+          <div className="commit-modal__body">
+            <section className="commit-modal__pane commit-modal__pane--meta">
+              <div className="commit-meta">
+                <label>Branch</label>
+                <strong>{branchLabel.toUpperCase()}</strong>
+              </div>
+              <div className="commit-meta">
+                <label>Status</label>
+                <strong>{data.status || 'No status supplied'}</strong>
+              </div>
+              <div className="commit-meta">
+                <label>Timestamp</label>
+                <span>{data.timestamp}</span>
+              </div>
+              <div className="commit-meta">
+                <label>Tags</label>
+                {data.tags.length > 0 ? (
+                  <div className="commit-meta__tags">
+                    {data.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="commit-meta__empty">No tags applied</span>
+                )}
+              </div>
+            </section>
+            <section className="commit-modal__pane commit-modal__pane--content">
+              <div className="commit-summary">
+                <header>
+                  <h3>Version Summary</h3>
+                  <small>Validator snapshot</small>
+                </header>
+                <p>{data.summary || 'No summary recorded.'}</p>
+              </div>
+              <div className="commit-intent">
+                <header>
+                  <Sparkles size={16} />
+                  <span>Intent</span>
+                </header>
+                <p>{data.status || 'No intent captured.'}</p>
+              </div>
             </section>
           </div>
         </div>
@@ -870,6 +1005,7 @@ export function NodeModal({
                 <select
                   value={data.bridgePrompt ?? bridgePrompts[0]}
                   onChange={(event) => onUpdate({ bridgePrompt: event.target.value })}
+                  disabled={isMergeDraft}
                 >
                   {bridgePrompts.map((prompt) => (
                     <option key={prompt} value={prompt}>
@@ -905,6 +1041,50 @@ export function NodeModal({
                     onChange={(event) => onBranchNameChange?.(event.target.value)}
                   />
                 </label>
+              )}
+              {isMergeDraft && mergeConfig && (
+                <div className="merge-config">
+                  <h4>Merge Inputs</h4>
+                  <div className="merge-config__grid">
+                    <label>
+                      Latest MAIN commit
+                      <span className="merge-config__field-meta">
+                        {mergeConfig.targetCommitTitle || mergeConfig.targetCommitId}
+                      </span>
+                      <textarea
+                        value={mergeConfig.targetContent}
+                        onChange={(event) =>
+                          updateMergeConfig({ targetContent: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Incoming branch commit
+                      <span className="merge-config__field-meta">
+                        {mergeConfig.sourceCommitTitle || mergeConfig.sourceCommitId}
+                      </span>
+                      <textarea
+                        value={mergeConfig.sourceContent}
+                        onChange={(event) =>
+                          updateMergeConfig({ sourceContent: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Base commit
+                      <span className="merge-config__field-meta">
+                        {mergeConfig.baseCommitTitle || 'No upstream main commit detected'}
+                      </span>
+                      <textarea
+                        value={mergeConfig.baseContent ?? ''}
+                        placeholder="Describe the branch point context"
+                        onChange={(event) =>
+                          updateMergeConfig({ baseContent: event.target.value })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
               )}
             </>
           )}
