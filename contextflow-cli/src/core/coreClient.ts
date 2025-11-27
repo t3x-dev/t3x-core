@@ -1,7 +1,7 @@
 /**
  * Core API Client
  *
- * 封装对 core_api 的所有 HTTP 请求
+ * Encapsulates all HTTP requests to core_api
  */
 
 import { logger } from '../runtime/logger';

@@ -1,10 +1,10 @@
 """
-三方语义 Diff 引擎实现
+Three-way semantic Diff engine implementation
 
-按照 docs/ARCHITECTURE.zh.md:124-141 的算法：
-1. 取参考版本 A 的每个分句 sA_i，编码向量 emb(sA_i)
-2. 取目标版本 B 的全文（或聚合分句矩阵）编码 Emb(B)
-3. 计算 cosine(emb(sA_i), Emb(B))，高于阈值视为"相同"，否则为"不同/新增"
+Following the algorithm from docs/ARCHITECTURE.zh.md:124-141:
+1. Take each sentence sA_i from reference version A, encode vector emb(sA_i)
+2. Take the full text of target version B (or aggregated sentence matrix) and encode Emb(B)
+3. Calculate cosine(emb(sA_i), Emb(B)), if above threshold treat as "same", otherwise as "different/added"
 """
 
 from __future__ import annotations
@@ -18,33 +18,33 @@ from .types import DiffType, SegmentDiff, SegmentMatch
 # Protocol for Embedding Provider
 class EmbeddingProvider(Protocol):
     """
-    嵌入提供者接口
+    Embedding provider interface
 
-    Draft Workflow 和 Diff Engine 共用此接口。
+    Shared by Draft Workflow and Diff Engine.
     """
 
     def encode(self, texts: List[str]) -> List[List[float]]:
         """
-        编码文本为向量
+        Encode texts to vectors
 
         Args:
-            texts: 文本列表
+            texts: List of texts
 
         Returns:
-            向量列表
+            List of vectors
         """
         ...
 
     def similarity(self, vec_a: List[float], vec_b: List[float]) -> float:
         """
-        计算两个向量的余弦相似度
+        Calculate cosine similarity between two vectors
 
         Args:
-            vec_a: 向量 A
-            vec_b: 向量 B
+            vec_a: Vector A
+            vec_b: Vector B
 
         Returns:
-            相似度分数（0~1）
+            Similarity score (0~1)
         """
         ...
 
@@ -52,20 +52,20 @@ class EmbeddingProvider(Protocol):
 @dataclass
 class DiffResult:
     """
-    Diff 结果
+    Diff result
 
-    包含所有分句的 Diff 信息。
+    Contains Diff information for all segments.
     """
 
-    base_id: str  # 基准版本 ID（Commit Hash 或 "draft"）
-    target_id: str  # 目标版本 ID
+    base_id: str  # Base version ID (Commit Hash or "draft")
+    target_id: str  # Target version ID
     segment_diffs: List[SegmentDiff]
-    threshold: float  # 使用的相似度阈值
+    threshold: float  # Similarity threshold used
 
-    # 三方 diff 专用字段
-    source_id: Optional[str] = None  # Source Branch 版本 ID（仅三方 diff）
+    # Three-way diff specific fields
+    source_id: Optional[str] = None  # Source Branch version ID (three-way diff only)
 
-    # 统计信息
+    # Statistics
     total_segments: int = 0
     same_count: int = 0
     added_count: int = 0
@@ -74,7 +74,7 @@ class DiffResult:
     conflict_count: int = 0
 
     def __post_init__(self):
-        # 自动计算统计信息
+        # Automatically calculate statistics
         self.total_segments = len(self.segment_diffs)
         for diff in self.segment_diffs:
             if diff.diff_type == DiffType.SAME:
@@ -91,11 +91,11 @@ class DiffResult:
 
 class DiffEngine:
     """
-    三方语义 Diff 引擎
+    Three-way semantic Diff engine
 
-    支持两种场景：
-    1. Commit Diff（Draft 自检）
-    2. Merge Diff（预览）
+    Supports two scenarios:
+    1. Commit Diff (Draft self-check)
+    2. Merge Diff (preview)
     """
 
     def __init__(
@@ -104,11 +104,11 @@ class DiffEngine:
         threshold: float = 0.70,
     ):
         """
-        初始化 Diff 引擎
+        Initialize Diff engine
 
         Args:
-            embedding_provider: 嵌入提供者
-            threshold: 相似度阈值（默认 0.70）
+            embedding_provider: Embedding provider
+            threshold: Similarity threshold (default 0.70)
         """
         self.embedding_provider = embedding_provider
         self.threshold = threshold
@@ -121,45 +121,45 @@ class DiffEngine:
         target_segments: List[Dict[str, str]],
     ) -> DiffResult:
         """
-        双向 Diff（Commit Diff / Draft 自检）
+        Two-way Diff (Commit Diff / Draft self-check)
 
-        场景：将当前 Draft（版本 A）与父 Commit（版本 B）做语义 diff。
+        Scenario: Perform semantic diff between current Draft (version A) and parent Commit (version B).
 
         Args:
-            base_id: 基准版本 ID
-            base_segments: 基准版本的分句列表
-            target_id: 目标版本 ID
-            target_segments: 目标版本的分句列表
+            base_id: Base version ID
+            base_segments: List of segments from base version
+            target_id: Target version ID
+            target_segments: List of segments from target version
 
         Returns:
             DiffResult
         """
-        # 1. 编码所有分句
+        # 1. Encode all segments
         base_texts = [seg["text"] for seg in base_segments]
         target_texts = [seg["text"] for seg in target_segments]
 
         base_vecs = self.embedding_provider.encode(base_texts)
         target_vecs = self.embedding_provider.encode(target_texts)
 
-        # 2. 计算相似度矩阵
+        # 2. Calculate similarity matrix
         matches = self._compute_matches(
             base_segments, base_vecs,
             target_segments, target_vecs,
         )
 
-        # 3. 生成 Diff 结果
+        # 3. Generate Diff result
         segment_diffs = []
         target_matched_ids = set()
 
-        # 检查 base 中的每个分句
+        # Check each segment in base
         for base_seg in base_segments:
             best_match = matches.get(base_seg["segment_id"])
 
             if best_match and best_match.matched:
-                # 找到匹配
+                # Found match
                 target_matched_ids.add(best_match.target_segment_id)
 
-                # 获取匹配的 target 文本
+                # Get matched target text
                 matched_text = None
                 for t_seg in target_segments:
                     if t_seg["segment_id"] == best_match.target_segment_id:
@@ -176,14 +176,14 @@ class DiffEngine:
                     matched_text=matched_text,
                 ))
             else:
-                # 未找到匹配，视为删除
+                # No match found, treat as removed
                 segment_diffs.append(SegmentDiff(
                     segment_id=base_seg["segment_id"],
                     text=base_seg["text"],
                     diff_type=DiffType.REMOVED,
                 ))
 
-        # 检查 target 中未匹配的分句（新增）
+        # Check unmatched segments in target (added)
         for target_seg in target_segments:
             if target_seg["segment_id"] not in target_matched_ids:
                 segment_diffs.append(SegmentDiff(
@@ -207,7 +207,7 @@ class DiffEngine:
         target_vecs: List[List[float]],
     ) -> Dict[str, SegmentMatch]:
         """
-        计算相似度矩阵，找到每个 base 分句的最佳匹配
+        Calculate similarity matrix and find best match for each base segment
 
         Returns:
             {base_segment_id: SegmentMatch}
@@ -219,7 +219,7 @@ class DiffEngine:
             best_similarity = 0.0
             best_target_idx = -1
 
-            # 遍历所有 target 分句，找到最高相似度
+            # Iterate through all target segments to find highest similarity
             for j, target_seg in enumerate(target_segments):
                 target_vec = target_vecs[j]
                 similarity = self.embedding_provider.similarity(base_vec, target_vec)
@@ -228,7 +228,7 @@ class DiffEngine:
                     best_similarity = similarity
                     best_target_idx = j
 
-            # 记录最佳匹配
+            # Record best match
             if best_target_idx >= 0:
                 matches[base_seg["segment_id"]] = SegmentMatch(
                     source_segment_id=base_seg["segment_id"],
@@ -249,35 +249,35 @@ class DiffEngine:
         target_segments: List[Dict[str, str]],
     ) -> DiffResult:
         """
-        三方 Diff（Merge 预览）
+        Three-way Diff (Merge preview)
 
-        场景：合并 Source Branch 到 Target Branch，基于共同祖先 Base。
+        Scenario: Merge Source Branch to Target Branch based on common ancestor Base.
 
-        算法：
-        1. 对每个 base 分句 b_i：
-           - 在 source 中找最佳匹配 s_j（相似度 sim_s）
-           - 在 target 中找最佳匹配 t_k（相似度 sim_t）
-        2. 分类：
-           - 若 sim_s >= threshold 且 sim_t >= threshold：
-             * 若 s_j == t_k（文本相同）→ SAME
-             * 若 s_j != t_k → CONFLICT
-           - 若 sim_s >= threshold 且 sim_t < threshold → source 保留，target 删除 → 取 source
-           - 若 sim_s < threshold 且 sim_t >= threshold → source 删除，target 保留 → 取 target
-           - 若 sim_s < threshold 且 sim_t < threshold → 双方都删除 → REMOVED
-        3. 检查 source/target 中未匹配的分句 → ADDED
+        Algorithm:
+        1. For each base segment b_i:
+           - Find best match s_j in source (similarity sim_s)
+           - Find best match t_k in target (similarity sim_t)
+        2. Classify:
+           - If sim_s >= threshold and sim_t >= threshold:
+             * If s_j == t_k (same text) → SAME
+             * If s_j != t_k → CONFLICT
+           - If sim_s >= threshold and sim_t < threshold → source kept, target deleted → take source
+           - If sim_s < threshold and sim_t >= threshold → source deleted, target kept → take target
+           - If sim_s < threshold and sim_t < threshold → both deleted → REMOVED
+        3. Check unmatched segments in source/target → ADDED
 
         Args:
-            base_id: 共同祖先版本 ID
-            base_segments: 共同祖先的分句列表
-            source_id: Source Branch 版本 ID
-            source_segments: Source Branch 的分句列表
-            target_id: Target Branch 版本 ID
-            target_segments: Target Branch 的分句列表
+            base_id: Common ancestor version ID
+            base_segments: List of segments from common ancestor
+            source_id: Source Branch version ID
+            source_segments: List of segments from Source Branch
+            target_id: Target Branch version ID
+            target_segments: List of segments from Target Branch
 
         Returns:
-            DiffResult（包含冲突检测）
+            DiffResult (includes conflict detection)
         """
-        # 1. 编码所有分句
+        # 1. Encode all segments
         base_texts = [seg["text"] for seg in base_segments]
         source_texts = [seg["text"] for seg in source_segments]
         target_texts = [seg["text"] for seg in target_segments]
@@ -286,11 +286,11 @@ class DiffEngine:
         source_vecs = self.embedding_provider.encode(source_texts)
         target_vecs = self.embedding_provider.encode(target_texts)
 
-        # 2. 计算相似度矩阵
+        # 2. Calculate similarity matrices
         base_to_source = self._compute_matches(base_segments, base_vecs, source_segments, source_vecs)
         base_to_target = self._compute_matches(base_segments, base_vecs, target_segments, target_vecs)
 
-        # 3. 生成三方 Diff 结果
+        # 3. Generate three-way Diff result
         segment_diffs = []
         source_matched_ids = set()
         target_matched_ids = set()
@@ -304,16 +304,16 @@ class DiffEngine:
             target_matched = target_match and target_match.matched
 
             if source_matched and target_matched:
-                # 双方都保留
+                # Both sides kept
                 source_matched_ids.add(source_match.target_segment_id)
                 target_matched_ids.add(target_match.target_segment_id)
 
-                # 检查是否冲突
+                # Check for conflict
                 source_text = self._get_segment_text(source_match.target_segment_id, source_segments)
                 target_text = self._get_segment_text(target_match.target_segment_id, target_segments)
 
                 if source_text == target_text:
-                    # 内容相同 → SAME
+                    # Same content → SAME
                     segment_diffs.append(SegmentDiff(
                         segment_id=base_id_str,
                         text=base_seg["text"],
@@ -323,7 +323,7 @@ class DiffEngine:
                         matched_text=source_text,
                     ))
                 else:
-                    # 内容不同 → CONFLICT
+                    # Different content → CONFLICT
                     segment_diffs.append(SegmentDiff(
                         segment_id=base_id_str,
                         text=base_seg["text"],
@@ -334,7 +334,7 @@ class DiffEngine:
                     ))
 
             elif source_matched and not target_matched:
-                # Source 保留，Target 删除 → 取 source
+                # Source kept, Target deleted → take source
                 source_matched_ids.add(source_match.target_segment_id)
                 segment_diffs.append(SegmentDiff(
                     segment_id=base_id_str,
@@ -346,7 +346,7 @@ class DiffEngine:
                 ))
 
             elif not source_matched and target_matched:
-                # Source 删除，Target 保留 → 取 target
+                # Source deleted, Target kept → take target
                 target_matched_ids.add(target_match.target_segment_id)
                 segment_diffs.append(SegmentDiff(
                     segment_id=base_id_str,
@@ -358,14 +358,14 @@ class DiffEngine:
                 ))
 
             else:
-                # 双方都删除 → REMOVED
+                # Both deleted → REMOVED
                 segment_diffs.append(SegmentDiff(
                     segment_id=base_id_str,
                     text=base_seg["text"],
                     diff_type=DiffType.REMOVED,
                 ))
 
-        # 4. 检查 source/target 中未匹配的分句（新增）
+        # 4. Check unmatched segments in source/target (added)
         for source_seg in source_segments:
             if source_seg["segment_id"] not in source_matched_ids:
                 segment_diffs.append(SegmentDiff(
@@ -383,15 +383,15 @@ class DiffEngine:
                 ))
 
         return DiffResult(
-            base_id=base_id,  # 共同祖先
-            target_id=target_id,  # Target Branch 版本
-            source_id=source_id,  # Source Branch 版本
+            base_id=base_id,  # Common ancestor
+            target_id=target_id,  # Target Branch version
+            source_id=source_id,  # Source Branch version
             segment_diffs=segment_diffs,
             threshold=self.threshold,
         )
 
     def _get_segment_text(self, segment_id: str, segments: List[Dict[str, str]]) -> str:
-        """获取指定 segment_id 的文本"""
+        """Get text for specified segment_id"""
         for seg in segments:
             if seg["segment_id"] == segment_id:
                 return seg["text"]

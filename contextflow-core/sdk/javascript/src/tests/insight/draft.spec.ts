@@ -5,27 +5,27 @@ describe("renderBullets", () => {
     const bullets = renderBullets([
       {
         aspectId: "aspect-1",
-        title: "旅行预算",
-        findings: ["预算不超过 2000 美元", "另外备注"],
+        title: "Travel budget",
+        findings: ["Budget not exceeding 2000 USD", "Additional notes"],
         confidence: 0.82,
       },
     ]);
 
-    expect(bullets[0]).toContain("旅行预算");
+    expect(bullets[0]).toContain("Travel budget");
     expect(bullets[0]).toContain("(82%)");
-    expect(bullets[0]).toContain("预算不超过 2000 美元");
+    expect(bullets[0]).toContain("Budget not exceeding 2000 USD");
   });
 
   it("indicates missing evidence when findings empty", () => {
     const bullets = renderBullets([
       {
         aspectId: "aspect-2",
-        title: "出发时间",
+        title: "Departure time",
         findings: [],
         confidence: 0.4,
       },
     ]);
 
-    expect(bullets[0]).toContain("缺少佐证");
+    expect(bullets[0]).toContain("Missing evidence");
   });
 });

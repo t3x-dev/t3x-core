@@ -1,7 +1,7 @@
 """
-依赖注入 - 数据库连接和配置管理
+Dependency injection - Database connections and configuration management
 
-提供 FastAPI 依赖注入的组件。
+Provides dependency injection components for FastAPI.
 """
 
 from __future__ import annotations
@@ -16,22 +16,22 @@ from pydantic_settings import BaseSettings
 
 
 # ============================================================================
-# 配置
+# Configuration
 # ============================================================================
 
 class Settings(BaseSettings):
-    """应用配置"""
-    # 数据库路径
+    """Application configuration"""
+    # Database path
     database_path: str = ".contextflow/contextflow.db"
 
-    # JSONL Ledger 目录
+    # JSONL Ledger directory
     ledger_dir: str = ".contextflow/ledger"
 
-    # 认证（可选）
+    # Authentication (optional)
     auth_enabled: bool = False
     auth_token: Optional[str] = None
 
-    # 日志级别
+    # Log level
     log_level: str = "info"
 
     class Config:
@@ -42,46 +42,46 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """获取应用配置（缓存）"""
+    """Get application configuration (cached)"""
     return Settings()
 
 
 # ============================================================================
-# 数据库连接
+# Database connections
 # ============================================================================
 
 def get_db_path(settings: Optional[Settings] = None) -> Path:
-    """获取数据库路径"""
+    """Get database path"""
     if settings is None:
         settings = get_settings()
     return Path(settings.database_path)
 
 
 def get_ledger_dir(settings: Optional[Settings] = None) -> Path:
-    """获取 Ledger 目录"""
+    """Get ledger directory"""
     if settings is None:
         settings = get_settings()
     return Path(settings.ledger_dir)
 
 
 def ensure_directories():
-    """确保必要的目录存在"""
+    """Ensure required directories exist"""
     settings = get_settings()
 
-    # 创建数据库目录
+    # Create database directory
     db_path = get_db_path(settings)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 创建 Ledger 目录
+    # Create ledger directory
     ledger_dir = get_ledger_dir(settings)
     ledger_dir.mkdir(parents=True, exist_ok=True)
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:
     """
-    获取数据库连接（FastAPI 依赖注入）
+    Get database connection (FastAPI dependency injection)
 
-    使用方式：
+    Usage:
         @router.get("/")
         async def list_items(db: sqlite3.Connection = Depends(get_db)):
             cursor = db.execute("SELECT * FROM items")
@@ -90,11 +90,11 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
     settings = get_settings()
     db_path = get_db_path(settings)
 
-    # 确保目录存在
+    # Ensure directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
-    conn.row_factory = sqlite3.Row  # 返回字典式结果
+    conn.row_factory = sqlite3.Row  # Return dict-style results
 
     try:
         yield conn
@@ -103,7 +103,7 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 
 
 # ============================================================================
-# 启动时间追踪（用于 /health）
+# Startup time tracking (for /health endpoint)
 # ============================================================================
 
 import time
@@ -112,13 +112,13 @@ _start_time: Optional[float] = None
 
 
 def set_start_time():
-    """设置启动时间"""
+    """Set startup time"""
     global _start_time
     _start_time = time.time()
 
 
 def get_uptime() -> int:
-    """获取运行时间（秒）"""
+    """Get runtime in seconds"""
     if _start_time is None:
         return 0
     return int(time.time() - _start_time)

@@ -79,8 +79,8 @@ export function NodeModal({
   const MIN_DRAFT_RIGHT = 0.35
   const chatHistory = useMemo(
     () => [
-      { id: `${node.id}-user`, role: 'user' as const, content: data.status || '尚未添加状态描述。' },
-      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || '暂无摘要。' },
+      { id: `${node.id}-user`, role: 'user' as const, content: data.status || 'No status description added yet.' },
+      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || 'No summary available.' },
     ],
     [data.status, data.summary, node.id],
   )
@@ -143,12 +143,12 @@ export function NodeModal({
       {
         id: `${node.id}-ai`,
         role: 'ai',
-        content: data.summary || '暂无摘要，开始对话以捕获上下文。',
+        content: data.summary || 'No summary available, start conversation to capture context.',
       },
       {
         id: `${node.id}-user`,
         role: 'user',
-        content: data.status || '尚未设置状态',
+        content: data.status || 'No status set yet',
       },
     ])
   }, [isConversation, data.summary, data.status, node.id])
@@ -291,7 +291,7 @@ export function NodeModal({
                   type="button"
                 >
                   {conversationAction.icon}
-                  <span>提取到草稿</span>
+                  <span>Extract to Draft</span>
                 </button>
               )}
               <button className="text-btn" onClick={onClose} aria-label="Close">
@@ -307,23 +307,23 @@ export function NodeModal({
               <div className="conversation-context__header">
                 <Database size={18} />
                 <div>
-                  <strong>上游上下文</strong>
-                  <span>图书馆 / 文档</span>
+                  <strong>Upstream Context</strong>
+                  <span>Library / Documentation</span>
                 </div>
               </div>
               <div className="conversation-context__cards">
                 <article className="context-card">
-                  <span>来源</span>
+                  <span>Source</span>
                   <strong>{data.entryId}</strong>
                   <p>{data.timestamp}</p>
                 </article>
                 <article className="context-card">
-                  <span>状态</span>
+                  <span>Status</span>
                   <strong>{data.status}</strong>
-                  <p>当前追踪标记</p>
+                  <p>Current tracking marker</p>
                 </article>
                 <article className="context-card">
-                  <span>活动标签</span>
+                  <span>Active Tags</span>
                   <div className="context-card__tags">
                     {data.tags.length > 0 ? (
                       data.tags.map((tag) => (
@@ -332,28 +332,28 @@ export function NodeModal({
                         </span>
                       ))
                     ) : (
-                      <em>暂无</em>
+                      <em>None</em>
                     )}
                   </div>
                 </article>
               </div>
               <div className="conversation-context__note">
                 <label>
-                  摘要
+                  Summary
                   <textarea
                     value={data.summary}
                     onChange={(event) => onUpdate({ summary: event.target.value })}
                   />
                 </label>
                 <label>
-                  备注
+                  Notes
                   <input
                     value={data.status}
                     onChange={(event) => onUpdate({ status: event.target.value })}
                   />
                 </label>
                 <label>
-                  标签
+                  Tags
                   <input
                     value={data.tags.join(', ')}
                     onChange={(event) =>
@@ -383,7 +383,7 @@ export function NodeModal({
               <div className="conversation-chat__header">
                 <div>
                   <strong>{data.title}</strong>
-                  <span>写作桌 / Chat</span>
+                  <span>Workspace / Chat</span>
                 </div>
                 <button className="conversation-chat__settings-btn" type="button">
                   <Settings size={18} />
@@ -406,12 +406,12 @@ export function NodeModal({
               </div>
               <form className="conversation-chat__composer" onSubmit={handleSendMessage}>
                 <textarea
-                  placeholder="总结或补充新的上下文..."
+                  placeholder="Summarize or add new context..."
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                 />
                 <button className="primary-btn" type="submit">
-                  发送
+                  Send
                 </button>
               </form>
             </section>
@@ -435,12 +435,12 @@ export function NodeModal({
         id: 'commit',
         title: `Commit Snapshot`,
         subtitle: data.branchType === 'main' ? 'Main' : 'Feature',
-        content: <p>{data.baselineSummary || '尚无上游提交摘要。'}</p>,
+        content: <p>{data.baselineSummary || 'No upstream commit summary yet.'}</p>,
       },
       {
         id: 'conversation',
         title: 'Conversation (Raw)',
-        subtitle: '最后两条消息',
+        subtitle: 'Last two messages',
         content: (
           <div className="draft-chat-thread">
             {chatHistory.map((message) => (
@@ -452,7 +452,7 @@ export function NodeModal({
                     : 'draft-chat__bubble draft-chat__bubble--ai'
                 }
               >
-                <span>{message.role === 'user' ? '用户' : 'AI'}</span>
+                <span>{message.role === 'user' ? 'User' : 'AI'}</span>
                 <p>{message.content}</p>
               </div>
             ))}
@@ -463,7 +463,7 @@ export function NodeModal({
         id: check.id,
         title: check.label,
         subtitle: `Validation · ${check.status}`,
-        content: <p>{data.summary || '暂无描述。'}</p>,
+        content: <p>{data.summary || 'No description available.'}</p>,
       })),
     ]
 
@@ -499,7 +499,7 @@ export function NodeModal({
             <section className="draft-section draft-section--sidebar" style={{ flexBasis: `${leftBasis * 100}%` }}>
               <div className="draft-sidebar__header">
                 <span>Upstream Context</span>
-                <p>引用上游证据，随时对照</p>
+                <p>Reference upstream evidence for comparison</p>
               </div>
               <div className="draft-evidence__list">
                 {evidenceCards.map((card) => (
@@ -530,7 +530,7 @@ export function NodeModal({
             >
               <div className="draft-config__header">
                 <strong>Draft Settings</strong>
-                <span>配置桥接逻辑与目标</span>
+                <span>Configure bridge logic and targets</span>
               </div>
               <div className="draft-config__form">
                 <label>
@@ -538,7 +538,7 @@ export function NodeModal({
                   <input
                     value={data.title}
                     onChange={(event) => onUpdate({ title: event.target.value })}
-                    placeholder="输入草稿标题"
+                    placeholder="Enter draft title"
                   />
                 </label>
                 <label>
@@ -594,7 +594,7 @@ export function NodeModal({
                     rows={5}
                     value={data.draftInstructions ?? ''}
                     onChange={(event) => onUpdate({ draftInstructions: event.target.value })}
-                    placeholder="例如：语气更正式，突出验证要点……"
+                    placeholder="e.g.: More formal tone, highlight key validation points..."
                   />
                 </label>
                 <button
@@ -652,7 +652,7 @@ export function NodeModal({
                   className="draft-editor__textarea"
                   value={data.summary}
                   onChange={(event) => onUpdate({ summary: event.target.value })}
-                  placeholder="在此编辑草稿，支持 Markdown / 富文本..."
+                  placeholder="Edit draft here, supports Markdown / rich text..."
                 />
               ) : (
                 <div className="draft-diff">
@@ -665,7 +665,7 @@ export function NodeModal({
                     </header>
                     <div className="draft-diff__lines">
                       {baselineLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">(暂无上游 commit)</div>
+                        <div className="diff-line diff-line--neutral">(No upstream commit)</div>
                       ) : (
                         baselineLines.map((text, index) => {
                           const status = baselineStatuses[index]
@@ -675,7 +675,7 @@ export function NodeModal({
                               : 'diff-line diff-line--neutral'
                           return (
                             <div key={`commit-${index}`} className={classes}>
-                              {text || '(空行)'}
+                              {text || '(Empty line)'}
                             </div>
                           )
                         })
@@ -697,7 +697,7 @@ export function NodeModal({
                     </header>
                     <div className="draft-diff__lines draft-diff__lines--interactive">
                       {draftLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">(暂无草稿内容)</div>
+                        <div className="diff-line diff-line--neutral">(No draft content)</div>
                       ) : (
                         draftLines.map((text, index) => {
                           const status = draftStatuses[index]
@@ -707,7 +707,7 @@ export function NodeModal({
                           const decision = diffDecisions[key]
                           return (
                             <div key={`draft-${key}`} className={classes}>
-                              <span>{text || '(空行)'}</span>
+                              <span>{text || '(Empty line)'}</span>
                               {status === 'added' && (
                                 <div className="diff-line__actions">
                                   <button
@@ -724,7 +724,7 @@ export function NodeModal({
                                         return next
                                       })
                                     }
-                                    aria-label="接受修改"
+                                    aria-label="Accept change"
                                   >
                                     <Check size={16} />
                                   </button>
@@ -742,7 +742,7 @@ export function NodeModal({
                                         return next
                                       })
                                     }
-                                    aria-label="拒绝修改"
+                                    aria-label="Reject change"
                                   >
                                     <X size={16} />
                                   </button>
@@ -756,7 +756,7 @@ export function NodeModal({
                         const decision = diffDecisions[segment.key]
                         return (
                           <div key={`draft-${segment.key}`} className="diff-line diff-line--ghost">
-                            <span>(删除) {segment.text || '(空行)'}</span>
+                            <span>(delete) {segment.text || '(Empty line)'}</span>
                             <div className="diff-line__actions">
                               <button
                                 type="button"
@@ -772,7 +772,7 @@ export function NodeModal({
                                     return next
                                   })
                                 }
-                                aria-label="接受删除"
+                                aria-label="Accept deletion"
                               >
                                 <Check size={16} />
                               </button>
@@ -790,7 +790,7 @@ export function NodeModal({
                                     return next
                                   })
                                 }
-                                aria-label="拒绝删除"
+                                aria-label="Reject deletion"
                               >
                                 <X size={16} />
                               </button>

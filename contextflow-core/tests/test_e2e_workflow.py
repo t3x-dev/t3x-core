@@ -1,9 +1,9 @@
 """
-端到端集成测试
+End-to-end integration tests
 
-这些测试不会真正调用 OpenAI 或 sentence-transformers，而是通过
-Stub Embedding / LLM Provider 来验证“Turn → Ledger → Diff → Merge →
-Storage 重建”这条链路是否按照架构文档运行。
+These tests don't actually call OpenAI or sentence-transformers, but instead
+use Stub Embedding / LLM Provider to validate that the "Turn → Ledger → Diff → Merge →
+Storage rebuild" pipeline runs according to the Architecture Documentation.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from core.storage import init_database, rebuild_from_ledger
 
 
 class StubEmbeddingProvider:
-    """简单的嵌入提供者，使用文本长度做余弦近似。"""
+    """Simple embedding provider, using text length for cosine approximation."""
 
     def encode(self, texts):
         return [[len(t)] for t in texts]
@@ -34,7 +34,7 @@ class StubEmbeddingProvider:
 
 
 def _make_ring_snapshot(turn_id: str, text: str) -> dict:
-    """构造最小的 Ring 快照，避免依赖 spaCy。"""
+    """Construct minimal Ring snapshot, avoiding dependency on spaCy."""
     return {
         "turn_id": turn_id,
         "ring1": {
@@ -50,7 +50,7 @@ def _make_ring_snapshot(turn_id: str, text: str) -> dict:
 
 
 def test_turn_commit_storage_roundtrip(tmp_path: Path):
-    """TurnLedger + CommitLedger + SQLite 重建的完整流程。"""
+    """Complete flow of TurnLedger + CommitLedger + SQLite rebuild."""
     ledger_dir = tmp_path / "ledgers"
     ledger_dir.mkdir()
 
@@ -110,7 +110,7 @@ def test_turn_commit_storage_roundtrip(tmp_path: Path):
 
 
 def test_diff_and_merge_with_stub_embedding():
-    """验证 DiffEngine + MergeAgent 可以在 stub embedding 下运行。"""
+    """Validate that DiffEngine + MergeAgent can run with stub embedding."""
     embedding = StubEmbeddingProvider()
     diff_engine = DiffEngine(embedding_provider=embedding, threshold=0.5)
     merge_agent = MergeAgent(diff_engine=diff_engine)
@@ -139,7 +139,7 @@ def test_diff_and_merge_with_stub_embedding():
     assert diff_result.base_id == "base"
     assert diff_result.source_id == "source"
     assert diff_result.target_id == "target"
-    assert diff_result.conflict_count == 1  # 双方都改了 s1
+    assert diff_result.conflict_count == 1  # Both sides modified s1
     assert any(diff.diff_type == DiffType.ADDED for diff in diff_result.segment_diffs)
 
     merge_result = merge_agent.merge(
@@ -155,7 +155,7 @@ def test_diff_and_merge_with_stub_embedding():
     assert merge_result.base_id == "base"
     assert merge_result.source_id == "source"
     assert merge_result.target_id == "target"
-    # 同时保留 source/target 的新增段落
+    # Keep both source/target added segments
     merged_texts = {seg["text"] for seg in merge_result.merged_segments}
     assert "Add remember me option." in merged_texts
     assert any("CONFLICT" in seg["text"] for seg in merge_result.merged_segments)

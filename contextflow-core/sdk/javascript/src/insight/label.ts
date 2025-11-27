@@ -35,19 +35,17 @@ const STOPWORDS = new Set(
     "it",
     "as",
     "about",
-    "但",
-    "并且",
-    "或者",
-    "以及",
-    "一个",
-    "这个",
-    "那个",
-    "我们",
-    "你们",
-    "他们",
-    "需要",
-    "希望",
-    "还有",
+    "但", // but
+    "以及", // and
+    "一个", // one/a
+    "这个", // this
+    "那个", // that
+    "我们", // we
+    "你们", // you (plural)
+    "他们", // they
+    "需要", // need
+    "希望", // hope/wish
+    "还有", // also/and
   ].map(word => word.toLowerCase()),
 );
 

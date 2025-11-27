@@ -1,11 +1,11 @@
 """
-MergeAgent 实现
+MergeAgent implementation
 
-按照 ARCHITECTURE.zh.md:257-277 规范：
-- 基于 DiffEngine 的三方 diff
-- 检测冲突（DiffType.CONFLICT）
-- 自动合并无冲突部分
-- 可选：LLM 辅助冲突解决（Agentic Layer）
+Per ARCHITECTURE.zh.md:257-277 specification:
+- Three-way diff based on DiffEngine
+- Detect conflicts (DiffType.CONFLICT)
+- Automatically merge non-conflicting parts
+- Optional: LLM-assisted conflict resolution (Agentic Layer)
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from ..diff import DiffEngine, DiffResult, DiffType, SegmentDiff
 # Protocol for LLM Provider (optional)
 class LLMProvider(Protocol):
     """
-    LLM 提供者接口
+    LLM provider interface
 
-    用于辅助冲突解决（可选）。
+    Used for assisted conflict resolution (optional).
     """
 
     def resolve_conflict(
@@ -32,16 +32,16 @@ class LLMProvider(Protocol):
         context: str = "",
     ) -> str:
         """
-        使用 LLM 解决冲突
+        Resolve conflict using LLM
 
         Args:
-            base_text: 共同祖先文本
-            source_text: Source 分支文本
-            target_text: Target 分支文本
-            context: 额外上下文信息
+            base_text: Common ancestor text
+            source_text: Source branch text
+            target_text: Target branch text
+            context: Additional context information
 
         Returns:
-            解决后的文本
+            Resolved text
         """
         ...
 
@@ -49,44 +49,44 @@ class LLMProvider(Protocol):
 @dataclass
 class MergeResult:
     """
-    Merge 结果
+    Merge result
 
-    包含合并后的分句、冲突信息、统计数据。
+    Contains merged segments, conflict information, and statistics.
     """
 
     base_id: str
     source_id: str
     target_id: str
 
-    # 合并结果
+    # Merge result
     merged_segments: List[Dict[str, str]]  # [{"segment_id": "...", "text": "..."}]
 
-    # 冲突信息
-    conflicts: List[SegmentDiff]  # DiffType.CONFLICT 的分句
+    # Conflict information
+    conflicts: List[SegmentDiff]  # Segments with DiffType.CONFLICT
 
-    # 统计信息
+    # Statistics
     total_segments: int = 0
-    auto_merged_count: int = 0  # 自动合并成功的分句数
-    conflict_count: int = 0  # 冲突分句数
-    llm_resolved_count: int = 0  # LLM 解决的冲突数
+    auto_merged_count: int = 0  # Number of successfully auto-merged segments
+    conflict_count: int = 0  # Number of conflicting segments
+    llm_resolved_count: int = 0  # Number of conflicts resolved by LLM
 
-    # Diff 结果（用于审计）
+    # Diff result (for auditing)
     diff_result: Optional[DiffResult] = None
 
 
 class MergeAgent:
     """
-    三方合并代理
+    Three-way merge agent
 
-    工作流程：
-    1. 使用 DiffEngine 进行三方 diff
-    2. 自动合并无冲突部分：
-       - SAME → 保留
-       - ADDED → 添加
-       - REMOVED → 删除
-       - MODIFIED → 取修改后的版本
-    3. 收集冲突（CONFLICT）
-    4. 可选：使用 LLM 辅助解决冲突
+    Workflow:
+    1. Perform three-way diff using DiffEngine
+    2. Auto-merge non-conflicting parts:
+       - SAME → Keep
+       - ADDED → Add
+       - REMOVED → Delete
+       - MODIFIED → Take modified version
+    3. Collect conflicts (CONFLICT)
+    4. Optional: Use LLM to assist conflict resolution
     """
 
     def __init__(
@@ -95,11 +95,11 @@ class MergeAgent:
         llm_provider: Optional[LLMProvider] = None,
     ):
         """
-        初始化 MergeAgent
+        Initialize MergeAgent
 
         Args:
-            diff_engine: Diff 引擎
-            llm_provider: LLM 提供者（可选）
+            diff_engine: Diff engine
+            llm_provider: LLM provider (optional)
         """
         self.diff_engine = diff_engine
         self.llm_provider = llm_provider
@@ -115,21 +115,21 @@ class MergeAgent:
         auto_resolve_conflicts: bool = False,
     ) -> MergeResult:
         """
-        执行三方合并
+        Execute three-way merge
 
         Args:
-            base_id: 共同祖先版本 ID
-            base_segments: 共同祖先的分句列表
-            source_id: Source Branch 版本 ID
-            source_segments: Source Branch 的分句列表
-            target_id: Target Branch 版本 ID
-            target_segments: Target Branch 的分句列表
-            auto_resolve_conflicts: 是否使用 LLM 自动解决冲突
+            base_id: Common ancestor version ID
+            base_segments: List of segments from common ancestor
+            source_id: Source Branch version ID
+            source_segments: List of segments from Source Branch
+            target_id: Target Branch version ID
+            target_segments: List of segments from Target Branch
+            auto_resolve_conflicts: Whether to use LLM to automatically resolve conflicts
 
         Returns:
             MergeResult
         """
-        # 1. 执行三方 diff
+        # 1. Execute three-way diff
         diff_result = self.diff_engine.diff_three_way(
             base_id=base_id,
             base_segments=base_segments,
@@ -139,20 +139,20 @@ class MergeAgent:
             target_segments=target_segments,
         )
 
-        # 2. 自动合并
+        # 2. Auto-merge
         merged_segments = []
         conflicts = []
         auto_merged_count = 0
         llm_resolved_count = 0
 
-        # 构建 segment_id -> segment 映射表
+        # Build segment_id -> segment mapping table
         source_map = {seg["segment_id"]: seg for seg in source_segments}
         target_map = {seg["segment_id"]: seg for seg in target_segments}
         base_map = {seg["segment_id"]: seg for seg in base_segments}
 
         for diff in diff_result.segment_diffs:
             if diff.diff_type == DiffType.SAME:
-                # 保留原文本
+                # Keep original text
                 merged_segments.append({
                     "segment_id": diff.segment_id,
                     "text": diff.text,
@@ -160,7 +160,7 @@ class MergeAgent:
                 auto_merged_count += 1
 
             elif diff.diff_type == DiffType.ADDED:
-                # 添加新分句
+                # Add new segment
                 merged_segments.append({
                     "segment_id": diff.segment_id,
                     "text": diff.text,
@@ -168,11 +168,11 @@ class MergeAgent:
                 auto_merged_count += 1
 
             elif diff.diff_type == DiffType.REMOVED:
-                # 删除分句（不添加到 merged_segments）
+                # Delete segment (don't add to merged_segments)
                 auto_merged_count += 1
 
             elif diff.diff_type == DiffType.MODIFIED:
-                # 取修改后的版本
+                # Take modified version
                 if diff.matched_segment_id:
                     merged_segments.append({
                         "segment_id": diff.matched_segment_id,
@@ -181,10 +181,10 @@ class MergeAgent:
                     auto_merged_count += 1
 
             elif diff.diff_type == DiffType.CONFLICT:
-                # 记录冲突
+                # Record conflict
                 conflicts.append(diff)
 
-                # 尝试使用 LLM 解决冲突
+                # Try to resolve conflict using LLM
                 if auto_resolve_conflicts and self.llm_provider:
                     resolved_text = self._resolve_conflict_with_llm(diff, base_map, source_map, target_map)
                     if resolved_text:
@@ -194,13 +194,13 @@ class MergeAgent:
                         })
                         llm_resolved_count += 1
                     else:
-                        # LLM 解决失败，保留冲突标记
+                        # LLM resolution failed, keep conflict marker
                         merged_segments.append({
                             "segment_id": diff.segment_id,
                             "text": f"<<<<<<< CONFLICT\n{diff.matched_text}\n=======",
                         })
                 else:
-                    # 不使用 LLM，保留冲突标记
+                    # Not using LLM, keep conflict marker
                     merged_segments.append({
                         "segment_id": diff.segment_id,
                         "text": f"<<<<<<< CONFLICT\n{diff.matched_text}\n=======",
@@ -227,32 +227,32 @@ class MergeAgent:
         target_map: Dict[str, Dict[str, str]],
     ) -> Optional[str]:
         """
-        使用 LLM 解决冲突
+        Resolve conflict using LLM
 
         Args:
-            conflict_diff: 冲突的 SegmentDiff
-            base_map: base segment 映射表
-            source_map: source segment 映射表
-            target_map: target segment 映射表
+            conflict_diff: Conflicting SegmentDiff
+            base_map: Base segment mapping table
+            source_map: Source segment mapping table
+            target_map: Target segment mapping table
 
         Returns:
-            解决后的文本，失败返回 None
+            Resolved text, or None if failed
         """
         if not self.llm_provider:
             return None
 
-        # 提取冲突的 source 和 target segment_id
+        # Extract conflicting source and target segment_id
         if not conflict_diff.matched_segment_id or "|" not in conflict_diff.matched_segment_id:
             return None
 
         source_seg_id, target_seg_id = conflict_diff.matched_segment_id.split("|")
 
-        # 获取文本
+        # Get texts
         base_text = conflict_diff.text
         source_text = source_map.get(source_seg_id, {}).get("text", "")
         target_text = target_map.get(target_seg_id, {}).get("text", "")
 
-        # 调用 LLM
+        # Call LLM
         try:
             resolved = self.llm_provider.resolve_conflict(
                 base_text=base_text,
@@ -262,5 +262,5 @@ class MergeAgent:
             )
             return resolved
         except Exception:
-            # LLM 调用失败，返回 None
+            # LLM call failed, return None
             return None

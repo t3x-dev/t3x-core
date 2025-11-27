@@ -50,16 +50,16 @@ ContextFlow is built as a **deterministic reasoning compiler** with clear separa
 │      LAYER 3: SEMANTIC CORE (The Intelligence)      │
 │                                                     │
 │  ★ MVP 1.1 (Phase 1): Deterministic Finding Layer  │
-│    • Evidence scoring（embed + BM25 + meta weights）│
-│    • Extractor rings（表层 / 关系 / 结构）           │
-│    • 语义面向合成器（findings → aspects）          │
-│    • 信心闸门（auto / suggest / ignore）          │
+│    • Evidence scoring(embed + BM25 + meta weights)│
+│    • Extractor rings(surface / relation / structural)           │
+│    • Semantic-oriented composer(findings → aspects)          │
+│    • Confidence gating(auto / suggest / ignore)          │
 │                                                     │
 │  ★ Phase 2: Dual-Pipeline Enhancements             │
-│    • NLP backends（spaCy/Stanza/Spark NLP）        │
-│    • 验证层：语义一致性 / 类型校验                 │
-│    • 意图模式（knowledge / decision / …）         │
-│    • 进阶矛盾检测                                  │
+│    • NLP backends(spaCy/Stanza/Spark NLP)        │
+│    • Validation layer: semantic consistency / type checking                 │
+│    • Intent modes(knowledge / decision / …)         │
+│    • Advanced contradiction detection                                  │
 │                                                     │
 │  ★ Phase 2+: Optional LLM Agents                   │
 │    • SummaryAgent (OpenAI/Claude/local/template)   │
@@ -785,7 +785,7 @@ contextflow/
 ├── docs/                       # Drafts / supporting notes
 │   ├── CORE_ARCHITECTURE.md    # Evidence-centric design (legacy)
 │   ├── EVIDENCE_SCORING_V2.md  # Evidence scoring spec
-│   ├── FACET_SUMMARY_LLM.md    # Legacy facet-summary notes (待迁移)
+│   ├── FACET_SUMMARY_LLM.md    # Legacy facet-summary notes (pending migration)
 │   └── DEV_PRIORITIES.md       # Development roadmap
 │
 └── README.md                   # This file

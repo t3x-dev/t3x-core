@@ -5,14 +5,14 @@ describe("structural extractors", () => {
     const turn = {
       id: "turn-struct",
       text: [
-        "## 预算与行程",
-        "- 不超过 1800 美元",
-        "- 行程保持 3 天",
-        "> \"大阪夜生活很棒\"",
+        "## Budget and Itinerary",
+        "- Not exceeding 1800 USD",
+        "- Keep itinerary to 3 days",
+        "> \"Osaka nightlife is great\"",
         "",
-        "第一段描述大阪夜市美食。",
+        "First paragraph describes Osaka night market food.",
         "",
-        "第二段强调靠近地铁。",
+        "Second paragraph emphasizes proximity to subway.",
       ].join("\n"),
     };
 

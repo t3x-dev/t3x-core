@@ -1,7 +1,7 @@
 """
-API 路由模块
+API Routes module
 
-包含所有 Framework Core API 端点。
+Contains all Framework Core API endpoints.
 """
 
 from core_api.routes import health

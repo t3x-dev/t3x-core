@@ -1,15 +1,15 @@
 """
-极性标注规则引擎
+Polarity annotation rule engine
 
-基于依存句法分析 + YAML/JSON 规则表，为关键词标注极性 (-1/0/+1)。
+Annotates keywords with polarity (-1/0/+1) based on dependency parsing + YAML/JSON rule tables.
 
-规则：
-1. 正向谓词（want/prefer/need/like/should）+ 无否定 → +1
-2. 负向谓词（dislike/reject/avoid/hate/cannot）→ -1
-3. 正向谓词 + 否定修饰（don't want / not like）→ -1
-4. 其他情况 → 0（中性）
+Rules:
+1. Positive verbs (want/prefer/need/like/should) + no negation → +1
+2. Negative verbs (dislike/reject/avoid/hate/cannot) → -1
+3. Positive verbs + negation modifier (don't want / not like) → -1
+4. Other cases → 0 (neutral)
 
-不使用情感词典（VADER/SentiWordNet），保证决定论。
+Does not use sentiment dictionaries (VADER/SentiWordNet), ensuring determinism.
 """
 
 from __future__ import annotations
@@ -24,20 +24,20 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class PolarityRule:
     """
-    极性规则条目
+    Polarity rule entry
 
     Examples:
         - verb: "want", polarity: 1, check_negation: True
         - verb: "avoid", polarity: -1, check_negation: False
     """
 
-    verb: str  # 谓词原形（lemma）
-    polarity: Literal[-1, 1]  # 基础极性
-    check_negation: bool = True  # 是否检查否定修饰
+    verb: str  # Verb lemma
+    polarity: Literal[-1, 1]  # Base polarity
+    check_negation: bool = True  # Whether to check negation modifier
 
 
 DEFAULT_POLARITY_RULES = {
-    # 正向谓词（带否定检查）
+    # Positive verbs (with negation check)
     "positive": [
         PolarityRule("want", 1, True),
         PolarityRule("prefer", 1, True),
@@ -52,7 +52,7 @@ DEFAULT_POLARITY_RULES = {
         PolarityRule("plan", 1, True),
         PolarityRule("intend", 1, True),
     ],
-    # 负向谓词（不需要否定检查，已经是负向）
+    # Negative verbs (no negation check needed, already negative)
     "negative": [
         PolarityRule("dislike", -1, False),
         PolarityRule("hate", -1, False),
@@ -66,7 +66,7 @@ DEFAULT_POLARITY_RULES = {
     ],
 }
 
-# 否定词集合（用于依存树查找）
+# Negation markers (for dependency tree lookup)
 NEGATION_MARKERS = {
     "not", "n't", "never", "no", "none", "nobody", "nothing", "neither",
     "nor", "nowhere", "hardly", "scarcely", "barely"
@@ -75,25 +75,25 @@ NEGATION_MARKERS = {
 
 class PolarityRuleEngine:
     """
-    极性规则引擎
+    Polarity rule engine
 
-    加载规则表，并基于依存句法分析为关键词标注极性。
+    Loads rule tables and annotates keywords with polarity based on dependency parsing.
     """
 
     def __init__(self, rules_path: Path | None = None):
         """
-        初始化规则引擎
+        Initialize rule engine
 
         Args:
-            rules_path: 自定义规则文件路径（JSON 格式）
-                       如果为 None，使用内置默认规则
+            rules_path: Custom rule file path (JSON format)
+                       If None, uses built-in default rules
         """
         if rules_path and rules_path.exists():
             self.rules = self._load_rules_from_file(rules_path)
         else:
             self.rules = DEFAULT_POLARITY_RULES
 
-        # 构建快速查找索引
+        # Build fast lookup indexes
         self.positive_verbs: Dict[str, PolarityRule] = {
             rule.verb: rule for rule in self.rules["positive"]
         }
@@ -102,7 +102,7 @@ class PolarityRuleEngine:
         }
 
     def _load_rules_from_file(self, path: Path) -> Dict[str, List[PolarityRule]]:
-        """从 JSON 文件加载规则"""
+        """Load rules from JSON file"""
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -118,60 +118,60 @@ class PolarityRuleEngine:
     def get_polarity(
         self,
         token,  # spaCy Token object
-        verb_token,  # 谓词 Token（用于查规则）
+        verb_token,  # Verb Token (for rule lookup)
     ) -> Literal[-1, 0, 1]:
         """
-        基于依存树和规则表，返回关键词的极性
+        Return keyword polarity based on dependency tree and rule table
 
         Args:
-            token: spaCy Token（关键词）
-            verb_token: 关联的谓词 Token
+            token: spaCy Token (keyword)
+            verb_token: Associated verb Token
 
         Returns:
             -1/0/+1
         """
         verb_lemma = verb_token.lemma_.lower()
 
-        # 检查是否命中正向谓词
+        # Check if it matches positive verbs
         if verb_lemma in self.positive_verbs:
             rule = self.positive_verbs[verb_lemma]
             if rule.check_negation and self._has_negation(verb_token):
-                return -1  # 正向 + 否定 = 负向
+                return -1  # Positive + negation = negative
             return 1
 
-        # 检查是否命中负向谓词
+        # Check if it matches negative verbs
         if verb_lemma in self.negative_verbs:
             rule = self.negative_verbs[verb_lemma]
             if rule.check_negation and self._has_negation(verb_token):
-                # 双重否定：don't avoid → 正向？（边缘情况，保守处理为中性）
+                # Double negation: don't avoid → positive? (edge case, conservatively treat as neutral)
                 return 0
             return -1
 
-        # 未命中任何规则 → 中性
+        # No rule matched → neutral
         return 0
 
     def _has_negation(self, token) -> bool:
         """
-        检查 token 是否有否定修饰
+        Check if token has negation modifier
 
-        查找依存树中的 neg、advmod、aux 等否定标记。
+        Looks for negation markers like neg, advmod, aux in dependency tree.
 
         Args:
             token: spaCy Token
 
         Returns:
-            True 如果有否定修饰
+            True if negation modifier present
         """
-        # 检查子节点中是否有否定词
+        # Check child nodes for negation words
         for child in token.children:
             if child.dep_ in {"neg", "advmod", "aux"}:
                 if child.lemma_.lower() in NEGATION_MARKERS:
                     return True
-                # 检查缩写形式（don't, won't, can't）
+                # Check contracted forms (don't, won't, can't)
                 if "n't" in child.text.lower():
                     return True
 
-        # 检查父节点（某些情况下否定词在上层）
+        # Check parent node (in some cases negation is at higher level)
         if token.head and token.head != token:
             for sibling in token.head.children:
                 if sibling.dep_ == "neg" and sibling.lemma_.lower() in NEGATION_MARKERS:
@@ -181,9 +181,9 @@ class PolarityRuleEngine:
 
     def extract_preference_relations(self, doc) -> List[tuple]:
         """
-        从 spaCy Doc 中提取 (谓词, 宾语, 极性) 三元组
+        Extract (verb, object, polarity) triples from spaCy Doc
 
-        遍历依存树，找到 opinion/preference 相关的动词及其宾语。
+        Traverses dependency tree to find opinion/preference-related verbs and their objects.
 
         Args:
             doc: spaCy Doc object
@@ -194,23 +194,23 @@ class PolarityRuleEngine:
         relations = []
 
         for token in doc:
-            # 只关注动词
+            # Only focus on verbs
             if token.pos_ not in {"VERB", "AUX"}:
                 continue
 
             verb_lemma = token.lemma_.lower()
 
-            # 检查是否命中规则
+            # Check if it matches rules
             if verb_lemma not in self.positive_verbs and verb_lemma not in self.negative_verbs:
                 continue
 
-            # 找到宾语（dobj, pobj, attr）
+            # Find objects (dobj, pobj, attr)
             for child in token.children:
                 if child.dep_ in {"dobj", "pobj", "attr", "oprd"}:
                     polarity = self.get_polarity(child, token)
                     relations.append((token, child, polarity))
 
-                # 处理介词短语（如 "travel to Japan"）
+                # Handle prepositional phrases (e.g., "travel to Japan")
                 if child.dep_ == "prep":
                     for grandchild in child.children:
                         if grandchild.dep_ == "pobj":
@@ -221,10 +221,10 @@ class PolarityRuleEngine:
 
     def save_rules(self, path: Path):
         """
-        保存当前规则到 JSON 文件
+        Save current rules to JSON file
 
         Args:
-            path: 保存路径
+            path: Save path
         """
         data = {
             "positive": [

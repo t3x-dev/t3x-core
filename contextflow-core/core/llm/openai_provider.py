@@ -1,10 +1,11 @@
 """
 OpenAI LLM Provider
 
-该模块提供一个最小的 OpenAI Chat Completions 封装，用于 Draft Workflow
-的 polish 步骤和 MergeAgent 的冲突解决。实现被设计为可选依赖：
-只要仓库里存在该文件并在 requirements 中声明 `openai` 包，CLI/Agentic
-层即可在需要时实例化它；离线/完全本地化部署也可以替换成别的 Provider。
+This module provides a minimal OpenAI Chat Completions wrapper for Draft Workflow
+polish step and MergeAgent conflict resolution. The implementation is designed as
+an optional dependency: as long as this file exists in the repository and the
+`openai` package is declared in requirements, the CLI/Agentic layer can instantiate
+it when needed; offline/fully local deployments can replace it with other Providers.
 """
 
 from __future__ import annotations
@@ -14,19 +15,19 @@ from typing import Optional
 
 try:
     from openai import OpenAI
-except ImportError:  # pragma: no cover - 导入失败时的提示逻辑
+except ImportError:  # pragma: no cover - fallback logic when import fails
     OpenAI = None  # type: ignore
 
 
 class OpenAIProvider:
     """
-    OpenAI LLM Provider，实现 DraftWorkflow/ MergeAgent 所需的最小接口。
+    OpenAI LLM Provider, implementing minimal interface required by DraftWorkflow/MergeAgent.
 
     Attributes:
         api_key: OpenAI API Key
-        model: 模型名称，例如 `gpt-4o`, `gpt-4-turbo`
-        temperature: 温度
-        max_tokens: 最大输出 token
+        model: Model name, e.g., `gpt-4o`, `gpt-4-turbo`
+        temperature: Temperature
+        max_tokens: Maximum output tokens
     """
 
     def __init__(
@@ -62,18 +63,18 @@ class OpenAIProvider:
         system_prompt: Optional[str] = None,
     ) -> str:
         """
-        调用 OpenAI Chat Completions API 生成文本。
+        Call OpenAI Chat Completions API to generate text.
 
-        符合 Draft Workflow 的 LLMProvider Protocol。
+        Conforms to Draft Workflow's LLMProvider Protocol.
 
         Args:
-            prompt: 完整的提示词（包含 Bridge 模板 + Evidence）
-            temperature: 生成温度（默认 0.3）
-            max_tokens: 最大 token 数（默认 2048）
-            system_prompt: 系统提示词（可选，用于高级配置）
+            prompt: Complete prompt (including Bridge template + Evidence)
+            temperature: Generation temperature (default 0.3)
+            max_tokens: Maximum token count (default 2048)
+            system_prompt: System prompt (optional, for advanced configuration)
 
         Returns:
-            生成的文本
+            Generated text
         """
         messages = []
         if system_prompt:
@@ -96,13 +97,13 @@ class OpenAIProvider:
         context: str = "",
     ) -> str:
         """
-        MergeAgent 用的冲突解决辅助接口。
+        Conflict resolution helper interface for MergeAgent.
 
         Args:
-            base_text: 共同祖先文本
-            source_text: Source 分支文本
-            target_text: Target 分支文本
-            context: 额外提示
+            base_text: Common ancestor text
+            source_text: Source branch text
+            target_text: Target branch text
+            context: Additional context
         """
         prompt = f"""You are helping resolve a semantic merge conflict.
 

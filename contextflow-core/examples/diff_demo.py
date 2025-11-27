@@ -1,7 +1,7 @@
 """
-三方语义 Diff 引擎示例
+Three-way Semantic Diff Engine Example
 
-演示如何使用 DiffEngine 进行语义 diff。
+Demonstrates how to use DiffEngine for semantic diff.
 """
 
 from core.diff import DiffEngine
@@ -9,34 +9,34 @@ from core.embedding import MiniLMEmbeddingProvider
 
 
 def demo_two_way_diff():
-    """演示双向 Diff（Draft vs Commit）"""
-    print("=== 双向 Diff 示例 ===\n")
+    """Demonstrate two-way Diff (Draft vs Commit)"""
+    print("=== Two-way Diff Example ===\n")
 
-    # 1. 准备分句数据
+    # 1. Prepare segment data
     base_segments = [
-        {"segment_id": "base-s1", "text": "用户希望实现一个登录功能。"},
-        {"segment_id": "base-s2", "text": "需要支持邮箱和密码登录。"},
-        {"segment_id": "base-s3", "text": "登录失败时显示错误提示。"},
+        {"segment_id": "base-s1", "text": "用户希望实现一个登录功能."},
+        {"segment_id": "base-s2", "text": "需要支持邮箱和密码登录."},
+        {"segment_id": "base-s3", "text": "登录Failed时显示Errortip."},
     ]
 
     target_segments = [
-        {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},  # 相似但略有不同
-        {"segment_id": "target-s2", "text": "需要支持邮箱、手机号和密码登录。"},  # 修改
-        {"segment_id": "target-s3", "text": "添加记住我功能。"},  # 新增
+        {"segment_id": "target-s1", "text": "用户希望实现登录功能."},  # Similar but slightly different
+        {"segment_id": "target-s2", "text": "需要支持邮箱,手机号和密码登录."},  # Modified
+        {"segment_id": "target-s3", "text": "添加记住我功能."},  # Added
     ]
 
-    # 2. 初始化嵌入提供者
-    print("正在加载 MiniLM 模型...")
+    # 2. Initialize embedding provider
+    print("Loading MiniLM model...")
     embedding_provider = MiniLMEmbeddingProvider()
 
-    # 3. 初始化 DiffEngine
+    # 3. Initialize DiffEngine
     diff_engine = DiffEngine(
         embedding_provider=embedding_provider,
         threshold=0.70,
     )
 
-    # 4. 执行双向 Diff
-    print("正在计算语义 diff...\n")
+    # 4. Execute two-way Diff
+    print("Computing semantic diff...\n")
     result = diff_engine.diff_two_way(
         base_id="commit-abc123",
         base_segments=base_segments,
@@ -44,54 +44,54 @@ def demo_two_way_diff():
         target_segments=target_segments,
     )
 
-    # 5. 输出结果
-    print(f"Diff 结果 ({result.base_id} → {result.target_id})")
-    print(f"阈值: {result.threshold}")
-    print(f"总分句数: {result.total_segments}")
-    print(f"  - 相同: {result.same_count}")
-    print(f"  - 新增: {result.added_count}")
-    print(f"  - 删除: {result.removed_count}")
-    print(f"  - 修改: {result.modified_count}")
-    print(f"  - 冲突: {result.conflict_count}")
-    print("\n详细 Diff:")
+    # 5. Output results
+    print(f"Diff result ({result.base_id} → {result.target_id})")
+    print(f"Threshold: {result.threshold}")
+    print(f"Total segments: {result.total_segments}")
+    print(f"  - Same: {result.same_count}")
+    print(f"  - Added: {result.added_count}")
+    print(f"  - Removed: {result.removed_count}")
+    print(f"  - Modified: {result.modified_count}")
+    print(f"  - Conflicts: {result.conflict_count}")
+    print("\nDetailed Diff:")
 
     for diff in result.segment_diffs:
         print(f"\n[{diff.diff_type.value.upper()}] {diff.segment_id}")
-        print(f"  文本: {diff.text}")
+        print(f"  Text: {diff.text}")
         if diff.similarity is not None:
-            print(f"  相似度: {diff.similarity:.2f}")
+            print(f"  Similarity: {diff.similarity:.2f}")
         if diff.matched_segment_id:
-            print(f"  匹配: {diff.matched_segment_id}")
-            print(f"  匹配文本: {diff.matched_text}")
+            print(f"  Match: {diff.matched_segment_id}")
+            print(f"  Matched text: {diff.matched_text}")
 
 
 def demo_three_way_diff():
-    """演示三方 Diff（Merge 预览）"""
-    print("\n\n=== 三方 Diff 示例 ===\n")
+    """Demonstrate three-way Diff (Merge preview)"""
+    print("\n\n=== Three-way Diff Example ===\n")
 
-    # 1. 准备分句数据
+    # 1. Prepare segment data
     base_segments = [
-        {"segment_id": "base-s1", "text": "用户希望实现一个登录功能。"},
-        {"segment_id": "base-s2", "text": "需要支持邮箱和密码登录。"},
+        {"segment_id": "base-s1", "text": "用户希望实现一个登录功能."},
+        {"segment_id": "base-s2", "text": "需要支持邮箱和密码登录."},
     ]
 
     source_segments = [
-        {"segment_id": "source-s1", "text": "用户希望实现登录功能。"},
-        {"segment_id": "source-s2", "text": "需要支持邮箱、手机号和密码登录。"},  # Source 修改
+        {"segment_id": "source-s1", "text": "用户希望实现登录功能."},
+        {"segment_id": "source-s2", "text": "需要支持邮箱,手机号和密码登录."},  # Source modified
     ]
 
     target_segments = [
-        {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},
-        {"segment_id": "target-s2", "text": "需要支持邮箱、微信和密码登录。"},  # Target 也修改（冲突）
+        {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
+        {"segment_id": "target-s2", "text": "需要支持邮箱,微信和密码登录."},  # Target also modified (conflict)
     ]
 
-    # 2. 初始化
-    print("正在加载 MiniLM 模型...")
+    # 2. Initialize
+    print("Loading MiniLM model...")
     embedding_provider = MiniLMEmbeddingProvider()
     diff_engine = DiffEngine(embedding_provider, threshold=0.70)
 
-    # 3. 执行三方 Diff
-    print("正在计算三方语义 diff...\n")
+    # 3. Execute three-way Diff
+    print("Computing three-way semantic diff...\n")
     result = diff_engine.diff_three_way(
         base_id="commit-base",
         base_segments=base_segments,
@@ -101,31 +101,31 @@ def demo_three_way_diff():
         target_segments=target_segments,
     )
 
-    # 4. 输出结果
-    print(f"三方 Diff 结果")
-    print(f"阈值: {result.threshold}")
-    print(f"总分句数: {result.total_segments}")
-    print(f"  - 相同: {result.same_count}")
-    print(f"  - 新增: {result.added_count}")
-    print(f"  - 删除: {result.removed_count}")
-    print(f"  - 修改: {result.modified_count}")
-    print(f"  - 冲突: {result.conflict_count}")
-    print("\n详细 Diff:")
+    # 4. Output results
+    print(f"Three-way Diff result")
+    print(f"Threshold: {result.threshold}")
+    print(f"Total segments: {result.total_segments}")
+    print(f"  - Same: {result.same_count}")
+    print(f"  - Added: {result.added_count}")
+    print(f"  - Removed: {result.removed_count}")
+    print(f"  - Modified: {result.modified_count}")
+    print(f"  - Conflicts: {result.conflict_count}")
+    print("\nDetailed Diff:")
 
     for diff in result.segment_diffs:
         print(f"\n[{diff.diff_type.value.upper()}] {diff.segment_id}")
-        print(f"  文本: {diff.text}")
+        print(f"  Text: {diff.text}")
         if diff.similarity is not None:
-            print(f"  相似度: {diff.similarity:.2f}")
+            print(f"  Similarity: {diff.similarity:.2f}")
         if diff.matched_segment_id:
-            print(f"  匹配: {diff.matched_segment_id}")
+            print(f"  Match: {diff.matched_segment_id}")
         if diff.matched_text:
-            print(f"  匹配文本: {diff.matched_text}")
+            print(f"  Matched text: {diff.matched_text}")
 
 
 if __name__ == "__main__":
-    # 运行双向 Diff 示例
+    # Run two-way Diff example
     demo_two_way_diff()
 
-    # 运行三方 Diff 示例
+    # Run three-way Diff example
     demo_three_way_diff()

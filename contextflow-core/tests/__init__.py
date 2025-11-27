@@ -1,11 +1,11 @@
 """
-ContextFlow Core 测试套件
+ContextFlow Core Test Suite
 
-覆盖：
-- Ring 1/2/3 提取器
+Coverage:
+- Ring 1/2/3 extractor
 - Draft Workflow
 - Commit/Ledger
-- Diff Engine（双向 + 三方）
+- Diff Engine (two-way + three-way)
 - MergeAgent
-- Storage 层
+- Storage layer
 """

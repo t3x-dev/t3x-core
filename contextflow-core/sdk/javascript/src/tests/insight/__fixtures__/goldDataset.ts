@@ -1,13 +1,13 @@
 import type { Turn } from "../../../insight/engine";
 
-/** ---------- Legacy interface (保持与现有评测脚本兼容) ---------- */
+/** ---------- Legacy interface (maintain compatibility with existing evaluation scripts) ---------- */
 export interface GoldConversation {
   id: string;
   turns: Turn[];
   expectedTopAspectContains: string;
 }
 
-/** ---------- V2 扩展可选字段 ---------- */
+/** ---------- V2 extended optional fields ---------- */
 export type SignatureStatus = "valid" | "invalid" | "missing";
 
 export interface MetadataBranch {
@@ -68,10 +68,10 @@ export interface GoldConversationV2 extends GoldConversation {
   merge?: MergeInfo;
   _tooling?: { lineage?: ToolingLineage; snapshot?: string };
   usage_summary?: UsageSummary;
-  conversations?: ConversationEnvelope[]; // 可选：记录来源轨道
+  conversations?: ConversationEnvelope[]; // optional: record source track
 }
 
-/* ===================== 英文段（与上版相同，补充可选字段） ===================== */
+/* ===================== English section (same as previous version, with optional fields added) ===================== */
 export const enGoldConversationsV2: GoldConversationV2[] = [
   {
     id: "nyc-business-trip",
@@ -187,20 +187,20 @@ export const enGoldConversationsV2: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== 中文段（与上版相同，补充可选字段） ===================== */
+/* ===================== Chinese section (same as previous version, with optional fields added) ===================== */
 export const zhGoldConversationsV2: GoldConversationV2[] = [
   {
     id: "shanghai-trip-budget",
     turns: [
       {
         id: "t-49",
-        text: "下周去上海出差，酒店尽量靠近虹桥。",
+        text: "下周去上海出差,酒店尽量靠近虹桥.",
         role: "user",
         timestamp: "2025-06-22T03:00:00Z",
       },
       {
         id: "t-50",
-        text: "整体预算控制在 6000 人民币以内。",
+        text: "整体预算控制在 6000 人民币以内.",
         role: "user",
         timestamp: "2025-06-22T03:02:00Z",
       },
@@ -214,13 +214,13 @@ export const zhGoldConversationsV2: GoldConversationV2[] = [
     turns: [
       {
         id: "t-51",
-        text: "里程碑一必须在 8 月 1 日前完成评审通过。",
+        text: "里程碑一必须在 8 月 1 日前完成评审通过.",
         role: "assistant",
         timestamp: "2025-06-23T09:00:00Z",
       },
       {
         id: "t-52",
-        text: "相关文档需提前两天提交。",
+        text: "相关documentation需提前两天commit.",
         role: "assistant",
         timestamp: "2025-06-23T09:01:00Z",
       },
@@ -235,13 +235,13 @@ export const zhGoldConversationsV2: GoldConversationV2[] = [
     turns: [
       {
         id: "t-53",
-        text: "我倾向于远程办公，每周最多进办公室一次。",
+        text: "我倾向于远程办公,每周最多进办公室一次.",
         role: "user",
         timestamp: "2025-06-24T06:30:00Z",
       },
       {
         id: "t-54",
-        text: "如果必须现场，也希望提前一周通知。",
+        text: "if必须现场,也希望提前一周通知.",
         role: "user",
         timestamp: "2025-06-24T06:32:00Z",
       },
@@ -255,13 +255,13 @@ export const zhGoldConversationsV2: GoldConversationV2[] = [
     turns: [
       {
         id: "t-55",
-        text: "合同期至少 12 个月，低于 9 个月不考虑。",
+        text: "合同期至少 12 个月,低于 9 个月不考虑.",
         role: "user",
         timestamp: "2025-06-25T01:15:00Z",
       },
       {
         id: "t-56",
-        text: "可在期末评估是否续约。",
+        text: "可在期末评估是否续约.",
         role: "assistant",
         timestamp: "2025-06-25T01:17:00Z",
       },
@@ -275,13 +275,13 @@ export const zhGoldConversationsV2: GoldConversationV2[] = [
     turns: [
       {
         id: "t-57",
-        text: "报销需要开具增值税专用发票，抬头为公司名称。",
+        text: "报销需要开具增值税专用发票,抬头为公司名称.",
         role: "user",
         timestamp: "2025-06-26T12:40:00Z",
       },
       {
         id: "t-58",
-        text: "请在 7 个工作日内寄出纸质发票。",
+        text: "请在 7 个工作日内寄出纸质发票.",
         role: "assistant",
         timestamp: "2025-06-26T12:42:00Z",
       },
@@ -292,7 +292,7 @@ export const zhGoldConversationsV2: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== A. 分支对话（5 条） ===================== */
+/* ===================== A. branch conversations (5 items) ===================== */
 export const branchConversations: GoldConversationV2[] = [
   {
     id: "branch-create-feature",
@@ -397,7 +397,7 @@ export const branchConversations: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== B. 合并成功（3 条） ===================== */
+/* ===================== B. merge success (3 items) ===================== */
 export const mergeSuccessConversations: GoldConversationV2[] = [
   {
     id: "merge-success-search-v2",
@@ -468,7 +468,7 @@ export const mergeSuccessConversations: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== C. 冲突解决（6 条，总数达标） ===================== */
+/* ===================== C. conflict resolution (6 items, meets total count) ===================== */
 export const conflictConversations: GoldConversationV2[] = [
   {
     id: "merge-conflict-accept-theirs",
@@ -633,7 +633,7 @@ export const conflictConversations: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== D. 签名与审计（3 条，总数达标） ===================== */
+/* ===================== D. signature and audit (3 items, meets total count) ===================== */
 export const signatureAuditConversations: GoldConversationV2[] = [
   {
     id: "signature-verify-chain",
@@ -718,7 +718,7 @@ export const signatureAuditConversations: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== E. 变更解释（4 条，总数达标） ===================== */
+/* ===================== E. change explanation (4 items, meets total count) ===================== */
 export const diffExplainConversations: GoldConversationV2[] = [
   {
     id: "diff-aspect-explain",
@@ -803,8 +803,8 @@ export const diffExplainConversations: GoldConversationV2[] = [
   },
 ];
 
-/* ===================== 汇总导出 ===================== */
-/** 包含全部 V2 结构（供你在测试中断言扩展字段） */
+/* ===================== Consolidated exports ===================== */
+/** Contains all V2 structures (for asserting extended fields in tests) */
 export const goldConversationsV2: GoldConversationV2[] = [
   ...enGoldConversationsV2,
   ...zhGoldConversationsV2,
@@ -815,13 +815,13 @@ export const goldConversationsV2: GoldConversationV2[] = [
   ...diffExplainConversations,
 ];
 
-/** 向后兼容：降级为旧结构，直接供 Evidence@1 使用 */
+/** Backward compatibility: downgrade to old structure for direct use by Evidence@1 */
 export const goldConversations: GoldConversation[] = goldConversationsV2.map(
   ({ id, turns, expectedTopAspectContains }) => ({ id, turns, expectedTopAspectContains }),
 );
 
-/** 向后兼容：保留过往命名 allGoldConversations */
+/** Backward compatibility: retain legacy naming allGoldConversations */
 export const allGoldConversations: GoldConversation[] = goldConversations;
 
-/** 也可导出默认（兼容你原本只 import goldConversations 的写法） */
+/** Also export as default (compatible with your original import goldConversations syntax) */
 export default goldConversations;

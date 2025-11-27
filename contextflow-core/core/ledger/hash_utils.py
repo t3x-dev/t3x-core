@@ -1,7 +1,7 @@
 """
-哈希工具函数
+Hash utility functions
 
-使用 JCS (JSON Canonicalization Scheme) + SHA-256。
+Uses JCS (JSON Canonicalization Scheme) + SHA-256.
 """
 
 from __future__ import annotations
@@ -13,21 +13,21 @@ from typing import Any, Dict
 
 def jcs_normalize(data: Dict[str, Any]) -> str:
     """
-    使用 JCS 规范化 JSON
+    Normalize JSON using JCS
 
-    JCS 保证：
-    1. 键按字典序排序
-    2. 无多余空格
-    3. Unicode 转义一致
+    JCS guarantees:
+    1. Keys sorted in lexicographic order
+    2. No extra whitespace
+    3. Consistent Unicode escaping
 
     Args:
-        data: 待规范化的字典
+        data: Dictionary to normalize
 
     Returns:
-        规范化后的 JSON 字符串
+        Normalized JSON string
     """
-    # Python 的 json.dumps 默认就是字典序排序（如果 sort_keys=True）
-    # 并且 separators 去掉多余空格
+    # Python's json.dumps uses lexicographic ordering by default (with sort_keys=True)
+    # and separators removes extra whitespace
     return json.dumps(
         data,
         sort_keys=True,
@@ -38,14 +38,14 @@ def jcs_normalize(data: Dict[str, Any]) -> str:
 
 def compute_jcs_hash(data: Dict[str, Any], prefix: str = "sha256") -> str:
     """
-    计算 JCS 规范化后的 SHA-256 哈希
+    Compute SHA-256 hash of JCS-normalized JSON
 
     Args:
-        data: 待哈希的字典
-        prefix: 哈希前缀（默认 "sha256"）
+        data: Dictionary to hash
+        prefix: Hash prefix (default "sha256")
 
     Returns:
-        哈希值（格式：sha256:abc123...）
+        Hash value (format: sha256:abc123...)
     """
     jcs_str = jcs_normalize(data)
     hash_bytes = hashlib.sha256(jcs_str.encode('utf-8')).hexdigest()

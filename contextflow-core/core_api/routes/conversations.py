@@ -1,8 +1,8 @@
 """
-对话管理端点
+Conversation management endpoints
 
-POST /api/v1/conversations - 创建对话
-GET /api/v1/conversations - 列出对话
+POST /api/v1/conversations - create conversation
+GET /api/v1/conversations - list conversations
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ router = APIRouter()
 
 
 def generate_conversation_id() -> str:
-    """生成对话 ID"""
+    """Generate conversation ID"""
     return f"conv_{uuid.uuid4().hex[:8]}"
 
 
@@ -39,11 +39,11 @@ async def create_conversation(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    创建新对话
+    Create new conversation
     """
     cursor = db.cursor()
 
-    # 检查项目是否存在
+    # Check if project exists
     project_exists = cursor.execute(
         "SELECT 1 FROM projects WHERE project_id = ?", (conversation.project_id,)
     ).fetchone()
@@ -81,17 +81,17 @@ async def create_conversation(
 
 @router.get("", response_model=PaginatedResponse)
 async def list_conversations(
-    project_id: str = Query(..., description="项目 ID（必需）"),
+    project_id: str = Query(..., description="project ID(required)"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    列出对话
+    List conversations
     """
     cursor = db.cursor()
 
-    # 检查项目是否存在
+    # Check if project exists
     project_exists = cursor.execute(
         "SELECT 1 FROM projects WHERE project_id = ?", (project_id,)
     ).fetchone()
@@ -99,12 +99,12 @@ async def list_conversations(
     if not project_exists:
         raise project_not_found(project_id)
 
-    # 获取总数
+    # Get total count
     total = cursor.execute(
         "SELECT COUNT(*) FROM conversations WHERE project_id = ?", (project_id,)
     ).fetchone()[0]
 
-    # 获取对话列表
+    # Get conversation list
     rows = cursor.execute(
         """
         SELECT

@@ -1,9 +1,9 @@
 """
-项目管理端点
+Project management endpoints
 
-POST /api/v1/projects - 创建项目
-GET /api/v1/projects - 列出项目
-GET /api/v1/projects/{project_id} - 获取项目详情
+POST /api/v1/projects - create project
+GET /api/v1/projects - list projects
+GET /api/v1/projects/{project_id} - get project details
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ router = APIRouter()
 
 
 def generate_project_id() -> str:
-    """生成项目 ID"""
+    """Generate project ID"""
     return f"proj_{uuid.uuid4().hex[:8]}"
 
 
@@ -41,7 +41,7 @@ async def create_project(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    创建新项目
+    Create new project
     """
     project_id = generate_project_id()
     created_at = datetime.now(timezone.utc).isoformat()
@@ -78,14 +78,14 @@ async def list_projects(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    列出所有项目
+    List all projects
     """
     cursor = db.cursor()
 
-    # 获取总数
+    # Get total count
     total = cursor.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
 
-    # 获取项目列表
+    # Get project list
     rows = cursor.execute(
         """
         SELECT
@@ -129,7 +129,7 @@ async def get_project(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    获取项目详情
+    Get project details
     """
     cursor = db.cursor()
 
@@ -141,7 +141,7 @@ async def get_project(
     if not row:
         raise project_not_found(project_id)
 
-    # 获取统计信息
+    # Get statistics
     conversations_count = cursor.execute(
         "SELECT COUNT(*) FROM conversations WHERE project_id = ?", (project_id,)
     ).fetchone()[0]

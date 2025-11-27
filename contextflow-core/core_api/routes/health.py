@@ -1,8 +1,8 @@
 """
-健康检查端点
+Health check endpoints
 
-GET /health - 用于容器存活探针和负载均衡
-GET /api/v1/status - 系统状态统计
+GET /health - For container liveness probes and load balancing
+GET /api/v1/status - System status statistics
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
     """
-    健康检查
+    Health check
 
-    用于容器存活探针和负载均衡器。
-    不挂在 /api/v1 下，便于直接访问。
+    For container liveness probes and load balancers.
+    Not under /api/v1 for direct access.
     """
     return HealthResponse(
         status="ok",
@@ -41,15 +41,15 @@ async def get_status(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    获取系统状态和统计信息
+    Get system status and statistics
 
-    可选参数 project_id 限定统计范围。
+    Optional parameter project_id limits the statistics scope.
     """
     cursor = db.cursor()
 
-    # 统计各表数量
+    # Count records in each table
     if project_id:
-        # 限定项目范围
+        # Limit to specific project scope
         projects_count = 1 if cursor.execute(
             "SELECT 1 FROM projects WHERE project_id = ?", (project_id,)
         ).fetchone() else 0
@@ -66,7 +66,7 @@ async def get_status(
             "SELECT COUNT(*) FROM commits WHERE project_id = ?", (project_id,)
         ).fetchone()[0]
     else:
-        # 全局统计
+        # Global statistics
         projects_count = cursor.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
         conversations_count = cursor.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
         turns_count = cursor.execute("SELECT COUNT(*) FROM turns").fetchone()[0]

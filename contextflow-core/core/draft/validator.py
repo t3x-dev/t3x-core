@@ -1,7 +1,7 @@
 """
-Must-Have / Mustn't-Have 验证器
+Must-Have / Mustn't-Have validator
 
-检查生成的草稿文本是否满足关键词约束。
+Check if generated draft text satisfies keyword constraints.
 """
 
 from __future__ import annotations
@@ -14,12 +14,12 @@ import re
 @dataclass(frozen=True)
 class ValidationResult:
     """
-    验证结果
+    Validation result
 
     Attributes:
-        passed: 是否通过验证
-        missing_must_have: 缺失的 Must-Have 关键词
-        violated_mustnt_have: 违规出现的 Mustn't-Have 关键词
+        passed: Whether validation passed
+        missing_must_have: Missing Must-Have keywords
+        violated_mustnt_have: Violated Mustn't-Have keywords
     """
 
     passed: bool
@@ -28,28 +28,28 @@ class ValidationResult:
 
     @property
     def is_complete(self) -> bool:
-        """所有 Must-Have 都已包含"""
+        """All Must-Have keywords are included"""
         return len(self.missing_must_have) == 0
 
     @property
     def is_clean(self) -> bool:
-        """没有 Mustn't-Have 违规"""
+        """No Mustn't-Have violations"""
         return len(self.violated_mustnt_have) == 0
 
 
 class MustHaveValidator:
     """
-    Must-Have / Mustn't-Have 验证器
+    Must-Have / Mustn't-Have validator
 
-    使用词形归一后的关键词进行匹配，避免因时态/单复数差异导致漏检。
+    Uses lemmatized keywords for matching to avoid missed detections due to tense/plural differences.
     """
 
     def __init__(self, case_sensitive: bool = False):
         """
-        初始化验证器
+        Initialize validator
 
         Args:
-            case_sensitive: 是否区分大小写（默认不区分）
+            case_sensitive: Whether to be case-sensitive (default is case-insensitive)
         """
         self.case_sensitive = case_sensitive
 
@@ -60,35 +60,35 @@ class MustHaveValidator:
         mustnt_have: List[str],
     ) -> ValidationResult:
         """
-        验证文本是否满足约束
+        Validate if text satisfies constraints
 
         Args:
-            text: 待验证的文本
-            must_have: Must-Have 关键词列表（已归一）
-            mustnt_have: Mustn't-Have 关键词列表（已归一）
+            text: Text to validate
+            must_have: Must-Have keyword list (lemmatized)
+            mustnt_have: Mustn't-Have keyword list (lemmatized)
 
         Returns:
             ValidationResult
         """
-        # 预处理文本（转小写，提取单词）
+        # Preprocess text (lowercase, extract words)
         text_normalized = self._normalize_text(text)
         text_words = self._extract_words(text_normalized)
 
-        # 检查 Must-Have
+        # Check Must-Have
         missing_must_have = []
         for keyword in must_have:
             keyword_normalized = self._normalize_text(keyword)
             if not self._contains_word(text_words, keyword_normalized):
                 missing_must_have.append(keyword)
 
-        # 检查 Mustn't-Have
+        # Check Mustn't-Have
         violated_mustnt_have = []
         for keyword in mustnt_have:
             keyword_normalized = self._normalize_text(keyword)
             if self._contains_word(text_words, keyword_normalized):
                 violated_mustnt_have.append(keyword)
 
-        # 判断是否通过
+        # Determine if passed
         passed = (len(missing_must_have) == 0) and (len(violated_mustnt_have) == 0)
 
         return ValidationResult(
@@ -99,13 +99,13 @@ class MustHaveValidator:
 
     def _normalize_text(self, text: str) -> str:
         """
-        规范化文本
+        Normalize text
 
         Args:
-            text: 原始文本
+            text: Original text
 
         Returns:
-            规范化后的文本
+            Normalized text
         """
         if not self.case_sensitive:
             text = text.lower()
@@ -113,38 +113,38 @@ class MustHaveValidator:
 
     def _extract_words(self, text: str) -> Set[str]:
         """
-        提取文本中的所有单词
+        Extract all words from text
 
         Args:
-            text: 文本
+            text: Text
 
         Returns:
-            单词集合
+            Set of words
         """
-        # 使用正则提取单词（字母、数字、下划线）
+        # Use regex to extract words (letters, digits, underscores)
         words = re.findall(r'\w+', text)
         return set(words)
 
     def _contains_word(self, words: Set[str], target: str) -> bool:
         """
-        检查单词集合中是否包含目标词
+        Check if word set contains target word
 
-        支持：
-        1. 精确匹配（travel）
-        2. 子词匹配（travel 在 travels 中）
+        Supports:
+        1. Exact match (travel)
+        2. Substring match (travel in travels)
 
         Args:
-            words: 单词集合
-            target: 目标词
+            words: Set of words
+            target: Target word
 
         Returns:
-            True 如果包含
+            True if contained
         """
-        # 精确匹配
+        # Exact match
         if target in words:
             return True
 
-        # 子词匹配（允许词形变化）
+        # Substring match (allow word variations)
         for word in words:
             if target in word or word in target:
                 return True

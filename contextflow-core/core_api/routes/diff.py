@@ -1,7 +1,7 @@
 """
-Diff 端点
+Diff endpoints
 
-POST /api/v1/diff - 计算语义 Diff
+POST /api/v1/diff - Compute semantic Diff
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from core_api.schemas import (
 )
 from core_api.errors import commit_not_found
 
-# 尝试加载 core.diff 和 core.embedding，如果失败则使用简化实现
+# Try to load core.diff and core.embedding, if failed then use simplified implementation
 try:
     from core.diff import DiffEngine, DiffType
     from core.embedding import MiniLMEmbeddingProvider
@@ -31,7 +31,7 @@ try:
     _diff_engine = DiffEngine(_embedding_provider, threshold=0.70)
     USE_CORE_DIFF = True
 except (ImportError, RuntimeError) as e:
-    # sentence-transformers 未安装，使用简化实现
+    # sentence-transformers not installed, use simplified implementation
     _diff_engine = None
     USE_CORE_DIFF = False
 
@@ -41,12 +41,12 @@ router = APIRouter()
 
 def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
     """
-    计算两个 Commit 之间的语义 Diff
+    Compute semantic Diff between two Commits
 
-    如果 core.diff 可用，使用基于 MiniLM 的语义相似度；
-    否则回退到简化的文本比较实现。
+    If core.diff is available, use MiniLM-based semantic similarity;
+    otherwise fall back to simplified text comparison implementation.
     """
-    # 获取两个 commit 的数据
+    # Get data for both commits
     base_row = cursor.execute(
         "SELECT facet_snapshot_json FROM commits WHERE commit_hash = ?", (base_hash,)
     ).fetchone()
@@ -62,13 +62,13 @@ def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
     base_facets = json.loads(base_row["facet_snapshot_json"])
     target_facets = json.loads(target_row["facet_snapshot_json"])
 
-    # 比较 facet
+    # Compare facets
     base_facet_map = {f["facet"]: f for f in base_facets}
     target_facet_map = {f["facet"]: f for f in target_facets}
 
     facet_changes = []
 
-    # 检查修改和删除
+    # Check modifications and deletions
     for facet_name, base_f in base_facet_map.items():
         if facet_name in target_facet_map:
             target_f = target_facet_map[facet_name]
@@ -94,7 +94,7 @@ def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
                 removed_keywords=base_f.get("keywords", [])
             ))
 
-    # 检查新增
+    # Check additions
     for facet_name, target_f in target_facet_map.items():
         if facet_name not in base_facet_map:
             facet_changes.append(FacetChange(
@@ -105,11 +105,11 @@ def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
                 added_keywords=target_f.get("keywords", [])
             ))
 
-    # 使用 core.diff 进行句级语义 diff
+    # Use core.diff for sentence-level semantic diff
     segment_changes = []
     if USE_CORE_DIFF and _diff_engine:
-        # 从 turns 获取 Ring 3 segments 进行语义 diff
-        # 需要从 commit 的 turn_window 获取 segments
+        # Get Ring 3 segments from turns for semantic diff
+        # Need to get segments from commit's turn_window
         base_turn_row = cursor.execute(
             "SELECT turn_window_json FROM commits WHERE commit_hash = ?", (base_hash,)
         ).fetchone()
@@ -121,7 +121,7 @@ def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
             base_turn_window = json.loads(base_turn_row["turn_window_json"])
             target_turn_window = json.loads(target_turn_row["turn_window_json"])
 
-            # 获取 end_turn 的 segments
+            # Get end_turn segments
             base_turn = cursor.execute(
                 "SELECT rings_json FROM turns WHERE turn_hash = ?",
                 (base_turn_window["end_turn_hash"],)
@@ -150,7 +150,7 @@ def compute_diff(cursor, base_hash: str, target_hash: str) -> DiffResult:
                         target_hash, target_segments
                     )
 
-                    # 转换为 API 格式
+                    # Convert to API format
                     for seg_diff in diff_result.segment_diffs:
                         segment_changes.append(SegmentChange(
                             segment_id=seg_diff.segment_id,
@@ -171,11 +171,11 @@ async def create_diff(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    计算两个 Commit 之间的语义 Diff
+    Compute semantic Diff between two Commits
     """
     cursor = db.cursor()
 
-    # 计算 diff
+    # Compute diff
     diff_result = compute_diff(
         cursor,
         request.base_commit_hash,

@@ -8,19 +8,19 @@ async function main() {
     {
       id: "turn-001",
       role: "user" as const,
-      text: "我想去大阪吃夜市美食，预算不超过1800美元，时间是3月12号到3月16号。",
+      text: "我想去大阪吃夜市美食,预算不超过1800美元,时间是3月12号到3月16号.",
       timestamp: "2025-03-10T12:00:00Z",
     },
     {
       id: "turn-002",
       role: "user" as const,
-      text: "避免太远的酒店，最好靠近地铁。",
+      text: "避免太远的酒店,最好靠近地铁.",
       timestamp: "2025-03-10T12:05:00Z",
     },
     {
       id: "turn-003",
       role: "assistant" as const,
-      text: "了解啦！可以看一下 https://travel.example/osaka-night-market 获取灵感。",
+      text: "Got it! You can check out https://travel.example/osaka-night-market for inspiration.",
       timestamp: "2025-03-10T12:06:00Z",
     },
   ];

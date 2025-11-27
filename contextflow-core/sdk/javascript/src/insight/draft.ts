@@ -17,23 +17,23 @@ export function renderBullets(aspects: AspectSummary[]): string[] {
 }
 
 function formatAspect(aspect: AspectSummary): string {
-  const title = aspect.title?.trim() || "未命名要点";
+  const title = aspect.title?.trim() || "Unnamed aspect";
   const confidenceLabel = formatConfidence(aspect.confidence);
   const prefix = `- ${title}${confidenceLabel ? ` ${confidenceLabel}` : ""}`;
 
   if (!aspect.findings || aspect.findings.length === 0) {
-    return `${prefix}: 缺少佐证`;
+    return `${prefix}: Missing evidence`;
   }
 
   const snippets = aspect.findings.slice(0, MAX_FINDINGS_PER_ASPECT).map(snippet => summarize(snippet));
   const remaining = aspect.findings.length - snippets.length;
   if (remaining > 0) {
-    snippets.push(`另外 ${remaining} 条补充`);
+    snippets.push(`plus ${remaining} more`);
   }
 
-  let body = snippets.join("；");
+  let body = snippets.join(";");
   if (aspect.confidence < 0.5) {
-    body += "（待确认）";
+    body += " (pending confirmation)";
   }
 
   return `${prefix}: ${body}`;

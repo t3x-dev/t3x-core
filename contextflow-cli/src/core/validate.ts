@@ -15,7 +15,7 @@ export function validateAll(): ValidationResult {
       .prepare(`SELECT hash, COUNT(*) as c FROM turns GROUP BY hash HAVING c > 1`)
       .all() as { hash: string; c: number }[];
     if (duplicateTurnHashes.length > 0) {
-      report.push(`发现重复 turn hash: ${duplicateTurnHashes.map((row) => `${row.hash}(${row.c})`).join(', ')}`);
+      report.push(`Found duplicate turn hash: ${duplicateTurnHashes.map((row) => `${row.hash}(${row.c})`).join(', ')}`);
     }
 
     const invalidDraftStates = db
@@ -23,7 +23,7 @@ export function validateAll(): ValidationResult {
       .all() as { id: number; state: string }[];
     if (invalidDraftStates.length > 0) {
       report.push(
-        `存在非法 draft state: ${invalidDraftStates.map((row) => `#${row.id}:${row.state}`).join(', ')}`,
+        `Invalid draft state found: ${invalidDraftStates.map((row) => `#${row.id}:${row.state}`).join(', ')}`,
       );
     }
 
@@ -32,20 +32,20 @@ export function validateAll(): ValidationResult {
       .all() as { hash: string; c: number }[];
     if (duplicateCommitHashes.length > 0) {
       report.push(
-        `发现重复 commit hash: ${duplicateCommitHashes.map((row) => `${row.hash}(${row.c})`).join(', ')}`,
+        `Found duplicate commit hash: ${duplicateCommitHashes.map((row) => `${row.hash}(${row.c})`).join(', ')}`,
       );
     }
 
     const metaRow = db.prepare(`SELECT value FROM meta WHERE key='generation'`).get() as { value?: string } | undefined;
     if (!metaRow || Number(metaRow.value) < 0) {
-      report.push('meta.generation 缺失或非法。');
+      report.push('meta.generation missing or invalid.');
     }
   } catch (error) {
-    report.push(`validate 执行失败: ${(error as Error).message}`);
+    report.push(`Validation execution failed: ${(error as Error).message}`);
   }
 
   return {
     ok: report.length === 0,
-    report: report.length === 0 ? ['validate: OK'] : report,
+    report: report.length === 0 ? ['Validation: OK'] : report,
   };
 }

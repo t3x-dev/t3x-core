@@ -1,18 +1,18 @@
 """
-SQLite 索引层
+SQLite Index layer
 
-按照 STORAGE_ARCHITECTURE.md 规范实现：
-- 仅用于查询加速、关联与缓存
-- 可以从 JSONL 主账本完整重建
-- 不作为唯一真相来源
+Implements according to STORAGE_ARCHITECTURE.md specification:
+- Used only for query acceleration, associations, and caching
+- Can be fully rebuilt from JSONL master ledgers
+- Not the single source of truth
 
-核心表：
-- projects: 项目元数据
-- conversations: 对话容器
-- turns: Turn 索引（指向 JSONL）
-- drafts: Draft 索引
-- commits: Commit 索引
-- diffs: 语义 diff 缓存
+Core tables:
+- projects: Project metadata
+- conversations: Conversation containers
+- turns: Turn indexes (point to JSONL)
+- drafts: Draft indexes
+- commits: Commit indexes
+- diffs: Semantic diff cache
 """
 
 from .database import Database

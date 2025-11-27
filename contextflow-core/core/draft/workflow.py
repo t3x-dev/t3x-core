@@ -1,7 +1,7 @@
 """
-Draft Workflow 核心流程
+Draft Workflow core process
 
-实现文档中定义的 6 步 Draft 流程。
+Implements the 6-step Draft workflow defined in documentation.
 """
 
 from __future__ import annotations
@@ -18,59 +18,59 @@ from .validator import MustHaveValidator, ValidationResult
 
 
 def utc_now_iso() -> str:
-    """返回 UTC 时间戳（ISO 8601 格式）"""
+    """Return UTC timestamp (ISO 8601 format)"""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
 class DraftConfig:
     """
-    Draft 配置
+    Draft configuration
 
-    对应文档中的 Draft Ledger 配置字段。
+    Corresponds to Draft Ledger configuration fields in documentation.
     """
 
     project_id: str
-    base_commit_hash: Optional[str] = None  # 基准 commit（可选）
-    turn_anchor_hash: Optional[str] = None  # 焦点 turn（可选）
-    bridge_id: str = "plan"  # Bridge 模式
+    base_commit_hash: Optional[str] = None  # Base commit (optional)
+    turn_anchor_hash: Optional[str] = None  # Focal turn (optional)
+    bridge_id: str = "plan"  # Bridge mode
 
-    # LLM 配置
+    # LLM configuration
     llm_provider: str = "openai"
     llm_model: str = "gpt-4"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 2048
 
-    # 嵌入/相似度配置
+    # Embedding/similarity configuration
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    similarity_threshold: Optional[float] = None  # 如果为 None，使用 Bridge 的阈值
+    similarity_threshold: Optional[float] = None  # If None, use Bridge's threshold
 
-    # 提取器配置
+    # Extractor configuration
     extractor_config: Optional[ExtractorConfig] = None
 
 
 @dataclass
 class EvidenceSentence:
     """
-    证据句子（嵌入筛选后的结果）
+    Evidence sentence (result after embedding filtering)
 
-    对应文档中的"相似度评分后的句子"。
+    Corresponds to "similarity-scored sentences" in documentation.
     """
 
     segment_id: str
     text: str
     turn_hash: str
     similarity_score: float
-    ring1_keywords: List[str]  # Ring 1 关键词（已归一）
+    ring1_keywords: List[str]  # Ring 1 keywords (normalized)
     polarity_keywords: Dict[str, int]  # {keyword: polarity}
 
 
 @dataclass
 class DraftResult:
     """
-    Draft 生成结果
+    Draft generation result
 
-    对应文档中的 Draft Ledger 输出。
+    Corresponds to Draft Ledger output in documentation.
     """
 
     draft_id: str
@@ -78,19 +78,19 @@ class DraftResult:
     base_commit_hash: Optional[str]
     turn_anchor_hash: Optional[str]
     bridge_id: str
-    bridge_payload: Dict[str, Any]  # Bridge 配置快照
+    bridge_payload: Dict[str, Any]  # Bridge configuration snapshot
 
-    must_have: List[str]  # Must-Have 关键词列表
-    mustnt_have: List[str]  # Mustn't-Have 关键词列表
+    must_have: List[str]  # Must-Have keyword list
+    mustnt_have: List[str]  # Mustn't-Have keyword list
 
-    llm_config: Dict[str, Any]  # LLM 配置快照
-    text: str  # 生成的草稿文本
+    llm_config: Dict[str, Any]  # LLM configuration snapshot
+    text: str  # Generated draft text
 
     status: str = "ephemeral"  # ephemeral | adopted | superseded
     created_at: str = field(default_factory=utc_now_iso)
     schema_version: str = "draft_v1"
 
-    # 额外的调试信息（不写入 Ledger）
+    # Additional debug information (not written to Ledger)
     evidence_sentences: List[EvidenceSentence] = field(default_factory=list)
     validation_iterations: int = 0
 
@@ -98,10 +98,10 @@ class DraftResult:
 # Protocol for LLM providers (Agentic Layer)
 class LLMProvider(Protocol):
     """
-    LLM 提供者接口（Agentic Layer 实现）
+    LLM provider interface (implemented by Agentic Layer)
 
-    Draft Workflow 的步骤 4（Polish）需要调用 LLM。
-    这个接口由外部 Agentic Layer 实现。
+    Draft Workflow step 4 (Polish) requires calling LLM.
+    This interface is implemented by external Agentic Layer.
     """
 
     def generate(
@@ -111,15 +111,15 @@ class LLMProvider(Protocol):
         max_tokens: int = 2048,
     ) -> str:
         """
-        生成文本
+        Generate text
 
         Args:
-            prompt: 完整的提示词（包含 Bridge 模板 + Evidence）
-            temperature: 生成温度
-            max_tokens: 最大 token 数
+            prompt: Complete prompt (including Bridge template + Evidence)
+            temperature: Generation temperature
+            max_tokens: Maximum number of tokens
 
         Returns:
-            生成的文本
+            Generated text
         """
         ...
 
@@ -127,42 +127,42 @@ class LLMProvider(Protocol):
 # Protocol for Embedding providers (Core)
 class EmbeddingProvider(Protocol):
     """
-    嵌入提供者接口（Core 实现）
+    Embedding provider interface (implemented by Core)
 
-    Draft Workflow 的步骤 3（嵌入筛选）需要计算相似度。
+    Draft Workflow step 3 (embedding filtering) requires calculating similarity.
     """
 
     def encode(self, texts: List[str]) -> List[List[float]]:
         """
-        编码文本为向量
+        Encode texts to vectors
 
         Args:
-            texts: 文本列表
+            texts: List of texts
 
         Returns:
-            向量列表
+            List of vectors
         """
         ...
 
     def similarity(self, vec_a: List[float], vec_b: List[float]) -> float:
         """
-        计算两个向量的相似度
+        Calculate similarity between two vectors
 
         Args:
-            vec_a: 向量 A
-            vec_b: 向量 B
+            vec_a: Vector A
+            vec_b: Vector B
 
         Returns:
-            相似度分数（0~1）
+            Similarity score (0~1)
         """
         ...
 
 
 class DraftWorkflow:
     """
-    Draft Workflow 主流程
+    Draft Workflow main process
 
-    实现文档中的 6 步流程。
+    Implements the 6-step workflow from documentation.
     """
 
     def __init__(
@@ -173,13 +173,13 @@ class DraftWorkflow:
         llm_provider: LLMProvider,
     ):
         """
-        初始化 Draft Workflow
+        Initialize Draft Workflow
 
         Args:
-            bridge_loader: Bridge 加载器
-            extractor: Ring 提取器
-            embedding_provider: 嵌入提供者
-            llm_provider: LLM 提供者
+            bridge_loader: Bridge loader
+            extractor: Ring extractor
+            embedding_provider: Embedding provider
+            llm_provider: LLM provider
         """
         self.bridge_loader = bridge_loader
         self.extractor = extractor
@@ -194,17 +194,17 @@ class DraftWorkflow:
         user_intent: str,
     ) -> DraftResult:
         """
-        执行完整的 Draft 流程
+        Execute complete Draft workflow
 
         Args:
-            config: Draft 配置
-            turn_window: Turn 窗口（从上一个 commit 到当前）
-            user_intent: 用户意图（自由文本）
+            config: Draft configuration
+            turn_window: Turn window (from last commit to current)
+            user_intent: User intent (free text)
 
         Returns:
             DraftResult
         """
-        # Step 1: 哈希窗口选择（已由调用者完成，这里接收窗口）
+        # Step 1: Hash window selection (already done by caller, receiving window here)
 
         # Step 2: Intent & Bridge
         bridge, threshold = self.bridge_loader.get_with_threshold(
@@ -214,7 +214,7 @@ class DraftWorkflow:
         if bridge is None:
             raise ValueError(f"Bridge '{config.bridge_id}' not found")
 
-        # Step 3: 嵌入筛选
+        # Step 3: Embedding filtering
         evidence_sentences = self._embedding_filter(
             turn_window=turn_window,
             bridge_prompt=bridge.prompt,
@@ -222,10 +222,10 @@ class DraftWorkflow:
             threshold=threshold,
         )
 
-        # 从 evidence 中提取 Must-Have / Mustn't-Have
+        # Extract Must-Have / Mustn't-Have from evidence
         must_have, mustnt_have = self._extract_must_mustnt(evidence_sentences)
 
-        # Step 4 & 5: Polish + Validate 循环
+        # Step 4 & 5: Polish + Validate loop
         draft_text = self._polish_and_validate(
             bridge=bridge,
             user_intent=user_intent,
@@ -235,9 +235,9 @@ class DraftWorkflow:
             config=config,
         )
 
-        # Step 6: 用户审核（由调用者完成，这里返回结果）
+        # Step 6: User review (done by caller, return result here)
 
-        # 生成 draft_id
+        # Generate draft_id
         draft_id = f"draft_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         return DraftResult(
@@ -267,16 +267,16 @@ class DraftWorkflow:
         threshold: float,
     ) -> List[EvidenceSentence]:
         """
-        Step 3: 嵌入筛选
+        Step 3: Embedding filtering
 
-        使用 Ring 3 分句 + 相似度计算，筛选高相关句子。
+        Use Ring 3 segments + similarity calculation to filter highly relevant sentences.
         """
-        # 1. 对每个 turn 进行 Ring 提取
+        # 1. Perform Ring extraction for each turn
         all_segments = []
         for turn_hash, role, content in turn_window:
             ring_output = self.extractor.extract(turn_hash, content)
 
-            # 收集 Ring 3 分句
+            # Collect Ring 3 segments
             for segment in ring_output.ring3.segments:
                 all_segments.append({
                     "turn_hash": turn_hash,
@@ -285,11 +285,11 @@ class DraftWorkflow:
                     "ring1": ring_output.ring1,
                 })
 
-        # 2. 计算查询向量（Bridge 提示词 + 用户意图）
+        # 2. Calculate query vector (Bridge prompt + user intent)
         query_text = f"{bridge_prompt}\n\n{user_intent}"
         query_vec = self.embedding_provider.encode([query_text])[0]
 
-        # 3. 计算每个句子的相似度
+        # 3. Calculate similarity for each sentence
         segment_texts = [seg["text"] for seg in all_segments]
         segment_vecs = self.embedding_provider.encode(segment_texts)
 
@@ -297,9 +297,9 @@ class DraftWorkflow:
         for seg, vec in zip(all_segments, segment_vecs):
             similarity = self.embedding_provider.similarity(query_vec, vec)
 
-            # 筛选高于阈值的句子
+            # Filter sentences above threshold
             if similarity >= threshold:
-                # 提取 Ring 1 关键词
+                # Extract Ring 1 keywords
                 ring1: Ring1Output = seg["ring1"]
                 keywords = [kw.lemma for kw in ring1.keywords]
                 polarity_keywords = {
@@ -317,7 +317,7 @@ class DraftWorkflow:
                     polarity_keywords=polarity_keywords,
                 ))
 
-        # 按相似度降序排序
+        # Sort by similarity in descending order
         evidence_sentences.sort(key=lambda x: x.similarity_score, reverse=True)
 
         return evidence_sentences
@@ -327,9 +327,9 @@ class DraftWorkflow:
         evidence_sentences: List[EvidenceSentence],
     ) -> tuple[List[str], List[str]]:
         """
-        从 evidence 中提取 Must-Have / Mustn't-Have 列表
+        Extract Must-Have / Mustn't-Have lists from evidence
 
-        基于 Ring 1 极性：
+        Based on Ring 1 polarity:
         - polarity == +1 → Must-Have
         - polarity == -1 → Mustn't-Have
         """
@@ -356,54 +356,54 @@ class DraftWorkflow:
         max_iterations: int = 3,
     ) -> str:
         """
-        Step 4 & 5: Polish（LLM）+ Validate 循环
+        Step 4 & 5: Polish (LLM) + Validate loop
 
-        循环直到满足 Must-Have / Mustn't-Have 约束，或达到最大迭代次数。
+        Loop until Must-Have / Mustn't-Have constraints are satisfied, or max iterations reached.
         """
-        # 构建初始 prompt
+        # Build initial prompt
         evidence_text = "\n\n".join([
             f"[Evidence {i+1}] (score: {ev.similarity_score:.2f})\n{ev.text}"
-            for i, ev in enumerate(evidence_sentences[:10])  # 只取前 10 条
+            for i, ev in enumerate(evidence_sentences[:10])  # Only take top 10
         ])
 
         base_prompt = f"""
 {bridge.prompt}
 
-【用户意图】
+[User Intent]
 {user_intent}
 
-【Evidence（已筛选）】
+[Evidence (Filtered)]
 {evidence_text}
 
-【必须包含的关键词（Must-Have）】
+[Required Keywords (Must-Have)]
 {', '.join(must_have)}
 
-【禁止出现的关键词（Mustn't-Have）】
+[Forbidden Keywords (Mustn't-Have)]
 {', '.join(mustnt_have)}
 
-请严格按照上述要求生成草稿。
+Please strictly follow the above requirements to generate the draft.
 """
 
         draft_text = None
         validation_result = None
 
         for iteration in range(max_iterations):
-            # Step 4: Polish（调用 LLM）
+            # Step 4: Polish (call LLM)
             if iteration == 0:
                 prompt = base_prompt
             else:
-                # 后续迭代：附带上一版 + 缺失/违规列表
+                # Subsequent iterations: attach previous version + missing/violated list
                 feedback = self._build_feedback(validation_result)
                 prompt = f"""
 {base_prompt}
 
-【上一版草稿】
+[Previous Draft]
 {draft_text}
 
-【反馈】
+[Feedback]
 {feedback}
 
-请根据反馈修正草稿。
+Please revise the draft based on the feedback.
 """
 
             draft_text = self.llm_provider.generate(
@@ -419,25 +419,25 @@ class DraftWorkflow:
                 mustnt_have=mustnt_have,
             )
 
-            # 如果通过验证，返回
+            # If validation passed, return
             if validation_result.passed:
                 return draft_text
 
-        # 达到最大迭代次数，返回最后一版（即使未完全通过）
+        # Max iterations reached, return last version (even if not fully passed)
         return draft_text
 
     def _build_feedback(self, validation_result: ValidationResult) -> str:
-        """构建反馈信息（用于 LLM 重新生成）"""
+        """Build feedback message (for LLM regeneration)"""
         feedback_parts = []
 
         if validation_result.missing_must_have:
             feedback_parts.append(
-                f"❌ 缺少以下 Must-Have 关键词：{', '.join(validation_result.missing_must_have)}"
+                f"Missing the following Must-Have keywords: {', '.join(validation_result.missing_must_have)}"
             )
 
         if validation_result.violated_mustnt_have:
             feedback_parts.append(
-                f"❌ 出现了禁止的 Mustn't-Have 关键词：{', '.join(validation_result.violated_mustnt_have)}"
+                f"Contains the following forbidden Mustn't-Have keywords: {', '.join(validation_result.violated_mustnt_have)}"
             )
 
         return "\n".join(feedback_parts)

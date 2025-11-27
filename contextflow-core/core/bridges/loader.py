@@ -1,7 +1,7 @@
 """
-Bridge 模板加载器
+Bridge template loader
 
-从 YAML 文件加载 Bridge 配置和提示词模板。
+Load Bridge configuration and prompt templates from YAML files.
 """
 
 from __future__ import annotations
@@ -11,26 +11,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
 
-# 全局默认阈值
+# Global default threshold
 DEFAULT_THRESHOLD = 0.60
 
-# 内置默认 Bridge 模板目录（用于初始化拷贝）
+# Built-in default Bridge template directory (for initialization copy)
 BUILTIN_BRIDGES_DIR = Path(__file__).parent.parent.parent / "configs" / "bridges"
 
 
 @dataclass(frozen=True)
 class BridgeTemplate:
     """
-    Bridge 模板数据类
+    Bridge template data class
 
-    对应 YAML 文件中的字段：
-    - bridge: Bridge ID（必填）
-    - label: 人类可读名称（可选）
-    - version: 版本号（可选）
-    - locale: 语言（可选）
-    - threshold: 相似度阈值（可选，默认 0.60）
-    - description: 描述（可选）
-    - prompt: 提示词模板（必填）
+    Corresponds to fields in YAML file:
+    - bridge: Bridge ID (required)
+    - label: Human-readable name (optional)
+    - version: Version number (optional)
+    - locale: Language (optional)
+    - threshold: Similarity threshold (optional, default 0.60)
+    - description: Description (optional)
+    - prompt: Prompt template (required)
     """
 
     bridge: str
@@ -44,17 +44,17 @@ class BridgeTemplate:
     @classmethod
     def from_yaml(cls, path: Path) -> BridgeTemplate:
         """
-        从 YAML 文件加载 Bridge 模板
+        Load Bridge template from YAML file
 
         Args:
-            path: YAML 文件路径
+            path: YAML file path
 
         Returns:
-            BridgeTemplate 实例
+            BridgeTemplate instance
 
         Raises:
-            ValueError: 如果缺少必填字段
-            FileNotFoundError: 如果文件不存在
+            ValueError: If required fields are missing
+            FileNotFoundError: If file does not exist
         """
         if not path.exists():
             raise FileNotFoundError(f"Bridge YAML not found: {path}")
@@ -62,7 +62,7 @@ class BridgeTemplate:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
-        # 验证必填字段
+        # Validate required fields
         if "bridge" not in data:
             raise ValueError(f"Missing required field 'bridge' in {path}")
         if "prompt" not in data:
@@ -79,7 +79,7 @@ class BridgeTemplate:
         )
 
     def to_dict(self) -> Dict:
-        """转换为字典（用于序列化）"""
+        """Convert to dictionary (for serialization)"""
         return {
             "bridge": self.bridge,
             "label": self.label,
@@ -93,26 +93,26 @@ class BridgeTemplate:
 
 class BridgeLoader:
     """
-    Bridge 模板加载器
+    Bridge template loader
 
-    支持：
-    1. 从默认目录加载所有 Bridge
-    2. 从自定义目录加载 Bridge
-    3. 按 ID 查找 Bridge
-    4. 阈值覆盖（CLI 参数 > config.json > Bridge YAML > 全局默认）
+    Supports:
+    1. Load all Bridges from default directory
+    2. Load Bridges from custom directory
+    3. Find Bridge by ID
+    4. Threshold override (CLI parameter > config.json > Bridge YAML > global default)
     """
 
     def __init__(self, bridges_dir: Optional[Path] = None, project_root: Optional[Path] = None):
         """
-        初始化加载器
+        Initialize loader
 
         Args:
-            bridges_dir: Bridge YAML 文件目录
-                        如果为 None，默认为 {project_root}/.contextflow/bridges/
-            project_root: 项目根目录（默认为当前工作目录）
+            bridges_dir: Bridge YAML file directory
+                        If None, defaults to {project_root}/.contextflow/bridges/
+            project_root: Project root directory (defaults to current working directory)
         """
         if bridges_dir is None:
-            # 按文档要求，默认读取 .contextflow/bridges/
+            # Per documentation, default reads .contextflow/bridges/
             self.project_root = project_root or Path.cwd()
             self.bridges_dir = self.project_root / ".contextflow" / "bridges"
         else:
@@ -121,7 +121,7 @@ class BridgeLoader:
 
         self.templates: Dict[str, BridgeTemplate] = {}
 
-        # 如果目录不存在，从内置模板初始化
+        # If directory does not exist, initialize from built-in templates
         if not self.bridges_dir.exists():
             self._init_default_bridges()
 
@@ -129,24 +129,24 @@ class BridgeLoader:
 
     def _init_default_bridges(self):
         """
-        从内置模板目录拷贝默认 Bridge 到 .contextflow/bridges/
+        Copy default Bridges from built-in template directory to .contextflow/bridges/
 
-        按照 docs/ARCHITECTURE.zh.md:176 的要求，
-        CLI 初始化时将默认 Bridge 模板拷贝到用户的 .contextflow/bridges/，
-        便于用户编辑和自定义。
+        Per docs/ARCHITECTURE.zh.md:176,
+        CLI initialization copies default Bridge templates to user's .contextflow/bridges/
+        for easy editing and customization.
         """
         import shutil
 
-        # 创建目标目录
+        # Create target directory
         self.bridges_dir.mkdir(parents=True, exist_ok=True)
 
-        # 检查内置模板目录是否存在
+        # Check if built-in template directory exists
         if not BUILTIN_BRIDGES_DIR.exists():
             print(f"Warning: Builtin bridges directory not found: {BUILTIN_BRIDGES_DIR}")
             print(f"Creating empty bridges directory: {self.bridges_dir}")
             return
 
-        # 拷贝所有 YAML 文件
+        # Copy all YAML files
         copied_count = 0
         for yaml_file in BUILTIN_BRIDGES_DIR.glob("*.yaml"):
             dest_file = self.bridges_dir / yaml_file.name
@@ -157,10 +157,10 @@ class BridgeLoader:
         if copied_count == 0:
             print(f"Warning: No bridge templates found in {BUILTIN_BRIDGES_DIR}")
         else:
-            print(f"✅ Initialized {copied_count} default bridge templates in {self.bridges_dir}")
+            print(f"Initialized {copied_count} default bridge templates in {self.bridges_dir}")
 
     def _load_all(self):
-        """从目录加载所有 Bridge YAML 文件"""
+        """Load all Bridge YAML files from directory"""
         if not self.bridges_dir.exists():
             raise FileNotFoundError(
                 f"Bridges directory not found: {self.bridges_dir}\n"
@@ -172,18 +172,18 @@ class BridgeLoader:
                 template = BridgeTemplate.from_yaml(yaml_file)
                 self.templates[template.bridge] = template
             except Exception as e:
-                # 记录警告但不中断加载
+                # Log warning but don't interrupt loading
                 print(f"Warning: Failed to load bridge {yaml_file}: {e}")
 
     def get(self, bridge_id: str) -> Optional[BridgeTemplate]:
         """
-        获取指定 ID 的 Bridge 模板
+        Get Bridge template for specified ID
 
         Args:
-            bridge_id: Bridge ID（如 "plan", "explain"）
+            bridge_id: Bridge ID (e.g., "plan", "explain")
 
         Returns:
-            BridgeTemplate 或 None（如果不存在）
+            BridgeTemplate or None (if does not exist)
         """
         return self.templates.get(bridge_id)
 
@@ -194,18 +194,18 @@ class BridgeLoader:
         config_threshold: Optional[float] = None,
     ) -> tuple[Optional[BridgeTemplate], float]:
         """
-        获取 Bridge 模板并解析阈值
+        Get Bridge template and resolve threshold
 
-        阈值优先级：
-        1. CLI 临时参数（cli_threshold）
-        2. 项目配置（config_threshold）
-        3. Bridge YAML 里的 threshold
-        4. 全局默认值（0.60）
+        Threshold priority:
+        1. CLI temporary parameter (cli_threshold)
+        2. Project configuration (config_threshold)
+        3. Threshold in Bridge YAML
+        4. Global default value (0.60)
 
         Args:
             bridge_id: Bridge ID
-            cli_threshold: CLI 参数指定的阈值
-            config_threshold: config.json 中的阈值
+            cli_threshold: Threshold specified by CLI parameter
+            config_threshold: Threshold from config.json
 
         Returns:
             (BridgeTemplate, effective_threshold)
@@ -214,7 +214,7 @@ class BridgeLoader:
         if template is None:
             return None, DEFAULT_THRESHOLD
 
-        # 应用优先级规则
+        # Apply priority rules
         effective_threshold = (
             cli_threshold
             or config_threshold
@@ -225,10 +225,10 @@ class BridgeLoader:
         return template, effective_threshold
 
     def list_bridges(self) -> list[str]:
-        """返回所有可用的 Bridge ID 列表"""
+        """Return list of all available Bridge IDs"""
         return list(self.templates.keys())
 
     def reload(self):
-        """重新加载所有 Bridge（用于热更新）"""
+        """Reload all Bridges (for hot updates)"""
         self.templates.clear()
         self._load_all()

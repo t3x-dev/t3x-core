@@ -1,12 +1,12 @@
 """
-Ring 1/2/3 提取器（基于 spaCy）
+Ring 1/2/3 extractor (based on spaCy)
 
-按照 ARCHITECTURE.zh.md 规范实现完整的三层 Ring 提取：
-- Ring 1: 关键词 + 实体 + 词形归一 + 极性标注
-- Ring 2: 轻关系 / Facet（intent seed、时间窗口、偏好等）
-- Ring 3: 分句结构
+Implements complete three-layer Ring extraction according to ARCHITECTURE.zh.md:
+- Ring 1: Keywords + entities + lemmatization + polarity annotation
+- Ring 2: Lightweight relations / Facets (intent seed, time window, preferences, etc.)
+- Ring 3: Sentence structure
 
-决定论保证：同输入 + 同配置 → 同输出
+Determinism guarantee: same input + same configuration → same output
 """
 
 from __future__ import annotations
@@ -41,13 +41,13 @@ from .polarity_rules import PolarityRuleEngine
 
 class RingExtractor(ExtractorPlugin):
     """
-    基于 spaCy 的 Ring 1/2/3 提取器
+    spaCy-based Ring 1/2/3 extractor
 
-    特性：
-    1. 词形归一：使用 token.lemma_
-    2. 极性标注：依存句法 + 规则引擎
-    3. 分句：使用 spaCy 句子分割器
-    4. 命名实体识别：spaCy NER
+    Features:
+    1. Lemmatization: uses token.lemma_
+    2. Polarity annotation: dependency parsing + rule engine
+    3. Sentence segmentation: uses spaCy sentence segmenter
+    4. Named entity recognition: spaCy NER
     """
 
     def __init__(
@@ -56,15 +56,15 @@ class RingExtractor(ExtractorPlugin):
         polarity_rules_path: Optional[Path] = None,
     ):
         """
-        初始化提取器
+        Initialize extractor
 
         Args:
-            config: 提取器配置
-            polarity_rules_path: 自定义极性规则文件路径
+            config: extractor configuration
+            polarity_rules_path: custom polarity rules file path
         """
         self.config = config
 
-        # 加载 spaCy 模型
+        # load spaCy model
         model_name = config.model or "en_core_web_sm"
         try:
             self.nlp: Language = spacy.load(model_name)
@@ -74,22 +74,22 @@ class RingExtractor(ExtractorPlugin):
                 f"Download it with: python -m spacy download {model_name}"
             )
 
-        # 初始化极性规则引擎
+        # Initialize polarity rule engine
         self.polarity_engine = PolarityRuleEngine(polarity_rules_path)
 
-        # 获取 spaCy 版本（用于元数据）
+        # Get spaCy version (for metadata)
         self.spacy_version = spacy.__version__
 
     def extract(self, turn_id: str, content: str) -> RingOutput:
         """
-        从单个 turn 提取 Ring 1/2/3
+        Extract Ring 1/2/3 from a single turn
 
         Args:
             turn_id: Turn ID
-            content: Turn 文本内容
+            content: Turn text content
 
         Returns:
-            RingOutput: 完整的三层 Ring
+            RingOutput: Complete three-layer Ring
         """
         doc = self.nlp(content)
 
@@ -106,56 +106,56 @@ class RingExtractor(ExtractorPlugin):
 
     def _extract_ring1(self, doc: Doc) -> Ring1Output:
         """
-        提取 Ring 1：关键词主轴
+        Extract Ring 1: Keyword axis
 
-        包含：
-        1. 关键词（名词、动词、形容词）
-        2. 命名实体
-        3. 词形归一（lemma）
-        4. 极性标注（基于依存树 + 规则）
+        Contains:
+        1. Keywords (nouns, verbs, adjectives)
+        2. Named entities
+        3. Lemmatization
+        4. Polarity annotation (based on dependency tree + rules)
         """
         keywords = []
         time_anchor = None
         topic = None
 
-        # 提取偏好关系（谓词-宾语对，带极性）
+        # Extract preference relations (verb-object pairs with polarity)
         preference_relations = self.polarity_engine.extract_preference_relations(doc)
 
-        # 构建极性映射：token → polarity
+        # Build polarity mapping: token → polarity
         polarity_map = {}
         for verb_token, obj_token, polarity in preference_relations:
             polarity_map[obj_token.i] = polarity
 
-        # 遍历所有 token
+        # Iterate through all tokens
         for token in doc:
-            # 跳过标点和停用词
+            # Skip punctuation and stop words
             if token.is_punct or token.is_stop:
                 continue
 
-            # 只保留名词、动词、形容词
+            # Only keep nouns, verbs, adjectives
             if token.pos_ not in {"NOUN", "PROPN", "VERB", "ADJ"}:
                 continue
 
-            # 获取极性（如果在 polarity_map 中）
+            # Get polarity (if in polarity_map)
             polarity = polarity_map.get(token.i, 0)
 
-            # 提取命名实体类型
+            # Extract named entity type
             entity_type = token.ent_type_ if token.ent_type_ else None
 
-            # 检测时间锚点（DATE 实体）
+            # Detect time anchor (DATE entity)
             if entity_type == "DATE" and time_anchor is None:
                 time_anchor = token.text
 
             keyword = Keyword(
                 text=token.text,
-                lemma=token.lemma_.lower(),  # 词形归一
+                lemma=token.lemma_.lower(),  # Lemmatization
                 polarity=polarity,
                 pos=token.pos_,
                 entity_type=entity_type,
             )
             keywords.append(keyword)
 
-        # 简单主题提取：取第一个 NOUN/PROPN
+        # Simple topic extraction: take first NOUN/PROPN
         for kw in keywords:
             if kw.pos in {"NOUN", "PROPN"} and topic is None:
                 topic = kw.lemma
@@ -169,17 +169,17 @@ class RingExtractor(ExtractorPlugin):
 
     def _extract_ring2(self, doc: Doc, ring1: Ring1Output) -> Ring2Output:
         """
-        提取 Ring 2：轻关系 / Facet
+        Extract Ring 2: Lightweight relations / Facets
 
-        包含：
-        - intent_seed: 意图种子（基于动词）
-        - time_window: 时间窗口（基于 DATE 实体）
-        - preference_soft: 软偏好（基于极性关键词）
-        - unknown_slot: 未知槽位（基于疑问词）
+        Contains:
+        - intent_seed: Intent seed (based on verbs)
+        - time_window: Time window (based on DATE entities)
+        - preference_soft: Soft preferences (based on polarity keywords)
+        - unknown_slot: Unknown slots (based on question words)
         """
         facets = []
 
-        # 1. Intent Seed（基于主要动词）
+        # 1. Intent Seed (based on main verb)
         main_verbs = [token for token in doc if token.pos_ == "VERB" and token.dep_ == "ROOT"]
         if main_verbs:
             intent_verb = main_verbs[0].lemma_.lower()
@@ -190,7 +190,7 @@ class RingExtractor(ExtractorPlugin):
                 confidence=0.9,
             ))
 
-        # 2. Time Window（基于 Ring 1 的 time_anchor）
+        # 2. Time Window (based on Ring 1's time_anchor)
         if ring1.time_anchor:
             facets.append(Facet(
                 facet_type="time_window",
@@ -199,7 +199,7 @@ class RingExtractor(ExtractorPlugin):
                 confidence=0.8,
             ))
 
-        # 3. Preference Soft（基于 Ring 1 的偏好关键词）
+        # 3. Preference Soft (based on Ring 1's preference keywords)
         for kw in ring1.preference_keywords:
             if kw.polarity == 1:
                 facets.append(Facet(
@@ -216,9 +216,9 @@ class RingExtractor(ExtractorPlugin):
                     confidence=0.7,
                 ))
 
-        # 4. Unknown Slot（基于疑问词）
+        # 4. Unknown Slot (based on question words)
         for token in doc:
-            if token.tag_ in {"WDT", "WP", "WP$", "WRB"}:  # 疑问词
+            if token.tag_ in {"WDT", "WP", "WP$", "WRB"}:  # Question words
                 facets.append(Facet(
                     facet_type="unknown_slot",
                     key="question",
@@ -230,9 +230,9 @@ class RingExtractor(ExtractorPlugin):
 
     def _extract_ring3(self, doc: Doc) -> Ring3Output:
         """
-        提取 Ring 3：分句结构
+        Extract Ring 3: Sentence structure
 
-        使用 spaCy 的句子分割器，将 turn 拆成句级片段。
+        Uses spaCy's sentence segmenter to split turn into sentence-level segments.
         """
         segments = []
 
@@ -249,7 +249,7 @@ class RingExtractor(ExtractorPlugin):
 
     def get_metadata(self) -> ExtractorMetadata:
         """
-        返回提取器元数据（用于可复现性）
+        Return extractor metadata (for reproducibility)
         """
         return ExtractorMetadata(
             plugin=self.config.plugin,

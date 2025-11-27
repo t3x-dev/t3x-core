@@ -5,7 +5,7 @@
 
 import { Segment, useDefault } from "segmentit";
 
-const TOKEN_SPLIT_REGEX = /[,\s、，。．\.!?！？;；:：()\[\]{}<>「」“”"']+/u;
+const TOKEN_SPLIT_REGEX = /[,\s,,.．\.!?!?;;::()\[\]{}<>""“”"']+/u;
 const CHINESE_RUN_REGEX = /[\p{Script=Han}]{2,}/gu;
 
 export interface ExtractedItem {
@@ -68,10 +68,10 @@ class DateExtractor implements Extractor {
   readonly id = "date@v1";
 
   private readonly patterns: RegExp[] = [
-    /\d{4}-\d{1,2}-\d{1,2}(?:\s*到\s*\d{4}-\d{1,2}-\d{1,2})?/gu,
+    /\d{4}-\d{1,2}-\d{1,2}(?:\s*(?:到|to)\s*\d{4}-\d{1,2}-\d{1,2})?/gu,
     /\d{1,2}\/\d{1,2}(?:\s*-\s*\d{1,2}\/\d{1,2})?/gu,
     /\d{1,2}月\d{1,2}号?(?:\s*到\s*\d{1,2}月\d{1,2}号?)?/gu,
-    /(下周(?:末)?|本周|本月|下个月|明天|后天|周末|周日|周六)/gu,
+    /(下周(?:末)?|本周|本月|下个月|明天|后天|周末|周日|周六|next week|this week|this month|next month|tomorrow|weekend|sunday|saturday)/gu,
   ];
 
   run(input: ExtractorInput): ExtractedItem[] {
@@ -98,8 +98,8 @@ class UrlExtractor implements Extractor {
 
 class PreferenceExtractor implements Extractor {
   readonly id = "preference@v1";
-  private readonly positiveKeywords = ["想", "希望", "喜欢", "prefer", "would like", "想要"];
-  private readonly negativeKeywords = ["不想", "不要", "避免", "no", "not"];
+  private readonly positiveKeywords = ["想", "希望", "喜欢", "prefer", "would like", "想要", "want", "希望"];
+  private readonly negativeKeywords = ["不想", "不要", "避免", "no", "not", "avoid"];
 
   run(input: ExtractorInput): ExtractedItem[] {
     const { turnId, text } = input;
@@ -132,7 +132,7 @@ class PreferenceExtractor implements Extractor {
 
 class ConstraintExtractor implements Extractor {
   readonly id = "constraint@v1";
-  private readonly lessEqualPattern = /(?:小于|少于|不超过|≤|<=|不多于)\s*([^\s，。,]+)/gu;
+  private readonly lessEqualPattern = /(?:小于|少于|不超过|≤|<=|不多于|less than|at most|no more than)\s*([^\s,.,]+)/gu;
 
   run(input: ExtractorInput): ExtractedItem[] {
     const { turnId, text } = input;
@@ -190,7 +190,7 @@ class HeadingExtractor implements Extractor {
 class ListExtractor implements Extractor {
   readonly id = "list@v1";
   private readonly bulletPattern = /^[\-*+]\s+(.+)/;
-  private readonly orderedPattern = /^(?:\d+\.|[一二三四五六七八九十]+、)\s*(.+)/;
+  private readonly orderedPattern = /^(?:\d+\.|[一二三四五六七八九十]+[,.])\s*(.+)/;
 
   run(input: ExtractorInput): ExtractedItem[] {
     const lines = splitLines(input.text);
@@ -392,7 +392,7 @@ function extractFollowingPhrase(text: string, start: number): string | null {
 }
 
 function parseAmount(raw: string): Record<string, unknown> {
-  const normalized = raw.replace(/[,，]/g, "").trim();
+  const normalized = raw.replace(/[,,]/g, "").trim();
   const currencyMatch = normalized.match(/^(USD|US\$|\$|¥|￥|CNY|RMB)/i);
   const suffixMatch = normalized.match(/(USD|usd|美元|美金|元|块|人民币)$/i);
   const numberMatch = normalized.match(/\d+(?:\.\d+)?/);

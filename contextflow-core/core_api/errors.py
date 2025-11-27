@@ -1,7 +1,7 @@
 """
-错误处理 - 统一的异常和错误响应
+Error handling - Unified exceptions and error responses
 
-定义标准错误码和异常类，与 CORE_API_SPEC.zh.md 保持一致。
+Defines standard error codes and exception classes, aligned with CORE_API_SPEC.zh.md.
 """
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ from fastapi.responses import JSONResponse
 
 
 # ============================================================================
-# 错误码定义
+# Error code definitions
 # ============================================================================
 
 class ErrorCode:
-    """标准错误码"""
+    """Standard error codes"""
     # 400 Bad Request
     INVALID_TURN_HASH = "INVALID_TURN_HASH"
     INVALID_COMMIT_HASH = "INVALID_COMMIT_HASH"
@@ -44,11 +44,11 @@ class ErrorCode:
 
 
 # ============================================================================
-# 自定义异常
+# Custom exceptions
 # ============================================================================
 
 class ContextFlowError(Exception):
-    """ContextFlow 基础异常"""
+    """Base exception for ContextFlow"""
     def __init__(
         self,
         code: str,
@@ -64,25 +64,25 @@ class ContextFlowError(Exception):
 
 
 class NotFoundError(ContextFlowError):
-    """资源未找到"""
+    """Resource not found"""
     def __init__(self, code: str, message: str, details: Optional[dict] = None):
         super().__init__(code, message, 404, details)
 
 
 class ValidationError(ContextFlowError):
-    """验证失败"""
+    """Validation failed"""
     def __init__(self, code: str, message: str, details: Optional[dict] = None):
         super().__init__(code, message, 400, details)
 
 
 class ConflictError(ContextFlowError):
-    """资源冲突"""
+    """Resource conflict"""
     def __init__(self, code: str, message: str, details: Optional[dict] = None):
         super().__init__(code, message, 409, details)
 
 
 # ============================================================================
-# 便捷函数
+# Convenience functions
 # ============================================================================
 
 def project_not_found(project_id: str) -> NotFoundError:
@@ -166,14 +166,14 @@ def extractor_unavailable(language: str, extractor: str) -> ValidationError:
 
 
 # ============================================================================
-# 异常处理器
+# Exception handlers
 # ============================================================================
 
 async def contextflow_exception_handler(
     request: Request,
     exc: ContextFlowError
 ) -> JSONResponse:
-    """处理 ContextFlowError 异常"""
+    """Handle ContextFlowError exceptions"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -191,7 +191,7 @@ async def generic_exception_handler(
     request: Request,
     exc: Exception
 ) -> JSONResponse:
-    """处理未捕获的异常"""
+    """Handle uncaught exceptions"""
     return JSONResponse(
         status_code=500,
         content={
@@ -206,7 +206,7 @@ async def generic_exception_handler(
 
 
 def setup_exception_handlers(app):
-    """注册异常处理器"""
+    """Register exception handlers"""
     app.add_exception_handler(ContextFlowError, contextflow_exception_handler)
-    # 注意：生产环境可能不想暴露内部错误详情
+    # Note: In production environments, you may not want to expose internal error details
     # app.add_exception_handler(Exception, generic_exception_handler)

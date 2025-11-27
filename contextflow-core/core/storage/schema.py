@@ -1,7 +1,7 @@
 """
-SQLite Schema 初始化与重建
+SQLite Schema initialization and rebuild
 
-按照 STORAGE_ARCHITECTURE.md 规范实现。
+Implemented per STORAGE_ARCHITECTURE.md specification.
 """
 
 from __future__ import annotations
@@ -15,27 +15,27 @@ from .database import Database
 
 def init_database(db_path: Path, schema_path: Optional[Path] = None) -> Database:
     """
-    初始化 SQLite 数据库
+    Initialize SQLite database
 
     Args:
-        db_path: 数据库文件路径
-        schema_path: schema.sql 文件路径（默认使用内置 schema）
+        db_path: Database file path
+        schema_path: schema.sql file path (default uses built-in schema)
 
     Returns:
-        Database 实例
+        Database instance
     """
-    # 使用内置 schema.sql
+    # Use built-in schema.sql
     if schema_path is None:
         schema_path = Path(__file__).parent / "schema.sql"
 
-    # 读取 schema
+    # Read schema
     with open(schema_path, "r", encoding="utf-8") as f:
         schema_sql = f.read()
 
-    # 创建数据库连接
+    # Create database connection
     db = Database(db_path)
 
-    # 执行 schema
+    # Execute schema
     conn = db.connect()
     conn.executescript(schema_sql)
     db.commit()
@@ -48,31 +48,31 @@ def rebuild_from_ledger(
     ledger_dir: Path,
 ) -> None:
     """
-    从 JSONL 主账本重建 SQLite 索引
+    Rebuild SQLite indexes from JSONL master ledger
 
-    按照 STORAGE_ARCHITECTURE.md 的要求，SQLite 可以从 JSONL 完整重建。
+    Per STORAGE_ARCHITECTURE.md requirements, SQLite can be fully rebuilt from JSONL.
 
     Args:
-        db: Database 实例
-        ledger_dir: JSONL 主账本目录（如 .contextflow/ledgers/）
+        db: Database instance
+        ledger_dir: JSONL master ledger directory (e.g., .contextflow/ledgers/)
     """
-    # 清空现有索引
+    # Clear existing indexes
     _clear_index(db)
 
-    # 重建 Turn 索引
+    # Rebuild Turn indexes
     _rebuild_turns_index(db, ledger_dir / "turns.jsonl")
 
-    # 重建 Commit 索引
+    # Rebuild Commit indexes
     _rebuild_commits_index(db, ledger_dir / "commits.jsonl")
 
-    # 重建 Draft 索引
+    # Rebuild Draft indexes
     _rebuild_drafts_index(db, ledger_dir / "drafts.jsonl")
 
     db.commit()
 
 
 def _clear_index(db: Database):
-    """清空所有索引表"""
+    """Clear all index tables"""
     tables = ["diffs", "commits", "drafts", "turns", "conversations", "projects"]
     for table in tables:
         db.execute(f"DELETE FROM {table}")
@@ -80,11 +80,11 @@ def _clear_index(db: Database):
 
 def _rebuild_turns_index(db: Database, turns_ledger: Path):
     """
-    从 Turn Ledger 重建 turns 表索引
+    Rebuild turns table index from Turn Ledger
 
     Args:
-        db: Database 实例
-        turns_ledger: turns.jsonl 文件路径
+        db: Database instance
+        turns_ledger: turns.jsonl file path
     """
     if not turns_ledger.exists():
         return
@@ -99,7 +99,7 @@ def _rebuild_turns_index(db: Database, turns_ledger: Path):
 
             turn_data = json.loads(line)
 
-            # 确保 project 存在
+            # Ensure project exists
             project_id = turn_data["project_id"]
             if project_id not in projects_seen:
                 db.execute(
@@ -111,7 +111,7 @@ def _rebuild_turns_index(db: Database, turns_ledger: Path):
                 )
                 projects_seen.add(project_id)
 
-            # 确保 conversation 存在
+            # Ensure conversation exists
             conversation_id = turn_data["conversation_id"]
             if conversation_id not in conversations_seen:
                 db.execute(
@@ -123,7 +123,7 @@ def _rebuild_turns_index(db: Database, turns_ledger: Path):
                 )
                 conversations_seen.add(conversation_id)
 
-            # 插入 turn 索引
+            # Insert turn index
             db.execute(
                 """
                 INSERT INTO turns (
@@ -146,11 +146,11 @@ def _rebuild_turns_index(db: Database, turns_ledger: Path):
 
 def _rebuild_commits_index(db: Database, commits_ledger: Path):
     """
-    从 Commit Ledger 重建 commits 表索引
+    Rebuild commits table index from Commit Ledger
 
     Args:
-        db: Database 实例
-        commits_ledger: commits.jsonl 文件路径
+        db: Database instance
+        commits_ledger: commits.jsonl file path
     """
     if not commits_ledger.exists():
         return
@@ -164,7 +164,7 @@ def _rebuild_commits_index(db: Database, commits_ledger: Path):
 
             commit_data = json.loads(line)
 
-            # 确保 project 存在（避免外键约束失败）
+            # Ensure project exists (avoid foreign key constraint failure)
             project_id = commit_data["project_id"]
             if project_id not in projects_seen:
                 db.execute(
@@ -208,11 +208,11 @@ def _rebuild_commits_index(db: Database, commits_ledger: Path):
 
 def _rebuild_drafts_index(db: Database, drafts_ledger: Path):
     """
-    从 Draft Ledger 重建 drafts 表索引
+    Rebuild drafts table index from Draft Ledger
 
     Args:
-        db: Database 实例
-        drafts_ledger: drafts.jsonl 文件路径
+        db: Database instance
+        drafts_ledger: drafts.jsonl file path
     """
     if not drafts_ledger.exists():
         return
@@ -226,7 +226,7 @@ def _rebuild_drafts_index(db: Database, drafts_ledger: Path):
 
             draft_data = json.loads(line)
 
-            # 确保 project 存在（避免外键约束失败）
+            # Ensure project exists (avoid foreign key constraint failure)
             project_id = draft_data["project_id"]
             if project_id not in projects_seen:
                 db.execute(

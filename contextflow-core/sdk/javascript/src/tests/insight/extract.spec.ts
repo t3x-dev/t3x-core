@@ -4,7 +4,7 @@ describe("runExtractors", () => {
   it("extracts key findings from travel planning text", () => {
     const turn = {
       id: "turn-42",
-      text: "我想去大阪吃夜市美食，预算不超过1800美元，时间是3月12号到3月16号。",
+      text: "我想去大阪吃夜市美食,预算不超过1800美元,时间是3月12号到3月16号.",
     };
 
     const findings = runExtractors(turn);

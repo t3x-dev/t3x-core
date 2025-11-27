@@ -1,9 +1,9 @@
 """
-Turn 管理端点
+Turn management endpoints
 
-POST /api/v1/turns - 创建 Turn
-GET /api/v1/turns - 查询 Turn 列表
-GET /api/v1/turns/{turn_hash} - 获取 Turn 详情
+POST /api/v1/turns - create Turn
+GET /api/v1/turns - query Turn list
+GET /api/v1/turns/{turn_hash} - get Turn details
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from core_api.errors import (
     extractor_unavailable,
 )
 
-# 尝试加载 core.extractors
+# Try to load core.extractors
 _spacy_extractor = None
 _jieba_extractor = None
 USE_SPACY_EXTRACTOR = False
@@ -62,14 +62,14 @@ except (ImportError, RuntimeError):
 
 def detect_language(text: str) -> str:
     """
-    简单的语言检测：检测文本是否包含中文字符
+    Simple language detection: detect if text contains Chinese characters
 
     Returns:
-        "zh" 如果包含中文字符，否则 "en"
+        "zh" if contains Chinese characters, otherwise "en"
     """
-    # 统计中文字符数量
+    # Count Chinese characters
     chinese_chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
-    # 如果中文字符占比超过 10%，认为是中文
+    # If Chinese characters exceed 10%, consider it Chinese
     if len(text) > 0 and chinese_chars / len(text) > 0.1:
         return "zh"
     return "en"
@@ -80,16 +80,16 @@ router = APIRouter()
 
 def compute_turn_hash(turn_data: dict) -> str:
     """
-    计算 Turn 哈希
+    Compute Turn hash
 
-    使用 JCS（JSON Canonicalization Scheme）规范化后计算 SHA-256。
+    Uses JCS (JSON Canonicalization Scheme) normalization then computes SHA-256.
     """
     return compute_jcs_hash(turn_data)
 
 
 def _ring_output_to_dict(ring_output) -> dict:
     """
-    将 RingOutput 转换为 API 格式的字典
+    Convert RingOutput to API format dictionary
     """
     return {
         "ring1": {
@@ -122,7 +122,7 @@ def _ring_output_to_dict(ring_output) -> dict:
 
 def _fallback_extract(content: str) -> dict:
     """
-    简化的 fallback 实现：基于简单规则提取关键词和分句
+    Simplified fallback implementation: extract keywords and segments based on simple rules
     """
     words = content.split()
     keywords = [w.strip('.,!?') for w in words if len(w) > 3][:10]
@@ -151,52 +151,52 @@ def _fallback_extract(content: str) -> dict:
 
 def extract_rings(turn_hash: str, content: str, language: str = None) -> dict:
     """
-    提取 Ring 1/2/3
+    Extract Ring 1/2/3
 
     Args:
-        turn_hash: Turn 哈希
-        content: 文本内容
-        language: 语言选择
-            - "zh": 强制使用中文(jieba)，如果不可用则报错
-            - "en": 强制使用英文(spaCy)，如果不可用则报错
-            - "auto" 或 None: 自动检测，按可用性降级
+        turn_hash: Turn hash
+        content: Text content
+        language: Language selection
+            - "zh": Force use Chinese (jieba), raise error if unavailable
+            - "en": Force use English (spaCy), raise error if unavailable
+            - "auto" or None: Auto-detect, degrade by availability
 
     Returns:
-        Ring 1/2/3 字典
+        Ring 1/2/3 dictionary
 
     Raises:
-        extractor_unavailable: 当用户指定的提取器不可用时
+        extractor_unavailable: When user-specified extractor is unavailable
     """
-    # 确定实际使用的语言
+    # Determine actual language to use
     if language == "zh":
-        # 用户明确指定中文，必须有 jieba
+        # User explicitly specified Chinese, must have jieba
         if not USE_JIEBA_EXTRACTOR or not _jieba_extractor:
             raise extractor_unavailable("zh", "jieba")
         ring_output = _jieba_extractor.extract(turn_hash, content)
         return _ring_output_to_dict(ring_output)
 
     elif language == "en":
-        # 用户明确指定英文，必须有 spaCy
+        # User explicitly specified English, must have spaCy
         if not USE_SPACY_EXTRACTOR or not _spacy_extractor:
             raise extractor_unavailable("en", "spaCy")
         ring_output = _spacy_extractor.extract(turn_hash, content)
         return _ring_output_to_dict(ring_output)
 
     else:
-        # auto 或 None：自动检测，可以降级
+        # auto or None: auto-detect, can degrade
         lang = detect_language(content)
 
-        # 中文优先使用 jieba
+        # Chinese prefers jieba
         if lang == "zh" and USE_JIEBA_EXTRACTOR and _jieba_extractor:
             ring_output = _jieba_extractor.extract(turn_hash, content)
             return _ring_output_to_dict(ring_output)
 
-        # 英文或 jieba 不可用时使用 spaCy
+        # English or jieba unavailable, use spaCy
         if USE_SPACY_EXTRACTOR and _spacy_extractor:
             ring_output = _spacy_extractor.extract(turn_hash, content)
             return _ring_output_to_dict(ring_output)
 
-        # 都不可用，使用 fallback
+        # All unavailable, use fallback
         return _fallback_extract(content)
 
 
@@ -206,22 +206,22 @@ async def create_turn(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    创建新的对话 Turn
+    Create new conversation Turn
 
-    重要约束：
-    - 服务端自动确定 parent_turn_hash（该对话的最新 Turn）
-    - 客户端不得指定 parent_turn_hash
+    Important constraints:
+    - Server automatically determines parent_turn_hash (latest Turn in this conversation)
+    - Client must not specify parent_turn_hash
     """
     cursor = db.cursor()
 
-    # 检查项目是否存在
+    # Check if project exists
     project_exists = cursor.execute(
         "SELECT 1 FROM projects WHERE project_id = ?", (turn.project_id,)
     ).fetchone()
     if not project_exists:
         raise project_not_found(turn.project_id)
 
-    # 检查对话是否存在且属于该项目
+    # Check if conversation exists and belongs to this project
     conversation_row = cursor.execute(
         "SELECT project_id FROM conversations WHERE conversation_id = ?", (turn.conversation_id,)
     ).fetchone()
@@ -230,7 +230,7 @@ async def create_turn(
     if conversation_row["project_id"] != turn.project_id:
         raise conversation_not_found(f"{turn.conversation_id} (not in project {turn.project_id})")
 
-    # 获取该对话的最新 Turn（自动确定父指针）
+    # Get latest Turn in this conversation (automatically determine parent pointer)
     last_turn = cursor.execute(
         """
         SELECT turn_hash FROM turns
@@ -243,25 +243,25 @@ async def create_turn(
 
     parent_turn_hash = last_turn["turn_hash"] if last_turn else None
 
-    # 生成时间戳
+    # Generate timestamp
     created_at = datetime.now(timezone.utc).isoformat()
 
-    # 计算 Turn 哈希（包含 language 以确保可复现性）
+    # Compute Turn hash (includes language to ensure reproducibility)
     turn_data = {
         "project_id": turn.project_id,
         "conversation_id": turn.conversation_id,
         "role": turn.role,
         "content": turn.content,
         "parent_turn_hash": parent_turn_hash,
-        "language": turn.language,  # 参与哈希，确保同输入+同配置→同输出
+        "language": turn.language,  # Participates in hash, ensures same input + same config → same output
         "created_at": created_at
     }
     turn_hash = compute_turn_hash(turn_data)
 
-    # 提取 Rings（使用 turn_hash 作为 ID，支持用户指定语言）
+    # Extract Rings (use turn_hash as ID, support user-specified language)
     rings = extract_rings(turn_hash, turn.content, turn.language)
 
-    # 保存到数据库（包含 language 以确保可复现性）
+    # Save to database (includes language to ensure reproducibility)
     cursor.execute(
         """
         INSERT INTO turns (
@@ -277,7 +277,7 @@ async def create_turn(
             turn.conversation_id,
             turn.role,
             turn.content,
-            turn.language,  # 存储用户指定的语言，用于后续重放/复现
+            turn.language,  # Store user-specified language for subsequent replay/reproduction
             json.dumps(rings),
             created_at
         )
@@ -300,21 +300,21 @@ async def create_turn(
 
 @router.get("", response_model=PaginatedResponse)
 async def list_turns(
-    project_id: str = Query(..., description="项目 ID（必需）"),
-    conversation_id: Optional[str] = Query(None, description="对话 ID（可选）"),
-    role: Optional[str] = Query(None, description="角色过滤（可选）"),
+    project_id: str = Query(..., description="project ID(required)"),
+    conversation_id: Optional[str] = Query(None, description="conversation ID(optional)"),
+    role: Optional[str] = Query(None, description="role filter (optional)"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    查询 Turn 列表
+    Query Turn list
 
-    注意：列表查询不返回 rings 字段，减轻带宽负担。
+    Note: List query does not return rings field to reduce bandwidth.
     """
     cursor = db.cursor()
 
-    # 构建查询条件
+    # Build query conditions
     conditions = ["project_id = ?"]
     params = [project_id]
 
@@ -328,13 +328,13 @@ async def list_turns(
 
     where_clause = " AND ".join(conditions)
 
-    # 获取总数
+    # Get total count
     total = cursor.execute(
         f"SELECT COUNT(*) FROM turns WHERE {where_clause}",
         params
     ).fetchone()[0]
 
-    # 获取 Turn 列表
+    # Get Turn list
     rows = cursor.execute(
         f"""
         SELECT turn_hash, parent_turn_hash, project_id, conversation_id,
@@ -378,11 +378,11 @@ async def get_turn(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    获取单个 Turn 详情（包含完整 Rings）
+    Get single Turn details (including complete Rings)
 
-    重要约束：
-    - 不暴露 embedding_vector
-    - 仅返回可复现的语义字段
+    Important constraints:
+    - Do not expose embedding_vector
+    - Only return reproducible semantic fields
     """
     cursor = db.cursor()
 
@@ -399,7 +399,7 @@ async def get_turn(
     if not row:
         raise turn_not_found(turn_hash)
 
-    # 解析 Rings
+    # Parse Rings
     rings_data = json.loads(row["rings_json"]) if row["rings_json"] else None
 
     if rings_data:
@@ -429,7 +429,7 @@ async def get_turn(
             )
         )
     else:
-        # 默认空 Rings
+        # Default empty Rings
         rings = Rings(
             ring1=Ring1(),
             ring2=Ring2(),

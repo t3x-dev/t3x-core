@@ -109,7 +109,7 @@ export function openDB(projectRoot: string): string {
 
 export function getDb(): Database.Database {
   if (!db) {
-    throw new Error('Database not initialized. 请先调用 openDB()。');
+    throw new Error('Database not initialized. Please call openDB() first.');
   }
   return db;
 }
@@ -184,7 +184,7 @@ export function openDraft(
 
 export function updateDraft(draftId: number, patch: DraftPatch, actor = defaultActor()): DraftRecord {
   if (!patch.content && !patch.state) {
-    throw new Error('updateDraft 需要 content 或 state 字段。');
+    throw new Error('updateDraft requires content or state field.');
   }
 
   return runInTransaction((instance) => {
@@ -312,7 +312,7 @@ function readSchemaText(): string {
     return readFileSync(fallback, 'utf-8');
   }
 
-  throw new Error('schema.sql 未找到，无法初始化 SQLite。');
+  throw new Error('schema.sql not found, cannot initialize SQLite.');
 }
 
 // For inspection/debugging

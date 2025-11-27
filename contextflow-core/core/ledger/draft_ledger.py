@@ -1,9 +1,9 @@
 """
-Draft Ledger（草稿账本）
+Draft Ledger (draft ledger)
 
-记录 Draft 生成记录（可选持久化）。
+Records Draft generation records (optional persistence).
 
-文件路径：`.contextflow/ledgers/drafts.jsonl`
+File path: `.contextflow/ledgers/drafts.jsonl`
 """
 
 from __future__ import annotations
@@ -18,26 +18,26 @@ from .hash_utils import compute_jcs_hash
 
 
 def utc_now_iso() -> str:
-    """返回 UTC 时间戳（ISO 8601 格式）"""
+    """Return UTC timestamp (ISO 8601 format)"""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass
 class DraftRecord:
     """
-    Draft 记录（对应 STORAGE_ARCHITECTURE.md 中的 Draft Ledger 结构）
+    Draft record (corresponds to Draft Ledger structure in STORAGE_ARCHITECTURE.md)
     """
 
     draft_id: str
     project_id: str
-    base_commit_hash: Optional[str]  # 基准 commit
-    turn_anchor_hash: Optional[str]  # 焦点 turn
-    bridge_id: str  # Bridge 模式
-    bridge_payload: Dict[str, Any]  # Bridge 配置快照
-    must_have: List[str]  # Must-Have 列表
-    mustnt_have: List[str]  # Mustn't-Have 列表
-    llm_config: Dict[str, Any]  # LLM 配置
-    text: str  # 生成的草稿文本
+    base_commit_hash: Optional[str]  # Base commit
+    turn_anchor_hash: Optional[str]  # Focal turn
+    bridge_id: str  # Bridge mode
+    bridge_payload: Dict[str, Any]  # Bridge configuration snapshot
+    must_have: List[str]  # Must-Have list
+    mustnt_have: List[str]  # Mustn't-Have list
+    llm_config: Dict[str, Any]  # LLM configuration
+    text: str  # Generated draft text
     status: str = "ephemeral"  # ephemeral | adopted | superseded
     created_at: str = None
     schema_version: str = "draft_v1"
@@ -47,26 +47,26 @@ class DraftRecord:
             object.__setattr__(self, 'created_at', utc_now_iso())
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """Convert to dictionary"""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> DraftRecord:
-        """从字典创建"""
+        """Create from dictionary"""
         return cls(**data)
 
 
 class DraftLedger:
     """
-    Draft Ledger 管理器
+    Draft Ledger manager
     """
 
     def __init__(self, ledger_path: Path):
         """
-        初始化 Draft Ledger
+        Initialize Draft Ledger
 
         Args:
-            ledger_path: JSONL 文件路径（如 .contextflow/ledgers/drafts.jsonl）
+            ledger_path: JSONL file path (e.g., .contextflow/ledgers/drafts.jsonl)
         """
         self.ledger_path = ledger_path
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,12 +75,12 @@ class DraftLedger:
             self.ledger_path.touch()
 
     def append(self, draft: DraftRecord) -> None:
-        """追加新 draft 到账本"""
+        """Append new draft to ledger"""
         with open(self.ledger_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(draft.to_dict(), ensure_ascii=False) + "\n")
 
     def read_all(self) -> List[DraftRecord]:
-        """读取所有 draft 记录"""
+        """Read all draft records"""
         records = []
         with open(self.ledger_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -90,7 +90,7 @@ class DraftLedger:
         return records
 
     def get_by_id(self, draft_id: str) -> Optional[DraftRecord]:
-        """根据 draft_id 查找"""
+        """Find by draft_id"""
         all_drafts = self.read_all()
         for draft in all_drafts:
             if draft.draft_id == draft_id:
