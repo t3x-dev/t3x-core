@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ComponentType, ReactNode } from 'react'
-import { GitCommit, PenSquare, Sparkles, MessageSquare, MessageSquarePlus } from 'lucide-react'
+import { GitCommit, GitMerge, PenSquare, Sparkles, MessageSquare, MessageSquarePlus } from 'lucide-react'
 import { Handle, Position } from 'reactflow'
 import type { NodeProps } from 'reactflow'
 import { useCanvasStore } from '../store/canvasStore'
@@ -73,6 +73,10 @@ function NodeShell({
   if (bodyClassName) {
     bodyClasses.push(bodyClassName)
   }
+  const lockInteractions = expanded && !!dropdownContent
+  if (lockInteractions) {
+    classes.push('canvas-node--locked', 'nodrag')
+  }
 
   const headerContent =
     customHeader !== undefined ? (
@@ -90,6 +94,7 @@ function NodeShell({
             onClick={onToggle}
             aria-label="Toggle node text"
             aria-expanded={expanded}
+            type="button"
           >
             <svg className="node-expand-icon" width="16" height="16" viewBox="0 0 16 16" role="presentation" aria-hidden="true">
               <path
@@ -110,7 +115,7 @@ function NodeShell({
     <div className={classes.join(' ')}>
       {headerContent}
       <div className={bodyClasses.join(' ')}>{children}</div>
-      {expanded && dropdownContent && <div className="node-dropdown">{dropdownContent}</div>}
+      {expanded && dropdownContent && <div className="node-dropdown nodrag">{dropdownContent}</div>}
     </div>
   )
 }
@@ -118,7 +123,6 @@ function NodeShell({
 function ConversationNode(props: Props) {
   const { data, selected, id } = props
   const [expanded, setExpanded] = useState(false)
-  const updateNode = useCanvasStore((state) => state.updateNode)
   const addDraftFromConversation = useCanvasStore((state) => state.addDraftFromConversation)
   const canSeedDraft = useCanvasStore((state) => state.canCreateDraftFromConversation(id))
   const [showHandleActions, setShowHandleActions] = useState(false)
@@ -166,11 +170,9 @@ function ConversationNode(props: Props) {
         highlightMode={data.highlightMode}
         dropdownContent={
           <>
-            <textarea
-              className="node-summary-field"
-              value={data.summary}
-              onChange={(event) => updateNode(id, { summary: event.target.value })}
-            />
+            <div className="node-summary-field node-summary-field--static">
+              <p>{data.summary || 'No summary is available yet.'}</p>
+            </div>
             <footer>
               <span>{data.timestamp}</span>
               <span>{data.status}</span>
@@ -213,9 +215,8 @@ function ConversationNode(props: Props) {
 }
 
 function DraftNode(props: Props) {
-  const { data, selected, id } = props
+  const { data, selected } = props
   const [expanded, setExpanded] = useState(false)
-  const updateNode = useCanvasStore((state) => state.updateNode)
 
   return (
     <>
@@ -234,11 +235,9 @@ function DraftNode(props: Props) {
         highlightMode={data.highlightMode}
         dropdownContent={
           <>
-            <textarea
-              className="node-summary-field"
-              value={data.summary}
-              onChange={(event) => updateNode(id, { summary: event.target.value })}
-            />
+            <div className="node-summary-field node-summary-field--static">
+              <p>{data.summary || 'No summary captured yet.'}</p>
+            </div>
             <footer>
               <span>{data.status}</span>
               <span>{data.bridgePrompt}</span>
@@ -260,10 +259,11 @@ function DraftNode(props: Props) {
 function CommitNode(props: Props) {
   const { data, selected, id } = props
   const [expanded, setExpanded] = useState(false)
-  const updateNode = useCanvasStore((state) => state.updateNode)
   const tone = useCanvasStore((state) => state.getCommitTone(id))
   const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit)
   const addDraftFromCommit = useCanvasStore((state) => state.addDraftFromCommit)
+  const startMergeFromCommit = useCanvasStore((state) => state.createMergeDraftFromCommit)
+  const hasMainCommit = useCanvasStore((state) => state.hasMainCommit)
   const [showHandleActions, setShowHandleActions] = useState(false)
   const hideTimer = useRef<number | undefined>(undefined)
   const branchLabel =
@@ -273,6 +273,14 @@ function CommitNode(props: Props) {
   }
   const handleAddDraft = () => {
     addDraftFromCommit(id)
+  }
+  const canTriggerMerge =
+    data.branchType === 'branch' && tone === 'branch-latest' && hasMainCommit
+  const handleMerge = () => {
+    if (!canTriggerMerge) {
+      return
+    }
+    startMergeFromCommit(id)
   }
   const showActions = () => {
     if (hideTimer.current) {
@@ -314,11 +322,9 @@ function CommitNode(props: Props) {
         highlightMode={data.highlightMode}
         dropdownContent={
           <>
-            <textarea
-              className="node-summary-field"
-              value={data.summary}
-              onChange={(event) => updateNode(id, { summary: event.target.value })}
-            />
+            <div className="node-summary-field node-summary-field--static">
+              <p>{data.summary || 'No summary recorded.'}</p>
+            </div>
             <footer>
               <Sparkles size={14} />
               <span>{data.status}</span>
@@ -329,6 +335,11 @@ function CommitNode(props: Props) {
         <div className="commit-node__top-row">
           <span className="commit-node__badge">{data.entryId}</span>
           <div className="commit-node__top-actions">
+            {data.isMergeCommit && (
+              <span className="commit-node__merge-flag" aria-label="Merge commit">
+                merge
+              </span>
+            )}
             <span className="node-branch-badge">{branchLabel}</span>
             <button
               className={
@@ -354,7 +365,6 @@ function CommitNode(props: Props) {
         <div className="commit-node__title-row">
           <h4>{data.title}</h4>
         </div>
-        <p className="commit-node__summary">{data.summary}</p>
         <footer className="commit-node__meta">
           <div className="commit-node__signal">
             <Sparkles size={14} />
@@ -390,6 +400,17 @@ function CommitNode(props: Props) {
         <button className="node-handle-action-btn" onClick={handleAddDraft} aria-label="Add Draft" type="button">
           <PenSquare size={14} />
         </button>
+        {data.branchType === 'branch' && (
+          <button
+            className="node-handle-action-btn"
+            onClick={handleMerge}
+            aria-label="Start Merge"
+            type="button"
+            disabled={!canTriggerMerge}
+          >
+            <GitMerge size={14} />
+          </button>
+        )}
       </div>
     </>
   )
