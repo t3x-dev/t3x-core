@@ -1,7 +1,7 @@
 """
-嵌入提供者实现
+Embedding provider implementation
 
-基于 sentence-transformers 的 MiniLM 模型。
+Based on sentence-transformers MiniLM model.
 """
 
 from __future__ import annotations
@@ -14,54 +14,54 @@ from sentence_transformers import SentenceTransformer
 
 class MiniLMEmbeddingProvider:
     """
-    MiniLM 嵌入提供者
+    MiniLM embedding provider
 
-    使用 sentence-transformers 的 all-MiniLM-L6-v2 模型：
-    - 轻量级（22M 参数）
-    - 快速推理（适合实时 Diff）
-    - 支持多语言（中英文均可）
-    - 384 维向量
+    Uses sentence-transformers all-MiniLM-L6-v2 model:
+    - Lightweight (22M parameters)
+    - Fast inference (suitable for real-time Diff)
+    - Supports multiple languages (Chinese and English)
+    - 384-dimensional vectors
     """
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         """
-        初始化嵌入提供者
+        Initialize embedding provider
 
         Args:
-            model_name: sentence-transformers 模型名称
+            model_name: sentence-transformers model name
         """
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
 
     def encode(self, texts: List[str]) -> List[List[float]]:
         """
-        编码文本为向量
+        Encode texts to vectors
 
         Args:
-            texts: 文本列表
+            texts: List of texts
 
         Returns:
-            向量列表
+            List of vectors
         """
         if not texts:
             return []
 
-        # sentence-transformers 返回 numpy array，需转为 list
+        # sentence-transformers returns numpy array, need to convert to list
         embeddings = self.model.encode(texts, convert_to_numpy=True)
         return embeddings.tolist()
 
     def similarity(self, vec_a: List[float], vec_b: List[float]) -> float:
         """
-        计算两个向量的余弦相似度
+        Calculate cosine similarity between two vectors
 
         Args:
-            vec_a: 向量 A
-            vec_b: 向量 B
+            vec_a: Vector A
+            vec_b: Vector B
 
         Returns:
-            相似度分数（0~1）
+            Similarity score (0~1)
         """
-        # 余弦相似度公式：cos(θ) = (A · B) / (||A|| × ||B||)
+        # Cosine similarity formula: cos(θ) = (A · B) / (||A|| × ||B||)
         dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
         norm_a = math.sqrt(sum(a * a for a in vec_a))
         norm_b = math.sqrt(sum(b * b for b in vec_b))
@@ -71,5 +71,5 @@ class MiniLMEmbeddingProvider:
 
         cos_sim = dot_product / (norm_a * norm_b)
 
-        # 余弦相似度范围 [-1, 1]，归一化到 [0, 1]
+        # Cosine similarity range [-1, 1], normalize to [0, 1]
         return (cos_sim + 1) / 2

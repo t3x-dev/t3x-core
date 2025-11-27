@@ -1,20 +1,20 @@
-# ContextFlow Core API 依赖
+# ContextFlow Core API Dependencies
 
-# Web 框架
+# Web framework
 fastapi>=0.104.0,<1.0.0
 uvicorn[standard]>=0.24.0,<1.0.0
 
-# 数据验证和设置
+# Data validation and settings
 pydantic>=2.0.0,<3.0.0
 pydantic-settings>=2.0.0,<3.0.0
 
-# 可选：更好的 JSON 性能
+# Optional: Better JSON performance
 orjson>=3.9.0,<4.0.0
 
-# NLP 处理 (core.extractors)
+# NLP processing (core.extractors)
 spacy>=3.5.0,<4.0.0
 
-# 中文分词 (core.extractors.jieba_extractor)
+# Chinese tokenization (core.extractors.jieba_extractor)
 jieba>=0.42.0
 
 # Embedding (core.diff)

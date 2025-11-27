@@ -1,8 +1,8 @@
 """
-Export 端点
+Export endpoints
 
-GET /api/v1/export/cfpack - 导出 .cfpack 格式
-GET /api/v1/export/ledger - 导出 JSONL Ledger（扩展）
+GET /api/v1/export/cfpack - export in .cfpack format
+GET /api/v1/export/ledger - export JSONL Ledger (extension)
 """
 
 from __future__ import annotations
@@ -44,19 +44,19 @@ router = APIRouter()
 
 @router.get("/cfpack")
 async def export_cfpack(
-    project_id: str = Query(..., description="项目 ID"),
+    project_id: str = Query(..., description="project ID"),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    导出项目为 .cfpack 格式（单文件 JSON 归档）
+    Export project in .cfpack format (single file JSON archive)
 
-    .cfpack 是标准 JSON 格式，包含完整的语义版本历史。
+    .cfpack is standard JSON format containing complete semantic version history.
 
-    注意：Draft 导出属于 Agentic Layer 扩展，当前 MVP Core 不包含。
+    Note: Draft export is part of Agentic Layer extension, not included in current MVP Core.
     """
     cursor = db.cursor()
 
-    # 获取项目信息
+    # Get project information
     project_row = cursor.execute(
         "SELECT project_id, name, created_at FROM projects WHERE project_id = ?",
         (project_id,)
@@ -65,7 +65,7 @@ async def export_cfpack(
     if not project_row:
         raise project_not_found(project_id)
 
-    # 获取所有 Turns
+    # Get all Turns
     turn_rows = cursor.execute(
         """
         SELECT turn_hash, parent_turn_hash, role, content, rings_json, created_at
@@ -77,12 +77,12 @@ async def export_cfpack(
     ).fetchall()
 
     turns = []
-    all_keywords = {}  # 用于聚合 findings
+    all_keywords = {}  # Used to aggregate findings
 
     for row in turn_rows:
         rings_data = json.loads(row["rings_json"]) if row["rings_json"] else None
 
-        # 构建 Rings 对象
+        # Build Rings object
         rings = None
         if rings_data:
             ring1_data = rings_data.get("ring1", {})
@@ -113,7 +113,7 @@ async def export_cfpack(
                 )
             )
 
-            # 聚合关键词用于 findings
+            # Aggregate keywords for findings
             for kw in ring1_data.get("keywords", []):
                 if kw not in all_keywords:
                     all_keywords[kw] = {"count": 0, "polarity": "neutral"}
@@ -128,7 +128,7 @@ async def export_cfpack(
             rings=rings
         ))
 
-    # 获取所有 Commits
+    # Get all Commits
     commit_rows = cursor.execute(
         """
         SELECT commit_hash, parents_json, branch, turn_window_json,
@@ -146,7 +146,7 @@ async def export_cfpack(
         facet_snapshot_data = json.loads(row["facet_snapshot_json"])
         pipeline_config_data = json.loads(row["pipeline_config_json"]) if row["pipeline_config_json"] else None
 
-        # 构建 facet_snapshot
+        # Build facet_snapshot
         facet_snapshots = []
         for fs in facet_snapshot_data:
             evidence = [EvidenceRef(**e) for e in fs.get("evidence", [])]
@@ -170,13 +170,13 @@ async def export_cfpack(
             created_at=row["created_at"]
         ))
 
-    # 构建 findings（归一后的语义事实）
+    # Build findings (normalized semantic facts)
     aggregated_keywords = [
         {"lemma": kw, "count": data["count"], "polarity": data["polarity"]}
         for kw, data in sorted(all_keywords.items(), key=lambda x: -x[1]["count"])[:50]
     ]
 
-    # 简化的 must_have（取高频词）
+    # Simplified must_have (high-frequency words)
     must_have = [kw for kw, data in all_keywords.items() if data["count"] >= 2][:20]
 
     findings = CfpackFindings(
@@ -186,7 +186,7 @@ async def export_cfpack(
         evidence_refs=[]
     )
 
-    # 构建完整响应（先构建，再计算哈希）
+    # Build complete response (build first, calculate hash later)
     cfpack = CfpackResponse(
         version="1.0.0",
         cfpack_schema_version="1.0.0",
@@ -198,15 +198,15 @@ async def export_cfpack(
         turns=turns,
         findings=findings,
         commits=commits,
-        hash=None,  # 稍后计算
+        hash=None,  # Calculate later
         meta=CfpackMeta(
             exported_at=datetime.now(timezone.utc).isoformat(),
             exported_by=f"core_api@{__version__}"
         )
     )
 
-    # 计算包哈希（基于除 hash 字段外的完整内容）
-    # 使用 JCS 风格：排序 keys，无额外空格
+    # Calculate package hash (based on complete content excluding hash field)
+    # Use JCS style: sorted keys, no extra whitespace
     content_for_hash = cfpack.model_dump(exclude={"hash"})
     canonical_json = json.dumps(content_for_hash, sort_keys=True, separators=(',', ':'))
     pack_hash = f"sha256:{hashlib.sha256(canonical_json.encode()).hexdigest()}"
@@ -216,7 +216,7 @@ async def export_cfpack(
         pack_hash=pack_hash
     )
 
-    # 返回带自定义 MIME 类型的响应
+    # Return response with custom MIME type
     return JSONResponse(
         content=cfpack.model_dump(),
         media_type="application/vnd.contextflow.cfpack+json",
@@ -228,17 +228,17 @@ async def export_cfpack(
 
 @router.get("/ledger")
 async def export_ledger(
-    project_id: str = Query(..., description="项目 ID"),
+    project_id: str = Query(..., description="project ID"),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    导出项目为 JSONL Ledger 格式
+    Export project in JSONL Ledger format
 
-    每行一个 JSON 对象，按时间顺序排列，用于备份和流式处理。
+    One JSON object per line, sorted chronologically, for backup and streaming processing.
     """
     cursor = db.cursor()
 
-    # 检查项目是否存在
+    # Check if project exists
     project_row = cursor.execute(
         "SELECT project_id, name, created_at FROM projects WHERE project_id = ?",
         (project_id,)
@@ -248,7 +248,7 @@ async def export_ledger(
         raise project_not_found(project_id)
 
     def generate_jsonl():
-        # 1. 输出项目元数据
+        # 1. Output project metadata
         yield json.dumps({
             "type": "project",
             "project_id": project_row["project_id"],
@@ -256,7 +256,7 @@ async def export_ledger(
             "created_at": project_row["created_at"]
         }) + "\n"
 
-        # 2. 输出所有对话
+        # 2. Output all conversations
         conversations = cursor.execute(
             """
             SELECT conversation_id, project_id, title, created_at
@@ -276,7 +276,7 @@ async def export_ledger(
                 "created_at": conv["created_at"]
             }) + "\n"
 
-        # 3. 输出所有 Turns
+        # 3. Output all Turns
         turns = cursor.execute(
             """
             SELECT turn_hash, parent_turn_hash, project_id, conversation_id,
@@ -302,7 +302,7 @@ async def export_ledger(
                 "created_at": turn["created_at"]
             }) + "\n"
 
-        # 4. 输出所有 Commits
+        # 4. Output all Commits
         commits = cursor.execute(
             """
             SELECT commit_hash, project_id, branch, message, parents_json,

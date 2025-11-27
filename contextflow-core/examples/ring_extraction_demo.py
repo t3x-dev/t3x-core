@@ -1,22 +1,22 @@
 """
-Ring 1/2/3 提取器演示
+Ring 1/2/3 Extractor Demo
 
-展示如何使用新实现的 Ring 提取器从对话中提取语义信息。
+Demonstrates how to use the newly implemented Ring extractor to extract semantic information from conversations.
 """
 
 from pathlib import Path
 import sys
 
-# 添加 core 到路径
+# Add core to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.extractors import RingExtractor, ExtractorConfig
 
 
 def main():
-    """演示 Ring 提取器的使用"""
+    """Demonstrate Ring extractor usage"""
 
-    # 1. 初始化提取器
+    # 1. Initialize extractor
     config = ExtractorConfig(
         plugin="spacy",
         model="en_core_web_sm",
@@ -25,7 +25,7 @@ def main():
 
     extractor = RingExtractor(config)
 
-    # 2. 示例对话
+    # 2. Example conversations
     test_conversations = [
         {
             "turn_id": "turn-1",
@@ -41,9 +41,9 @@ def main():
         }
     ]
 
-    # 3. 提取 Ring 1/2/3
+    # 3. Extract Ring 1/2/3
     print("=" * 80)
-    print("Ring 1/2/3 提取器演示")
+    print("Ring 1/2/3 Extractor Demo")
     print("=" * 80)
     print()
 
@@ -55,41 +55,41 @@ def main():
         print(f"   Content: {content}")
         print()
 
-        # 提取
+        # Extract
         result = extractor.extract(turn_id, content)
 
-        # 显示 Ring 1
-        print("   🔵 Ring 1: 关键词主轴")
+        # Display Ring 1
+        print("   🔵 Ring 1: Keyword Backbone")
         print(f"      Topic: {result.ring1.topic}")
         print(f"      Time Anchor: {result.ring1.time_anchor}")
         print(f"      Keywords ({len(result.ring1.keywords)}):")
-        for kw in result.ring1.keywords[:10]:  # 只显示前 10 个
+        for kw in result.ring1.keywords[:10]:  # Only show first 10
             polarity_symbol = {-1: "❌", 0: "⚪", 1: "✅"}[kw.polarity]
             print(f"         {polarity_symbol} {kw.text} → {kw.lemma} (pos={kw.pos}, polarity={kw.polarity})")
 
-        # 显示 Ring 1 偏好关键词
+        # Display Ring 1 preference keywords
         if result.ring1.preference_keywords:
             print(f"\n      Preference Keywords ({len(result.ring1.preference_keywords)}):")
             for kw in result.ring1.preference_keywords:
                 polarity_symbol = {-1: "👎 Avoid", 1: "👍 Prefer"}[kw.polarity]
                 print(f"         {polarity_symbol}: {kw.lemma}")
 
-        # 显示 Ring 2
-        print(f"\n   🟢 Ring 2: 轻关系 / Facet")
+        # Display Ring 2
+        print(f"\n   🟢 Ring 2: Lightweight Relations / Facets")
         print(f"      Facets ({len(result.ring2.facets)}):")
         for facet in result.ring2.facets:
             print(f"         [{facet.facet_type}] {facet.key} = {facet.value} (conf={facet.confidence:.2f})")
 
-        # 显示 Ring 3
-        print(f"\n   🟣 Ring 3: 分句结构")
+        # Display Ring 3
+        print(f"\n   🟣 Ring 3: Segmented Structure")
         print(f"      Segments ({len(result.ring3.segments)}):")
         for seg in result.ring3.segments:
             print(f"         {seg.segment_id}: \"{seg.text}\"")
 
         print("\n   " + "-" * 76)
 
-    # 4. 显示提取器元数据
-    print("\n\n📊 提取器元数据")
+    # 4. Display extractor metadata
+    print("\n\n📊 Extractor Metadata")
     metadata = extractor.get_metadata()
     print(f"   Plugin: {metadata.plugin}")
     print(f"   Model: {metadata.model}")
@@ -97,7 +97,7 @@ def main():
     print(f"   Language: {metadata.language}")
 
     print("\n" + "=" * 80)
-    print("✅ 演示完成！")
+    print("✅ Demo Complete!")
     print("=" * 80)
 
 

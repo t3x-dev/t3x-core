@@ -106,7 +106,7 @@ export async function resolveRuntimeConfig(overrides: {
 
   if (!apiKey) {
     throw new Error(
-      'ANTHROPIC_API_KEY 未设置。\n请在 contextflow CLI 中使用 /config -> /api <your_key>\n或设置环境变量: export ANTHROPIC_API_KEY=...',
+      'ANTHROPIC_API_KEY not set.\nPlease use /config -> /api <your_key> in contextflow CLI\nor set environment variable: export ANTHROPIC_API_KEY=...',
     );
   }
 

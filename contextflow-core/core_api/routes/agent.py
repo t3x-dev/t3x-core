@@ -1,9 +1,9 @@
 """
-Agent 端点（Draft API）
+Agent endpoints(Draft API)
 
-POST /api/v1/agent/drafts - 创建 Draft
-GET /api/v1/agent/drafts/{draft_id} - 获取 Draft
-PATCH /api/v1/agent/drafts/{draft_id} - 更新 Draft
+POST /api/v1/agent/drafts - create Draft
+GET /api/v1/agent/drafts/{draft_id} - get Draft
+PATCH /api/v1/agent/drafts/{draft_id} - update Draft
 """
 
 from __future__ import annotations
@@ -36,18 +36,18 @@ router = APIRouter()
 
 
 def utc_now_iso() -> str:
-    """返回 UTC 时间戳"""
+    """return UTC timestamp"""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def generate_draft_id() -> str:
-    """生成 Draft ID"""
+    """Generate Draft ID"""
     return f"draft_{uuid.uuid4().hex[:8]}"
 
 
 def extract_must_have_from_turns(cursor, project_id: str, conversation_id: str) -> list[str]:
     """
-    从对话的 turns 中提取 must_have 关键词
+    Extract must_have keywords from conversation turns
     """
     rows = cursor.execute(
         """
@@ -63,23 +63,23 @@ def extract_must_have_from_turns(cursor, project_id: str, conversation_id: str) 
         if row["rings_json"]:
             rings = json.loads(row["rings_json"])
             ring1 = rings.get("ring1", {})
-            # 提取正向偏好关键词
+            # Extract positive preference keywords
             for pref in ring1.get("preference_keywords", []):
                 if pref.get("polarity") == "positive":
                     kw = pref.get("keyword") or pref.get("lemma")
                     if kw and kw not in keywords:
                         keywords.append(kw)
-            # 提取普通关键词
+            # Extract regular keywords
             for kw in ring1.get("keywords", []):
                 if kw not in keywords:
                     keywords.append(kw)
 
-    return keywords[:20]  # 限制数量
+    return keywords[:20]  # Limit count
 
 
 def extract_mustnt_have_from_turns(cursor, project_id: str, conversation_id: str) -> list[str]:
     """
-    从对话的 turns 中提取 mustnt_have 关键词
+    Extract mustnt_have keywords from conversation turns
     """
     rows = cursor.execute(
         """
@@ -95,7 +95,7 @@ def extract_mustnt_have_from_turns(cursor, project_id: str, conversation_id: str
         if row["rings_json"]:
             rings = json.loads(row["rings_json"])
             ring1 = rings.get("ring1", {})
-            # 提取负向偏好关键词
+            # Extract negative preference keywords
             for pref in ring1.get("preference_keywords", []):
                 if pref.get("polarity") == "negative":
                     kw = pref.get("keyword") or pref.get("lemma")
@@ -107,7 +107,7 @@ def extract_mustnt_have_from_turns(cursor, project_id: str, conversation_id: str
 
 def validate_draft_text(text: str, must_have: list[str], mustnt_have: list[str]) -> DraftValidation:
     """
-    验证 draft 文本是否满足约束
+    Validate if draft text satisfies constraints
     """
     text_lower = text.lower()
 
@@ -127,9 +127,9 @@ async def call_llm(
     system_prompt: str = ""
 ) -> str:
     """
-    调用 LLM 生成文本
+    Call LLM to generate text
 
-    支持 Anthropic 和 OpenAI 两种 provider
+    Supports Anthropic and OpenAI providers
     """
     provider = llm_config.provider.lower()
 
@@ -207,25 +207,25 @@ def build_bridge_prompt(
     mustnt_have: list[str]
 ) -> tuple[str, str]:
     """
-    根据 bridge_id 构建 prompt
+    Build prompt based on bridge_id
 
-    返回 (system_prompt, user_prompt)
+    Returns (system_prompt, user_prompt)
     """
-    # 构建对话上下文
+    # Build conversation context
     context_text = ""
-    for turn in context_turns[-10:]:  # 最多取最近 10 条
+    for turn in context_turns[-10:]:  # Take at most last 10 entries
         role = turn["role"]
-        content = turn["content"][:500]  # 截断过长内容
+        content = turn["content"][:500]  # Truncate overly long content
         context_text += f"\n[{role}]: {content}"
 
-    # Must-Have / Mustn't-Have 约束
+    # Must-Have / Mustn't-Have constraints
     constraints = ""
     if must_have:
         constraints += f"\n\n**Must Include**: {', '.join(must_have[:10])}"
     if mustnt_have:
         constraints += f"\n\n**Must Avoid**: {', '.join(mustnt_have[:5])}"
 
-    # 根据 bridge_id 选择模板
+    # Select template based on bridge_id
     if bridge_id == "plan":
         system_prompt = "You are a planning assistant. Create structured, actionable plans based on user requirements."
         user_prompt = f"""Based on the following conversation context, create a plan for: {intent}
@@ -278,25 +278,25 @@ async def create_draft(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    创建 Draft（基于 Bridge 模板 + LLM 生成）
+    Create Draft (based on Bridge template + LLM generation)
 
-    同步执行流程：
-    1. 提取 Must-Have/Mustn't-Have 约束
-    2. 构建 Bridge prompt
-    3. 调用 LLM 生成文本
-    4. 验证约束
-    5. 如果验证失败，重试最多 3 次
+    Synchronous execution flow:
+    1. Extract Must-Have/Mustn't-Have constraints
+    2. Build Bridge prompt
+    3. Call LLM to generate text
+    4. Validate constraints
+    5. If validation fails, retry up to 3 times
     """
     cursor = db.cursor()
 
-    # 检查项目是否存在
+    # Check if project exists
     project = cursor.execute(
         "SELECT 1 FROM projects WHERE project_id = ?", (draft.project_id,)
     ).fetchone()
     if not project:
         raise project_not_found(draft.project_id)
 
-    # 检查对话是否存在
+    # Check if conversation exists
     conversation = cursor.execute(
         "SELECT 1 FROM conversations WHERE conversation_id = ? AND project_id = ?",
         (draft.conversation_id, draft.project_id)
@@ -304,7 +304,7 @@ async def create_draft(
     if not conversation:
         raise conversation_not_found(draft.conversation_id)
 
-    # 获取对话的 turns 作为上下文
+    # Get conversation turns as context
     turns = cursor.execute(
         """
         SELECT role, content FROM turns
@@ -316,14 +316,14 @@ async def create_draft(
 
     context_turns = [{"role": t["role"], "content": t["content"]} for t in turns]
 
-    # 提取约束
+    # Extract constraints
     must_have = extract_must_have_from_turns(cursor, draft.project_id, draft.conversation_id)
     mustnt_have = extract_mustnt_have_from_turns(cursor, draft.project_id, draft.conversation_id)
 
-    # 使用默认 LLM 配置或用户提供的配置
+    # Use default LLM config or user-provided config
     llm_config = draft.llm_config or LLMConfig()
 
-    # 构建 prompt
+    # Build prompt
     system_prompt, user_prompt = build_bridge_prompt(
         draft.bridge_id,
         draft.intent,
@@ -332,26 +332,26 @@ async def create_draft(
         mustnt_have
     )
 
-    # 生成 Draft
+    # Generate Draft
     draft_id = generate_draft_id()
     created_at = utc_now_iso()
 
-    # 尝试生成并验证，最多重试 3 次
+    # Try to generate and validate, retry up to 3 times
     max_retries = 3
     generated_text = ""
     validation = None
 
     for attempt in range(max_retries):
-        # 调用 LLM
+        # Call LLM
         generated_text = await call_llm(user_prompt, llm_config, system_prompt)
 
-        # 验证
+        # Validate
         validation = validate_draft_text(generated_text, must_have, mustnt_have)
 
         if validation.passed:
             break
 
-        # 如果验证失败，添加提示重试
+        # If validation failed, add hint and retry
         if attempt < max_retries - 1:
             retry_hint = f"\n\nPrevious attempt failed validation. Missing keywords: {validation.missing_keywords}. Please include them."
             user_prompt += retry_hint
@@ -359,7 +359,7 @@ async def create_draft(
     completed_at = utc_now_iso()
     status = "ready" if validation and validation.passed else "failed"
 
-    # 保存到数据库
+    # Save to database
     cursor.execute(
         """
         INSERT INTO drafts (
@@ -421,7 +421,7 @@ async def get_draft(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    获取已创建的 Draft
+    Get created Draft
     """
     cursor = db.cursor()
 
@@ -443,13 +443,13 @@ async def get_draft(
             {"draft_id": draft_id}
         )
 
-    # 解析 JSON 字段
+    # Parse JSON fields
     bridge_payload = json.loads(row["bridge_payload_json"]) if row["bridge_payload_json"] else {}
     must_have = json.loads(row["must_have_json"]) if row["must_have_json"] else []
     mustnt_have = json.loads(row["mustnt_have_json"]) if row["mustnt_have_json"] else []
     llm_config_data = json.loads(row["llm_config_json"]) if row["llm_config_json"] else {}
 
-    # 重新验证
+    # Re-validate
     validation = validate_draft_text(row["text"] or "", must_have, mustnt_have)
 
     return APIResponse(
@@ -480,11 +480,11 @@ async def update_draft(
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    更新 Draft（用户反馈后重新生成）
+    Update Draft (regenerate after user feedback)
     """
     cursor = db.cursor()
 
-    # 获取现有 draft
+    # Get existing draft
     row = cursor.execute(
         """
         SELECT draft_id, project_id, conversation_id, base_commit_hash, turn_anchor_hash,
@@ -503,19 +503,19 @@ async def update_draft(
             {"draft_id": draft_id}
         )
 
-    # 解析现有数据
+    # Parse existing data
     bridge_payload = json.loads(row["bridge_payload_json"]) if row["bridge_payload_json"] else {}
     must_have = json.loads(row["must_have_json"]) if row["must_have_json"] else []
     mustnt_have = json.loads(row["mustnt_have_json"]) if row["mustnt_have_json"] else []
     llm_config_data = json.loads(row["llm_config_json"]) if row["llm_config_json"] else {}
 
-    # 更新 must_have
+    # Update must_have
     if update.append_must_have:
         for kw in update.append_must_have:
             if kw not in must_have:
                 must_have.append(kw)
 
-    # 获取对话上下文（使用 conversation_id 过滤）
+    # Get conversation context (filter by conversation_id)
     turns = cursor.execute(
         """
         SELECT role, content FROM turns
@@ -527,7 +527,7 @@ async def update_draft(
 
     context_turns = [{"role": t["role"], "content": t["content"]} for t in turns]
 
-    # 重新构建 prompt，加入反馈
+    # Rebuild prompt, add feedback
     intent = bridge_payload.get("intent", "")
     if update.feedback:
         intent = f"{intent}\n\nUser feedback: {update.feedback}"
@@ -542,14 +542,14 @@ async def update_draft(
         mustnt_have
     )
 
-    # 重新生成
+    # Regenerate
     generated_text = await call_llm(user_prompt, llm_config, system_prompt)
     validation = validate_draft_text(generated_text, must_have, mustnt_have)
 
     completed_at = utc_now_iso()
     status = "ready" if validation.passed else "failed"
 
-    # 更新数据库
+    # Update database
     cursor.execute(
         """
         UPDATE drafts

@@ -1,7 +1,7 @@
 """
-Ledger 测试
+Ledger tests
 
-测试 JSONL 主账本的读写逻辑。
+Tests for JSONL main ledger read/write logic.
 """
 
 import json
@@ -15,15 +15,15 @@ from core.ledger.turn_ledger import TurnRecord
 
 
 class TestTurnLedger:
-    """测试 Turn Ledger"""
+    """Test Turn Ledger"""
 
     def test_append_turn(self):
-        """测试追加 Turn 记录"""
+        """Test appending Turn record"""
         with tempfile.TemporaryDirectory() as tmpdir:
             ledger_path = Path(tmpdir) / "turns.jsonl"
             ledger = TurnLedger(ledger_path)
 
-            # 创建 Turn 记录
+            # Create Turn record
             turn = TurnRecord.create(
                 turn_hash="sha256:abc123",
                 parent_turn_hash=None,
@@ -31,13 +31,13 @@ class TestTurnLedger:
                 conversation_id="test-conv",
                 role="user",
                 content="Hello world",
-                ring_snapshot=None,  # 简化测试
+                ring_snapshot=None,  # Simplified test
             )
 
-            # 追加记录
+            # Append record
             ledger.append(turn)
 
-            # 验证文件存在且包含记录
+            # Validate file exists and contains record
             assert ledger_path.exists()
 
             with open(ledger_path, "r") as f:
@@ -49,12 +49,12 @@ class TestTurnLedger:
                 assert data["content"] == "Hello world"
 
     def test_load_all_turns(self):
-        """测试加载所有 Turn 记录"""
+        """Test loading all Turn records"""
         with tempfile.TemporaryDirectory() as tmpdir:
             ledger_path = Path(tmpdir) / "turns.jsonl"
             ledger = TurnLedger(ledger_path)
 
-            # 追加多条记录
+            # Append multiple records
             for i in range(3):
                 turn = TurnRecord.create(
                     turn_hash=f"sha256:turn-{i}",
@@ -67,16 +67,16 @@ class TestTurnLedger:
                 )
                 ledger.append(turn)
 
-            # 加载所有记录
+            # Load all records
             turns = ledger.load_all()
 
-            # 验证
+            # Validate
             assert len(turns) == 3
             assert turns[0].content == "Turn 0"
             assert turns[2].content == "Turn 2"
 
     def test_turn_hash_calculation(self):
-        """测试 Turn Hash 计算"""
+        """Test Turn Hash calculation"""
         turn = TurnRecord.create(
             turn_hash="placeholder",
             parent_turn_hash=None,
@@ -87,10 +87,10 @@ class TestTurnLedger:
             ring_snapshot=None,
         )
 
-        # Hash 应该以 sha256: 开头
+        # Hash should start with sha256:
         assert turn.turn_hash.startswith("sha256:")
 
-        # 相同输入应该产生相同 hash
+        # Same input should produce same hash
         turn2 = TurnRecord.create(
             turn_hash="placeholder",
             parent_turn_hash=None,
@@ -101,16 +101,16 @@ class TestTurnLedger:
             ring_snapshot=None,
         )
 
-        # 注意：由于 created_at 不同，hash 会不同
-        # 这里只验证格式
+        # Note: due to different created_at, hash will be different
+        # Here we only validate format
         assert turn2.turn_hash.startswith("sha256:")
 
 
 class TestCommitLedger:
-    """测试 Commit Ledger"""
+    """Test Commit Ledger"""
 
     def test_append_commit(self):
-        """测试追加 Commit 记录"""
+        """Test appending Commit record"""
         with tempfile.TemporaryDirectory() as tmpdir:
             ledger_path = Path(tmpdir) / "commits.jsonl"
             ledger = CommitLedger(ledger_path)
@@ -131,7 +131,7 @@ class TestCommitLedger:
 
             ledger.append(commit_data)
 
-            # 验证
+            # Validate
             assert ledger_path.exists()
 
             with open(ledger_path, "r") as f:
@@ -143,10 +143,10 @@ class TestCommitLedger:
 
 
 class TestDraftLedger:
-    """测试 Draft Ledger"""
+    """Test Draft Ledger"""
 
     def test_append_draft(self):
-        """测试追加 Draft 记录"""
+        """Test appending Draft record"""
         with tempfile.TemporaryDirectory() as tmpdir:
             ledger_path = Path(tmpdir) / "drafts.jsonl"
             ledger = DraftLedger(ledger_path)
@@ -167,7 +167,7 @@ class TestDraftLedger:
 
             ledger.append(draft_data)
 
-            # 验证
+            # Validate
             assert ledger_path.exists()
 
             with open(ledger_path, "r") as f:

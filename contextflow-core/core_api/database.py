@@ -1,7 +1,7 @@
 """
-数据库初始化和 Schema 管理
+Database initialization and schema management
 
-基于 STORAGE_ARCHITECTURE.md 定义的 SQLite 索引层。
+SQLite index layer based on STORAGE_ARCHITECTURE.md definition.
 """
 
 from __future__ import annotations
@@ -13,18 +13,18 @@ from core_api.dependencies import get_db_path, get_settings
 
 
 def init_database():
-    """初始化数据库 Schema"""
+    """Initialize database schema"""
     db_path = get_db_path()
 
-    # 确保目录存在
+    # Ensure directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
-    # 创建表
+    # Create tables
     cursor.executescript("""
-    -- Projects 表
+    -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
         project_id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -32,7 +32,7 @@ def init_database():
         created_at TEXT NOT NULL
     );
 
-    -- Conversations 表
+    -- Conversations table
     CREATE TABLE IF NOT EXISTS conversations (
         conversation_id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -42,7 +42,7 @@ def init_database():
         FOREIGN KEY (project_id) REFERENCES projects(project_id)
     );
 
-    -- Turns 表（索引层，完整数据在 JSONL Ledger）
+    -- Turns table (Index layer, full data in JSONL Ledger)
     CREATE TABLE IF NOT EXISTS turns (
         turn_hash TEXT PRIMARY KEY,
         parent_turn_hash TEXT,
@@ -50,7 +50,7 @@ def init_database():
         conversation_id TEXT NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
-        language TEXT,  -- zh | en | auto | NULL，用于可复现性
+        language TEXT,  -- zh | en | auto | NULL, for reproducibility
         rings_json TEXT,
         created_at TEXT NOT NULL,
         ledger_file TEXT,
@@ -59,7 +59,7 @@ def init_database():
         FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id)
     );
 
-    -- Commits 表
+    -- Commits table
     CREATE TABLE IF NOT EXISTS commits (
         commit_hash TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -76,7 +76,7 @@ def init_database():
         FOREIGN KEY (project_id) REFERENCES projects(project_id)
     );
 
-    -- Drafts 表（用于 Agentic Layer）
+    -- Drafts table (for Agentic Layer)
     CREATE TABLE IF NOT EXISTS drafts (
         draft_id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -96,7 +96,7 @@ def init_database():
         FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id)
     );
 
-    -- Diffs 缓存表
+    -- Diffs cache table
     CREATE TABLE IF NOT EXISTS diffs (
         base_commit_hash TEXT NOT NULL,
         target_commit_hash TEXT NOT NULL,
@@ -106,7 +106,7 @@ def init_database():
         PRIMARY KEY (base_commit_hash, target_commit_hash, algo_version)
     );
 
-    -- Merge Results 表
+    -- Merge results table
     CREATE TABLE IF NOT EXISTS merge_results (
         merge_result_id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -120,7 +120,7 @@ def init_database():
         FOREIGN KEY (project_id) REFERENCES projects(project_id)
     );
 
-    -- Branches 表
+    -- Branches table
     CREATE TABLE IF NOT EXISTS branches (
         branch_id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -135,7 +135,7 @@ def init_database():
         UNIQUE(project_id, name)
     );
 
-    -- 索引
+    -- Indexes
     CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
     CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
@@ -146,7 +146,7 @@ def init_database():
 
     conn.commit()
 
-    # 迁移：为现有 turns 表添加 language 列（如果不存在）
+    # Migration: Add language column to existing turns table (if not exists)
     _migrate_add_language_column(conn)
 
     conn.close()
@@ -154,13 +154,13 @@ def init_database():
 
 def _migrate_add_language_column(conn: sqlite3.Connection):
     """
-    迁移：为 turns 表添加 language 列
+    Migration: Add language column to turns table
 
-    用于升级现有数据库，避免 sqlite3.OperationalError。
+    Used to upgrade existing database to avoid sqlite3.OperationalError.
     """
     cursor = conn.cursor()
 
-    # 检查 language 列是否存在
+    # Check if language column exists
     cursor.execute("PRAGMA table_info(turns)")
     columns = [row[1] for row in cursor.fetchall()]
 
@@ -170,7 +170,7 @@ def _migrate_add_language_column(conn: sqlite3.Connection):
 
 
 def get_database_size() -> int:
-    """获取数据库文件大小（字节）"""
+    """Get database file size (bytes)"""
     db_path = get_db_path()
     if db_path.exists():
         return db_path.stat().st_size
@@ -178,7 +178,7 @@ def get_database_size() -> int:
 
 
 def get_ledger_files_count() -> int:
-    """获取 Ledger 文件数量"""
+    """Get number of Ledger files"""
     from core_api.dependencies import get_ledger_dir
     ledger_dir = get_ledger_dir()
     if ledger_dir.exists():

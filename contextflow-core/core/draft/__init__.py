@@ -1,17 +1,17 @@
 """
-Draft Workflow 模块
+Draft Workflow module
 
-实现完整的 6 步 Draft 流程：
-1. 哈希窗口选择（Hash Window Selection）
-2. Intent & Bridge 加载
-3. 嵌入筛选（Embedding Filtering）
-4. Polish（LLM 生成）
-5. Validate 循环（Must-Have / Mustn't-Have 验证）
-6. 用户审核（User Review）
+Implements the complete 6-step Draft workflow:
+1. Hash Window Selection
+2. Intent & Bridge loading
+3. Embedding Filtering
+4. Polish (LLM generation)
+5. Validation loop (Must-Have / Mustn't-Have validation)
+6. User Review
 
-核心原则：
-- 步骤 1/2/3/5 由 Core 决定论执行
-- 步骤 4/6 由 Agentic Layer（SummaryAgent）负责
+Core principles:
+- Steps 1/2/3/5 executed deterministically by Core
+- Steps 4/6 handled by Agentic Layer (SummaryAgent)
 """
 
 from .workflow import DraftWorkflow, DraftConfig, DraftResult

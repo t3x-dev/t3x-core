@@ -17,13 +17,13 @@ describe("runAspectsEngine", () => {
     const turns = [
       {
         id: "turn-1",
-        text: "Trip idea: 我想去大阪吃夜市美食。",
+        text: "Trip idea: 我想去大阪吃夜市美食.",
         role: "user" as const,
         timestamp: "2025-03-10T12:00:00Z",
       },
       {
         id: "turn-2",
-        text: "预算不超过1800美元，时间是3月12号到3月16号。",
+        text: "预算不超过1800美元,时间是3月12号到3月16号.",
         role: "user" as const,
         timestamp: "2025-03-10T12:05:00Z",
       },

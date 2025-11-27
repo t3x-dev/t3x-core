@@ -41,7 +41,7 @@ let lockPath: string | null = null;
 
 export async function startApiServer(options: ApiServerOptions): Promise<ApiServerInfo> {
   if (server) {
-    throw new Error('API server 已在运行。');
+    throw new Error('API server already running.');
   }
 
   const port = await resolvePort(options.port ?? 8765);
@@ -104,9 +104,9 @@ export async function startApiServer(options: ApiServerOptions): Promise<ApiServ
   serverToken = token;
   lockPath = path.join(options.contextflowDir, LOCK_FILENAME);
   await writeLockFile(lockPath, port, token);
-  logger.info(`本地 API 已启动：http://127.0.0.1:${port}`);
+  logger.info(`Local API started: http://127.0.0.1:${port}`);
   if (token) {
-    logger.info(`请在请求时附带 X-CF-Token: ${token}`);
+    logger.info(`Include X-CF-Token in request: ${token}`);
   }
   return serverInfo;
 }
@@ -160,7 +160,7 @@ async function handleListTurns(_req: IncomingMessage, res: ServerResponse, url: 
 async function handleCreateTurn(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readJsonBody(req);
   if (!body || !body.text || !body.role) {
-    sendJson(res, { error: 'role/text 为必填字段' }, 400);
+    sendJson(res, { error: 'role/text are required fields' }, 400);
     return;
   }
   const turn = createTurn(
@@ -186,7 +186,7 @@ async function handleOpenDraft(req: IncomingMessage, res: ServerResponse): Promi
 async function handleUpdateDraft(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const idMatch = url.pathname.match(/\/api\/drafts\/(\d+)/);
   if (!idMatch) {
-    sendJson(res, { error: 'draft id 缺失' }, 400);
+    sendJson(res, { error: 'draft id missing' }, 400);
     return;
   }
   const draftId = Number(idMatch[1]);
@@ -203,7 +203,7 @@ async function handleCommitDraft(req: IncomingMessage, res: ServerResponse): Pro
   const body = await readJsonBody(req);
   const draftId = Number(body?.id);
   if (!Number.isInteger(draftId)) {
-    sendJson(res, { error: 'id 必须为数字' }, 400);
+    sendJson(res, { error: 'id must be a number' }, 400);
     return;
   }
   const commit = commitDraft(draftId, body?.msg, 'webui');

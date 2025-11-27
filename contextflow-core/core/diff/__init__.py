@@ -1,11 +1,11 @@
 """
-三方语义 Diff 引擎
+Three-way semantic Diff engine
 
-按照 docs/ARCHITECTURE.zh.md:124-141 规范实现：
-- 基于 Ring 3 分句 + MiniLM 相似度
-- 支持两种场景：
-  1. Commit Diff（Draft 自检）：Draft vs 父 Commit
-  2. Merge Diff（预览）：Source Commit vs Target Commit（基于共同祖先 Base）
+Implements according to docs/ARCHITECTURE.zh.md:124-141 specification:
+- Based on Ring 3 sentence segmentation + MiniLM similarity
+- Supports two scenarios:
+  1. Commit Diff (Draft self-check): Draft vs parent Commit
+  2. Merge Diff (preview): Source Commit vs Target Commit (based on common ancestor Base)
 """
 
 from .engine import DiffEngine, DiffResult, EmbeddingProvider

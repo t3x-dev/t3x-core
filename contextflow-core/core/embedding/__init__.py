@@ -1,7 +1,7 @@
 """
-嵌入提供者模块
+Embedding provider module
 
-提供基于 sentence-transformers 的 MiniLM 嵌入实现。
+Provides MiniLM embedding implementation based on sentence-transformers.
 """
 
 from .provider import MiniLMEmbeddingProvider

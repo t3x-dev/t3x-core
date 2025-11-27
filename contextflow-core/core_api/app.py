@@ -1,7 +1,7 @@
 """
-FastAPI 应用主入口
+FastAPI Application Main Entry Point
 
-这是 ContextFlow Core API 的参考实现。
+This is the reference implementation of the ContextFlow Core API.
 """
 
 from __future__ import annotations
@@ -11,15 +11,15 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# 加载 .env 文件（支持多个位置）
+# Load .env file (supports multiple locations)
 try:
     from dotenv import load_dotenv
 
-    # 按优先级查找 .env 文件
+    # Search for .env file in priority order
     env_locations = [
         Path(__file__).parent.parent / ".env",  # contextflow-core/.env
         Path.home() / ".contextflow" / ".env",  # ~/.contextflow/.env
-        Path.cwd() / ".env",  # 当前工作目录
+        Path.cwd() / ".env",  # Current working directory
     ]
 
     for env_path in env_locations:
@@ -38,35 +38,35 @@ from core_api.routes import health, projects, conversations, turns, commits, bra
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    # 启动时
+    """Application lifecycle management"""
+    # On startup
     set_start_time()
     ensure_directories()
 
-    # 初始化数据库 schema
+    # Initialize database schema
     from core_api.database import init_database
     init_database()
 
     yield
 
-    # 关闭时（如有需要）
+    # On shutdown (if needed)
     pass
 
 
-# 创建 FastAPI 应用
+# Create FastAPI application
 app = FastAPI(
     title="ContextFlow Core API",
     description="""
-ContextFlow Core API - HTTP 协议参考实现
+ContextFlow Core API - HTTP Protocol Reference Implementation
 
-这是 ContextFlow Framework Core 的 HTTP API，提供：
-- Projects / Conversations / Turns 管理
-- Commits / Diff / Merge 操作
-- .cfpack 导出
+This is the HTTP API of ContextFlow Framework Core, providing:
+- Projects / Conversations / Turns management
+- Commits / Diff / Merge operations
+- .cfpack export
 
-**协议优先**：任何语言实现只要遵守 CORE_API_SPEC.zh.md 规范，即为兼容的 ContextFlow Core 服务。
+**Protocol First**:Any language implementation that adheres to the CORE_API_SPEC specification is a compatible ContextFlow Core service.
 
-更多信息请参考 [ContextFlow 架构文档](https://github.com/contextflow/contextflow-core)
+For more information, please refer to [ContextFlow Architecture Documentation](https://github.com/contextflow/contextflow-core)
     """,
     version=__version__,
     lifespan=lifespan,
@@ -76,13 +76,13 @@ ContextFlow Core API - HTTP 协议参考实现
 
 
 # ============================================================================
-# 中间件
+# Middleware
 # ============================================================================
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制
+    allow_origins=["*"],  # Should be restricted in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,17 +90,17 @@ app.add_middleware(
 
 
 # ============================================================================
-# 异常处理
+# Exception Handling
 # ============================================================================
 
 setup_exception_handlers(app)
 
 
 # ============================================================================
-# 路由注册
+# Route Registration
 # ============================================================================
 
-# Health（不带版本号）
+# Health (no version prefix)
 app.include_router(health.router, tags=["Health"])
 
 # Framework Core API
@@ -154,12 +154,12 @@ app.include_router(
 
 
 # ============================================================================
-# API 版本信息（响应头）
+# API Version Information (response header)
 # ============================================================================
 
 @app.middleware("http")
 async def add_api_version_header(request, call_next):
-    """在响应头中添加 API 版本"""
+    """Add API version to response headers"""
     response = await call_next(request)
     response.headers["X-API-Version"] = __version__
     return response

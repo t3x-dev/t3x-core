@@ -1,5 +1,5 @@
 """
-Diff 类型定义
+Diff type definitions
 """
 
 from __future__ import annotations
@@ -10,39 +10,39 @@ from typing import List, Optional
 
 
 class DiffType(Enum):
-    """Diff 类型"""
-    SAME = "same"              # 相同（相似度高于阈值）
-    ADDED = "added"            # 新增（仅在目标版本中）
-    REMOVED = "removed"        # 删除（仅在源版本中）
-    MODIFIED = "modified"      # 修改（有匹配但内容不同）
-    CONFLICT = "conflict"      # 冲突（三方合并时双方都修改）
+    """Diff type"""
+    SAME = "same"              # Same (similarity above threshold)
+    ADDED = "added"            # Added (only in target version)
+    REMOVED = "removed"        # Removed (only in source version)
+    MODIFIED = "modified"      # Modified (has match but content differs)
+    CONFLICT = "conflict"      # Conflict (both sides modified in three-way merge)
 
 
 @dataclass(frozen=True)
 class SegmentMatch:
     """
-    分句匹配结果
+    Segment match result
 
-    用于记录两个分句的相似度和匹配关系。
+    Records similarity and match relationship between two segments.
     """
 
     source_segment_id: str
     target_segment_id: str
     similarity: float
-    matched: bool  # 是否超过阈值
+    matched: bool  # Whether exceeds threshold
 
 
 @dataclass(frozen=True)
 class SegmentDiff:
     """
-    单个分句的 Diff 结果
+    Diff result for single segment
 
-    对应文档中的"句级语义 Diff"。
+    Corresponds to "sentence-level semantic Diff" in documentation.
     """
 
     segment_id: str
     text: str
     diff_type: DiffType
-    similarity: Optional[float] = None  # 相似度分数（如果有匹配）
-    matched_segment_id: Optional[str] = None  # 匹配的对方分句 ID
-    matched_text: Optional[str] = None  # 匹配的对方分句文本
+    similarity: Optional[float] = None  # Similarity score (if matched)
+    matched_segment_id: Optional[str] = None  # Matched segment ID from other side
+    matched_text: Optional[str] = None  # Matched segment text from other side

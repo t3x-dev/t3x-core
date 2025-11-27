@@ -1,7 +1,7 @@
 """
-提取器基础类型定义
+Extractor base type definitions
 
-定义所有提取器必须遵守的接口规范。
+Defines the interface specification that all extractors must follow.
 """
 
 from __future__ import annotations
@@ -14,9 +14,9 @@ from typing import Any, Dict, List, Literal, Optional
 @dataclass(frozen=True)
 class ExtractorConfig:
     """
-    提取器配置
+    Extractor configuration
 
-    对应文档中的 extractor 配置段落：
+    Corresponds to the extractor configuration section in documentation:
     ```yaml
     extractors:
       keywords:
@@ -36,7 +36,7 @@ class ExtractorConfig:
 @dataclass(frozen=True)
 class ExtractorMetadata:
     """
-    提取器元数据（用于可复现性追溯）
+    Extractor metadata (for reproducibility tracking)
     """
 
     plugin: str
@@ -46,39 +46,39 @@ class ExtractorMetadata:
     settings: Dict[str, Any]
 
 
-# Ring 1: 关键词主轴
+# Ring 1: Keyword axis
 @dataclass(frozen=True)
 class Keyword:
     """
-    Ring 1 关键词输出
+    Ring 1 keyword output
 
-    必须包含：
-    - text: 原始文本
-    - lemma: 词形归一后的形式（使用 spaCy token.lemma_）
-    - polarity: 极性标注 (-1/0/+1)
-    - pos: 词性标签
-    - entity_type: 实体类型（如果是命名实体）
+    Must contain:
+    - text: Original text
+    - lemma: Lemmatized form (using spaCy token.lemma_)
+    - polarity: Polarity annotation (-1/0/+1)
+    - pos: Part-of-speech tag
+    - entity_type: Entity type (if named entity)
     """
 
     text: str
-    lemma: str  # 词形归一（travel/traveling/traveled → travel）
-    polarity: Literal[-1, 0, 1]  # -1=负向, 0=中性, 1=正向
-    pos: str  # 词性（NOUN, VERB, ADJ, etc.）
+    lemma: str  # Lemmatized (travel/traveling/traveled → travel)
+    polarity: Literal[-1, 0, 1]  # -1=negative, 0=neutral, 1=positive
+    pos: str  # Part-of-speech (NOUN, VERB, ADJ, etc.)
     entity_type: Optional[str] = None  # PERSON, GPE, DATE, etc.
     confidence: float = 1.0
 
 
 @dataclass(frozen=True)
 class Ring1Output:
-    """Ring 1 输出：关键词主轴"""
+    """Ring 1 output: Keyword axis"""
 
     keywords: List[Keyword]
-    time_anchor: Optional[str] = None  # 时间锚点（如 "November 2025"）
-    topic: Optional[str] = None  # 主题标签
-    preference_keywords: List[Keyword] = None  # 偏好关键词（polarity != 0）
+    time_anchor: Optional[str] = None  # Time anchor (e.g., "November 2025")
+    topic: Optional[str] = None  # Topic label
+    preference_keywords: List[Keyword] = None  # Preference keywords (polarity != 0)
 
     def __post_init__(self):
-        # 自动提取偏好关键词
+        # Automatically extract preference keywords
         if self.preference_keywords is None:
             object.__setattr__(
                 self,
@@ -87,17 +87,17 @@ class Ring1Output:
             )
 
 
-# Ring 2: 轻关系 / Facet
+# Ring 2: Lightweight relations / Facets
 @dataclass(frozen=True)
 class Facet:
     """
-    Ring 2 输出：轻关系 / Facet
+    Ring 2 output: Lightweight relations / Facets
 
-    包含：
-    - intent_seed: 意图种子（如 "plan_travel", "compare_options"）
-    - time_window: 时间窗口（如 "2025-11-01 to 2025-11-30"）
-    - preference_soft: 软偏好（如 "prefer quiet places"）
-    - unknown_slot: 未知槽位（如 "budget TBD"）
+    Contains:
+    - intent_seed: Intent seed (e.g., "plan_travel", "compare_options")
+    - time_window: Time window (e.g., "2025-11-01 to 2025-11-30")
+    - preference_soft: Soft preferences (e.g., "prefer quiet places")
+    - unknown_slot: Unknown slots (e.g., "budget TBD")
     """
 
     facet_type: Literal["intent_seed", "time_window", "preference_soft", "unknown_slot"]
@@ -108,18 +108,18 @@ class Facet:
 
 @dataclass(frozen=True)
 class Ring2Output:
-    """Ring 2 输出：轻关系 / Facet"""
+    """Ring 2 output: Lightweight relations / Facets"""
 
     facets: List[Facet]
 
 
-# Ring 3: 分句结构
+# Ring 3: Sentence structure
 @dataclass(frozen=True)
 class Segment:
     """
-    Ring 3 句子片段
+    Ring 3 sentence segment
 
-    每个 turn 拆成句级片段，如：
+    Each turn is split into sentence-level segments, e.g.:
     - "I want to visit Japan." → s1-1
     - "Budget is around $5000." → s1-2
     """
@@ -132,18 +132,18 @@ class Segment:
 
 @dataclass(frozen=True)
 class Ring3Output:
-    """Ring 3 输出：分句结构"""
+    """Ring 3 output: Sentence structure"""
 
     segments: List[Segment]
 
 
-# 完整的 Ring 输出
+# Complete Ring output
 @dataclass(frozen=True)
 class RingOutput:
     """
-    完整的 Ring 1/2/3 输出
+    Complete Ring 1/2/3 output
 
-    对应文档中的三层 Ring 结构。
+    Corresponds to the three-layer Ring structure in documentation.
     """
 
     turn_id: str
@@ -154,28 +154,28 @@ class RingOutput:
 
 class ExtractorPlugin(ABC):
     """
-    提取器插件接口
+    Extractor plugin interface
 
-    所有提取器（spaCy、Stanza、rule-based）必须实现此接口。
+    All extractors (spaCy, Stanza, rule-based) must implement this interface.
     """
 
     @abstractmethod
     def extract(self, turn_id: str, content: str) -> RingOutput:
         """
-        从单个 turn 提取 Ring 1/2/3
+        Extract Ring 1/2/3 from a single turn
 
         Args:
-            turn_id: Turn 的唯一标识
-            content: Turn 的文本内容
+            turn_id: Unique identifier of the turn
+            content: Text content of the turn
 
         Returns:
-            RingOutput: 包含三层 Ring 的完整输出
+            RingOutput: Complete three-layer Ring output
         """
         pass
 
     @abstractmethod
     def get_metadata(self) -> ExtractorMetadata:
         """
-        返回提取器元数据（用于可复现性）
+        Return extractor metadata (for reproducibility)
         """
         pass

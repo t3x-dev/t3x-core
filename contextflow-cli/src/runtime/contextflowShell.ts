@@ -116,11 +116,11 @@ export async function startContextflowShell(): Promise<void> {
       logger.info(`🧾 ContextFlow DB ready: ${dbPath}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`SQLite 初始化失败，相关命令将不可用: ${message}`);
+      logger.warn(`SQLite initialization failed, related commands unavailable: ${message}`);
       sqliteReady = false;
     }
   } else {
-    logger.info('storageMode=JSONL，仅使用 JSONL 存储。');
+    logger.info('storageMode=JSONL, using JSONL storage only.');
   }
 
   // Initialize project cache for core_api integration
@@ -222,7 +222,7 @@ export async function startContextflowShell(): Promise<void> {
           store = jsonlEnabled ? new ConversationStore(root.contextflowDir, state.project) : null;
           state.messages = [];
           await hydrateSessionMessages(store, state);
-          logger.info(`已切换到项目 "${state.project}"。`);
+          logger.info(`Switched to project "${state.project}".`);
           if (store) {
             logger.info(`Conversation log: ${store.filePath}`);
           }
@@ -231,7 +231,7 @@ export async function startContextflowShell(): Promise<void> {
 
         if (commandResult.type === 'resetConversation') {
           state.messages = [];
-          logger.info('已清除当前会话上下文。');
+          logger.info('Current conversation context cleared.');
           continue;
         }
 
@@ -306,7 +306,7 @@ async function handleChatMessage(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     stdout.write('\n');
-    logger.error(`Claude 请求失败: ${message}`);
+    logger.error(`Claude request failed: ${message}`);
   }
 }
 
@@ -337,7 +337,7 @@ async function handleChatCommand(
       const projectName = parts[0];
       const exists = await projectExistsViaApi(projectName);
       if (!exists) {
-        logger.warn(`会话项目 "${projectName}" 不存在。使用 /new ${projectName} 创建。`);
+        logger.warn(`Conversation project "${projectName}" does not exist. Use /new ${projectName} to create.`);
         return { type: 'none' };
       }
       setCurrentProjectName(projectName);
@@ -345,16 +345,16 @@ async function handleChatCommand(
     }
     case 'new': {
       if (parts.length === 0) {
-        logger.warn('用法: /new <会话名称>');
+        logger.warn('Usage: /new <conversation_name>');
         return { type: 'none' };
       }
       const projectName = parts[0];
       try {
         await createProjectViaApi(projectName);
-        logger.info(`会话项目 "${projectName}" 已创建。使用 /project ${projectName} 切换。`);
+        logger.info(`Conversation project "${projectName}" created. Use /project ${projectName} to switch.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`创建项目失败: ${message}`);
+        logger.error(`Failed to create project: ${message}`);
       }
       return { type: 'none' };
     }
@@ -362,7 +362,7 @@ async function handleChatCommand(
     case 'reset':
       return { type: 'resetConversation' };
     default:
-      logger.warn(`未知命令: /${rawCommand}。输入 /help 查看可用命令。`);
+      logger.warn(`Unknown command: /${rawCommand}. Type /help to see available commands.`);
       return { type: 'none' };
   }
 }
@@ -374,7 +374,7 @@ async function handleConfigMode(
   workspaceDir: string,
 ): Promise<ConfigCommandResult> {
   if (!input.startsWith('/')) {
-    logger.warn('配置模式下请以 / 开头输入命令。');
+    logger.warn('In configuration mode, please start commands with /.');
     return 'stay';
   }
 
@@ -407,17 +407,17 @@ async function handleConfigMode(
       return 'stay';
     case 'stream':
       if (parts.length === 0) {
-        logger.info(`当前流式输出: ${state.stream ? 'on' : 'off'}`);
+        logger.info(`Current streaming output: ${state.stream ? 'on' : 'off'}`);
       } else {
         const value = parts[0].toLowerCase();
         if (value === 'on') {
           state.stream = true;
-          logger.info('流式输出已开启。');
+          logger.info('Streaming output enabled.');
         } else if (value === 'off') {
           state.stream = false;
-          logger.info('流式输出已关闭。');
+          logger.info('Streaming output disabled.');
         } else {
-          logger.warn('用法: /stream on|off');
+          logger.warn('Usage: /stream on|off');
         }
       }
       return 'stay';
@@ -433,7 +433,7 @@ async function handleConfigMode(
     case 'back':
       return 'back';
     default:
-      logger.warn(`未知配置命令: /${rawCommand}。输入 /help 查看列表。`);
+      logger.warn(`Unknown configuration command: /${rawCommand}. Type /help to see list.`);
       return 'stay';
   }
 }
@@ -444,7 +444,7 @@ async function logInitialGuidance(state: SessionState): Promise<void> {
   stdout.write('\n');
   printChatHelp();
   stdout.write('\n');
-  logger.info('输入消息可直接对话');
+  logger.info('Type message to start conversation');
   flushProxyActivationNotice();
 }
 
@@ -455,7 +455,7 @@ function logWelcomeBanner(model: string): void {
     formatBannerLine(`^_^ contextflow  (${APP_VERSION})`),
     formatBannerLine(''),
     formatBannerLine(buildModelLine(model)),
-    formatBannerLine('祝您使用愉快'),
+    formatBannerLine('Happy chatting!'),
     `╰${horizontal}╯`,
   ];
   const formatted = lines
@@ -531,27 +531,27 @@ type HelpEntry = {
 };
 
 const CHAT_HELP_ENTRIES: HelpEntry[] = [
-  { usage: '/help', description: '显示帮助' },
-  { usage: '/new NAME', description: '新建会话项目' },
-  { usage: '/config', description: '进入配置模式，设置 API Key 和模型' },
-  { usage: '/project NAME', description: '切换或查看当前会话项目' },
-  { usage: '/clear|/reset', description: '清空当前会话上下文' },
-  { usage: '/status', description: '查看 SQLite 代数与计数信息' },
+  { usage: '/help', description: 'Show help' },
+  { usage: '/new NAME', description: 'Create new conversation project' },
+  { usage: '/config', description: 'Enter configuration mode to set API Key and model' },
+  { usage: '/project NAME', description: 'Switch to or view current conversation project' },
+  { usage: '/clear|/reset', description: 'Clear current conversation context' },
+  { usage: '/status', description: 'View SQLite statistics and counts' },
   {
     usage: '/turns [opts]',
-    description: '按 limit/role 查看最近 turn（如 /turns --n 5 --role user）',
+    description: 'View recent turns by limit/role (e.g. /turns --n 5 --role user)',
   },
-  { usage: '/draft [kind]', description: '新建笔记/计划草稿（summary|plan|note）' },
-  { usage: '/commit ID', description: '提交草稿，可搭配 --msg "..."' },
-  { usage: '/validate', description: '执行数据一致性校验' },
-  { usage: '/ui_init [opts]', description: '启动本地 WebUI/API（支持 --port/--token）' },
-  { usage: '/exit|/quit', description: '退出 CLI' },
+  { usage: '/draft [kind]', description: 'Create new note/plan draft (summary|plan|note)' },
+  { usage: '/commit ID', description: 'Commit draft, optionally with --msg "..."' },
+  { usage: '/validate', description: 'Execute data consistency validation' },
+  { usage: '/ui_init [opts]', description: 'Start local WebUI/API (supports --port/--token)' },
+  { usage: '/exit|/quit', description: 'Exit CLI' },
 ];
 
 const CHAT_HELP_USAGE_PAD = 18;
 
 function printChatHelp(): void {
-  logger.info('可用命令:');
+  logger.info('Available commands:');
   CHAT_HELP_ENTRIES.forEach((entry) => {
     const usage = entry.usage.padEnd(CHAT_HELP_USAGE_PAD);
     logger.info(`  ${usage}${entry.description}`);
@@ -559,20 +559,20 @@ function printChatHelp(): void {
 }
 
 function printConfigHelp(): void {
-  logger.info('配置模式命令:');
-  logger.info('  /help              显示帮助信息');
-  logger.info('  /api [KEY]         查看或更新 ANTHROPIC_API_KEY');
-  logger.info('  /model [NAME]      查看或更新默认模型');
-  logger.info('  /proxy             查看当前/默认代理');
-  logger.info('  /stream on|off     切换流式输出');
-  logger.info('  /param             查看模型、API Key、代理等参数');
-  logger.info('  /file              查看 workspace 与会话日志路径');
-  logger.info('  /back              返回聊天模式');
+  logger.info('Configuration mode commands:');
+  logger.info('  /help              Show help information');
+  logger.info('  /api [KEY]         View or update ANTHROPIC_API_KEY');
+  logger.info('  /model [NAME]      View or update default model');
+  logger.info('  /proxy             View current/default proxy');
+  logger.info('  /stream on|off     Toggle streaming output');
+  logger.info('  /param             View model, API Key, proxy, and other parameters');
+  logger.info('  /file              View workspace and conversation log paths');
+  logger.info('  /back              Return to chat mode');
 }
 
 function flushProxyActivationNotice(): void {
   if (proxyActivationPending) {
-    logger.info('已启用代理');
+    logger.info('Proxy enabled');
     proxyActivationPending = false;
   }
 }
@@ -587,7 +587,7 @@ async function setApiKey(value: string, overrides: SessionOverrides): Promise<vo
   process.env.ANTHROPIC_API_KEY = value;
   process.env.CLAUDE_API_KEY = value;
   process.env.OPENAI_API_KEY = value;
-  logger.info('ANTHROPIC_API_KEY 已更新。');
+  logger.info('ANTHROPIC_API_KEY updated.');
 }
 
 async function showApiKey(overrides: SessionOverrides): Promise<void> {
@@ -603,11 +603,11 @@ async function showApiKey(overrides: SessionOverrides): Promise<void> {
     config.OPENAI_API_KEY;
 
   if (!candidate) {
-    logger.info('当前未设置 ANTHROPIC_API_KEY。');
+    logger.info('ANTHROPIC_API_KEY not currently set.');
     return;
   }
 
-  logger.info(`当前 ANTHROPIC_API_KEY: ${maskSecret(candidate)}`);
+  logger.info(`Current ANTHROPIC_API_KEY: ${maskSecret(candidate)}`);
 }
 
 async function setModel(value: string, overrides: SessionOverrides): Promise<void> {
@@ -619,12 +619,12 @@ async function setModel(value: string, overrides: SessionOverrides): Promise<voi
   overrides.model = value;
   process.env.CLAUDE_MODEL = value;
   process.env.OPENAI_MODEL = value;
-  logger.info(`默认模型已更新为 ${value}。`);
+  logger.info(`Default model updated to ${value}.`);
 }
 
 async function showModel(overrides: SessionOverrides): Promise<void> {
   const current = await resolveModelName(overrides);
-  logger.info(`当前默认模型: ${current}`);
+  logger.info(`Current default model: ${current}`);
 }
 
 async function hydrateConversationFromStore(
@@ -636,7 +636,7 @@ async function hydrateConversationFromStore(
     state.messages = buildMessagesFromTurns(turns);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`加载历史对话失败: ${message}`);
+    logger.warn(`Failed to load conversation history: ${message}`);
     state.messages = [];
   }
 }
@@ -663,7 +663,7 @@ async function hydrateSessionMessages(
     state.messages = buildMessagesFromTurns(turns);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`从 SQLite 加载历史失败: ${message}`);
+    logger.warn(`Failed to load history from SQLite: ${message}`);
     state.messages = [];
   }
 }
@@ -733,16 +733,16 @@ function buildHistorySummary(messages: ChatMessage[]): string {
   }
 
   const lines: string[] = [];
-  lines.push('以下为较早的对话摘要 (已截断):');
+  lines.push('Earlier conversation summary (truncated):');
 
   messages.forEach((msg, index) => {
-    const speakerLabel = msg.role === 'assistant' ? '助手' : '用户';
+    const speakerLabel = msg.role === 'assistant' ? 'Assistant' : 'User';
     lines.push(`${index + 1}. ${speakerLabel}: ${msg.content}`);
   });
 
   let summary = lines.join('\n');
   if (summary.length > HISTORY_SUMMARY_CHAR_LIMIT) {
-    summary = `${summary.slice(0, HISTORY_SUMMARY_CHAR_LIMIT)}\n...[内容已截断]`;
+    summary = `${summary.slice(0, HISTORY_SUMMARY_CHAR_LIMIT)}\n...[Content truncated]`;
   }
   return summary;
 }
@@ -762,7 +762,7 @@ async function showParamSummary(state: SessionState): Promise<void> {
   await showApiKey(state.overrides);
   await showModel(state.overrides);
   await showProxyStatus();
-  logger.info(`流式输出: ${state.stream ? 'on' : 'off'}`);
+  logger.info(`Streaming output: ${state.stream ? 'on' : 'off'}`);
 }
 
 async function updateUserConfig(mutator: (config: UserConfig) => UserConfig): Promise<void> {
@@ -792,8 +792,8 @@ async function ensureProxyConfigured(): Promise<void> {
   }
 
   const promptMessage = defaultProxy
-    ? `请输入当前 VPN/代理地址（回车沿用 ${defaultProxy}，输入 none 关闭代理）：`
-    : '请输入当前 VPN/代理地址（例如 127.0.0.1:10808，直接回车表示不使用代理）：';
+    ? `Enter current VPN/proxy address (press Enter to use ${defaultProxy}, type 'none' to disable proxy):`
+    : 'Enter current VPN/proxy address (e.g. 127.0.0.1:10808, press Enter to skip proxy):';
 
   const answer = await promptForProxy(promptMessage);
   const trimmed = answer.trim();
@@ -814,7 +814,7 @@ async function ensureProxyConfigured(): Promise<void> {
         ...config,
         proxyUrl: desiredProxy,
       }));
-      logger.info(`代理地址已保存，下次默认使用 ${desiredProxy}。`);
+      logger.info(`Proxy address saved, will be used by default next time: ${desiredProxy}.`);
     }
     return;
   }
@@ -826,9 +826,9 @@ async function ensureProxyConfigured(): Promise<void> {
       delete updated.proxyUrl;
       return updated;
     });
-    logger.info('已清除默认代理设置。');
+    logger.info('Default proxy settings cleared.');
   } else {
-    logger.info('本次会话未启用代理。');
+    logger.info('Proxy not enabled for this session.');
   }
 }
 
@@ -905,7 +905,7 @@ async function normalizeProxyEnv(): Promise<void> {
 
   const undici = await loadUndiciModule();
   if (!undici) {
-    logger.warn('未找到 undici 模块，跳过代理配置。');
+    logger.warn('undici module not found, skipping proxy configuration.');
     return;
   }
 
@@ -915,7 +915,7 @@ async function normalizeProxyEnv(): Promise<void> {
     proxyActivationPending = true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`代理配置失败: ${message}`);
+    logger.warn(`Proxy configuration failed: ${message}`);
   }
 }
 
@@ -956,8 +956,8 @@ async function loadUndiciModule(): Promise<UndiciModule | null> {
 async function showProxyStatus(): Promise<void> {
   const config = await readUserConfig();
   const activeProxy = getProxyFromEnv();
-  logger.info(`当前代理: ${activeProxy ?? '<未启用>'}`);
-  logger.info(`默认代理: ${config.proxyUrl ?? '<未设置>'}`);
+  logger.info(`Current proxy: ${activeProxy ?? '<Not enabled>'}`);
+  logger.info(`Default proxy: ${config.proxyUrl ?? '<Not set>'}`);
 }
 
 function showFileInfo(workspaceDir: string, store: ConversationStore | null): void {
@@ -1007,7 +1007,7 @@ function persistTurnToDatabase(turn: ConversationTurn, project: string): void {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`写入 SQLite 失败: ${message}`);
+    logger.warn(`Failed to write to SQLite: ${message}`);
   }
 }
 
@@ -1049,7 +1049,7 @@ async function persistTurnToCoreApi(
     await createTurnViaApi(projectId, conversationId, turn.role, turn.text);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.trace('cache', `core_api turn 写入失败: ${message}`);
+    logger.trace('cache', `core_api turn write failed: ${message}`);
   }
 }
 
@@ -1079,27 +1079,27 @@ async function handleSlashCommand(
       // Try core_api first
       try {
         const apiStatus = await getSystemStatusViaApi();
-        logger.info('=== core_api 状态 ===');
+        logger.info('=== core_api status ===');
         logger.info(`projects: ${apiStatus.projects_count}`);
         logger.info(`conversations: ${apiStatus.conversations_count}`);
         logger.info(`turns: ${apiStatus.turns_count}`);
         logger.info(`commits: ${apiStatus.commits_count}`);
       } catch {
-        logger.info('core_api 不可用');
+        logger.info('core_api unavailable');
       }
 
       // Also show local SQLite status
       if (sqliteEnabled && sqliteReady) {
         try {
           const snapshot = status();
-          logger.info('=== 本地 SQLite 状态 ===');
+          logger.info('=== Local SQLite status ===');
           logger.info(`generation=${snapshot.generation}`);
           logger.info(
             `counts => turns:${snapshot.counts.turns} drafts:${snapshot.counts.drafts} commits:${snapshot.counts.commits} events:${snapshot.counts.events}`,
           );
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.warn(`本地 SQLite 查询失败: ${message}`);
+          logger.warn(`Local SQLite query failed: ${message}`);
         }
       }
       return true;
@@ -1124,7 +1124,7 @@ async function handleSlashCommand(
             limit,
           });
           if (turns.length === 0) {
-            logger.info('暂无 turn 记录。');
+            logger.info('No turn records yet.');
           } else {
             turns.forEach((turn) => {
               const preview = turn.content.length > 80 ? `${turn.content.slice(0, 77)}...` : turn.content;
@@ -1141,7 +1141,7 @@ async function handleSlashCommand(
       return runDbCommand(() => {
         const rows = listTurns({ project: state.project, limit, role: roleFilter });
         if (rows.length === 0) {
-          logger.info('暂无 turn 记录。');
+          logger.info('No turn records yet.');
           return;
         }
         rows.forEach((row) => {
@@ -1162,24 +1162,24 @@ async function handleSlashCommand(
       if (subcommand === 'show') {
         const draftId = rest[1];
         if (!draftId) {
-          logger.warn('用法: /draft show <draft_id>');
+          logger.warn('Usage: /draft show <draft_id>');
           return true;
         }
 
         try {
           const draft = await getDraftViaApi(draftId);
           logger.info(`Draft #${draft.draft_id}`);
-          logger.info(`状态: ${draft.status}`);
+          logger.info(`status: ${draft.status}`);
           logger.info(`Bridge: ${draft.bridge_id}`);
           logger.info(`Intent: ${draft.intent}`);
-          logger.info(`验证: ${draft.validation_passed ? '通过' : '失败'}`);
-          logger.info(`Must-Have: ${draft.must_have.join(', ') || '(无)'}`);
-          logger.info(`Mustn't-Have: ${draft.mustnt_have.join(', ') || '(无)'}`);
+          logger.info(`Validation: ${draft.validation_passed ? 'Passed' : 'Failed'}`);
+          logger.info(`Must-Have: ${draft.must_have.join(', ') || '(none)'}`);
+          logger.info(`Mustn't-Have: ${draft.mustnt_have.join(', ') || '(none)'}`);
           logger.info('---');
-          logger.info(draft.text || '(无内容)');
+          logger.info(draft.text || '(no content)');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.error(`获取 Draft 失败: ${message}`);
+          logger.error(`Failed to get draft: ${message}`);
         }
         return true;
       }
@@ -1188,7 +1188,7 @@ async function handleSlashCommand(
       if (subcommand === 'feedback') {
         const draftId = rest[1];
         if (!draftId) {
-          logger.warn('用法: /draft feedback <draft_id> <feedback_text> [--must <keyword>...]');
+          logger.warn('Usage: /draft feedback <draft_id> <feedback_text> [--must <keyword>...]');
           return true;
         }
 
@@ -1205,30 +1205,30 @@ async function handleSlashCommand(
         }
 
         if (!feedback && appendMustHave.length === 0) {
-          logger.warn('请提供反馈内容或 --must 关键词');
+          logger.warn('Please provide feedback or --must keywords');
           return true;
         }
 
         try {
-          logger.info(`正在更新 Draft #${draftId}...`);
+          logger.info(`Updating draft #${draftId}...`);
           const draft = await updateDraftViaApi(draftId, {
             feedback: feedback || undefined,
             append_must_have: appendMustHave.length > 0 ? appendMustHave : undefined,
           });
 
           if (draft.status === 'ready') {
-            logger.info(`✅ Draft 更新成功 #${draft.draft_id}`);
-            logger.info(`验证: ${draft.validation_passed ? '通过' : '失败'}`);
-            logger.info(`Must-Have: ${draft.must_have.join(', ') || '(无)'}`);
+            logger.info(`✅ Draft updated successfully #${draft.draft_id}`);
+            logger.info(`Validation: ${draft.validation_passed ? 'Passed' : 'Failed'}`);
+            logger.info(`Must-Have: ${draft.must_have.join(', ') || '(none)'}`);
             logger.info('---');
-            logger.info(draft.text || '(无内容)');
+            logger.info(draft.text || '(no content)');
           } else {
-            logger.warn(`⚠️ Draft 更新失败 #${draft.draft_id}`);
-            logger.info(`状态: ${draft.status}`);
+            logger.warn(`⚠️ Draft update failed #${draft.draft_id}`);
+            logger.info(`status: ${draft.status}`);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.error(`更新 Draft 失败: ${message}`);
+          logger.error(`Failed to update draft: ${message}`);
         }
         return true;
       }
@@ -1242,13 +1242,13 @@ async function handleSlashCommand(
         // bridge_id: plan | summary | explain | clarify
         const projectId = getProjectIdByName(state.project);
         if (!projectId) {
-          logger.warn(`项目 "${state.project}" 未在 core_api 中创建。请先使用 /new 创建项目。`);
+          logger.warn(`Project "${state.project}" not created in core_api. Please use /new to create project first.`);
           return true;
         }
 
         const conversationId = getCurrentConversationId();
         if (!conversationId) {
-          logger.warn('当前没有活跃的对话。请先发送一条消息。');
+          logger.warn('No active conversation. Please send a message first.');
           return true;
         }
 
@@ -1262,22 +1262,22 @@ async function handleSlashCommand(
         const intent = filteredRest.slice(validBridges.includes(filteredRest[0]) ? 1 : 0).join(' ') || 'Generate content';
 
         try {
-          logger.info(`正在生成 Draft (${bridgeId})...`);
+          logger.info(`Generating draft (${bridgeId})...`);
           const draft = await createDraftViaApi(projectId, conversationId, bridgeId, intent);
 
           if (draft.status === 'ready') {
-            logger.info(`✅ Draft 生成成功 #${draft.draft_id}`);
-            logger.info(`验证: ${draft.validation_passed ? '通过' : '失败'}`);
-            logger.info(`Must-Have: ${draft.must_have.join(', ') || '(无)'}`);
+            logger.info(`✅ Draft generated successfully #${draft.draft_id}`);
+            logger.info(`Validation: ${draft.validation_passed ? 'Passed' : 'Failed'}`);
+            logger.info(`Must-Have: ${draft.must_have.join(', ') || '(none)'}`);
             logger.info('---');
-            logger.info(draft.text || '(无内容)');
+            logger.info(draft.text || '(no content)');
           } else {
-            logger.warn(`⚠️ Draft 生成失败 #${draft.draft_id}`);
-            logger.info(`状态: ${draft.status}`);
+            logger.warn(`⚠️ Draft generation failed #${draft.draft_id}`);
+            logger.info(`status: ${draft.status}`);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.error(`生成 Draft 失败: ${message}`);
+          logger.error(`Failed to generate draft: ${message}`);
         }
         return true;
       }
@@ -1304,7 +1304,7 @@ async function handleSlashCommand(
     case 'branch': {
       const projectId = getProjectIdByName(state.project);
       if (!projectId) {
-        logger.warn(`项目 "${state.project}" 未在 core_api 中创建。请先使用 /new 创建项目。`);
+        logger.warn(`Project "${state.project}" not created in core_api. Please use /new to create project first.`);
         return true;
       }
 
@@ -1315,7 +1315,7 @@ async function handleSlashCommand(
         try {
           const branches = await listBranchesViaApi(projectId);
           if (branches.length === 0) {
-            logger.info('暂无分支。');
+            logger.info('No branches yet.');
           } else {
             branches.forEach((branch) => {
               const marker = branch.is_current ? '* ' : '  ';
@@ -1325,7 +1325,7 @@ async function handleSlashCommand(
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.error(`获取分支列表失败: ${message}`);
+          logger.error(`Failed to get branch list: ${message}`);
         }
         return true;
       }
@@ -1334,17 +1334,17 @@ async function handleSlashCommand(
       const branchName = rest[0];
       try {
         const branch = await createBranchViaApi(projectId, branchName, { checkout: true });
-        logger.info(`分支 "${branch.name}" 已创建并切换。`);
+        logger.info(`Branch "${branch.name}" created and switched.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`创建分支失败: ${message}`);
+        logger.error(`Failed to create branch: ${message}`);
       }
       return true;
     }
     case 'checkout': {
       const projectId = getProjectIdByName(state.project);
       if (!projectId) {
-        logger.warn(`项目 "${state.project}" 未在 core_api 中创建。请先使用 /new 创建项目。`);
+        logger.warn(`Project "${state.project}" not created in core_api. Please use /new to create project first.`);
         return true;
       }
 
@@ -1352,10 +1352,10 @@ async function handleSlashCommand(
         // Show current branch
         try {
           const current = await getCurrentBranchViaApi(projectId);
-          logger.info(`当前分支: ${current.current_branch}`);
+          logger.info(`Current branch: ${current.current_branch}`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          logger.error(`获取当前分支失败: ${message}`);
+          logger.error(`Failed to get current branch: ${message}`);
         }
         return true;
       }
@@ -1369,10 +1369,10 @@ async function handleSlashCommand(
         const result = await switchBranchViaApi(projectId, targetBranch, {
           create: createIfNotExists,
         });
-        logger.info(`已切换到分支: ${result.current_branch}`);
+        logger.info(`Switched to branch: ${result.current_branch}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`切换分支失败: ${message}`);
+        logger.error(`Failed to switch branch: ${message}`);
       }
       return true;
     }
@@ -1380,7 +1380,7 @@ async function handleSlashCommand(
     case 'log': {
       const projectId = getProjectIdByName(state.project);
       if (!projectId) {
-        logger.warn(`项目 "${state.project}" 未在 core_api 中创建。请先使用 /new 创建项目。`);
+        logger.warn(`Project "${state.project}" not created in core_api. Please use /new to create project first.`);
         return true;
       }
 
@@ -1392,7 +1392,7 @@ async function handleSlashCommand(
       try {
         const commits = await listCommitsViaApi(projectId, { limit });
         if (commits.length === 0) {
-          logger.info('暂无 commit 记录。');
+          logger.info('No commit records yet.');
         } else {
           commits.forEach((commit) => {
             const hash = commit.commit_hash.slice(0, 8);
@@ -1403,14 +1403,14 @@ async function handleSlashCommand(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`获取 commit 列表失败: ${message}`);
+        logger.error(`Failed to get commit list: ${message}`);
       }
       return true;
     }
     case 'diff': {
       // /diff <base_hash> <target_hash>
       if (rest.length < 2) {
-        logger.warn('用法: /diff <base_commit_hash> <target_commit_hash>');
+        logger.warn('Usage: /diff <base_commit_hash> <target_commit_hash>');
         return true;
       }
 
@@ -1421,12 +1421,12 @@ async function handleSlashCommand(
         const diff = await diffCommitsViaApi(baseHash, targetHash);
 
         if (diff.facet_changes.length === 0 && diff.segment_changes.length === 0) {
-          logger.info('无差异。');
+          logger.info('No diff.');
           return true;
         }
 
         if (diff.facet_changes.length > 0) {
-          logger.info('=== Facet 变更 ===');
+          logger.info('=== Facet Changes ===');
           diff.facet_changes.forEach((change) => {
             const sign = change.change_type === 'added' ? '+' : change.change_type === 'removed' ? '-' : '~';
             logger.info(`${sign} ${change.facet}: ${change.target_text ?? change.base_text ?? ''}`);
@@ -1440,7 +1440,7 @@ async function handleSlashCommand(
         }
 
         if (diff.segment_changes.length > 0) {
-          logger.info('=== Segment 变更 ===');
+          logger.info('=== Segment Changes ===');
           diff.segment_changes.forEach((change) => {
             const sign = change.change_type === 'added' ? '+' : change.change_type === 'removed' ? '-' : '~';
             const preview = change.text.length > 60 ? `${change.text.slice(0, 57)}...` : change.text;
@@ -1449,7 +1449,7 @@ async function handleSlashCommand(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`计算 diff 失败: ${message}`);
+        logger.error(`Failed to compute diff: ${message}`);
       }
       return true;
     }
@@ -1460,7 +1460,7 @@ async function handleSlashCommand(
 
 function runDbCommand(action: () => void): boolean {
   if (!sqliteEnabled || !sqliteReady) {
-    logger.warn('SQLite 未初始化或已禁用，相关命令不可用。');
+    logger.warn('SQLite not initialized or disabled, related commands unavailable.');
     return true;
   }
 
@@ -1468,7 +1468,7 @@ function runDbCommand(action: () => void): boolean {
     action();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SQLite 命令执行失败: ${message}`);
+    logger.error(`SQLite command execution failed: ${message}`);
   }
   return true;
 }
@@ -1512,13 +1512,13 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
   if (opts.api !== undefined || positional.length >= 2) {
     const projectId = getProjectIdByName(state.project);
     if (!projectId) {
-      logger.warn(`项目 "${state.project}" 未在 core_api 中创建。请先使用 /new 创建项目。`);
+      logger.warn(`project "${state.project}" was not created in core_api. Please use /new createproject first.`);
       return true;
     }
 
     const conversationId = getCurrentConversationId();
     if (!conversationId) {
-      logger.warn('当前无活跃会话。请先发送消息创建会话。');
+      logger.warn('No active conversation. Please send a message to create conversation first.');
       return true;
     }
 
@@ -1539,7 +1539,7 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
         });
 
         if (turns.length === 0) {
-          logger.warn('当前会话无 turns，无法创建 commit。');
+          logger.warn('Current conversation has no turns, cannot create commit.');
           return true;
         }
 
@@ -1561,23 +1561,23 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`创建 commit 失败: ${message}`);
+      logger.error(`Failed to create commit: ${message}`);
       return true;
     }
   }
 
   // Fallback to local draft-based commit
   if (positional.length === 0) {
-    logger.warn('用法：');
-    logger.warn('  /commit --api [--msg "..."]  - 提交最近的 turns 到 core_api');
-    logger.warn('  /commit <start_hash> <end_hash> [--msg "..."]  - 提交指定 turn 窗口');
-    logger.warn('  /commit <draftId> [--msg "..."]  - 提交本地 draft');
+    logger.warn('Usage:');
+    logger.warn('  /commit --api [--msg "..."]  - Commit recent turns to core_api');
+    logger.warn('  /commit <start_hash> <end_hash> [--msg "..."]  - Commit specified turn window');
+    logger.warn('  /commit <draftId> [--msg "..."]  - Commit local draft');
     return true;
   }
 
   const draftId = Number(positional[0]);
   if (!Number.isInteger(draftId) || draftId <= 0) {
-    logger.warn('draftId 需为正整数。');
+    logger.warn('draftId must be a positive integer.');
     return true;
   }
   return runDbCommand(() => {
@@ -1588,13 +1588,13 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
 
 async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boolean> {
   if (!sqliteEnabled || !sqliteReady) {
-    logger.warn('SQLite 未启用，无法启动 WebUI。');
+    logger.warn('SQLite not enabled, cannot start WebUI.');
     return true;
   }
 
   const existing = getApiServerInfo();
   if (existing) {
-    logger.info(`API 已运行：http://127.0.0.1:${existing.port}`);
+    logger.info(`API already running: http://127.0.0.1:${existing.port}`);
     if (existing.token) {
       logger.info(`X-CF-Token: ${existing.token}`);
     }
@@ -1621,15 +1621,15 @@ async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boo
       requireToken,
       token,
     });
-    logger.info(`启动本地 WebUI 接口：http://127.0.0.1:${info.port}`);
+    logger.info(`Local WebUI API started: http://127.0.0.1:${info.port}`);
     if (info.token) {
-      logger.info(`请在请求头附带 X-CF-Token: ${info.token}`);
+      logger.info(`Include X-CF-Token in request header: ${info.token}`);
     } else if (requireToken) {
-      logger.warn('未能生成 token。请检查配置。');
+      logger.warn('Failed to generate token. Please check configuration.');
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`启动 WebUI 失败: ${message}`);
+    logger.error(`Failed to start WebUI: ${message}`);
   }
   return true;
 }
@@ -1638,14 +1638,14 @@ async function printProjectList(current: string): Promise<void> {
   try {
     const projects = await listProjectsViaApi();
     if (projects.length === 0) {
-      logger.info('当前尚未创建任何会话项目。使用 /new <名称> 新建。');
+      logger.info('No conversation projects created yet. Use /new <name> to create.');
       return;
     }
-    logger.info(`当前会话项目: ${current}`);
+    logger.info(`Current conversation project: ${current}`);
     const projectNames = projects.map(p => p.name);
-    logger.info(`可用项目: ${projectNames.join(', ')}`);
+    logger.info(`Available projects: ${projectNames.join(', ')}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`获取项目列表失败: ${message}`);
+    logger.error(`Failed to get project list: ${message}`);
   }
 }

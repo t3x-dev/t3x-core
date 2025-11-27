@@ -1,7 +1,7 @@
 """
-Diff 引擎测试
+Diff engine tests
 
-测试双向 diff 和三方 diff 逻辑。
+Tests for two-way diff and three-way diff logic.
 """
 
 import pytest
@@ -12,21 +12,21 @@ from core.embedding import MiniLMEmbeddingProvider
 
 @pytest.fixture
 def diff_engine():
-    """初始化 Diff 引擎"""
+    """Initialize Diff engine"""
     embedding_provider = MiniLMEmbeddingProvider()
     return DiffEngine(embedding_provider, threshold=0.70)
 
 
 class TestTwoWayDiff:
-    """测试双向 Diff（Draft vs Commit）"""
+    """Test two-way Diff (Draft vs Commit)"""
 
     def test_same_segments(self, diff_engine):
-        """测试相同分句识别"""
+        """Test recognition of identical segments"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "用户希望实现一个登录功能。"},
+            {"segment_id": "base-s1", "text": "用户希望实现一个登录功能."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},  # 略有不同但语义相似
+            {"segment_id": "target-s1", "text": "用户希望实现登录功能."},  # Slightly different but semantically similar
         ]
 
         result = diff_engine.diff_two_way(
@@ -36,18 +36,18 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该识别为相同或修改（取决于相似度）
+        # Should be recognized as same or modified (depending on similarity)
         assert result.total_segments > 0
         assert result.same_count + result.modified_count > 0
 
     def test_added_segments(self, diff_engine):
-        """测试新增分句识别"""
+        """Test recognition of added segments"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "用户希望实现登录功能。"},
+            {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},
-            {"segment_id": "target-s2", "text": "添加记住我功能。"},  # 新增
+            {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
+            {"segment_id": "target-s2", "text": "添加记住我功能."},  # Added
         ]
 
         result = diff_engine.diff_two_way(
@@ -57,17 +57,17 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该识别出新增分句
+        # Should recognize added segments
         assert result.added_count > 0
 
     def test_removed_segments(self, diff_engine):
-        """测试删除分句识别"""
+        """Test recognition of removed segments"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "用户希望实现登录功能。"},
-            {"segment_id": "base-s2", "text": "需要支持邮箱登录。"},
+            {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
+            {"segment_id": "base-s2", "text": "需要支持邮箱登录."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},
+            {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
         ]
 
         result = diff_engine.diff_two_way(
@@ -77,16 +77,16 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该识别出删除分句
+        # Should recognize removed segments
         assert result.removed_count > 0
 
     def test_modified_segments(self, diff_engine):
-        """测试修改分句识别"""
+        """Test recognition of modified segments"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "需要支持邮箱和密码登录。"},
+            {"segment_id": "base-s1", "text": "需要支持邮箱和密码登录."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "需要支持邮箱、手机号和密码登录。"},  # 修改
+            {"segment_id": "target-s1", "text": "需要支持邮箱,手机号和密码登录."},  # Modified
         ]
 
         result = diff_engine.diff_two_way(
@@ -96,25 +96,25 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该识别为修改
+        # Should recognize as modified
         assert result.modified_count > 0 or result.same_count > 0
 
 
 class TestThreeWayDiff:
-    """测试三方 Diff（Merge）"""
+    """Test three-way Diff (Merge)"""
 
     def test_no_conflict_merge(self, diff_engine):
-        """测试无冲突合并"""
+        """Test merge without conflicts"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "用户希望实现登录功能。"},
+            {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
         ]
         source_segments = [
-            {"segment_id": "source-s1", "text": "用户希望实现登录功能。"},
-            {"segment_id": "source-s2", "text": "添加记住我功能。"},  # Source 新增
+            {"segment_id": "source-s1", "text": "用户希望实现登录功能."},
+            {"segment_id": "source-s2", "text": "添加记住我功能."},  # Source added
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},
-            {"segment_id": "target-s3", "text": "添加验证码功能。"},  # Target 新增
+            {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
+            {"segment_id": "target-s3", "text": "添加validate码功能."},  # Target added
         ]
 
         result = diff_engine.diff_three_way(
@@ -126,20 +126,20 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # 无冲突，应该有 SAME 和 ADDED
+        # No conflicts, should have SAME and ADDED
         assert result.conflict_count == 0
         assert result.added_count > 0
 
     def test_conflict_detection(self, diff_engine):
-        """测试冲突检测"""
+        """Test conflict detection"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "需要支持邮箱和密码登录。"},
+            {"segment_id": "base-s1", "text": "需要支持邮箱和密码登录."},
         ]
         source_segments = [
-            {"segment_id": "source-s1", "text": "需要支持邮箱、手机号和密码登录。"},  # Source 修改
+            {"segment_id": "source-s1", "text": "需要支持邮箱,手机号和密码登录."},  # Source modified
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "需要支持邮箱、微信和密码登录。"},  # Target 也修改
+            {"segment_id": "target-s1", "text": "需要支持邮箱,微信和密码登录."},  # Target also modified
         ]
 
         result = diff_engine.diff_three_way(
@@ -151,25 +151,25 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该检测出冲突
+        # Should detect conflicts
         assert result.conflict_count > 0
 
-        # 检查冲突详情
+        # Check conflict details
         conflicts = [d for d in result.segment_diffs if d.diff_type == DiffType.CONFLICT]
         assert len(conflicts) > 0
-        assert "|" in conflicts[0].matched_segment_id  # Source|Target 格式
+        assert "|" in conflicts[0].matched_segment_id  # Source|Target format
 
     def test_both_deleted(self, diff_engine):
-        """测试双方都删除"""
+        """Test both sides deleted"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "用户希望实现登录功能。"},
-            {"segment_id": "base-s2", "text": "需要支持邮箱登录。"},
+            {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
+            {"segment_id": "base-s2", "text": "需要支持邮箱登录."},
         ]
         source_segments = [
-            {"segment_id": "source-s1", "text": "用户希望实现登录功能。"},
+            {"segment_id": "source-s1", "text": "用户希望实现登录功能."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "用户希望实现登录功能。"},
+            {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
         ]
 
         result = diff_engine.diff_three_way(
@@ -181,22 +181,22 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # 应该识别为删除
+        # Should recognize as deleted
         assert result.removed_count > 0
 
 
 class TestDiffStatistics:
-    """测试 Diff 统计信息"""
+    """Test Diff statistics"""
 
     def test_statistics_calculation(self, diff_engine):
-        """测试统计信息自动计算"""
+        """Test automatic statistics calculation"""
         base_segments = [
-            {"segment_id": "base-s1", "text": "第一句。"},
-            {"segment_id": "base-s2", "text": "第二句。"},
+            {"segment_id": "base-s1", "text": "第一句."},
+            {"segment_id": "base-s2", "text": "第二句."},
         ]
         target_segments = [
-            {"segment_id": "target-s1", "text": "第一句。"},
-            {"segment_id": "target-s3", "text": "第三句。"},  # 新增
+            {"segment_id": "target-s1", "text": "第一句."},
+            {"segment_id": "target-s3", "text": "第三句."},  # Added
         ]
 
         result = diff_engine.diff_two_way(
@@ -206,6 +206,6 @@ class TestDiffStatistics:
             target_segments=target_segments,
         )
 
-        # 统计信息应该正确
+        # Statistics should be correct
         total = result.same_count + result.added_count + result.removed_count + result.modified_count + result.conflict_count
         assert result.total_segments == total

@@ -4,9 +4,9 @@ describe("extractors integration (current capabilities)", () => {
   const turn = {
     id: "turn-100",
     text: [
-      "我想去大阪吃夜市美食，预算不超过1800美元，时间是3月12号到3月16号。",
-      "避免太远的酒店，最好靠近地铁。",
-      "更多灵感可以看这个链接：https://travel.example/osaka-night-market",
+      "我想去大阪吃夜市美食,预算不超过1800美元,时间是3月12号到3月16号.",
+      "避免太远的酒店,最好靠近地铁.",
+      "更多灵感可以看这个链接:https://travel.example/osaka-night-market",
     ].join(" "),
   };
 

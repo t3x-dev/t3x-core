@@ -1,13 +1,13 @@
 """
-ContextFlow Core API - FastAPI 参考实现
+ContextFlow Core API - FastAPI reference implementation
 
-这是 ContextFlow Core HTTP API 的参考实现，基于 FastAPI。
-任何语言实现只要遵守 CORE_API_SPEC.zh.md 规范，即为兼容的 ContextFlow Core 服务。
+This is the reference implementation of ContextFlow Core HTTP API, based on FastAPI.
+Any language implementation that adheres to the CORE_API_SPEC specification is a compatible ContextFlow Core service.
 
-使用方式：
+Usage:
     python -m core_api
 
-或者：
+or:
     uvicorn core_api.app:app --host 0.0.0.0 --port 8000
 """
 

@@ -1,7 +1,7 @@
 """
-命令行启动入口
+Command-line entry point
 
-使用方式：
+Usage:
     python -m core_api
     python -m core_api --port 8080
     python -m core_api --host 0.0.0.0 --port 8000 --reload

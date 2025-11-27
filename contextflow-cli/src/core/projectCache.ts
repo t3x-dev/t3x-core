@@ -1,8 +1,8 @@
 /**
  * Project Cache
  *
- * 管理本地 project_name -> project_id 的映射缓存
- * 以及当前活跃的 project/conversation
+ * Manages local project_name -> project_id mapping cache
+ * and currently active project/conversation
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';

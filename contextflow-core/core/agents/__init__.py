@@ -1,9 +1,9 @@
 """
-Agentic Layer 模块
+Agentic Layer module
 
-提供可插拔的 Agent 实现：
-- MergeAgent: 三方合并 + 冲突检测 + 可选 LLM 辅助
-- （未来）SummaryAgent: 对话摘要生成
+Provides pluggable Agent implementations:
+- MergeAgent: Three-way merge + conflict detection + optional LLM assistance
+- (Future) SummaryAgent: Conversation summary generation
 """
 
 from .merge_agent import LLMProvider, MergeAgent, MergeResult
