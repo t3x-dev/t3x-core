@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { applyEdgeChanges, applyNodeChanges } from 'reactflow'
+import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import type { BranchType, CanvasNodeData, NodeKind } from '../types/nodes'
 
@@ -17,6 +17,7 @@ type CanvasState = {
   addDraftFromConversation: (conversationId: string) => void
   addConversationFromCommit: (commitId: string) => void
   addDraftFromCommit: (commitId: string) => void
+  createMergeDraftFromCommit: (commitId: string) => void
   getDraftBranchMode: (draftId: string) => DraftBranchMode
   canCreateDraftFromConversation: (conversationId: string) => boolean
   onNodesChange: (changes: NodeChange[]) => void
@@ -59,6 +60,12 @@ const reactFlowGridSize = 16
 const conversationNodeHeight = reactFlowGridSize * 8
 const draftNodeHeight = reactFlowGridSize * 10
 const commitNodeHeight = reactFlowGridSize * 10
+const mergeArrowMarker = {
+  type: MarkerType.ArrowClosed,
+  color: '#6d6f76',
+  width: 18,
+  height: 18,
+} as const
 
 const alignToGrid = (value: number) => Math.round(value / reactFlowGridSize) * reactFlowGridSize
 const snapPosition = (position: { x: number; y: number }) => ({
@@ -161,6 +168,38 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
     ancestors.forEach((nodeId) => locked.add(nodeId))
   })
   return locked
+}
+
+const findNearestMainAncestorCommit = (
+  commitId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+): Node<CanvasNodeData> | undefined => {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const incomingMap = buildIncomingMap(edges)
+  const visited = new Set<string>()
+  const queue = [...(incomingMap.get(commitId) ?? [])]
+  let latestMain: Node<CanvasNodeData> | undefined
+  while (queue.length > 0) {
+    const currentId = queue.shift()!
+    if (visited.has(currentId)) {
+      continue
+    }
+    visited.add(currentId)
+    const node = nodeMap.get(currentId)
+    if (node && node.data.kind === 'commit' && node.data.branchType === 'main') {
+      if (!latestMain || getNumericId(node.id) > getNumericId(latestMain.id)) {
+        latestMain = node
+      }
+    }
+    const parents = incomingMap.get(currentId) ?? []
+    parents.forEach((parentId) => {
+      if (!visited.has(parentId)) {
+        queue.push(parentId)
+      }
+    })
+  }
+  return latestMain
 }
 
 const isDescendantOf = (
@@ -526,9 +565,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (branchMode === 'blocked') {
         return {}
       }
+      const isMergeDraft = draftNode.data.bridgePrompt === '/merge' && !!draftNode.data.mergeConfig
       let branchType: BranchType = 'branch'
 
-      if (branchMode === 'force-main') {
+      if (branchMode === 'force-main' || isMergeDraft) {
         branchType = 'main'
       } else if (branchMode === 'select') {
         branchType = draftNode.data.pendingBranch ?? 'branch'
@@ -545,20 +585,29 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         if (node.id !== id || node.data.kind !== 'draft') {
           return node
         }
+        const nextData: CanvasNodeData = {
+          ...node.data,
+          kind: 'commit',
+          status: 'Committed · awaiting diff',
+          tags: Array.from(
+            new Set([
+              ...node.data.tags,
+              'commit',
+              ...(isMergeDraft ? ['merge'] : []),
+            ]),
+          ),
+          branchType,
+          branchName,
+          pendingBranch: undefined,
+          pendingBranchName: undefined,
+          mergeConfig: undefined,
+          isMergeCommit: isMergeDraft,
+        }
 
         return {
           ...node,
           type: 'commit',
-          data: {
-            ...node.data,
-            kind: 'commit',
-            status: 'Committed · awaiting diff',
-            tags: Array.from(new Set([...node.data.tags, 'commit'])),
-            branchType,
-            branchName,
-            pendingBranch: undefined,
-            pendingBranchName: undefined,
-          },
+          data: nextData,
         }
       })
 
@@ -690,6 +739,100 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return {
         nodes: [...state.nodes, newNode],
         edges: [...state.edges, newEdge],
+      }
+    }),
+
+  createMergeDraftFromCommit: (commitId) =>
+    set((state) => {
+      const nodes = state.nodes
+      const edges = state.edges
+      const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+      const branchCommit = nodeMap.get(commitId)
+      if (
+        !branchCommit ||
+        branchCommit.data.kind !== 'commit' ||
+        branchCommit.data.branchType !== 'branch'
+      ) {
+        return {}
+      }
+      const latestMainId = resolveLatestMainCommitId(nodes, state.latestMainCommitId)
+      if (!latestMainId) {
+        return {}
+      }
+      const latestMainCommit = nodeMap.get(latestMainId)
+      if (!latestMainCommit) {
+        return {}
+      }
+      const outgoingMap = buildOutgoingMap(edges)
+      const hasPendingMergeDraft =
+        outgoingMap
+          .get(commitId)
+          ?.some((targetId) => {
+            const targetNode = nodeMap.get(targetId)
+            return targetNode?.data.kind === 'draft' && targetNode.data.bridgePrompt === '/merge'
+          }) ?? false
+      if (hasPendingMergeDraft) {
+        return {}
+      }
+      const tone = computeCommitTone(nodes, edges, state.latestMainCommitId, commitId)
+      if (tone !== 'branch-latest') {
+        return {}
+      }
+      const baseCommit = findNearestMainAncestorCommit(commitId, nodes, edges)
+      const mergeNodeId = nextNodeId()
+      const mergeLabel =
+        branchCommit.data.branchName?.trim() || branchCommit.data.title || 'branch'
+      const mergeConfig = {
+        targetCommitId: latestMainCommit.id,
+        targetCommitTitle: latestMainCommit.data.title,
+        targetContent: latestMainCommit.data.summary,
+        sourceCommitId: branchCommit.id,
+        sourceCommitTitle: branchCommit.data.title,
+        sourceContent: branchCommit.data.summary,
+        baseCommitId: baseCommit?.id,
+        baseCommitTitle: baseCommit?.data.title,
+        baseContent: baseCommit?.data.summary,
+      }
+      const mergeDraft: Node<CanvasNodeData> = {
+        id: mergeNodeId,
+        type: 'draft',
+        position: computeAttachedPosition(latestMainCommit, 'draft', commitQuickOffset),
+        data: {
+          entryId: `MERGE-${getNumericId(mergeNodeId)}`,
+          title: `Merge · ${mergeLabel}`,
+          summary: 'Resolve semantic conflicts before committing to main.',
+          status: 'merge in progress',
+          timestamp: 'just now',
+          tags: ['draft', 'merge'],
+          kind: 'draft',
+          bridgePrompt: '/merge',
+          pendingBranch: 'main',
+          mergeConfig,
+        },
+      }
+
+      const mainEdge: Edge = {
+        id: nextEdgeId(),
+        source: latestMainCommit.id,
+        target: mergeNodeId,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+
+      const branchEdge: Edge = {
+        id: nextEdgeId(),
+        source: branchCommit.id,
+        target: mergeNodeId,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+        markerEnd: mergeArrowMarker,
+      }
+
+      return {
+        nodes: [...nodes, mergeDraft],
+        edges: [...edges, mainEdge, branchEdge],
       }
     }),
 

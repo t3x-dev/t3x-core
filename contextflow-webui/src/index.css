@@ -668,19 +668,42 @@ button {
   color: #2d2e32;
   margin: 6px 0;
   resize: vertical;
+  background: #fff;
+}
+
+.canvas-node--locked {
+  cursor: text;
+}
+
+.node-summary-field--static {
+  min-height: 220px;
+  max-height: 520px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.node-summary-field--static p {
+  margin: 0;
 }
 
 .node-dropdown {
   position: absolute;
   top: 38px;
-  right: 8px;
-  width: min(280px, calc(100% - 16px));
+  right: 6px;
+  width: min(calc(var(--canvas-grid-size) * 17), calc(100% - 16px));
   background: #f5f5f8;
   border: 1px solid #dfe0e4;
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
   z-index: 5;
+  min-height: 240px;
+  max-height: 520px;
+  overflow-y: auto;
 }
 
 .node-dropdown footer {
@@ -711,6 +734,7 @@ button {
 .node-handle-actions--commit {
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 .node-handle-actions--visible {
@@ -830,6 +854,7 @@ button {
   --commit-accent: #2563eb;
   border-radius: 12px;
   padding: 18px 20px 20px;
+  width: calc(var(--canvas-grid-size) * 18);
   min-width: calc(var(--canvas-grid-size) * 18);
   border: 3px solid var(--commit-border);
   box-shadow: var(--commit-shadow);
@@ -908,6 +933,13 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.commit-node__merge-flag {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .canvas-node--commit .node-branch-badge {
@@ -1140,6 +1172,148 @@ button {
   color: #64748b;
 }
 
+.commit-modal {
+  width: min(90vw, 1320px);
+  height: min(85vh, 900px);
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.2);
+}
+
+.commit-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.commit-modal__title span {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.commit-modal__title strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.35rem;
+  color: #0f172a;
+}
+
+.commit-modal__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.commit-modal__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.commit-modal__pane {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  min-width: 0;
+}
+
+.commit-modal__pane--meta {
+  flex: 0 0 32%;
+  gap: 16px;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+}
+
+.commit-modal__pane--content {
+  flex: 1;
+  background: #fff;
+  gap: 18px;
+}
+
+.commit-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.commit-meta label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.commit-meta__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.commit-meta__tags span {
+  background: #edf2f7;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.commit-meta__empty {
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.commit-modal__pane--content header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.commit-summary,
+.commit-intent {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.commit-summary h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.commit-summary small {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.commit-summary p,
+.commit-intent p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
 .conversation-context__cards {
   display: flex;
   flex-direction: column;
@@ -1279,19 +1453,17 @@ button {
 }
 
 .conversation-chat__composer {
-  display: flex;
-  gap: 10px;
-  padding-top: 8px;
+  padding-top: 12px;
   border-top: 1px solid #e2e8f0;
 }
 
 .conversation-chat__composer textarea {
-  flex: 1;
+  width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px 14px;
   font: inherit;
-  min-height: 70px;
+  min-height: 96px;
   resize: vertical;
   background: #f8fafc;
   color: #0f172a;
@@ -1323,6 +1495,38 @@ button {
 
 .node-modal textarea {
   resize: vertical;
+}
+
+.merge-config {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px dashed #d1d2d6;
+  border-radius: 12px;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.merge-config h4 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #1f2937;
+}
+
+.merge-config__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.merge-config__field-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.merge-config textarea {
+  min-height: 70px;
 }
 
 .node-modal select {

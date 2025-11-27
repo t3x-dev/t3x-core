@@ -9,6 +9,18 @@ export interface DraftValidationCheck {
   status: ValidationCheckStatus
 }
 
+export interface MergeConfig {
+  targetCommitId: string
+  targetCommitTitle: string
+  targetContent: string
+  sourceCommitId: string
+  sourceCommitTitle: string
+  sourceContent: string
+  baseCommitId?: string
+  baseCommitTitle?: string
+  baseContent?: string
+}
+
 export interface CanvasNodeData {
   entryId: string
   title: string
@@ -28,4 +40,6 @@ export interface CanvasNodeData {
   baselineSummary?: string
   draftInstructions?: string
   draftDiff?: string
+  mergeConfig?: MergeConfig
+  isMergeCommit?: boolean
 }
