@@ -12,6 +12,7 @@ from core_api.routes import commits
 from core_api.routes import diff
 from core_api.routes import merge
 from core_api.routes import export
+from core_api.routes import chat
 
 __all__ = [
     "health",
@@ -22,4 +23,5 @@ __all__ = [
     "diff",
     "merge",
     "export",
+    "chat",
 ]

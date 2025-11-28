@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core_api import __version__
 from core_api.dependencies import set_start_time, ensure_directories
 from core_api.errors import setup_exception_handlers
-from core_api.routes import health, projects, conversations, turns, commits, branches, diff, merge, export, agent
+from core_api.routes import health, projects, conversations, turns, commits, branches, diff, merge, export, agent, chat
 
 
 @asynccontextmanager
@@ -150,6 +150,13 @@ app.include_router(
     agent.router,
     prefix="/api/v1/agent/drafts",
     tags=["Agent"]
+)
+
+# Chat API (Streaming LLM)
+app.include_router(
+    chat.router,
+    prefix="/api/v1/chat",
+    tags=["Chat"]
 )
 
 
