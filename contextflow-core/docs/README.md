@@ -823,6 +823,24 @@ pytest core/evidence/tests/ -v --cov
 pytest tests/integration/ -v
 ```
 
+### Skipped Tests (Pending Implementation)
+
+The following test modules are currently skipped because they depend on modules
+planned for future phases:
+
+| Test File | Required Module | Status |
+|-----------|-----------------|--------|
+| `test_cli_commands.py` | `cli.commands` | Phase 3 |
+| `test_lineage_chain.py` | `core.lineage` | Phase 3 |
+| `test_perf_bench.py` | `core.evidence` | Phase 2+ |
+| `test_scorer_determinism.py` | `core.evidence` | Phase 2+ |
+| `test_storage_determinism.py` | `core.storage.JSONLConversationStore` | Phase 2+ |
+| `test_tokenizer_determinism.py` | `core.evidence` | Phase 2+ |
+
+These tests serve as specifications for the planned modules. Once the modules
+are implemented, remove the `pytest.skip()` call at the top of each file to
+enable them.
+
 ### Development Setup
 
 ```bash

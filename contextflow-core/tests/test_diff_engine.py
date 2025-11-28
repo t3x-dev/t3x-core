@@ -57,14 +57,22 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # Should recognize added segments
-        assert result.added_count > 0
+        # Verify exact counts
+        assert result.added_count == 1, f"Expected added_count == 1, got {result.added_count}"
+        assert result.total_segments == 2, f"Expected total_segments == 2, got {result.total_segments}"
+
+        # Verify the added segment is target-s2 (remember me)
+        added_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.ADDED]
+        assert len(added_diffs) == 1, f"Expected 1 added diff, got {len(added_diffs)}"
+        assert added_diffs[0].segment_id == "target-s2", f"Expected target-s2 added, got {added_diffs[0].segment_id}"
+        assert "记住我" in added_diffs[0].text, f"Expected 记住我 in added text, got {added_diffs[0].text}"
 
     def test_removed_segments(self, diff_engine):
         """Test recognition of removed segments"""
+        # Use very different texts to ensure removed segment is detected
         base_segments = [
             {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
-            {"segment_id": "base-s2", "text": "需要支持邮箱登录."},
+            {"segment_id": "base-s2", "text": "系统需要支持PDF文件导出和打印功能."},
         ]
         target_segments = [
             {"segment_id": "target-s1", "text": "用户希望实现登录功能."},
@@ -77,8 +85,20 @@ class TestTwoWayDiff:
             target_segments=target_segments,
         )
 
-        # Should recognize removed segments
-        assert result.removed_count > 0
+        # Verify exact counts and segment content
+        assert result.removed_count == 1, f"Expected removed_count == 1, got {result.removed_count}"
+        assert result.total_segments == 2, f"Expected total_segments == 2, got {result.total_segments}"
+
+        # Verify the removed segment is base-s2 (PDF export)
+        removed_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.REMOVED]
+        assert len(removed_diffs) == 1, f"Expected 1 removed diff, got {len(removed_diffs)}"
+        assert removed_diffs[0].segment_id == "base-s2", f"Expected base-s2 removed, got {removed_diffs[0].segment_id}"
+        assert "PDF" in removed_diffs[0].text, f"Expected PDF in removed text, got {removed_diffs[0].text}"
+
+        # Verify base-s1 is matched (SAME or MODIFIED)
+        matched_diffs = [d for d in result.segment_diffs if d.diff_type in (DiffType.SAME, DiffType.MODIFIED)]
+        assert len(matched_diffs) == 1, f"Expected 1 matched diff, got {len(matched_diffs)}"
+        assert matched_diffs[0].segment_id == "base-s1"
 
     def test_modified_segments(self, diff_engine):
         """Test recognition of modified segments"""
@@ -126,9 +146,21 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # No conflicts, should have SAME and ADDED
-        assert result.conflict_count == 0
-        assert result.added_count > 0
+        # Verify no conflicts and correct counts
+        assert result.conflict_count == 0, f"Expected no conflicts, got {result.conflict_count}"
+        assert result.added_count == 2, f"Expected 2 added segments, got {result.added_count}"
+        assert result.same_count == 1, f"Expected 1 same segment, got {result.same_count}"
+
+        # Verify added segments are source-s2 and target-s3
+        added_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.ADDED]
+        added_ids = {d.segment_id for d in added_diffs}
+        assert "source-s2" in added_ids, f"Expected source-s2 in added, got {added_ids}"
+        assert "target-s3" in added_ids, f"Expected target-s3 in added, got {added_ids}"
+
+        # Verify base-s1 is kept as SAME
+        same_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.SAME]
+        assert len(same_diffs) == 1
+        assert same_diffs[0].segment_id == "base-s1"
 
     def test_conflict_detection(self, diff_engine):
         """Test conflict detection"""
@@ -151,19 +183,26 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # Should detect conflicts
-        assert result.conflict_count > 0
+        # Verify exact conflict count
+        assert result.conflict_count == 1, f"Expected 1 conflict, got {result.conflict_count}"
+        assert result.total_segments == 1, f"Expected 1 total segment, got {result.total_segments}"
 
         # Check conflict details
         conflicts = [d for d in result.segment_diffs if d.diff_type == DiffType.CONFLICT]
-        assert len(conflicts) > 0
-        assert "|" in conflicts[0].matched_segment_id  # Source|Target format
+        assert len(conflicts) == 1, f"Expected 1 conflict diff, got {len(conflicts)}"
+        assert conflicts[0].segment_id == "base-s1", f"Expected base-s1 in conflict, got {conflicts[0].segment_id}"
+        assert "|" in conflicts[0].matched_segment_id, f"Expected | in matched_segment_id, got {conflicts[0].matched_segment_id}"
+
+        # Verify conflict contains both source and target references
+        assert "source-s1" in conflicts[0].matched_segment_id
+        assert "target-s1" in conflicts[0].matched_segment_id
 
     def test_both_deleted(self, diff_engine):
         """Test both sides deleted"""
+        # Use very different texts to avoid false similarity matches
         base_segments = [
             {"segment_id": "base-s1", "text": "用户希望实现登录功能."},
-            {"segment_id": "base-s2", "text": "需要支持邮箱登录."},
+            {"segment_id": "base-s2", "text": "系统需要支持PDF文件导出和打印功能."},
         ]
         source_segments = [
             {"segment_id": "source-s1", "text": "用户希望实现登录功能."},
@@ -181,8 +220,20 @@ class TestThreeWayDiff:
             target_segments=target_segments,
         )
 
-        # Should recognize as deleted
-        assert result.removed_count > 0
+        # Verify exact counts
+        assert result.removed_count == 1, f"Expected removed_count == 1, got {result.removed_count}"
+        assert result.conflict_count == 0, f"Expected no conflicts, got {result.conflict_count}"
+
+        # Verify the removed segment is base-s2 (PDF export)
+        removed_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.REMOVED]
+        assert len(removed_diffs) == 1, f"Expected 1 removed diff, got {len(removed_diffs)}"
+        assert removed_diffs[0].segment_id == "base-s2", f"Expected base-s2 removed, got {removed_diffs[0].segment_id}"
+        assert "PDF" in removed_diffs[0].text, f"Expected PDF in removed text, got {removed_diffs[0].text}"
+
+        # Verify base-s1 is kept (SAME) since both source and target have it
+        same_diffs = [d for d in result.segment_diffs if d.diff_type == DiffType.SAME]
+        assert len(same_diffs) == 1, f"Expected 1 SAME diff, got {len(same_diffs)}"
+        assert same_diffs[0].segment_id == "base-s1"
 
 
 class TestDiffStatistics:

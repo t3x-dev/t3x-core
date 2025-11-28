@@ -12,6 +12,8 @@ import pytest
 
 from core.ledger import CommitLedger, DraftLedger, TurnLedger
 from core.ledger.turn_ledger import TurnRecord
+from core.ledger.commit_ledger import CommitRecord
+from core.ledger.draft_ledger import DraftRecord
 
 
 class TestTurnLedger:
@@ -23,15 +25,14 @@ class TestTurnLedger:
             ledger_path = Path(tmpdir) / "turns.jsonl"
             ledger = TurnLedger(ledger_path)
 
-            # Create Turn record
+            # Create Turn record (turn_hash is auto-computed)
             turn = TurnRecord.create(
-                turn_hash="sha256:abc123",
-                parent_turn_hash=None,
                 project_id="test-project",
                 conversation_id="test-conv",
                 role="user",
                 content="Hello world",
-                ring_snapshot=None,  # Simplified test
+                parent_turn_hash=None,
+                ring_snapshot=None,
             )
 
             # Append record
@@ -44,7 +45,7 @@ class TestTurnLedger:
                 lines = f.readlines()
                 assert len(lines) == 1
                 data = json.loads(lines[0])
-                assert data["turn_hash"] == "sha256:abc123"
+                assert data["turn_hash"].startswith("sha256:")
                 assert data["role"] == "user"
                 assert data["content"] == "Hello world"
 
@@ -57,18 +58,17 @@ class TestTurnLedger:
             # Append multiple records
             for i in range(3):
                 turn = TurnRecord.create(
-                    turn_hash=f"sha256:turn-{i}",
-                    parent_turn_hash=None,
                     project_id="test-project",
                     conversation_id="test-conv",
                     role="user",
                     content=f"Turn {i}",
+                    parent_turn_hash=None,
                     ring_snapshot=None,
                 )
                 ledger.append(turn)
 
             # Load all records
-            turns = ledger.load_all()
+            turns = ledger.read_all()
 
             # Validate
             assert len(turns) == 3
@@ -78,12 +78,11 @@ class TestTurnLedger:
     def test_turn_hash_calculation(self):
         """Test Turn Hash calculation"""
         turn = TurnRecord.create(
-            turn_hash="placeholder",
-            parent_turn_hash=None,
             project_id="test-project",
             conversation_id="test-conv",
             role="user",
             content="Test content",
+            parent_turn_hash=None,
             ring_snapshot=None,
         )
 
@@ -92,12 +91,11 @@ class TestTurnLedger:
 
         # Same input should produce same hash
         turn2 = TurnRecord.create(
-            turn_hash="placeholder",
-            parent_turn_hash=None,
             project_id="test-project",
             conversation_id="test-conv",
             role="user",
             content="Test content",
+            parent_turn_hash=None,
             ring_snapshot=None,
         )
 
@@ -115,21 +113,20 @@ class TestCommitLedger:
             ledger_path = Path(tmpdir) / "commits.jsonl"
             ledger = CommitLedger(ledger_path)
 
-            commit_data = {
-                "commit_hash": "sha256:commit-1",
-                "project_id": "test-project",
-                "branch": "main",
-                "parent_hashes": ["sha256:parent-1"],
-                "turn_window": {
+            # Create CommitRecord using the proper API
+            commit = CommitRecord.create(
+                project_id="test-project",
+                branch="main",
+                parent_hashes=["sha256:parent-1"],
+                turn_window={
                     "start_turn_hash": "sha256:turn-1",
                     "end_turn_hash": "sha256:turn-2",
                 },
-                "facet_snapshot": {"keywords": []},
-                "pipeline_config": {"threshold": 0.70},
-                "schema_version": "commit_v1",
-            }
+                facet_snapshot=[{"type": "keyword", "value": "test"}],
+                pipeline_config={"threshold": 0.70},
+            )
 
-            ledger.append(commit_data)
+            ledger.append(commit)
 
             # Validate
             assert ledger_path.exists()
@@ -138,7 +135,7 @@ class TestCommitLedger:
                 lines = f.readlines()
                 assert len(lines) == 1
                 data = json.loads(lines[0])
-                assert data["commit_hash"] == "sha256:commit-1"
+                assert data["commit_hash"].startswith("sha256:")
                 assert data["branch"] == "main"
 
 
@@ -151,21 +148,22 @@ class TestDraftLedger:
             ledger_path = Path(tmpdir) / "drafts.jsonl"
             ledger = DraftLedger(ledger_path)
 
-            draft_data = {
-                "draft_id": "draft-1",
-                "project_id": "test-project",
-                "base_commit_hash": "sha256:commit-1",
-                "turn_anchor_hash": "sha256:turn-10",
-                "bridge_id": "plan",
-                "bridge_payload": {"threshold": 0.60},
-                "must_have": ["login", "authentication"],
-                "mustnt_have": ["password"],
-                "llm_config": {"model": "gpt-4", "temperature": 0.3},
-                "text": "This is the draft text.",
-                "status": "accepted",
-            }
+            # Create DraftRecord directly (no create() factory needed)
+            draft = DraftRecord(
+                draft_id="draft-1",
+                project_id="test-project",
+                base_commit_hash="sha256:commit-1",
+                turn_anchor_hash="sha256:turn-10",
+                bridge_id="plan",
+                bridge_payload={"threshold": 0.60},
+                must_have=["login", "authentication"],
+                mustnt_have=["password"],
+                llm_config={"model": "gpt-4", "temperature": 0.3},
+                text="This is the draft text.",
+                status="accepted",
+            )
 
-            ledger.append(draft_data)
+            ledger.append(draft)
 
             # Validate
             assert ledger_path.exists()

@@ -44,6 +44,19 @@ export interface ProjectListItem extends Project {
   turns_count: number;
 }
 
+export interface DeleteProjectResult {
+  deleted: string;
+  name: string;
+  cascade_deleted: {
+    turns: number;
+    drafts: number;
+    conversations: number;
+    commits: number;
+    branches: number;
+    merge_results: number;
+  };
+}
+
 // Conversation types
 export interface Conversation {
   conversation_id: string;
@@ -416,7 +429,11 @@ export class CoreClient {
   }
 
   async getProject(projectId: string): Promise<Project> {
-    return this.request<Project>('GET', `/api/v1/projects/${projectId}`);
+    return this.request<Project>('GET', `/api/v1/projects/${encodeURIComponent(projectId)}`);
+  }
+
+  async deleteProject(projectId: string): Promise<DeleteProjectResult> {
+    return this.request<DeleteProjectResult>('DELETE', `/api/v1/projects/${encodeURIComponent(projectId)}`);
   }
 
   // --------------------------------------------------------------------------
