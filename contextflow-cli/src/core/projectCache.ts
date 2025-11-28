@@ -244,6 +244,56 @@ export async function createProjectViaApi(name: string): Promise<string> {
 }
 
 /**
+ * Delete a project via core_api and remove from cache
+ */
+export async function deleteProjectViaApi(name: string): Promise<{
+  deleted: string;
+  cascade_deleted: {
+    turns: number;
+    drafts: number;
+    conversations: number;
+    commits: number;
+    branches: number;
+    merge_results: number;
+  };
+}> {
+  const projectId = getProjectIdByName(name);
+  if (!projectId) {
+    throw new Error(`Project "${name}" not found in cache`);
+  }
+
+  const client = getCoreClient();
+
+  try {
+    const result = await client.deleteProject(projectId);
+
+    // Remove from cache
+    uncacheProject(name);
+
+    // Also remove associated conversations from cache
+    const cache = loadCache();
+    const conversationsToRemove = Object.keys(cache.conversations).filter(
+      (convId) => cache.conversations[convId].project_id === projectId
+    );
+    for (const convId of conversationsToRemove) {
+      delete cache.conversations[convId];
+    }
+    saveCache();
+
+    logger.trace('cache', `Project deleted and uncached: ${name} (${projectId})`);
+    return {
+      deleted: result.deleted,
+      cascade_deleted: result.cascade_deleted,
+    };
+  } catch (error) {
+    if (error instanceof CoreApiError) {
+      throw new Error(`Failed to delete project: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
  * List projects from core_api and sync cache
  */
 export async function listProjectsViaApi(): Promise<Array<{ name: string; project_id: string }>> {

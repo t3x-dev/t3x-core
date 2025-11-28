@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
+import yaml
+
 DEFAULT_THRESHOLDS_PATH = Path("configs/thresholds.yaml")
 
 
@@ -46,7 +48,19 @@ SAMPLE_DATASET: List[EvidenceExample] = [
 
 
 def load_thresholds(path: Path = DEFAULT_THRESHOLDS_PATH) -> dict:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    content = Path(path).read_text(encoding="utf-8")
+    if path.suffix in (".yaml", ".yml"):
+        data = yaml.safe_load(content)
+    else:
+        data = json.loads(content)
+
+    # Support both flat and nested YAML structures
+    if "confidence_threshold" not in data and "auto_apply" in data:
+        # Convert nested structure to flat keys expected by compute_metrics
+        return {
+            "confidence_threshold": data["auto_apply"]["confidence"],
+            "margin_threshold": data["auto_apply"]["margin"],
+        }
     return data
 
 

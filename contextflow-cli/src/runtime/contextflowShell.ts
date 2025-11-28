@@ -43,6 +43,7 @@ import {
   createProjectViaApi,
   listProjectsViaApi,
   projectExistsViaApi,
+  deleteProjectViaApi,
   syncCache,
   createTurnViaApi,
   listTurnsViaApi,
@@ -200,7 +201,7 @@ export async function startContextflowShell(): Promise<void> {
       }
 
       if (trimmed.startsWith('/')) {
-        const slashHandled = await handleSlashCommand(trimmed, state, root.contextflowDir);
+        const slashHandled = await handleSlashCommand(trimmed, state, root.contextflowDir, rl);
         if (slashHandled) {
           continue;
         }
@@ -565,6 +566,7 @@ type HelpEntry = {
 const CHAT_HELP_ENTRIES: HelpEntry[] = [
   { usage: '/help', description: 'Show help' },
   { usage: '/new NAME', description: 'Create new conversation project' },
+  { usage: '/delete NAME', description: 'Delete project and all data (--force to skip confirm)' },
   { usage: '/config', description: 'Enter configuration mode to set API Key and model' },
   { usage: '/project NAME', description: 'Switch to or view current conversation project' },
   { usage: '/clear|/reset', description: 'Clear current conversation context' },
@@ -1119,6 +1121,7 @@ async function handleSlashCommand(
   cmdline: string,
   state: SessionState,
   workspaceDir: string,
+  rl: import('node:readline/promises').Interface,
 ): Promise<boolean> {
   if (!cmdline.startsWith('/')) {
     return false;
@@ -1512,6 +1515,59 @@ async function handleSlashCommand(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to compute diff: ${message}`);
+      }
+      return true;
+    }
+    case 'delete': {
+      // /delete <project_name> [--force]
+      // Use the main readline interface passed in to avoid conflict
+      if (rest.length === 0) {
+        logger.warn('Usage: /delete <project_name>');
+        logger.warn('  --force  Skip confirmation prompt');
+        return true;
+      }
+
+      const projectName = rest[0];
+      const forceDelete = rest.includes('--force');
+
+      // Check if project exists
+      const exists = await projectExistsViaApi(projectName);
+      if (!exists) {
+        logger.warn(`Project "${projectName}" does not exist.`);
+        return true;
+      }
+
+      // Confirm deletion unless --force is used
+      if (!forceDelete) {
+        const answer = await rl.question(
+          `Are you sure you want to delete "${projectName}"? This will permanently delete all conversations, turns, commits, and other data. (yes/no): `
+        );
+        if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
+          logger.info('Deletion cancelled.');
+          return true;
+        }
+      }
+
+      try {
+        const result = await deleteProjectViaApi(projectName);
+        const { cascade_deleted } = result;
+        const totalDeleted = cascade_deleted.turns + cascade_deleted.conversations +
+          cascade_deleted.commits + cascade_deleted.drafts + cascade_deleted.branches;
+
+        logger.info(`✅ Project "${projectName}" deleted successfully.`);
+        if (totalDeleted > 0) {
+          logger.info(`   Cascade deleted: ${cascade_deleted.turns} turns, ${cascade_deleted.conversations} conversations, ${cascade_deleted.commits} commits, ${cascade_deleted.drafts} drafts, ${cascade_deleted.branches} branches`);
+        }
+
+        // If we deleted the current project, clear state
+        if (state.project === projectName) {
+          state.project = 'default';
+          state.messages = [];
+          logger.info('Switched to default project.');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`Failed to delete project: ${message}`);
       }
       return true;
     }
