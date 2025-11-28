@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import { ApiStatus } from './ApiStatus'
 
 export function TopNav() {
   const location = useLocation()
@@ -17,6 +18,9 @@ export function TopNav() {
       <button className={isWorkflow ? 'top-link top-link--active' : 'top-link'} disabled={!isWorkflow}>
         Workflow
       </button>
+      <div style={{ marginLeft: 'auto' }}>
+        <ApiStatus />
+      </div>
     </header>
   )
 }
