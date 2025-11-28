@@ -30,7 +30,9 @@ import {
   writeUserConfig,
 } from '../core/config';
 import { validateAll } from '../core/validate';
-import { createChatCompletion } from '../providers/claude';
+// Note: Direct Claude API call removed. All LLM calls now go through Core API.
+// import { createChatCompletion } from '../providers/claude';
+import { getCoreClient, CoreApiError } from '../core/coreClient';
 import { ensureDir, pathExists } from '../utils/fs';
 import { startApiServer, getApiServerInfo } from '../server';
 import { configureLogger, logger } from './logger';
@@ -267,27 +269,44 @@ async function handleChatMessage(
   });
 
   try {
-    const { apiKey, model } = await resolveRuntimeConfig(state.overrides);
+    const { model } = await resolveRuntimeConfig(state.overrides);
 
-    let streamed = '';
-    const completion = await createChatCompletion({
-      apiKey,
-      model,
-      messages: state.messages,
-      stream: state.stream,
-      onToken: state.stream
-        ? (token) => {
-            streamed += token;
-            stdout.write(token);
-          }
-        : undefined,
-    });
+    let assistantText = '';
 
-    const assistantText = state.stream ? streamed || completion : completion;
+    // All LLM calls go through Core API (LLM is a plugin in Core)
+    const coreAvailable = await checkCoreApiAvailable();
 
-    if (!state.stream) {
+    if (!coreAvailable) {
+      logger.error('Core API is not available. Please start Core API first:');
+      logger.error('  cd contextflow-core && python -m core_api');
+      return;
+    }
+
+    const client = getCoreClient();
+
+    if (state.stream) {
+      // Use Core API streaming
+      assistantText = await client.chatStream(
+        state.messages.map(m => ({ role: m.role, content: m.content })),
+        (token) => {
+          stdout.write(token);
+        },
+        {
+          model,
+        }
+      );
+    } else {
+      // Use Core API non-streaming
+      const response = await client.chat(
+        state.messages.map(m => ({ role: m.role, content: m.content })),
+        {
+          model,
+        }
+      );
+      assistantText = response.content;
       stdout.write(assistantText);
     }
+
     stdout.write('\n');
 
     state.messages.push({
@@ -307,7 +326,20 @@ async function handleChatMessage(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     stdout.write('\n');
-    logger.error(`Claude request failed: ${message}`);
+    logger.error(`Chat request failed: ${message}`);
+  }
+}
+
+/**
+ * Check if Core API is available
+ */
+async function checkCoreApiAvailable(): Promise<boolean> {
+  try {
+    const client = getCoreClient();
+    await client.health();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -990,7 +1022,11 @@ async function appendConversationTurn(
   };
 }
 
-function persistTurnToDatabase(turn: ConversationTurn, project: string): void {
+/**
+ * Persist turn to local SQLite (optional cache, secondary storage)
+ * Primary storage is now Core API
+ */
+function persistTurnToLocalCache(turn: ConversationTurn, project: string): void {
   if (!sqliteEnabled || !sqliteReady) {
     return;
   }
@@ -1007,12 +1043,16 @@ function persistTurnToDatabase(turn: ConversationTurn, project: string): void {
       at: turn.timestamp,
       tags: [`project:${project}`],
     });
+    logger.trace('sql', `Turn cached locally for project ${project}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`Failed to write to SQLite: ${message}`);
+    logger.trace('sql', `Local cache write failed: ${message}`);
   }
 }
 
+/**
+ * Persist turn to Core API (primary storage with semantic extraction)
+ */
 async function persistTurnToCoreApi(
   turn: ConversationTurn,
   project: string
@@ -1023,14 +1063,25 @@ async function persistTurnToCoreApi(
 
   try {
     // Get project ID and conversation ID
-    const projectId = getProjectIdByName(project);
+    let projectId: string | undefined = getProjectIdByName(project);
+
+    // If project doesn't exist in Core API, try to create it
     if (!projectId) {
-      // Project not yet created in core_api, skip
-      logger.trace('cache', `Project ${project} not in cache, skipping core_api turn`);
-      return;
+      try {
+        projectId = await createProjectViaApi(project);
+        logger.trace('cache', `Created project "${project}" in Core API`);
+      } catch (createError) {
+        // If creation fails (e.g., already exists), try to sync cache
+        await syncCache();
+        projectId = getProjectIdByName(project);
+        if (!projectId) {
+          logger.trace('cache', `Project ${project} not in Core API, skipping turn persist`);
+          return;
+        }
+      }
     }
 
-    let conversationId = getCurrentConversationId();
+    let conversationId: string | undefined = getCurrentConversationId();
 
     // Validate that the conversation belongs to the current project
     if (conversationId) {
@@ -1048,11 +1099,22 @@ async function persistTurnToCoreApi(
       conversationId = result.conversationId;
     }
 
-    await createTurnViaApi(projectId, conversationId, turn.role, turn.text);
+    if (projectId && conversationId) {
+      await createTurnViaApi(projectId, conversationId, turn.role, turn.text);
+      logger.trace('cache', `Turn persisted to Core API for project ${project}`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.trace('cache', `core_api turn write failed: ${message}`);
+    logger.trace('cache', `Core API turn write failed: ${message}`);
   }
+}
+
+/**
+ * Legacy alias for backward compatibility
+ * @deprecated Use persistTurnToLocalCache instead
+ */
+function persistTurnToDatabase(turn: ConversationTurn, project: string): void {
+  persistTurnToLocalCache(turn, project);
 }
 
 async function handleSlashCommand(

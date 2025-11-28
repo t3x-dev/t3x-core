@@ -1,122 +1,157 @@
 """
 OpenAI LLM Provider
 
-This module provides a minimal OpenAI Chat Completions wrapper for Draft Workflow
-polish step and MergeAgent conflict resolution. The implementation is designed as
-an optional dependency: as long as this file exists in the repository and the
-`openai` package is declared in requirements, the CLI/Agentic layer can instantiate
-it when needed; offline/fully local deployments can replace it with other Providers.
+Implements the LLMProvider interface for OpenAI's models.
+Supports both synchronous and streaming generation.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import AsyncIterator, Iterator, List, Optional
+
+from .base import ChatMessage, GenerationResult, LLMConfig, LLMProvider
 
 try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - fallback logic when import fails
+    from openai import AsyncOpenAI, OpenAI
+except ImportError:  # pragma: no cover
     OpenAI = None  # type: ignore
+    AsyncOpenAI = None  # type: ignore
 
 
-class OpenAIProvider:
+class OpenAIProvider(LLMProvider):
     """
-    OpenAI LLM Provider, implementing minimal interface required by DraftWorkflow/MergeAgent.
+    OpenAI LLM Provider using the official OpenAI SDK.
 
-    Attributes:
-        api_key: OpenAI API Key
-        model: Model name, e.g., `gpt-4o`, `gpt-4-turbo`
-        temperature: Temperature
-        max_tokens: Maximum output tokens
+    Supports GPT-4, GPT-4o, and other OpenAI models with streaming.
     """
 
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        model: str = "gpt-4o-mini",
-        temperature: float = 0.3,
-        max_tokens: int = 2048,
-    ):
+    def __init__(self, config: LLMConfig):
+        super().__init__(config)
+
         if OpenAI is None:
             raise ImportError(
                 "openai package not installed. "
                 "Please run `pip install openai` or remove OpenAIProvider usage."
             )
 
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.api_key = config.api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
                 "OpenAI API key missing. Set OPENAI_API_KEY env var "
-                "or pass api_key argument when constructing OpenAIProvider."
+                "or pass api_key in LLMConfig."
             )
 
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.client = OpenAI(api_key=self.api_key)
+        self.model = config.model or "gpt-4o-mini"
+        self.default_temperature = config.temperature
+        self.default_max_tokens = config.max_tokens
+        self.base_url = config.base_url
+
+        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url) if AsyncOpenAI else None
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
+    def _build_messages(self, messages: List[ChatMessage]) -> list:
+        """Convert ChatMessage list to OpenAI format."""
+        return [{"role": msg.role, "content": msg.content} for msg in messages]
 
     def generate(
         self,
-        prompt: str,
-        temperature: float = 0.3,
-        max_tokens: int = 2048,
-        system_prompt: Optional[str] = None,
-    ) -> str:
-        """
-        Call OpenAI Chat Completions API to generate text.
-
-        Conforms to Draft Workflow's LLMProvider Protocol.
-
-        Args:
-            prompt: Complete prompt (including Bridge template + Evidence)
-            temperature: Generation temperature (default 0.3)
-            max_tokens: Maximum token count (default 2048)
-            system_prompt: System prompt (optional, for advanced configuration)
-
-        Returns:
-            Generated text
-        """
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
+        messages: List[ChatMessage],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> GenerationResult:
+        """Generate a response synchronously."""
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            messages=self._build_messages(messages),
+            temperature=temperature if temperature is not None else self.default_temperature,
+            max_tokens=max_tokens or self.default_max_tokens,
+            stream=False,
         )
-        return response.choices[0].message.content or ""
 
-    def resolve_conflict(
+        choice = response.choices[0]
+        return GenerationResult(
+            content=choice.message.content or "",
+            model=response.model,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                "total_tokens": response.usage.total_tokens if response.usage else 0,
+            },
+            finish_reason=choice.finish_reason,
+        )
+
+    def generate_stream(
         self,
-        base_text: str,
-        source_text: str,
-        target_text: str,
-        context: str = "",
-    ) -> str:
-        """
-        Conflict resolution helper interface for MergeAgent.
+        messages: List[ChatMessage],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Iterator[str]:
+        """Generate a response with streaming (synchronous)."""
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=self._build_messages(messages),
+            temperature=temperature if temperature is not None else self.default_temperature,
+            max_tokens=max_tokens or self.default_max_tokens,
+            stream=True,
+        )
 
-        Args:
-            base_text: Common ancestor text
-            source_text: Source branch text
-            target_text: Target branch text
-            context: Additional context
-        """
-        prompt = f"""You are helping resolve a semantic merge conflict.
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
-Base version (common ancestor):
-{base_text}
+    async def agenerate(
+        self,
+        messages: List[ChatMessage],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> GenerationResult:
+        """Generate a response asynchronously."""
+        if not self.async_client:
+            raise ImportError("AsyncOpenAI not available")
 
-Source branch changed it to:
-{source_text}
+        response = await self.async_client.chat.completions.create(
+            model=self.model,
+            messages=self._build_messages(messages),
+            temperature=temperature if temperature is not None else self.default_temperature,
+            max_tokens=max_tokens or self.default_max_tokens,
+            stream=False,
+        )
 
-Target branch changed it to:
-{target_text}
+        choice = response.choices[0]
+        return GenerationResult(
+            content=choice.message.content or "",
+            model=response.model,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                "total_tokens": response.usage.total_tokens if response.usage else 0,
+            },
+            finish_reason=choice.finish_reason,
+        )
 
-{f"Additional context: {context}" if context else ""}
+    async def agenerate_stream(
+        self,
+        messages: List[ChatMessage],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncIterator[str]:
+        """Generate a response with streaming (async)."""
+        if not self.async_client:
+            raise ImportError("AsyncOpenAI not available")
 
-Please produce a merged version that respects both changes. Output only the merged text."""
-        return self.generate(prompt)
+        stream = await self.async_client.chat.completions.create(
+            model=self.model,
+            messages=self._build_messages(messages),
+            temperature=temperature if temperature is not None else self.default_temperature,
+            max_tokens=max_tokens or self.default_max_tokens,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
