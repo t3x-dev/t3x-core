@@ -16,6 +16,9 @@ sentence-transformers>=2.2.0,<3.0.0
 # LLM Provider (Draft Polish and Merge conflict resolution - optional)
 openai>=1.0.0,<2.0.0
 
+# HTTP client for Claude API
+httpx>=0.25.0,<1.0.0
+
 # Database (SQLite Indexes layer - included in Python standard library, no additional installation needed)
 # sqlite3 is part of Python standard library
 

@@ -663,6 +663,159 @@ export class CoreClient {
   ): Promise<Draft> {
     return this.request<Draft>('PATCH', `/api/v1/agent/drafts/${draftId}`, options);
   }
+
+  // --------------------------------------------------------------------------
+  // Chat (Streaming LLM)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get available LLM providers
+   */
+  async listProviders(): Promise<{ providers: string[]; default: string }> {
+    return this.request<{ providers: string[]; default: string }>('GET', '/api/v1/chat/providers');
+  }
+
+  /**
+   * Non-streaming chat request
+   */
+  async chat(
+    messages: Array<{ role: string; content: string }>,
+    options?: {
+      provider?: string;
+      model?: string;
+      temperature?: number;
+      max_tokens?: number;
+    }
+  ): Promise<{ content: string; model: string; usage?: Record<string, number> }> {
+    return this.request<{ content: string; model: string; usage?: Record<string, number> }>(
+      'POST',
+      '/api/v1/chat',
+      {
+        messages,
+        provider: options?.provider ?? 'claude',
+        model: options?.model,
+        temperature: options?.temperature,
+        max_tokens: options?.max_tokens,
+      }
+    );
+  }
+
+  /**
+   * Streaming chat request using Server-Sent Events
+   *
+   * @param messages - Array of chat messages
+   * @param onToken - Callback for each token received
+   * @param options - Optional configuration
+   * @returns Promise that resolves with the complete response when stream ends
+   */
+  async chatStream(
+    messages: Array<{ role: string; content: string }>,
+    onToken: (token: string) => void,
+    options?: {
+      provider?: string;
+      model?: string;
+      temperature?: number;
+      max_tokens?: number;
+      onError?: (error: Error) => void;
+    }
+  ): Promise<string> {
+    const url = `${this.baseUrl}/api/v1/chat/stream`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout * 10); // Longer timeout for streaming
+
+    try {
+      logger.trace('http', `POST ${url} (streaming)`);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          provider: options?.provider ?? 'claude',
+          model: options?.model,
+          temperature: options?.temperature,
+          max_tokens: options?.max_tokens,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new CoreApiError(
+          'HTTP_ERROR',
+          `HTTP ${response.status}: ${errorText}`,
+          undefined,
+          response.status
+        );
+      }
+
+      if (!response.body) {
+        throw new CoreApiError('STREAM_ERROR', 'Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process SSE events
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+          const dataStr = trimmed.slice(5).trim();
+          if (dataStr === '[DONE]') continue;
+
+          try {
+            const event = JSON.parse(dataStr) as {
+              type: 'token' | 'done' | 'error';
+              content?: string;
+              message?: string;
+              model?: string;
+            };
+
+            if (event.type === 'token' && event.content) {
+              accumulated += event.content;
+              onToken(event.content);
+            } else if (event.type === 'error' && event.message) {
+              throw new CoreApiError('STREAM_ERROR', event.message);
+            } else if (event.type === 'done') {
+              // Stream complete
+              if (event.content) {
+                accumulated = event.content;
+              }
+            }
+          } catch (parseError) {
+            if (parseError instanceof CoreApiError) throw parseError;
+            // Ignore JSON parse errors for malformed events
+            logger.trace('http', `Failed to parse SSE event: ${dataStr}`);
+          }
+        }
+      }
+
+      return accumulated;
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        throw new CoreApiError('TIMEOUT', `Stream timeout after ${this.timeout * 10}ms`);
+      }
+      if (error instanceof CoreApiError) throw error;
+      throw new CoreApiError('STREAM_ERROR', (error as Error).message);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 // ============================================================================
