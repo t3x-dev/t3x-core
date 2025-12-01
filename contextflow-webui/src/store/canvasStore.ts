@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -25,6 +25,16 @@ type CanvasState = {
   onConnect: (connection: Connection) => void
   getCommitTone: (commitId: string) => CommitTone
   resetToSingleConversation: () => void
+  // Conversation constraints management
+  saveConversationConstraints: (conversationId: string, constraints: ConversationConstraints) => void
+  getConversationConstraints: (conversationId: string) => ConversationConstraints | undefined
+  // Draft constraint overrides
+  updateDraftConstraintOverrides: (draftId: string, overrides: Partial<DraftConstraintOverrides>) => void
+  getDraftEffectiveConstraints: (draftId: string) => { clauses: ConversationConstraints['clauses'], must_have: string[], mustnt_have: string[] } | undefined
+  // Get source conversation for a draft
+  getSourceConversationForDraft: (draftId: string) => Node<CanvasNodeData> | undefined
+  // Check if a conversation has any downstream drafts (for locking)
+  hasDownstreamDrafts: (conversationId: string) => boolean
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -588,10 +598,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const nextData: CanvasNodeData = {
           ...node.data,
           kind: 'commit',
+          entryId: `COMMIT-${getNumericId(id)}`,
           status: 'Committed · awaiting diff',
           tags: Array.from(
             new Set([
-              ...node.data.tags,
+              ...node.data.tags.filter((tag) => tag !== 'draft'),
               'commit',
               ...(isMergeDraft ? ['merge'] : []),
             ]),
@@ -955,5 +966,141 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       hasMainCommit: false,
       latestMainCommitId: undefined,
     })
+  },
+
+  // Save constraints to a conversation node
+  saveConversationConstraints: (conversationId, constraints) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === conversationId && node.data.kind === 'conversation'
+          ? { ...node, data: { ...node.data, constraints } }
+          : node
+      ),
+    })),
+
+  // Get constraints from a conversation node
+  getConversationConstraints: (conversationId) => {
+    const state = get()
+    const node = state.nodes.find(
+      (n) => n.id === conversationId && n.data.kind === 'conversation'
+    )
+    return node?.data.constraints
+  },
+
+  // Update draft constraint overrides
+  updateDraftConstraintOverrides: (draftId, overrides) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (node.id !== draftId || node.data.kind !== 'draft') {
+          return node
+        }
+        const currentOverrides = node.data.constraintOverrides ?? {
+          disabledClauseIds: [],
+          additionalMustHave: [],
+          additionalMustntHave: [],
+          removedMustHave: [],
+          removedMustntHave: [],
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            constraintOverrides: { ...currentOverrides, ...overrides },
+          },
+        }
+      }),
+    })),
+
+  // Get source conversation for a draft (follows edges backward)
+  getSourceConversationForDraft: (draftId) => {
+    const state = get()
+    const incomingMap = buildIncomingMap(state.edges)
+    const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
+
+    // BFS to find the first conversation ancestor
+    const visited = new Set<string>()
+    const queue = [...(incomingMap.get(draftId) ?? [])]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const node = nodeMap.get(currentId)
+      if (node?.data.kind === 'conversation') {
+        return node
+      }
+
+      const parents = incomingMap.get(currentId) ?? []
+      parents.forEach((p) => {
+        if (!visited.has(p)) queue.push(p)
+      })
+    }
+    return undefined
+  },
+
+  // Get effective constraints for a draft (conversation constraints + draft overrides)
+  getDraftEffectiveConstraints: (draftId) => {
+    const state = get()
+    const draftNode = state.nodes.find(
+      (n) => n.id === draftId && n.data.kind === 'draft'
+    )
+    if (!draftNode) return undefined
+
+    // Find source conversation
+    const sourceConv = get().getSourceConversationForDraft(draftId)
+    const baseConstraints = sourceConv?.data.constraints
+    if (!baseConstraints) return undefined
+
+    const overrides = draftNode.data.constraintOverrides
+
+    // Apply overrides
+    const clauses = baseConstraints.clauses.filter(
+      (c) => !overrides?.disabledClauseIds?.includes(c.id)
+    )
+
+    const must_have = [
+      ...baseConstraints.must_have.filter(
+        (kw) => !overrides?.removedMustHave?.includes(kw)
+      ),
+      ...(overrides?.additionalMustHave ?? []),
+    ]
+
+    const mustnt_have = [
+      ...baseConstraints.mustnt_have.filter(
+        (kw) => !overrides?.removedMustntHave?.includes(kw)
+      ),
+      ...(overrides?.additionalMustntHave ?? []),
+    ]
+
+    return { clauses, must_have, mustnt_have }
+  },
+
+  // Check if a conversation has any downstream drafts (for locking editing)
+  hasDownstreamDrafts: (conversationId) => {
+    const state = get()
+    const outgoingMap = buildOutgoingMap(state.edges)
+    const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
+
+    // BFS to find any draft descendant
+    const visited = new Set<string>()
+    const queue = [...(outgoingMap.get(conversationId) ?? [])]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const node = nodeMap.get(currentId)
+      if (node?.data.kind === 'draft') {
+        return true
+      }
+
+      const children = outgoingMap.get(currentId) ?? []
+      children.forEach((c) => {
+        if (!visited.has(c)) queue.push(c)
+      })
+    }
+    return false
   },
 }))

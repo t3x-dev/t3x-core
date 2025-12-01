@@ -21,6 +21,43 @@ export interface MergeConfig {
   baseContent?: string
 }
 
+// Clause (sentence) status in Manage mode
+export type ClauseStatus = 'neutral' | 'keep' | 'discard'
+
+// Keyword constraint type
+export type KeywordConstraintType = 'must_have' | 'mustnt_have' | 'neutral'
+
+// Individual clause/sentence with its status
+export interface Clause {
+  id: string
+  text: string
+  status: ClauseStatus
+  keywords: Keyword[]
+}
+
+// Individual keyword with constraint info
+export interface Keyword {
+  id: string
+  text: string
+  constraint: KeywordConstraintType
+}
+
+// Conversation constraints (output of Manage mode)
+export interface ConversationConstraints {
+  clauses: Clause[]
+  must_have: string[]
+  mustnt_have: string[]
+}
+
+// Draft-level constraint overrides
+export interface DraftConstraintOverrides {
+  disabledClauseIds: string[]
+  additionalMustHave: string[]
+  additionalMustntHave: string[]
+  removedMustHave: string[]
+  removedMustntHave: string[]
+}
+
 export interface CanvasNodeData {
   entryId: string
   title: string
@@ -42,4 +79,10 @@ export interface CanvasNodeData {
   draftDiff?: string
   mergeConfig?: MergeConfig
   isMergeCommit?: boolean
+  // Conversation constraints from Manage mode
+  constraints?: ConversationConstraints
+  // Draft-level constraint overrides
+  constraintOverrides?: DraftConstraintOverrides
+  // Source conversation ID for draft inheritance
+  sourceConversationId?: string
 }

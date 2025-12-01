@@ -8,9 +8,11 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Sparkles, Database, Settings, WandSparkles, Check } from 'lucide-react'
+import { X, Sparkles, Database, Settings, WandSparkles, Check, ListChecks } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData, MergeConfig } from '../types/nodes'
+import type { CanvasNodeData, MergeConfig, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import ManageMode from './ManageMode'
+import ConstraintsPanel from './ConstraintsPanel'
 
 const bridgePrompts = ['/plan', '/story', '/merge', '/refine']
 
@@ -34,6 +36,10 @@ interface NodeModalProps {
   onBranchChange?: (branch: 'main' | 'branch') => void
   onBranchNameChange?: (name: string) => void
   quickActions?: NodeQuickAction[]
+  onSaveConstraints?: (constraints: ConversationConstraints) => void
+  effectiveConstraints?: { clauses: ConversationConstraints['clauses'], must_have: string[], mustnt_have: string[] }
+  onUpdateConstraintOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void
+  isConversationLocked?: boolean
 }
 
 export function NodeModal({
@@ -45,6 +51,10 @@ export function NodeModal({
   onBranchChange,
   onBranchNameChange,
   quickActions,
+  onSaveConstraints,
+  effectiveConstraints,
+  onUpdateConstraintOverrides,
+  isConversationLocked = false,
 }: NodeModalProps) {
   if (!node) {
     return null
@@ -78,6 +88,7 @@ export function NodeModal({
   const [chatMessages, setChatMessages] = useState<
     { id: string; role: 'user' | 'ai'; content: string }[]
   >([])
+  const [isManageMode, setIsManageMode] = useState(false)
 
   const conversationAction = useMemo(() => quickActions?.[0], [quickActions])
   const MIN_DRAFT_LEFT = 0.18
@@ -350,6 +361,11 @@ export function NodeModal({
   }
 
   if (isConversation) {
+    // Handle save constraints from ManageMode
+    const handleSaveConstraints = (constraints: ConversationConstraints) => {
+      onSaveConstraints?.(constraints)
+    }
+
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
         <div className="conversation-modal" ref={containerRef}>
@@ -358,11 +374,21 @@ export function NodeModal({
               <input
                 value={data.title}
                 onChange={(event) => onUpdate({ title: event.target.value })}
+                disabled={isManageMode}
               />
               <span>{data.entryId}</span>
             </div>
             <div className="conversation-modal__actions">
-              {conversationAction && (
+              <button
+                className={`secondary-btn conversation-modal__manage-btn ${isManageMode ? 'active' : ''}`}
+                onClick={() => setIsManageMode(!isManageMode)}
+                type="button"
+                title={isManageMode ? 'Exit Manage mode' : 'Enter Manage mode'}
+              >
+                <ListChecks size={16} />
+                <span>Manage</span>
+              </button>
+              {conversationAction && !isManageMode && (
                 <button
                   className="primary-btn conversation-modal__primary-action"
                   onClick={() => {
@@ -381,6 +407,17 @@ export function NodeModal({
               </button>
             </div>
           </header>
+          {isManageMode ? (
+            <div className="conversation-modal__body conversation-modal__body--manage">
+              <ManageMode
+                text={data.summary || ''}
+                initialConstraints={data.constraints}
+                onSave={handleSaveConstraints}
+                onExit={() => setIsManageMode(false)}
+                isLocked={isConversationLocked}
+              />
+            </div>
+          ) : (
           <div className="conversation-modal__body">
             <section
               className="conversation-modal__pane conversation-modal__pane--context"
@@ -496,6 +533,7 @@ export function NodeModal({
               </form>
             </section>
           </div>
+          )}
         </div>
       </div>
     )
@@ -594,6 +632,13 @@ export function NodeModal({
                   </details>
                 ))}
               </div>
+              {effectiveConstraints && (
+                <ConstraintsPanel
+                  constraints={effectiveConstraints}
+                  overrides={data.constraintOverrides}
+                  onUpdateOverrides={onUpdateConstraintOverrides}
+                />
+              )}
             </section>
             <div
               className="draft-section__resizer"
