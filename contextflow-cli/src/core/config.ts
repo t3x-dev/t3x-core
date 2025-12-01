@@ -6,12 +6,36 @@ import { ensureDir, pathExists } from '../utils/fs';
 
 export type StorageMode = 'jsonl' | 'sqlite' | 'both';
 
+/**
+ * Embedding provider type
+ * - 'google-ai': Google AI Studio (Gemini Embedding) - requires API key
+ */
+export type EmbeddingProviderType = 'google-ai';
+
+/**
+ * NLP provider type
+ * - 'google-cloud': Google Cloud NLP - requires API key
+ */
+export type NLPProviderType = 'google-cloud';
+
+export type LanguageSetting = 'en' | 'zh' | 'auto';
+
 export interface UserConfig {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
+  /** Google AI Studio API key (for Gemini Embedding) */
+  GOOGLE_AI_STUDIO_KEY?: string;
+  /** Google Cloud API key (for Cloud NLP) */
+  GOOGLE_CLOUD_NLP_KEY?: string;
   defaultModel?: string;
   proxyUrl?: string;
   storageMode?: StorageMode;
+  /** Embedding provider selection */
+  embeddingProvider?: EmbeddingProviderType;
+  /** NLP provider selection */
+  nlpProvider?: NLPProviderType;
+  /** Default language for NLP analysis */
+  defaultLanguage?: LanguageSetting;
   insight?: {
     embedModel?: string;
   };
@@ -31,6 +55,15 @@ export interface ResolvedConfig {
 
 export interface AppPreferences {
   storageMode: StorageMode;
+  embeddingProvider: EmbeddingProviderType;
+  nlpProvider: NLPProviderType;
+  defaultLanguage: LanguageSetting;
+  /** Google AI Studio API key (for Gemini Embedding) */
+  googleAIStudioKey?: string;
+  /** Google Cloud API key (for Cloud NLP) */
+  googleCloudNLPKey?: string;
+  /** Anthropic API key (for Claude LLM) */
+  anthropicApiKey?: string;
   insight: {
     embedModel: string;
   };
@@ -51,6 +84,10 @@ const USER_CONFIG_YML_PATH = path.join(USER_CONFIG_DIR, 'config.yaml');
 export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_STORAGE_MODE: StorageMode = 'both';
 const DEFAULT_EMBED_MODEL = 'MiniLM';
+const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProviderType = 'google-ai';
+const DEFAULT_NLP_PROVIDER: NLPProviderType = 'google-cloud';
+// Note: rule-based NLP provider removed - Google Cloud NLP is required
+const DEFAULT_LANGUAGE: LanguageSetting = 'auto';
 
 type CliOverrides = {
   storageMode?: StorageMode;
@@ -129,6 +166,12 @@ export async function loadAppPreferences(): Promise<AppPreferences> {
 
   return {
     storageMode,
+    embeddingProvider: config.embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER,
+    nlpProvider: config.nlpProvider ?? DEFAULT_NLP_PROVIDER,
+    defaultLanguage: config.defaultLanguage ?? DEFAULT_LANGUAGE,
+    googleAIStudioKey: resolveGoogleAIStudioKey(config),
+    googleCloudNLPKey: resolveGoogleCloudNLPKey(config),
+    anthropicApiKey: resolveAnthropicApiKey(config),
     insight: {
       embedModel: config.insight?.embedModel ?? DEFAULT_EMBED_MODEL,
     },
@@ -137,6 +180,39 @@ export async function loadAppPreferences(): Promise<AppPreferences> {
     },
     trace: resolveTracePreferences(config),
   };
+}
+
+/**
+ * Resolve Google AI Studio API key (for Gemini Embedding)
+ * Priority: env.GOOGLE_AI_STUDIO_KEY > config.GOOGLE_AI_STUDIO_KEY
+ */
+function resolveGoogleAIStudioKey(config: UserConfig): string | undefined {
+  return (
+    process.env.GOOGLE_AI_STUDIO_KEY ??
+    config.GOOGLE_AI_STUDIO_KEY
+  );
+}
+
+/**
+ * Resolve Google Cloud NLP API key
+ * Priority: env.GOOGLE_CLOUD_NLP_KEY > config.GOOGLE_CLOUD_NLP_KEY
+ */
+function resolveGoogleCloudNLPKey(config: UserConfig): string | undefined {
+  return (
+    process.env.GOOGLE_CLOUD_NLP_KEY ??
+    config.GOOGLE_CLOUD_NLP_KEY
+  );
+}
+
+/**
+ * Resolve Anthropic API key (for Claude LLM)
+ * Priority: env.ANTHROPIC_API_KEY > config.ANTHROPIC_API_KEY
+ */
+function resolveAnthropicApiKey(config: UserConfig): string | undefined {
+  return (
+    process.env.ANTHROPIC_API_KEY ??
+    config.ANTHROPIC_API_KEY
+  );
 }
 
 export function shouldUseJsonlStorage(mode: StorageMode): boolean {
