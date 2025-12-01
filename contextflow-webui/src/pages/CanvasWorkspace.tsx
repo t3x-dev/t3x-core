@@ -34,6 +34,10 @@ export default function CanvasWorkspace() {
     addDraftFromConversation,
     addConversationFromCommit,
     addDraftFromCommit,
+    saveConversationConstraints,
+    getDraftEffectiveConstraints,
+    updateDraftConstraintOverrides,
+    hasDownstreamDrafts,
   } = useCanvasStore()
 
   const modalNode = nodes.find((node) => node.id === openNodeId)
@@ -54,6 +58,22 @@ export default function CanvasWorkspace() {
     }
     return state.canCreateDraftFromConversation(openNodeId)
   })
+
+  // Get effective constraints for draft nodes
+  const effectiveConstraints = useMemo(() => {
+    if (!openNodeId || !modalNode || modalNode.data.kind !== 'draft') {
+      return undefined
+    }
+    return getDraftEffectiveConstraints(openNodeId)
+  }, [openNodeId, modalNode, getDraftEffectiveConstraints])
+
+  // Check if conversation is locked (has downstream drafts)
+  const isConversationLocked = useMemo(() => {
+    if (!openNodeId || !modalNode || modalNode.data.kind !== 'conversation') {
+      return false
+    }
+    return hasDownstreamDrafts(openNodeId)
+  }, [openNodeId, modalNode, hasDownstreamDrafts])
 
   const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {
     if (!modalNode) {
@@ -442,6 +462,18 @@ export default function CanvasWorkspace() {
               : undefined
           }
           quickActions={modalQuickActions}
+          onSaveConstraints={
+            modalNode.data.kind === 'conversation'
+              ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
+              : undefined
+          }
+          effectiveConstraints={effectiveConstraints}
+          onUpdateConstraintOverrides={
+            modalNode.data.kind === 'draft'
+              ? (overrides) => updateDraftConstraintOverrides(modalNode.id, overrides)
+              : undefined
+          }
+          isConversationLocked={isConversationLocked}
         />
       )}
     </div>
