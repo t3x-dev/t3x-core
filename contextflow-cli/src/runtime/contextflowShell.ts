@@ -35,6 +35,12 @@ import { validateAll } from '../core/validate';
 import { getCoreClient, CoreApiError } from '../core/coreClient';
 import { ensureDir, pathExists } from '../utils/fs';
 import { startApiServer, getApiServerInfo } from '../server';
+import {
+  startEmbeddedServer,
+  stopEmbeddedServer,
+  getEmbeddedServerInfo,
+  isEmbeddedServerRunning,
+} from '../server/index';
 import { configureLogger, logger } from './logger';
 import {
   initProjectCache,
@@ -126,6 +132,16 @@ export async function startContextflowShell(): Promise<void> {
     logger.info('storageMode=JSONL, using JSONL storage only.');
   }
 
+  // Start embedded TypeScript API server for Ring extraction, Diff, Merge
+  try {
+    const embeddedInfo = await startEmbeddedServer({ port: 8100 });
+    logger.info(`🚀 Embedded API server: http://${embeddedInfo.host}:${embeddedInfo.port}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(`Embedded server failed to start: ${message}`);
+    logger.warn('Ring extraction, Diff, and Merge features may be unavailable.');
+  }
+
   // Initialize project cache for core_api integration
   initProjectCache(root.contextflowDir);
   try {
@@ -160,6 +176,8 @@ export async function startContextflowShell(): Promise<void> {
 
   const close = async () => {
     rl.close();
+    // Stop embedded server on exit
+    await stopEmbeddedServer();
   };
 
   rl.on('SIGINT', async () => {
@@ -1705,17 +1723,27 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
 }
 
 async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boolean> {
-  if (!sqliteEnabled || !sqliteReady) {
-    logger.warn('SQLite not enabled, cannot start WebUI.');
+  // Show status of both servers
+  const embeddedInfo = getEmbeddedServerInfo();
+  const legacyInfo = getApiServerInfo();
+
+  if (embeddedInfo) {
+    logger.info(`Embedded API server (Ring/Diff/Merge): http://${embeddedInfo.host}:${embeddedInfo.port}`);
+  } else {
+    logger.warn('Embedded API server not running. Ring extraction, Diff, Merge unavailable.');
+  }
+
+  if (legacyInfo) {
+    logger.info(`Legacy WebUI API running: http://127.0.0.1:${legacyInfo.port}`);
+    if (legacyInfo.token) {
+      logger.info(`X-CF-Token: ${legacyInfo.token}`);
+    }
     return true;
   }
 
-  const existing = getApiServerInfo();
-  if (existing) {
-    logger.info(`API already running: http://127.0.0.1:${existing.port}`);
-    if (existing.token) {
-      logger.info(`X-CF-Token: ${existing.token}`);
-    }
+  // Legacy WebUI API requires SQLite
+  if (!sqliteEnabled || !sqliteReady) {
+    logger.warn('SQLite not enabled, cannot start legacy WebUI API.');
     return true;
   }
 
@@ -1739,7 +1767,7 @@ async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boo
       requireToken,
       token,
     });
-    logger.info(`Local WebUI API started: http://127.0.0.1:${info.port}`);
+    logger.info(`Legacy WebUI API started: http://127.0.0.1:${info.port}`);
     if (info.token) {
       logger.info(`Include X-CF-Token in request header: ${info.token}`);
     } else if (requireToken) {
