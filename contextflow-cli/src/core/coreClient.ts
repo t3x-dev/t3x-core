@@ -222,7 +222,106 @@ export interface SystemStatus {
   };
 }
 
-// Draft types
+// Bridge types (TS Embedded Server)
+export interface BridgeInfo {
+  bridge: string;
+  label?: string;
+  description?: string;
+  threshold: number;
+  locale?: string;
+  version?: number;
+  prompt?: string;
+}
+
+// Draft Workflow types (TS Embedded Server)
+export interface DraftWorkflowResult {
+  draftId: string;
+  projectId: string;
+  baseCommitHash?: string;
+  turnAnchorHash?: string;
+  bridgeId: string;
+  bridgePayload: Record<string, unknown>;
+  mustHave: string[];
+  mustntHave: string[];
+  text: string;
+  status: 'ephemeral' | 'adopted' | 'superseded';
+  createdAt: string;
+  schemaVersion: string;
+  evidenceSentences: Array<{
+    segmentId: string;
+    text: string;
+    turnHash: string;
+    similarityScore: number;
+    keywords: string[];
+    polarityKeywords: Record<string, number>;
+  }>;
+  validationIterations: number;
+}
+
+// Ring Extraction types (TS Embedded Server)
+export interface RingExtractionResult {
+  turnId: string;
+  ring1: {
+    keywords: Array<{
+      text: string;
+      lemma: string;
+      pos: string;
+      polarity: number;
+    }>;
+    entities: Array<{
+      text: string;
+      type: string;
+      salience: number;
+    }>;
+    timeAnchor?: string;
+    topic?: string;
+  };
+  ring2: {
+    intentSeed?: string;
+    timeWindow?: string;
+    preferenceSoft: string[];
+    unknownSlot: string[];
+  };
+  ring3: {
+    segments: Array<{
+      segmentId: string;
+      text: string;
+      beginOffset: number;
+      endOffset: number;
+    }>;
+  };
+}
+
+// Merge with LLM types (TS Embedded Server)
+export interface MergeWithLLMResult {
+  autoMerged: Array<{
+    facet: string;
+    mergedText: string | null;
+    source: 'base' | 'source' | 'target';
+    keywords: string[];
+  }>;
+  conflicts: Array<{
+    facet: string;
+    baseText: string | null;
+    sourceText: string | null;
+    targetText: string | null;
+    conflictType: string;
+  }>;
+  status: 'clean' | 'conflicts';
+  stats: {
+    totalFacets: number;
+    autoMergedCount: number;
+    conflictCount: number;
+    llmResolvedCount: number;
+    bySource: {
+      base: number;
+      source: number;
+      target: number;
+    };
+  };
+}
+
+// Draft types (Python Agent)
 export interface LLMConfig {
   provider: string;
   model: string;
@@ -682,6 +781,101 @@ export class CoreClient {
   }
 
   // --------------------------------------------------------------------------
+  // Bridges (TS Embedded Server)
+  // --------------------------------------------------------------------------
+
+  /**
+   * List all available bridges
+   */
+  async listBridges(): Promise<{ bridges: BridgeInfo[] }> {
+    return this.request<{ bridges: BridgeInfo[] }>('GET', '/api/v1/bridges');
+  }
+
+  /**
+   * Get specific bridge details
+   */
+  async getBridge(bridgeId: string): Promise<BridgeInfo> {
+    return this.request<BridgeInfo>('GET', `/api/v1/bridges/${encodeURIComponent(bridgeId)}`);
+  }
+
+  /**
+   * Reload bridges from disk
+   */
+  async reloadBridges(): Promise<{ message: string }> {
+    return this.request<{ message: string }>('POST', '/api/v1/bridges/reload');
+  }
+
+  // --------------------------------------------------------------------------
+  // Draft Workflow (TS Embedded Server - 6-step workflow)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Generate a draft using the 6-step workflow
+   * This is different from the Python agent/drafts - it runs the complete workflow
+   */
+  async generateDraft(
+    projectId: string,
+    userIntent: string,
+    turns: Array<{ turnHash: string; role: string; content: string }>,
+    options?: {
+      bridgeId?: string;
+      similarityThreshold?: number;
+      baseCommitHash?: string;
+      turnAnchorHash?: string;
+    }
+  ): Promise<DraftWorkflowResult> {
+    return this.request<DraftWorkflowResult>('POST', '/api/v1/draft', {
+      projectId,
+      userIntent,
+      turns,
+      bridgeId: options?.bridgeId ?? 'plan',
+      similarityThreshold: options?.similarityThreshold,
+      baseCommitHash: options?.baseCommitHash,
+      turnAnchorHash: options?.turnAnchorHash,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Ring Extraction (TS Embedded Server)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Extract Ring 1/2/3 from text
+   */
+  async extractRings(
+    turnId: string,
+    content: string,
+    language?: string
+  ): Promise<RingExtractionResult> {
+    return this.request<RingExtractionResult>('POST', '/api/v1/extract', {
+      turnId,
+      content,
+      language,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Merge (TS Embedded Server - with LLM conflict resolution)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Execute three-way merge with optional LLM conflict resolution
+   */
+  async mergeWithLLM(
+    baseFacets: Array<{ facet: string; text: string | null; keywords?: string[] }>,
+    sourceFacets: Array<{ facet: string; text: string | null; keywords?: string[] }>,
+    targetFacets: Array<{ facet: string; text: string | null; keywords?: string[] }>,
+    autoResolveConflicts?: boolean
+  ): Promise<MergeWithLLMResult> {
+    return this.request<MergeWithLLMResult>('POST', '/api/v1/merge', {
+      baseFacets,
+      sourceFacets,
+      targetFacets,
+      autoResolveConflicts,
+    });
+  }
+
+  // --------------------------------------------------------------------------
   // Chat (Streaming LLM)
   // --------------------------------------------------------------------------
 
@@ -840,6 +1034,7 @@ export class CoreClient {
 // ============================================================================
 
 let defaultClient: CoreClient | null = null;
+let embeddedClient: CoreClient | null = null;
 
 export function getCoreClient(): CoreClient {
   if (!defaultClient) {
@@ -852,4 +1047,24 @@ export function getCoreClient(): CoreClient {
 
 export function setCoreClient(client: CoreClient): void {
   defaultClient = client;
+}
+
+/**
+ * Get the embedded server client (for TS-native APIs)
+ * Used for bridges, draft workflow, etc.
+ */
+export function getEmbeddedClient(): CoreClient {
+  if (!embeddedClient) {
+    embeddedClient = new CoreClient({
+      baseUrl: process.env.EMBEDDED_API_URL ?? 'http://127.0.0.1:8100',
+    });
+  }
+  return embeddedClient;
+}
+
+/**
+ * Set the embedded server client
+ */
+export function setEmbeddedClient(client: CoreClient): void {
+  embeddedClient = client;
 }
