@@ -15,6 +15,13 @@ import {
   registerMergeRoutes,
   registerBridgeRoutes,
   registerDraftRoutes,
+  // V2 Storage/Management routes
+  registerProjectRoutes,
+  registerConversationRoutes,
+  registerTurnsV2Routes,
+  registerBranchesRoutes,
+  registerCommitsV2Routes,
+  registerDraftsV2Routes,
 } from "./routes";
 
 /**
@@ -44,6 +51,14 @@ export function createServer(config: ServerConfig): Server {
   registerMergeRoutes(router, config.providers);
   registerBridgeRoutes(router, config.contextflowDir);
   registerDraftRoutes(router, config.providers, config.contextflowDir);
+
+  // V2 Storage/Management routes (Python core_api migration)
+  registerProjectRoutes(router);
+  registerConversationRoutes(router);
+  registerTurnsV2Routes(router, config.providers);
+  registerBranchesRoutes(router);
+  registerCommitsV2Routes(router, config.providers);
+  registerDraftsV2Routes(router);
 
   // Create HTTP server
   const httpServer = http.createServer(async (req, res) => {

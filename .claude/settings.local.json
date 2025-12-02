@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= node:*)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/api/v1/agent/drafts/draft_93eaa324)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/api/v1/agent/drafts/draft_3ca7fd83)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python:*)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/health)",
+      "Bash(pip install:*)",
+      "Bash(cat:*)",
+      "Bash(lsof:*)",
+      "Bash(curl:*)",
+      "Bash(ALL_PROXY= http_proxy= https_proxy= node:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(npm install)",
+      "Bash(./node_modules/.bin/vite build:*)",
+      "Bash(pytest:*)",
+      "Bash(git checkout:*)",
+      "Bash(echo:*)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/api/v1/projects)",
+      "Bash(http_proxy= https_proxy= curl:*)",
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(npx vitest:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
