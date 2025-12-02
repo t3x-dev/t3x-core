@@ -1034,8 +1034,11 @@ export class CoreClient {
 // ============================================================================
 
 let defaultClient: CoreClient | null = null;
-let embeddedClient: CoreClient | null = null;
 
+/**
+ * Get the default CoreClient instance
+ * Uses CORE_API_URL env var or defaults to http://127.0.0.1:8000
+ */
 export function getCoreClient(): CoreClient {
   if (!defaultClient) {
     defaultClient = new CoreClient({
@@ -1045,26 +1048,9 @@ export function getCoreClient(): CoreClient {
   return defaultClient;
 }
 
+/**
+ * Set the default CoreClient instance
+ */
 export function setCoreClient(client: CoreClient): void {
   defaultClient = client;
-}
-
-/**
- * Get the embedded server client (for TS-native APIs)
- * Used for bridges, draft workflow, etc.
- */
-export function getEmbeddedClient(): CoreClient {
-  if (!embeddedClient) {
-    embeddedClient = new CoreClient({
-      baseUrl: process.env.EMBEDDED_API_URL ?? 'http://127.0.0.1:8100',
-    });
-  }
-  return embeddedClient;
-}
-
-/**
- * Set the embedded server client
- */
-export function setEmbeddedClient(client: CoreClient): void {
-  embeddedClient = client;
 }
