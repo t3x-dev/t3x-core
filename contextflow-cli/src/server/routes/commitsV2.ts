@@ -1,0 +1,319 @@
+/**
+ * Commits V2 API Routes
+ */
+
+import type { Router } from "../router";
+import { sendJson } from "../router";
+import { successResponse, errorResponse, ProviderConfig } from "../types";
+import {
+  createCommitV2,
+  getCommitV2,
+  listCommitsV2,
+  getCommitParents,
+  getCommitHistory,
+  findCommonAncestor,
+  getProject,
+  getTurnV2,
+  getTurnsInWindow,
+  getDraftV2,
+  getDraftTextHash,
+  getBranch,
+  TurnWindowError,
+  CommitError,
+} from "../../core/storage";
+
+/**
+ * Register commits V2 routes
+ */
+export function registerCommitsV2Routes(router: Router, _providers: ProviderConfig): void {
+  // POST /api/v1/commits - Create commit
+  router.post("/api/v1/commits", async (ctx, _req, res) => {
+    const body = ctx.body as {
+      project_id?: string;
+      branch?: string;
+      message?: string;
+      turn_window?: {
+        start_turn_hash: string;
+        end_turn_hash: string;
+      };
+      draft_id?: string;
+      pipeline_config?: unknown;
+      signature?: unknown;
+    } | null;
+
+    if (!body?.project_id || !body?.turn_window) {
+      sendJson(res, 400, errorResponse(
+        "INVALID_REQUEST",
+        "project_id and turn_window are required"
+      ));
+      return;
+    }
+
+    // Verify project exists
+    const project = getProject(body.project_id);
+    if (!project) {
+      sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
+      return;
+    }
+
+    // Verify turns exist and belong to same conversation
+    const startTurn = getTurnV2(body.turn_window.start_turn_hash);
+    const endTurn = getTurnV2(body.turn_window.end_turn_hash);
+
+    if (!startTurn || !endTurn) {
+      sendJson(res, 404, errorResponse("NOT_FOUND", "Start or end turn not found"));
+      return;
+    }
+
+    if (startTurn.conversation_id !== endTurn.conversation_id) {
+      sendJson(res, 400, errorResponse(
+        "INVALID_REQUEST",
+        "Start and end turns must be in the same conversation"
+      ));
+      return;
+    }
+
+    if (startTurn.project_id !== body.project_id || endTurn.project_id !== body.project_id) {
+      sendJson(res, 400, errorResponse(
+        "INVALID_REQUEST",
+        "Turns must belong to the specified project"
+      ));
+      return;
+    }
+
+    // Verify branch exists (if specified and not 'main')
+    const targetBranch = body.branch ?? "main";
+    if (targetBranch !== "main") {
+      const branch = getBranch(body.project_id, targetBranch);
+      if (!branch) {
+        sendJson(res, 404, errorResponse(
+          "NOT_FOUND",
+          `Branch '${targetBranch}' does not exist`
+        ));
+        return;
+      }
+    }
+
+    // Validate draft belongs to same project if specified
+    let draft_text_hash: string | undefined;
+    if (body.draft_id) {
+      const draft = getDraftV2(body.draft_id);
+      if (!draft) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", `Draft ${body.draft_id} not found`));
+        return;
+      }
+      if (draft.project_id !== body.project_id) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "Draft does not belong to the specified project"
+        ));
+        return;
+      }
+      draft_text_hash = getDraftTextHash(body.draft_id) ?? undefined;
+    }
+
+    try {
+      // Get turns in window for facet aggregation
+      const turns = getTurnsInWindow(
+        body.turn_window.start_turn_hash,
+        body.turn_window.end_turn_hash
+      );
+
+      // Aggregate facet snapshot from turns' rings
+      const facet_snapshot = aggregateFacets(turns);
+
+      const commit = createCommitV2({
+        project_id: body.project_id,
+        branch: targetBranch,
+        message: body.message,
+        turn_window: body.turn_window,
+        facet_snapshot,
+        pipeline_config: body.pipeline_config,
+        draft_id: body.draft_id,
+        draft_text_hash,
+        signature: body.signature,
+      });
+
+      sendJson(res, 201, successResponse(commit));
+    } catch (err) {
+      // Handle specific error types
+      if (err instanceof TurnWindowError) {
+        sendJson(res, 400, errorResponse("INVALID_TURN_WINDOW", err.message));
+        return;
+      }
+      if (err instanceof CommitError) {
+        const status = err.code === "BRANCH_NOT_FOUND" ? 404 : 400;
+        sendJson(res, status, errorResponse(err.code, err.message));
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("CREATE_FAILED", message));
+    }
+  });
+
+  // GET /api/v1/commits - List commits
+  router.get("/api/v1/commits", async (ctx, _req, res) => {
+    const project_id = ctx.query.get("project_id");
+
+    if (!project_id) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "project_id query param is required"));
+      return;
+    }
+
+    const branch = ctx.query.get("branch") ?? undefined;
+    const limit = parseInt(ctx.query.get("limit") ?? "100", 10);
+    const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
+
+    try {
+      const commits = listCommitsV2({ project_id, branch, limit, offset });
+      sendJson(res, 200, successResponse({ commits, project_id, branch, limit, offset }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("LIST_FAILED", message));
+    }
+  });
+
+  // GET /api/v1/commits/:hash - Get commit
+  router.get(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)$/, async (ctx, _req, res) => {
+    const match = ctx.path.match(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)$/);
+    const commit_hash = match?.[1];
+
+    if (!commit_hash) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "commit_hash is required"));
+      return;
+    }
+
+    try {
+      const commit = getCommitV2(commit_hash);
+      if (!commit) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", `Commit ${commit_hash} not found`));
+        return;
+      }
+      sendJson(res, 200, successResponse(commit));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("GET_FAILED", message));
+    }
+  });
+
+  // GET /api/v1/commits/:hash/parents - Get commit parents
+  router.get(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/parents$/, async (ctx, _req, res) => {
+    const match = ctx.path.match(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/parents$/);
+    const commit_hash = match?.[1];
+
+    if (!commit_hash) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "commit_hash is required"));
+      return;
+    }
+
+    try {
+      const parents = getCommitParents(commit_hash);
+      sendJson(res, 200, successResponse({ parents, commit_hash }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("GET_FAILED", message));
+    }
+  });
+
+  // GET /api/v1/commits/:hash/history - Get commit history
+  router.get(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/history$/, async (ctx, _req, res) => {
+    const match = ctx.path.match(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/history$/);
+    const commit_hash = match?.[1];
+
+    if (!commit_hash) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "commit_hash is required"));
+      return;
+    }
+
+    const limit = parseInt(ctx.query.get("limit") ?? "50", 10);
+
+    try {
+      const history = getCommitHistory(commit_hash, limit);
+      sendJson(res, 200, successResponse({ history, commit_hash }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("GET_FAILED", message));
+    }
+  });
+
+  // GET /api/v1/commits/common-ancestor - Find common ancestor
+  router.get("/api/v1/commits/common-ancestor", async (ctx, _req, res) => {
+    const hash1 = ctx.query.get("hash1");
+    const hash2 = ctx.query.get("hash2");
+
+    if (!hash1 || !hash2) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "hash1 and hash2 query params are required"));
+      return;
+    }
+
+    try {
+      const ancestor = findCommonAncestor(hash1, hash2);
+      if (!ancestor) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", "No common ancestor found"));
+        return;
+      }
+      sendJson(res, 200, successResponse(ancestor));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("GET_FAILED", message));
+    }
+  });
+}
+
+/**
+ * Aggregate facets from turns' ring data
+ */
+function aggregateFacets(turns: Array<{ rings_json: string | null }>): unknown[] {
+  const facets: unknown[] = [];
+
+  for (const turn of turns) {
+    if (!turn.rings_json) continue;
+
+    try {
+      const rings = JSON.parse(turn.rings_json);
+
+      // Extract goal facets from ring2 intents
+      if (rings.ring2?.intent_seeds) {
+        for (const seed of rings.ring2.intent_seeds) {
+          facets.push({
+            facet: "goal",
+            text: seed.text,
+            confidence: seed.confidence,
+            source_turn: (turn as any).turn_hash,
+          });
+        }
+      }
+
+      // Extract preference facets from ring2 preferences
+      if (rings.ring2?.preferences) {
+        for (const pref of rings.ring2.preferences) {
+          facets.push({
+            facet: "preference",
+            key: pref.key,
+            value: pref.value,
+            confidence: pref.confidence,
+            source_turn: (turn as any).turn_hash,
+          });
+        }
+      }
+
+      // Extract context facets from ring1 entities
+      if (rings.ring1?.keywords) {
+        const entities = rings.ring1.keywords.filter((k: any) => k.entity_type);
+        for (const entity of entities) {
+          facets.push({
+            facet: "context",
+            entity_type: entity.entity_type,
+            text: entity.text,
+            confidence: entity.confidence,
+            source_turn: (turn as any).turn_hash,
+          });
+        }
+      }
+    } catch {
+      // Skip malformed ring data
+    }
+  }
+
+  return facets;
+}

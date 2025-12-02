@@ -1,0 +1,90 @@
+/**
+ * Conversations CRUD operations
+ */
+
+import { getDb } from '../db';
+import type {
+  ConversationRecord,
+  CreateConversationInput,
+  ListConversationsOptions,
+} from './types';
+import { generateConversationId, isoNow } from './utils';
+
+export function createConversation(input: CreateConversationInput): ConversationRecord {
+  const db = getDb();
+  const conversation_id = generateConversationId();
+  const created_at = isoNow();
+  const metadata_json = input.metadata ? JSON.stringify(input.metadata) : null;
+
+  db.prepare(
+    `INSERT INTO conversations (conversation_id, project_id, title, created_at, metadata_json)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(conversation_id, input.project_id, input.title ?? null, created_at, metadata_json);
+
+  return {
+    conversation_id,
+    project_id: input.project_id,
+    title: input.title ?? null,
+    created_at,
+    metadata_json,
+  };
+}
+
+export function getConversation(conversation_id: string): ConversationRecord | null {
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT * FROM conversations WHERE conversation_id = ?`)
+    .get(conversation_id) as ConversationRecord | undefined;
+  return row ?? null;
+}
+
+export function listConversations(options: ListConversationsOptions): ConversationRecord[] {
+  const db = getDb();
+  const limit = options.limit ?? 100;
+  const offset = options.offset ?? 0;
+
+  return db
+    .prepare(
+      `SELECT * FROM conversations
+       WHERE project_id = ?
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(options.project_id, limit, offset) as ConversationRecord[];
+}
+
+export function deleteConversation(conversation_id: string): boolean {
+  const db = getDb();
+  const result = db
+    .prepare(`DELETE FROM conversations WHERE conversation_id = ?`)
+    .run(conversation_id);
+  return result.changes > 0;
+}
+
+export function updateConversation(
+  conversation_id: string,
+  updates: { title?: string; metadata?: Record<string, unknown> }
+): ConversationRecord | null {
+  const db = getDb();
+  const existing = getConversation(conversation_id);
+  if (!existing) return null;
+
+  const title = updates.title !== undefined ? updates.title : existing.title;
+  const metadata_json = updates.metadata
+    ? JSON.stringify(updates.metadata)
+    : existing.metadata_json;
+
+  db.prepare(
+    `UPDATE conversations SET title = ?, metadata_json = ? WHERE conversation_id = ?`
+  ).run(title, metadata_json, conversation_id);
+
+  return getConversation(conversation_id);
+}
+
+export function getConversationTurnCount(conversation_id: string): number {
+  const db = getDb();
+  const result = db
+    .prepare(`SELECT COUNT(*) as c FROM turns_v2 WHERE conversation_id = ?`)
+    .get(conversation_id) as { c: number };
+  return result.c;
+}
