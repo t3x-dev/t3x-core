@@ -52,6 +52,43 @@
         "version": {
           "type": "string",
           "description": "User-defined version for this context"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Current branch name tracked by ContextFlow tools (e.g., main, feature/add-merge)."
+        },
+        "signature": {
+          "type": "object",
+          "description": "Latest signature verification metadata recorded by tooling.",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["verified", "pending", "missing", "invalid", "skipped"],
+              "description": "Verification result for the most recent signature check."
+            },
+            "algorithm": {
+              "type": "string",
+              "description": "Signature algorithm that was used (e.g., ed25519)."
+            },
+            "verified_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Timestamp when the signature status was last confirmed."
+            },
+            "signer": {
+              "type": "string",
+              "description": "Identifier for the key or persona that produced the signature."
+            },
+            "commit": {
+              "type": "string",
+              "description": "Commit hash or identifier associated with the verification event."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Additional tooling notes about the signature verification."
+            }
+          },
+          "additionalProperties": true
         }
       }
     },
@@ -403,6 +440,89 @@
                 "provider": {"type": "string"},
                 "config": {"type": "object"}
               }
+            },
+            "current_branch": {
+              "type": "string",
+              "description": "Branch currently checked out when the artifact was generated."
+            },
+            "branches": {
+              "type": "object",
+              "description": "Branch heads tracked locally by the tooling.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "head": {
+                    "type": "string",
+                    "description": "Latest commit hash recorded for this branch."
+                  },
+                  "parent": {
+                    "type": "string",
+                    "description": "Optional parent branch for visualization."
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the branch pointer was created."
+                  },
+                  "updated_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the branch pointer was last updated."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Human-readable description for the branch."
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "merges": {
+              "type": "array",
+              "description": "Recorded merge operations with provenance.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Source branch name."
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Target branch name."
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": ["fast-forward", "squash", "three-way", "manual", "rebase"],
+                    "description": "Merge strategy that was attempted."
+                  },
+                  "commit": {
+                    "type": "string",
+                    "description": "Resulting merge commit hash, if completed."
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the merge was recorded."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["pending", "completed", "failed"],
+                    "description": "Outcome of the merge operation."
+                  },
+                  "conflicts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of conflicting aspect identifiers or files."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional context about the merge decision."
+                  }
+                },
+                "required": ["source", "target", "strategy"],
+                "additionalProperties": true
+              }
             }
           }
         },
@@ -414,6 +534,89 @@
             "snapshot_timestamp": {"type": "string", "format": "date-time"},
             "message": {"type": "string"}
           }
+        },
+        "semantic": {
+          "type": "object",
+          "description": "Semantic pipeline configuration used to generate the current state.",
+          "properties": {
+            "extractor": {
+              "type": "object",
+              "description": "Extractor pipeline configuration (e.g., spaCy/Stanza/Spark NLP).",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["clustering", "spacy", "stanza", "spark_nlp", "custom"],
+                  "description": "Extractor implementation identifier."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Model name or package used by the extractor."
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Version of the extractor pipeline."
+                },
+                "language": {
+                  "type": "string",
+                  "description": "Language or locale handled by the extractor."
+                },
+                "settings": {
+                  "type": "object",
+                  "description": "Additional extractor configuration (thresholds, patterns, etc.)."
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            },
+            "validator": {
+              "type": "object",
+              "description": "Semantic validator configuration (e.g., MiniLM paraphrase checks).",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["minilm", "bert", "custom"],
+                  "description": "Validator implementation identifier."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Embedding or validation model used."
+                },
+                "threshold": {
+                  "type": "number",
+                  "description": "Score threshold for accepting matches."
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Version of the validator pipeline."
+                },
+                "settings": {
+                  "type": "object",
+                  "description": "Additional validator configuration."
+                }
+              },
+              "additionalProperties": true
+            },
+            "intent_mode": {
+              "type": "string",
+              "enum": ["knowledge", "decision", "analysis", "creative", "plan", "custom"],
+              "description": "Intent mode active when semantic extraction was run."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["active", "disabled", "experimental"],
+              "description": "Lifecycle state for the semantic pipeline."
+            },
+            "last_updated": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the semantic pipeline configuration last changed."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Additional notes about the semantic configuration."
+            }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -446,6 +649,43 @@
               "avg_latency_ms": {"type": "number"},
               "total_cost": {"type": "number"}
             }
+          }
+        },
+        "last_diff": {
+          "type": "object",
+          "description": "Metadata about the most recent diff operation.",
+          "properties": {
+            "from_commit": {"type": "string"},
+            "to_commit": {"type": "string"},
+            "generated_at": {"type": "string", "format": "date-time"},
+            "summary": {"type": "string"},
+            "aspect_changes": {"type": "integer"},
+            "stats": {"type": "object"}
+          },
+          "additionalProperties": true
+        },
+        "operations": {
+          "type": "array",
+          "description": "Aggregated CLI operations for usage analytics.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Operation name (e.g., commit, diff, verify)."
+              },
+              "count": {
+                "type": "integer",
+                "description": "Number of times the operation was executed."
+              },
+              "last_used": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Last time the operation was recorded."
+              }
+            },
+            "required": ["name"],
+            "additionalProperties": true
           }
         }
       }

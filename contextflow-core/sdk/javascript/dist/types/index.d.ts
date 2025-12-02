@@ -9,6 +9,8 @@ export interface ContextFlowMetadata {
     description?: string;
     tags?: string[];
     version?: string;
+    branch?: string;
+    signature?: SignatureMetadata;
 }
 export interface Message {
     role: 'system' | 'user' | 'assistant';
@@ -93,6 +95,103 @@ export interface Prompt {
     parent_version?: number;
     changes?: string;
 }
+export type SignatureStatus = 'verified' | 'pending' | 'missing' | 'invalid' | 'skipped';
+export interface SignatureMetadata {
+    status?: SignatureStatus;
+    algorithm?: string;
+    verified_at?: string;
+    signer?: string;
+    commit?: string;
+    notes?: string;
+    [key: string]: any;
+}
+export interface UsageSummaryDiff {
+    from_commit?: string;
+    to_commit?: string;
+    generated_at?: string;
+    summary?: string;
+    aspect_changes?: number;
+    stats?: Record<string, any>;
+    [key: string]: any;
+}
+export interface UsageSummaryOperation {
+    name: string;
+    count?: number;
+    last_used?: string;
+    [key: string]: any;
+}
+export type ExtractorType = 'clustering' | 'spacy' | 'stanza' | 'spark_nlp' | 'custom';
+export type ValidatorType = 'minilm' | 'bert' | 'custom';
+export type IntentMode = 'knowledge' | 'decision' | 'analysis' | 'creative' | 'plan' | 'custom';
+export type SemanticStatus = 'active' | 'disabled' | 'experimental';
+export interface SemanticExtractorConfig {
+    type: ExtractorType;
+    model?: string;
+    version?: string;
+    language?: string;
+    settings?: Record<string, any>;
+    [key: string]: any;
+}
+export interface SemanticValidatorConfig {
+    type?: ValidatorType;
+    model?: string;
+    threshold?: number;
+    version?: string;
+    settings?: Record<string, any>;
+    [key: string]: any;
+}
+export interface SemanticPipelineConfig {
+    extractor?: SemanticExtractorConfig;
+    validator?: SemanticValidatorConfig;
+    intent_mode?: IntentMode;
+    status?: SemanticStatus;
+    last_updated?: string;
+    notes?: string;
+    [key: string]: any;
+}
+export interface DerivedFromEntry {
+    file_id?: string;
+    context_type?: string;
+    fields_used?: string[];
+    [key: string]: any;
+}
+export interface TransformationMetadata {
+    type?: string;
+    tool?: string;
+    timestamp?: string;
+    provider?: string;
+    config?: Record<string, any>;
+    [key: string]: any;
+}
+export type MergeStrategy = 'fast-forward' | 'squash' | 'three-way' | 'manual' | 'rebase';
+export type MergeStatus = 'pending' | 'completed' | 'failed';
+export interface LineageBranch {
+    head?: string;
+    parent?: string;
+    created_at?: string;
+    updated_at?: string;
+    description?: string;
+    [key: string]: any;
+}
+export interface LineageMerge {
+    source: string;
+    target: string;
+    strategy: MergeStrategy;
+    commit?: string;
+    timestamp?: string;
+    status?: MergeStatus;
+    conflicts?: string[];
+    notes?: string;
+    [key: string]: any;
+}
+export interface LineageMetadata {
+    derived_from?: DerivedFromEntry[];
+    transformation?: TransformationMetadata;
+    current_branch?: string;
+    branches?: Record<string, LineageBranch>;
+    merges?: LineageMerge[];
+    [key: string]: any;
+}
 export interface UsageSummary {
     total_conversations?: number;
     total_messages?: number;
@@ -108,6 +207,8 @@ export interface UsageSummary {
         avg_latency_ms?: number;
         total_cost?: number;
     }>;
+    last_diff?: UsageSummaryDiff;
+    operations?: UsageSummaryOperation[];
 }
 export interface ContextFlowFile {
     contextflow_version: string;
@@ -121,8 +222,9 @@ export interface ContextFlowFile {
     usage_summary?: UsageSummary;
     _tooling?: {
         context_type?: 'source' | 'derived' | 'materialized' | 'snapshot';
-        lineage?: any;
+        lineage?: LineageMetadata;
         snapshot?: any;
+        semantic?: SemanticPipelineConfig;
         [key: string]: any;
     };
 }
