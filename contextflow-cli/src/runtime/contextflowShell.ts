@@ -132,14 +132,18 @@ export async function startContextflowShell(): Promise<void> {
     logger.info('storageMode=JSONL, using JSONL storage only.');
   }
 
-  // Start embedded TypeScript API server for Ring extraction, Diff, Merge
+  // Start embedded TypeScript API server (unified on port 8000)
   try {
-    const embeddedInfo = await startEmbeddedServer({ port: 8100 });
-    logger.info(`🚀 Embedded API server: http://${embeddedInfo.host}:${embeddedInfo.port}`);
+    const embeddedInfo = await startEmbeddedServer({ port: 8000 });
+    logger.info(`🚀 ContextFlow API server: http://${embeddedInfo.host}:${embeddedInfo.port}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`Embedded server failed to start: ${message}`);
-    logger.warn('Ring extraction, Diff, and Merge features may be unavailable.');
+    if (message.includes('already in use')) {
+      logger.info('API server already running on port 8000 (standalone mode)');
+    } else {
+      logger.warn(`API server failed to start: ${message}`);
+      logger.warn('Some features may be unavailable.');
+    }
   }
 
   // Initialize project cache for core_api integration
@@ -295,8 +299,9 @@ async function handleChatMessage(
     const coreAvailable = await checkCoreApiAvailable();
 
     if (!coreAvailable) {
-      logger.error('Core API is not available. Please start Core API first:');
-      logger.error('  cd contextflow-core && python -m core_api');
+      logger.error('API server is not available. Please ensure the server is running:');
+      logger.error('  contextflow-serve');
+      logger.error('Or check if port 8000 is accessible.');
       return;
     }
 
@@ -1723,18 +1728,20 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
 }
 
 async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boolean> {
-  // Show status of both servers
-  const embeddedInfo = getEmbeddedServerInfo();
-  const legacyInfo = getApiServerInfo();
+  // Show status of API server
+  const serverInfo = getEmbeddedServerInfo();
 
-  if (embeddedInfo) {
-    logger.info(`Embedded API server (Ring/Diff/Merge): http://${embeddedInfo.host}:${embeddedInfo.port}`);
+  if (serverInfo) {
+    logger.info(`ContextFlow API server: http://${serverInfo.host}:${serverInfo.port}`);
+    logger.info('WebUI can connect to this server for all operations.');
   } else {
-    logger.warn('Embedded API server not running. Ring extraction, Diff, Merge unavailable.');
+    logger.warn('API server not running. Start with: contextflow-serve');
   }
 
+  // Show legacy WebUI API status if running
+  const legacyInfo = getApiServerInfo();
   if (legacyInfo) {
-    logger.info(`Legacy WebUI API running: http://127.0.0.1:${legacyInfo.port}`);
+    logger.info(`WebUI API (legacy): http://127.0.0.1:${legacyInfo.port}`);
     if (legacyInfo.token) {
       logger.info(`X-CF-Token: ${legacyInfo.token}`);
     }
@@ -1743,7 +1750,7 @@ async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boo
 
   // Legacy WebUI API requires SQLite
   if (!sqliteEnabled || !sqliteReady) {
-    logger.warn('SQLite not enabled, cannot start legacy WebUI API.');
+    logger.info('SQLite mode not enabled. Use the main API server at port 8000.');
     return true;
   }
 
@@ -1767,7 +1774,7 @@ async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boo
       requireToken,
       token,
     });
-    logger.info(`Legacy WebUI API started: http://127.0.0.1:${info.port}`);
+    logger.info(`WebUI API started: http://127.0.0.1:${info.port}`);
     if (info.token) {
       logger.info(`Include X-CF-Token in request header: ${info.token}`);
     } else if (requireToken) {
@@ -1775,7 +1782,7 @@ async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boo
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`Failed to start WebUI: ${message}`);
+    logger.error(`Failed to start WebUI API: ${message}`);
   }
   return true;
 }
