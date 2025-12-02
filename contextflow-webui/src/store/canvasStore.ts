@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType } from '../types/nodes'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -11,6 +11,9 @@ type CanvasState = {
   edges: Edge[]
   hasMainCommit: boolean
   latestMainCommitId?: string
+  // Leaf panel state
+  leafPanelOpen: boolean
+  leafPanelCommitId?: string
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   convertDraftToCommit: (id: string) => void
@@ -35,12 +38,17 @@ type CanvasState = {
   getSourceConversationForDraft: (draftId: string) => Node<CanvasNodeData> | undefined
   // Check if a conversation has any downstream drafts (for locking)
   hasDownstreamDrafts: (conversationId: string) => boolean
+  // Leaf panel methods
+  openLeafPanel: (commitId: string) => void
+  closeLeafPanel: () => void
+  addLeafNode: (leafType: LeafType) => void
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
   conversation: ['draft', 'conversation'],
   draft: ['commit'],
-  commit: ['conversation', 'draft'],
+  commit: ['conversation', 'draft', 'leaf'],
+  leaf: [],
 }
 
 const canConnect = (
@@ -494,6 +502,9 @@ const seedEdges: Edge[] = [
 
 const initialLatestMainCommitId = resolveLatestMainCommitId(seedNodes)
 
+const leafNodeHeight = reactFlowGridSize * 5
+const leafNodeOffset = 80
+
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: seedNodes,
   edges: seedEdges,
@@ -501,6 +512,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
   ),
   latestMainCommitId: initialLatestMainCommitId,
+  leafPanelOpen: false,
+  leafPanelCommitId: undefined,
 
   addNode: (kind, position) => {
     const total = get().nodes.length
@@ -1103,4 +1116,72 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }
     return false
   },
+
+  // Leaf panel methods
+  openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
+  closeLeafPanel: () => set({ leafPanelOpen: false, leafPanelCommitId: undefined }),
+
+  addLeafNode: (leafType) =>
+    set((state) => {
+      const commitId = state.leafPanelCommitId
+      if (!commitId) return {}
+
+      const commitNode = state.nodes.find(
+        (node) => node.id === commitId && node.data.kind === 'commit'
+      )
+      if (!commitNode) return {}
+
+      // Count existing leaf nodes connected to this commit to offset position
+      const existingLeafCount = state.edges.filter((edge) => {
+        if (edge.source !== commitId) return false
+        const targetNode = state.nodes.find((n) => n.id === edge.target)
+        return targetNode?.data.kind === 'leaf'
+      }).length
+
+      const newNodeId = nextNodeId()
+      const leafLabels: Record<LeafType, string> = {
+        twitter: 'Twitter',
+        weibo: '微博',
+        wechat: '朋友圈',
+        article: '文章',
+        email: 'Email',
+        slack: 'Slack',
+      }
+
+      // Position leaf above the commit node
+      const newNode: Node<CanvasNodeData> = {
+        id: newNodeId,
+        type: 'leaf',
+        position: snapPosition({
+          x: commitNode.position.x + commitQuickOffset,
+          y: commitNode.position.y - leafNodeHeight - leafNodeOffset - (existingLeafCount * (leafNodeHeight + 20)),
+        }),
+        data: {
+          entryId: `LEAF-${getNumericId(newNodeId)}`,
+          title: leafLabels[leafType],
+          summary: '',
+          status: 'pending',
+          timestamp: 'just now',
+          tags: ['leaf', leafType],
+          kind: 'leaf',
+          leafType,
+        },
+      }
+
+      const newEdge: Edge = {
+        id: nextEdgeId(),
+        source: commitId,
+        target: newNodeId,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+
+      return {
+        nodes: [...state.nodes, newNode],
+        edges: [...state.edges, newEdge],
+        leafPanelOpen: false,
+        leafPanelCommitId: undefined,
+      }
+    }),
 }))

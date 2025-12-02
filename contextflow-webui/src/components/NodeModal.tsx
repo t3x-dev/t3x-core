@@ -4,17 +4,18 @@ import {
   useRef,
   useState,
   type ReactNode,
-  type MouseEvent as ReactMouseEvent,
-  type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Sparkles, Database, Settings, WandSparkles, Check, ListChecks } from 'lucide-react'
+import { X, Settings, PenSquare, MessageSquarePlus, Check, Sparkles, GitBranch, Clock, Tag, Link2, Send } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData, MergeConfig, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
-import ManageMode from './ManageMode'
-import ConstraintsPanel from './ConstraintsPanel'
+import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
 
-const bridgePrompts = ['/plan', '/story', '/merge', '/refine']
+const bridgeTemplates = [
+  { id: '/plan', name: 'Plan', description: 'Extract action items and planning structure' },
+  { id: '/story', name: 'Story', description: 'Narrative extraction with flow preservation' },
+  { id: '/merge', name: 'Merge', description: 'Combine multiple sources into unified view' },
+  { id: '/refine', name: 'Refine', description: 'Polish and tighten existing content' },
+]
 
 export type NodeQuickAction = {
   key: string
@@ -23,9 +24,6 @@ export type NodeQuickAction = {
   onClick: () => void
   disabled?: boolean
 }
-
-type DiffDecision = 'accept' | 'reject'
-type DiffDecisionMap = Partial<Record<string, DiffDecision>>
 
 interface NodeModalProps {
   node?: Node<CanvasNodeData>
@@ -42,6 +40,14 @@ interface NodeModalProps {
   isConversationLocked?: boolean
 }
 
+// Keywords extraction from text (mock - in real app this would come from backend)
+function extractKeywords(text: string): string[] {
+  if (!text) return []
+  const words = text.split(/\s+/)
+  const keywords = words.filter(w => w.length > 4).slice(0, 20)
+  return [...new Set(keywords)]
+}
+
 export function NodeModal({
   node,
   onClose,
@@ -51,10 +57,6 @@ export function NodeModal({
   onBranchChange,
   onBranchNameChange,
   quickActions,
-  onSaveConstraints,
-  effectiveConstraints,
-  onUpdateConstraintOverrides,
-  isConversationLocked = false,
 }: NodeModalProps) {
   if (!node) {
     return null
@@ -65,1122 +67,852 @@ export function NodeModal({
   const isCommit = data.kind === 'commit'
   const isConversation = data.kind === 'conversation'
   const isMergeDraft = isDraft && data.bridgePrompt === '/merge' && !!data.mergeConfig
-  const mergeConfig = data.mergeConfig
   const shouldShowBranchSelect =
     (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
   const requireBranchName =
     !isMergeDraft &&
     ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
       draftBranchMode === 'branch-only')
-  const baselineSourceSummary = data.baselineSummary ?? ''
-  const [paneRatio, setPaneRatio] = useState(0.3)
-  const [isResizing, setIsResizing] = useState(false)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [draftPaneSizes, setDraftPaneSizes] = useState({ left: 0.22, center: 0.26 })
-  const [activeDraftResizer, setActiveDraftResizer] = useState<'left' | 'center' | null>(null)
-  const draftContainerRef = useRef<HTMLDivElement | null>(null)
-  const [draftTab, setDraftTab] = useState<'editor' | 'diff'>('editor')
-  const [diffSplit, setDiffSplit] = useState(0.5)
-  const [diffDrag, setDiffDrag] = useState(false)
-  const [diffDecisions, setDiffDecisions] = useState<DiffDecisionMap>({})
-  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Draft state - use isGenerated flag from data
+  const [draftGenerated, setDraftGenerated] = useState(!!data.isGenerated)
+  const [patchKeywords, setPatchKeywords] = useState<{ word: string; status: 'none' | 'must' | 'mustnt' }[]>([])
+
+  // Sidebar state for conversation
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Chat state for conversation
+  const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
-  const [chatMessages, setChatMessages] = useState<
-    { id: string; role: 'user' | 'ai'; content: string }[]
-  >([])
-  const [isManageMode, setIsManageMode] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const conversationAction = useMemo(() => quickActions?.[0], [quickActions])
-  const MIN_DRAFT_LEFT = 0.18
-  const MIN_DRAFT_CENTER = 0.22
-  const MIN_DRAFT_RIGHT = 0.35
-  const chatHistory = useMemo(
-    () => [
-      { id: `${node.id}-user`, role: 'user' as const, content: data.status || 'No status provided yet.' },
-      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || 'No summary captured yet.' },
-    ],
-    [data.status, data.summary, node.id],
-  )
-  const diffData = useMemo(() => {
-    const baselineLines =
-      baselineSourceSummary && baselineSourceSummary.length > 0
-        ? baselineSourceSummary.split('\n')
-        : []
-    const draftLines = (data.summary ?? '').split('\n')
-    const m = baselineLines.length
-    const n = draftLines.length
-    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
-    for (let i = m - 1; i >= 0; i -= 1) {
-      for (let j = n - 1; j >= 0; j -= 1) {
-        if (baselineLines[i] === draftLines[j]) {
-          dp[i][j] = dp[i + 1][j + 1] + 1
-        } else {
-          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1])
-        }
-      }
+  // Resizable sidebar state (conversation)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const isDraggingRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Draft Phase A resizable state
+  const [draftPhaseALeftWidth, setDraftPhaseALeftWidth] = useState(40) // percentage
+  const draftPhaseARef = useRef<HTMLDivElement>(null)
+
+  // Draft Phase B resizable state (two dividers)
+  const [draftPhaseBLeftWidth, setDraftPhaseBLeftWidth] = useState(260) // pixels
+  const [draftPhaseBRightWidth, setDraftPhaseBRightWidth] = useState(300) // pixels
+  const draftPhaseBRef = useRef<HTMLDivElement>(null)
+
+  // Commit resizable state
+  const [commitLeftWidth, setCommitLeftWidth] = useState(280)
+  const [commitRightWidth, setCommitRightWidth] = useState(280)
+  const commitContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current || !containerRef.current) return
+      const containerRect = containerRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - containerRect.left
+      // Clamp between 200 and 500px
+      setSidebarWidth(Math.max(200, Math.min(500, newWidth)))
     }
-    const baselineStatuses: Array<'same' | 'removed'> = Array(m).fill('same')
-    const draftStatuses: Array<'same' | 'added'> = Array(n).fill('same')
-    const removals: { key: string; text: string }[] = []
-    let i = 0
-    let j = 0
-    while (i < m && j < n) {
-      if (baselineLines[i] === draftLines[j]) {
-        baselineStatuses[i] = 'same'
-        draftStatuses[j] = 'same'
-        i += 1
-        j += 1
-      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-        baselineStatuses[i] = 'removed'
-        removals.push({ key: `rem-${i}`, text: baselineLines[i] })
-        i += 1
-      } else {
-        draftStatuses[j] = 'added'
-        j += 1
-      }
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
     }
-    while (i < m) {
-      baselineStatuses[i] = 'removed'
-      removals.push({ key: `rem-${i}`, text: baselineLines[i] })
-      i += 1
-    }
-    while (j < n) {
-      draftStatuses[j] = 'added'
-      j += 1
-    }
-    return { baselineLines, draftLines, baselineStatuses, draftStatuses, removals }
-  }, [baselineSourceSummary, data.summary])
-  const { baselineLines, draftLines, baselineStatuses, draftStatuses, removals } = diffData
-  const updateMergeConfig = (patch: Partial<MergeConfig>) => {
-    if (!mergeConfig) {
-      return
-    }
-    onUpdate({ mergeConfig: { ...mergeConfig, ...patch } })
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
-  useEffect(() => {
-    if (!isConversation) {
-      return
-    }
-    setChatMessages([
-      {
-        id: `${node.id}-ai`,
-        role: 'ai',
-        content: data.summary || 'No summary yet—start the chat to capture context.',
-      },
-      {
-        id: `${node.id}-user`,
-        role: 'user',
-        content: data.status || 'Status not set yet.',
-      },
-    ])
-  }, [isConversation, data.summary, data.status, node.id])
+  // Draft Phase A divider handler
+  const handleDraftPhaseADivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
 
-  useEffect(() => {
-    if (!isConversation) {
-      return
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!draftPhaseARef.current) return
+      const rect = draftPhaseARef.current.getBoundingClientRect()
+      const percentage = ((moveEvent.clientX - rect.left) / rect.width) * 100
+      setDraftPhaseALeftWidth(Math.max(25, Math.min(65, percentage)))
     }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Draft Phase B left divider handler
+  const handleDraftPhaseBLeftDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!draftPhaseBRef.current) return
+      const rect = draftPhaseBRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - rect.left
+      setDraftPhaseBLeftWidth(Math.max(180, Math.min(400, newWidth)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Draft Phase B right divider handler
+  const handleDraftPhaseBRightDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!draftPhaseBRef.current) return
+      const rect = draftPhaseBRef.current.getBoundingClientRect()
+      const newWidth = rect.right - moveEvent.clientX
+      setDraftPhaseBRightWidth(Math.max(200, Math.min(450, newWidth)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Commit left divider handler
+  const handleCommitLeftDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!commitContainerRef.current) return
+      const rect = commitContainerRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - rect.left
+      setCommitLeftWidth(Math.max(200, Math.min(400, newWidth)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Commit right divider handler
+  const handleCommitRightDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!commitContainerRef.current) return
+      const rect = commitContainerRef.current.getBoundingClientRect()
+      const newWidth = rect.right - moveEvent.clientX
+      setCommitRightWidth(Math.max(200, Math.min(400, newWidth)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Initialize patch keywords when draft is generated
+  useEffect(() => {
+    if (isDraft && draftGenerated && data.summary) {
+      const keywords = extractKeywords(data.summary)
+      setPatchKeywords(keywords.map(word => ({ word, status: 'none' })))
+    }
+  }, [isDraft, draftGenerated, data.summary])
+
+  // Scroll to bottom when new messages added
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages, isConversation])
+  }, [chatMessages])
 
-  useEffect(() => {
-    if (!isConversation || !isResizing) {
-      return
-    }
-    const handleMove = (event: MouseEvent) => {
-      if (!containerRef.current) {
-        return
-      }
-      const bounds = containerRef.current.getBoundingClientRect()
-      const relativeX = (event.clientX - bounds.left) / bounds.width
-      const clamped = Math.min(0.7, Math.max(0.2, relativeX))
-      setPaneRatio(clamped)
-    }
-    const handleUp = () => setIsResizing(false)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [isConversation, isResizing])
+  const conversationAction = useMemo(() => quickActions?.find(a => a.key === 'add-draft'), [quickActions])
 
-  const handleSplitMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    setIsResizing(true)
-  }
+  const handleSendMessage = () => {
+    if (!chatInput.trim()) return
 
-  useEffect(() => {
-    if (!isDraft || !activeDraftResizer) {
-      return
+    const newUserMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user' as const,
+      content: chatInput.trim(),
     }
-    const handleMove = (event: MouseEvent) => {
-      if (!draftContainerRef.current) {
-        return
-      }
-      const bounds = draftContainerRef.current.getBoundingClientRect()
-      const ratio = (event.clientX - bounds.left) / bounds.width
-      if (activeDraftResizer === 'left') {
-        setDraftPaneSizes((prev) => {
-          const maxLeft = 1 - prev.center - MIN_DRAFT_RIGHT
-          const nextLeft = Math.min(maxLeft, Math.max(MIN_DRAFT_LEFT, ratio))
-          return { ...prev, left: nextLeft }
-        })
-      } else {
-        setDraftPaneSizes((prev) => {
-          const maxCenter = 1 - prev.left - MIN_DRAFT_RIGHT
-          const desiredCenter = ratio - prev.left
-          const nextCenter = Math.min(maxCenter, Math.max(MIN_DRAFT_CENTER, desiredCenter))
-          return { ...prev, center: nextCenter }
-        })
-      }
-    }
-    const handleUp = () => setActiveDraftResizer(null)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [MIN_DRAFT_CENTER, MIN_DRAFT_LEFT, MIN_DRAFT_RIGHT, activeDraftResizer, isDraft])
 
-  useEffect(() => {
-    if (!diffDrag) {
-      return
-    }
-    const handleMove = (event: MouseEvent) => {
-      if (!draftContainerRef.current) {
-        return
-      }
-      const bounds = draftContainerRef.current.getBoundingClientRect()
-      const start = (draftPaneSizes.left + draftPaneSizes.center) * bounds.width
-      const available = bounds.width - start
-      if (available <= 0) {
-        return
-      }
-      const ratio = (event.clientX - bounds.left - start) / available
-      const clamped = Math.min(0.8, Math.max(0.2, ratio))
-      setDiffSplit(clamped)
-    }
-    const handleUp = () => setDiffDrag(false)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [diffDrag, draftPaneSizes.center, draftPaneSizes.left])
-
-  useEffect(() => {
-    setDraftPaneSizes({ left: 0.22, center: 0.26 })
-    setDraftTab('editor')
-    setDiffSplit(0.5)
-    setDiffDecisions({})
-  }, [node.id])
-
-  const toggleDiffDecision = (key: string, value: DiffDecision) => {
-    setDiffDecisions((current) => {
-      const next: DiffDecisionMap = { ...current }
-      if (next[key] === value) {
-        delete next[key]
-      } else {
-        next[key] = value
-      }
-      return next
-    })
-  }
-
-  const shiftDiffDecisionsAfterRemoval = (removedIndex: number) => {
-    setDiffDecisions((current) => {
-      const entries = Object.entries(current)
-      if (entries.length === 0) {
-        return current
-      }
-      const next: DiffDecisionMap = {}
-      let changed = false
-      entries.forEach(([key, value]) => {
-        if (!value) {
-          return
-        }
-        if (!key.startsWith('add-')) {
-          next[key] = value
-          return
-        }
-        const indexValue = Number.parseInt(key.slice(4), 10)
-        if (Number.isNaN(indexValue)) {
-          next[key] = value
-          return
-        }
-        if (indexValue === removedIndex) {
-          changed = true
-          return
-        }
-        const newIndex = indexValue > removedIndex ? indexValue - 1 : indexValue
-        const newKey = `add-${newIndex}`
-        if (newKey !== key) {
-          changed = true
-        }
-        next[newKey] = value
-      })
-      return changed ? next : current
-    })
-  }
-
-  const handleRejectDraftLine = (lineIndex: number) => {
-    const lines = (data.summary ?? '').split('\n')
-    if (lineIndex < 0 || lineIndex >= lines.length) {
-      return
-    }
-    lines.splice(lineIndex, 1)
-    onUpdate({ summary: lines.join('\n') })
-    shiftDiffDecisionsAfterRemoval(lineIndex)
-  }
-
-  const sendMessage = () => {
-    const trimmed = chatInput.trim()
-    if (!trimmed) {
-      return
-    }
-    setChatMessages((messages) => [
-      ...messages,
-      { id: `${node.id}-user-${messages.length}`, role: 'user', content: trimmed },
-    ])
+    setChatMessages(prev => [...prev, newUserMessage])
     setChatInput('')
+
+    // Simulate assistant response (mock - not connected to LLM)
+    setTimeout(() => {
+      const mockResponse = {
+        id: `msg-${Date.now() + 1}`,
+        role: 'assistant' as const,
+        content: 'This is a placeholder response. LLM integration coming soon.',
+      }
+      setChatMessages(prev => [...prev, mockResponse])
+    }, 500)
   }
 
-  const handleSendMessage = (event?: FormEvent) => {
-    event?.preventDefault()
-    sendMessage()
-  }
-
-  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      sendMessage()
+  const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
 
+  const handleGenerate = () => {
+    // In real app, this would call backend API
+    // For now, just mark as generated and persist to data
+    setDraftGenerated(true)
+    onUpdate({ isGenerated: true })
+  }
+
+  const toggleKeywordStatus = (index: number) => {
+    setPatchKeywords(prev => {
+      const newKeywords = [...prev]
+      const current = newKeywords[index].status
+      // Cycle: none -> must -> mustnt -> none
+      if (current === 'none') {
+        newKeywords[index] = { ...newKeywords[index], status: 'must' }
+      } else if (current === 'must') {
+        newKeywords[index] = { ...newKeywords[index], status: 'mustnt' }
+      } else {
+        newKeywords[index] = { ...newKeywords[index], status: 'none' }
+      }
+      return newKeywords
+    })
+  }
+
+  const mustHaveKeywords = patchKeywords.filter(k => k.status === 'must').map(k => k.word)
+  const mustntHaveKeywords = patchKeywords.filter(k => k.status === 'mustnt').map(k => k.word)
+
+  // ============================================
+  // CONVERSATION NODE - Sidebar left, Chat interface right
+  // ============================================
   if (isConversation) {
-    // Handle save constraints from ManageMode
-    const handleSaveConstraints = (constraints: ConversationConstraints) => {
-      onSaveConstraints?.(constraints)
-    }
-
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="conversation-modal" ref={containerRef}>
-          <header className="conversation-modal__header">
-            <div className="conversation-modal__title">
-              <input
-                value={data.title}
-                onChange={(event) => onUpdate({ title: event.target.value })}
-                disabled={isManageMode}
-              />
-              <span>{data.entryId}</span>
+        <div className="modal-v2 modal-v2--conversation">
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <h2 className="modal-v2__title">Conversation: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
             </div>
-            <div className="conversation-modal__actions">
+            <div className="modal-v2__topbar-right">
               <button
-                className={`secondary-btn conversation-modal__manage-btn ${isManageMode ? 'active' : ''}`}
-                onClick={() => setIsManageMode(!isManageMode)}
-                type="button"
-                title={isManageMode ? 'Exit Manage mode' : 'Enter Manage mode'}
+                className="modal-v2__icon-btn"
+                onClick={() => setShowSettings(!showSettings)}
+                title="Edit Meta"
               >
-                <ListChecks size={16} />
-                <span>Manage</span>
+                <Settings size={18} />
               </button>
-              {conversationAction && !isManageMode && (
+              {conversationAction && (
                 <button
-                  className="primary-btn conversation-modal__primary-action"
+                  className="modal-v2__primary-btn"
                   onClick={() => {
                     conversationAction.onClick()
                     onClose()
                   }}
                   disabled={conversationAction.disabled}
-                  type="button"
                 >
-                  {conversationAction.icon}
-                  <span>Extract to Draft</span>
+                  <PenSquare size={16} />
+                  <span>Create Draft</span>
                 </button>
               )}
-              <button className="text-btn" onClick={onClose} aria-label="Close">
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
           </header>
-          {isManageMode ? (
-            <div className="conversation-modal__body conversation-modal__body--manage">
-              <ManageMode
-                text={data.summary || ''}
-                initialConstraints={data.constraints}
-                onSave={handleSaveConstraints}
-                onExit={() => setIsManageMode(false)}
-                isLocked={isConversationLocked}
-              />
-            </div>
-          ) : (
-          <div className="conversation-modal__body">
-            <section
-              className="conversation-modal__pane conversation-modal__pane--context"
-              style={{ flexBasis: `${paneRatio * 100}%` }}
+
+          <div className="modal-v2__body" ref={containerRef}>
+            {/* Left Sidebar - Metadata */}
+            <aside
+              className={`modal-v2__sidebar modal-v2__sidebar--left ${showSettings ? 'modal-v2__sidebar--open' : ''}`}
+              style={{ width: sidebarWidth }}
             >
-              <div className="conversation-context__header">
-                <Database size={18} />
-                <div>
-                  <strong>Upstream Context</strong>
-                  <span>Library / Docs</span>
+              <div className="modal-v2__sidebar-section">
+                <h4>Metadata</h4>
+                <div className="modal-v2__field">
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    value={data.title}
+                    onChange={(e) => onUpdate({ title: e.target.value })}
+                  />
                 </div>
-              </div>
-              <div className="conversation-context__cards">
-                <article className="context-card">
-                  <span>Source</span>
-                  <strong>{data.entryId}</strong>
-                  <p>{data.timestamp}</p>
-                </article>
-                <article className="context-card">
-                  <span>Status</span>
-                  <strong>{data.status}</strong>
-                  <p>Current tracking label</p>
-                </article>
-                <article className="context-card">
-                  <span>Active Tags</span>
-                  <div className="context-card__tags">
-                    {data.tags.length > 0 ? (
-                      data.tags.map((tag) => (
-                        <span key={tag} className="context-tag">
-                          {tag}
-                        </span>
-                      ))
-                    ) : (
-                      <em>None</em>
-                    )}
-                  </div>
-                </article>
-              </div>
-              <div className="conversation-context__note">
-                <label>
-                  Summary
-                  <textarea
-                    value={data.summary}
-                    onChange={(event) => onUpdate({ summary: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Notes
+                <div className="modal-v2__field">
+                  <label>Tags</label>
                   <input
-                    value={data.status}
-                    onChange={(event) => onUpdate({ status: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Tags
-                  <input
+                    type="text"
                     value={data.tags.join(', ')}
-                    onChange={(event) =>
-                      onUpdate({
-                        tags: event.target.value
-                          .split(',')
-                          .map((token) => token.trim())
-                          .filter(Boolean),
-                      })
-                    }
+                    onChange={(e) => onUpdate({
+                      tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+                    })}
+                    placeholder="tag1, tag2, ..."
                   />
-                </label>
-              </div>
-            </section>
-            <div
-              className={
-                isResizing
-                  ? 'conversation-modal__splitter conversation-modal__splitter--active'
-                  : 'conversation-modal__splitter'
-              }
-              onMouseDown={handleSplitMouseDown}
-            />
-            <section
-              className="conversation-modal__pane conversation-modal__pane--chat"
-              style={{ flexBasis: `${(1 - paneRatio) * 100}%` }}
-            >
-              <div className="conversation-chat__header">
-                <div>
-                  <strong>{data.title}</strong>
-                  <span>Writing Desk / Chat</span>
                 </div>
-                <button className="conversation-chat__settings-btn" type="button">
-                  <Settings size={18} />
-                </button>
               </div>
-              <div className="conversation-chat__messages">
-                {chatMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={
-                      message.role === 'user'
-                        ? 'conversation-chat__bubble conversation-chat__bubble--user'
-                        : 'conversation-chat__bubble conversation-chat__bubble--ai'
-                    }
-                  >
-                    <p>{message.content}</p>
+
+              <div className="modal-v2__sidebar-divider" />
+
+              <div className="modal-v2__sidebar-section">
+                <h4>Info</h4>
+                <div className="modal-v2__info-row">
+                  <Clock size={14} />
+                  <span>Created: {data.timestamp}</span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Link2 size={14} />
+                  <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
+                </div>
+              </div>
+            </aside>
+
+            {/* Draggable Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleDividerMouseDown}
+            />
+
+            {/* Main Content - Chat Interface */}
+            <div className="modal-v2__main conversation-v2__chat-container">
+              <div className="conversation-v2__chat-messages">
+                {chatMessages.length === 0 ? (
+                  <div className="conversation-v2__chat-empty">
+                    <MessageSquarePlus size={48} strokeWidth={1} />
+                    <p>Start a conversation with the LLM</p>
+                    <span>Type a message below to begin</span>
                   </div>
-                ))}
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div key={msg.id} className={`conversation-v2__chat-message conversation-v2__chat-message--${msg.role}`}>
+                      <div className="conversation-v2__chat-message-content">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))
+                )}
                 <div ref={messagesEndRef} />
               </div>
-              <form className="conversation-chat__composer" onSubmit={handleSendMessage}>
+
+              <div className="conversation-v2__chat-input-container">
                 <textarea
-                  placeholder="Summarize or add new context..."
+                  className="conversation-v2__chat-input"
                   value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  onKeyDown={handleComposerKeyDown}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                  rows={3}
                 />
-              </form>
-            </section>
+                <button
+                  className="conversation-v2__chat-send-btn"
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
           </div>
-          )}
         </div>
       </div>
     )
   }
 
+  // ============================================
+  // DRAFT NODE - Two phases: Config (A) & Patch (B)
+  // ============================================
   if (isDraft) {
-    const leftBasis = draftPaneSizes.left
-    const centerBasis = draftPaneSizes.center
-    const rightBasis = Math.max(MIN_DRAFT_RIGHT, 1 - leftBasis - centerBasis)
-    const evidenceCards: Array<{
-      id: string
-      title: string
-      subtitle: string
-      content: ReactNode
-    }> = [
-      {
-        id: 'commit',
-        title: `Commit Snapshot`,
-        subtitle: data.branchType === 'main' ? 'Main' : 'Feature',
-        content: <p>{baselineSourceSummary || 'No upstream commit summary captured yet.'}</p>,
-      },
-      {
-        id: 'conversation',
-        title: 'Conversation (Raw)',
-        subtitle: 'Last two messages',
-        content: (
-          <div className="draft-chat-thread">
-            {chatHistory.map((message) => (
-              <div
-                key={message.id}
-                className={
-                  message.role === 'user'
-                    ? 'draft-chat__bubble draft-chat__bubble--user'
-                    : 'draft-chat__bubble draft-chat__bubble--ai'
-                }
-              >
-                <span>{message.role === 'user' ? 'User' : 'AI'}</span>
-                <p>{message.content}</p>
+    return (
+      <div className="node-modal__overlay" role="dialog" aria-modal="true">
+        <div className={`modal-v2 modal-v2--draft ${draftGenerated ? 'modal-v2--draft-phase-b' : 'modal-v2--draft-phase-a'}`}>
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <h2 className="modal-v2__title">{draftGenerated ? 'Patch' : 'Draft'}: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
+              <span className={`draft-v2__phase-badge ${draftGenerated ? 'draft-v2__phase-badge--b' : 'draft-v2__phase-badge--a'}`}>
+                {draftGenerated ? 'Patch Phase' : 'Draft Phase'}
+              </span>
+            </div>
+            <div className="modal-v2__topbar-right">
+              {draftGenerated && onConvertDraft && (
+                <button className="modal-v2__primary-btn" onClick={onConvertDraft}>
+                  <Check size={16} />
+                  <span>Commit</span>
+                </button>
+              )}
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+          </header>
+
+          <div className={`modal-v2__body draft-v2__body ${draftGenerated ? 'draft-v2__body--phase-b' : 'draft-v2__body--phase-a'}`}>
+            {!draftGenerated ? (
+              // ========== Phase A: Draft Configuration (2 panels) ==========
+              <div className="draft-v2__phase-a" ref={draftPhaseARef}>
+                {/* Left: Source Lineage */}
+                <div className="draft-v2__phase-a-left" style={{ width: `${draftPhaseALeftWidth}%` }}>
+                  <div className="draft-v2__section-header">
+                    <h3>Source Lineage</h3>
+                    <span className="draft-v2__section-desc">Upstream input for this draft</span>
+                  </div>
+                  <div className="draft-v2__lineage-content">
+                    {data.baselineSummary ? (
+                      <div className="draft-v2__lineage-blocks">
+                        <div className="draft-v2__lineage-block">
+                          <div className="draft-v2__lineage-block-header">
+                            <Link2 size={14} />
+                            <span>From Conversation/Commit</span>
+                          </div>
+                          <p>{data.baselineSummary}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="draft-v2__upstream-empty">
+                        <MessageSquarePlus size={32} strokeWidth={1} />
+                        <p>No upstream connected</p>
+                        <span>This draft will start fresh.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Draggable Divider */}
+                <div
+                  className="modal-v2__resize-divider"
+                  onMouseDown={handleDraftPhaseADivider}
+                />
+
+                {/* Right: Configuration (Branch, Bridge, Preference, Generate) */}
+                <div className="draft-v2__phase-a-right">
+                  <div className="draft-v2__section-header">
+                    <h3>Draft Configuration</h3>
+                    <span className="draft-v2__section-desc">Set up extraction parameters</span>
+                  </div>
+
+                  <div className="draft-v2__config-form">
+                    {/* Branch Selection */}
+                    {shouldShowBranchSelect && (
+                      <div className="draft-v2__config-group">
+                        <div className="draft-v2__config-label">Target Branch</div>
+                        <div className="draft-v2__config-row">
+                          <select
+                            className="draft-v2__config-select"
+                            value={data.pendingBranch || 'branch'}
+                            onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
+                          >
+                            <option value="main">main</option>
+                            <option value="branch">branch</option>
+                          </select>
+                          {requireBranchName && (
+                            <input
+                              type="text"
+                              className="draft-v2__config-input"
+                              value={data.pendingBranchName || ''}
+                              onChange={(e) => onBranchNameChange?.(e.target.value)}
+                              placeholder="Branch name"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bridge Template */}
+                    <div className="draft-v2__config-group">
+                      <div className="draft-v2__config-label">Bridge Template</div>
+                      <select
+                        className="draft-v2__config-select draft-v2__config-select--full"
+                        value={data.bridgePrompt || bridgeTemplates[0].id}
+                        onChange={(e) => onUpdate({ bridgePrompt: e.target.value })}
+                      >
+                        {bridgeTemplates.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Preference */}
+                    <div className="draft-v2__config-group draft-v2__config-group--flex">
+                      <div className="draft-v2__config-label">Preference</div>
+                      <textarea
+                        className="draft-v2__preference-input"
+                        value={data.draftInstructions || ''}
+                        onChange={(e) => onUpdate({ draftInstructions: e.target.value })}
+                        placeholder="Describe your extraction preferences...&#10;&#10;Examples:&#10;• Focus on risks and potential issues&#10;• Preserve all numbers and statistics&#10;• Tighten the tone, make it concise&#10;• Extract action items only"
+                      />
+                    </div>
+
+                    {/* Generate Button */}
+                    <div className="draft-v2__generate-action">
+                      <button className="draft-v2__generate-btn" onClick={handleGenerate}>
+                        <Sparkles size={18} />
+                        <span>Generate Draft</span>
+                      </button>
+                      <span className="draft-v2__generate-hint">
+                        This will extract content based on Bridge + Preference
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            ))}
+            ) : (
+              // ========== Phase B: Patch (3 panels) ==========
+              <div className="draft-v2__phase-b" ref={draftPhaseBRef}>
+                {/* Left: Source Lineage */}
+                <div className="draft-v2__phase-b-left" style={{ width: draftPhaseBLeftWidth }}>
+                  <div className="draft-v2__section-header">
+                    <h3>Source Lineage</h3>
+                    <span className="draft-v2__section-desc">Traceability</span>
+                  </div>
+                  <div className="draft-v2__lineage-content">
+                    {data.baselineSummary ? (
+                      <div className="draft-v2__lineage-blocks">
+                        <div className="draft-v2__lineage-block draft-v2__lineage-block--hoverable">
+                          <div className="draft-v2__lineage-block-header">
+                            <span>Source Fragment</span>
+                          </div>
+                          <p>{data.baselineSummary}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="draft-v2__lineage-empty">
+                        <p>No upstream source</p>
+                      </div>
+                    )}
+                    <div className="draft-v2__lineage-hint">
+                      <span>Hover on draft content to highlight source</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Left Divider */}
+                <div
+                  className="modal-v2__resize-divider"
+                  onMouseDown={handleDraftPhaseBLeftDivider}
+                />
+
+                {/* Center: Semantic Draft Content */}
+                <div className="draft-v2__phase-b-center">
+                  <div className="draft-v2__section-header">
+                    <h3>Semantic Draft</h3>
+                    <span className="draft-v2__generated-badge">
+                      <Check size={12} />
+                      Generated · To change, create new Draft
+                    </span>
+                  </div>
+                  <div className="draft-v2__content-area">
+                    <textarea
+                      className="draft-v2__content-textarea"
+                      value={data.summary || ''}
+                      onChange={(e) => onUpdate({ summary: e.target.value })}
+                      placeholder="Generated semantic content..."
+                    />
+                  </div>
+                </div>
+
+                {/* Right Divider */}
+                <div
+                  className="modal-v2__resize-divider"
+                  onMouseDown={handleDraftPhaseBRightDivider}
+                />
+
+                {/* Right: Patch Panel */}
+                <div className="draft-v2__phase-b-right" style={{ width: draftPhaseBRightWidth }}>
+                  <div className="draft-v2__section-header">
+                    <h3>Patch: Constraints</h3>
+                    <span className="draft-v2__section-desc">must-have / mustn't-have</span>
+                  </div>
+
+                  <div className="draft-v2__patch-keywords">
+                    {patchKeywords.length === 0 ? (
+                      <p className="draft-v2__patch-empty">No keywords extracted yet</p>
+                    ) : (
+                      <div className="draft-v2__patch-keyword-grid">
+                        {patchKeywords.map((kw, idx) => (
+                          <button
+                            key={idx}
+                            className={`draft-v2__keyword draft-v2__keyword--${kw.status}`}
+                            onClick={() => toggleKeywordStatus(idx)}
+                            title={kw.status === 'none' ? 'Click to mark as must-have' :
+                                   kw.status === 'must' ? 'Click to mark as mustn\'t-have' :
+                                   'Click to clear'}
+                          >
+                            {kw.word}
+                            {kw.status === 'must' && <Check size={12} />}
+                            {kw.status === 'mustnt' && <X size={12} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="draft-v2__patch-divider" />
+
+                  <div className="draft-v2__patch-summary">
+                    <div className="draft-v2__patch-list">
+                      <h5 className="draft-v2__patch-list-title draft-v2__patch-list-title--must">
+                        <Check size={14} />
+                        Must-have ({mustHaveKeywords.length})
+                      </h5>
+                      {mustHaveKeywords.length > 0 ? (
+                        <div className="draft-v2__patch-tags draft-v2__patch-tags--must">
+                          {mustHaveKeywords.map((w, i) => <span key={i}>{w}</span>)}
+                        </div>
+                      ) : (
+                        <span className="draft-v2__patch-none">None selected</span>
+                      )}
+                    </div>
+                    <div className="draft-v2__patch-list">
+                      <h5 className="draft-v2__patch-list-title draft-v2__patch-list-title--mustnt">
+                        <X size={14} />
+                        Mustn't-have ({mustntHaveKeywords.length})
+                      </h5>
+                      {mustntHaveKeywords.length > 0 ? (
+                        <div className="draft-v2__patch-tags draft-v2__patch-tags--mustnt">
+                          {mustntHaveKeywords.map((w, i) => <span key={i}>{w}</span>)}
+                        </div>
+                      ) : (
+                        <span className="draft-v2__patch-none">None selected</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="draft-v2__patch-action">
+                    <button className="draft-v2__patch-confirm-btn">
+                      <Check size={16} />
+                      <span>Confirm Constraints</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        ),
-      },
-      ...(data.validationChecks ?? []).map((check) => ({
-        id: check.id,
-        title: check.label,
-        subtitle: `Validation · ${check.status}`,
-        content: <p>{data.summary || 'No description yet.'}</p>,
-      })),
-    ]
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================
+  // COMMIT NODE - Read-only frozen version
+  // ============================================
+  if (isCommit) {
+    const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
+
+    // Mock constraints - in real app these would come from data
+    const commitMustHave = data.tags.slice(0, 3)
+    const commitMustntHave = data.tags.slice(3, 5)
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="draft-modal">
-          <header className="draft-modal__header">
-            <div className="draft-modal__title">
-              <span>{data.entryId}</span>
-              <input value={data.title} onChange={(event) => onUpdate({ title: event.target.value })} />
+        <div className="modal-v2 modal-v2--commit">
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
+              <span className={`modal-v2__branch-badge modal-v2__branch-badge--${branchLabel === 'main' ? 'main' : 'branch'}`}>
+                <GitBranch size={12} />
+                {branchLabel}
+              </span>
             </div>
-            <div className="draft-modal__actions">
+            <div className="modal-v2__topbar-right">
               {quickActions?.map((action) => (
                 <button
                   key={action.key}
-                  className="secondary-btn"
-                  onClick={() => {
-                    action.onClick()
-                    onClose()
-                  }}
-                  type="button"
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </button>
-              ))}
-              <button className="text-btn" onClick={onClose} aria-label="Close draft modal">
-                <X size={18} />
-              </button>
-            </div>
-          </header>
-          <div className="draft-layout" ref={draftContainerRef}>
-            <section className="draft-section draft-section--sidebar" style={{ flexBasis: `${leftBasis * 100}%` }}>
-              <div className="draft-sidebar__header">
-                <span>Upstream Context</span>
-                <p>Reference upstream evidence as you work</p>
-              </div>
-              <div className="draft-evidence__list">
-                {evidenceCards.map((card) => (
-                  <details key={card.id} open={card.id === 'commit'}>
-                    <summary>
-                      <div>
-                        <strong>{card.title}</strong>
-                        <small>{card.subtitle}</small>
-                      </div>
-                    </summary>
-                    <div className="draft-evidence__body">{card.content}</div>
-                  </details>
-                ))}
-              </div>
-              {effectiveConstraints && (
-                <ConstraintsPanel
-                  constraints={effectiveConstraints}
-                  overrides={data.constraintOverrides}
-                  onUpdateOverrides={onUpdateConstraintOverrides}
-                />
-              )}
-            </section>
-            <div
-              className="draft-section__resizer"
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                setActiveDraftResizer('left')
-              }}
-            />
-            <section
-              className="draft-section draft-section--config"
-              style={{ flexBasis: `${centerBasis * 100}%` }}
-            >
-              <div className="draft-config__header">
-                <strong>Draft Settings</strong>
-                <span>Configure bridging logic & target</span>
-              </div>
-              <div className="draft-config__form">
-                <label>
-                  Title
-                  <input
-                    value={data.title}
-                    onChange={(event) => onUpdate({ title: event.target.value })}
-                    placeholder="Enter draft title"
-                  />
-                </label>
-                <label>
-                  Branch
-                  <div className="draft-select">
-                    <select
-                      value={
-                        shouldShowBranchSelect
-                          ? data.pendingBranch ?? 'branch'
-                          : 'branch'
-                      }
-                      onChange={(event) =>
-                        shouldShowBranchSelect &&
-                        onBranchChange?.(event.target.value as 'main' | 'branch')
-                      }
-                      disabled={!shouldShowBranchSelect}
-                    >
-                      <option value="main">main</option>
-                      <option value="branch">branch</option>
-                    </select>
-                    <span className="draft-select__chevron" aria-hidden="true">▾</span>
-                  </div>
-                </label>
-                {requireBranchName && (
-                  <label>
-                    Branch Name
-                    <input
-                      value={data.pendingBranchName ?? ''}
-                      placeholder="e.g. osaka-nightlife"
-                      onChange={(event) => onBranchNameChange?.(event.target.value)}
-                    />
-                  </label>
-                )}
-                <label>
-                  Mode
-                  <div className="bridge-mode-select">
-                    <select
-                      value={data.bridgePrompt ?? bridgePrompts[0]}
-                      onChange={(event) => onUpdate({ bridgePrompt: event.target.value })}
-                    >
-                      {bridgePrompts.map((prompt) => (
-                        <option key={prompt} value={prompt}>
-                          {prompt}
-                        </option>
-                      ))}
-                    </select>
-                    <Sparkles size={16} aria-hidden="true" />
-                  </div>
-                </label>
-                <label>
-                  Draft Instructions
-                  <textarea
-                    rows={5}
-                    value={data.draftInstructions ?? ''}
-                    onChange={(event) => onUpdate({ draftInstructions: event.target.value })}
-                    placeholder="For example: tighten tone, highlight validator insights..."
-                  />
-                </label>
-                <button
-                  className="secondary-btn draft-config__regenerate"
-                  type="button"
-                  onClick={() => onUpdate({ summary: `${data.summary}\n\nRegenerated draft...` })}
-                >
-                  <WandSparkles size={16} />
-                  <span>Regenerate</span>
-                </button>
-              </div>
-            </section>
-            <div
-              className="draft-section__resizer"
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                setActiveDraftResizer('center')
-              }}
-            />
-            <section
-              className="draft-section draft-section--editor"
-              style={{ flexBasis: `${rightBasis * 100}%` }}
-            >
-              <div className="draft-editor__header">
-                <div className="draft-tabs" role="tablist">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={draftTab === 'editor'}
-                    className={draftTab === 'editor' ? 'active' : undefined}
-                    onClick={() => setDraftTab('editor')}
-                  >
-                    Editor
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={draftTab === 'diff'}
-                    className={draftTab === 'diff' ? 'active' : undefined}
-                    onClick={() => setDraftTab('diff')}
-                  >
-                    Diff
-                  </button>
-                </div>
-                {onConvertDraft && (
-                  <button className="primary-btn" onClick={() => onConvertDraft()}>
-                    Commit Changes
-                  </button>
-                )}
-              </div>
-              {draftTab === 'editor' ? (
-                <textarea
-                  className="draft-editor__textarea"
-                  value={data.summary}
-                  onChange={(event) => onUpdate({ summary: event.target.value })}
-                  placeholder="Draft here with Markdown / rich text support..."
-                />
-              ) : (
-                <div className="draft-diff">
-                  <div
-                    className="draft-diff__pane"
-                    style={{ flexBasis: `${diffSplit * 100}%` }}
-                  >
-                    <header>
-                      <strong>Previous Commit</strong>
-                    </header>
-                    <div className="draft-diff__lines">
-                      {baselineLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">No upstream commit attached.</div>
-                      ) : (
-                        baselineLines.map((text, index) => {
-                          const status = baselineStatuses[index]
-                          const classes =
-                            status === 'removed'
-                              ? 'diff-line diff-line--removed'
-                              : 'diff-line diff-line--neutral'
-                          const displayText = text.trim().length > 0 ? text : '\u00A0'
-                          return (
-                            <div key={`commit-${index}`} className={classes}>
-                              {displayText}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                  <div
-                    className="draft-diff__resizer"
-                    role="separator"
-                    aria-orientation="vertical"
-                    onMouseDown={() => setDiffDrag(true)}
-                  />
-                  <div
-                    className="draft-diff__pane draft-diff__pane--changes"
-                    style={{ flexBasis: `${(1 - diffSplit) * 100}%` }}
-                  >
-                    <header>
-                      <strong>Draft Changes</strong>
-                    </header>
-                    <div className="draft-diff__lines draft-diff__lines--interactive">
-                      {draftLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">No draft content yet.</div>
-                      ) : (
-                        draftLines.map((text, index) => {
-                          const status = draftStatuses[index]
-                          const key = status === 'added' ? `add-${index}` : `same-${index}`
-                          const decision = diffDecisions[key]
-                          const classes =
-                            status === 'added' && decision !== 'accept'
-                              ? 'diff-line diff-line--added'
-                              : 'diff-line diff-line--neutral'
-                          const displayText = text.trim().length > 0 ? text : '\u00A0'
-                          return (
-                            <div key={`draft-${key}`} className={classes}>
-                              <span>{displayText}</span>
-                              {status === 'added' && (
-                                <div className="diff-line__actions">
-                                  <button
-                                    type="button"
-                                    className={decision === 'accept' ? 'active' : undefined}
-                                    onClick={() => toggleDiffDecision(key, 'accept')}
-                                    aria-label="Accept change"
-                                  >
-                                    <Check size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRejectDraftLine(index)}
-                                    aria-label="Reject change"
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })
-                      )}
-                      {removals.map((segment) => {
-                        const trimmed = segment.text.trim()
-                        if (!trimmed) {
-                          return null
-                        }
-                        const decision = diffDecisions[segment.key]
-                        if (decision === 'reject') {
-                          return null
-                        }
-                        const classes =
-                          decision === 'accept'
-                            ? 'diff-line diff-line--neutral'
-                            : 'diff-line diff-line--removed'
-                        return (
-                          <div key={`draft-${segment.key}`} className={classes}>
-                            <span>Removed · {trimmed}</span>
-                            <div className="diff-line__actions">
-                              <button
-                                type="button"
-                                className={decision === 'accept' ? 'active' : undefined}
-                                onClick={() => toggleDiffDecision(segment.key, 'accept')}
-                                aria-label="Accept removal"
-                              >
-                                <Check size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => toggleDiffDecision(segment.key, 'reject')}
-                                aria-label="Reject removal"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isCommit) {
-    const branchLabel =
-      data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
-    const headerActions = quickActions ?? []
-    return (
-      <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="commit-modal">
-          <header className="commit-modal__header">
-            <div className="commit-modal__title">
-              <span>{data.entryId}</span>
-              <strong>{data.title}</strong>
-            </div>
-            <div className="commit-modal__actions">
-              {headerActions.map((action) => (
-                <button
-                  key={action.key}
-                  className="secondary-btn"
+                  className="modal-v2__secondary-btn"
                   onClick={() => {
                     action.onClick()
                     onClose()
                   }}
                   disabled={action.disabled}
-                  type="button"
                 >
                   {action.icon}
                   <span>{action.label}</span>
                 </button>
               ))}
-              <button className="text-btn" onClick={onClose} aria-label="Close commit modal">
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
           </header>
-          <div className="commit-modal__body">
-            <section className="commit-modal__pane commit-modal__pane--meta">
-              <div className="commit-meta">
-                <label>Branch</label>
-                <strong>{branchLabel.toUpperCase()}</strong>
+
+          <div className="modal-v2__body" ref={commitContainerRef}>
+            {/* Left Sidebar - Meta & Lineage */}
+            <aside className="modal-v2__sidebar modal-v2__sidebar--left" style={{ width: commitLeftWidth }}>
+              <div className="modal-v2__sidebar-section">
+                <h4>Version Info</h4>
+                <div className="modal-v2__info-row">
+                  <GitBranch size={14} />
+                  <span>Branch: <strong>{branchLabel}</strong></span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Clock size={14} />
+                  <span>{data.timestamp}</span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Tag size={14} />
+                  <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
+                </div>
               </div>
-              <div className="commit-meta">
-                <label>Status</label>
-                <strong>{data.status || 'No status supplied'}</strong>
-              </div>
-              <div className="commit-meta">
-                <label>Timestamp</label>
-                <span>{data.timestamp}</span>
-              </div>
-              <div className="commit-meta">
-                <label>Tags</label>
-                {data.tags.length > 0 ? (
-                  <div className="commit-meta__tags">
-                    {data.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
+
+              <div className="modal-v2__sidebar-divider" />
+
+              <div className="modal-v2__sidebar-section">
+                <h4>Lineage</h4>
+                <div className="commit-v2__lineage">
+                  <div className="commit-v2__lineage-item">
+                    <span className="commit-v2__lineage-label">From Draft:</span>
+                    <span className="commit-v2__lineage-value">{data.entryId}</span>
                   </div>
-                ) : (
-                  <span className="commit-meta__empty">No tags applied</span>
-                )}
+                  {data.baselineSummary && (
+                    <div className="commit-v2__lineage-item">
+                      <span className="commit-v2__lineage-label">Upstream:</span>
+                      <span className="commit-v2__lineage-value">Connected</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </section>
-            <section className="commit-modal__pane commit-modal__pane--content">
-              <div className="commit-summary">
-                <header>
-                  <h3>Version Summary</h3>
-                  <small>Validator snapshot</small>
-                </header>
-                <p>{data.summary || 'No summary recorded.'}</p>
+            </aside>
+
+            {/* Left Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleCommitLeftDivider}
+            />
+
+            {/* Main Content - Semantic Snapshot */}
+            <div className="modal-v2__main">
+              <div className="commit-v2__section">
+                <div className="commit-v2__section-header">
+                  <h3>Semantic Content</h3>
+                  <span className="commit-v2__readonly-badge">Read-only</span>
+                </div>
+                <div className="commit-v2__content">
+                  {data.summary || 'No content recorded.'}
+                </div>
               </div>
-              <div className="commit-intent">
-                <header>
-                  <Sparkles size={16} />
-                  <span>Intent</span>
-                </header>
-                <p>{data.status || 'No intent captured.'}</p>
+
+              {data.status && (
+                <div className="commit-v2__section">
+                  <div className="commit-v2__section-header">
+                    <h3>Intent</h3>
+                  </div>
+                  <div className="commit-v2__intent">
+                    {data.status}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleCommitRightDivider}
+            />
+
+            {/* Right Sidebar - Constraints Summary */}
+            <aside className="modal-v2__sidebar modal-v2__sidebar--right" style={{ width: commitRightWidth }}>
+              <div className="modal-v2__sidebar-section">
+                <h4>Constraints</h4>
+
+                <div className="commit-v2__constraints-group">
+                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--must">
+                    Must-have
+                  </h5>
+                  {commitMustHave.length > 0 ? (
+                    <div className="commit-v2__constraints-tags">
+                      {commitMustHave.map((w, i) => (
+                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--must">
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="commit-v2__constraints-empty">None</span>
+                  )}
+                </div>
+
+                <div className="commit-v2__constraints-group">
+                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--mustnt">
+                    Mustn't-have
+                  </h5>
+                  {commitMustntHave.length > 0 ? (
+                    <div className="commit-v2__constraints-tags">
+                      {commitMustntHave.map((w, i) => (
+                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--mustnt">
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="commit-v2__constraints-empty">None</span>
+                  )}
+                </div>
               </div>
-            </section>
+            </aside>
           </div>
         </div>
       </div>
     )
   }
 
+  // Fallback for unknown node types
   return (
     <div className="node-modal__overlay" role="dialog" aria-modal="true">
-      <div className="node-modal">
-        <header>
-          <div>
-            <span>{data.entryId}</span>
-            <strong>{data.title}</strong>
+      <div className="modal-v2">
+        <header className="modal-v2__topbar">
+          <div className="modal-v2__topbar-left">
+            <h2 className="modal-v2__title">{data.title || 'Node'}</h2>
           </div>
-          <button className="text-btn" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <div className="modal-v2__topbar-right">
+            <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+              <X size={20} />
+            </button>
+          </div>
         </header>
-
-        <div className="node-modal__body">
-          <label>
-            Title
-            <input
-              value={data.title}
-              onChange={(event) => onUpdate({ title: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Summary
-            <textarea
-              rows={5}
-              value={data.summary}
-              onChange={(event) => onUpdate({ summary: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Status
-            <input
-              value={data.status}
-              onChange={(event) => onUpdate({ status: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Tags
-            <input
-              value={data.tags.join(', ')}
-              onChange={(event) =>
-                onUpdate({
-                  tags: event.target.value
-                    .split(',')
-                    .map((token) => token.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </label>
-
-          {isDraft && (
-            <>
-              <label>
-                Bridge Prompt
-                <select
-                  value={data.bridgePrompt ?? bridgePrompts[0]}
-                  onChange={(event) => onUpdate({ bridgePrompt: event.target.value })}
-                  disabled={isMergeDraft}
-                >
-                  {bridgePrompts.map((prompt) => (
-                    <option key={prompt} value={prompt}>
-                      {prompt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {shouldShowBranchSelect && (
-                <label>
-                  Branch Target
-                  {draftBranchMode === 'select' ? (
-                    <select
-                      value={data.pendingBranch ?? 'branch'}
-                      onChange={(event) => onBranchChange?.(event.target.value as 'main' | 'branch')}
-                    >
-                      <option value="main">main</option>
-                      <option value="branch">branch</option>
-                    </select>
-                  ) : (
-                    <select value="branch" disabled>
-                      <option value="branch">branch</option>
-                    </select>
-                  )}
-                </label>
-              )}
-              {requireBranchName && (
-                <label className="branch-name-field">
-                  Branch Name
-                  <input
-                    value={data.pendingBranchName ?? ''}
-                    placeholder="e.g. osaka-nightlife"
-                    onChange={(event) => onBranchNameChange?.(event.target.value)}
-                  />
-                </label>
-              )}
-              {isMergeDraft && mergeConfig && (
-                <div className="merge-config">
-                  <h4>Merge Inputs</h4>
-                  <div className="merge-config__grid">
-                    <label>
-                      Latest MAIN commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.targetCommitTitle || mergeConfig.targetCommitId}
-                      </span>
-                      <textarea
-                        value={mergeConfig.targetContent}
-                        onChange={(event) =>
-                          updateMergeConfig({ targetContent: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Incoming branch commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.sourceCommitTitle || mergeConfig.sourceCommitId}
-                      </span>
-                      <textarea
-                        value={mergeConfig.sourceContent}
-                        onChange={(event) =>
-                          updateMergeConfig({ sourceContent: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Base commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.baseCommitTitle || 'No upstream main commit detected'}
-                      </span>
-                      <textarea
-                        value={mergeConfig.baseContent ?? ''}
-                        placeholder="Describe the branch point context"
-                        onChange={(event) =>
-                          updateMergeConfig({ baseContent: event.target.value })
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {isCommit && (
-            <div className="node-modal__note">
-              <Sparkles size={16} />
-              <span>This commit is validator-signed. Use the ledger to diff changes.</span>
-            </div>
-          )}
+        <div className="modal-v2__body">
+          <p>Unknown node type</p>
         </div>
-
-        <footer>
-          {isDraft && (
-            <div className="draft-actions">
-              {draftBranchMode === 'branch-only' && (
-                <span className="branch-note">latest main locked · branch only</span>
-              )}
-              {draftBranchMode === 'force-main' && <span className="branch-note">will create MAIN</span>}
-              {draftBranchMode === 'blocked' && (
-                <span className="branch-note">connect to main/branch commit to continue</span>
-              )}
-              <button
-                className="secondary-btn"
-                onClick={() => onConvertDraft?.()}
-                disabled={!onConvertDraft}
-              >
-                Commit
-              </button>
-            </div>
-          )}
-          {quickActions && quickActions.length > 0 && (
-            <div className="node-modal__quick-actions">
-              {quickActions.map((action) => (
-                <button
-                  key={action.key}
-                  className="text-btn node-modal__create-btn"
-                  onClick={() => {
-                    action.onClick()
-                    onClose()
-                  }}
-                  disabled={action.disabled}
-                  type="button"
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </footer>
       </div>
     </div>
   )
