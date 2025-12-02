@@ -1,4 +1,12 @@
-export type NodeKind = 'conversation' | 'draft' | 'commit'
+export type NodeKind = 'conversation' | 'draft' | 'commit' | 'leaf'
+
+// Leaf node types for output destinations
+export type LeafType = 'twitter' | 'weibo' | 'wechat' | 'article' | 'email' | 'slack'
+
+export interface LeafNodeConfig {
+  leafType: LeafType
+  // Additional config can be added per leaf type
+}
 export type BranchType = 'main' | 'branch'
 
 export type ValidationCheckStatus = 'pass' | 'fail' | 'warn'
@@ -85,4 +93,9 @@ export interface CanvasNodeData {
   constraintOverrides?: DraftConstraintOverrides
   // Source conversation ID for draft inheritance
   sourceConversationId?: string
+  // Draft generation state - true after Generate is clicked
+  isGenerated?: boolean
+  // Leaf node specific data
+  leafType?: LeafType
+  leafConfig?: LeafNodeConfig
 }

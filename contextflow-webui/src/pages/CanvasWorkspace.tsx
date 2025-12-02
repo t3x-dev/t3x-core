@@ -4,6 +4,7 @@ import { Background, Controls, MiniMap, ReactFlow } from 'reactflow'
 import type { Edge, Node, ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { canvasNodeTypes } from '../components/CanvasNodes'
+import { LeafPanel } from '../components/LeafPanel'
 import { NodeModal, type NodeQuickAction } from '../components/NodeModal'
 import { useCanvasStore } from '../store/canvasStore'
 import type { CanvasNodeData, NodeKind } from '../types/nodes'
@@ -15,7 +16,13 @@ type PathHighlight =
   | { mode: 'branch'; branch?: string }
   | null
 
-export default function CanvasWorkspace() {
+interface CanvasWorkspaceProps {
+  projectName: string
+  mode: 'editor' | 'execution'
+  onModeChange: (mode: 'editor' | 'execution') => void
+}
+
+export default function CanvasWorkspace({ projectName, mode, onModeChange }: CanvasWorkspaceProps) {
   const [openNodeId, setOpenNodeId] = useState<string>()
   const [isPanMode, setIsPanMode] = useState(false)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
@@ -353,16 +360,18 @@ export default function CanvasWorkspace() {
   )
   return (
     <div className="workspace">
-      <div className="workspace__toolbar">
-        <div className="path-controls">
-          <button
-            className={highlight?.mode === 'main' ? 'path-btn path-btn--active' : 'path-btn'}
-            onClick={() => toggleHighlight({ mode: 'main' })}
-            disabled={!hasMainCommits}
-          >
-            <span>Main</span>
-          </button>
-          <div className="branch-picker">
+      {/* Integrated Top Bar */}
+      <header className="project-topbar">
+        <div className="project-topbar__left">
+          <h2 className="project-topbar__title">{projectName}</h2>
+          <div className="path-controls">
+            <button
+              className={highlight?.mode === 'main' ? 'path-btn path-btn--active' : 'path-btn'}
+              onClick={() => toggleHighlight({ mode: 'main' })}
+              disabled={!hasMainCommits}
+            >
+              Main
+            </button>
             <button
               className={highlight?.mode === 'branch' ? 'path-btn path-btn--active' : 'path-btn'}
               onClick={() =>
@@ -374,9 +383,10 @@ export default function CanvasWorkspace() {
               }
               disabled={!hasBranchCommits}
             >
-              <span>Branch</span>
+              Branch
             </button>
             <select
+              className="branch-select"
               value={branchFilter}
               onChange={(event) => {
                 const value = event.target.value
@@ -399,14 +409,43 @@ export default function CanvasWorkspace() {
             </select>
           </div>
         </div>
-        <div className="toolbar-actions">
-          <button className="text-btn" onClick={() => handleAddNode('conversation')}>
-            <MessageSquarePlus size={16} />
-            Add Conversation
+
+        <div className="project-topbar__right">
+          <button
+            className="icon-btn"
+            onClick={() => handleAddNode('conversation')}
+            title="Add Conversation"
+          >
+            <MessageSquarePlus size={18} />
           </button>
-          <button className="text-btn" onClick={() => handleAddNode('draft')}>
-            <PenSquare size={16} />
-            Add Draft
+          <button
+            className="icon-btn"
+            onClick={() => handleAddNode('draft')}
+            title="Add Draft"
+          >
+            <PenSquare size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* Mode Switch - positioned at topbar/canvas boundary */}
+      <div className="mode-switch-container">
+        <div className="mode-switch">
+          <div
+            className="mode-switch__slider"
+            style={{ transform: mode === 'editor' ? 'translateX(0)' : 'translateX(100%)' }}
+          />
+          <button
+            className={mode === 'editor' ? 'mode-switch__btn mode-switch__btn--active' : 'mode-switch__btn'}
+            onClick={() => onModeChange('editor')}
+          >
+            Editor
+          </button>
+          <button
+            className={mode === 'execution' ? 'mode-switch__btn mode-switch__btn--active' : 'mode-switch__btn'}
+            onClick={() => onModeChange('execution')}
+          >
+            Execution
           </button>
         </div>
       </div>
@@ -476,6 +515,7 @@ export default function CanvasWorkspace() {
           isConversationLocked={isConversationLocked}
         />
       )}
+      <LeafPanel />
     </div>
   )
 }
