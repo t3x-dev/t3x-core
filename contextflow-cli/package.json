@@ -5,11 +5,13 @@
   "license": "MIT",
   "main": "dist/bin/contextflow.js",
   "bin": {
-    "contextflow": "./dist/bin/contextflow.js"
+    "contextflow": "./dist/bin/contextflow.js",
+    "contextflow-serve": "./dist/src/serve.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/bin/contextflow.js",
+    "serve": "node dist/src/serve.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

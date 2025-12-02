@@ -22,6 +22,11 @@ import {
   registerBranchesRoutes,
   registerCommitsV2Routes,
   registerDraftsV2Routes,
+  // Additional routes for full Python API parity
+  registerStatusRoutes,
+  registerAgentDraftsRoutes,
+  registerChatRoutes,
+  registerExportRoutes,
 } from "./routes";
 
 /**
@@ -59,6 +64,12 @@ export function createServer(config: ServerConfig): Server {
   registerBranchesRoutes(router);
   registerCommitsV2Routes(router, config.providers);
   registerDraftsV2Routes(router);
+
+  // Additional routes for full Python API parity
+  registerStatusRoutes(router);
+  registerAgentDraftsRoutes(router, config.providers);
+  registerChatRoutes(router, config.providers);
+  registerExportRoutes(router);
 
   // Create HTTP server
   const httpServer = http.createServer(async (req, res) => {
