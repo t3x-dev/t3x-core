@@ -57,7 +57,7 @@ export async function startEmbeddedServer(options?: {
   };
 
   const config: ServerConfig = {
-    port: options?.port ?? 8100,
+    port: options?.port ?? 8000,
     host: options?.host ?? "127.0.0.1",
     providers,
     contextflowDir: projectRoot.contextflowDir,

@@ -43,6 +43,13 @@ export class Router {
   }
 
   /**
+   * Register a PATCH route
+   */
+  patch(path: string | RegExp, handler: RouteHandler): void {
+    this.routes.push({ method: "PATCH", path, handler });
+  }
+
+  /**
    * Handle incoming request
    */
   async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -89,7 +96,7 @@ export class Router {
    */
   private async parseBody(req: IncomingMessage): Promise<unknown> {
     const method = req.method?.toUpperCase();
-    if (method !== "POST" && method !== "PUT") {
+    if (method !== "POST" && method !== "PUT" && method !== "PATCH") {
       return null;
     }
 

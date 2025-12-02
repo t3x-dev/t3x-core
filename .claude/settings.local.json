@@ -24,7 +24,16 @@
       "Bash(http_proxy= https_proxy= curl:*)",
       "Bash(find:*)",
       "Bash(npm test:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(timeout 5 node:*)",
+      "Bash(node dist/serve.js:*)",
+      "Bash(node dist/src/serve.js:*)",
+      "Bash(xargs:*)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/api/v1/status)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s http://127.0.0.1:8000/api/v1/chat/providers)",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s \"http://127.0.0.1:8000/api/v1/export/cfpack?project_id=test123\")",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s -X POST http://127.0.0.1:8000/api/v1/projects -H \"Content-Type: application/json\" -d '{\"\"name\"\":\"\"test-project\"\"}')",
+      "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl:*)"
     ],
     "deny": [],
     "ask": []

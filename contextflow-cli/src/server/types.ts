@@ -6,14 +6,15 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { EmbeddingProviderType, NLPProviderType, LanguageSetting } from "../core/config";
 
 /**
- * API response wrapper
+ * API response wrapper (matches Python core_api format)
  */
 export interface APIResponse<T = unknown> {
-  success: boolean;
+  status: "ok" | "error";
   data?: T;
   error?: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -46,7 +47,7 @@ export type RouteHandler = (
  * Route definition
  */
 export interface Route {
-  method: "GET" | "POST" | "PUT" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   path: string | RegExp;
   handler: RouteHandler;
 }
@@ -84,15 +85,15 @@ export interface ServerConfig {
 }
 
 /**
- * Create success response
+ * Create success response (matches Python core_api format)
  */
 export function successResponse<T>(data: T): APIResponse<T> {
-  return { success: true, data };
+  return { status: "ok", data };
 }
 
 /**
- * Create error response
+ * Create error response (matches Python core_api format)
  */
-export function errorResponse(code: string, message: string): APIResponse {
-  return { success: false, error: { code, message } };
+export function errorResponse(code: string, message: string, details?: Record<string, unknown>): APIResponse {
+  return { status: "error", error: { code, message, details } };
 }

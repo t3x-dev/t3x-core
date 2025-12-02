@@ -19,3 +19,9 @@ export { registerTurnsV2Routes } from "./turnsV2";
 export { registerBranchesRoutes } from "./branchesV2";
 export { registerCommitsV2Routes } from "./commitsV2";
 export { registerDraftsV2Routes } from "./draftsV2";
+
+// Additional routes for full Python API parity
+export { registerStatusRoutes } from "./status";
+export { registerAgentDraftsRoutes } from "./agentDrafts";
+export { registerChatRoutes } from "./chat";
+export { registerExportRoutes } from "./export";
