@@ -4,12 +4,14 @@
  * Re-exports all embedding provider interfaces and implementations.
  */
 
+// Re-export interfaces from @contextflow/core
 export {
-  EmbeddingProvider,
+  type EmbeddingProvider,
   EmbeddingProviderError,
   cosineSimilarity,
-} from "./base";
+} from "@contextflow/core";
 
+// Export concrete implementations
 export {
   GoogleAIEmbeddingProvider,
   GoogleAIEmbeddingConfig,

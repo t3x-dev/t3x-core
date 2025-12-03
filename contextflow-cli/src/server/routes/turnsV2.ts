@@ -12,8 +12,8 @@ import {
   getConversation,
   getTurnChain,
 } from "../../core/storage";
-import { RingExtractor } from "../../core/extractors/ringExtractor";
-import { GoogleCloudNLPProvider } from "../../core/providers/nlp/googleCloud";
+import { RingExtractor } from "../../core/extractors";
+import { GoogleCloudNLPProvider } from "../../core/providers/nlp";
 
 /**
  * Register turns V2 routes

@@ -9,7 +9,7 @@ import {
   EmbeddingProvider,
   EmbeddingProviderError,
   cosineSimilarity,
-} from "./base";
+} from "@contextflow/core";
 
 const GOOGLE_AI_EMBEDDING_URL =
   "https://generativelanguage.googleapis.com/v1beta/models";
