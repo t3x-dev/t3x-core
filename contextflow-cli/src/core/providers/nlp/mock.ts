@@ -11,7 +11,7 @@ import {
   NLPToken,
   NLPEntity,
   NLPSentence,
-} from "./base";
+} from "@contextflow/core";
 
 /**
  * Mock NLP analysis result

@@ -4,19 +4,21 @@
  * Re-exports all NLP provider interfaces and implementations.
  */
 
+// Re-export interfaces from @contextflow/core
 export {
-  NLPProvider,
+  type NLPProvider,
   NLPProviderError,
-  NLPAnalysis,
-  NLPToken,
-  NLPEntity,
-  NLPSentence,
-  DependencyLabel,
+  type NLPAnalysis,
+  type NLPToken,
+  type NLPEntity,
+  type NLPSentence,
+  type DependencyLabel,
   normalizePosTag,
   normalizeDependencyLabel,
   POS_TAG_MAPPING,
-} from "./base";
+} from "@contextflow/core";
 
+// Export concrete implementations
 export {
   GoogleCloudNLPProvider,
   GoogleCloudNLPConfig,

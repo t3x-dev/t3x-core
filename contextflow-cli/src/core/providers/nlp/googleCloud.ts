@@ -20,7 +20,7 @@ import {
   NLPSentence,
   normalizePosTag,
   normalizeDependencyLabel,
-} from "./base";
+} from "@contextflow/core";
 
 const GOOGLE_CLOUD_NLP_URL =
   "https://language.googleapis.com/v1/documents:annotateText";
