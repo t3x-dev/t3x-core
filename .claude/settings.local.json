@@ -34,16 +34,12 @@
       "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s \"http://127.0.0.1:8000/api/v1/export/cfpack?project_id=test123\")",
       "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s -X POST http://127.0.0.1:8000/api/v1/projects -H \"Content-Type: application/json\" -d '{\"\"name\"\":\"\"test-project\"\"}')",
       "Bash(http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl:*)",
-      "Bash(python3:*)",
-      "Bash(tree:*)",
-      "Bash(rm:*)",
-      "Bash(contextflow-cli/package-lock.json )",
-      "Bash(contextflow-core/node_modules )",
-      "Bash(contextflow-core/package-lock.json )",
-      "Bash(contextflow-core/sdk/javascript/node_modules )",
-      "Bash(contextflow-core/sdk/javascript/package-lock.json)",
+      "Bash(git commit:*)",
+      "Bash(npm pack:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,6 +2,8 @@
 __pycache__/
 .pytest_cache/
 .env
+node_modules/
+.DS_Store
 
 # Coverage reports
 coverage/
