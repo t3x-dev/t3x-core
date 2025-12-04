@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import * as api from '../services/api'
 
-export interface WorkflowSummary {
+export interface ProjectSummary {
   id: string
   name: string
   description: string
@@ -15,17 +15,17 @@ export interface WorkflowSummary {
 // Callback type for notifications
 type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void
 
-type WorkflowStore = {
-  workflows: WorkflowSummary[]
+type ProjectStore = {
+  projects: ProjectSummary[]
   loading: boolean
   error: Error | null
   initialized: boolean
   notifyCallback: NotifyCallback | null
   setNotifyCallback: (cb: NotifyCallback | null) => void
-  fetchWorkflows: () => Promise<void>
-  addWorkflow: (name?: string) => Promise<WorkflowSummary>
-  deleteWorkflow: (id: string) => Promise<void>
-  getWorkflow: (id: string) => WorkflowSummary | undefined
+  fetchProjects: () => Promise<void>
+  addProject: (name?: string) => Promise<ProjectSummary>
+  deleteProject: (id: string) => Promise<void>
+  getProject: (id: string) => ProjectSummary | undefined
 }
 
 const formatDate = (dateStr: string) => {
@@ -43,7 +43,7 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString()
 }
 
-const projectToWorkflow = (project: api.Project): WorkflowSummary => ({
+const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
   id: project.project_id,
   name: project.name,
   description: project.metadata?.description as string || 'Project created via API',
@@ -54,8 +54,8 @@ const projectToWorkflow = (project: api.Project): WorkflowSummary => ({
   drafts: project.conversations_count || 0,
 })
 
-export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
-  workflows: [],
+export const useProjectStore = create<ProjectStore>((set, get) => ({
+  projects: [],
   loading: false,
   error: null,
   initialized: false,
@@ -63,15 +63,15 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
-  fetchWorkflows: async () => {
+  fetchProjects: async () => {
     // Skip if already loading
     if (get().loading) return
 
     set({ loading: true, error: null })
     try {
       const response = await api.listProjects(50, 0)
-      const workflows = response.data.map(projectToWorkflow)
-      set({ workflows, loading: false, initialized: true })
+      const projects = response.data.map(apiProjectToSummary)
+      set({ projects, loading: false, initialized: true })
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
       set({
@@ -79,34 +79,34 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         loading: false,
         initialized: true,
       })
-      get().notifyCallback?.(`Failed to load workflows: ${error.message}`, 'error')
+      get().notifyCallback?.(`Failed to load projects: ${error.message}`, 'error')
     }
   },
 
-  addWorkflow: async (rawName = 'Untitled Workflow') => {
-    const name = rawName.trim() || 'Untitled Workflow'
+  addProject: async (rawName = 'Untitled Project') => {
+    const name = rawName.trim() || 'Untitled Project'
     const notify = get().notifyCallback
 
     try {
       // Create project via API
       const project = await api.createProject(name, {
-        description: 'Fresh workflow awaiting conversations.',
+        description: 'Fresh project awaiting conversations.',
       })
 
-      const workflow = projectToWorkflow(project)
+      const projectSummary = apiProjectToSummary(project)
 
       set((state) => ({
-        workflows: [workflow, ...state.workflows],
+        projects: [projectSummary, ...state.projects],
       }))
 
-      notify?.(`Created workflow "${name}"`, 'success')
-      return workflow
+      notify?.(`Created project "${name}"`, 'success')
+      return projectSummary
     } catch (err) {
       // Log error and notify user
       console.warn('Failed to create project via API:', err)
-      notify?.(`API unavailable - created offline workflow "${name}"`, 'warning')
+      notify?.(`API unavailable - created offline project "${name}"`, 'warning')
 
-      const workflow: WorkflowSummary = {
+      const projectSummary: ProjectSummary = {
         id: `local-${Date.now()}`,
         name: `${name} (offline)`,
         description: 'Created offline - will sync when API is available.',
@@ -118,25 +118,25 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       }
 
       set((state) => ({
-        workflows: [workflow, ...state.workflows],
+        projects: [projectSummary, ...state.projects],
       }))
 
-      return workflow
+      return projectSummary
     }
   },
 
-  deleteWorkflow: async (id) => {
+  deleteProject: async (id) => {
     const notify = get().notifyCallback
-    const workflow = get().workflows.find((w) => w.id === id)
+    const project = get().projects.find((p) => p.id === id)
 
     // Optimistically remove from UI
     set((state) => ({
-      workflows: state.workflows.filter((w) => w.id !== id),
+      projects: state.projects.filter((p) => p.id !== id),
     }))
 
-    // Skip API call for local-only workflows
+    // Skip API call for local-only projects
     if (id.startsWith('local-')) {
-      notify?.(`Deleted offline workflow`, 'success')
+      notify?.(`Deleted offline project`, 'success')
       return
     }
 
@@ -146,14 +146,14 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       const deletedCount = cascade_deleted.turns + cascade_deleted.conversations + cascade_deleted.commits
 
       notify?.(
-        `Deleted "${workflow?.name || id}"${deletedCount > 0 ? ` (${deletedCount} items removed)` : ''}`,
+        `Deleted "${project?.name || id}"${deletedCount > 0 ? ` (${deletedCount} items removed)` : ''}`,
         'success'
       )
     } catch (err) {
-      // Restore workflow on failure
-      if (workflow) {
+      // Restore project on failure
+      if (project) {
         set((state) => ({
-          workflows: [workflow, ...state.workflows],
+          projects: [project, ...state.projects],
         }))
       }
 
@@ -162,12 +162,12 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
       // Check if it's a 404 (already deleted) - don't restore in this case
       if (error.message.includes('404') || error.message.includes('not found')) {
-        notify?.(`Workflow was already deleted from server`, 'warning')
+        notify?.(`Project was already deleted from server`, 'warning')
       } else {
         notify?.(`Failed to delete: ${error.message}`, 'error')
       }
     }
   },
 
-  getWorkflow: (id) => get().workflows.find((workflow) => workflow.id === id),
+  getProject: (id) => get().projects.find((project) => project.id === id),
 }))

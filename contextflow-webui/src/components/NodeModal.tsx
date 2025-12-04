@@ -1,20 +1,55 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
-  type MouseEvent as ReactMouseEvent,
-  type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Sparkles, Database, Settings, WandSparkles, Check, ListChecks } from 'lucide-react'
+import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight, Lock, RotateCcw } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData, MergeConfig, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
-import ManageMode from './ManageMode'
-import ConstraintsPanel from './ConstraintsPanel'
+import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
 
-const bridgePrompts = ['/plan', '/story', '/merge', '/refine']
+const bridgeTemplates = [
+  { id: 'prose', name: 'prose', description: 'General prose extraction' },
+  { id: 'plan', name: 'plan', description: 'Extract action items and planning structure' },
+  { id: 'story', name: 'story', description: 'Narrative extraction with flow preservation' },
+  { id: 'merge', name: 'merge', description: 'Combine multiple sources into unified view' },
+  { id: 'refine', name: 'refine', description: 'Polish and tighten existing content' },
+]
+
+// Phrase type for extraction results
+// Two states: included (浅绿) or excluded (浅红)
+interface Phrase {
+  id: string
+  text: string
+  included: boolean  // true = include (浅绿), false = exclude (浅红)
+  sourceBoxId: string
+  keywords: PhraseKeyword[]  // Keywords within this phrase
+}
+
+// Keyword within a phrase
+// Two states: must (深绿) or mustnt (深红)
+// Only editable when parent phrase is included
+interface PhraseKeyword {
+  id: string
+  text: string
+  originalWord: string  // Original word with punctuation
+  startIndex: number    // Position in phrase text
+  isMustnt: boolean     // false = must_have (深绿), true = mustnt_have (深红)
+}
+
+// Source box type for SOURCE column
+interface SourceBox {
+  id: string
+  title: string
+  type: 'commit' | 'conversation'
+  content: string
+  expanded: boolean
+  phrases: Phrase[]
+}
+
 
 export type NodeQuickAction = {
   key: string
@@ -23,9 +58,6 @@ export type NodeQuickAction = {
   onClick: () => void
   disabled?: boolean
 }
-
-type DiffDecision = 'accept' | 'reject'
-type DiffDecisionMap = Partial<Record<string, DiffDecision>>
 
 interface NodeModalProps {
   node?: Node<CanvasNodeData>
@@ -42,6 +74,231 @@ interface NodeModalProps {
   isConversationLocked?: boolean
 }
 
+// Stop words for keyword extraction
+const STOP_WORDS = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'been', 'will', 'would', 'could', 'should', 'about', 'which', 'their', 'there', 'where', 'when', 'what', 'were', 'they', 'into', 'also', 'more', 'some', 'than', 'very', 'just', 'only', 'over', 'such', 'like', 'then', 'most', 'your', 'other', 'first', 'can', 'are', 'was', 'has', 'had', 'but', 'not', 'you', 'all', 'any', 'its', 'may', 'how', 'out', 'who', 'get', 'our', 'one', 'two'])
+
+// Extract keywords from a single phrase
+function extractKeywordsFromPhrase(
+  phraseText: string,
+  phraseId: string,
+  minWordLength: number = 4
+): PhraseKeyword[] {
+  const keywords: PhraseKeyword[] = []
+  const seenWords = new Set<string>()
+
+  // Match words with their positions
+  const wordRegex = /\b\w+\b/g
+  let match
+
+  while ((match = wordRegex.exec(phraseText)) !== null) {
+    const word = match[0]
+    const cleanWord = word.toLowerCase()
+
+    if (
+      cleanWord.length >= minWordLength &&
+      !STOP_WORDS.has(cleanWord) &&
+      !seenWords.has(cleanWord)
+    ) {
+      seenWords.add(cleanWord)
+      keywords.push({
+        id: `kw-${phraseId}-${match.index}`,
+        text: cleanWord,
+        originalWord: word,
+        startIndex: match.index,
+        isMustnt: false,  // Default to must_have (深绿)
+      })
+    }
+  }
+
+  return keywords
+}
+
+// Mock phrase extraction from text (in real app this would come from backend)
+function extractPhrasesFromText(
+  text: string,
+  sourceBoxId: string,
+  keywordsThreshold: number = 0.6
+): Phrase[] {
+  if (!text) return []
+
+  // Minimum word length based on threshold (higher threshold = longer words)
+  const minWordLength = Math.floor(3 + keywordsThreshold * 3) // 3-6 chars
+
+  // Split into sentences and create phrases
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  return sentences.slice(0, 8).map((sentence, idx) => {
+    const phraseId = `phrase-${sourceBoxId}-${idx}`
+    const trimmedText = sentence.trim()
+    return {
+      id: phraseId,
+      text: trimmedText,
+      included: true, // default to included (浅绿)
+      sourceBoxId,
+      keywords: extractKeywordsFromPhrase(trimmedText, phraseId, minWordLength),
+    }
+  })
+}
+
+// Generate result text from included phrases (excludes mustnt keywords)
+function generateResultText(phrases: Phrase[]): string {
+  const includedPhrases = phrases.filter(p => p.included)
+  if (includedPhrases.length === 0) return ''
+
+  return includedPhrases.map(p => p.text).join('. ') + '.'
+}
+
+// Get all must_have keywords from included phrases
+function getMustHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+  return phrases
+    .filter(p => p.included)
+    .flatMap(p => p.keywords.filter(kw => !kw.isMustnt))
+}
+
+// Get all mustnt_have keywords from included phrases
+function getMustntHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+  return phrases
+    .filter(p => p.included)
+    .flatMap(p => p.keywords.filter(kw => kw.isMustnt))
+}
+
+// Helper to render phrase text with clickable keywords
+// - Click on non-keyword text: toggle phrase include/exclude
+// - Click on keyword: toggle keyword must/mustnt (only when phrase is included)
+function renderPhraseWithKeywords(
+  phrase: Phrase,
+  canToggle: boolean,
+  onPhraseClick: () => void,
+  onKeywordClick: (keywordId: string) => void
+): React.ReactNode[] {
+  const { text, keywords, included } = phrase
+
+  if (keywords.length === 0) {
+    // No keywords, entire phrase is clickable
+    return [
+      <span
+        key="text"
+        className="draft-svtz__phrase-text"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle) onPhraseClick()
+        }}
+        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+      >
+        {text}
+      </span>
+    ]
+  }
+
+  // Sort keywords by position
+  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
+
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+
+  sortedKeywords.forEach((kw, idx) => {
+    // Add text before this keyword (clickable to toggle phrase)
+    if (kw.startIndex > lastIndex) {
+      const beforeText = text.slice(lastIndex, kw.startIndex)
+      parts.push(
+        <span
+          key={`text-${idx}`}
+          className="draft-svtz__phrase-text"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (canToggle) onPhraseClick()
+          }}
+          title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+        >
+          {beforeText}
+        </span>
+      )
+    }
+
+    // Add keyword (clickable to toggle must/mustnt, only when phrase is included)
+    const keywordEndIndex = kw.startIndex + kw.originalWord.length
+    parts.push(
+      <span
+        key={`kw-${kw.id}`}
+        className={`draft-svtz__keyword ${kw.isMustnt ? 'draft-svtz__keyword--mustnt' : 'draft-svtz__keyword--must'} ${!included ? 'draft-svtz__keyword--disabled' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle && included) onKeywordClick(kw.id)
+        }}
+        title={
+          !canToggle ? 'Complete Step 1 to edit' :
+          !included ? 'Include phrase first to edit keywords' :
+          (kw.isMustnt ? 'Click to change to must-have' : 'Click to change to mustnt-have')
+        }
+      >
+        {text.slice(kw.startIndex, keywordEndIndex)}
+      </span>
+    )
+
+    lastIndex = keywordEndIndex
+  })
+
+  // Add remaining text after last keyword
+  if (lastIndex < text.length) {
+    parts.push(
+      <span
+        key="text-end"
+        className="draft-svtz__phrase-text"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle) onPhraseClick()
+        }}
+        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+      >
+        {text.slice(lastIndex)}
+      </span>
+    )
+  }
+
+  return parts
+}
+
+// Helper to render phrase in RESULT with keyword highlighting (read-only)
+function renderResultPhraseWithKeywords(phrase: Phrase): React.ReactNode[] {
+  const { text, keywords } = phrase
+
+  if (keywords.length === 0) {
+    return [<span key="text">{text}</span>]
+  }
+
+  // Sort keywords by position
+  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
+
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+
+  sortedKeywords.forEach((kw, idx) => {
+    // Add text before this keyword
+    if (kw.startIndex > lastIndex) {
+      parts.push(<span key={`text-${idx}`}>{text.slice(lastIndex, kw.startIndex)}</span>)
+    }
+
+    // Add keyword with appropriate styling
+    const keywordEndIndex = kw.startIndex + kw.originalWord.length
+    parts.push(
+      <span
+        key={`kw-${kw.id}`}
+        className={`draft-svtz__result-inline-keyword ${kw.isMustnt ? 'draft-svtz__result-inline-keyword--mustnt' : 'draft-svtz__result-inline-keyword--must'}`}
+      >
+        {text.slice(kw.startIndex, keywordEndIndex)}
+      </span>
+    )
+
+    lastIndex = keywordEndIndex
+  })
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>)
+  }
+
+  return parts
+}
+
 export function NodeModal({
   node,
   onClose,
@@ -51,1136 +308,1050 @@ export function NodeModal({
   onBranchChange,
   onBranchNameChange,
   quickActions,
-  onSaveConstraints,
-  effectiveConstraints,
-  onUpdateConstraintOverrides,
-  isConversationLocked = false,
 }: NodeModalProps) {
   if (!node) {
     return null
   }
 
   const { data } = node
-  const isDraft = data.kind === 'draft'
   const isCommit = data.kind === 'commit'
   const isConversation = data.kind === 'conversation'
-  const isMergeDraft = isDraft && data.bridgePrompt === '/merge' && !!data.mergeConfig
-  const mergeConfig = data.mergeConfig
+  // Pending commit (previously "draft") - editable state before committing
+  const isPendingCommit = isCommit && data.commitStatus === 'pending'
+  // Committed commit - read-only state
+  const isCommittedCommit = isCommit && data.commitStatus !== 'pending'
+  const isMergeDraft = isPendingCommit && data.bridgePrompt === 'merge' && !!data.mergeConfig
   const shouldShowBranchSelect =
     (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
   const requireBranchName =
     !isMergeDraft &&
     ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
       draftBranchMode === 'branch-only')
-  const baselineSourceSummary = data.baselineSummary ?? ''
-  const [paneRatio, setPaneRatio] = useState(0.3)
-  const [isResizing, setIsResizing] = useState(false)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [draftPaneSizes, setDraftPaneSizes] = useState({ left: 0.22, center: 0.26 })
-  const [activeDraftResizer, setActiveDraftResizer] = useState<'left' | 'center' | null>(null)
-  const draftContainerRef = useRef<HTMLDivElement | null>(null)
-  const [draftTab, setDraftTab] = useState<'editor' | 'diff'>('editor')
-  const [diffSplit, setDiffSplit] = useState(0.5)
-  const [diffDrag, setDiffDrag] = useState(false)
-  const [diffDecisions, setDiffDecisions] = useState<DiffDecisionMap>({})
-  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // ========== Single View Two Zones State ==========
+  // Config state (STEP 1)
+  const [template, setTemplate] = useState(data.bridgePrompt || 'prose')
+  const [cosineThreshold, setCosineThreshold] = useState(0.75)
+  const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
+
+  // Step 1 locked state - when true, config is frozen and Step 2 becomes editable
+  const [configLocked, setConfigLocked] = useState(false)
+
+  // Source boxes with phrases (SOURCE column) - baseline from Step 1
+  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
+
+  // Loading state for Refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Divider positions
+  const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
+  const [sourceResultDividerPos, setSourceResultDividerPos] = useState(50) // percentage for SOURCE | RESULT
+
+  // Refs
+  const mainContentRef = useRef<HTMLDivElement>(null)
+  const draftBodyRef = useRef<HTMLDivElement>(null)
+
+  // Computed: all phrases from all source boxes
+  const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
+
+  // Computed: included phrases count
+  const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
+
+  // Computed: must_have and mustnt_have keywords
+  const mustHaveKeywords = useMemo(() => getMustHaveKeywords(allPhrases), [allPhrases])
+  const mustntHaveKeywords = useMemo(() => getMustntHaveKeywords(allPhrases), [allPhrases])
+
+  // Computed: result text from included phrases
+  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases])
+
+  // Sidebar state for conversation
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Chat state for conversation
+  const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
-  const [chatMessages, setChatMessages] = useState<
-    { id: string; role: 'user' | 'ai'; content: string }[]
-  >([])
-  const [isManageMode, setIsManageMode] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const conversationAction = useMemo(() => quickActions?.[0], [quickActions])
-  const MIN_DRAFT_LEFT = 0.18
-  const MIN_DRAFT_CENTER = 0.22
-  const MIN_DRAFT_RIGHT = 0.35
-  const chatHistory = useMemo(
-    () => [
-      { id: `${node.id}-user`, role: 'user' as const, content: data.status || 'No status provided yet.' },
-      { id: `${node.id}-ai`, role: 'ai' as const, content: data.summary || 'No summary captured yet.' },
-    ],
-    [data.status, data.summary, node.id],
-  )
-  const diffData = useMemo(() => {
-    const baselineLines =
-      baselineSourceSummary && baselineSourceSummary.length > 0
-        ? baselineSourceSummary.split('\n')
-        : []
-    const draftLines = (data.summary ?? '').split('\n')
-    const m = baselineLines.length
-    const n = draftLines.length
-    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
-    for (let i = m - 1; i >= 0; i -= 1) {
-      for (let j = n - 1; j >= 0; j -= 1) {
-        if (baselineLines[i] === draftLines[j]) {
-          dp[i][j] = dp[i + 1][j + 1] + 1
-        } else {
-          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1])
-        }
-      }
+  // Resizable sidebar state (conversation)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const isDraggingRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Commit resizable state
+  const [commitLeftWidth, setCommitLeftWidth] = useState(280)
+  const [commitRightWidth, setCommitRightWidth] = useState(280)
+  const commitContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current || !containerRef.current) return
+      const containerRect = containerRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - containerRect.left
+      // Clamp between 200 and 500px
+      setSidebarWidth(Math.max(200, Math.min(500, newWidth)))
     }
-    const baselineStatuses: Array<'same' | 'removed'> = Array(m).fill('same')
-    const draftStatuses: Array<'same' | 'added'> = Array(n).fill('same')
-    const removals: { key: string; text: string }[] = []
-    let i = 0
-    let j = 0
-    while (i < m && j < n) {
-      if (baselineLines[i] === draftLines[j]) {
-        baselineStatuses[i] = 'same'
-        draftStatuses[j] = 'same'
-        i += 1
-        j += 1
-      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-        baselineStatuses[i] = 'removed'
-        removals.push({ key: `rem-${i}`, text: baselineLines[i] })
-        i += 1
-      } else {
-        draftStatuses[j] = 'added'
-        j += 1
-      }
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
     }
-    while (i < m) {
-      baselineStatuses[i] = 'removed'
-      removals.push({ key: `rem-${i}`, text: baselineLines[i] })
-      i += 1
-    }
-    while (j < n) {
-      draftStatuses[j] = 'added'
-      j += 1
-    }
-    return { baselineLines, draftLines, baselineStatuses, draftStatuses, removals }
-  }, [baselineSourceSummary, data.summary])
-  const { baselineLines, draftLines, baselineStatuses, draftStatuses, removals } = diffData
-  const updateMergeConfig = (patch: Partial<MergeConfig>) => {
-    if (!mergeConfig) {
-      return
-    }
-    onUpdate({ mergeConfig: { ...mergeConfig, ...patch } })
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
-  useEffect(() => {
-    if (!isConversation) {
-      return
-    }
-    setChatMessages([
-      {
-        id: `${node.id}-ai`,
-        role: 'ai',
-        content: data.summary || 'No summary yet—start the chat to capture context.',
-      },
-      {
-        id: `${node.id}-user`,
-        role: 'user',
-        content: data.status || 'Status not set yet.',
-      },
-    ])
-  }, [isConversation, data.summary, data.status, node.id])
+  // Commit left divider handler
+  const handleCommitLeftDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
 
-  useEffect(() => {
-    if (!isConversation) {
-      return
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!commitContainerRef.current) return
+      const rect = commitContainerRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - rect.left
+      setCommitLeftWidth(Math.max(200, Math.min(400, newWidth)))
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages, isConversation])
 
-  useEffect(() => {
-    if (!isConversation || !isResizing) {
-      return
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
     }
-    const handleMove = (event: MouseEvent) => {
-      if (!containerRef.current) {
-        return
-      }
-      const bounds = containerRef.current.getBoundingClientRect()
-      const relativeX = (event.clientX - bounds.left) / bounds.width
-      const clamped = Math.min(0.7, Math.max(0.2, relativeX))
-      setPaneRatio(clamped)
-    }
-    const handleUp = () => setIsResizing(false)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [isConversation, isResizing])
 
-  const handleSplitMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    setIsResizing(true)
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
-  useEffect(() => {
-    if (!isDraft || !activeDraftResizer) {
-      return
-    }
-    const handleMove = (event: MouseEvent) => {
-      if (!draftContainerRef.current) {
-        return
-      }
-      const bounds = draftContainerRef.current.getBoundingClientRect()
-      const ratio = (event.clientX - bounds.left) / bounds.width
-      if (activeDraftResizer === 'left') {
-        setDraftPaneSizes((prev) => {
-          const maxLeft = 1 - prev.center - MIN_DRAFT_RIGHT
-          const nextLeft = Math.min(maxLeft, Math.max(MIN_DRAFT_LEFT, ratio))
-          return { ...prev, left: nextLeft }
-        })
-      } else {
-        setDraftPaneSizes((prev) => {
-          const maxCenter = 1 - prev.left - MIN_DRAFT_RIGHT
-          const desiredCenter = ratio - prev.left
-          const nextCenter = Math.min(maxCenter, Math.max(MIN_DRAFT_CENTER, desiredCenter))
-          return { ...prev, center: nextCenter }
-        })
-      }
-    }
-    const handleUp = () => setActiveDraftResizer(null)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [MIN_DRAFT_CENTER, MIN_DRAFT_LEFT, MIN_DRAFT_RIGHT, activeDraftResizer, isDraft])
+  // Commit right divider handler
+  const handleCommitRightDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
 
-  useEffect(() => {
-    if (!diffDrag) {
-      return
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!commitContainerRef.current) return
+      const rect = commitContainerRef.current.getBoundingClientRect()
+      const newWidth = rect.right - moveEvent.clientX
+      setCommitRightWidth(Math.max(200, Math.min(400, newWidth)))
     }
-    const handleMove = (event: MouseEvent) => {
-      if (!draftContainerRef.current) {
-        return
-      }
-      const bounds = draftContainerRef.current.getBoundingClientRect()
-      const start = (draftPaneSizes.left + draftPaneSizes.center) * bounds.width
-      const available = bounds.width - start
-      if (available <= 0) {
-        return
-      }
-      const ratio = (event.clientX - bounds.left - start) / available
-      const clamped = Math.min(0.8, Math.max(0.2, ratio))
-      setDiffSplit(clamped)
-    }
-    const handleUp = () => setDiffDrag(false)
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [diffDrag, draftPaneSizes.center, draftPaneSizes.left])
 
-  useEffect(() => {
-    setDraftPaneSizes({ left: 0.22, center: 0.26 })
-    setDraftTab('editor')
-    setDiffSplit(0.5)
-    setDiffDecisions({})
-  }, [node.id])
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
 
-  const toggleDiffDecision = (key: string, value: DiffDecision) => {
-    setDiffDecisions((current) => {
-      const next: DiffDecisionMap = { ...current }
-      if (next[key] === value) {
-        delete next[key]
-      } else {
-        next[key] = value
-      }
-      return next
-    })
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
-  const shiftDiffDecisionsAfterRemoval = (removedIndex: number) => {
-    setDiffDecisions((current) => {
-      const entries = Object.entries(current)
-      if (entries.length === 0) {
-        return current
-      }
-      const next: DiffDecisionMap = {}
-      let changed = false
-      entries.forEach(([key, value]) => {
-        if (!value) {
-          return
+  // ========== Single View Two Zones Handlers ==========
+
+  // Sidebar | SOURCE divider handler
+  const handleSidebarSourceDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!draftBodyRef.current) return
+      const rect = draftBodyRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - rect.left
+      // Min 220px to ensure Branch Name input is fully visible
+      setSidebarSourceDividerPos(Math.max(220, Math.min(400, newWidth)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // SOURCE | RESULT divider handler
+  const handleSourceResultDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!mainContentRef.current) return
+      const rect = mainContentRef.current.getBoundingClientRect()
+      const percentage = ((moveEvent.clientX - rect.left) / rect.width) * 100
+      setSourceResultDividerPos(Math.max(30, Math.min(70, percentage)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Toggle source box expansion
+  const toggleSourceBoxExpand = useCallback((boxId: string) => {
+    setSourceBoxes(prev => prev.map(sb =>
+      sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb
+    ))
+  }, [])
+
+  // Toggle phrase include/exclude (only in Step 2 when configLocked)
+  // Phrase: include (浅绿) ↔ exclude (浅红)
+  const togglePhraseInclude = useCallback((phraseId: string) => {
+    if (!configLocked) return // Only allow in Step 2
+
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p =>
+        p.id === phraseId ? { ...p, included: !p.included } : p
+      )
+    })))
+  }, [configLocked])
+
+  // Toggle keyword must/mustnt (only when parent phrase is included)
+  // Keyword: must_have (深绿) ↔ mustnt_have (深红)
+  const toggleKeywordMustnt = useCallback((phraseId: string, keywordId: string) => {
+    if (!configLocked) return // Only allow in Step 2
+
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p => {
+        if (p.id !== phraseId || !p.included) return p // Only toggle if phrase is included
+        return {
+          ...p,
+          keywords: p.keywords.map(kw =>
+            kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
+          )
         }
-        if (!key.startsWith('add-')) {
-          next[key] = value
-          return
-        }
-        const indexValue = Number.parseInt(key.slice(4), 10)
-        if (Number.isNaN(indexValue)) {
-          next[key] = value
-          return
-        }
-        if (indexValue === removedIndex) {
-          changed = true
-          return
-        }
-        const newIndex = indexValue > removedIndex ? indexValue - 1 : indexValue
-        const newKey = `add-${newIndex}`
-        if (newKey !== key) {
-          changed = true
-        }
-        next[newKey] = value
       })
-      return changed ? next : current
+    })))
+  }, [configLocked])
+
+  // Initialize source boxes from baseline summary
+  useEffect(() => {
+    if (isPendingCommit && data.baselineSummary) {
+      // Determine source type based on title or sourceConversationId
+      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
+      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
+      const sourceTitle = isFromCommit
+        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+
+      const initialBox: SourceBox = {
+        id: 'source-1',
+        title: sourceTitle,
+        type: sourceType,
+        content: data.baselineSummary,
+        expanded: true,
+        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
+      }
+      setSourceBoxes([initialBox])
+    }
+  }, [isPendingCommit, data.baselineSummary, data.title, data.sourceConversationId, keywordsThreshold])
+
+  // Handle Refresh - re-extract with current config
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    // Re-extract phrases based on new config
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
+    })))
+
+    setIsRefreshing(false)
+  }, [keywordsThreshold])
+
+  // Handle Proceed - lock Step 1 config and enable Step 2 editing
+  const handleProceed = useCallback(() => {
+    if (sourceBoxes.length === 0) return
+    setConfigLocked(true)
+  }, [sourceBoxes])
+
+  // Handle Reset - unlock Step 1 config and reset phrases to default
+  const handleReset = useCallback(() => {
+    setConfigLocked(false)
+    // Re-extract to reset all phrase/keyword states
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
+    })))
+  }, [keywordsThreshold])
+
+  // Handle Commit - create commit node
+  const handleCommit = useCallback(() => {
+    // Update data with final values
+    onUpdate({
+      summary: resultText,
+      bridgePrompt: template,
+      isGenerated: true,
     })
-  }
+    // Trigger convert to commit
+    onConvertDraft?.()
+  }, [resultText, template, onUpdate, onConvertDraft])
 
-  const handleRejectDraftLine = (lineIndex: number) => {
-    const lines = (data.summary ?? '').split('\n')
-    if (lineIndex < 0 || lineIndex >= lines.length) {
-      return
-    }
-    lines.splice(lineIndex, 1)
-    onUpdate({ summary: lines.join('\n') })
-    shiftDiffDecisionsAfterRemoval(lineIndex)
-  }
+  // Scroll to bottom when new messages added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
-  const sendMessage = () => {
-    const trimmed = chatInput.trim()
-    if (!trimmed) {
-      return
+  const conversationAction = useMemo(() => quickActions?.find(a => a.key === 'add-draft'), [quickActions])
+
+  const handleSendMessage = () => {
+    if (!chatInput.trim()) return
+
+    const newUserMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user' as const,
+      content: chatInput.trim(),
     }
-    setChatMessages((messages) => [
-      ...messages,
-      { id: `${node.id}-user-${messages.length}`, role: 'user', content: trimmed },
-    ])
+
+    setChatMessages(prev => [...prev, newUserMessage])
     setChatInput('')
+
+    // Simulate assistant response (mock - not connected to LLM)
+    setTimeout(() => {
+      const mockResponse = {
+        id: `msg-${Date.now() + 1}`,
+        role: 'assistant' as const,
+        content: 'This is a placeholder response. LLM integration coming soon.',
+      }
+      setChatMessages(prev => [...prev, mockResponse])
+    }, 500)
   }
 
-  const handleSendMessage = (event?: FormEvent) => {
-    event?.preventDefault()
-    sendMessage()
-  }
-
-  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      sendMessage()
+  const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
 
+  // ============================================
+  // CONVERSATION NODE - Sidebar left, Chat interface right
+  // ============================================
   if (isConversation) {
-    // Handle save constraints from ManageMode
-    const handleSaveConstraints = (constraints: ConversationConstraints) => {
-      onSaveConstraints?.(constraints)
-    }
-
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="conversation-modal" ref={containerRef}>
-          <header className="conversation-modal__header">
-            <div className="conversation-modal__title">
-              <input
-                value={data.title}
-                onChange={(event) => onUpdate({ title: event.target.value })}
-                disabled={isManageMode}
-              />
-              <span>{data.entryId}</span>
+        <div className="modal-v2 modal-v2--conversation">
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <h2 className="modal-v2__title">Conversation: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
             </div>
-            <div className="conversation-modal__actions">
+            <div className="modal-v2__topbar-right">
               <button
-                className={`secondary-btn conversation-modal__manage-btn ${isManageMode ? 'active' : ''}`}
-                onClick={() => setIsManageMode(!isManageMode)}
-                type="button"
-                title={isManageMode ? 'Exit Manage mode' : 'Enter Manage mode'}
+                className="modal-v2__icon-btn"
+                onClick={() => setShowSettings(!showSettings)}
+                title="Edit Meta"
               >
-                <ListChecks size={16} />
-                <span>Manage</span>
+                <Settings size={18} />
               </button>
-              {conversationAction && !isManageMode && (
+              {conversationAction && (
                 <button
-                  className="primary-btn conversation-modal__primary-action"
+                  className="modal-v2__primary-btn"
                   onClick={() => {
                     conversationAction.onClick()
                     onClose()
                   }}
                   disabled={conversationAction.disabled}
-                  type="button"
                 >
-                  {conversationAction.icon}
-                  <span>Extract to Draft</span>
+                  <PenSquare size={16} />
+                  <span>Create Draft</span>
                 </button>
               )}
-              <button className="text-btn" onClick={onClose} aria-label="Close">
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
           </header>
-          {isManageMode ? (
-            <div className="conversation-modal__body conversation-modal__body--manage">
-              <ManageMode
-                text={data.summary || ''}
-                initialConstraints={data.constraints}
-                onSave={handleSaveConstraints}
-                onExit={() => setIsManageMode(false)}
-                isLocked={isConversationLocked}
-              />
-            </div>
-          ) : (
-          <div className="conversation-modal__body">
-            <section
-              className="conversation-modal__pane conversation-modal__pane--context"
-              style={{ flexBasis: `${paneRatio * 100}%` }}
+
+          <div className="modal-v2__body" ref={containerRef}>
+            {/* Left Sidebar - Metadata */}
+            <aside
+              className={`modal-v2__sidebar modal-v2__sidebar--left ${showSettings ? 'modal-v2__sidebar--open' : ''}`}
+              style={{ width: sidebarWidth }}
             >
-              <div className="conversation-context__header">
-                <Database size={18} />
-                <div>
-                  <strong>Upstream Context</strong>
-                  <span>Library / Docs</span>
+              <div className="modal-v2__sidebar-section">
+                <h4>Metadata</h4>
+                <div className="modal-v2__field">
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    value={data.title}
+                    onChange={(e) => onUpdate({ title: e.target.value })}
+                  />
                 </div>
-              </div>
-              <div className="conversation-context__cards">
-                <article className="context-card">
-                  <span>Source</span>
-                  <strong>{data.entryId}</strong>
-                  <p>{data.timestamp}</p>
-                </article>
-                <article className="context-card">
-                  <span>Status</span>
-                  <strong>{data.status}</strong>
-                  <p>Current tracking label</p>
-                </article>
-                <article className="context-card">
-                  <span>Active Tags</span>
-                  <div className="context-card__tags">
-                    {data.tags.length > 0 ? (
-                      data.tags.map((tag) => (
-                        <span key={tag} className="context-tag">
-                          {tag}
-                        </span>
-                      ))
-                    ) : (
-                      <em>None</em>
-                    )}
-                  </div>
-                </article>
-              </div>
-              <div className="conversation-context__note">
-                <label>
-                  Summary
-                  <textarea
-                    value={data.summary}
-                    onChange={(event) => onUpdate({ summary: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Notes
+                <div className="modal-v2__field">
+                  <label>Tags</label>
                   <input
-                    value={data.status}
-                    onChange={(event) => onUpdate({ status: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Tags
-                  <input
+                    type="text"
                     value={data.tags.join(', ')}
-                    onChange={(event) =>
-                      onUpdate({
-                        tags: event.target.value
-                          .split(',')
-                          .map((token) => token.trim())
-                          .filter(Boolean),
-                      })
-                    }
+                    onChange={(e) => onUpdate({
+                      tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+                    })}
+                    placeholder="tag1, tag2, ..."
                   />
-                </label>
-              </div>
-            </section>
-            <div
-              className={
-                isResizing
-                  ? 'conversation-modal__splitter conversation-modal__splitter--active'
-                  : 'conversation-modal__splitter'
-              }
-              onMouseDown={handleSplitMouseDown}
-            />
-            <section
-              className="conversation-modal__pane conversation-modal__pane--chat"
-              style={{ flexBasis: `${(1 - paneRatio) * 100}%` }}
-            >
-              <div className="conversation-chat__header">
-                <div>
-                  <strong>{data.title}</strong>
-                  <span>Writing Desk / Chat</span>
                 </div>
-                <button className="conversation-chat__settings-btn" type="button">
-                  <Settings size={18} />
-                </button>
               </div>
-              <div className="conversation-chat__messages">
-                {chatMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={
-                      message.role === 'user'
-                        ? 'conversation-chat__bubble conversation-chat__bubble--user'
-                        : 'conversation-chat__bubble conversation-chat__bubble--ai'
-                    }
-                  >
-                    <p>{message.content}</p>
+
+              <div className="modal-v2__sidebar-divider" />
+
+              <div className="modal-v2__sidebar-section">
+                <h4>Info</h4>
+                <div className="modal-v2__info-row">
+                  <Clock size={14} />
+                  <span>Created: {data.timestamp}</span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Link2 size={14} />
+                  <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
+                </div>
+              </div>
+            </aside>
+
+            {/* Draggable Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleDividerMouseDown}
+            />
+
+            {/* Main Content - Chat Interface */}
+            <div className="modal-v2__main conversation-v2__chat-container">
+              <div className="conversation-v2__chat-messages">
+                {chatMessages.length === 0 ? (
+                  <div className="conversation-v2__chat-empty">
+                    <MessageSquarePlus size={48} strokeWidth={1} />
+                    <p>Start a conversation with the LLM</p>
+                    <span>Type a message below to begin</span>
                   </div>
-                ))}
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div key={msg.id} className={`conversation-v2__chat-message conversation-v2__chat-message--${msg.role}`}>
+                      <div className="conversation-v2__chat-message-content">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))
+                )}
                 <div ref={messagesEndRef} />
               </div>
-              <form className="conversation-chat__composer" onSubmit={handleSendMessage}>
+
+              <div className="conversation-v2__chat-input-container">
                 <textarea
-                  placeholder="Summarize or add new context..."
+                  className="conversation-v2__chat-input"
                   value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  onKeyDown={handleComposerKeyDown}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                  rows={3}
                 />
-              </form>
-            </section>
+                <button
+                  className="conversation-v2__chat-send-btn"
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
           </div>
-          )}
         </div>
       </div>
     )
   }
 
-  if (isDraft) {
-    const leftBasis = draftPaneSizes.left
-    const centerBasis = draftPaneSizes.center
-    const rightBasis = Math.max(MIN_DRAFT_RIGHT, 1 - leftBasis - centerBasis)
-    const evidenceCards: Array<{
-      id: string
-      title: string
-      subtitle: string
-      content: ReactNode
-    }> = [
-      {
-        id: 'commit',
-        title: `Commit Snapshot`,
-        subtitle: data.branchType === 'main' ? 'Main' : 'Feature',
-        content: <p>{baselineSourceSummary || 'No upstream commit summary captured yet.'}</p>,
-      },
-      {
-        id: 'conversation',
-        title: 'Conversation (Raw)',
-        subtitle: 'Last two messages',
-        content: (
-          <div className="draft-chat-thread">
-            {chatHistory.map((message) => (
-              <div
-                key={message.id}
-                className={
-                  message.role === 'user'
-                    ? 'draft-chat__bubble draft-chat__bubble--user'
-                    : 'draft-chat__bubble draft-chat__bubble--ai'
-                }
-              >
-                <span>{message.role === 'user' ? 'User' : 'AI'}</span>
-                <p>{message.content}</p>
+  // ============================================
+  // PENDING COMMIT - Single View Two Zones Design (editable)
+  // ============================================
+  if (isPendingCommit) {
+    return (
+      <div className="node-modal__overlay" role="dialog" aria-modal="true">
+        <div className="modal-v2 modal-v2--commit modal-v2--commit-pending modal-v2--draft-svtz">
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <div className="draft-svtz__logo">t3x</div>
+              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
+              <span className="modal-v2__pending-badge">pending</span>
+            </div>
+            <div className="modal-v2__topbar-right">
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+          </header>
+
+          <div className="modal-v2__body draft-svtz__body" ref={draftBodyRef}>
+            {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
+            <aside className="draft-svtz__sidebar" style={{ width: sidebarSourceDividerPos }}>
+              {/* STEP 1: Configure */}
+              <div className={`draft-svtz__step ${configLocked ? 'draft-svtz__step--locked' : ''}`}>
+                <div className="draft-svtz__step-header">
+                  <span className="draft-svtz__step-number">STEP 1</span>
+                  <span className="draft-svtz__step-label">
+                    <span className={`draft-svtz__step-dot ${!configLocked ? 'draft-svtz__step-dot--active' : 'draft-svtz__step-dot--completed'}`} />
+                    Configure
+                    {configLocked && <Lock size={12} className="draft-svtz__lock-icon" />}
+                  </span>
+                </div>
+
+                {!configLocked ? (
+                  /* Unlocked state: Show editable controls */
+                  <div className="draft-svtz__config-controls">
+                    {/* Branch Selection */}
+                    {shouldShowBranchSelect && (
+                      <div className="draft-svtz__control-group">
+                        <label className="draft-svtz__control-label">Branch</label>
+                        <select
+                          className="draft-svtz__select draft-svtz__select--full"
+                          value={data.pendingBranch || 'branch'}
+                          onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
+                        >
+                          <option value="main">main</option>
+                          <option value="branch">branch</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Branch Name - only shown when branch is selected */}
+                    {requireBranchName && (
+                      <div className="draft-svtz__control-group">
+                        <label className="draft-svtz__control-label">Branch Name</label>
+                        <input
+                          type="text"
+                          className="draft-svtz__input draft-svtz__input--full"
+                          value={data.pendingBranchName || ''}
+                          onChange={(e) => onBranchNameChange?.(e.target.value)}
+                          placeholder="Enter branch name"
+                        />
+                      </div>
+                    )}
+
+                    {/* Template */}
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Template</label>
+                      <select
+                        className="draft-svtz__select draft-svtz__select--full"
+                        value={template}
+                        onChange={(e) => setTemplate(e.target.value)}
+                      >
+                        {bridgeTemplates.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Cosine Threshold */}
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Cosine</label>
+                      <input
+                        type="range"
+                        className="draft-svtz__slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={cosineThreshold}
+                        onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
+                      />
+                      <span className="draft-svtz__slider-value">{cosineThreshold.toFixed(2)}</span>
+                    </div>
+
+                    {/* Keywords Threshold */}
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Keywords</label>
+                      <input
+                        type="range"
+                        className="draft-svtz__slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={keywordsThreshold}
+                        onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
+                      />
+                      <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
+                    </div>
+
+                    {/* Refresh + Proceed Buttons */}
+                    <div className="draft-svtz__step-actions">
+                      <button
+                        className="draft-svtz__refresh-btn"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                      >
+                        <RefreshCw size={16} className={isRefreshing ? 'draft-svtz__spin' : ''} />
+                        <span>Refresh</span>
+                      </button>
+                      <button
+                        className="draft-svtz__proceed-btn"
+                        onClick={handleProceed}
+                        disabled={sourceBoxes.length === 0 || isRefreshing}
+                        title="Lock configuration and proceed to curation"
+                      >
+                        <Check size={16} />
+                        <span>Proceed</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Locked state: Show read-only summary */
+                  <div className="draft-svtz__config-locked">
+                    <div className="draft-svtz__config-summary">
+                      {shouldShowBranchSelect && (
+                        <div className="draft-svtz__config-item">
+                          <span className="draft-svtz__config-item-label">Branch:</span>
+                          <span className="draft-svtz__config-item-value">{data.pendingBranch || 'branch'}</span>
+                        </div>
+                      )}
+                      {requireBranchName && (
+                        <div className="draft-svtz__config-item">
+                          <span className="draft-svtz__config-item-label">Name:</span>
+                          <span className="draft-svtz__config-item-value">{data.pendingBranchName || '-'}</span>
+                        </div>
+                      )}
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Template:</span>
+                        <span className="draft-svtz__config-item-value">{template}</span>
+                      </div>
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Cosine:</span>
+                        <span className="draft-svtz__config-item-value">{cosineThreshold.toFixed(2)}</span>
+                      </div>
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Keywords:</span>
+                        <span className="draft-svtz__config-item-value">{keywordsThreshold.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="draft-svtz__reset-btn"
+                      onClick={handleReset}
+                      title="Unlock configuration (will reset Step 2 changes)"
+                    >
+                      <RotateCcw size={16} />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+
+              <div className="draft-svtz__step-divider" />
+
+              {/* STEP 2: Curate */}
+              <div className={`draft-svtz__step ${!configLocked ? 'draft-svtz__step--disabled' : ''}`}>
+                <div className="draft-svtz__step-header">
+                  <span className="draft-svtz__step-number">STEP 2</span>
+                  <span className="draft-svtz__step-label">
+                    <span className={`draft-svtz__step-dot ${configLocked ? 'draft-svtz__step-dot--active' : ''}`} />
+                    Curate
+                  </span>
+                </div>
+
+                {!configLocked ? (
+                  /* Disabled state: Show hint */
+                  <div className="draft-svtz__step-disabled-hint">
+                    <Lock size={16} />
+                    <span>Complete Step 1 first</span>
+                  </div>
+                ) : (
+                  /* Enabled state: Show stats and commit button */
+                  <>
+                    <div className="draft-svtz__stats">
+                      <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
+                      <span className="draft-svtz__stat">{mustHaveKeywords.length} must</span>
+                      <span className="draft-svtz__stat">{mustntHaveKeywords.length} mustnt</span>
+                    </div>
+
+                    <p className="draft-svtz__step-hint">
+                      Click phrases in SOURCE to toggle inclusion
+                    </p>
+
+                    {/* Commit Button */}
+                    <button
+                      className="draft-svtz__commit-btn"
+                      onClick={handleCommit}
+                      disabled={includedPhrasesCount === 0}
+                    >
+                      <Check size={16} />
+                      <span>Commit</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </aside>
+
+            {/* Sidebar | SOURCE Divider */}
+            <div
+              className="draft-svtz__divider"
+              onMouseDown={handleSidebarSourceDivider}
+            >
+              <div className="draft-svtz__divider-handle" />
+            </div>
+
+            {/* ========== MAIN CONTENT: SOURCE + RESULT ========== */}
+            <div className="draft-svtz__main" ref={mainContentRef}>
+              {/* SOURCE Column */}
+              <div className="draft-svtz__source" style={{ width: `${sourceResultDividerPos}%` }}>
+                <div className="draft-svtz__column-header">
+                  <h3>SOURCE</h3>
+                </div>
+                <div className="draft-svtz__source-content">
+                  {sourceBoxes.length === 0 ? (
+                    <div className="draft-svtz__source-empty">
+                      <MessageSquarePlus size={32} strokeWidth={1} />
+                      <p>No source content</p>
+                      <span>Connect upstream conversation or commit</span>
+                    </div>
+                  ) : (
+                    sourceBoxes.map((box) => (
+                      <div key={box.id} className="draft-svtz__source-box">
+                        {/* Source Box Header */}
+                        <div
+                          className="draft-svtz__source-box-header"
+                          onClick={() => toggleSourceBoxExpand(box.id)}
+                        >
+                          <span className="draft-svtz__source-box-toggle">
+                            {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </span>
+                          <span className="draft-svtz__source-box-title">{box.title}</span>
+                          <span className={`draft-svtz__source-box-badge draft-svtz__source-box-badge--${box.type}`}>
+                            {box.type}
+                          </span>
+                        </div>
+                        {/* Source Box Body with Phrases and Keyword Highlighting */}
+                        {box.expanded && (
+                          <div className="draft-svtz__source-box-body">
+                            {box.phrases.map((phrase) => {
+                              const canToggle = configLocked // Only allow toggling when Step 1 is locked
+                              return (
+                                <div
+                                  key={phrase.id}
+                                  className={`draft-svtz__phrase ${phrase.included ? 'draft-svtz__phrase--included' : 'draft-svtz__phrase--excluded'} ${!canToggle ? 'draft-svtz__phrase--disabled' : ''}`}
+                                  onClick={(e) => {
+                                    // Only toggle if clicking the phrase background (not a keyword)
+                                    if (canToggle && e.target === e.currentTarget) {
+                                      togglePhraseInclude(phrase.id)
+                                    }
+                                  }}
+                                  title={!canToggle ? 'Complete Step 1 to edit' : (phrase.included ? 'Click to exclude phrase' : 'Click to include phrase')}
+                                >
+                                  {/* Render phrase text with clickable keywords */}
+                                  {renderPhraseWithKeywords(
+                                    phrase,
+                                    canToggle,
+                                    () => togglePhraseInclude(phrase.id),
+                                    (kwId) => toggleKeywordMustnt(phrase.id, kwId)
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Draggable Divider */}
+              <div
+                className="draft-svtz__divider"
+                onMouseDown={handleSourceResultDivider}
+              >
+                <div className="draft-svtz__divider-handle" />
+              </div>
+
+              {/* RESULT Column */}
+              <div className="draft-svtz__result" style={{ width: `${100 - sourceResultDividerPos}%` }}>
+                <div className="draft-svtz__column-header">
+                  <h3>RESULT</h3>
+                </div>
+                <div className="draft-svtz__result-content">
+                  {/* Result Text with Keyword Highlighting */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Text</h4>
+                    <div className="draft-svtz__result-text">
+                      {allPhrases.filter(p => p.included).length > 0 ? (
+                        <div className="draft-svtz__result-text-content">
+                          {allPhrases.filter(p => p.included).map((phrase, idx, arr) => (
+                            <span key={phrase.id}>
+                              {renderResultPhraseWithKeywords(phrase)}
+                              {idx < arr.length - 1 ? '. ' : '.'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="draft-svtz__result-empty">
+                          <p>No content yet</p>
+                          <span>Include phrases from SOURCE</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Must-have Keywords */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Must-have</h4>
+                    <div className="draft-svtz__result-keywords">
+                      {mustHaveKeywords.length > 0 ? (
+                        mustHaveKeywords.map(kw => (
+                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--must">
+                            {kw.text}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="draft-svtz__result-keywords-empty">None</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mustnt-have Keywords */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Mustnt-have</h4>
+                    <div className="draft-svtz__result-keywords">
+                      {mustntHaveKeywords.length > 0 ? (
+                        mustntHaveKeywords.map(kw => (
+                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--mustnt">
+                            {kw.text}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="draft-svtz__result-keywords-empty">None</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        ),
-      },
-      ...(data.validationChecks ?? []).map((check) => ({
-        id: check.id,
-        title: check.label,
-        subtitle: `Validation · ${check.status}`,
-        content: <p>{data.summary || 'No description yet.'}</p>,
-      })),
-    ]
+
+          {/* Bottom Legend */}
+          <footer className="draft-svtz__legend">
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--included" />
+              green bg = included phrase
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--excluded" />
+              red bg = excluded phrase
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-must" />
+              green text = must-have keyword
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-mustnt" />
+              red text = mustnt-have keyword
+            </span>
+          </footer>
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================
+  // COMMITTED COMMIT - Read-only frozen version
+  // ============================================
+  if (isCommittedCommit) {
+    const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
+
+    // Mock constraints - in real app these would come from data
+    const commitMustHave = data.tags.slice(0, 3)
+    const commitMustntHave = data.tags.slice(3, 5)
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="draft-modal">
-          <header className="draft-modal__header">
-            <div className="draft-modal__title">
-              <span>{data.entryId}</span>
-              <input value={data.title} onChange={(event) => onUpdate({ title: event.target.value })} />
+        <div className="modal-v2 modal-v2--commit">
+          {/* Top Bar */}
+          <header className="modal-v2__topbar">
+            <div className="modal-v2__topbar-left">
+              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
+              <span className="modal-v2__id">{data.entryId}</span>
+              <span className={`modal-v2__branch-badge modal-v2__branch-badge--${branchLabel === 'main' ? 'main' : 'branch'}`}>
+                <GitBranch size={12} />
+                {branchLabel}
+              </span>
             </div>
-            <div className="draft-modal__actions">
+            <div className="modal-v2__topbar-right">
               {quickActions?.map((action) => (
                 <button
                   key={action.key}
-                  className="secondary-btn"
-                  onClick={() => {
-                    action.onClick()
-                    onClose()
-                  }}
-                  type="button"
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </button>
-              ))}
-              <button className="text-btn" onClick={onClose} aria-label="Close draft modal">
-                <X size={18} />
-              </button>
-            </div>
-          </header>
-          <div className="draft-layout" ref={draftContainerRef}>
-            <section className="draft-section draft-section--sidebar" style={{ flexBasis: `${leftBasis * 100}%` }}>
-              <div className="draft-sidebar__header">
-                <span>Upstream Context</span>
-                <p>Reference upstream evidence as you work</p>
-              </div>
-              <div className="draft-evidence__list">
-                {evidenceCards.map((card) => (
-                  <details key={card.id} open={card.id === 'commit'}>
-                    <summary>
-                      <div>
-                        <strong>{card.title}</strong>
-                        <small>{card.subtitle}</small>
-                      </div>
-                    </summary>
-                    <div className="draft-evidence__body">{card.content}</div>
-                  </details>
-                ))}
-              </div>
-              {effectiveConstraints && (
-                <ConstraintsPanel
-                  constraints={effectiveConstraints}
-                  overrides={data.constraintOverrides}
-                  onUpdateOverrides={onUpdateConstraintOverrides}
-                />
-              )}
-            </section>
-            <div
-              className="draft-section__resizer"
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                setActiveDraftResizer('left')
-              }}
-            />
-            <section
-              className="draft-section draft-section--config"
-              style={{ flexBasis: `${centerBasis * 100}%` }}
-            >
-              <div className="draft-config__header">
-                <strong>Draft Settings</strong>
-                <span>Configure bridging logic & target</span>
-              </div>
-              <div className="draft-config__form">
-                <label>
-                  Title
-                  <input
-                    value={data.title}
-                    onChange={(event) => onUpdate({ title: event.target.value })}
-                    placeholder="Enter draft title"
-                  />
-                </label>
-                <label>
-                  Branch
-                  <div className="draft-select">
-                    <select
-                      value={
-                        shouldShowBranchSelect
-                          ? data.pendingBranch ?? 'branch'
-                          : 'branch'
-                      }
-                      onChange={(event) =>
-                        shouldShowBranchSelect &&
-                        onBranchChange?.(event.target.value as 'main' | 'branch')
-                      }
-                      disabled={!shouldShowBranchSelect}
-                    >
-                      <option value="main">main</option>
-                      <option value="branch">branch</option>
-                    </select>
-                    <span className="draft-select__chevron" aria-hidden="true">▾</span>
-                  </div>
-                </label>
-                {requireBranchName && (
-                  <label>
-                    Branch Name
-                    <input
-                      value={data.pendingBranchName ?? ''}
-                      placeholder="e.g. osaka-nightlife"
-                      onChange={(event) => onBranchNameChange?.(event.target.value)}
-                    />
-                  </label>
-                )}
-                <label>
-                  Mode
-                  <div className="bridge-mode-select">
-                    <select
-                      value={data.bridgePrompt ?? bridgePrompts[0]}
-                      onChange={(event) => onUpdate({ bridgePrompt: event.target.value })}
-                    >
-                      {bridgePrompts.map((prompt) => (
-                        <option key={prompt} value={prompt}>
-                          {prompt}
-                        </option>
-                      ))}
-                    </select>
-                    <Sparkles size={16} aria-hidden="true" />
-                  </div>
-                </label>
-                <label>
-                  Draft Instructions
-                  <textarea
-                    rows={5}
-                    value={data.draftInstructions ?? ''}
-                    onChange={(event) => onUpdate({ draftInstructions: event.target.value })}
-                    placeholder="For example: tighten tone, highlight validator insights..."
-                  />
-                </label>
-                <button
-                  className="secondary-btn draft-config__regenerate"
-                  type="button"
-                  onClick={() => onUpdate({ summary: `${data.summary}\n\nRegenerated draft...` })}
-                >
-                  <WandSparkles size={16} />
-                  <span>Regenerate</span>
-                </button>
-              </div>
-            </section>
-            <div
-              className="draft-section__resizer"
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                setActiveDraftResizer('center')
-              }}
-            />
-            <section
-              className="draft-section draft-section--editor"
-              style={{ flexBasis: `${rightBasis * 100}%` }}
-            >
-              <div className="draft-editor__header">
-                <div className="draft-tabs" role="tablist">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={draftTab === 'editor'}
-                    className={draftTab === 'editor' ? 'active' : undefined}
-                    onClick={() => setDraftTab('editor')}
-                  >
-                    Editor
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={draftTab === 'diff'}
-                    className={draftTab === 'diff' ? 'active' : undefined}
-                    onClick={() => setDraftTab('diff')}
-                  >
-                    Diff
-                  </button>
-                </div>
-                {onConvertDraft && (
-                  <button className="primary-btn" onClick={() => onConvertDraft()}>
-                    Commit Changes
-                  </button>
-                )}
-              </div>
-              {draftTab === 'editor' ? (
-                <textarea
-                  className="draft-editor__textarea"
-                  value={data.summary}
-                  onChange={(event) => onUpdate({ summary: event.target.value })}
-                  placeholder="Draft here with Markdown / rich text support..."
-                />
-              ) : (
-                <div className="draft-diff">
-                  <div
-                    className="draft-diff__pane"
-                    style={{ flexBasis: `${diffSplit * 100}%` }}
-                  >
-                    <header>
-                      <strong>Previous Commit</strong>
-                    </header>
-                    <div className="draft-diff__lines">
-                      {baselineLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">No upstream commit attached.</div>
-                      ) : (
-                        baselineLines.map((text, index) => {
-                          const status = baselineStatuses[index]
-                          const classes =
-                            status === 'removed'
-                              ? 'diff-line diff-line--removed'
-                              : 'diff-line diff-line--neutral'
-                          const displayText = text.trim().length > 0 ? text : '\u00A0'
-                          return (
-                            <div key={`commit-${index}`} className={classes}>
-                              {displayText}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                  <div
-                    className="draft-diff__resizer"
-                    role="separator"
-                    aria-orientation="vertical"
-                    onMouseDown={() => setDiffDrag(true)}
-                  />
-                  <div
-                    className="draft-diff__pane draft-diff__pane--changes"
-                    style={{ flexBasis: `${(1 - diffSplit) * 100}%` }}
-                  >
-                    <header>
-                      <strong>Draft Changes</strong>
-                    </header>
-                    <div className="draft-diff__lines draft-diff__lines--interactive">
-                      {draftLines.length === 0 ? (
-                        <div className="diff-line diff-line--neutral">No draft content yet.</div>
-                      ) : (
-                        draftLines.map((text, index) => {
-                          const status = draftStatuses[index]
-                          const key = status === 'added' ? `add-${index}` : `same-${index}`
-                          const decision = diffDecisions[key]
-                          const classes =
-                            status === 'added' && decision !== 'accept'
-                              ? 'diff-line diff-line--added'
-                              : 'diff-line diff-line--neutral'
-                          const displayText = text.trim().length > 0 ? text : '\u00A0'
-                          return (
-                            <div key={`draft-${key}`} className={classes}>
-                              <span>{displayText}</span>
-                              {status === 'added' && (
-                                <div className="diff-line__actions">
-                                  <button
-                                    type="button"
-                                    className={decision === 'accept' ? 'active' : undefined}
-                                    onClick={() => toggleDiffDecision(key, 'accept')}
-                                    aria-label="Accept change"
-                                  >
-                                    <Check size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRejectDraftLine(index)}
-                                    aria-label="Reject change"
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })
-                      )}
-                      {removals.map((segment) => {
-                        const trimmed = segment.text.trim()
-                        if (!trimmed) {
-                          return null
-                        }
-                        const decision = diffDecisions[segment.key]
-                        if (decision === 'reject') {
-                          return null
-                        }
-                        const classes =
-                          decision === 'accept'
-                            ? 'diff-line diff-line--neutral'
-                            : 'diff-line diff-line--removed'
-                        return (
-                          <div key={`draft-${segment.key}`} className={classes}>
-                            <span>Removed · {trimmed}</span>
-                            <div className="diff-line__actions">
-                              <button
-                                type="button"
-                                className={decision === 'accept' ? 'active' : undefined}
-                                onClick={() => toggleDiffDecision(segment.key, 'accept')}
-                                aria-label="Accept removal"
-                              >
-                                <Check size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => toggleDiffDecision(segment.key, 'reject')}
-                                aria-label="Reject removal"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isCommit) {
-    const branchLabel =
-      data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
-    const headerActions = quickActions ?? []
-    return (
-      <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="commit-modal">
-          <header className="commit-modal__header">
-            <div className="commit-modal__title">
-              <span>{data.entryId}</span>
-              <strong>{data.title}</strong>
-            </div>
-            <div className="commit-modal__actions">
-              {headerActions.map((action) => (
-                <button
-                  key={action.key}
-                  className="secondary-btn"
+                  className="modal-v2__secondary-btn"
                   onClick={() => {
                     action.onClick()
                     onClose()
                   }}
                   disabled={action.disabled}
-                  type="button"
                 >
                   {action.icon}
                   <span>{action.label}</span>
                 </button>
               ))}
-              <button className="text-btn" onClick={onClose} aria-label="Close commit modal">
+              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
           </header>
-          <div className="commit-modal__body">
-            <section className="commit-modal__pane commit-modal__pane--meta">
-              <div className="commit-meta">
-                <label>Branch</label>
-                <strong>{branchLabel.toUpperCase()}</strong>
+
+          <div className="modal-v2__body" ref={commitContainerRef}>
+            {/* Left Sidebar - Meta & Lineage */}
+            <aside className="modal-v2__sidebar modal-v2__sidebar--left" style={{ width: commitLeftWidth }}>
+              <div className="modal-v2__sidebar-section">
+                <h4>Version Info</h4>
+                <div className="modal-v2__info-row">
+                  <GitBranch size={14} />
+                  <span>Branch: <strong>{branchLabel}</strong></span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Clock size={14} />
+                  <span>{data.timestamp}</span>
+                </div>
+                <div className="modal-v2__info-row">
+                  <Tag size={14} />
+                  <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
+                </div>
               </div>
-              <div className="commit-meta">
-                <label>Status</label>
-                <strong>{data.status || 'No status supplied'}</strong>
-              </div>
-              <div className="commit-meta">
-                <label>Timestamp</label>
-                <span>{data.timestamp}</span>
-              </div>
-              <div className="commit-meta">
-                <label>Tags</label>
-                {data.tags.length > 0 ? (
-                  <div className="commit-meta__tags">
-                    {data.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
+
+              <div className="modal-v2__sidebar-divider" />
+
+              <div className="modal-v2__sidebar-section">
+                <h4>Lineage</h4>
+                <div className="commit-v2__lineage">
+                  <div className="commit-v2__lineage-item">
+                    <span className="commit-v2__lineage-label">From Draft:</span>
+                    <span className="commit-v2__lineage-value">{data.entryId}</span>
                   </div>
-                ) : (
-                  <span className="commit-meta__empty">No tags applied</span>
-                )}
+                  {data.baselineSummary && (
+                    <div className="commit-v2__lineage-item">
+                      <span className="commit-v2__lineage-label">Upstream:</span>
+                      <span className="commit-v2__lineage-value">Connected</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </section>
-            <section className="commit-modal__pane commit-modal__pane--content">
-              <div className="commit-summary">
-                <header>
-                  <h3>Version Summary</h3>
-                  <small>Validator snapshot</small>
-                </header>
-                <p>{data.summary || 'No summary recorded.'}</p>
+            </aside>
+
+            {/* Left Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleCommitLeftDivider}
+            />
+
+            {/* Main Content - Semantic Snapshot */}
+            <div className="modal-v2__main">
+              <div className="commit-v2__section">
+                <div className="commit-v2__section-header">
+                  <h3>Semantic Content</h3>
+                  <span className="commit-v2__readonly-badge">Read-only</span>
+                </div>
+                <div className="commit-v2__content">
+                  {data.summary || 'No content recorded.'}
+                </div>
               </div>
-              <div className="commit-intent">
-                <header>
-                  <Sparkles size={16} />
-                  <span>Intent</span>
-                </header>
-                <p>{data.status || 'No intent captured.'}</p>
+
+              {data.status && (
+                <div className="commit-v2__section">
+                  <div className="commit-v2__section-header">
+                    <h3>Intent</h3>
+                  </div>
+                  <div className="commit-v2__intent">
+                    {data.status}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Divider */}
+            <div
+              className="modal-v2__resize-divider"
+              onMouseDown={handleCommitRightDivider}
+            />
+
+            {/* Right Sidebar - Constraints Summary */}
+            <aside className="modal-v2__sidebar modal-v2__sidebar--right" style={{ width: commitRightWidth }}>
+              <div className="modal-v2__sidebar-section">
+                <h4>Constraints</h4>
+
+                <div className="commit-v2__constraints-group">
+                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--must">
+                    Must-have
+                  </h5>
+                  {commitMustHave.length > 0 ? (
+                    <div className="commit-v2__constraints-tags">
+                      {commitMustHave.map((w, i) => (
+                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--must">
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="commit-v2__constraints-empty">None</span>
+                  )}
+                </div>
+
+                <div className="commit-v2__constraints-group">
+                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--mustnt">
+                    Mustn't-have
+                  </h5>
+                  {commitMustntHave.length > 0 ? (
+                    <div className="commit-v2__constraints-tags">
+                      {commitMustntHave.map((w, i) => (
+                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--mustnt">
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="commit-v2__constraints-empty">None</span>
+                  )}
+                </div>
               </div>
-            </section>
+            </aside>
           </div>
         </div>
       </div>
     )
   }
 
+  // Fallback for unknown node types
   return (
     <div className="node-modal__overlay" role="dialog" aria-modal="true">
-      <div className="node-modal">
-        <header>
-          <div>
-            <span>{data.entryId}</span>
-            <strong>{data.title}</strong>
+      <div className="modal-v2">
+        <header className="modal-v2__topbar">
+          <div className="modal-v2__topbar-left">
+            <h2 className="modal-v2__title">{data.title || 'Node'}</h2>
           </div>
-          <button className="text-btn" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <div className="modal-v2__topbar-right">
+            <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+              <X size={20} />
+            </button>
+          </div>
         </header>
-
-        <div className="node-modal__body">
-          <label>
-            Title
-            <input
-              value={data.title}
-              onChange={(event) => onUpdate({ title: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Summary
-            <textarea
-              rows={5}
-              value={data.summary}
-              onChange={(event) => onUpdate({ summary: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Status
-            <input
-              value={data.status}
-              onChange={(event) => onUpdate({ status: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Tags
-            <input
-              value={data.tags.join(', ')}
-              onChange={(event) =>
-                onUpdate({
-                  tags: event.target.value
-                    .split(',')
-                    .map((token) => token.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </label>
-
-          {isDraft && (
-            <>
-              <label>
-                Bridge Prompt
-                <select
-                  value={data.bridgePrompt ?? bridgePrompts[0]}
-                  onChange={(event) => onUpdate({ bridgePrompt: event.target.value })}
-                  disabled={isMergeDraft}
-                >
-                  {bridgePrompts.map((prompt) => (
-                    <option key={prompt} value={prompt}>
-                      {prompt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {shouldShowBranchSelect && (
-                <label>
-                  Branch Target
-                  {draftBranchMode === 'select' ? (
-                    <select
-                      value={data.pendingBranch ?? 'branch'}
-                      onChange={(event) => onBranchChange?.(event.target.value as 'main' | 'branch')}
-                    >
-                      <option value="main">main</option>
-                      <option value="branch">branch</option>
-                    </select>
-                  ) : (
-                    <select value="branch" disabled>
-                      <option value="branch">branch</option>
-                    </select>
-                  )}
-                </label>
-              )}
-              {requireBranchName && (
-                <label className="branch-name-field">
-                  Branch Name
-                  <input
-                    value={data.pendingBranchName ?? ''}
-                    placeholder="e.g. osaka-nightlife"
-                    onChange={(event) => onBranchNameChange?.(event.target.value)}
-                  />
-                </label>
-              )}
-              {isMergeDraft && mergeConfig && (
-                <div className="merge-config">
-                  <h4>Merge Inputs</h4>
-                  <div className="merge-config__grid">
-                    <label>
-                      Latest MAIN commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.targetCommitTitle || mergeConfig.targetCommitId}
-                      </span>
-                      <textarea
-                        value={mergeConfig.targetContent}
-                        onChange={(event) =>
-                          updateMergeConfig({ targetContent: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Incoming branch commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.sourceCommitTitle || mergeConfig.sourceCommitId}
-                      </span>
-                      <textarea
-                        value={mergeConfig.sourceContent}
-                        onChange={(event) =>
-                          updateMergeConfig({ sourceContent: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Base commit
-                      <span className="merge-config__field-meta">
-                        {mergeConfig.baseCommitTitle || 'No upstream main commit detected'}
-                      </span>
-                      <textarea
-                        value={mergeConfig.baseContent ?? ''}
-                        placeholder="Describe the branch point context"
-                        onChange={(event) =>
-                          updateMergeConfig({ baseContent: event.target.value })
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {isCommit && (
-            <div className="node-modal__note">
-              <Sparkles size={16} />
-              <span>This commit is validator-signed. Use the ledger to diff changes.</span>
-            </div>
-          )}
+        <div className="modal-v2__body">
+          <p>Unknown node type</p>
         </div>
-
-        <footer>
-          {isDraft && (
-            <div className="draft-actions">
-              {draftBranchMode === 'branch-only' && (
-                <span className="branch-note">latest main locked · branch only</span>
-              )}
-              {draftBranchMode === 'force-main' && <span className="branch-note">will create MAIN</span>}
-              {draftBranchMode === 'blocked' && (
-                <span className="branch-note">connect to main/branch commit to continue</span>
-              )}
-              <button
-                className="secondary-btn"
-                onClick={() => onConvertDraft?.()}
-                disabled={!onConvertDraft}
-              >
-                Commit
-              </button>
-            </div>
-          )}
-          {quickActions && quickActions.length > 0 && (
-            <div className="node-modal__quick-actions">
-              {quickActions.map((action) => (
-                <button
-                  key={action.key}
-                  className="text-btn node-modal__create-btn"
-                  onClick={() => {
-                    action.onClick()
-                    onClose()
-                  }}
-                  disabled={action.disabled}
-                  type="button"
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </footer>
       </div>
     </div>
   )

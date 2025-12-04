@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquarePlus, PenSquare } from 'lucide-react'
+import { GitCommit, MessageSquarePlus } from 'lucide-react'
 import { Background, Controls, MiniMap, ReactFlow } from 'reactflow'
 import type { Edge, Node, ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { canvasNodeTypes } from '../components/CanvasNodes'
+import { LeafPanel } from '../components/LeafPanel'
 import { NodeModal, type NodeQuickAction } from '../components/NodeModal'
 import { useCanvasStore } from '../store/canvasStore'
 import type { CanvasNodeData, NodeKind } from '../types/nodes'
@@ -15,7 +16,13 @@ type PathHighlight =
   | { mode: 'branch'; branch?: string }
   | null
 
-export default function CanvasWorkspace() {
+interface CanvasWorkspaceProps {
+  projectName: string
+  mode: 'editor' | 'execution'
+  onModeChange: (mode: 'editor' | 'execution') => void
+}
+
+export default function CanvasWorkspace({ projectName, mode, onModeChange }: CanvasWorkspaceProps) {
   const [openNodeId, setOpenNodeId] = useState<string>()
   const [isPanMode, setIsPanMode] = useState(false)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
@@ -27,53 +34,53 @@ export default function CanvasWorkspace() {
     edges,
     addNode,
     updateNode,
-    convertDraftToCommit,
+    commitPendingCommit,
     onNodesChange,
     onEdgesChange,
     onConnect,
-    addDraftFromConversation,
+    addPendingCommitFromConversation,
     addConversationFromCommit,
-    addDraftFromCommit,
+    addPendingCommitFromCommit,
     saveConversationConstraints,
-    getDraftEffectiveConstraints,
-    updateDraftConstraintOverrides,
-    hasDownstreamDrafts,
+    getPendingCommitEffectiveConstraints,
+    updatePendingCommitConstraintOverrides,
+    hasDownstreamPendingCommits,
   } = useCanvasStore()
 
   const modalNode = nodes.find((node) => node.id === openNodeId)
-  const draftBranchMode = useCanvasStore((state) => {
+  const pendingCommitBranchMode = useCanvasStore((state) => {
     if (!openNodeId) {
       return undefined
     }
-    const draftNode = state.nodes.find((node) => node.id === openNodeId && node.data.kind === 'draft')
-    if (!draftNode) {
+    const pendingNode = state.nodes.find((node) => node.id === openNodeId && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
+    if (!pendingNode) {
       return undefined
     }
-    return state.getDraftBranchMode(openNodeId)
+    return state.getPendingCommitBranchMode(openNodeId)
   })
 
-  const canSeedDraftFromConversation = useCanvasStore((state) => {
+  const canSeedPendingCommitFromConversation = useCanvasStore((state) => {
     if (!openNodeId) {
       return false
     }
-    return state.canCreateDraftFromConversation(openNodeId)
+    return state.canCreatePendingCommitFromConversation(openNodeId)
   })
 
-  // Get effective constraints for draft nodes
+  // Get effective constraints for pending commit nodes
   const effectiveConstraints = useMemo(() => {
-    if (!openNodeId || !modalNode || modalNode.data.kind !== 'draft') {
+    if (!openNodeId || !modalNode || modalNode.data.kind !== 'commit' || modalNode.data.commitStatus !== 'pending') {
       return undefined
     }
-    return getDraftEffectiveConstraints(openNodeId)
-  }, [openNodeId, modalNode, getDraftEffectiveConstraints])
+    return getPendingCommitEffectiveConstraints(openNodeId)
+  }, [openNodeId, modalNode, getPendingCommitEffectiveConstraints])
 
-  // Check if conversation is locked (has downstream drafts)
+  // Check if conversation is locked (has downstream pending commits)
   const isConversationLocked = useMemo(() => {
     if (!openNodeId || !modalNode || modalNode.data.kind !== 'conversation') {
       return false
     }
-    return hasDownstreamDrafts(openNodeId)
-  }, [openNodeId, modalNode, hasDownstreamDrafts])
+    return hasDownstreamPendingCommits(openNodeId)
+  }, [openNodeId, modalNode, hasDownstreamPendingCommits])
 
   const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {
     if (!modalNode) {
@@ -82,15 +89,16 @@ export default function CanvasWorkspace() {
     if (modalNode.data.kind === 'conversation') {
       return [
         {
-          key: 'add-draft',
-          label: 'Create Draft',
-          icon: <PenSquare size={14} />,
-          onClick: () => addDraftFromConversation(modalNode.id),
-          disabled: !canSeedDraftFromConversation,
+          key: 'add-commit',
+          label: 'Create Commit',
+          icon: <GitCommit size={14} />,
+          onClick: () => addPendingCommitFromConversation(modalNode.id),
+          disabled: !canSeedPendingCommitFromConversation,
         },
       ]
     }
-    if (modalNode.data.kind === 'commit') {
+    // Only show quick actions for committed commits, not pending ones
+    if (modalNode.data.kind === 'commit' && modalNode.data.commitStatus !== 'pending') {
       return [
         {
           key: 'add-conversation',
@@ -99,20 +107,20 @@ export default function CanvasWorkspace() {
           onClick: () => addConversationFromCommit(modalNode.id),
         },
         {
-          key: 'add-draft',
-          label: 'Create Draft',
-          icon: <PenSquare size={14} />,
-          onClick: () => addDraftFromCommit(modalNode.id),
+          key: 'add-commit',
+          label: 'Create Commit',
+          icon: <GitCommit size={14} />,
+          onClick: () => addPendingCommitFromCommit(modalNode.id),
         },
       ]
     }
     return undefined
   }, [
     modalNode,
-    addDraftFromConversation,
-    canSeedDraftFromConversation,
+    addPendingCommitFromConversation,
+    canSeedPendingCommitFromConversation,
     addConversationFromCommit,
-    addDraftFromCommit,
+    addPendingCommitFromCommit,
   ])
 
   useEffect(() => {
@@ -353,16 +361,18 @@ export default function CanvasWorkspace() {
   )
   return (
     <div className="workspace">
-      <div className="workspace__toolbar">
-        <div className="path-controls">
-          <button
-            className={highlight?.mode === 'main' ? 'path-btn path-btn--active' : 'path-btn'}
-            onClick={() => toggleHighlight({ mode: 'main' })}
-            disabled={!hasMainCommits}
-          >
-            <span>Main</span>
-          </button>
-          <div className="branch-picker">
+      {/* Integrated Top Bar */}
+      <header className="project-topbar">
+        <div className="project-topbar__left">
+          <h2 className="project-topbar__title">{projectName}</h2>
+          <div className="path-controls">
+            <button
+              className={highlight?.mode === 'main' ? 'path-btn path-btn--active' : 'path-btn'}
+              onClick={() => toggleHighlight({ mode: 'main' })}
+              disabled={!hasMainCommits}
+            >
+              Main
+            </button>
             <button
               className={highlight?.mode === 'branch' ? 'path-btn path-btn--active' : 'path-btn'}
               onClick={() =>
@@ -374,9 +384,10 @@ export default function CanvasWorkspace() {
               }
               disabled={!hasBranchCommits}
             >
-              <span>Branch</span>
+              Branch
             </button>
             <select
+              className="branch-select"
               value={branchFilter}
               onChange={(event) => {
                 const value = event.target.value
@@ -399,14 +410,36 @@ export default function CanvasWorkspace() {
             </select>
           </div>
         </div>
-        <div className="toolbar-actions">
-          <button className="text-btn" onClick={() => handleAddNode('conversation')}>
-            <MessageSquarePlus size={16} />
-            Add Conversation
+
+        <div className="project-topbar__right">
+          <button
+            className="icon-btn"
+            onClick={() => handleAddNode('conversation')}
+            title="Add Conversation"
+          >
+            <MessageSquarePlus size={18} />
           </button>
-          <button className="text-btn" onClick={() => handleAddNode('draft')}>
-            <PenSquare size={16} />
-            Add Draft
+        </div>
+      </header>
+
+      {/* Mode Switch - positioned at topbar/canvas boundary */}
+      <div className="mode-switch-container">
+        <div className="mode-switch">
+          <div
+            className="mode-switch__slider"
+            style={{ transform: mode === 'editor' ? 'translateX(0)' : 'translateX(100%)' }}
+          />
+          <button
+            className={mode === 'editor' ? 'mode-switch__btn mode-switch__btn--active' : 'mode-switch__btn'}
+            onClick={() => onModeChange('editor')}
+          >
+            Editor
+          </button>
+          <button
+            className={mode === 'execution' ? 'mode-switch__btn mode-switch__btn--active' : 'mode-switch__btn'}
+            onClick={() => onModeChange('execution')}
+          >
+            Execution
           </button>
         </div>
       </div>
@@ -443,21 +476,21 @@ export default function CanvasWorkspace() {
           onClose={() => setOpenNodeId(undefined)}
           onUpdate={(patch) => updateNode(modalNode.id, patch)}
           onConvertDraft={
-            modalNode.data.kind === 'draft' && draftBranchMode !== 'blocked'
+            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending' && pendingCommitBranchMode !== 'blocked'
               ? () => {
-                  convertDraftToCommit(modalNode.id)
+                  commitPendingCommit(modalNode.id)
                   setOpenNodeId(undefined)
                 }
               : undefined
           }
-          draftBranchMode={draftBranchMode}
+          draftBranchMode={pendingCommitBranchMode}
           onBranchChange={
-            modalNode.data.kind === 'draft'
+            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
               ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
               : undefined
           }
           onBranchNameChange={
-            modalNode.data.kind === 'draft'
+            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
               ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
               : undefined
           }
@@ -469,13 +502,14 @@ export default function CanvasWorkspace() {
           }
           effectiveConstraints={effectiveConstraints}
           onUpdateConstraintOverrides={
-            modalNode.data.kind === 'draft'
-              ? (overrides) => updateDraftConstraintOverrides(modalNode.id, overrides)
+            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
+              ? (overrides) => updatePendingCommitConstraintOverrides(modalNode.id, overrides)
               : undefined
           }
           isConversationLocked={isConversationLocked}
         />
       )}
+      <LeafPanel />
     </div>
   )
 }

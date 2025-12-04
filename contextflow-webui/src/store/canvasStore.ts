@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus } from '../types/nodes'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -11,15 +11,18 @@ type CanvasState = {
   edges: Edge[]
   hasMainCommit: boolean
   latestMainCommitId?: string
+  // Leaf panel state
+  leafPanelOpen: boolean
+  leafPanelCommitId?: string
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
-  convertDraftToCommit: (id: string) => void
-  addDraftFromConversation: (conversationId: string) => void
+  commitPendingCommit: (id: string) => void
+  addPendingCommitFromConversation: (conversationId: string) => void
   addConversationFromCommit: (commitId: string) => void
-  addDraftFromCommit: (commitId: string) => void
-  createMergeDraftFromCommit: (commitId: string) => void
-  getDraftBranchMode: (draftId: string) => DraftBranchMode
-  canCreateDraftFromConversation: (conversationId: string) => boolean
+  addPendingCommitFromCommit: (commitId: string) => void
+  createMergePendingCommit: (commitId: string) => void
+  getPendingCommitBranchMode: (commitId: string) => DraftBranchMode
+  canCreatePendingCommitFromConversation: (conversationId: string) => boolean
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onConnect: (connection: Connection) => void
@@ -28,19 +31,23 @@ type CanvasState = {
   // Conversation constraints management
   saveConversationConstraints: (conversationId: string, constraints: ConversationConstraints) => void
   getConversationConstraints: (conversationId: string) => ConversationConstraints | undefined
-  // Draft constraint overrides
-  updateDraftConstraintOverrides: (draftId: string, overrides: Partial<DraftConstraintOverrides>) => void
-  getDraftEffectiveConstraints: (draftId: string) => { clauses: ConversationConstraints['clauses'], must_have: string[], mustnt_have: string[] } | undefined
-  // Get source conversation for a draft
-  getSourceConversationForDraft: (draftId: string) => Node<CanvasNodeData> | undefined
-  // Check if a conversation has any downstream drafts (for locking)
-  hasDownstreamDrafts: (conversationId: string) => boolean
+  // Pending commit constraint overrides
+  updatePendingCommitConstraintOverrides: (commitId: string, overrides: Partial<DraftConstraintOverrides>) => void
+  getPendingCommitEffectiveConstraints: (commitId: string) => { clauses: ConversationConstraints['clauses'], must_have: string[], mustnt_have: string[] } | undefined
+  // Get source conversation for a pending commit
+  getSourceConversationForPendingCommit: (commitId: string) => Node<CanvasNodeData> | undefined
+  // Check if a conversation has any downstream pending commits (for locking)
+  hasDownstreamPendingCommits: (conversationId: string) => boolean
+  // Leaf panel methods
+  openLeafPanel: (commitId: string) => void
+  closeLeafPanel: () => void
+  addLeafNode: (leafType: LeafType) => void
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
-  conversation: ['draft', 'conversation'],
-  draft: ['commit'],
-  commit: ['conversation', 'draft'],
+  conversation: ['commit', 'conversation'],
+  commit: ['conversation', 'commit', 'leaf'],
+  leaf: [],
 }
 
 const canConnect = (
@@ -64,11 +71,10 @@ const nextNodeId = () => `node-${nodeCounter++}`
 const nextEdgeId = () => `edge-${edgeCounter++}`
 const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 }
 const edgeType: Edge['type'] = 'default'
-const conversationDraftOffset = 300
-const commitQuickOffset = conversationDraftOffset + 40
+const conversationCommitOffset = 300
+const commitQuickOffset = conversationCommitOffset + 40
 const reactFlowGridSize = 16
 const conversationNodeHeight = reactFlowGridSize * 8
-const draftNodeHeight = reactFlowGridSize * 10
 const commitNodeHeight = reactFlowGridSize * 10
 const mergeArrowMarker = {
   type: MarkerType.ArrowClosed,
@@ -84,9 +90,6 @@ const snapPosition = (position: { x: number; y: number }) => ({
 })
 
 const getNodeHeightForKind = (kind: NodeKind) => {
-  if (kind === 'draft') {
-    return draftNodeHeight
-  }
   if (kind === 'commit') {
     return commitNodeHeight
   }
@@ -377,7 +380,7 @@ const hasPrimaryAncestor = (
   return sources.some((sourceId) => hasPrimaryAncestor(sourceId, nodeMap, incomingMap, visited))
 }
 
-const determineDraftBranchMode = (state: CanvasState, draftId: string): DraftBranchMode => {
+const determinePendingCommitBranchMode = (state: CanvasState, commitId: string): DraftBranchMode => {
   if (!state.hasMainCommit) {
     return 'force-main'
   }
@@ -385,14 +388,14 @@ const determineDraftBranchMode = (state: CanvasState, draftId: string): DraftBra
   const incomingMap = buildIncomingMap(state.edges)
   const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
   const attachedToLatestMain =
-    latestMainId !== undefined && isDescendantOf(draftId, latestMainId, incomingMap)
+    latestMainId !== undefined && isDescendantOf(commitId, latestMainId, incomingMap)
   if (attachedToLatestMain) {
     return 'select'
   }
-  return hasPrimaryAncestor(draftId, nodeMap, incomingMap) ? 'branch-only' : 'blocked'
+  return hasPrimaryAncestor(commitId, nodeMap, incomingMap) ? 'branch-only' : 'blocked'
 }
 
-const canConversationSeedDraft = (
+const canConversationSeedPendingCommit = (
   conversationId: string,
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
@@ -406,9 +409,9 @@ const canConversationSeedDraft = (
   return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
 }
 
-const canAttachConversationToDraft = (
+const canAttachConversationToPendingCommit = (
   conversationId: string,
-  draftId: string,
+  commitId: string,
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
   hasMainCommit: boolean,
@@ -418,7 +421,7 @@ const canAttachConversationToDraft = (
   }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const incomingMap = buildIncomingMap(edges)
-  if (hasPrimaryAncestor(draftId, nodeMap, incomingMap)) {
+  if (hasPrimaryAncestor(commitId, nodeMap, incomingMap)) {
     return true
   }
   return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
@@ -432,7 +435,7 @@ const seedNodes: Node<CanvasNodeData>[] = [
     data: {
       entryId: 'CONV-18',
       title: 'Conversation: food-heavy reiteration',
-      summary: '“I want neon, late-night ramen alleys, and buzzing markets.”',
+      summary: '"I want neon, late-night ramen alleys, and buzzing markets."',
       status: 'ready for extraction',
       timestamp: '14m ago',
       tags: ['conversation', 'preference'],
@@ -441,19 +444,20 @@ const seedNodes: Node<CanvasNodeData>[] = [
   },
   {
     id: 'node-2',
-    type: 'draft',
+    type: 'commit',
     position: snapPosition({ x: 360, y: 240 }),
     data: {
-      entryId: 'DRAFT-42',
-      title: 'Draft: Osaka nightlife shard',
+      entryId: 'COMMIT-42',
+      title: 'Commit: Osaka nightlife shard',
       summary: 'Includes Dotonbori, Kuromon, and Namba Yasaka blend.',
       status: 'needs validator',
       timestamp: '10m ago',
-      tags: ['draft', 'nightlife'],
-      kind: 'draft',
+      tags: ['commit', 'nightlife'],
+      kind: 'commit',
       bridgePrompt: '/plan',
       pendingBranch: 'branch',
       pendingBranchName: '',
+      commitStatus: 'pending',
     },
   },
   {
@@ -469,6 +473,7 @@ const seedNodes: Node<CanvasNodeData>[] = [
       tags: ['commit', 'stable'],
       kind: 'commit',
       branchType: 'main',
+      commitStatus: 'committed',
     },
   },
 ]
@@ -494,6 +499,9 @@ const seedEdges: Edge[] = [
 
 const initialLatestMainCommitId = resolveLatestMainCommitId(seedNodes)
 
+const leafNodeHeight = reactFlowGridSize * 5
+const leafNodeOffset = 80
+
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: seedNodes,
   edges: seedEdges,
@@ -501,6 +509,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
   ),
   latestMainCommitId: initialLatestMainCommitId,
+  leafPanelOpen: false,
+  leafPanelCommitId: undefined,
 
   addNode: (kind, position) => {
     const total = get().nodes.length
@@ -519,34 +529,22 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         title:
           kind === 'conversation'
             ? 'New Conversation'
-            : kind === 'draft'
-              ? 'New Draft'
-              : 'New Commit',
+            : 'New Commit',
         summary:
           kind === 'conversation'
             ? 'Capture the latest exchange before structuring.'
-            : kind === 'draft'
-              ? 'Blend conversations and commits, then validate.'
-              : 'Snapshot that passed validator.',
+            : 'Snapshot that passed validator.',
         status:
           kind === 'conversation'
             ? 'raw-input'
-            : kind === 'draft'
-              ? 'working'
-              : 'stable',
+            : 'stable',
         timestamp: 'just now',
         tags: [kind],
         kind,
-        ...(kind === 'draft'
-          ? {
-              bridgePrompt: '/plan',
-              pendingBranch: 'branch' as const,
-              pendingBranchName: '',
-            }
-          : {}),
         ...(kind === 'commit'
           ? {
               branchType: 'branch' as const,
+              commitStatus: 'committed' as CommitStatus,
             }
           : {}),
       },
@@ -564,35 +562,35 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       ),
     })),
 
-  convertDraftToCommit: (id) =>
+  commitPendingCommit: (id) =>
     set((state) => {
-      const draftNode = state.nodes.find((node) => node.id === id && node.data.kind === 'draft')
-      if (!draftNode) {
+      const pendingNode = state.nodes.find((node) => node.id === id && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
+      if (!pendingNode) {
         return {}
       }
 
-      const branchMode = determineDraftBranchMode(state, id)
+      const branchMode = determinePendingCommitBranchMode(state, id)
       if (branchMode === 'blocked') {
         return {}
       }
-      const isMergeDraft = draftNode.data.bridgePrompt === '/merge' && !!draftNode.data.mergeConfig
+      const isMergeCommit = pendingNode.data.bridgePrompt === '/merge' && !!pendingNode.data.mergeConfig
       let branchType: BranchType = 'branch'
 
-      if (branchMode === 'force-main' || isMergeDraft) {
+      if (branchMode === 'force-main' || isMergeCommit) {
         branchType = 'main'
       } else if (branchMode === 'select') {
-        branchType = draftNode.data.pendingBranch ?? 'branch'
+        branchType = pendingNode.data.pendingBranch ?? 'branch'
       }
 
       const branchName =
         branchType === 'branch'
-          ? draftNode.data.pendingBranchName?.trim() || `branch-${getNumericId(id)}`
+          ? pendingNode.data.pendingBranchName?.trim() || `branch-${getNumericId(id)}`
           : undefined
 
       const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
 
       const updatedNodes = state.nodes.map<Node<CanvasNodeData>>((node) => {
-        if (node.id !== id || node.data.kind !== 'draft') {
+        if (node.id !== id || node.data.commitStatus !== 'pending') {
           return node
         }
         const nextData: CanvasNodeData = {
@@ -602,9 +600,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           status: 'Committed · awaiting diff',
           tags: Array.from(
             new Set([
-              ...node.data.tags.filter((tag) => tag !== 'draft'),
+              ...node.data.tags,
               'commit',
-              ...(isMergeDraft ? ['merge'] : []),
+              ...(isMergeCommit ? ['merge'] : []),
             ]),
           ),
           branchType,
@@ -612,7 +610,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           pendingBranch: undefined,
           pendingBranchName: undefined,
           mergeConfig: undefined,
-          isMergeCommit: isMergeDraft,
+          isMergeCommit: isMergeCommit,
+          commitStatus: 'committed',
         }
 
         return {
@@ -629,13 +628,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  addDraftFromConversation: (conversationId) =>
+  addPendingCommitFromConversation: (conversationId) =>
     set((state) => {
       const source = state.nodes.find((node) => node.id === conversationId)
       if (!source || source.data.kind !== 'conversation') {
         return {}
       }
-      const canSeed = canConversationSeedDraft(
+      const canSeed = canConversationSeedPendingCommit(
         conversationId,
         state.nodes,
         state.edges,
@@ -647,19 +646,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
-        type: 'draft',
-        position: computeAttachedPosition(source, 'draft', conversationDraftOffset),
+        type: 'commit',
+        position: computeAttachedPosition(source, 'commit', conversationCommitOffset),
         data: {
-          entryId: `DRAFT-${nodeCounter}`,
-          title: `Draft from ${source.data.entryId}`,
-          summary: 'Refine this draft before validation.',
+          entryId: `COMMIT-${nodeCounter}`,
+          title: `Commit from ${source.data.entryId}`,
+          summary: '',
           status: 'in progress',
           timestamp: 'just now',
-          tags: ['draft'],
-          kind: 'draft',
-          bridgePrompt: '/plan',
+          tags: ['commit'],
+          kind: 'commit',
+          bridgePrompt: 'prose',
           pendingBranch: 'branch',
           pendingBranchName: '',
+          commitStatus: 'pending',
+          // Pass upstream content to pending commit
+          baselineSummary: source.data.summary,
+          sourceConversationId: source.id,
         },
       }
 
@@ -714,29 +717,32 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  addDraftFromCommit: (commitId) =>
+  addPendingCommitFromCommit: (commitId) =>
     set((state) => {
       const source = state.nodes.find(
-        (node) => node.id === commitId && node.data.kind === 'commit',
+        (node) => node.id === commitId && node.data.kind === 'commit' && node.data.commitStatus === 'committed',
       )
       if (!source) {
         return {}
       }
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
-        type: 'draft',
-        position: computeAttachedPosition(source, 'draft', commitQuickOffset),
+        type: 'commit',
+        position: computeAttachedPosition(source, 'commit', commitQuickOffset),
         data: {
-          entryId: `DRAFT-${nodeCounter}`,
-          title: `Draft from ${source.data.entryId}`,
-          summary: 'Blend this commit into the next deliverable.',
+          entryId: `COMMIT-${nodeCounter}`,
+          title: `Commit from ${source.data.entryId}`,
+          summary: '',
           status: 'in progress',
           timestamp: 'just now',
-          tags: ['draft'],
-          kind: 'draft',
-          bridgePrompt: '/plan',
+          tags: ['commit'],
+          kind: 'commit',
+          bridgePrompt: 'prose',
           pendingBranch: 'branch',
           pendingBranchName: '',
+          commitStatus: 'pending',
+          // Pass upstream content to pending commit
+          baselineSummary: source.data.summary,
         },
       }
       const newEdge: Edge = {
@@ -753,7 +759,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  createMergeDraftFromCommit: (commitId) =>
+  createMergePendingCommit: (commitId) =>
     set((state) => {
       const nodes = state.nodes
       const edges = state.edges
@@ -775,14 +781,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         return {}
       }
       const outgoingMap = buildOutgoingMap(edges)
-      const hasPendingMergeDraft =
+      const hasPendingMergeCommit =
         outgoingMap
           .get(commitId)
           ?.some((targetId) => {
             const targetNode = nodeMap.get(targetId)
-            return targetNode?.data.kind === 'draft' && targetNode.data.bridgePrompt === '/merge'
+            return targetNode?.data.kind === 'commit' && targetNode.data.commitStatus === 'pending' && targetNode.data.bridgePrompt === '/merge'
           }) ?? false
-      if (hasPendingMergeDraft) {
+      if (hasPendingMergeCommit) {
         return {}
       }
       const tone = computeCommitTone(nodes, edges, state.latestMainCommitId, commitId)
@@ -804,21 +810,22 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         baseCommitTitle: baseCommit?.data.title,
         baseContent: baseCommit?.data.summary,
       }
-      const mergeDraft: Node<CanvasNodeData> = {
+      const mergePendingCommit: Node<CanvasNodeData> = {
         id: mergeNodeId,
-        type: 'draft',
-        position: computeAttachedPosition(latestMainCommit, 'draft', commitQuickOffset),
+        type: 'commit',
+        position: computeAttachedPosition(latestMainCommit, 'commit', commitQuickOffset),
         data: {
           entryId: `MERGE-${getNumericId(mergeNodeId)}`,
           title: `Merge · ${mergeLabel}`,
           summary: 'Resolve semantic conflicts before committing to main.',
           status: 'merge in progress',
           timestamp: 'just now',
-          tags: ['draft', 'merge'],
-          kind: 'draft',
+          tags: ['commit', 'merge'],
+          kind: 'commit',
           bridgePrompt: '/merge',
           pendingBranch: 'main',
           mergeConfig,
+          commitStatus: 'pending',
         },
       }
 
@@ -842,13 +849,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
 
       return {
-        nodes: [...nodes, mergeDraft],
+        nodes: [...nodes, mergePendingCommit],
         edges: [...edges, mainEdge, branchEdge],
       }
     }),
 
-  getDraftBranchMode: (draftId) => determineDraftBranchMode(get(), draftId),
-  canCreateDraftFromConversation: (conversationId) => {
+  getPendingCommitBranchMode: (commitId) => determinePendingCommitBranchMode(get(), commitId),
+  canCreatePendingCommitFromConversation: (conversationId) => {
     const state = get()
     const node = state.nodes.find(
       (candidate) => candidate.id === conversationId && candidate.data.kind === 'conversation',
@@ -856,7 +863,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (!node) {
       return false
     }
-    return canConversationSeedDraft(conversationId, state.nodes, state.edges, state.hasMainCommit)
+    return canConversationSeedPendingCommit(conversationId, state.nodes, state.edges, state.hasMainCommit)
   },
 
   onNodesChange: (changes) =>
@@ -919,10 +926,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (!canConnect(source, target)) {
       return
     }
+    // Check if connecting conversation to pending commit
     if (
       source?.data.kind === 'conversation' &&
-      target?.data.kind === 'draft' &&
-      !canAttachConversationToDraft(
+      target?.data.kind === 'commit' &&
+      target?.data.commitStatus === 'pending' &&
+      !canAttachConversationToPendingCommit(
         source.id,
         target.id,
         nodes,
@@ -987,11 +996,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return node?.data.constraints
   },
 
-  // Update draft constraint overrides
-  updateDraftConstraintOverrides: (draftId, overrides) =>
+  // Update pending commit constraint overrides
+  updatePendingCommitConstraintOverrides: (commitId, overrides) =>
     set((state) => ({
       nodes: state.nodes.map((node) => {
-        if (node.id !== draftId || node.data.kind !== 'draft') {
+        if (node.id !== commitId || node.data.kind !== 'commit' || node.data.commitStatus !== 'pending') {
           return node
         }
         const currentOverrides = node.data.constraintOverrides ?? {
@@ -1011,15 +1020,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }),
     })),
 
-  // Get source conversation for a draft (follows edges backward)
-  getSourceConversationForDraft: (draftId) => {
+  // Get source conversation for a pending commit (follows edges backward)
+  getSourceConversationForPendingCommit: (commitId) => {
     const state = get()
     const incomingMap = buildIncomingMap(state.edges)
     const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
 
     // BFS to find the first conversation ancestor
     const visited = new Set<string>()
-    const queue = [...(incomingMap.get(draftId) ?? [])]
+    const queue = [...(incomingMap.get(commitId) ?? [])]
 
     while (queue.length > 0) {
       const currentId = queue.shift()!
@@ -1039,20 +1048,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return undefined
   },
 
-  // Get effective constraints for a draft (conversation constraints + draft overrides)
-  getDraftEffectiveConstraints: (draftId) => {
+  // Get effective constraints for a pending commit (conversation constraints + overrides)
+  getPendingCommitEffectiveConstraints: (commitId) => {
     const state = get()
-    const draftNode = state.nodes.find(
-      (n) => n.id === draftId && n.data.kind === 'draft'
+    const pendingNode = state.nodes.find(
+      (n) => n.id === commitId && n.data.kind === 'commit' && n.data.commitStatus === 'pending'
     )
-    if (!draftNode) return undefined
+    if (!pendingNode) return undefined
 
     // Find source conversation
-    const sourceConv = get().getSourceConversationForDraft(draftId)
+    const sourceConv = get().getSourceConversationForPendingCommit(commitId)
     const baseConstraints = sourceConv?.data.constraints
     if (!baseConstraints) return undefined
 
-    const overrides = draftNode.data.constraintOverrides
+    const overrides = pendingNode.data.constraintOverrides
 
     // Apply overrides
     const clauses = baseConstraints.clauses.filter(
@@ -1076,13 +1085,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return { clauses, must_have, mustnt_have }
   },
 
-  // Check if a conversation has any downstream drafts (for locking editing)
-  hasDownstreamDrafts: (conversationId) => {
+  // Check if a conversation has any downstream pending commits (for locking editing)
+  hasDownstreamPendingCommits: (conversationId) => {
     const state = get()
     const outgoingMap = buildOutgoingMap(state.edges)
     const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
 
-    // BFS to find any draft descendant
+    // BFS to find any pending commit descendant
     const visited = new Set<string>()
     const queue = [...(outgoingMap.get(conversationId) ?? [])]
 
@@ -1092,7 +1101,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       visited.add(currentId)
 
       const node = nodeMap.get(currentId)
-      if (node?.data.kind === 'draft') {
+      if (node?.data.kind === 'commit' && node?.data.commitStatus === 'pending') {
         return true
       }
 
@@ -1103,4 +1112,72 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }
     return false
   },
+
+  // Leaf panel methods
+  openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
+  closeLeafPanel: () => set({ leafPanelOpen: false, leafPanelCommitId: undefined }),
+
+  addLeafNode: (leafType) =>
+    set((state) => {
+      const commitId = state.leafPanelCommitId
+      if (!commitId) return {}
+
+      const commitNode = state.nodes.find(
+        (node) => node.id === commitId && node.data.kind === 'commit'
+      )
+      if (!commitNode) return {}
+
+      // Count existing leaf nodes connected to this commit to offset position
+      const existingLeafCount = state.edges.filter((edge) => {
+        if (edge.source !== commitId) return false
+        const targetNode = state.nodes.find((n) => n.id === edge.target)
+        return targetNode?.data.kind === 'leaf'
+      }).length
+
+      const newNodeId = nextNodeId()
+      const leafLabels: Record<LeafType, string> = {
+        twitter: 'Twitter',
+        weibo: '微博',
+        wechat: '朋友圈',
+        article: '文章',
+        email: 'Email',
+        slack: 'Slack',
+      }
+
+      // Position leaf above the commit node
+      const newNode: Node<CanvasNodeData> = {
+        id: newNodeId,
+        type: 'leaf',
+        position: snapPosition({
+          x: commitNode.position.x + commitQuickOffset,
+          y: commitNode.position.y - leafNodeHeight - leafNodeOffset - (existingLeafCount * (leafNodeHeight + 20)),
+        }),
+        data: {
+          entryId: `LEAF-${getNumericId(newNodeId)}`,
+          title: leafLabels[leafType],
+          summary: '',
+          status: 'pending',
+          timestamp: 'just now',
+          tags: ['leaf', leafType],
+          kind: 'leaf',
+          leafType,
+        },
+      }
+
+      const newEdge: Edge = {
+        id: nextEdgeId(),
+        source: commitId,
+        target: newNodeId,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }
+
+      return {
+        nodes: [...state.nodes, newNode],
+        edges: [...state.edges, newEdge],
+        leafPanelOpen: false,
+        leafPanelCommitId: undefined,
+      }
+    }),
 }))
