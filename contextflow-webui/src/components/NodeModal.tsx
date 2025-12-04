@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -6,16 +7,45 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Settings, PenSquare, MessageSquarePlus, Check, Sparkles, GitBranch, Clock, Tag, Link2, Send } from 'lucide-react'
+import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
 
 const bridgeTemplates = [
-  { id: '/plan', name: 'Plan', description: 'Extract action items and planning structure' },
-  { id: '/story', name: 'Story', description: 'Narrative extraction with flow preservation' },
-  { id: '/merge', name: 'Merge', description: 'Combine multiple sources into unified view' },
-  { id: '/refine', name: 'Refine', description: 'Polish and tighten existing content' },
+  { id: 'prose', name: 'prose', description: 'General prose extraction' },
+  { id: 'plan', name: 'plan', description: 'Extract action items and planning structure' },
+  { id: 'story', name: 'story', description: 'Narrative extraction with flow preservation' },
+  { id: 'merge', name: 'merge', description: 'Combine multiple sources into unified view' },
+  { id: 'refine', name: 'refine', description: 'Polish and tighten existing content' },
 ]
+
+// Phrase type for extraction results
+interface Phrase {
+  id: string
+  text: string
+  included: boolean
+  sourceBoxId: string
+}
+
+// Source box type for SOURCE column
+interface SourceBox {
+  id: string
+  title: string
+  type: 'commit' | 'conversation'
+  content: string
+  expanded: boolean
+  phrases: Phrase[]
+}
+
+// Linked keyword type for RESULT column
+interface LinkedKeyword {
+  id: string
+  text: string
+  phraseId: string
+  sourceBoxId: string
+  sourceBoxTitle: string
+  originalWord: string
+}
 
 export type NodeQuickAction = {
   key: string
@@ -40,12 +70,115 @@ interface NodeModalProps {
   isConversationLocked?: boolean
 }
 
-// Keywords extraction from text (mock - in real app this would come from backend)
-function extractKeywords(text: string): string[] {
+// Mock phrase extraction from text (in real app this would come from backend)
+function extractPhrasesFromText(text: string, sourceBoxId: string): Phrase[] {
   if (!text) return []
-  const words = text.split(/\s+/)
-  const keywords = words.filter(w => w.length > 4).slice(0, 20)
-  return [...new Set(keywords)]
+  // Split into sentences and create phrases
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  return sentences.slice(0, 8).map((sentence, idx) => ({
+    id: `phrase-${sourceBoxId}-${idx}`,
+    text: sentence.trim(),
+    included: true, // default to included
+    sourceBoxId,
+  }))
+}
+
+// Mock keyword extraction from phrases with threshold control
+function extractKeywordsFromPhrases(
+  phrases: Phrase[],
+  sourceBoxes: SourceBox[],
+  keywordsThreshold: number = 0.6
+): LinkedKeyword[] {
+  const keywords: LinkedKeyword[] = []
+  const stopWords = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'been', 'will', 'would', 'could', 'should', 'about', 'which', 'their', 'there', 'where', 'when', 'what', 'were', 'they', 'into', 'also', 'more', 'some', 'than', 'very', 'just', 'only', 'over', 'such', 'like', 'then', 'most', 'your', 'other', 'first'])
+
+  // Minimum word length based on threshold (higher threshold = longer words)
+  const minWordLength = Math.floor(3 + keywordsThreshold * 3) // 3-6 chars
+
+  phrases.filter(p => p.included).forEach(phrase => {
+    const words = phrase.text.split(/\s+/)
+    const sourceBox = sourceBoxes.find(sb => sb.id === phrase.sourceBoxId)
+    words.forEach((word, idx) => {
+      const cleanWord = word.toLowerCase().replace(/[^\w]/g, '')
+      if (cleanWord.length >= minWordLength && !stopWords.has(cleanWord) && !keywords.some(k => k.text.toLowerCase() === cleanWord)) {
+        keywords.push({
+          id: `kw-${phrase.id}-${idx}`,
+          text: cleanWord,
+          phraseId: phrase.id,
+          sourceBoxId: phrase.sourceBoxId,
+          sourceBoxTitle: sourceBox?.title || 'Unknown',
+          // Store original word position for highlighting in source
+          originalWord: word,
+        })
+      }
+    })
+  })
+
+  // Max keywords based on threshold (higher threshold = fewer keywords)
+  const maxKeywords = Math.floor(5 + (1 - keywordsThreshold) * 20) // 5-25 keywords
+  return keywords.slice(0, maxKeywords)
+}
+
+// Generate mock draft text from included phrases
+function generateDraftText(phrases: Phrase[], template: string): string {
+  const includedPhrases = phrases.filter(p => p.included)
+  if (includedPhrases.length === 0) return ''
+
+  const content = includedPhrases.map(p => p.text).join('. ')
+
+  if (template === 'plan') {
+    return `Key priorities:\n• ${includedPhrases.map(p => p.text).join('\n• ')}`
+  }
+  return content + '.'
+}
+
+// Helper to render text with keyword highlighting
+function renderTextWithKeywords(
+  text: string,
+  keywords: LinkedKeyword[],
+  hoveredKeyword: LinkedKeyword | null,
+  onKeywordHover: (kw: LinkedKeyword | null) => void
+): React.ReactNode[] {
+  if (!text || keywords.length === 0) {
+    return [text]
+  }
+
+  // Create a map of keyword texts (lowercase) to their LinkedKeyword objects
+  const keywordMap = new Map<string, LinkedKeyword>()
+  keywords.forEach(kw => {
+    keywordMap.set(kw.text.toLowerCase(), kw)
+  })
+
+  // Split text into words while preserving spaces and punctuation
+  const parts: React.ReactNode[] = []
+  const regex = /(\s+|[^\s\w]|\w+)/g
+  let match
+  let idx = 0
+
+  while ((match = regex.exec(text)) !== null) {
+    const part = match[0]
+    const cleanPart = part.toLowerCase().replace(/[^\w]/g, '')
+    const keyword = keywordMap.get(cleanPart)
+
+    if (keyword && cleanPart.length >= 3) {
+      const isHovered = hoveredKeyword?.text.toLowerCase() === cleanPart
+      parts.push(
+        <span
+          key={`kw-${idx}`}
+          className={`draft-svtz__inline-keyword ${isHovered ? 'draft-svtz__inline-keyword--hovered' : ''}`}
+          onMouseEnter={() => onKeywordHover(keyword)}
+          onMouseLeave={() => onKeywordHover(null)}
+        >
+          {part}
+        </span>
+      )
+    } else {
+      parts.push(part)
+    }
+    idx++
+  }
+
+  return parts
 }
 
 export function NodeModal({
@@ -66,7 +199,7 @@ export function NodeModal({
   const isDraft = data.kind === 'draft'
   const isCommit = data.kind === 'commit'
   const isConversation = data.kind === 'conversation'
-  const isMergeDraft = isDraft && data.bridgePrompt === '/merge' && !!data.mergeConfig
+  const isMergeDraft = isDraft && data.bridgePrompt === 'merge' && !!data.mergeConfig
   const shouldShowBranchSelect =
     (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
   const requireBranchName =
@@ -74,9 +207,39 @@ export function NodeModal({
     ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
       draftBranchMode === 'branch-only')
 
-  // Draft state - use isGenerated flag from data
-  const [draftGenerated, setDraftGenerated] = useState(!!data.isGenerated)
-  const [patchKeywords, setPatchKeywords] = useState<{ word: string; status: 'none' | 'must' | 'mustnt' }[]>([])
+  // ========== Single View Two Zones State ==========
+  // Config state (STEP 1)
+  const [template, setTemplate] = useState(data.bridgePrompt || 'prose')
+  const [cosineThreshold, setCosineThreshold] = useState(0.75)
+  const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
+
+  // Source boxes with phrases (SOURCE column)
+  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
+
+  // Generated draft text and linked keywords (RESULT column)
+  const [draftText, setDraftText] = useState('')
+  const [linkedKeywords, setLinkedKeywords] = useState<LinkedKeyword[]>([])
+
+  // Loading state for Refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Divider positions
+  const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
+  const [sourceResultDividerPos, setSourceResultDividerPos] = useState(50) // percentage for SOURCE | RESULT
+
+  // Hovered keyword for tooltip
+  const [hoveredKeyword, setHoveredKeyword] = useState<LinkedKeyword | null>(null)
+
+  // Refs
+  const mainContentRef = useRef<HTMLDivElement>(null)
+  const draftBodyRef = useRef<HTMLDivElement>(null)
+
+  // Computed: all phrases from all source boxes
+  const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
+
+  // Computed: included phrases/keywords count
+  const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
+  const includedKeywordsCount = linkedKeywords.length
 
   // Sidebar state for conversation
   const [showSettings, setShowSettings] = useState(false)
@@ -90,15 +253,6 @@ export function NodeModal({
   const [sidebarWidth, setSidebarWidth] = useState(280)
   const isDraggingRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  // Draft Phase A resizable state
-  const [draftPhaseALeftWidth, setDraftPhaseALeftWidth] = useState(40) // percentage
-  const draftPhaseARef = useRef<HTMLDivElement>(null)
-
-  // Draft Phase B resizable state (two dividers)
-  const [draftPhaseBLeftWidth, setDraftPhaseBLeftWidth] = useState(260) // pixels
-  const [draftPhaseBRightWidth, setDraftPhaseBRightWidth] = useState(300) // pixels
-  const draftPhaseBRef = useRef<HTMLDivElement>(null)
 
   // Commit resizable state
   const [commitLeftWidth, setCommitLeftWidth] = useState(280)
@@ -121,78 +275,6 @@ export function NodeModal({
 
     const handleMouseUp = () => {
       isDraggingRef.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
-
-  // Draft Phase A divider handler
-  const handleDraftPhaseADivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!draftPhaseARef.current) return
-      const rect = draftPhaseARef.current.getBoundingClientRect()
-      const percentage = ((moveEvent.clientX - rect.left) / rect.width) * 100
-      setDraftPhaseALeftWidth(Math.max(25, Math.min(65, percentage)))
-    }
-
-    const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
-
-  // Draft Phase B left divider handler
-  const handleDraftPhaseBLeftDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!draftPhaseBRef.current) return
-      const rect = draftPhaseBRef.current.getBoundingClientRect()
-      const newWidth = moveEvent.clientX - rect.left
-      setDraftPhaseBLeftWidth(Math.max(180, Math.min(400, newWidth)))
-    }
-
-    const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
-
-  // Draft Phase B right divider handler
-  const handleDraftPhaseBRightDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!draftPhaseBRef.current) return
-      const rect = draftPhaseBRef.current.getBoundingClientRect()
-      const newWidth = rect.right - moveEvent.clientX
-      setDraftPhaseBRightWidth(Math.max(200, Math.min(450, newWidth)))
-    }
-
-    const handleMouseUp = () => {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)
@@ -251,13 +333,132 @@ export function NodeModal({
     document.addEventListener('mouseup', handleMouseUp)
   }
 
-  // Initialize patch keywords when draft is generated
-  useEffect(() => {
-    if (isDraft && draftGenerated && data.summary) {
-      const keywords = extractKeywords(data.summary)
-      setPatchKeywords(keywords.map(word => ({ word, status: 'none' })))
+  // ========== Single View Two Zones Handlers ==========
+
+  // Sidebar | SOURCE divider handler
+  const handleSidebarSourceDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!draftBodyRef.current) return
+      const rect = draftBodyRef.current.getBoundingClientRect()
+      const newWidth = moveEvent.clientX - rect.left
+      // Min 220px to ensure Branch Name input is fully visible
+      setSidebarSourceDividerPos(Math.max(220, Math.min(400, newWidth)))
     }
-  }, [isDraft, draftGenerated, data.summary])
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // SOURCE | RESULT divider handler
+  const handleSourceResultDivider = (e: React.MouseEvent) => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!mainContentRef.current) return
+      const rect = mainContentRef.current.getBoundingClientRect()
+      const percentage = ((moveEvent.clientX - rect.left) / rect.width) * 100
+      setSourceResultDividerPos(Math.max(30, Math.min(70, percentage)))
+    }
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  // Toggle source box expansion
+  const toggleSourceBoxExpand = useCallback((boxId: string) => {
+    setSourceBoxes(prev => prev.map(sb =>
+      sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb
+    ))
+  }, [])
+
+  // Toggle phrase include/exclude
+  const togglePhraseInclude = useCallback((phraseId: string) => {
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p =>
+        p.id === phraseId ? { ...p, included: !p.included } : p
+      )
+    })))
+  }, [])
+
+  // Update draft text and keywords when phrases or threshold change
+  useEffect(() => {
+    if (isDraft && sourceBoxes.length > 0) {
+      const newDraftText = generateDraftText(allPhrases, template)
+      setDraftText(newDraftText)
+      const newKeywords = extractKeywordsFromPhrases(allPhrases, sourceBoxes, keywordsThreshold)
+      setLinkedKeywords(newKeywords)
+    }
+  }, [isDraft, sourceBoxes, allPhrases, template, keywordsThreshold])
+
+  // Initialize source boxes from baseline summary
+  useEffect(() => {
+    if (isDraft && data.baselineSummary) {
+      // Determine source type based on title or sourceConversationId
+      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
+      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
+      const sourceTitle = isFromCommit
+        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+
+      const initialBox: SourceBox = {
+        id: 'source-1',
+        title: sourceTitle,
+        type: sourceType,
+        content: data.baselineSummary,
+        expanded: true,
+        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1'),
+      }
+      setSourceBoxes([initialBox])
+    }
+  }, [isDraft, data.baselineSummary, data.title, data.sourceConversationId])
+
+  // Handle Refresh - re-extract with current config
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    // Re-extract phrases based on new config
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: extractPhrasesFromText(sb.content, sb.id),
+    })))
+
+    setIsRefreshing(false)
+  }, [])
+
+  // Handle Commit - create commit node
+  const handleCommit = useCallback(() => {
+    // Update data with final values
+    onUpdate({
+      summary: draftText,
+      bridgePrompt: template,
+      isGenerated: true,
+    })
+    // Trigger convert to commit
+    onConvertDraft?.()
+  }, [draftText, template, onUpdate, onConvertDraft])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -295,32 +496,6 @@ export function NodeModal({
       handleSendMessage()
     }
   }
-
-  const handleGenerate = () => {
-    // In real app, this would call backend API
-    // For now, just mark as generated and persist to data
-    setDraftGenerated(true)
-    onUpdate({ isGenerated: true })
-  }
-
-  const toggleKeywordStatus = (index: number) => {
-    setPatchKeywords(prev => {
-      const newKeywords = [...prev]
-      const current = newKeywords[index].status
-      // Cycle: none -> must -> mustnt -> none
-      if (current === 'none') {
-        newKeywords[index] = { ...newKeywords[index], status: 'must' }
-      } else if (current === 'must') {
-        newKeywords[index] = { ...newKeywords[index], status: 'mustnt' }
-      } else {
-        newKeywords[index] = { ...newKeywords[index], status: 'none' }
-      }
-      return newKeywords
-    })
-  }
-
-  const mustHaveKeywords = patchKeywords.filter(k => k.status === 'must').map(k => k.word)
-  const mustntHaveKeywords = patchKeywords.filter(k => k.status === 'mustnt').map(k => k.word)
 
   // ============================================
   // CONVERSATION NODE - Sidebar left, Chat interface right
@@ -458,275 +633,268 @@ export function NodeModal({
   }
 
   // ============================================
-  // DRAFT NODE - Two phases: Config (A) & Patch (B)
+  // DRAFT NODE - Single View Two Zones Design
   // ============================================
   if (isDraft) {
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className={`modal-v2 modal-v2--draft ${draftGenerated ? 'modal-v2--draft-phase-b' : 'modal-v2--draft-phase-a'}`}>
+        <div className="modal-v2 modal-v2--draft modal-v2--draft-svtz">
           {/* Top Bar */}
           <header className="modal-v2__topbar">
             <div className="modal-v2__topbar-left">
-              <h2 className="modal-v2__title">{draftGenerated ? 'Patch' : 'Draft'}: {data.title || 'Untitled'}</h2>
+              <div className="draft-svtz__logo">t3x</div>
+              <h2 className="modal-v2__title">Draft: {data.title || 'Untitled'}</h2>
               <span className="modal-v2__id">{data.entryId}</span>
-              <span className={`draft-v2__phase-badge ${draftGenerated ? 'draft-v2__phase-badge--b' : 'draft-v2__phase-badge--a'}`}>
-                {draftGenerated ? 'Patch Phase' : 'Draft Phase'}
-              </span>
             </div>
             <div className="modal-v2__topbar-right">
-              {draftGenerated && onConvertDraft && (
-                <button className="modal-v2__primary-btn" onClick={onConvertDraft}>
-                  <Check size={16} />
-                  <span>Commit</span>
-                </button>
-              )}
               <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
           </header>
 
-          <div className={`modal-v2__body draft-v2__body ${draftGenerated ? 'draft-v2__body--phase-b' : 'draft-v2__body--phase-a'}`}>
-            {!draftGenerated ? (
-              // ========== Phase A: Draft Configuration (2 panels) ==========
-              <div className="draft-v2__phase-a" ref={draftPhaseARef}>
-                {/* Left: Source Lineage */}
-                <div className="draft-v2__phase-a-left" style={{ width: `${draftPhaseALeftWidth}%` }}>
-                  <div className="draft-v2__section-header">
-                    <h3>Source Lineage</h3>
-                    <span className="draft-v2__section-desc">Upstream input for this draft</span>
-                  </div>
-                  <div className="draft-v2__lineage-content">
-                    {data.baselineSummary ? (
-                      <div className="draft-v2__lineage-blocks">
-                        <div className="draft-v2__lineage-block">
-                          <div className="draft-v2__lineage-block-header">
-                            <Link2 size={14} />
-                            <span>From Conversation/Commit</span>
-                          </div>
-                          <p>{data.baselineSummary}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="draft-v2__upstream-empty">
-                        <MessageSquarePlus size={32} strokeWidth={1} />
-                        <p>No upstream connected</p>
-                        <span>This draft will start fresh.</span>
-                      </div>
-                    )}
-                  </div>
+          <div className="modal-v2__body draft-svtz__body" ref={draftBodyRef}>
+            {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
+            <aside className="draft-svtz__sidebar" style={{ width: sidebarSourceDividerPos }}>
+              {/* STEP 1: Configure */}
+              <div className="draft-svtz__step">
+                <div className="draft-svtz__step-header">
+                  <span className="draft-svtz__step-number">STEP 1</span>
+                  <span className="draft-svtz__step-label">
+                    <span className="draft-svtz__step-dot draft-svtz__step-dot--active" />
+                    Configure
+                  </span>
                 </div>
 
-                {/* Draggable Divider */}
-                <div
-                  className="modal-v2__resize-divider"
-                  onMouseDown={handleDraftPhaseADivider}
-                />
-
-                {/* Right: Configuration (Branch, Bridge, Preference, Generate) */}
-                <div className="draft-v2__phase-a-right">
-                  <div className="draft-v2__section-header">
-                    <h3>Draft Configuration</h3>
-                    <span className="draft-v2__section-desc">Set up extraction parameters</span>
-                  </div>
-
-                  <div className="draft-v2__config-form">
-                    {/* Branch Selection */}
-                    {shouldShowBranchSelect && (
-                      <div className="draft-v2__config-group">
-                        <div className="draft-v2__config-label">Target Branch</div>
-                        <div className="draft-v2__config-row">
-                          <select
-                            className="draft-v2__config-select"
-                            value={data.pendingBranch || 'branch'}
-                            onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
-                          >
-                            <option value="main">main</option>
-                            <option value="branch">branch</option>
-                          </select>
-                          {requireBranchName && (
-                            <input
-                              type="text"
-                              className="draft-v2__config-input"
-                              value={data.pendingBranchName || ''}
-                              onChange={(e) => onBranchNameChange?.(e.target.value)}
-                              placeholder="Branch name"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Bridge Template */}
-                    <div className="draft-v2__config-group">
-                      <div className="draft-v2__config-label">Bridge Template</div>
+                <div className="draft-svtz__config-controls">
+                  {/* Branch Selection */}
+                  {shouldShowBranchSelect && (
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Branch</label>
                       <select
-                        className="draft-v2__config-select draft-v2__config-select--full"
-                        value={data.bridgePrompt || bridgeTemplates[0].id}
-                        onChange={(e) => onUpdate({ bridgePrompt: e.target.value })}
+                        className="draft-svtz__select draft-svtz__select--full"
+                        value={data.pendingBranch || 'branch'}
+                        onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
                       >
-                        {bridgeTemplates.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
+                        <option value="main">main</option>
+                        <option value="branch">branch</option>
                       </select>
                     </div>
+                  )}
 
-                    {/* Preference */}
-                    <div className="draft-v2__config-group draft-v2__config-group--flex">
-                      <div className="draft-v2__config-label">Preference</div>
-                      <textarea
-                        className="draft-v2__preference-input"
-                        value={data.draftInstructions || ''}
-                        onChange={(e) => onUpdate({ draftInstructions: e.target.value })}
-                        placeholder="Describe your extraction preferences...&#10;&#10;Examples:&#10;• Focus on risks and potential issues&#10;• Preserve all numbers and statistics&#10;• Tighten the tone, make it concise&#10;• Extract action items only"
+                  {/* Branch Name - only shown when branch is selected */}
+                  {requireBranchName && (
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Branch Name</label>
+                      <input
+                        type="text"
+                        className="draft-svtz__input draft-svtz__input--full"
+                        value={data.pendingBranchName || ''}
+                        onChange={(e) => onBranchNameChange?.(e.target.value)}
+                        placeholder="Enter branch name"
                       />
                     </div>
+                  )}
 
-                    {/* Generate Button */}
-                    <div className="draft-v2__generate-action">
-                      <button className="draft-v2__generate-btn" onClick={handleGenerate}>
-                        <Sparkles size={18} />
-                        <span>Generate Draft</span>
-                      </button>
-                      <span className="draft-v2__generate-hint">
-                        This will extract content based on Bridge + Preference
-                      </span>
-                    </div>
+                  {/* Template */}
+                  <div className="draft-svtz__control-group">
+                    <label className="draft-svtz__control-label">Template</label>
+                    <select
+                      className="draft-svtz__select draft-svtz__select--full"
+                      value={template}
+                      onChange={(e) => setTemplate(e.target.value)}
+                    >
+                      {bridgeTemplates.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
                   </div>
+
+                  {/* Cosine Threshold */}
+                  <div className="draft-svtz__control-group">
+                    <label className="draft-svtz__control-label">Cosine</label>
+                    <input
+                      type="range"
+                      className="draft-svtz__slider"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={cosineThreshold}
+                      onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
+                    />
+                    <span className="draft-svtz__slider-value">{cosineThreshold.toFixed(2)}</span>
+                  </div>
+
+                  {/* Keywords Threshold */}
+                  <div className="draft-svtz__control-group">
+                    <label className="draft-svtz__control-label">Keywords</label>
+                    <input
+                      type="range"
+                      className="draft-svtz__slider"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={keywordsThreshold}
+                      onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
+                    />
+                    <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
+                  </div>
+
+                  {/* Refresh Button */}
+                  <button
+                    className="draft-svtz__refresh-btn"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw size={16} className={isRefreshing ? 'draft-svtz__spin' : ''} />
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
-            ) : (
-              // ========== Phase B: Patch (3 panels) ==========
-              <div className="draft-v2__phase-b" ref={draftPhaseBRef}>
-                {/* Left: Source Lineage */}
-                <div className="draft-v2__phase-b-left" style={{ width: draftPhaseBLeftWidth }}>
-                  <div className="draft-v2__section-header">
-                    <h3>Source Lineage</h3>
-                    <span className="draft-v2__section-desc">Traceability</span>
-                  </div>
-                  <div className="draft-v2__lineage-content">
-                    {data.baselineSummary ? (
-                      <div className="draft-v2__lineage-blocks">
-                        <div className="draft-v2__lineage-block draft-v2__lineage-block--hoverable">
-                          <div className="draft-v2__lineage-block-header">
-                            <span>Source Fragment</span>
-                          </div>
-                          <p>{data.baselineSummary}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="draft-v2__lineage-empty">
-                        <p>No upstream source</p>
-                      </div>
-                    )}
-                    <div className="draft-v2__lineage-hint">
-                      <span>Hover on draft content to highlight source</span>
+
+              <div className="draft-svtz__step-divider" />
+
+              {/* STEP 2: Curate */}
+              <div className="draft-svtz__step">
+                <div className="draft-svtz__step-header">
+                  <span className="draft-svtz__step-number">STEP 2</span>
+                  <span className="draft-svtz__step-label">Curate</span>
+                </div>
+
+                <div className="draft-svtz__stats">
+                  <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
+                  <span className="draft-svtz__stat">{includedKeywordsCount} keywords</span>
+                </div>
+
+                {/* Commit Button */}
+                <button
+                  className="draft-svtz__commit-btn"
+                  onClick={handleCommit}
+                  disabled={includedPhrasesCount === 0}
+                >
+                  <Check size={16} />
+                  <span>Commit</span>
+                </button>
+              </div>
+            </aside>
+
+            {/* Sidebar | SOURCE Divider */}
+            <div
+              className="draft-svtz__divider"
+              onMouseDown={handleSidebarSourceDivider}
+            >
+              <div className="draft-svtz__divider-handle" />
+            </div>
+
+            {/* ========== MAIN CONTENT: SOURCE + RESULT ========== */}
+            <div className="draft-svtz__main" ref={mainContentRef}>
+              {/* SOURCE Column */}
+              <div className="draft-svtz__source" style={{ width: `${sourceResultDividerPos}%` }}>
+                <div className="draft-svtz__column-header">
+                  <h3>SOURCE</h3>
+                </div>
+                <div className="draft-svtz__source-content">
+                  {sourceBoxes.length === 0 ? (
+                    <div className="draft-svtz__source-empty">
+                      <MessageSquarePlus size={32} strokeWidth={1} />
+                      <p>No source content</p>
+                      <span>Connect upstream conversation or commit</span>
                     </div>
-                  </div>
+                  ) : (
+                    sourceBoxes.map((box) => (
+                      <div key={box.id} className="draft-svtz__source-box">
+                        {/* Source Box Header */}
+                        <div
+                          className="draft-svtz__source-box-header"
+                          onClick={() => toggleSourceBoxExpand(box.id)}
+                        >
+                          <span className="draft-svtz__source-box-toggle">
+                            {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </span>
+                          <span className="draft-svtz__source-box-title">{box.title}</span>
+                          <span className={`draft-svtz__source-box-badge draft-svtz__source-box-badge--${box.type}`}>
+                            {box.type}
+                          </span>
+                        </div>
+                        {/* Source Box Body with Phrases and Keyword Highlighting */}
+                        {box.expanded && (
+                          <div className="draft-svtz__source-box-body">
+                            {box.phrases.map((phrase) => (
+                              <span
+                                key={phrase.id}
+                                className={`draft-svtz__phrase ${phrase.included ? 'draft-svtz__phrase--included' : 'draft-svtz__phrase--excluded'}`}
+                                onClick={() => togglePhraseInclude(phrase.id)}
+                                title={phrase.included ? 'Click to exclude' : 'Click to include'}
+                              >
+                                {renderTextWithKeywords(
+                                  phrase.text,
+                                  linkedKeywords.filter(kw => kw.phraseId === phrase.id),
+                                  hoveredKeyword,
+                                  setHoveredKeyword
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
+              </div>
 
-                {/* Left Divider */}
-                <div
-                  className="modal-v2__resize-divider"
-                  onMouseDown={handleDraftPhaseBLeftDivider}
-                />
+              {/* Draggable Divider */}
+              <div
+                className="draft-svtz__divider"
+                onMouseDown={handleSourceResultDivider}
+              >
+                <div className="draft-svtz__divider-handle" />
+              </div>
 
-                {/* Center: Semantic Draft Content */}
-                <div className="draft-v2__phase-b-center">
-                  <div className="draft-v2__section-header">
-                    <h3>Semantic Draft</h3>
-                    <span className="draft-v2__generated-badge">
-                      <Check size={12} />
-                      Generated · To change, create new Draft
-                    </span>
-                  </div>
-                  <div className="draft-v2__content-area">
-                    <textarea
-                      className="draft-v2__content-textarea"
-                      value={data.summary || ''}
-                      onChange={(e) => onUpdate({ summary: e.target.value })}
-                      placeholder="Generated semantic content..."
-                    />
-                  </div>
+              {/* RESULT Column */}
+              <div className="draft-svtz__result" style={{ width: `${100 - sourceResultDividerPos}%` }}>
+                <div className="draft-svtz__column-header">
+                  <h3>RESULT</h3>
                 </div>
-
-                {/* Right Divider */}
-                <div
-                  className="modal-v2__resize-divider"
-                  onMouseDown={handleDraftPhaseBRightDivider}
-                />
-
-                {/* Right: Patch Panel */}
-                <div className="draft-v2__phase-b-right" style={{ width: draftPhaseBRightWidth }}>
-                  <div className="draft-v2__section-header">
-                    <h3>Patch: Constraints</h3>
-                    <span className="draft-v2__section-desc">must-have / mustn't-have</span>
-                  </div>
-
-                  <div className="draft-v2__patch-keywords">
-                    {patchKeywords.length === 0 ? (
-                      <p className="draft-v2__patch-empty">No keywords extracted yet</p>
-                    ) : (
-                      <div className="draft-v2__patch-keyword-grid">
-                        {patchKeywords.map((kw, idx) => (
-                          <button
-                            key={idx}
-                            className={`draft-v2__keyword draft-v2__keyword--${kw.status}`}
-                            onClick={() => toggleKeywordStatus(idx)}
-                            title={kw.status === 'none' ? 'Click to mark as must-have' :
-                                   kw.status === 'must' ? 'Click to mark as mustn\'t-have' :
-                                   'Click to clear'}
-                          >
-                            {kw.word}
-                            {kw.status === 'must' && <Check size={12} />}
-                            {kw.status === 'mustnt' && <X size={12} />}
-                          </button>
+                <div className="draft-svtz__result-content">
+                  {/* Draft Text with Highlighted Keywords */}
+                  <div className="draft-svtz__draft-text">
+                    {allPhrases.filter(p => p.included).length > 0 ? (
+                      <div className="draft-svtz__draft-text-content">
+                        {allPhrases.filter(p => p.included).map((phrase, idx) => (
+                          <span key={phrase.id}>
+                            {renderTextWithKeywords(
+                              phrase.text,
+                              linkedKeywords.filter(kw => kw.phraseId === phrase.id),
+                              hoveredKeyword,
+                              setHoveredKeyword
+                            )}
+                            {idx < allPhrases.filter(p => p.included).length - 1 ? '. ' : '.'}
+                          </span>
                         ))}
                       </div>
+                    ) : (
+                      <div className="draft-svtz__draft-empty">
+                        <p>No content generated yet</p>
+                        <span>Click Refresh to extract content</span>
+                      </div>
                     )}
-                  </div>
-
-                  <div className="draft-v2__patch-divider" />
-
-                  <div className="draft-v2__patch-summary">
-                    <div className="draft-v2__patch-list">
-                      <h5 className="draft-v2__patch-list-title draft-v2__patch-list-title--must">
-                        <Check size={14} />
-                        Must-have ({mustHaveKeywords.length})
-                      </h5>
-                      {mustHaveKeywords.length > 0 ? (
-                        <div className="draft-v2__patch-tags draft-v2__patch-tags--must">
-                          {mustHaveKeywords.map((w, i) => <span key={i}>{w}</span>)}
-                        </div>
-                      ) : (
-                        <span className="draft-v2__patch-none">None selected</span>
-                      )}
-                    </div>
-                    <div className="draft-v2__patch-list">
-                      <h5 className="draft-v2__patch-list-title draft-v2__patch-list-title--mustnt">
-                        <X size={14} />
-                        Mustn't-have ({mustntHaveKeywords.length})
-                      </h5>
-                      {mustntHaveKeywords.length > 0 ? (
-                        <div className="draft-v2__patch-tags draft-v2__patch-tags--mustnt">
-                          {mustntHaveKeywords.map((w, i) => <span key={i}>{w}</span>)}
-                        </div>
-                      ) : (
-                        <span className="draft-v2__patch-none">None selected</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="draft-v2__patch-action">
-                    <button className="draft-v2__patch-confirm-btn">
-                      <Check size={16} />
-                      <span>Confirm Constraints</span>
-                    </button>
                   </div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
+
+          {/* Bottom Legend */}
+          <footer className="draft-svtz__legend">
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--included" />
+              light green = included phrase (click to exclude)
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword" />
+              dark green = keyword (hover to see source)
+            </span>
+          </footer>
         </div>
       </div>
     )

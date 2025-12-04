@@ -665,14 +665,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         data: {
           entryId: `DRAFT-${nodeCounter}`,
           title: `Draft from ${source.data.entryId}`,
-          summary: 'Refine this draft before validation.',
+          summary: '',
           status: 'in progress',
           timestamp: 'just now',
           tags: ['draft'],
           kind: 'draft',
-          bridgePrompt: '/plan',
+          bridgePrompt: 'prose',
           pendingBranch: 'branch',
           pendingBranchName: '',
+          // Pass upstream content to draft
+          baselineSummary: source.data.summary,
+          sourceConversationId: source.id,
         },
       }
 
@@ -742,14 +745,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         data: {
           entryId: `DRAFT-${nodeCounter}`,
           title: `Draft from ${source.data.entryId}`,
-          summary: 'Blend this commit into the next deliverable.',
+          summary: '',
           status: 'in progress',
           timestamp: 'just now',
           tags: ['draft'],
           kind: 'draft',
-          bridgePrompt: '/plan',
+          bridgePrompt: 'prose',
           pendingBranch: 'branch',
           pendingBranchName: '',
+          // Pass upstream content to draft
+          baselineSummary: source.data.summary,
         },
       }
       const newEdge: Edge = {
