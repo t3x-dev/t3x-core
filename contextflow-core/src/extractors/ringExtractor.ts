@@ -1,14 +1,12 @@
 /**
  * Ring Extractor
  *
- * Extracts Ring 1/2/3 structure from text using Google Cloud NLP.
+ * Extracts Ring 1/2/3 structure from text using NLP providers.
  * Based on ARCHITECTURE.zh.md specification:
  *
  * Ring 1 (主题主轴): keywords, lemmatization, polarity, entities, time_anchor, topic
  * Ring 2 (轻关系/Facet): intent_seed, time_window, preference_soft, unknown_slot
  * Ring 3 (分句结构): sentence segments
- *
- * Replaces spaCy implementation with Google Cloud NLP API.
  */
 
 import {
@@ -31,7 +29,6 @@ import {
 import {
   PolarityRuleEngine,
   createPolarityRuleEngine,
-  PreferenceRelation,
 } from "./polarityRules";
 
 /**
@@ -80,7 +77,7 @@ const DEFAULT_CONFIG: Required<Omit<ExtractorConfig, "customPolarityRules">> = {
 /**
  * Ring Extractor
  *
- * Converts Google Cloud NLP analysis results into the Ring 1/2/3 structure.
+ * Converts NLP analysis results into the Ring 1/2/3 structure.
  */
 export class RingExtractor {
   private readonly nlpProvider: NLPProvider;

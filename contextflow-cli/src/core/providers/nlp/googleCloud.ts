@@ -11,6 +11,8 @@
  * - Sentence segmentation (Ring 3)
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const undici = require("undici");
 import {
   NLPProvider,
   NLPProviderError,
@@ -20,10 +22,22 @@ import {
   NLPSentence,
   normalizePosTag,
   normalizeDependencyLabel,
-} from "./base";
+} from "@contextflow/core";
 
 const GOOGLE_CLOUD_NLP_URL =
   "https://language.googleapis.com/v1/documents:annotateText";
+
+/**
+ * Get proxy URL from environment variables
+ */
+function getProxyUrl(): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  );
+}
 
 /**
  * Configuration options for Google Cloud NLP Provider
@@ -80,11 +94,13 @@ export class GoogleCloudNLPProvider implements NLPProvider {
     }
 
     const url = `${GOOGLE_CLOUD_NLP_URL}?key=${this.apiKey}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    // Setup proxy if available
+    const proxyUrl = getProxyUrl();
+    const dispatcher = proxyUrl ? new undici.ProxyAgent(proxyUrl) : undefined;
 
     try {
-      const response = await fetch(url, {
+      const { statusCode, body } = await undici.request(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,35 +119,28 @@ export class GoogleCloudNLPProvider implements NLPProvider {
           },
           encodingType: "UTF8",
         }),
-        signal: controller.signal,
+        bodyTimeout: this.timeout,
+        headersTimeout: this.timeout,
+        dispatcher,
       });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
+      const responseText = await body.text();
+
+      if (statusCode !== 200) {
         throw new Error(
-          `Google Cloud NLP API error (${response.status}): ${errorBody}`
+          `Google Cloud NLP API error (${statusCode}): ${responseText}`
         );
       }
 
-      const data = (await response.json()) as GoogleCloudNLPResponse;
+      const data = JSON.parse(responseText) as GoogleCloudNLPResponse;
 
       return this.transformResponse(data, text, language);
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new NLPProviderError(
-          this.id,
-          undefined,
-          `Request timeout after ${this.timeout}ms`
-        );
-      }
-
       throw new NLPProviderError(
         this.id,
         error instanceof Error ? error : undefined,
         `Failed to analyze text: ${error instanceof Error ? error.message : String(error)}`
       );
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 

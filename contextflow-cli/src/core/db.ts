@@ -2,8 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { canonText } from './canon';
-import { sha256 } from './hash';
+import { canonText, sha256 } from '@contextflow/core';
 import { logger } from '../runtime/logger';
 
 export type TurnRole = 'user' | 'assistant' | 'tool';
