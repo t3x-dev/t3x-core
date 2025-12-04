@@ -81,20 +81,25 @@ function extractMustHave(projectId: string, conversationId: string): string[] {
       const rings = JSON.parse(row.rings_json);
       const ring1 = rings.ring1 ?? {};
 
-      // Positive preference keywords
-      for (const pref of ring1.preference_keywords ?? []) {
-        if (pref.polarity === "positive") {
-          const kw = pref.keyword ?? pref.lemma;
-          if (kw && !keywords.includes(kw)) {
+      // Positive preference keywords (polarity > 0)
+      for (const pref of ring1.preferenceKeywords ?? ring1.preference_keywords ?? []) {
+        // Handle both numeric polarity (new format) and string polarity (old format)
+        const isPositive = pref.polarity === "positive" || (typeof pref.polarity === "number" && pref.polarity > 0);
+        if (isPositive) {
+          const kw = pref.text ?? pref.keyword ?? pref.lemma;
+          if (kw && typeof kw === "string" && !keywords.includes(kw)) {
             keywords.push(kw);
           }
         }
       }
 
-      // Regular keywords
+      // Regular keywords (handle both object array and string array formats)
       for (const kw of ring1.keywords ?? []) {
-        if (!keywords.includes(kw)) {
-          keywords.push(kw);
+        // New format: {text, lemma, polarity, ...}
+        // Old format: string
+        const kwText = typeof kw === "string" ? kw : (kw.text ?? kw.lemma);
+        if (kwText && typeof kwText === "string" && !keywords.includes(kwText)) {
+          keywords.push(kwText);
         }
       }
     } catch {
@@ -124,11 +129,13 @@ function extractMustntHave(projectId: string, conversationId: string): string[] 
       const rings = JSON.parse(row.rings_json);
       const ring1 = rings.ring1 ?? {};
 
-      // Negative preference keywords
-      for (const pref of ring1.preference_keywords ?? []) {
-        if (pref.polarity === "negative") {
-          const kw = pref.keyword ?? pref.lemma;
-          if (kw && !keywords.includes(kw)) {
+      // Negative preference keywords (polarity < 0)
+      for (const pref of ring1.preferenceKeywords ?? ring1.preference_keywords ?? []) {
+        // Handle both numeric polarity (new format) and string polarity (old format)
+        const isNegative = pref.polarity === "negative" || (typeof pref.polarity === "number" && pref.polarity < 0);
+        if (isNegative) {
+          const kw = pref.text ?? pref.keyword ?? pref.lemma;
+          if (kw && typeof kw === "string" && !keywords.includes(kw)) {
             keywords.push(kw);
           }
         }
@@ -371,7 +378,11 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       }
 
       const completedAt = utcNowIso();
-      const status = validation?.passed ? "ready" : "failed";
+      // Database status constraint: ephemeral | adopted | superseded
+      // New drafts are always ephemeral until explicitly adopted
+      const dbStatus = "ephemeral";
+      // For API response, indicate validation status separately
+      const validationStatus = validation?.passed ? "ready" : "failed";
 
       // Save to database
       db.prepare(`
@@ -392,7 +403,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
         JSON.stringify(mustntHave),
         JSON.stringify(llmConfig),
         generatedText,
-        status,
+        dbStatus,
         createdAt,
         completedAt
       );
@@ -401,7 +412,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
         draft_id: draftId,
         project_id: body.project_id,
         conversation_id: body.conversation_id,
-        status,
+        status: validationStatus,
         base_commit_hash: body.base_commit_hash ?? null,
         turn_anchor_hash: body.turn_anchor_hash ?? null,
         bridge_id: body.bridge_id,
