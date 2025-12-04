@@ -82,60 +82,95 @@ export interface Branch {
   updated_at: string
 }
 
+// Raw commit from API - contains JSON strings that need parsing
+export interface CommitRaw {
+  commit_hash: string
+  project_id: string
+  branch: string
+  message: string | null
+  parents_json: string
+  turn_window_json: string | null
+  facet_snapshot_json: string | null
+  draft_ref_json: string | null
+  signature_json: string | null
+  created_at: string
+}
+
+// Facet types from CLI aggregateFacets
+export interface FacetBase {
+  facet: string
+  confidence?: number
+  source_turn?: string
+}
+
+export interface GoalFacet extends FacetBase {
+  facet: 'goal'
+  text: string
+}
+
+export interface PreferenceFacet extends FacetBase {
+  facet: 'preference'
+  key: string
+  value: string
+}
+
+export interface ContextFacet extends FacetBase {
+  facet: 'context'
+  entity_type: string
+  text: string
+}
+
+// Union type for all facet kinds, plus catch-all for unknown facet types
+export type Facet = GoalFacet | PreferenceFacet | ContextFacet | (FacetBase & Record<string, unknown>)
+
+// Parsed commit for frontend use
 export interface Commit {
   commit_hash: string
   project_id: string
   branch: string
-  message?: string
+  message: string | null
   parent_hashes: string[]
-  created_at: string
-}
-
-export interface CommitDetail extends Commit {
   turn_window: {
     start_turn_hash: string
     end_turn_hash: string
-  }
-  facet_snapshot: Array<{
-    facet: string
-    text: string
-    keywords: string[]
-    evidence: Array<{
-      turn_hash: string
-      segment_id: string
-      similarity_score: number
-    }>
-  }>
-  draft_ref?: {
+  } | null
+  facet_snapshot: Facet[] | null
+  draft_ref: {
     draft_id: string
     text_hash: string
-  }
-  signature?: {
+  } | null
+  signature: {
     algo: string
     key_id: string
     value: string
-  }
+  } | null
+  created_at: string
 }
+
+// CommitDetail is now same as Commit since we parse all JSON fields
+export type CommitDetail = Commit
 
 export interface Draft {
   draft_id: string
   project_id: string
   conversation_id: string
-  status: 'pending' | 'ready' | 'failed'
-  base_commit_hash?: string
-  turn_anchor_hash?: string
+  lifecycle_status: 'ephemeral' | 'adopted' | 'superseded'
+  validation_status: 'pending' | 'passed' | 'failed'
+  base_commit_hash: string | null
+  turn_anchor_hash: string | null
   bridge_id: string
   intent: string
-  text?: string
+  text: string | null
   must_have: string[]
   mustnt_have: string[]
-  validation?: {
+  validation: {
     passed: boolean
     missing_keywords: string[]
     forbidden_keywords: string[]
-  }
+  } | null
+  llm_config: unknown
   created_at: string
-  completed_at?: string
+  completed_at: string | null
 }
 
 export interface DiffResult {
@@ -184,20 +219,69 @@ export interface MergeResult {
   created_at: string
 }
 
-export interface PaginatedResponse<T> {
-  status: string
-  data: T[]
-  pagination: {
-    total: number
-    limit: number
-    offset: number
-    has_more: boolean
-  }
+// List response types - CLI returns nested structure: { status, data: { items: [...], limit, offset } }
+export interface ProjectListData {
+  projects: Project[]
+  limit: number
+  offset: number
+}
+
+export interface ConversationListData {
+  conversations: Conversation[]
+  limit: number
+  offset: number
+}
+
+export interface TurnListData {
+  turns: Turn[]
+  limit: number
+  offset: number
+}
+
+// Internal: API returns raw JSON strings
+interface CommitListDataRaw {
+  commits: CommitRaw[]
+  limit: number
+  offset: number
+}
+
+export interface CommitListData {
+  commits: Commit[]
+  limit: number
+  offset: number
+}
+
+export interface BranchListData {
+  branches: Branch[]
+  limit: number
+  offset: number
 }
 
 export interface ApiResponse<T> {
   status: string
   data: T
+}
+
+// ============================================================================
+// JSON Parsing Helpers
+// ============================================================================
+
+/**
+ * Parse raw commit from API (with JSON string fields) into frontend Commit type
+ */
+function parseCommit(raw: CommitRaw): Commit {
+  return {
+    commit_hash: raw.commit_hash,
+    project_id: raw.project_id,
+    branch: raw.branch,
+    message: raw.message,
+    parent_hashes: raw.parents_json ? JSON.parse(raw.parents_json) : [],
+    turn_window: raw.turn_window_json ? JSON.parse(raw.turn_window_json) : null,
+    facet_snapshot: raw.facet_snapshot_json ? JSON.parse(raw.facet_snapshot_json) : null,
+    draft_ref: raw.draft_ref_json ? JSON.parse(raw.draft_ref_json) : null,
+    signature: raw.signature_json ? JSON.parse(raw.signature_json) : null,
+    created_at: raw.created_at,
+  }
 }
 
 // ============================================================================
@@ -293,10 +377,11 @@ export async function getStatus(): Promise<{
 // Projects
 // ============================================================================
 
-export async function listProjects(limit = 50, offset = 0): Promise<PaginatedResponse<Project>> {
+export async function listProjects(limit = 50, offset = 0): Promise<ProjectListData> {
   const query = buildQueryString({ limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`)
-  return handleResponse(res)
+  const response = await handleResponse<ApiResponse<ProjectListData>>(res)
+  return response.data
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
@@ -344,10 +429,11 @@ export async function listConversations(
   projectId: string,
   limit = 50,
   offset = 0
-): Promise<PaginatedResponse<Conversation>> {
+): Promise<ConversationListData> {
   const query = buildQueryString({ project_id: projectId, limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/conversations?${query}`)
-  return handleResponse(res)
+  const response = await handleResponse<ApiResponse<ConversationListData>>(res)
+  return response.data
 }
 
 export async function createConversation(
@@ -370,10 +456,10 @@ export async function createConversation(
 
 export async function listTurns(
   projectId: string,
-  conversationId?: string,
+  conversationId: string,
   limit = 100,
   offset = 0
-): Promise<PaginatedResponse<Turn>> {
+): Promise<TurnListData> {
   const query = buildQueryString({
     project_id: projectId,
     conversation_id: conversationId,
@@ -381,7 +467,8 @@ export async function listTurns(
     offset,
   })
   const res = await fetchWithTimeout(`${API_V1}/turns?${query}`)
-  return handleResponse(res)
+  const response = await handleResponse<ApiResponse<TurnListData>>(res)
+  return response.data
 }
 
 export async function getTurn(turnHash: string): Promise<TurnDetail> {
@@ -416,10 +503,11 @@ export async function createTurn(
 // Branches
 // ============================================================================
 
-export async function listBranches(projectId: string): Promise<PaginatedResponse<Branch>> {
+export async function listBranches(projectId: string): Promise<BranchListData> {
   const query = buildQueryString({ project_id: projectId })
   const res = await fetchWithTimeout(`${API_V1}/branches?${query}`)
-  return handleResponse(res)
+  const response = await handleResponse<ApiResponse<BranchListData>>(res)
+  return response.data
 }
 
 export async function getCurrentBranch(projectId: string): Promise<{
@@ -497,42 +585,43 @@ export async function listCommits(
   branch?: string,
   limit = 50,
   offset = 0
-): Promise<PaginatedResponse<Commit>> {
+): Promise<CommitListData> {
   const query = buildQueryString({ project_id: projectId, branch, limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/commits?${query}`)
-  return handleResponse(res)
+  const response = await handleResponse<ApiResponse<CommitListDataRaw>>(res)
+  return {
+    commits: response.data.commits.map(parseCommit),
+    limit: response.data.limit,
+    offset: response.data.offset,
+  }
 }
 
-export async function getCommit(commitHash: string): Promise<CommitDetail> {
+export async function getCommit(commitHash: string): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`)
-  const data = await handleResponse<ApiResponse<CommitDetail>>(res)
-  return data.data
+  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
+  return parseCommit(data.data)
 }
 
 export async function createCommit(
   projectId: string,
-  conversationId: string,
   turnWindow: { start_turn_hash: string; end_turn_hash: string },
   branch = 'main',
   message?: string,
-  draftId?: string,
-  sign = false
+  draftId?: string
 ): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       project_id: projectId,
-      conversation_id: conversationId,
       branch,
       message,
       turn_window: turnWindow,
       draft_id: draftId,
-      sign,
     }),
   })
-  const data = await handleResponse<ApiResponse<Commit>>(res)
-  return data.data
+  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
+  return parseCommit(data.data)
 }
 
 // ============================================================================

@@ -712,6 +712,22 @@ button {
   cursor: grabbing;
 }
 
+.workspace__empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #64748b;
+  font-size: 0.95rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.workspace__empty-state p {
+  margin: 0.5rem 0;
+}
+
 .canvas-node {
   min-width: var(--canvas-node-min-width);
   border-radius: 12px;

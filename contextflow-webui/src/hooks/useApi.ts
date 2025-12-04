@@ -127,7 +127,7 @@ export function useProject(projectId: string | undefined) {
 export function useConversations(projectId: string | undefined, limit = 50, offset = 0) {
   return useApiCall(
     (pid: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { status: 'ok', data: [], pagination: { total: 0, limit: l, offset: o, has_more: false } }
+      if (!pid) return { conversations: [], limit: l, offset: o }
       return api.listConversations(pid, l, o)
     },
     [projectId, limit, offset]
@@ -140,13 +140,14 @@ export function useConversations(projectId: string | undefined, limit = 50, offs
 
 export function useTurns(
   projectId: string | undefined,
-  conversationId?: string,
+  conversationId: string | undefined,
   limit = 100,
   offset = 0
 ) {
   return useApiCall(
     (pid: string | undefined, cid: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { status: 'ok', data: [], pagination: { total: 0, limit: l, offset: o, has_more: false } }
+      // Both projectId and conversationId are required by the API
+      if (!pid || !cid) return { turns: [], limit: l, offset: o }
       return api.listTurns(pid, cid, l, o)
     },
     [projectId, conversationId, limit, offset]
@@ -170,7 +171,7 @@ export function useTurn(turnHash: string | undefined) {
 export function useBranches(projectId: string | undefined) {
   return useApiCall(
     (pid: string | undefined) => async () => {
-      if (!pid) return { status: 'ok', data: [], pagination: { total: 0, limit: 50, offset: 0, has_more: false } }
+      if (!pid) return { branches: [], limit: 50, offset: 0 }
       return api.listBranches(pid)
     },
     [projectId]
@@ -194,7 +195,7 @@ export function useCurrentBranch(projectId: string | undefined) {
 export function useCommits(projectId: string | undefined, branch?: string, limit = 50, offset = 0) {
   return useApiCall(
     (pid: string | undefined, b: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { status: 'ok', data: [], pagination: { total: 0, limit: l, offset: o, has_more: false } }
+      if (!pid) return { commits: [], limit: l, offset: o }
       return api.listCommits(pid, b, l, o)
     },
     [projectId, branch, limit, offset]
