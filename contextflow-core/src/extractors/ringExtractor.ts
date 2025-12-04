@@ -67,6 +67,50 @@ const QUESTION_WORD_LEMMAS = new Set([
 ]);
 
 /**
+ * Stop words to filter out from Ring extraction
+ * These are common words that don't carry meaningful information
+ */
+const STOP_WORDS = new Set([
+  // Pronouns
+  "i", "me", "my", "myself", "we", "our", "ours", "ourselves",
+  "you", "your", "yours", "yourself", "yourselves",
+  "he", "him", "his", "himself", "she", "her", "hers", "herself",
+  "it", "its", "itself", "they", "them", "their", "theirs", "themselves",
+  // Common verbs that are too generic
+  "be", "is", "am", "are", "was", "were", "been", "being",
+  "have", "has", "had", "having",
+  "do", "does", "did", "doing",
+  "will", "would", "could", "should", "may", "might", "must", "shall",
+  "can", "need",
+  // Articles and determiners
+  "a", "an", "the", "this", "that", "these", "those",
+  // Prepositions
+  "in", "on", "at", "to", "for", "of", "with", "by", "from", "as",
+  "into", "through", "during", "before", "after", "above", "below",
+  "between", "under", "again", "further", "then", "once",
+  // Conjunctions
+  "and", "but", "or", "nor", "so", "yet", "both", "either", "neither",
+  // Adverbs
+  "not", "no", "very", "just", "also", "only", "even", "still",
+  "already", "always", "never", "ever", "often", "sometimes",
+  // Indefinite pronouns (low-value)
+  "something", "anything", "nothing", "everything",
+  "someone", "anyone", "everyone", "nobody",
+  "some", "any", "all", "each", "every", "both", "few", "more", "most",
+  "other", "another", "such",
+  // Numbers (generic)
+  "one", "two", "three", "first", "second", "third",
+  // Misc low-value words
+  "thing", "things", "way", "ways", "time", "times",
+  "lot", "lots", "much", "many", "little", "less", "least",
+  "good", "great", "nice", "well", "better", "best",
+  "new", "old", "big", "small", "long", "short",
+  "come", "go", "get", "make", "take", "put", "give", "use",
+  "say", "tell", "ask", "think", "know", "see", "look", "find",
+  "want", "let", "try", "keep", "seem", "help", "show", "hear",
+]);
+
+/**
  * Default configuration
  */
 const DEFAULT_CONFIG: Required<Omit<ExtractorConfig, "customPolarityRules">> = {
@@ -159,7 +203,7 @@ export class RingExtractor {
     let topic: string | null = null;
 
     for (const token of tokens) {
-      // Skip punctuation and stop words (tokens with very short text that are not nouns)
+      // Skip punctuation and unknown tags
       if (token.pos === "PUNCT" || token.pos === "X") {
         continue;
       }
@@ -174,6 +218,12 @@ export class RingExtractor {
       if (seenLemmas.has(lemmaKey)) {
         continue;
       }
+
+      // Skip stop words (low-value common words)
+      if (STOP_WORDS.has(lemmaKey) || STOP_WORDS.has(token.text.toLowerCase())) {
+        continue;
+      }
+
       seenLemmas.add(lemmaKey);
 
       // Get polarity from polarity map
@@ -184,9 +234,12 @@ export class RingExtractor {
       const entityType = entity?.type ?? null;
       const confidence = entity?.salience ?? 1.0;
 
-      // Extract topic (first NOUN/PROPN)
+      // Extract topic (first NOUN/PROPN that is not a stop word)
       if (topic === null && (token.pos === "NOUN" || token.pos === "PROPN")) {
-        topic = lemmaKey;
+        // Skip generic nouns for topic
+        if (!STOP_WORDS.has(lemmaKey)) {
+          topic = lemmaKey;
+        }
       }
 
       keywords.push({

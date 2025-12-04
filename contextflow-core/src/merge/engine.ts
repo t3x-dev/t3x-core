@@ -64,13 +64,13 @@ export class MergeEngine {
     sourceFacets: MergeFacet[],
     targetFacets: MergeFacet[]
   ): Promise<MergeResult> {
-    // Build lookup maps
+    // Build lookup maps by key
     const baseMap = this.buildFacetMap(baseFacets);
     const sourceMap = this.buildFacetMap(sourceFacets);
     const targetMap = this.buildFacetMap(targetFacets);
 
-    // Get all unique facet names
-    const allFacetNames = new Set([
+    // Get all unique facet keys
+    const allFacetKeys = new Set([
       ...baseMap.keys(),
       ...sourceMap.keys(),
       ...targetMap.keys(),
@@ -79,11 +79,14 @@ export class MergeEngine {
     const autoMerged: AutoMergedFacet[] = [];
     const conflicts: MergeConflict[] = [];
 
-    // Process each facet
-    for (const facetName of allFacetNames) {
-      const baseFacet = baseMap.get(facetName);
-      const sourceFacet = sourceMap.get(facetName);
-      const targetFacet = targetMap.get(facetName);
+    // Process each facet by key
+    for (const facetKey of allFacetKeys) {
+      const baseFacet = baseMap.get(facetKey);
+      const sourceFacet = sourceMap.get(facetKey);
+      const targetFacet = targetMap.get(facetKey);
+
+      // Determine facet type for type-aware merging
+      const facetType = baseFacet?.type ?? sourceFacet?.type ?? targetFacet?.type;
 
       const baseText = baseFacet?.text ?? null;
       const sourceText = sourceFacet?.text ?? null;
@@ -94,22 +97,53 @@ export class MergeEngine {
       const targetChanged = targetText !== baseText;
 
       if (sourceChanged && targetChanged && sourceText !== targetText) {
-        // Conflict: both sides modified with different results
-        conflicts.push({
-          facet: facetName,
-          baseText,
-          sourceText,
-          targetText,
-          conflictType: this.determineConflictType(
-            baseText,
-            sourceText,
-            targetText
-          ),
-        });
+        // Both sides modified differently
+        // For constraint types (like budget), this is a real conflict
+        // For additive types (like menu_item), both can be kept
+        if (facetType === "constraint") {
+          // Real conflict for constraints - prefer higher confidence
+          const sourceConf = sourceFacet?.confidence ?? 0.5;
+          const targetConf = targetFacet?.confidence ?? 0.5;
+
+          if (sourceConf > targetConf + 0.1) {
+            // Source has significantly higher confidence
+            autoMerged.push({
+              facet: facetKey,
+              mergedText: sourceText,
+              source: "source",
+              keywords: sourceFacet?.keywords ?? [],
+            });
+          } else if (targetConf > sourceConf + 0.1) {
+            // Target has significantly higher confidence
+            autoMerged.push({
+              facet: facetKey,
+              mergedText: targetText,
+              source: "target",
+              keywords: targetFacet?.keywords ?? [],
+            });
+          } else {
+            // Similar confidence - real conflict
+            conflicts.push({
+              facet: facetKey,
+              baseText,
+              sourceText,
+              targetText,
+              conflictType: this.determineConflictType(baseText, sourceText, targetText),
+            });
+          }
+        } else {
+          // For non-constraint types, merge both versions
+          autoMerged.push({
+            facet: facetKey,
+            mergedText: [sourceText, targetText].filter(Boolean).join("\n"),
+            source: "target",
+            keywords: [...(sourceFacet?.keywords ?? []), ...(targetFacet?.keywords ?? [])],
+          });
+        }
       } else if (sourceChanged) {
         // Only source modified → take source
         autoMerged.push({
-          facet: facetName,
+          facet: facetKey,
           mergedText: sourceText,
           source: "source",
           keywords: sourceFacet?.keywords ?? [],
@@ -117,7 +151,7 @@ export class MergeEngine {
       } else if (targetChanged) {
         // Only target modified → take target
         autoMerged.push({
-          facet: facetName,
+          facet: facetKey,
           mergedText: targetText,
           source: "target",
           keywords: targetFacet?.keywords ?? [],
@@ -126,7 +160,7 @@ export class MergeEngine {
         // No change → keep base (if exists)
         if (baseText !== null) {
           autoMerged.push({
-            facet: facetName,
+            facet: facetKey,
             mergedText: baseText,
             source: "base",
             keywords: baseFacet?.keywords ?? [],
@@ -150,7 +184,7 @@ export class MergeEngine {
           autoMerged.push({
             facet: conflict.facet,
             mergedText: resolved,
-            source: "target", // Mark as resolved
+            source: "llm",
             keywords: [],
           });
           llmResolvedCount++;
@@ -164,7 +198,7 @@ export class MergeEngine {
     }
 
     // Calculate statistics
-    const stats = this.calculateStats(autoMerged, remainingConflicts, allFacetNames.size, llmResolvedCount);
+    const stats = this.calculateStats(autoMerged, remainingConflicts, allFacetKeys.size, llmResolvedCount);
 
     return {
       autoMerged,
@@ -195,7 +229,7 @@ export class MergeEngine {
         additionalMerged.push({
           facet: conflict.facet,
           mergedText: resolvedText,
-          source: "target", // Mark as manual resolution
+          source: "manual",
           keywords: [],
         });
       } else {
@@ -221,12 +255,30 @@ export class MergeEngine {
   }
 
   /**
+   * Get the merge key for a facet
+   * Priority: facet > id > type:text hash
+   */
+  private getFacetKey(facet: MergeFacet): string {
+    if (facet.facet) return facet.facet;
+    if (facet.id) return facet.id;
+    // Fallback: use type and first few words of text
+    const textKey = facet.text?.toLowerCase().split(/\s+/).slice(0, 3).join("_") ?? "empty";
+    return `${facet.type ?? "unknown"}:${textKey}`;
+  }
+
+  /**
    * Build facet lookup map
+   * Groups facets by key, with support for multiple matching strategies
    */
   private buildFacetMap(facets: MergeFacet[]): Map<string, MergeFacet> {
     const map = new Map<string, MergeFacet>();
     for (const facet of facets) {
-      map.set(facet.facet, facet);
+      const key = this.getFacetKey(facet);
+      // If duplicate key, keep the one with higher confidence
+      const existing = map.get(key);
+      if (!existing || (facet.confidence ?? 0.5) > (existing.confidence ?? 0.5)) {
+        map.set(key, facet);
+      }
     }
     return map;
   }
@@ -257,7 +309,7 @@ export class MergeEngine {
     totalFacets: number,
     llmResolvedCount: number
   ): MergeStats {
-    const bySource = { base: 0, source: 0, target: 0 };
+    const bySource = { base: 0, source: 0, target: 0, llm: 0, manual: 0 };
 
     for (const merged of autoMerged) {
       bySource[merged.source]++;

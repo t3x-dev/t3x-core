@@ -19,18 +19,24 @@ export enum ConflictType {
 /**
  * Source of merged content
  */
-export type MergeSource = "base" | "source" | "target";
+export type MergeSource = "base" | "source" | "target" | "llm" | "manual";
 
 /**
  * Input facet for merge operation
  */
 export interface MergeFacet {
-  /** Facet name/identifier */
-  facet: string;
+  /** Facet unique identifier (for tracking) */
+  id?: string;
+  /** Facet name/identifier (key for merge matching) */
+  facet?: string;
+  /** Facet type for grouping (e.g., "menu_item", "constraint") */
+  type?: string;
   /** Facet text content */
   text: string | null;
   /** Associated keywords */
   keywords?: string[];
+  /** Confidence score (0-1) for prioritizing during conflicts */
+  confidence?: number;
 }
 
 /**
@@ -94,5 +100,7 @@ export interface MergeStats {
     base: number;
     source: number;
     target: number;
+    llm: number;
+    manual: number;
   };
 }
