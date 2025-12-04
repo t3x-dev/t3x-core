@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight, Lock, RotateCcw } from 'lucide-react'
 import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
 
@@ -20,11 +20,24 @@ const bridgeTemplates = [
 ]
 
 // Phrase type for extraction results
+// Two states: included (浅绿) or excluded (浅红)
 interface Phrase {
   id: string
   text: string
-  included: boolean
+  included: boolean  // true = include (浅绿), false = exclude (浅红)
   sourceBoxId: string
+  keywords: PhraseKeyword[]  // Keywords within this phrase
+}
+
+// Keyword within a phrase
+// Two states: must (深绿) or mustnt (深红)
+// Only editable when parent phrase is included
+interface PhraseKeyword {
+  id: string
+  text: string
+  originalWord: string  // Original word with punctuation
+  startIndex: number    // Position in phrase text
+  isMustnt: boolean     // false = must_have (深绿), true = mustnt_have (深红)
 }
 
 // Source box type for SOURCE column
@@ -37,15 +50,6 @@ interface SourceBox {
   phrases: Phrase[]
 }
 
-// Linked keyword type for RESULT column
-interface LinkedKeyword {
-  id: string
-  text: string
-  phraseId: string
-  sourceBoxId: string
-  sourceBoxTitle: string
-  originalWord: string
-}
 
 export type NodeQuickAction = {
   key: string
@@ -70,112 +74,226 @@ interface NodeModalProps {
   isConversationLocked?: boolean
 }
 
-// Mock phrase extraction from text (in real app this would come from backend)
-function extractPhrasesFromText(text: string, sourceBoxId: string): Phrase[] {
-  if (!text) return []
-  // Split into sentences and create phrases
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
-  return sentences.slice(0, 8).map((sentence, idx) => ({
-    id: `phrase-${sourceBoxId}-${idx}`,
-    text: sentence.trim(),
-    included: true, // default to included
-    sourceBoxId,
-  }))
+// Stop words for keyword extraction
+const STOP_WORDS = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'been', 'will', 'would', 'could', 'should', 'about', 'which', 'their', 'there', 'where', 'when', 'what', 'were', 'they', 'into', 'also', 'more', 'some', 'than', 'very', 'just', 'only', 'over', 'such', 'like', 'then', 'most', 'your', 'other', 'first', 'can', 'are', 'was', 'has', 'had', 'but', 'not', 'you', 'all', 'any', 'its', 'may', 'how', 'out', 'who', 'get', 'our', 'one', 'two'])
+
+// Extract keywords from a single phrase
+function extractKeywordsFromPhrase(
+  phraseText: string,
+  phraseId: string,
+  minWordLength: number = 4
+): PhraseKeyword[] {
+  const keywords: PhraseKeyword[] = []
+  const seenWords = new Set<string>()
+
+  // Match words with their positions
+  const wordRegex = /\b\w+\b/g
+  let match
+
+  while ((match = wordRegex.exec(phraseText)) !== null) {
+    const word = match[0]
+    const cleanWord = word.toLowerCase()
+
+    if (
+      cleanWord.length >= minWordLength &&
+      !STOP_WORDS.has(cleanWord) &&
+      !seenWords.has(cleanWord)
+    ) {
+      seenWords.add(cleanWord)
+      keywords.push({
+        id: `kw-${phraseId}-${match.index}`,
+        text: cleanWord,
+        originalWord: word,
+        startIndex: match.index,
+        isMustnt: false,  // Default to must_have (深绿)
+      })
+    }
+  }
+
+  return keywords
 }
 
-// Mock keyword extraction from phrases with threshold control
-function extractKeywordsFromPhrases(
-  phrases: Phrase[],
-  sourceBoxes: SourceBox[],
+// Mock phrase extraction from text (in real app this would come from backend)
+function extractPhrasesFromText(
+  text: string,
+  sourceBoxId: string,
   keywordsThreshold: number = 0.6
-): LinkedKeyword[] {
-  const keywords: LinkedKeyword[] = []
-  const stopWords = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'been', 'will', 'would', 'could', 'should', 'about', 'which', 'their', 'there', 'where', 'when', 'what', 'were', 'they', 'into', 'also', 'more', 'some', 'than', 'very', 'just', 'only', 'over', 'such', 'like', 'then', 'most', 'your', 'other', 'first'])
+): Phrase[] {
+  if (!text) return []
 
   // Minimum word length based on threshold (higher threshold = longer words)
   const minWordLength = Math.floor(3 + keywordsThreshold * 3) // 3-6 chars
 
-  phrases.filter(p => p.included).forEach(phrase => {
-    const words = phrase.text.split(/\s+/)
-    const sourceBox = sourceBoxes.find(sb => sb.id === phrase.sourceBoxId)
-    words.forEach((word, idx) => {
-      const cleanWord = word.toLowerCase().replace(/[^\w]/g, '')
-      if (cleanWord.length >= minWordLength && !stopWords.has(cleanWord) && !keywords.some(k => k.text.toLowerCase() === cleanWord)) {
-        keywords.push({
-          id: `kw-${phrase.id}-${idx}`,
-          text: cleanWord,
-          phraseId: phrase.id,
-          sourceBoxId: phrase.sourceBoxId,
-          sourceBoxTitle: sourceBox?.title || 'Unknown',
-          // Store original word position for highlighting in source
-          originalWord: word,
-        })
-      }
-    })
+  // Split into sentences and create phrases
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  return sentences.slice(0, 8).map((sentence, idx) => {
+    const phraseId = `phrase-${sourceBoxId}-${idx}`
+    const trimmedText = sentence.trim()
+    return {
+      id: phraseId,
+      text: trimmedText,
+      included: true, // default to included (浅绿)
+      sourceBoxId,
+      keywords: extractKeywordsFromPhrase(trimmedText, phraseId, minWordLength),
+    }
   })
-
-  // Max keywords based on threshold (higher threshold = fewer keywords)
-  const maxKeywords = Math.floor(5 + (1 - keywordsThreshold) * 20) // 5-25 keywords
-  return keywords.slice(0, maxKeywords)
 }
 
-// Generate mock draft text from included phrases
-function generateDraftText(phrases: Phrase[], template: string): string {
+// Generate result text from included phrases (excludes mustnt keywords)
+function generateResultText(phrases: Phrase[]): string {
   const includedPhrases = phrases.filter(p => p.included)
   if (includedPhrases.length === 0) return ''
 
-  const content = includedPhrases.map(p => p.text).join('. ')
-
-  if (template === 'plan') {
-    return `Key priorities:\n• ${includedPhrases.map(p => p.text).join('\n• ')}`
-  }
-  return content + '.'
+  return includedPhrases.map(p => p.text).join('. ') + '.'
 }
 
-// Helper to render text with keyword highlighting
-function renderTextWithKeywords(
-  text: string,
-  keywords: LinkedKeyword[],
-  hoveredKeyword: LinkedKeyword | null,
-  onKeywordHover: (kw: LinkedKeyword | null) => void
+// Get all must_have keywords from included phrases
+function getMustHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+  return phrases
+    .filter(p => p.included)
+    .flatMap(p => p.keywords.filter(kw => !kw.isMustnt))
+}
+
+// Get all mustnt_have keywords from included phrases
+function getMustntHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+  return phrases
+    .filter(p => p.included)
+    .flatMap(p => p.keywords.filter(kw => kw.isMustnt))
+}
+
+// Helper to render phrase text with clickable keywords
+// - Click on non-keyword text: toggle phrase include/exclude
+// - Click on keyword: toggle keyword must/mustnt (only when phrase is included)
+function renderPhraseWithKeywords(
+  phrase: Phrase,
+  canToggle: boolean,
+  onPhraseClick: () => void,
+  onKeywordClick: (keywordId: string) => void
 ): React.ReactNode[] {
-  if (!text || keywords.length === 0) {
-    return [text]
+  const { text, keywords, included } = phrase
+
+  if (keywords.length === 0) {
+    // No keywords, entire phrase is clickable
+    return [
+      <span
+        key="text"
+        className="draft-svtz__phrase-text"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle) onPhraseClick()
+        }}
+        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+      >
+        {text}
+      </span>
+    ]
   }
 
-  // Create a map of keyword texts (lowercase) to their LinkedKeyword objects
-  const keywordMap = new Map<string, LinkedKeyword>()
-  keywords.forEach(kw => {
-    keywordMap.set(kw.text.toLowerCase(), kw)
-  })
+  // Sort keywords by position
+  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
 
-  // Split text into words while preserving spaces and punctuation
   const parts: React.ReactNode[] = []
-  const regex = /(\s+|[^\s\w]|\w+)/g
-  let match
-  let idx = 0
+  let lastIndex = 0
 
-  while ((match = regex.exec(text)) !== null) {
-    const part = match[0]
-    const cleanPart = part.toLowerCase().replace(/[^\w]/g, '')
-    const keyword = keywordMap.get(cleanPart)
-
-    if (keyword && cleanPart.length >= 3) {
-      const isHovered = hoveredKeyword?.text.toLowerCase() === cleanPart
+  sortedKeywords.forEach((kw, idx) => {
+    // Add text before this keyword (clickable to toggle phrase)
+    if (kw.startIndex > lastIndex) {
+      const beforeText = text.slice(lastIndex, kw.startIndex)
       parts.push(
         <span
-          key={`kw-${idx}`}
-          className={`draft-svtz__inline-keyword ${isHovered ? 'draft-svtz__inline-keyword--hovered' : ''}`}
-          onMouseEnter={() => onKeywordHover(keyword)}
-          onMouseLeave={() => onKeywordHover(null)}
+          key={`text-${idx}`}
+          className="draft-svtz__phrase-text"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (canToggle) onPhraseClick()
+          }}
+          title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
         >
-          {part}
+          {beforeText}
         </span>
       )
-    } else {
-      parts.push(part)
     }
-    idx++
+
+    // Add keyword (clickable to toggle must/mustnt, only when phrase is included)
+    const keywordEndIndex = kw.startIndex + kw.originalWord.length
+    parts.push(
+      <span
+        key={`kw-${kw.id}`}
+        className={`draft-svtz__keyword ${kw.isMustnt ? 'draft-svtz__keyword--mustnt' : 'draft-svtz__keyword--must'} ${!included ? 'draft-svtz__keyword--disabled' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle && included) onKeywordClick(kw.id)
+        }}
+        title={
+          !canToggle ? 'Complete Step 1 to edit' :
+          !included ? 'Include phrase first to edit keywords' :
+          (kw.isMustnt ? 'Click to change to must-have' : 'Click to change to mustnt-have')
+        }
+      >
+        {text.slice(kw.startIndex, keywordEndIndex)}
+      </span>
+    )
+
+    lastIndex = keywordEndIndex
+  })
+
+  // Add remaining text after last keyword
+  if (lastIndex < text.length) {
+    parts.push(
+      <span
+        key="text-end"
+        className="draft-svtz__phrase-text"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (canToggle) onPhraseClick()
+        }}
+        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+      >
+        {text.slice(lastIndex)}
+      </span>
+    )
+  }
+
+  return parts
+}
+
+// Helper to render phrase in RESULT with keyword highlighting (read-only)
+function renderResultPhraseWithKeywords(phrase: Phrase): React.ReactNode[] {
+  const { text, keywords } = phrase
+
+  if (keywords.length === 0) {
+    return [<span key="text">{text}</span>]
+  }
+
+  // Sort keywords by position
+  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
+
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+
+  sortedKeywords.forEach((kw, idx) => {
+    // Add text before this keyword
+    if (kw.startIndex > lastIndex) {
+      parts.push(<span key={`text-${idx}`}>{text.slice(lastIndex, kw.startIndex)}</span>)
+    }
+
+    // Add keyword with appropriate styling
+    const keywordEndIndex = kw.startIndex + kw.originalWord.length
+    parts.push(
+      <span
+        key={`kw-${kw.id}`}
+        className={`draft-svtz__result-inline-keyword ${kw.isMustnt ? 'draft-svtz__result-inline-keyword--mustnt' : 'draft-svtz__result-inline-keyword--must'}`}
+      >
+        {text.slice(kw.startIndex, keywordEndIndex)}
+      </span>
+    )
+
+    lastIndex = keywordEndIndex
+  })
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>)
   }
 
   return parts
@@ -196,10 +314,13 @@ export function NodeModal({
   }
 
   const { data } = node
-  const isDraft = data.kind === 'draft'
   const isCommit = data.kind === 'commit'
   const isConversation = data.kind === 'conversation'
-  const isMergeDraft = isDraft && data.bridgePrompt === 'merge' && !!data.mergeConfig
+  // Pending commit (previously "draft") - editable state before committing
+  const isPendingCommit = isCommit && data.commitStatus === 'pending'
+  // Committed commit - read-only state
+  const isCommittedCommit = isCommit && data.commitStatus !== 'pending'
+  const isMergeDraft = isPendingCommit && data.bridgePrompt === 'merge' && !!data.mergeConfig
   const shouldShowBranchSelect =
     (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
   const requireBranchName =
@@ -213,12 +334,11 @@ export function NodeModal({
   const [cosineThreshold, setCosineThreshold] = useState(0.75)
   const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
 
-  // Source boxes with phrases (SOURCE column)
-  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
+  // Step 1 locked state - when true, config is frozen and Step 2 becomes editable
+  const [configLocked, setConfigLocked] = useState(false)
 
-  // Generated draft text and linked keywords (RESULT column)
-  const [draftText, setDraftText] = useState('')
-  const [linkedKeywords, setLinkedKeywords] = useState<LinkedKeyword[]>([])
+  // Source boxes with phrases (SOURCE column) - baseline from Step 1
+  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
 
   // Loading state for Refresh
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -227,9 +347,6 @@ export function NodeModal({
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
   const [sourceResultDividerPos, setSourceResultDividerPos] = useState(50) // percentage for SOURCE | RESULT
 
-  // Hovered keyword for tooltip
-  const [hoveredKeyword, setHoveredKeyword] = useState<LinkedKeyword | null>(null)
-
   // Refs
   const mainContentRef = useRef<HTMLDivElement>(null)
   const draftBodyRef = useRef<HTMLDivElement>(null)
@@ -237,9 +354,15 @@ export function NodeModal({
   // Computed: all phrases from all source boxes
   const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
 
-  // Computed: included phrases/keywords count
+  // Computed: included phrases count
   const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
-  const includedKeywordsCount = linkedKeywords.length
+
+  // Computed: must_have and mustnt_have keywords
+  const mustHaveKeywords = useMemo(() => getMustHaveKeywords(allPhrases), [allPhrases])
+  const mustntHaveKeywords = useMemo(() => getMustntHaveKeywords(allPhrases), [allPhrases])
+
+  // Computed: result text from included phrases
+  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases])
 
   // Sidebar state for conversation
   const [showSettings, setShowSettings] = useState(false)
@@ -391,29 +514,41 @@ export function NodeModal({
     ))
   }, [])
 
-  // Toggle phrase include/exclude
+  // Toggle phrase include/exclude (only in Step 2 when configLocked)
+  // Phrase: include (浅绿) ↔ exclude (浅红)
   const togglePhraseInclude = useCallback((phraseId: string) => {
+    if (!configLocked) return // Only allow in Step 2
+
     setSourceBoxes(prev => prev.map(sb => ({
       ...sb,
       phrases: sb.phrases.map(p =>
         p.id === phraseId ? { ...p, included: !p.included } : p
       )
     })))
-  }, [])
+  }, [configLocked])
 
-  // Update draft text and keywords when phrases or threshold change
-  useEffect(() => {
-    if (isDraft && sourceBoxes.length > 0) {
-      const newDraftText = generateDraftText(allPhrases, template)
-      setDraftText(newDraftText)
-      const newKeywords = extractKeywordsFromPhrases(allPhrases, sourceBoxes, keywordsThreshold)
-      setLinkedKeywords(newKeywords)
-    }
-  }, [isDraft, sourceBoxes, allPhrases, template, keywordsThreshold])
+  // Toggle keyword must/mustnt (only when parent phrase is included)
+  // Keyword: must_have (深绿) ↔ mustnt_have (深红)
+  const toggleKeywordMustnt = useCallback((phraseId: string, keywordId: string) => {
+    if (!configLocked) return // Only allow in Step 2
+
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p => {
+        if (p.id !== phraseId || !p.included) return p // Only toggle if phrase is included
+        return {
+          ...p,
+          keywords: p.keywords.map(kw =>
+            kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
+          )
+        }
+      })
+    })))
+  }, [configLocked])
 
   // Initialize source boxes from baseline summary
   useEffect(() => {
-    if (isDraft && data.baselineSummary) {
+    if (isPendingCommit && data.baselineSummary) {
       // Determine source type based on title or sourceConversationId
       const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
       const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
@@ -427,11 +562,11 @@ export function NodeModal({
         type: sourceType,
         content: data.baselineSummary,
         expanded: true,
-        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1'),
+        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
       }
       setSourceBoxes([initialBox])
     }
-  }, [isDraft, data.baselineSummary, data.title, data.sourceConversationId])
+  }, [isPendingCommit, data.baselineSummary, data.title, data.sourceConversationId, keywordsThreshold])
 
   // Handle Refresh - re-extract with current config
   const handleRefresh = useCallback(async () => {
@@ -442,23 +577,39 @@ export function NodeModal({
     // Re-extract phrases based on new config
     setSourceBoxes(prev => prev.map(sb => ({
       ...sb,
-      phrases: extractPhrasesFromText(sb.content, sb.id),
+      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
     })))
 
     setIsRefreshing(false)
-  }, [])
+  }, [keywordsThreshold])
+
+  // Handle Proceed - lock Step 1 config and enable Step 2 editing
+  const handleProceed = useCallback(() => {
+    if (sourceBoxes.length === 0) return
+    setConfigLocked(true)
+  }, [sourceBoxes])
+
+  // Handle Reset - unlock Step 1 config and reset phrases to default
+  const handleReset = useCallback(() => {
+    setConfigLocked(false)
+    // Re-extract to reset all phrase/keyword states
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
+    })))
+  }, [keywordsThreshold])
 
   // Handle Commit - create commit node
   const handleCommit = useCallback(() => {
     // Update data with final values
     onUpdate({
-      summary: draftText,
+      summary: resultText,
       bridgePrompt: template,
       isGenerated: true,
     })
     // Trigger convert to commit
     onConvertDraft?.()
-  }, [draftText, template, onUpdate, onConvertDraft])
+  }, [resultText, template, onUpdate, onConvertDraft])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -633,18 +784,19 @@ export function NodeModal({
   }
 
   // ============================================
-  // DRAFT NODE - Single View Two Zones Design
+  // PENDING COMMIT - Single View Two Zones Design (editable)
   // ============================================
-  if (isDraft) {
+  if (isPendingCommit) {
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="modal-v2 modal-v2--draft modal-v2--draft-svtz">
+        <div className="modal-v2 modal-v2--commit modal-v2--commit-pending modal-v2--draft-svtz">
           {/* Top Bar */}
           <header className="modal-v2__topbar">
             <div className="modal-v2__topbar-left">
               <div className="draft-svtz__logo">t3x</div>
-              <h2 className="modal-v2__title">Draft: {data.title || 'Untitled'}</h2>
+              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
               <span className="modal-v2__id">{data.entryId}</span>
+              <span className="modal-v2__pending-badge">pending</span>
             </div>
             <div className="modal-v2__topbar-right">
               <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
@@ -657,124 +809,196 @@ export function NodeModal({
             {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
             <aside className="draft-svtz__sidebar" style={{ width: sidebarSourceDividerPos }}>
               {/* STEP 1: Configure */}
-              <div className="draft-svtz__step">
+              <div className={`draft-svtz__step ${configLocked ? 'draft-svtz__step--locked' : ''}`}>
                 <div className="draft-svtz__step-header">
                   <span className="draft-svtz__step-number">STEP 1</span>
                   <span className="draft-svtz__step-label">
-                    <span className="draft-svtz__step-dot draft-svtz__step-dot--active" />
+                    <span className={`draft-svtz__step-dot ${!configLocked ? 'draft-svtz__step-dot--active' : 'draft-svtz__step-dot--completed'}`} />
                     Configure
+                    {configLocked && <Lock size={12} className="draft-svtz__lock-icon" />}
                   </span>
                 </div>
 
-                <div className="draft-svtz__config-controls">
-                  {/* Branch Selection */}
-                  {shouldShowBranchSelect && (
+                {!configLocked ? (
+                  /* Unlocked state: Show editable controls */
+                  <div className="draft-svtz__config-controls">
+                    {/* Branch Selection */}
+                    {shouldShowBranchSelect && (
+                      <div className="draft-svtz__control-group">
+                        <label className="draft-svtz__control-label">Branch</label>
+                        <select
+                          className="draft-svtz__select draft-svtz__select--full"
+                          value={data.pendingBranch || 'branch'}
+                          onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
+                        >
+                          <option value="main">main</option>
+                          <option value="branch">branch</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Branch Name - only shown when branch is selected */}
+                    {requireBranchName && (
+                      <div className="draft-svtz__control-group">
+                        <label className="draft-svtz__control-label">Branch Name</label>
+                        <input
+                          type="text"
+                          className="draft-svtz__input draft-svtz__input--full"
+                          value={data.pendingBranchName || ''}
+                          onChange={(e) => onBranchNameChange?.(e.target.value)}
+                          placeholder="Enter branch name"
+                        />
+                      </div>
+                    )}
+
+                    {/* Template */}
                     <div className="draft-svtz__control-group">
-                      <label className="draft-svtz__control-label">Branch</label>
+                      <label className="draft-svtz__control-label">Template</label>
                       <select
                         className="draft-svtz__select draft-svtz__select--full"
-                        value={data.pendingBranch || 'branch'}
-                        onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
+                        value={template}
+                        onChange={(e) => setTemplate(e.target.value)}
                       >
-                        <option value="main">main</option>
-                        <option value="branch">branch</option>
+                        {bridgeTemplates.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
                       </select>
                     </div>
-                  )}
 
-                  {/* Branch Name - only shown when branch is selected */}
-                  {requireBranchName && (
+                    {/* Cosine Threshold */}
                     <div className="draft-svtz__control-group">
-                      <label className="draft-svtz__control-label">Branch Name</label>
+                      <label className="draft-svtz__control-label">Cosine</label>
                       <input
-                        type="text"
-                        className="draft-svtz__input draft-svtz__input--full"
-                        value={data.pendingBranchName || ''}
-                        onChange={(e) => onBranchNameChange?.(e.target.value)}
-                        placeholder="Enter branch name"
+                        type="range"
+                        className="draft-svtz__slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={cosineThreshold}
+                        onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
                       />
+                      <span className="draft-svtz__slider-value">{cosineThreshold.toFixed(2)}</span>
                     </div>
-                  )}
 
-                  {/* Template */}
-                  <div className="draft-svtz__control-group">
-                    <label className="draft-svtz__control-label">Template</label>
-                    <select
-                      className="draft-svtz__select draft-svtz__select--full"
-                      value={template}
-                      onChange={(e) => setTemplate(e.target.value)}
+                    {/* Keywords Threshold */}
+                    <div className="draft-svtz__control-group">
+                      <label className="draft-svtz__control-label">Keywords</label>
+                      <input
+                        type="range"
+                        className="draft-svtz__slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={keywordsThreshold}
+                        onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
+                      />
+                      <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
+                    </div>
+
+                    {/* Refresh + Proceed Buttons */}
+                    <div className="draft-svtz__step-actions">
+                      <button
+                        className="draft-svtz__refresh-btn"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                      >
+                        <RefreshCw size={16} className={isRefreshing ? 'draft-svtz__spin' : ''} />
+                        <span>Refresh</span>
+                      </button>
+                      <button
+                        className="draft-svtz__proceed-btn"
+                        onClick={handleProceed}
+                        disabled={sourceBoxes.length === 0 || isRefreshing}
+                        title="Lock configuration and proceed to curation"
+                      >
+                        <Check size={16} />
+                        <span>Proceed</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Locked state: Show read-only summary */
+                  <div className="draft-svtz__config-locked">
+                    <div className="draft-svtz__config-summary">
+                      {shouldShowBranchSelect && (
+                        <div className="draft-svtz__config-item">
+                          <span className="draft-svtz__config-item-label">Branch:</span>
+                          <span className="draft-svtz__config-item-value">{data.pendingBranch || 'branch'}</span>
+                        </div>
+                      )}
+                      {requireBranchName && (
+                        <div className="draft-svtz__config-item">
+                          <span className="draft-svtz__config-item-label">Name:</span>
+                          <span className="draft-svtz__config-item-value">{data.pendingBranchName || '-'}</span>
+                        </div>
+                      )}
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Template:</span>
+                        <span className="draft-svtz__config-item-value">{template}</span>
+                      </div>
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Cosine:</span>
+                        <span className="draft-svtz__config-item-value">{cosineThreshold.toFixed(2)}</span>
+                      </div>
+                      <div className="draft-svtz__config-item">
+                        <span className="draft-svtz__config-item-label">Keywords:</span>
+                        <span className="draft-svtz__config-item-value">{keywordsThreshold.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="draft-svtz__reset-btn"
+                      onClick={handleReset}
+                      title="Unlock configuration (will reset Step 2 changes)"
                     >
-                      {bridgeTemplates.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
+                      <RotateCcw size={16} />
+                      <span>Reset</span>
+                    </button>
                   </div>
-
-                  {/* Cosine Threshold */}
-                  <div className="draft-svtz__control-group">
-                    <label className="draft-svtz__control-label">Cosine</label>
-                    <input
-                      type="range"
-                      className="draft-svtz__slider"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={cosineThreshold}
-                      onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
-                    />
-                    <span className="draft-svtz__slider-value">{cosineThreshold.toFixed(2)}</span>
-                  </div>
-
-                  {/* Keywords Threshold */}
-                  <div className="draft-svtz__control-group">
-                    <label className="draft-svtz__control-label">Keywords</label>
-                    <input
-                      type="range"
-                      className="draft-svtz__slider"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={keywordsThreshold}
-                      onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
-                    />
-                    <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
-                  </div>
-
-                  {/* Refresh Button */}
-                  <button
-                    className="draft-svtz__refresh-btn"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                  >
-                    <RefreshCw size={16} className={isRefreshing ? 'draft-svtz__spin' : ''} />
-                    <span>Refresh</span>
-                  </button>
-                </div>
+                )}
               </div>
 
               <div className="draft-svtz__step-divider" />
 
               {/* STEP 2: Curate */}
-              <div className="draft-svtz__step">
+              <div className={`draft-svtz__step ${!configLocked ? 'draft-svtz__step--disabled' : ''}`}>
                 <div className="draft-svtz__step-header">
                   <span className="draft-svtz__step-number">STEP 2</span>
-                  <span className="draft-svtz__step-label">Curate</span>
+                  <span className="draft-svtz__step-label">
+                    <span className={`draft-svtz__step-dot ${configLocked ? 'draft-svtz__step-dot--active' : ''}`} />
+                    Curate
+                  </span>
                 </div>
 
-                <div className="draft-svtz__stats">
-                  <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
-                  <span className="draft-svtz__stat">{includedKeywordsCount} keywords</span>
-                </div>
+                {!configLocked ? (
+                  /* Disabled state: Show hint */
+                  <div className="draft-svtz__step-disabled-hint">
+                    <Lock size={16} />
+                    <span>Complete Step 1 first</span>
+                  </div>
+                ) : (
+                  /* Enabled state: Show stats and commit button */
+                  <>
+                    <div className="draft-svtz__stats">
+                      <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
+                      <span className="draft-svtz__stat">{mustHaveKeywords.length} must</span>
+                      <span className="draft-svtz__stat">{mustntHaveKeywords.length} mustnt</span>
+                    </div>
 
-                {/* Commit Button */}
-                <button
-                  className="draft-svtz__commit-btn"
-                  onClick={handleCommit}
-                  disabled={includedPhrasesCount === 0}
-                >
-                  <Check size={16} />
-                  <span>Commit</span>
-                </button>
+                    <p className="draft-svtz__step-hint">
+                      Click phrases in SOURCE to toggle inclusion
+                    </p>
+
+                    {/* Commit Button */}
+                    <button
+                      className="draft-svtz__commit-btn"
+                      onClick={handleCommit}
+                      disabled={includedPhrasesCount === 0}
+                    >
+                      <Check size={16} />
+                      <span>Commit</span>
+                    </button>
+                  </>
+                )}
               </div>
             </aside>
 
@@ -819,21 +1043,30 @@ export function NodeModal({
                         {/* Source Box Body with Phrases and Keyword Highlighting */}
                         {box.expanded && (
                           <div className="draft-svtz__source-box-body">
-                            {box.phrases.map((phrase) => (
-                              <span
-                                key={phrase.id}
-                                className={`draft-svtz__phrase ${phrase.included ? 'draft-svtz__phrase--included' : 'draft-svtz__phrase--excluded'}`}
-                                onClick={() => togglePhraseInclude(phrase.id)}
-                                title={phrase.included ? 'Click to exclude' : 'Click to include'}
-                              >
-                                {renderTextWithKeywords(
-                                  phrase.text,
-                                  linkedKeywords.filter(kw => kw.phraseId === phrase.id),
-                                  hoveredKeyword,
-                                  setHoveredKeyword
-                                )}
-                              </span>
-                            ))}
+                            {box.phrases.map((phrase) => {
+                              const canToggle = configLocked // Only allow toggling when Step 1 is locked
+                              return (
+                                <div
+                                  key={phrase.id}
+                                  className={`draft-svtz__phrase ${phrase.included ? 'draft-svtz__phrase--included' : 'draft-svtz__phrase--excluded'} ${!canToggle ? 'draft-svtz__phrase--disabled' : ''}`}
+                                  onClick={(e) => {
+                                    // Only toggle if clicking the phrase background (not a keyword)
+                                    if (canToggle && e.target === e.currentTarget) {
+                                      togglePhraseInclude(phrase.id)
+                                    }
+                                  }}
+                                  title={!canToggle ? 'Complete Step 1 to edit' : (phrase.included ? 'Click to exclude phrase' : 'Click to include phrase')}
+                                >
+                                  {/* Render phrase text with clickable keywords */}
+                                  {renderPhraseWithKeywords(
+                                    phrase,
+                                    canToggle,
+                                    () => togglePhraseInclude(phrase.id),
+                                    (kwId) => toggleKeywordMustnt(phrase.id, kwId)
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -856,28 +1089,58 @@ export function NodeModal({
                   <h3>RESULT</h3>
                 </div>
                 <div className="draft-svtz__result-content">
-                  {/* Draft Text with Highlighted Keywords */}
-                  <div className="draft-svtz__draft-text">
-                    {allPhrases.filter(p => p.included).length > 0 ? (
-                      <div className="draft-svtz__draft-text-content">
-                        {allPhrases.filter(p => p.included).map((phrase, idx) => (
-                          <span key={phrase.id}>
-                            {renderTextWithKeywords(
-                              phrase.text,
-                              linkedKeywords.filter(kw => kw.phraseId === phrase.id),
-                              hoveredKeyword,
-                              setHoveredKeyword
-                            )}
-                            {idx < allPhrases.filter(p => p.included).length - 1 ? '. ' : '.'}
+                  {/* Result Text with Keyword Highlighting */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Text</h4>
+                    <div className="draft-svtz__result-text">
+                      {allPhrases.filter(p => p.included).length > 0 ? (
+                        <div className="draft-svtz__result-text-content">
+                          {allPhrases.filter(p => p.included).map((phrase, idx, arr) => (
+                            <span key={phrase.id}>
+                              {renderResultPhraseWithKeywords(phrase)}
+                              {idx < arr.length - 1 ? '. ' : '.'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="draft-svtz__result-empty">
+                          <p>No content yet</p>
+                          <span>Include phrases from SOURCE</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Must-have Keywords */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Must-have</h4>
+                    <div className="draft-svtz__result-keywords">
+                      {mustHaveKeywords.length > 0 ? (
+                        mustHaveKeywords.map(kw => (
+                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--must">
+                            {kw.text}
                           </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="draft-svtz__draft-empty">
-                        <p>No content generated yet</p>
-                        <span>Click Refresh to extract content</span>
-                      </div>
-                    )}
+                        ))
+                      ) : (
+                        <span className="draft-svtz__result-keywords-empty">None</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mustnt-have Keywords */}
+                  <div className="draft-svtz__result-section">
+                    <h4 className="draft-svtz__result-section-title">Mustnt-have</h4>
+                    <div className="draft-svtz__result-keywords">
+                      {mustntHaveKeywords.length > 0 ? (
+                        mustntHaveKeywords.map(kw => (
+                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--mustnt">
+                            {kw.text}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="draft-svtz__result-keywords-empty">None</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -888,11 +1151,19 @@ export function NodeModal({
           <footer className="draft-svtz__legend">
             <span className="draft-svtz__legend-item">
               <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--included" />
-              light green = included phrase (click to exclude)
+              green bg = included phrase
             </span>
             <span className="draft-svtz__legend-item">
-              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword" />
-              dark green = keyword (hover to see source)
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--excluded" />
+              red bg = excluded phrase
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-must" />
+              green text = must-have keyword
+            </span>
+            <span className="draft-svtz__legend-item">
+              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-mustnt" />
+              red text = mustnt-have keyword
             </span>
           </footer>
         </div>
@@ -901,9 +1172,9 @@ export function NodeModal({
   }
 
   // ============================================
-  // COMMIT NODE - Read-only frozen version
+  // COMMITTED COMMIT - Read-only frozen version
   // ============================================
-  if (isCommit) {
+  if (isCommittedCommit) {
     const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
 
     // Mock constraints - in real app these would come from data

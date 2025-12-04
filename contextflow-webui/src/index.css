@@ -1071,6 +1071,34 @@ button {
   z-index: 2;
 }
 
+/* Pending commit state - dashed border, hollow icon indicator */
+.canvas-node--commit-pending {
+  --commit-bg: #f8fafc;
+  --commit-border: rgba(100, 116, 139, 0.5);
+  --commit-shadow: 0 4px 14px rgba(100, 116, 139, 0.15);
+  --commit-badge-bg: #94a3b8;
+  --commit-accent: #64748b;
+  border-style: dashed;
+  border-width: 2px;
+  z-index: 3;
+}
+
+.canvas-node--commit-pending .commit-node__badge {
+  background: transparent;
+  border: 1.5px dashed var(--commit-accent);
+  color: var(--commit-accent);
+}
+
+.commit-node__pending-flag {
+  font-size: 0.65rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  background: rgba(100, 116, 139, 0.1);
+  border-radius: 4px;
+}
+
 .commit-node__body {
   background: transparent;
   padding: 0;
@@ -2362,6 +2390,18 @@ button {
   font-size: 0.75rem;
   color: #9ca3af;
   font-family: 'JetBrains Mono', monospace;
+}
+
+.modal-v2__pending-badge {
+  font-size: 0.65rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  background: rgba(100, 116, 139, 0.15);
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+  border-radius: 4px;
+  margin-left: 8px;
 }
 
 .modal-v2__upstream-link {
@@ -3951,6 +3991,150 @@ button {
   box-shadow: none;
 }
 
+/* Step Locked State */
+.draft-svtz__step--locked {
+  opacity: 0.95;
+}
+
+.draft-svtz__step--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.draft-svtz__step-dot--completed {
+  background: #6b7280;
+}
+
+.draft-svtz__lock-icon {
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
+/* Step Actions (Refresh + Proceed buttons row) */
+.draft-svtz__step-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.draft-svtz__step-actions .draft-svtz__refresh-btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+/* Proceed Button */
+.draft-svtz__proceed-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.draft-svtz__proceed-btn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.draft-svtz__proceed-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Config Locked Summary */
+.draft-svtz__config-locked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draft-svtz__config-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.draft-svtz__config-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.draft-svtz__config-item-label {
+  color: #6b7280;
+  min-width: 70px;
+}
+
+.draft-svtz__config-item-value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* Reset Button */
+.draft-svtz__reset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-svtz__reset-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+/* Step Disabled Hint */
+.draft-svtz__step-disabled-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+/* Step Hint */
+.draft-svtz__step-hint {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Phrase Disabled State */
+.draft-svtz__phrase--disabled {
+  cursor: not-allowed !important;
+  opacity: 0.7;
+}
+
+.draft-svtz__phrase--disabled:hover {
+  background: inherit !important;
+}
+
 /* ========== MAIN CONTENT ========== */
 .draft-svtz__main {
   flex: 1;
@@ -4073,34 +4257,81 @@ button {
 
 /* Phrase Highlighting */
 .draft-svtz__phrase {
-  display: inline;
-  padding: 2px 6px;
-  margin: 2px;
-  border-radius: 4px;
-  cursor: pointer;
+  display: inline-block;
+  padding: 6px 10px;
+  margin: 4px 4px 4px 0;
+  border-radius: 6px;
   transition: all 0.15s ease;
+  line-height: 1.6;
+  cursor: pointer;
+  max-width: 100%;
 }
 
+/* Included phrase - 浅绿底 */
 .draft-svtz__phrase--included {
   background: #dcfce7;
   border: 1px solid #86efac;
-  color: #166534;
 }
 
 .draft-svtz__phrase--included:hover {
   background: #bbf7d0;
 }
 
+/* Excluded phrase - 浅红底 */
 .draft-svtz__phrase--excluded {
-  background: #f3f4f6;
-  border: 1px dashed #d1d5db;
-  color: #9ca3af;
-  opacity: 0.7;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
 }
 
 .draft-svtz__phrase--excluded:hover {
-  background: #e5e7eb;
-  opacity: 1;
+  background: #fecaca;
+}
+
+/* Phrase text (clickable area) */
+.draft-svtz__phrase-text {
+  cursor: pointer;
+  color: #374151;
+}
+
+.draft-svtz__phrase--excluded .draft-svtz__phrase-text {
+  color: #9ca3af;
+}
+
+/* Keyword in phrase - must_have 深绿 */
+.draft-svtz__keyword {
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.draft-svtz__keyword--must {
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.1);
+}
+
+.draft-svtz__keyword--must:hover {
+  background: rgba(21, 128, 61, 0.2);
+}
+
+/* Keyword in phrase - mustnt_have 深红 */
+.draft-svtz__keyword--mustnt {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  text-decoration: line-through;
+}
+
+.draft-svtz__keyword--mustnt:hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+/* Keyword disabled (when phrase is excluded) */
+.draft-svtz__keyword--disabled {
+  color: #9ca3af !important;
+  background: transparent !important;
+  cursor: not-allowed;
+  text-decoration: none !important;
 }
 
 /* Divider */
@@ -4143,39 +4374,43 @@ button {
   gap: 20px;
 }
 
-/* Draft Text */
-.draft-svtz__draft-text {
+/* Result Section */
+.draft-svtz__result-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.draft-svtz__result-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.draft-svtz__result-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 8px;
+}
+
+/* Result Text */
+.draft-svtz__result-text {
   flex: 1;
 }
 
-.draft-svtz__draft-text-content {
+.draft-svtz__result-text-content {
   font-size: 0.95rem;
   line-height: 1.8;
   color: #374151;
 }
 
-.draft-svtz__result-phrase {
-  display: inline;
-  padding: 2px 6px;
-  margin: 2px;
-  border-radius: 4px;
-  background: #dcfce7;
-  border: 1px solid #86efac;
-  color: #166534;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.draft-svtz__result-phrase:hover {
-  background: #bbf7d0;
-}
-
-.draft-svtz__draft-empty {
+.draft-svtz__result-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 200px;
+  height: 100px;
   text-align: center;
   color: #9ca3af;
   background: #f9fafb;
@@ -4183,58 +4418,68 @@ button {
   border-radius: 8px;
 }
 
-.draft-svtz__draft-empty p {
+.draft-svtz__result-empty p {
   margin: 0 0 4px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: #6b7280;
 }
 
-.draft-svtz__draft-empty span {
-  font-size: 0.85rem;
+.draft-svtz__result-empty span {
+  font-size: 0.8rem;
   color: #9ca3af;
 }
 
-/* Keywords Section */
-.draft-svtz__keywords-section {
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.draft-svtz__keywords-title {
-  font-size: 0.8rem;
+/* Result Inline Keywords */
+.draft-svtz__result-inline-keyword {
   font-weight: 600;
-  color: #6b7280;
-  margin: 0 0 12px;
+  border-radius: 2px;
+  padding: 0 2px;
 }
 
-.draft-svtz__keywords-grid {
+.draft-svtz__result-inline-keyword--must {
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.1);
+}
+
+.draft-svtz__result-inline-keyword--mustnt {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  text-decoration: line-through;
+}
+
+/* Result Keywords List */
+.draft-svtz__result-keywords {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.draft-svtz__keyword-tag {
-  position: relative;
+.draft-svtz__result-keywords-empty {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.draft-svtz__result-keyword {
   display: inline-block;
-  padding: 6px 12px;
-  background: #065f46;
-  color: #d1fae5;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 500;
-  cursor: default;
-  transition: all 0.15s ease;
 }
 
-.draft-svtz__keyword-tag:hover {
-  background: #047857;
+.draft-svtz__result-keyword--must {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
 }
 
-/* Keyword tag hovered state (linked from SOURCE or RESULT) */
-.draft-svtz__keyword-tag--hovered {
-  background: #047857;
-  box-shadow: 0 0 0 2px #10b981;
+.draft-svtz__result-keyword--mustnt {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  text-decoration: line-through;
 }
 
 /* Inline keyword highlighting in text (SOURCE and RESULT) */
@@ -4255,10 +4500,10 @@ button {
 /* Keyword Tooltip */
 .draft-svtz__keyword-tooltip {
   position: absolute;
-  bottom: 100%;
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 8px;
+  margin-top: 8px;
   padding: 10px 14px;
   background: #1f2937;
   color: #fff;
@@ -4269,25 +4514,28 @@ button {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   max-width: 300px;
   white-space: normal;
+  pointer-events: none;
 }
 
 .draft-svtz__keyword-tooltip::after {
   content: '';
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: #1f2937;
+  border-bottom-color: #1f2937;
 }
 
 .draft-svtz__keyword-tooltip-source {
+  display: block;
   font-size: 0.7rem;
   color: #9ca3af;
   margin-bottom: 4px;
 }
 
 .draft-svtz__keyword-tooltip-phrase {
+  display: block;
   font-size: 0.8rem;
   color: #f3f4f6;
   line-height: 1.4;
@@ -4323,8 +4571,17 @@ button {
   border: 1px solid #86efac;
 }
 
-.draft-svtz__legend-swatch--keyword {
-  background: #065f46;
+.draft-svtz__legend-swatch--excluded {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+}
+
+.draft-svtz__legend-swatch--keyword-must {
+  background: #15803d;
+}
+
+.draft-svtz__legend-swatch--keyword-mustnt {
+  background: #dc2626;
 }
 
 .draft-svtz__legend-hint {
