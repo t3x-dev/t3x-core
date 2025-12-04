@@ -15,7 +15,13 @@
  *   ANTHROPIC_API_KEY     - Required for LLM features
  *   GOOGLE_AI_STUDIO_KEY  - Required for embeddings
  *   GOOGLE_CLOUD_NLP_KEY  - Required for NLP extraction
+ *   HTTPS_PROXY / HTTP_PROXY - Proxy for external API calls
  */
+
+// Enable proxy support for Node.js fetch
+// Must be imported before any fetch calls
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+require("global-agent/bootstrap");
 
 import { createServer } from "./server/index";
 import { loadAppPreferences } from "./core/config";

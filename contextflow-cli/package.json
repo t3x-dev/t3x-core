@@ -21,9 +21,10 @@
     "@contextflow/core": "*",
     "better-sqlite3": "^11.10.0",
     "commander": "^12.1.0",
+    "global-agent": "^3.0.0",
     "json-canonicalize": "^2.0.0",
-    "yaml": "^2.4.2",
-    "undici": "^6.21.0"
+    "undici": "^6.22.0",
+    "yaml": "^2.4.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
