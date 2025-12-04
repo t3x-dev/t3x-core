@@ -1,28 +1,36 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { TopNav } from './components/TopNav'
+import { Sidebar } from './components/Sidebar'
 import { Toast, useToast } from './components/Toast'
-import { useWorkflowStore } from './store/workflowStore'
+import { useProjectStore } from './store/projectStore'
 import SemanticLedgerPage from './pages/SemanticLedgerPage'
-import WorkflowDetailPage from './pages/WorkflowDetailPage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
+import AgentDemoChatPage from './pages/AgentDemoChatPage'
+import AgentDemoOptimiserPage from './pages/AgentDemoOptimiserPage'
+import InsightsPage from './pages/InsightsPage'
 
 function App() {
   const { messages, addToast, dismissToast } = useToast()
-  const setNotifyCallback = useWorkflowStore((state) => state.setNotifyCallback)
+  const setNotifyCallback = useProjectStore((state) => state.setNotifyCallback)
 
-  // Register toast callback with workflow store
+  // Register toast callback with project store
   useEffect(() => {
     setNotifyCallback(addToast)
     return () => setNotifyCallback(null)
   }, [setNotifyCallback, addToast])
 
   return (
-    <div className="app-shell">
-      <TopNav />
-      <main className="app-main">
+    <div className="app-layout">
+      <Sidebar />
+      <main className="app-content">
         <Routes>
           <Route path="/" element={<SemanticLedgerPage />} />
-          <Route path="/workflow/:workflowId" element={<WorkflowDetailPage />} />
+          <Route path="/project/:projectId" element={<ProjectDetailPage />} />
+          <Route path="/agent-demo/chat" element={<AgentDemoChatPage />} />
+          <Route path="/agent-demo/optimiser" element={<AgentDemoOptimiserPage />} />
+          <Route path="/insights" element={<InsightsPage />} />
+          {/* Redirect old route */}
+          <Route path="/agent-optimiser" element={<Navigate to="/agent-demo/chat" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -1,4 +1,4 @@
-export interface WorkflowSummary {
+export interface ProjectSummary {
   id: string
   name: string
   description: string
@@ -9,7 +9,7 @@ export interface WorkflowSummary {
   drafts: number
 }
 
-export const workflowSeed: WorkflowSummary[] = [
+export const projectSeed: ProjectSummary[] = [
   {
     id: 'osaka-weekend',
     name: 'Osaka Weekend Narrative',
@@ -33,7 +33,7 @@ export const workflowSeed: WorkflowSummary[] = [
   {
     id: 'rail-pass-audit',
     name: 'Rail Pass Evidence',
-    description: 'Tool workflows collecting validator evidence for Kansai rail pass.',
+    description: 'Tool projects collecting validator evidence for Kansai rail pass.',
     updatedAt: '12 minutes ago',
     owner: 'Tooling',
     status: 'paused',
@@ -42,4 +42,4 @@ export const workflowSeed: WorkflowSummary[] = [
   },
 ]
 
-export const workflows = workflowSeed
+export const projects = projectSeed
