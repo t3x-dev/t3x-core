@@ -3,6 +3,8 @@
  *
  * POST /api/v1/diff/two-way - Two-way semantic diff
  * POST /api/v1/diff/three-way - Three-way semantic diff
+ *
+ * Requires GOOGLE_AI_STUDIO_KEY for embedding-based semantic diff.
  */
 
 import type { ServerResponse } from "node:http";
@@ -41,13 +43,12 @@ interface ThreeWayDiffRequest {
 
 /**
  * Create embedding provider based on configuration
+ * Throws EmbeddingProviderError if not configured
  */
 function createEmbeddingProvider(providers: ProviderConfig): EmbeddingProvider {
   if (!providers.googleAIStudioKey) {
     throw new EmbeddingProviderError(
-      "google-ai",
-      undefined,
-      "Google AI Studio API key not configured. Set GOOGLE_AI_STUDIO_KEY in your config."
+      "GOOGLE_AI_STUDIO_KEY not configured"
     );
   }
   return createGoogleAIEmbeddingProvider({
@@ -73,32 +74,26 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
 
     const baseSegments = body.baseSegments ?? [];
     const targetSegments = body.targetSegments ?? [];
+    const threshold = body.threshold ?? 0.7;
 
     try {
-      // Create embedding provider based on configuration
       const embeddingProvider = createEmbeddingProvider(providers);
-      const diffEngine = createDiffEngine(embeddingProvider, {
-        threshold: body.threshold,
-      });
-
-      // Perform two-way diff
+      const diffEngine = createDiffEngine(embeddingProvider, { threshold });
       const result = await diffEngine.diffTwoWay(
         body.baseId,
         baseSegments,
         body.targetId,
         targetSegments
       );
-
-      sendJson(res, 200, successResponse(result));
+      sendJson(res, 200, successResponse({ ...result, method: "embedding" }));
     } catch (error) {
       if (error instanceof EmbeddingProviderError) {
         sendJson(res, 503, errorResponse(
-          "PROVIDER_ERROR",
+          "EMBEDDING_UNAVAILABLE",
           error.message
         ));
         return;
       }
-
       sendJson(res, 500, errorResponse(
         "DIFF_FAILED",
         (error as Error).message
@@ -121,15 +116,11 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
     const baseSegments = body.baseSegments ?? [];
     const sourceSegments = body.sourceSegments ?? [];
     const targetSegments = body.targetSegments ?? [];
+    const threshold = body.threshold ?? 0.7;
 
     try {
-      // Create embedding provider based on configuration
       const embeddingProvider = createEmbeddingProvider(providers);
-      const diffEngine = createDiffEngine(embeddingProvider, {
-        threshold: body.threshold,
-      });
-
-      // Perform three-way diff
+      const diffEngine = createDiffEngine(embeddingProvider, { threshold });
       const result = await diffEngine.diffThreeWay(
         body.baseId,
         baseSegments,
@@ -138,17 +129,15 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
         body.targetId,
         targetSegments
       );
-
-      sendJson(res, 200, successResponse(result));
+      sendJson(res, 200, successResponse({ ...result, method: "embedding" }));
     } catch (error) {
       if (error instanceof EmbeddingProviderError) {
         sendJson(res, 503, errorResponse(
-          "PROVIDER_ERROR",
+          "EMBEDDING_UNAVAILABLE",
           error.message
         ));
         return;
       }
-
       sendJson(res, 500, errorResponse(
         "DIFF_FAILED",
         (error as Error).message
