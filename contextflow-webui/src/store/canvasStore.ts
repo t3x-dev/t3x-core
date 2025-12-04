@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus } from '../types/nodes'
+import * as api from '../services/api'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -11,9 +12,16 @@ type CanvasState = {
   edges: Edge[]
   hasMainCommit: boolean
   latestMainCommitId?: string
+  // Project data loading state
+  projectId: string | null
+  loading: boolean
+  loadError: Error | null
   // Leaf panel state
   leafPanelOpen: boolean
   leafPanelCommitId?: string
+  // Data loading
+  loadProjectData: (projectId: string) => Promise<void>
+  clearCanvas: () => void
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   commitPendingCommit: (id: string) => void
@@ -427,90 +435,209 @@ const canAttachConversationToPendingCommit = (
   return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
 }
 
-const seedNodes: Node<CanvasNodeData>[] = [
-  {
-    id: 'node-1',
+// Layout constants for API data
+const LAYOUT = {
+  CONVERSATION_START_X: 120,
+  CONVERSATION_START_Y: 120,
+  CONVERSATION_SPACING_Y: 200,
+  COMMIT_OFFSET_X: 400,
+  COMMIT_SPACING_Y: 150,
+}
+
+// Convert API Conversation to Canvas Node
+const conversationToNode = (
+  conv: api.Conversation,
+  index: number
+): Node<CanvasNodeData> => {
+  return {
+    id: conv.conversation_id,
     type: 'conversation',
-    position: snapPosition({ x: 120, y: 120 }),
+    position: snapPosition({
+      x: LAYOUT.CONVERSATION_START_X,
+      y: LAYOUT.CONVERSATION_START_Y + index * LAYOUT.CONVERSATION_SPACING_Y,
+    }),
     data: {
-      entryId: 'CONV-18',
-      title: 'Conversation: food-heavy reiteration',
-      summary: '"I want neon, late-night ramen alleys, and buzzing markets."',
-      status: 'ready for extraction',
-      timestamp: '14m ago',
-      tags: ['conversation', 'preference'],
+      entryId: conv.conversation_id.slice(0, 8),
+      title: conv.title || 'Untitled Conversation',
+      summary: `${conv.turns_count || 0} turns`,
+      status: 'active',
+      timestamp: conv.created_at,
+      tags: ['conversation'],
       kind: 'conversation',
     },
-  },
-  {
-    id: 'node-2',
+  }
+}
+
+// Convert API Commit to Canvas Node
+const commitToNode = (
+  commit: api.Commit,
+  index: number,
+  baseY: number
+): Node<CanvasNodeData> => {
+  const facetCount = commit.facet_snapshot?.length || 0
+  return {
+    id: commit.commit_hash,
     type: 'commit',
-    position: snapPosition({ x: 360, y: 240 }),
+    position: snapPosition({
+      x: LAYOUT.CONVERSATION_START_X + LAYOUT.COMMIT_OFFSET_X,
+      y: baseY + index * LAYOUT.COMMIT_SPACING_Y,
+    }),
     data: {
-      entryId: 'COMMIT-42',
-      title: 'Commit: Osaka nightlife shard',
-      summary: 'Includes Dotonbori, Kuromon, and Namba Yasaka blend.',
-      status: 'needs validator',
-      timestamp: '10m ago',
-      tags: ['commit', 'nightlife'],
+      entryId: commit.commit_hash.slice(0, 12),
+      title: commit.message || 'Commit',
+      summary: facetCount > 0 ? `${facetCount} facets` : 'No facets',
+      status: 'committed',
+      timestamp: commit.created_at,
+      tags: ['commit'],
       kind: 'commit',
-      bridgePrompt: '/plan',
-      pendingBranch: 'branch',
-      pendingBranchName: '',
-      commitStatus: 'pending',
-    },
-  },
-  {
-    id: 'node-3',
-    type: 'commit',
-    position: snapPosition({ x: 620, y: 80 }),
-    data: {
-      entryId: 'COMMIT-27',
-      title: 'Commit: Osaka weekend v2',
-      summary: 'Validator-signed snapshot with 6 evidence links.',
-      status: 'signed · ready to diff',
-      timestamp: '2h ago',
-      tags: ['commit', 'stable'],
-      kind: 'commit',
-      branchType: 'main',
+      branchType: commit.branch === 'main' ? 'main' : 'branch',
+      branchName: commit.branch !== 'main' ? commit.branch : undefined,
       commitStatus: 'committed',
     },
-  },
-]
+  }
+}
 
-const seedEdges: Edge[] = [
-  {
-    id: 'edge-1',
-    source: 'node-1',
-    target: 'node-2',
-    type: edgeType,
-    animated: false,
-    style: edgeStyle,
-  },
-  {
-    id: 'edge-2',
-    source: 'node-2',
-    target: 'node-3',
-    type: edgeType,
-    animated: false,
-    style: edgeStyle,
-  },
-]
+// Build edges from commit parent relationships
+const buildEdgesFromCommits = (commits: api.Commit[]): Edge[] => {
+  const edges: Edge[] = []
+  const commitHashes = new Set(commits.map(c => c.commit_hash))
 
-const initialLatestMainCommitId = resolveLatestMainCommitId(seedNodes)
+  commits.forEach((commit) => {
+    commit.parent_hashes.forEach((parentHash) => {
+      // Only create edge if parent exists in our commits
+      if (commitHashes.has(parentHash)) {
+        edges.push({
+          id: `${parentHash}-${commit.commit_hash}`,
+          source: parentHash,
+          target: commit.commit_hash,
+          type: edgeType,
+          animated: false,
+          style: edgeStyle,
+        })
+      }
+    })
+  })
+
+  return edges
+}
 
 const leafNodeHeight = reactFlowGridSize * 5
 const leafNodeOffset = 80
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
-  nodes: seedNodes,
-  edges: seedEdges,
-  hasMainCommit: seedNodes.some(
-    (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
-  ),
-  latestMainCommitId: initialLatestMainCommitId,
+  nodes: [],
+  edges: [],
+  hasMainCommit: false,
+  latestMainCommitId: undefined,
+  projectId: null,
+  loading: false,
+  loadError: null,
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
+
+  loadProjectData: async (projectId: string) => {
+    // Skip if already loading the same project
+    const state = get()
+    if (state.projectId === projectId && state.loading) {
+      return
+    }
+
+    set({ loading: true, loadError: null, projectId })
+
+    try {
+      // Fetch conversations and commits in parallel
+      const [convResponse, commitResponse] = await Promise.all([
+        api.listConversations(projectId, 100, 0),
+        api.listCommits(projectId, undefined, 100, 0),
+      ])
+
+      const conversations = convResponse.conversations
+      const commits = commitResponse.commits
+
+      // Build turn_hash → conversation_id map by fetching turns for each conversation
+      // This is needed to link commits (via turn_window) to their source conversations
+      const turnToConvMap = new Map<string, string>()
+
+      // Fetch turns for each conversation to build the mapping
+      await Promise.all(
+        conversations.map(async (conv) => {
+          try {
+            const turnsResponse = await api.listTurns(projectId, conv.conversation_id, 200, 0)
+            turnsResponse.turns.forEach((turn) => {
+              turnToConvMap.set(turn.turn_hash, conv.conversation_id)
+            })
+          } catch {
+            // Skip if turns fetch fails for a conversation
+          }
+        })
+      )
+
+      // Convert to canvas nodes
+      const convNodes = conversations.map((conv, i) =>
+        conversationToNode(conv, i)
+      )
+
+      const commitNodes = commits.map((commit, i) =>
+        commitToNode(commit, i, LAYOUT.CONVERSATION_START_Y)
+      )
+
+      const nodes = [...convNodes, ...commitNodes]
+
+      // Build edges: commit parents + conversation→commit links
+      const edges = buildEdgesFromCommits(commits)
+
+      // Add conversation → commit edges based on turn_window
+      const convIds = new Set(conversations.map(c => c.conversation_id))
+      commits.forEach((commit) => {
+        if (commit.turn_window) {
+          // Find which conversation this commit's turn_window belongs to
+          const convId = turnToConvMap.get(commit.turn_window.start_turn_hash)
+          if (convId && convIds.has(convId)) {
+            edges.push({
+              id: `conv-${convId}-${commit.commit_hash}`,
+              source: convId,
+              target: commit.commit_hash,
+              type: edgeType,
+              animated: false,
+              style: edgeStyle,
+            })
+          }
+        }
+      })
+
+      // Check for main commits
+      const hasMainCommit = commits.some(c => c.branch === 'main')
+      const latestMainCommitId = resolveLatestMainCommitId(nodes)
+
+      set({
+        nodes,
+        edges,
+        hasMainCommit,
+        latestMainCommitId,
+        loading: false,
+        loadError: null,
+      })
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      set({
+        loading: false,
+        loadError: error,
+      })
+      console.error('Failed to load project data:', error)
+    }
+  },
+
+  clearCanvas: () => {
+    set({
+      nodes: [],
+      edges: [],
+      projectId: null,
+      loading: false,
+      loadError: null,
+      hasMainCommit: false,
+      latestMainCommitId: undefined,
+    })
+  },
 
   addNode: (kind, position) => {
     const total = get().nodes.length

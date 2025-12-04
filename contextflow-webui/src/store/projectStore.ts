@@ -70,7 +70,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const response = await api.listProjects(50, 0)
-      const projects = response.data.map(apiProjectToSummary)
+      const projects = response.projects.map(apiProjectToSummary)
       set({ projects, loading: false, initialized: true })
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))

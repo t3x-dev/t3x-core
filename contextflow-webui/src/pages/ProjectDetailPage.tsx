@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import CanvasWorkspace from './CanvasWorkspace'
 import { useProjectStore } from '../store/projectStore'
+import { useCanvasStore } from '../store/canvasStore'
+import { LoadingSpinner, ErrorMessage } from '../components/ApiStatus'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams()
@@ -10,8 +12,41 @@ export default function ProjectDetailPage() {
   )
   const [mode, setMode] = useState<'editor' | 'execution'>('editor')
 
+  // Canvas store for loading project data
+  const canvasLoading = useCanvasStore((state) => state.loading)
+  const canvasError = useCanvasStore((state) => state.loadError)
+  const loadedProjectId = useCanvasStore((state) => state.projectId)
+
+  // Load project data when entering the page
+  useEffect(() => {
+    if (projectId && projectId !== loadedProjectId) {
+      useCanvasStore.getState().loadProjectData(projectId)
+    }
+  }, [projectId, loadedProjectId])
+
   if (!project) {
     return <Navigate to="/" replace />
+  }
+
+  // Show loading state
+  if (canvasLoading) {
+    return (
+      <div className="project-page">
+        <LoadingSpinner message="Loading project data..." />
+      </div>
+    )
+  }
+
+  // Show error state
+  if (canvasError) {
+    return (
+      <div className="project-page">
+        <ErrorMessage
+          error={canvasError}
+          onRetry={() => projectId && useCanvasStore.getState().loadProjectData(projectId)}
+        />
+      </div>
+    )
   }
 
   return (

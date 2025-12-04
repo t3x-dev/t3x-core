@@ -469,6 +469,14 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           <Controls />
           <Background gap={GRID_SIZE} size={1} color="#cbd5e1" />
         </ReactFlow>
+
+        {/* Empty state overlay */}
+        {nodes.length === 0 && (
+          <div className="workspace__empty-state">
+            <p>No conversations or commits yet.</p>
+            <p>Click the + button above to create a conversation.</p>
+          </div>
+        )}
       </div>
       {modalNode && (
         <NodeModal
