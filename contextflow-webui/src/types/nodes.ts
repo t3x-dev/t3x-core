@@ -1,4 +1,7 @@
-export type NodeKind = 'conversation' | 'draft' | 'commit' | 'leaf'
+export type NodeKind = 'conversation' | 'commit' | 'leaf'
+
+// Commit status: pending (editable) or committed (read-only)
+export type CommitStatus = 'pending' | 'committed'
 
 // Leaf node types for output destinations
 export type LeafType = 'twitter' | 'weibo' | 'wechat' | 'article' | 'email' | 'slack'
@@ -98,4 +101,6 @@ export interface CanvasNodeData {
   // Leaf node specific data
   leafType?: LeafType
   leafConfig?: LeafNodeConfig
+  // Commit status: pending (editable) or committed (read-only)
+  commitStatus?: CommitStatus
 }

@@ -141,8 +141,8 @@ function NodeShell({
 function ConversationNode(props: Props) {
   const { data, selected, id } = props
   const [expanded, setExpanded] = useState(false)
-  const addDraftFromConversation = useCanvasStore((state) => state.addDraftFromConversation)
-  const canSeedDraft = useCanvasStore((state) => state.canCreateDraftFromConversation(id))
+  const addPendingCommitFromConversation = useCanvasStore((state) => state.addPendingCommitFromConversation)
+  const canSeedPendingCommit = useCanvasStore((state) => state.canCreatePendingCommitFromConversation(id))
   const [showHandleActions, setShowHandleActions] = useState(false)
   const hideTimer = useRef<number | undefined>(undefined)
   const showActions = () => {
@@ -169,11 +169,11 @@ function ConversationNode(props: Props) {
     },
     [],
   )
-  const handleAddDraft = () => {
-    if (!canSeedDraft) {
+  const handleAddPendingCommit = () => {
+    if (!canSeedPendingCommit) {
       return
     }
-    addDraftFromConversation(id)
+    addPendingCommitFromConversation(id)
   }
 
   return (
@@ -220,56 +220,14 @@ function ConversationNode(props: Props) {
       >
         <button
           className="node-handle-action-btn"
-          onClick={handleAddDraft}
-          disabled={!canSeedDraft}
-          aria-label="Add Draft"
+          onClick={handleAddPendingCommit}
+          disabled={!canSeedPendingCommit}
+          aria-label="Add Commit"
           type="button"
         >
-          <PenSquare size={14} />
+          <GitCommit size={14} />
         </button>
       </div>
-    </>
-  )
-}
-
-function DraftNode(props: Props) {
-  const { data, selected } = props
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <>
-      <Handle type="target" position={Position.Left} style={targetHandleStyle} />
-      <NodeShell
-        kind="draft"
-        Icon={PenSquare}
-        selected={selected}
-        expanded={expanded}
-        onToggle={() => setExpanded((previous) => !previous)}
-        meta={
-          <span className="draft-node__corner-icon" aria-hidden="true">
-            <PenSquare size={12} />
-          </span>
-        }
-        highlightMode={data.highlightMode}
-        dropdownContent={
-          <>
-            <div className="node-summary-field node-summary-field--static">
-              <p>{data.summary || 'No summary captured yet.'}</p>
-            </div>
-            <footer>
-              <span>{data.status}</span>
-              <span>{data.bridgePrompt}</span>
-            </footer>
-          </>
-        }
-      >
-        <h4>{data.title}</h4>
-        <footer>
-          <span>{data.status}</span>
-          <span>{data.bridgePrompt}</span>
-        </footer>
-      </NodeShell>
-      <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
     </>
   )
 }
@@ -279,19 +237,23 @@ function CommitNode(props: Props) {
   const [expanded, setExpanded] = useState(false)
   const tone = useCanvasStore((state) => state.getCommitTone(id))
   const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit)
-  const addDraftFromCommit = useCanvasStore((state) => state.addDraftFromCommit)
-  const startMergeFromCommit = useCanvasStore((state) => state.createMergeDraftFromCommit)
+  const addPendingCommitFromCommit = useCanvasStore((state) => state.addPendingCommitFromCommit)
+  const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit)
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit)
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel)
   const [showHandleActions, setShowHandleActions] = useState(false)
   const hideTimer = useRef<number | undefined>(undefined)
+
+  // Check if commit is in pending state
+  const isPending = data.commitStatus === 'pending'
+
   const branchLabel =
     data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN'
   const handleAddConversation = () => {
     addConversationFromCommit(id)
   }
-  const handleAddDraft = () => {
-    addDraftFromCommit(id)
+  const handleAddPendingCommit = () => {
+    addPendingCommitFromCommit(id)
   }
   const canTriggerMerge =
     data.branchType === 'branch' && tone === 'branch-latest' && hasMainCommit
@@ -329,32 +291,43 @@ function CommitNode(props: Props) {
     [],
   )
 
+  // Build variant class with pending state
+  const variantClasses: string[] = []
+  if (tone) {
+    variantClasses.push(`canvas-node--commit-${tone}`)
+  }
+  if (isPending) {
+    variantClasses.push('canvas-node--commit-pending')
+  }
+
   return (
     <>
-      {/* Top Add Leaf Button - n8n style */}
-      <button
-        className="commit-node__add-leaf-btn"
-        onClick={handleOpenLeafPanel}
-        aria-label="Add Leaf Node"
-        type="button"
-      >
-        <Plus size={12} />
-      </button>
+      {/* Top Add Leaf Button - n8n style, only for committed nodes */}
+      {!isPending && (
+        <button
+          className="commit-node__add-leaf-btn"
+          onClick={handleOpenLeafPanel}
+          aria-label="Add Leaf Node"
+          type="button"
+        >
+          <Plus size={12} />
+        </button>
+      )}
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
       <NodeShell
         kind="commit"
-        Icon={GitCommit}
+        Icon={isPending ? PenSquare : GitCommit}
         selected={selected}
         expanded={expanded}
         onToggle={() => setExpanded((previous) => !previous)}
-        variantClass={tone ? `canvas-node--commit-${tone}` : undefined}
+        variantClass={variantClasses.length > 0 ? variantClasses.join(' ') : undefined}
         customHeader={null}
         bodyClassName="commit-node__body"
         highlightMode={data.highlightMode}
         dropdownContent={
           <>
             <div className="node-summary-field node-summary-field--static">
-              <p>{data.summary || 'No summary recorded.'}</p>
+              <p>{data.summary || (isPending ? 'Pending commit - click to edit' : 'No summary recorded.')}</p>
             </div>
             <footer>
               <Sparkles size={14} />
@@ -366,6 +339,11 @@ function CommitNode(props: Props) {
         <div className="commit-node__top-row">
           <span className="commit-node__badge">{data.entryId}</span>
           <div className="commit-node__top-actions">
+            {isPending && (
+              <span className="commit-node__pending-flag" aria-label="Pending commit">
+                pending
+              </span>
+            )}
             {data.isMergeCommit && (
               <span className="commit-node__merge-flag" aria-label="Merge commit">
                 merge
@@ -428,8 +406,8 @@ function CommitNode(props: Props) {
         >
           <MessageSquarePlus size={14} />
         </button>
-        <button className="node-handle-action-btn" onClick={handleAddDraft} aria-label="Add Draft" type="button">
-          <PenSquare size={14} />
+        <button className="node-handle-action-btn" onClick={handleAddPendingCommit} aria-label="Add Commit" type="button">
+          <GitCommit size={14} />
         </button>
         {data.branchType === 'branch' && (
           <button
@@ -473,7 +451,6 @@ function LeafNode(props: Props) {
 
 export const canvasNodeTypes = {
   conversation: ConversationNode,
-  draft: DraftNode,
   commit: CommitNode,
   leaf: LeafNode,
 }
