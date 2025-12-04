@@ -7,8 +7,6 @@ import {
   Rocket,
   MessageSquare,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
   Check,
   Copy,
   RefreshCw,
@@ -84,163 +82,6 @@ function CommitDetailModal({
   )
 }
 
-// Optimisation loop visualisation
-function OptimisationLoop({
-  onRunOptimisation,
-  isOptimizing,
-  canOptimize,
-}: {
-  onRunOptimisation: () => void
-  isOptimizing: boolean
-  canOptimize: boolean
-}) {
-  const steps = [
-    { id: 1, label: 'Collect feedback', icon: MessageSquare },
-    { id: 2, label: 'Propose new prompt', icon: Sparkles },
-    { id: 3, label: 'Auto commit on sandbox', icon: GitCommit },
-    { id: 4, label: 'Review and deploy', icon: Rocket },
-  ]
-
-  return (
-    <div className="optimisation-loop">
-      <h4>Optimisation Loop</h4>
-      <div className="optimisation-loop__steps">
-        {steps.map((step, index) => (
-          <div key={step.id} className="optimisation-loop__step">
-            <div className="optimisation-loop__step-icon">
-              <step.icon size={16} />
-            </div>
-            <span>{step.label}</span>
-            {index < steps.length - 1 && (
-              <ArrowRight size={14} className="optimisation-loop__arrow" />
-            )}
-          </div>
-        ))}
-      </div>
-      <button
-        className="optimisation-loop__run-btn"
-        onClick={onRunOptimisation}
-        disabled={isOptimizing || !canOptimize}
-      >
-        {isOptimizing ? (
-          <>
-            <RefreshCw size={16} className="spinning" />
-            Running Optimisation...
-          </>
-        ) : (
-          <>
-            <Sparkles size={16} />
-            Run Optimisation
-          </>
-        )}
-      </button>
-      {!canOptimize && !isOptimizing && (
-        <p className="optimisation-loop__hint">
-          Rate at least one response in Chat to enable optimisation
-        </p>
-      )}
-    </div>
-  )
-}
-
-// Sandbox commit history
-function SandboxHistory({
-  commits,
-  deployedCommitHash,
-  onSelectCommit,
-}: {
-  commits: SandboxCommit[]
-  deployedCommitHash: string
-  onSelectCommit: (commit: SandboxCommit) => void
-}) {
-  const [expanded, setExpanded] = useState(true)
-  const sortedCommits = [...commits].reverse()
-
-  return (
-    <div className="sandbox-history">
-      <header className="sandbox-history__header" onClick={() => setExpanded(!expanded)}>
-        <div>
-          <h4>Sandbox Prompt History</h4>
-          <span className="sandbox-history__branch">Branch: agent-support/prompt-sandbox</span>
-        </div>
-        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </header>
-
-      {expanded && (
-        <div className="sandbox-history__list">
-          {sortedCommits.map((commit) => {
-            const isDeployed = commit.commitHash === deployedCommitHash
-            return (
-              <button
-                key={commit.id}
-                className={`sandbox-history__item ${isDeployed ? 'sandbox-history__item--deployed' : ''}`}
-                onClick={() => onSelectCommit(commit)}
-              >
-                <div className="sandbox-history__item-icon">
-                  <GitCommit size={14} />
-                </div>
-                <div className="sandbox-history__item-info">
-                  <div className="sandbox-history__item-header">
-                    <span className="sandbox-history__item-version">v{commit.version}-sandbox</span>
-                    <code className="sandbox-history__item-hash">{commit.commitHash}</code>
-                    {isDeployed && (
-                      <span className="sandbox-history__item-badge">deployed</span>
-                    )}
-                  </div>
-                  <p className="sandbox-history__item-desc">{commit.description}</p>
-                  <span className="sandbox-history__item-time">{commit.createdAt}</span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Deployment history
-function DeploymentHistory({ deployments }: { deployments: DeploymentRecord[] }) {
-  const [expanded, setExpanded] = useState(true)
-
-  return (
-    <div className="deployment-history">
-      <header className="deployment-history__header" onClick={() => setExpanded(!expanded)}>
-        <div>
-          <h4>Deployment History</h4>
-          <span className="deployment-history__count">{deployments.length} deployments</span>
-        </div>
-        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </header>
-
-      <p className="deployment-history__info">
-        Each deployment updates the Chat page to use the prompt from a specific sandbox commit.
-      </p>
-
-      {expanded && (
-        <div className="deployment-history__list">
-          {deployments.map((deployment) => (
-            <div key={deployment.id} className="deployment-history__item">
-              <div className="deployment-history__item-header">
-                <span className="deployment-history__item-version">v{deployment.version}</span>
-                <code className="deployment-history__item-hash">{deployment.commitHash}</code>
-                <span className={`deployment-history__item-status deployment-history__item-status--${deployment.status}`}>
-                  {deployment.status}
-                </span>
-              </div>
-              <div className="deployment-history__item-meta">
-                <span>{deployment.timestamp}</span>
-                <span>→ {deployment.environment}</span>
-              </div>
-              <span className="deployment-history__item-trigger">{deployment.triggerSource}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function AgentDemoOptimiserPage() {
   const navigate = useNavigate()
   const [selectedCommit, setSelectedCommit] = useState<SandboxCommit | null>(null)
@@ -265,39 +106,38 @@ export default function AgentDemoOptimiserPage() {
     setSelectedCommit(null)
   }
 
+  const sortedCommits = [...sandboxCommits].reverse()
+
+  const optimisationSteps = [
+    { id: 1, label: 'Collect feedback', icon: MessageSquare },
+    { id: 2, label: 'Propose new prompt', icon: Sparkles },
+    { id: 3, label: 'Auto commit on sandbox', icon: GitCommit },
+    { id: 4, label: 'Review and deploy', icon: Rocket },
+  ]
+
   return (
-    <div className="agent-demo-optimiser-page">
-      {/* Top Summary Bar */}
-      <header className="agent-demo-optimiser-page__summary">
-        <div className="agent-demo-optimiser-page__summary-item">
+    <div className="agent-optimiser-page">
+      {/* Header */}
+      <header className="agent-optimiser-page__header">
+        <div className="agent-optimiser-page__header-left">
           <Bot size={20} />
-          <div>
-            <span className="agent-demo-optimiser-page__summary-label">Agent</span>
-            <strong>{agentName}</strong>
-          </div>
+          <h2>{agentName}</h2>
         </div>
-        <div className="agent-demo-optimiser-page__summary-item">
-          <GitCommit size={18} />
-          <div>
-            <span className="agent-demo-optimiser-page__summary-label">Sandbox branch</span>
-            <strong>{sandboxBranch}</strong>
-          </div>
-        </div>
-        <div className="agent-demo-optimiser-page__summary-item">
-          <div>
-            <span className="agent-demo-optimiser-page__summary-label">Sandbox head</span>
-            <strong>v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})</strong>
-          </div>
-        </div>
-        <div className="agent-demo-optimiser-page__summary-item agent-demo-optimiser-page__summary-item--highlight">
-          <Rocket size={18} />
-          <div>
-            <span className="agent-demo-optimiser-page__summary-label">Deployed</span>
-            <strong>v{deployedVersion} ({deployedCommitHash})</strong>
-          </div>
+        <div className="agent-optimiser-page__header-meta">
+          <span className="agent-optimiser-page__meta-item">
+            <GitCommit size={14} />
+            Branch: {sandboxBranch}
+          </span>
+          <span className="agent-optimiser-page__meta-item">
+            Head: v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})
+          </span>
+          <span className="agent-optimiser-page__meta-item agent-optimiser-page__meta-item--deployed">
+            <Rocket size={14} />
+            Deployed: v{deployedVersion} ({deployedCommitHash})
+          </span>
         </div>
         <button
-          className="agent-demo-optimiser-page__chat-btn"
+          className="agent-optimiser-page__chat-btn"
           onClick={() => navigate('/agent-demo/chat')}
         >
           <MessageSquare size={16} />
@@ -305,22 +145,21 @@ export default function AgentDemoOptimiserPage() {
         </button>
       </header>
 
-      {/* Main Content */}
-      <div className="agent-demo-optimiser-page__content">
-        {/* Left Column: Feedback & Optimisation */}
-        <div className="agent-demo-optimiser-page__left">
-          {/* Feedback Summary */}
-          <div className="feedback-summary">
-            <h4>Recent Feedback</h4>
-            <div className="feedback-summary__stats">
-              <div className="feedback-summary__stat">
-                <span className="feedback-summary__stat-value">
-                  {feedbackSummary.conversationCount}
-                </span>
-                <span className="feedback-summary__stat-label">Conversations</span>
+      {/* Main Content - Three Columns */}
+      <div className="agent-optimiser-page__body">
+        {/* Left: Feedback + Optimisation */}
+        <section className="agent-optimiser-page__section">
+          <div className="agent-optimiser-page__section-header">
+            <h3>Feedback Summary</h3>
+          </div>
+          <div className="agent-optimiser-page__section-content">
+            <div className="feedback-stats">
+              <div className="feedback-stats__item">
+                <span className="feedback-stats__value">{feedbackSummary.conversationCount}</span>
+                <span className="feedback-stats__label">Conversations</span>
               </div>
-              <div className="feedback-summary__stat">
-                <span className="feedback-summary__stat-value">
+              <div className="feedback-stats__item">
+                <span className="feedback-stats__value">
                   {feedbackSummary.totalRatings > 0 ? (
                     <>
                       <Star size={14} fill="currentColor" />
@@ -330,42 +169,122 @@ export default function AgentDemoOptimiserPage() {
                     '—'
                   )}
                 </span>
-                <span className="feedback-summary__stat-label">Avg Rating</span>
+                <span className="feedback-stats__label">Avg Rating</span>
               </div>
-              <div className="feedback-summary__stat">
-                <span className="feedback-summary__stat-value feedback-summary__stat-value--low">
+              <div className="feedback-stats__item">
+                <span className="feedback-stats__value feedback-stats__value--low">
                   {feedbackSummary.lowRatingCount}
                 </span>
-                <span className="feedback-summary__stat-label">Low ratings (1-2★)</span>
+                <span className="feedback-stats__label">Low (1-2★)</span>
               </div>
             </div>
-            <p className="feedback-summary__info">
-              Feedback shown here comes from the Chat page. It is used as input for prompt
-              optimisation on the sandbox branch.
+            <p className="feedback-stats__hint">
+              Feedback from Chat page is used for prompt optimisation.
             </p>
           </div>
 
-          {/* Optimisation Loop */}
-          <OptimisationLoop
-            onRunOptimisation={() => runOptimisation()}
-            isOptimizing={isOptimizing}
-            canOptimize={feedbackSummary.totalRatings >= 1}
-          />
-        </div>
+          <div className="agent-optimiser-page__section-header">
+            <h3>Optimisation Loop</h3>
+          </div>
+          <div className="agent-optimiser-page__section-content">
+            <div className="optimisation-steps">
+              {optimisationSteps.map((step, index) => (
+                <div key={step.id} className="optimisation-steps__item">
+                  <div className="optimisation-steps__icon">
+                    <step.icon size={14} />
+                  </div>
+                  <span>{step.label}</span>
+                  {index < optimisationSteps.length - 1 && (
+                    <ArrowRight size={12} className="optimisation-steps__arrow" />
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              className="optimisation-run-btn"
+              onClick={() => runOptimisation()}
+              disabled={isOptimizing || feedbackSummary.totalRatings < 1}
+            >
+              {isOptimizing ? (
+                <>
+                  <RefreshCw size={16} className="spinning" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  Run Optimisation
+                </>
+              )}
+            </button>
+            {feedbackSummary.totalRatings < 1 && !isOptimizing && (
+              <p className="optimisation-hint">
+                Rate at least one response in Chat to enable
+              </p>
+            )}
+          </div>
+        </section>
 
-        {/* Centre Column: Sandbox Commit History */}
-        <div className="agent-demo-optimiser-page__centre">
-          <SandboxHistory
-            commits={sandboxCommits}
-            deployedCommitHash={deployedCommitHash}
-            onSelectCommit={setSelectedCommit}
-          />
-        </div>
+        {/* Center: Sandbox Commits */}
+        <section className="agent-optimiser-page__section">
+          <div className="agent-optimiser-page__section-header">
+            <h3>Sandbox Commits</h3>
+            <span className="agent-optimiser-page__section-subtitle">
+              {sandboxCommits.length} commits
+            </span>
+          </div>
+          <div className="agent-optimiser-page__section-content agent-optimiser-page__section-content--scroll">
+            {sortedCommits.map((commit) => {
+              const isDeployed = commit.commitHash === deployedCommitHash
+              return (
+                <button
+                  key={commit.id}
+                  className={`commit-row ${isDeployed ? 'commit-row--deployed' : ''}`}
+                  onClick={() => setSelectedCommit(commit)}
+                >
+                  <GitCommit size={14} className="commit-row__icon" />
+                  <div className="commit-row__info">
+                    <div className="commit-row__header">
+                      <span className="commit-row__version">v{commit.version}-sandbox</span>
+                      <code className="commit-row__hash">{commit.commitHash}</code>
+                      {isDeployed && <span className="commit-row__badge">deployed</span>}
+                    </div>
+                    <p className="commit-row__desc">{commit.description}</p>
+                    <span className="commit-row__time">{commit.createdAt}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
 
-        {/* Right Column: Deployment History */}
-        <div className="agent-demo-optimiser-page__right">
-          <DeploymentHistory deployments={deploymentHistory} />
-        </div>
+        {/* Right: Deployment History */}
+        <section className="agent-optimiser-page__section">
+          <div className="agent-optimiser-page__section-header">
+            <h3>Deployments</h3>
+            <span className="agent-optimiser-page__section-subtitle">
+              {deploymentHistory.length} records
+            </span>
+          </div>
+          <div className="agent-optimiser-page__section-content agent-optimiser-page__section-content--scroll">
+            {deploymentHistory.map((deployment: DeploymentRecord) => (
+              <div key={deployment.id} className="deployment-row">
+                <div className="deployment-row__header">
+                  <span className="deployment-row__version">v{deployment.version}</span>
+                  <code className="deployment-row__hash">{deployment.commitHash}</code>
+                  <span className={`deployment-row__status deployment-row__status--${deployment.status}`}>
+                    {deployment.status}
+                  </span>
+                </div>
+                <div className="deployment-row__meta">
+                  <span>{deployment.timestamp}</span>
+                  <span>→ {deployment.environment}</span>
+                </div>
+                <span className="deployment-row__trigger">{deployment.triggerSource}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* Commit Detail Modal */}
