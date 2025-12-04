@@ -35,7 +35,10 @@ interface DraftResponse {
   draft_id: string;
   project_id: string;
   conversation_id: string;
-  status: "pending" | "ready" | "failed";
+  /** Lifecycle status in database: ephemeral → adopted | superseded */
+  lifecycle_status: "ephemeral" | "adopted" | "superseded";
+  /** Validation status: whether the draft passed constraint validation */
+  validation_status: "pending" | "passed" | "failed";
   base_commit_hash: string | null;
   turn_anchor_hash: string | null;
   bridge_id: string;
@@ -53,6 +56,51 @@ interface DraftResponse {
 // Helpers
 // ============================================================================
 
+/**
+ * Stop words to filter out from must_have keywords
+ * These are common words that don't provide meaningful constraints
+ */
+const DRAFT_STOP_WORDS = new Set([
+  // Common verbs
+  "be", "is", "am", "are", "was", "were", "been", "being",
+  "have", "has", "had", "having",
+  "do", "does", "did", "doing",
+  "will", "would", "could", "should", "may", "might", "must", "shall", "can",
+  "want", "need", "let", "try", "keep", "seem", "help", "show",
+  "come", "go", "get", "make", "take", "put", "give", "use",
+  "say", "tell", "ask", "think", "know", "see", "look", "find",
+  // Pronouns and determiners
+  "i", "me", "my", "we", "our", "you", "your", "he", "she", "it", "they",
+  "this", "that", "these", "those", "a", "an", "the",
+  // Indefinite pronouns (low-value)
+  "something", "anything", "nothing", "everything",
+  "someone", "anyone", "everyone", "nobody",
+  "some", "any", "all", "each", "every", "both", "few", "more", "most",
+  // Generic adjectives
+  "good", "great", "nice", "well", "better", "best",
+  "new", "old", "big", "small", "long", "short",
+  // Generic nouns
+  "thing", "things", "way", "ways", "time", "times",
+  "lot", "lots", "much", "many", "little", "less", "least",
+  // Misc low-value
+  "also", "just", "only", "even", "still", "already", "always", "never",
+  "very", "really", "quite", "pretty",
+]);
+
+/**
+ * Check if a keyword is meaningful for draft constraints
+ */
+function isValueableKeyword(keyword: string): boolean {
+  const kw = keyword.toLowerCase().trim();
+  // Skip empty or very short keywords
+  if (kw.length < 2) return false;
+  // Skip stop words
+  if (DRAFT_STOP_WORDS.has(kw)) return false;
+  // Skip pure numbers
+  if (/^\d+$/.test(kw)) return false;
+  return true;
+}
+
 function utcNowIso(): string {
   return new Date().toISOString();
 }
@@ -64,6 +112,7 @@ function generateDraftId(): string {
 
 /**
  * Extract must_have keywords from conversation turns
+ * Filters out stop words and prioritizes domain-specific terms
  */
 function extractMustHave(projectId: string, conversationId: string): string[] {
   const db = getDb();
@@ -74,31 +123,60 @@ function extractMustHave(projectId: string, conversationId: string): string[] {
   `).all(projectId, conversationId) as Array<{ rings_json: string | null }>;
 
   const keywords: string[] = [];
+  const seenLower = new Set<string>();
 
   for (const row of rows) {
     if (!row.rings_json) continue;
     try {
       const rings = JSON.parse(row.rings_json);
       const ring1 = rings.ring1 ?? {};
+      const ring2 = rings.ring2 ?? {};
 
-      // Positive preference keywords (polarity > 0)
+      // 1. Priority: Entities with high confidence (domain-specific terms)
+      for (const kw of ring1.keywords ?? []) {
+        if (typeof kw === "object" && kw.entityType && kw.confidence > 0.2) {
+          const kwText = kw.text ?? kw.lemma;
+          const kwLower = kwText?.toLowerCase();
+          if (kwText && isValueableKeyword(kwText) && !seenLower.has(kwLower)) {
+            seenLower.add(kwLower);
+            keywords.push(kwText);
+          }
+        }
+      }
+
+      // 2. Priority: Positive preference keywords (polarity > 0)
       for (const pref of ring1.preferenceKeywords ?? ring1.preference_keywords ?? []) {
-        // Handle both numeric polarity (new format) and string polarity (old format)
         const isPositive = pref.polarity === "positive" || (typeof pref.polarity === "number" && pref.polarity > 0);
         if (isPositive) {
           const kw = pref.text ?? pref.keyword ?? pref.lemma;
-          if (kw && typeof kw === "string" && !keywords.includes(kw)) {
+          const kwLower = kw?.toLowerCase();
+          if (kw && isValueableKeyword(kw) && !seenLower.has(kwLower)) {
+            seenLower.add(kwLower);
             keywords.push(kw);
           }
         }
       }
 
-      // Regular keywords (handle both object array and string array formats)
+      // 3. Ring2 facets: extract key constraint values
+      for (const facet of ring2.facets ?? []) {
+        if (facet.facetType === "preference_soft" && facet.key === "prefer") {
+          const val = facet.value;
+          const valLower = val?.toLowerCase();
+          if (val && isValueableKeyword(val) && !seenLower.has(valLower)) {
+            seenLower.add(valLower);
+            keywords.push(val);
+          }
+        }
+      }
+
+      // 4. Regular keywords with good confidence
       for (const kw of ring1.keywords ?? []) {
-        // New format: {text, lemma, polarity, ...}
-        // Old format: string
         const kwText = typeof kw === "string" ? kw : (kw.text ?? kw.lemma);
-        if (kwText && typeof kwText === "string" && !keywords.includes(kwText)) {
+        const kwLower = kwText?.toLowerCase();
+        // Only include keywords with decent confidence or no confidence (assumed high)
+        const conf = typeof kw === "object" ? kw.confidence : 1.0;
+        if (kwText && isValueableKeyword(kwText) && !seenLower.has(kwLower) && conf >= 0.5) {
+          seenLower.add(kwLower);
           keywords.push(kwText);
         }
       }
@@ -107,11 +185,13 @@ function extractMustHave(projectId: string, conversationId: string): string[] {
     }
   }
 
-  return keywords.slice(0, 20);
+  // Return top 15 meaningful keywords (reduced from 20 to improve focus)
+  return keywords.slice(0, 15);
 }
 
 /**
  * Extract mustnt_have keywords from conversation turns
+ * These are items the user explicitly wants to avoid
  */
 function extractMustntHave(projectId: string, conversationId: string): string[] {
   const db = getDb();
@@ -122,21 +202,38 @@ function extractMustntHave(projectId: string, conversationId: string): string[] 
   `).all(projectId, conversationId) as Array<{ rings_json: string | null }>;
 
   const keywords: string[] = [];
+  const seenLower = new Set<string>();
 
   for (const row of rows) {
     if (!row.rings_json) continue;
     try {
       const rings = JSON.parse(row.rings_json);
       const ring1 = rings.ring1 ?? {};
+      const ring2 = rings.ring2 ?? {};
 
-      // Negative preference keywords (polarity < 0)
+      // 1. Negative preference keywords (polarity < 0)
       for (const pref of ring1.preferenceKeywords ?? ring1.preference_keywords ?? []) {
-        // Handle both numeric polarity (new format) and string polarity (old format)
         const isNegative = pref.polarity === "negative" || (typeof pref.polarity === "number" && pref.polarity < 0);
         if (isNegative) {
           const kw = pref.text ?? pref.keyword ?? pref.lemma;
-          if (kw && typeof kw === "string" && !keywords.includes(kw)) {
+          const kwLower = kw?.toLowerCase();
+          // For mustnt_have, we want specific domain terms (e.g., "nuts", "shellfish")
+          // Skip generic indefinite pronouns like "anything"
+          if (kw && kwLower && !seenLower.has(kwLower) && !DRAFT_STOP_WORDS.has(kwLower)) {
+            seenLower.add(kwLower);
             keywords.push(kw);
+          }
+        }
+      }
+
+      // 2. Ring2 facets with avoid key
+      for (const facet of ring2.facets ?? []) {
+        if (facet.facetType === "preference_soft" && facet.key === "avoid") {
+          const val = facet.value;
+          const valLower = val?.toLowerCase();
+          if (val && valLower && !seenLower.has(valLower) && !DRAFT_STOP_WORDS.has(valLower)) {
+            seenLower.add(valLower);
+            keywords.push(val);
           }
         }
       }
@@ -149,13 +246,23 @@ function extractMustntHave(projectId: string, conversationId: string): string[] 
 }
 
 /**
+ * Check if keyword exists as a whole word in text
+ * Uses word boundary matching to avoid false positives like "nut" matching "donut"
+ */
+function hasWholeWord(text: string, keyword: string): boolean {
+  // Escape special regex characters in keyword
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Match keyword as a whole word (word boundary or start/end of string)
+  const regex = new RegExp(`\\b${escaped}\\b`, "i");
+  return regex.test(text);
+}
+
+/**
  * Validate draft text against constraints
  */
 function validateDraft(text: string, mustHave: string[], mustntHave: string[]): DraftValidation {
-  const textLower = text.toLowerCase();
-
-  const missing = mustHave.filter(kw => !textLower.includes(kw.toLowerCase()));
-  const forbidden = mustntHave.filter(kw => textLower.includes(kw.toLowerCase()));
+  const missing = mustHave.filter(kw => !hasWholeWord(text, kw));
+  const forbidden = mustntHave.filter(kw => hasWholeWord(text, kw));
 
   return {
     passed: missing.length === 0 && forbidden.length === 0,
@@ -378,11 +485,11 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       }
 
       const completedAt = utcNowIso();
-      // Database status constraint: ephemeral | adopted | superseded
+      // Database lifecycle status: ephemeral | adopted | superseded
       // New drafts are always ephemeral until explicitly adopted
-      const dbStatus = "ephemeral";
-      // For API response, indicate validation status separately
-      const validationStatus = validation?.passed ? "ready" : "failed";
+      const lifecycleStatus = "ephemeral" as const;
+      // Validation status: whether constraints were satisfied
+      const validationStatus = validation?.passed ? "passed" : "failed" as const;
 
       // Save to database
       db.prepare(`
@@ -403,7 +510,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
         JSON.stringify(mustntHave),
         JSON.stringify(llmConfig),
         generatedText,
-        dbStatus,
+        lifecycleStatus,
         createdAt,
         completedAt
       );
@@ -412,7 +519,8 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
         draft_id: draftId,
         project_id: body.project_id,
         conversation_id: body.conversation_id,
-        status: validationStatus,
+        lifecycle_status: lifecycleStatus,
+        validation_status: validationStatus,
         base_commit_hash: body.base_commit_hash ?? null,
         turn_anchor_hash: body.turn_anchor_hash ?? null,
         bridge_id: body.bridge_id,
@@ -485,12 +593,14 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
 
       // Re-validate
       const validation = row.text ? validateDraft(row.text, mustHave, mustntHave) : null;
+      const validationStatus = !row.text ? "pending" : (validation?.passed ? "passed" : "failed");
 
       const response: DraftResponse = {
         draft_id: row.draft_id,
         project_id: row.project_id,
         conversation_id: row.conversation_id,
-        status: row.status as "pending" | "ready" | "failed",
+        lifecycle_status: row.status as "ephemeral" | "adopted" | "superseded",
+        validation_status: validationStatus as "pending" | "passed" | "failed",
         base_commit_hash: row.base_commit_hash,
         turn_anchor_hash: row.turn_anchor_hash,
         bridge_id: row.bridge_id,
@@ -603,16 +713,17 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       const validation = validateDraft(generatedText, mustHave, mustntHave);
 
       const completedAt = utcNowIso();
-      const status = validation.passed ? "ready" : "failed";
+      const validationStatus = validation.passed ? "passed" : "failed" as const;
+      // Lifecycle status remains unchanged (still ephemeral)
+      const lifecycleStatus = row.status as "ephemeral" | "adopted" | "superseded";
 
-      // Update database
+      // Update database (lifecycle status unchanged, only update text and must_have)
       db.prepare(`
         UPDATE drafts_v2
-        SET text = ?, status = ?, must_have_json = ?, completed_at = ?, bridge_payload_json = ?
+        SET text = ?, must_have_json = ?, completed_at = ?, bridge_payload_json = ?
         WHERE draft_id = ?
       `).run(
         generatedText,
-        status,
         JSON.stringify(mustHave),
         completedAt,
         JSON.stringify({ intent }),
@@ -623,7 +734,8 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
         draft_id: draftId,
         project_id: row.project_id,
         conversation_id: row.conversation_id,
-        status: status as "pending" | "ready" | "failed",
+        lifecycle_status: lifecycleStatus,
+        validation_status: validationStatus,
         base_commit_hash: row.base_commit_hash,
         turn_anchor_hash: row.turn_anchor_hash,
         bridge_id: row.bridge_id,

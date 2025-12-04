@@ -134,7 +134,22 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         signature: body.signature,
       });
 
-      sendJson(res, 201, successResponse(commit));
+      // Parse parents for response
+      const parents = JSON.parse(commit.parents_json) as string[];
+
+      // Add metadata about commit lineage
+      const response = {
+        ...commit,
+        _meta: {
+          is_root_commit: parents.length === 0,
+          parent_count: parents.length,
+          ...(parents.length === 0 && {
+            note: "This is the first commit on this branch (root commit)",
+          }),
+        },
+      };
+
+      sendJson(res, 201, successResponse(response));
     } catch (err) {
       // Handle specific error types
       if (err instanceof TurnWindowError) {
