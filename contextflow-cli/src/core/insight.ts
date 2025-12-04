@@ -1,4 +1,4 @@
-import { hashText } from './hash';
+import { hashText } from '@contextflow/core';
 import { logger } from '../runtime/logger';
 
 export interface FacetExtractionInput {

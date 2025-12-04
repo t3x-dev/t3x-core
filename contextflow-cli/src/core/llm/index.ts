@@ -4,12 +4,14 @@
  * Re-exports LLM provider types and implementations.
  */
 
+// Re-export interfaces from @contextflow/core
 export {
-  LLMProvider,
-  LLMGenerateOptions,
+  type LLMProvider,
+  type LLMGenerateOptions,
   LLMProviderError,
-} from "./types";
+} from "@contextflow/core";
 
+// Export concrete implementations
 export {
   ClaudeProvider,
   ClaudeProviderConfig,

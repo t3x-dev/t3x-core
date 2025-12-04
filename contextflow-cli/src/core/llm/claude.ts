@@ -4,7 +4,21 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
-import { LLMProvider, LLMGenerateOptions, LLMProviderError } from "./types";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const undici = require("undici");
+import { LLMProvider, LLMGenerateOptions, LLMProviderError } from "@contextflow/core";
+
+/**
+ * Get proxy URL from environment variables
+ */
+function getProxyUrl(): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  );
+}
 
 /**
  * Claude provider configuration
@@ -38,51 +52,72 @@ export class ClaudeProvider implements LLMProvider {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
 
-    const response = await fetch(`${this.baseUrl}/v1/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: maxTokens,
-        temperature,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
-      }),
-    });
+    // Setup proxy if available
+    const proxyUrl = getProxyUrl();
+    const dispatcher = proxyUrl ? new undici.ProxyAgent(proxyUrl) : undefined;
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new LLMProviderError(
-        this.id,
-        response.status,
-        `API request failed: ${response.status} ${errorBody}`
-      );
-    }
+    const url = `${this.baseUrl}/v1/messages`;
 
-    const data = await response.json() as {
-      content: Array<{ type: string; text: string }>;
-    };
+    try {
+      const { statusCode, body } = await undici.request(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: maxTokens,
+          temperature,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
+        }),
+        bodyTimeout: 60000,
+        headersTimeout: 60000,
+        dispatcher,
+      });
 
-    // Extract text from response
-    const textContent = data.content.find(c => c.type === "text");
-    if (!textContent) {
+      const responseText = await body.text();
+
+      if (statusCode !== 200) {
+        throw new LLMProviderError(
+          this.id,
+          statusCode,
+          `API request failed: ${statusCode} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        content: Array<{ type: string; text: string }>;
+      };
+
+      // Extract text from response
+      const textContent = data.content.find(c => c.type === "text");
+      if (!textContent) {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          "No text content in response"
+        );
+      }
+
+      return textContent.text;
+    } catch (error) {
+      if (error instanceof LLMProviderError) {
+        throw error;
+      }
       throw new LLMProviderError(
         this.id,
         undefined,
-        "No text content in response"
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-
-    return textContent.text;
   }
 
   async resolveConflict(
