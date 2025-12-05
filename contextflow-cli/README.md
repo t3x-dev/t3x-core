@@ -55,7 +55,7 @@ After entering configuration mode, the prompt changes to `config> `, supporting:
 - `/stream on|off`: Toggle streaming output
 - `/back`: Return to chat mode
 
-All configurations are written to `~/.contextflow/config.json` and take effect immediately at runtime.
+All configurations are written to `~/.config/contextflow/config.json` and take effect immediately at runtime.
 
 ## Conversation Logs and Memory
 - Each time CLI starts, it defaults to using the `default` project and writes conversation turns to `.contextflow/conversations/<project>/conversation.jsonl`
@@ -68,7 +68,7 @@ All configurations are written to `~/.contextflow/config.json` and take effect i
 - `src/runtime/contextflowShell.ts`: Interactive shell main loop, handles chat/configuration dual modes
 - `src/runtime/logger.ts`: Encapsulates log output with `[contextflow]` prefix
 - `src/core/`:
-  - `config.ts`: Read/write `~/.contextflow/config.json`, parse runtime configuration
+  - `config.ts`: Read/write `~/.config/contextflow/config.json`, parse runtime configuration
   - `conversationStore.ts`: Manage `.contextflow/conversations/<project>/conversation.jsonl`
   - `root.ts`: Find/create `.contextflow` project root directory
   - `types.ts`: Shared type definitions

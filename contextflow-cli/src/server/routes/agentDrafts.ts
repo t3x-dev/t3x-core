@@ -11,7 +11,7 @@
 import type { Router } from "../router";
 import { sendJson } from "../router";
 import { successResponse, errorResponse, ProviderConfig } from "../types";
-import { getDb } from "../../core/db";
+import { getDb } from "@contextflow/core";
 import { createClaudeProvider, LLMProviderError } from "../../core/llm";
 
 // ============================================================================

@@ -96,3 +96,14 @@ export {
   MergeEngine,
   createMergeEngine,
 } from './merge';
+
+// Database
+export {
+  openDB,
+  getDb,
+  closeDB,
+  getDbPath,
+} from './db';
+
+// Storage (path resolution + CRUD)
+export * from './storage';

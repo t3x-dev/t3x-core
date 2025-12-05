@@ -97,10 +97,16 @@ export interface CommitRaw {
 }
 
 // Facet types from CLI aggregateFacets
+// Base fields that all facets have
 export interface FacetBase {
   facet: string
   confidence?: number
   source_turn?: string
+  // Additional fields from CLI FacetRecord
+  key?: string
+  value?: unknown
+  text?: string
+  entity_type?: string
 }
 
 export interface GoalFacet extends FacetBase {
@@ -121,7 +127,7 @@ export interface ContextFacet extends FacetBase {
 }
 
 // Union type for all facet kinds, plus catch-all for unknown facet types
-export type Facet = GoalFacet | PreferenceFacet | ContextFacet | (FacetBase & Record<string, unknown>)
+export type Facet = GoalFacet | PreferenceFacet | ContextFacet | FacetBase
 
 // Parsed commit for frontend use
 export interface Commit {
@@ -313,13 +319,19 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 // Fetch with timeout wrapper
+// Supports external AbortSignal for cancellation (e.g., component unmount)
 async function fetchWithTimeout(
   url: string,
   options?: RequestInit,
-  timeoutMs = DEFAULT_TIMEOUT
+  timeoutMs = DEFAULT_TIMEOUT,
+  externalSignal?: AbortSignal
 ): Promise<Response> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  // Link external signal to our controller
+  const abortHandler = () => controller.abort()
+  externalSignal?.addEventListener('abort', abortHandler)
 
   try {
     const response = await fetch(url, {
@@ -329,11 +341,16 @@ async function fetchWithTimeout(
     return response
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
+      // Check if it was external abort vs timeout
+      if (externalSignal?.aborted) {
+        throw new ApiError('ABORTED', 'Request was cancelled')
+      }
       throw new ApiError('TIMEOUT', `Request timed out after ${timeoutMs}ms`)
     }
     throw err
   } finally {
     clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortHandler)
   }
 }
 
@@ -458,15 +475,21 @@ export async function listTurns(
   projectId: string,
   conversationId: string,
   limit = 100,
-  offset = 0
+  offset = 0,
+  options?: {
+    signal?: AbortSignal
+    /** Sort order: 'asc' (oldest first) or 'desc' (newest first). Default: 'asc' */
+    order?: 'asc' | 'desc'
+  }
 ): Promise<TurnListData> {
   const query = buildQueryString({
     project_id: projectId,
     conversation_id: conversationId,
     limit,
     offset,
+    order: options?.order,
   })
-  const res = await fetchWithTimeout(`${API_V1}/turns?${query}`)
+  const res = await fetchWithTimeout(`${API_V1}/turns?${query}`, undefined, DEFAULT_TIMEOUT, options?.signal)
   const response = await handleResponse<ApiResponse<TurnListData>>(res)
   return response.data
 }
@@ -740,4 +763,124 @@ export async function exportLedger(projectId: string): Promise<Blob> {
     )
   }
   return res.blob()
+}
+
+// ============================================================================
+// Chat (LLM Integration)
+// ============================================================================
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[]
+  provider?: string
+  model?: string
+  temperature?: number
+  max_tokens?: number
+}
+
+export interface ChatResponse {
+  content: string
+  model: string
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+  }
+  finish_reason?: string
+}
+
+export interface ChatStreamEvent {
+  type: 'token' | 'done' | 'error'
+  content?: string
+  model?: string
+  message?: string
+}
+
+export interface ChatProvidersResponse {
+  providers: string[]
+  default: string
+}
+
+/**
+ * Get available chat providers
+ */
+export async function getChatProviders(): Promise<ChatProvidersResponse> {
+  const res = await fetchWithTimeout(`${API_V1}/chat/providers`)
+  const data = await handleResponse<ApiResponse<ChatProvidersResponse>>(res)
+  return data.data
+}
+
+/**
+ * Non-streaming chat
+ */
+export async function chat(request: ChatRequest): Promise<ChatResponse> {
+  const res = await fetchWithTimeout(`${API_V1}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  }, 120000) // 2 minute timeout for LLM
+  const data = await handleResponse<ApiResponse<ChatResponse>>(res)
+  return data.data
+}
+
+/**
+ * Streaming chat - returns async generator for SSE events
+ */
+export async function* chatStream(
+  request: ChatRequest
+): AsyncGenerator<ChatStreamEvent, void, unknown> {
+  const res = await fetch(`${API_V1}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}))
+    throw new ApiError(
+      errorData.error?.code || 'CHAT_ERROR',
+      errorData.error?.message || `HTTP ${res.status}`
+    )
+  }
+
+  const reader = res.body?.getReader()
+  if (!reader) {
+    throw new ApiError('CHAT_ERROR', 'No response body')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Parse SSE events: data: {...}\n\n
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) continue
+
+        const dataStr = trimmed.slice(5).trim()
+        if (dataStr === '[DONE]') continue
+
+        try {
+          const event = JSON.parse(dataStr) as ChatStreamEvent
+          yield event
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }

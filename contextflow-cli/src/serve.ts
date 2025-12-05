@@ -16,17 +16,44 @@
  *   GOOGLE_AI_STUDIO_KEY  - Required for embeddings
  *   GOOGLE_CLOUD_NLP_KEY  - Required for NLP extraction
  *   HTTPS_PROXY / HTTP_PROXY - Proxy for external API calls
+ *
+ * Config file (~/.config/contextflow/config.json):
+ *   proxyUrl              - Proxy URL for external API calls
  */
 
+// Setup proxy from config file BEFORE global-agent bootstrap
+// This must be synchronous to work with global-agent
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+
+const configPath = join(homedir(), ".config", "contextflow", "config.json");
+if (existsSync(configPath)) {
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const proxyUrl =
+      process.env.HTTPS_PROXY ??
+      process.env.HTTP_PROXY ??
+      config.proxyUrl;
+    if (proxyUrl) {
+      process.env.GLOBAL_AGENT_HTTP_PROXY = proxyUrl;
+      process.env.GLOBAL_AGENT_HTTPS_PROXY = proxyUrl;
+      if (!process.env.HTTP_PROXY) process.env.HTTP_PROXY = proxyUrl;
+      if (!process.env.HTTPS_PROXY) process.env.HTTPS_PROXY = proxyUrl;
+    }
+  } catch {
+    // Ignore config read errors at this stage
+  }
+}
+
 // Enable proxy support for Node.js fetch
-// Must be imported before any fetch calls
+// Must be imported after proxy env vars are set
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require("global-agent/bootstrap");
 
 import { createServer } from "./server/index";
-import { loadAppPreferences } from "./core/config";
-import { discoverProjectRoot } from "./core/root";
-import { openDB } from "./core/db";
+import { loadAppPreferences, checkLegacyConfig } from "./core/config";
+import { resolveStorageRoot, detectLegacyStorageDirs, openDB } from "@contextflow/core";
 import { ProviderConfig } from "./server/types";
 
 // Parse command line arguments
@@ -77,27 +104,34 @@ async function main(): Promise<void> {
 
   console.log("ContextFlow Server starting...");
 
-  // Discover project root for .contextflow directory
-  let contextflowDir: string;
-  try {
-    const root = await discoverProjectRoot(process.cwd());
-    contextflowDir = root.contextflowDir;
-    console.log(`  Project root: ${root.projectRoot}`);
-    console.log(`  Data directory: ${contextflowDir}`);
-  } catch (error) {
-    console.error("Error: Could not find .contextflow directory.");
-    console.error("Please run this command from within a contextflow project.");
-    process.exit(1);
+  // Resolve storage root using @contextflow/core
+  // Priority: CONTEXTFLOW_ROOT env > discover .contextflow/ > create at repo root
+  const storageRoot = resolveStorageRoot();
+  const contextflowDir = storageRoot.contextflowDir;
+
+  console.log(`  Project root: ${storageRoot.projectRoot}`);
+  console.log(`  Data directory: ${contextflowDir}`);
+  console.log(`  Source: ${storageRoot.source}`);
+
+  // Detect legacy .contextflow directories in subpackages
+  const legacyDirs = detectLegacyStorageDirs(storageRoot.projectRoot);
+  if (legacyDirs.length > 0) {
+    console.warn("\n  Warning: Found legacy .contextflow directories:");
+    legacyDirs.forEach(d => console.warn(`    - ${d}`));
+    console.warn(`  Consider migrating data to: ${contextflowDir}\n`);
   }
 
   // Initialize database
   try {
-    const dbPath = openDB(contextflowDir.replace("/.contextflow", ""));
+    const dbPath = openDB(storageRoot.projectRoot);
     console.log(`  Database: ${dbPath}`);
   } catch (error) {
     console.error(`Error: Failed to open database: ${(error as Error).message}`);
     process.exit(1);
   }
+
+  // Check for legacy config location and warn user
+  await checkLegacyConfig();
 
   // Load user preferences
   const preferences = await loadAppPreferences();
@@ -111,6 +145,12 @@ async function main(): Promise<void> {
     anthropicApiKey: preferences.anthropicApiKey,
     defaultLanguage: preferences.defaultLanguage,
   };
+
+  // Show proxy status
+  const activeProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (activeProxy) {
+    console.log(`  Proxy: ${activeProxy}`);
+  }
 
   // Warn about missing API keys
   if (!providers.anthropicApiKey) {

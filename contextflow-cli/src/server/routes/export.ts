@@ -12,7 +12,7 @@ import type { ServerResponse } from "node:http";
 import type { Router } from "../router";
 import { sendJson } from "../router";
 import { errorResponse } from "../types";
-import { getDb } from "../../core/db";
+import { getDb } from "@contextflow/core";
 
 // ============================================================================
 // Types (matching Python schemas)

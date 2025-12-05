@@ -12,8 +12,22 @@
  *
  * All operations are deterministic and do not depend on LLMs.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createMergeEngine = exports.MergeEngine = exports.ConflictType = exports.createDiffEngine = exports.DiffEngine = exports.calculateDiffStats = exports.DiffType = exports.createRingExtractor = exports.RingExtractor = exports.createPolarityRuleEngine = exports.PolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.LLMProviderError = exports.cosineSimilarity = exports.EmbeddingProviderError = exports.normalizeDependencyLabel = exports.normalizePosTag = exports.POS_TAG_MAPPING = exports.NLPProviderError = exports.sha256 = exports.hashText = exports.canonText = void 0;
+exports.getDbPath = exports.closeDB = exports.getDb = exports.openDB = exports.createMergeEngine = exports.MergeEngine = exports.ConflictType = exports.createDiffEngine = exports.DiffEngine = exports.calculateDiffStats = exports.DiffType = exports.createRingExtractor = exports.RingExtractor = exports.createPolarityRuleEngine = exports.PolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.LLMProviderError = exports.cosineSimilarity = exports.EmbeddingProviderError = exports.normalizeDependencyLabel = exports.normalizePosTag = exports.POS_TAG_MAPPING = exports.NLPProviderError = exports.sha256 = exports.hashText = exports.canonText = void 0;
 // Common utilities
 var common_1 = require("./common");
 Object.defineProperty(exports, "canonText", { enumerable: true, get: function () { return common_1.canonText; } });
@@ -51,4 +65,12 @@ var merge_1 = require("./merge");
 Object.defineProperty(exports, "ConflictType", { enumerable: true, get: function () { return merge_1.ConflictType; } });
 Object.defineProperty(exports, "MergeEngine", { enumerable: true, get: function () { return merge_1.MergeEngine; } });
 Object.defineProperty(exports, "createMergeEngine", { enumerable: true, get: function () { return merge_1.createMergeEngine; } });
+// Database
+var db_1 = require("./db");
+Object.defineProperty(exports, "openDB", { enumerable: true, get: function () { return db_1.openDB; } });
+Object.defineProperty(exports, "getDb", { enumerable: true, get: function () { return db_1.getDb; } });
+Object.defineProperty(exports, "closeDB", { enumerable: true, get: function () { return db_1.closeDB; } });
+Object.defineProperty(exports, "getDbPath", { enumerable: true, get: function () { return db_1.getDbPath; } });
+// Storage (path resolution + CRUD)
+__exportStar(require("./storage"), exports);
 //# sourceMappingURL=index.js.map

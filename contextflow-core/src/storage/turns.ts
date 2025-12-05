@@ -81,12 +81,16 @@ export function listTurnsV2(options: ListTurnsV2Options): TurnV2Record[] {
   const db = getDb();
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
+  const order = options.order ?? 'asc';
+  const orderClause = order === 'desc' ? 'DESC' : 'ASC';
 
+  // Use turn_hash as secondary sort key for stable ordering
+  // when multiple turns have the same created_at timestamp
   return db
     .prepare(
       `SELECT * FROM turns_v2
        WHERE conversation_id = ?
-       ORDER BY created_at ASC
+       ORDER BY created_at ${orderClause}, turn_hash ${orderClause}
        LIMIT ? OFFSET ?`
     )
     .all(options.conversation_id, limit, offset) as TurnV2Record[];

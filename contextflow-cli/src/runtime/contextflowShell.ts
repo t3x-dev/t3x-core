@@ -16,7 +16,7 @@ import {
   type DraftKind,
   type TurnRole,
 } from '../core/db';
-import { discoverProjectRoot } from '../core/root';
+import { resolveStorageRoot } from '@contextflow/core';
 import { ConversationStore } from '../core/conversationStore';
 import { ChatMessage, UserConfig, ConversationTurn } from '../core/types';
 import {
@@ -116,11 +116,11 @@ export async function startContextflowShell(): Promise<void> {
   await ensureProxyConfigured();
   await normalizeProxyEnv();
 
-  const root = await discoverProjectRoot(process.cwd());
+  const storageRoot = resolveStorageRoot();
 
   if (sqliteEnabled) {
     try {
-      const dbPath = openDB(root.projectRoot);
+      const dbPath = openDB(storageRoot.projectRoot);
       sqliteReady = true;
       logger.info(`🧾 ContextFlow DB ready: ${dbPath}`);
     } catch (error) {
@@ -147,7 +147,7 @@ export async function startContextflowShell(): Promise<void> {
   }
 
   // Initialize project cache for core_api integration
-  initProjectCache(root.contextflowDir);
+  initProjectCache(storageRoot.contextflowDir);
   try {
     await syncCache();
     logger.trace('cache', 'Project cache synced with core_api');
@@ -155,7 +155,7 @@ export async function startContextflowShell(): Promise<void> {
     logger.trace('cache', `Cache sync skipped: ${(error as Error).message}`);
   }
 
-  let store = jsonlEnabled ? new ConversationStore(root.contextflowDir, 'default') : null;
+  let store = jsonlEnabled ? new ConversationStore(storageRoot.contextflowDir, 'default') : null;
 
   const rl = readline.createInterface({
     input: stdin,
@@ -213,7 +213,7 @@ export async function startContextflowShell(): Promise<void> {
       }
 
       if (state.mode === 'config') {
-        const result = await handleConfigMode(trimmed, state, store, root.contextflowDir);
+        const result = await handleConfigMode(trimmed, state, store, storageRoot.contextflowDir);
         if (result === 'back') {
           state.mode = 'chat';
           prompt = CHAT_PROMPT;
@@ -223,7 +223,7 @@ export async function startContextflowShell(): Promise<void> {
       }
 
       if (trimmed.startsWith('/')) {
-        const slashHandled = await handleSlashCommand(trimmed, state, root.contextflowDir, rl);
+        const slashHandled = await handleSlashCommand(trimmed, state, storageRoot.contextflowDir, rl);
         if (slashHandled) {
           continue;
         }
@@ -231,7 +231,7 @@ export async function startContextflowShell(): Promise<void> {
           trimmed,
           state,
           store,
-          root.contextflowDir,
+          storageRoot.contextflowDir,
         );
 
         if (commandResult.type === 'enterConfig') {
@@ -244,7 +244,7 @@ export async function startContextflowShell(): Promise<void> {
 
         if (commandResult.type === 'switchProject') {
           state.project = commandResult.project;
-          store = jsonlEnabled ? new ConversationStore(root.contextflowDir, state.project) : null;
+          store = jsonlEnabled ? new ConversationStore(storageRoot.contextflowDir, state.project) : null;
           state.messages = [];
           await hydrateSessionMessages(store, state);
           logger.info(`Switched to project "${state.project}".`);

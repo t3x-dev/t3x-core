@@ -2948,6 +2948,83 @@ button {
   cursor: not-allowed;
 }
 
+/* Chat streaming styles */
+.conversation-v2__chat-message--streaming {
+  background: #f0f9ff;
+}
+
+.conversation-v2__streaming-cursor {
+  animation: blink 1s step-end infinite;
+  color: #3b82f6;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.conversation-v2__chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+
+.conversation-v2__spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Load more messages styles */
+.conversation-v2__chat-loading-more,
+.conversation-v2__chat-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.conversation-v2__load-more-btn {
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.conversation-v2__load-more-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.conversation-v2__chat-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin: 8px 24px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+.conversation-v2__chat-input:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
 /* ============================================
    Draft V2 Styles - Two Phase Design
    ============================================ */
@@ -4005,6 +4082,54 @@ button {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* Spinner animation */
+.draft-svtz__spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Validation error styles */
+.draft-svtz__validation-error {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+}
+
+.draft-svtz__validation-error-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.draft-svtz__validation-error-title {
+  font-weight: 600;
+}
+
+.draft-svtz__validation-error-list {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+/* Commit error styles */
+.draft-svtz__commit-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
 }
 
 /* Step Locked State */

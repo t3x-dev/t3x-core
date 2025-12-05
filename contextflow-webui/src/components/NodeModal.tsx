@@ -7,9 +7,11 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight, Lock, RotateCcw } from 'lucide-react'
+import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
 import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import { useCanvasStore } from '../store/canvasStore'
+import * as api from '../services/api'
 
 const bridgeTemplates = [
   { id: 'prose', name: 'prose', description: 'General prose extraction' },
@@ -343,6 +345,17 @@ export function NodeModal({
   // Loading state for Refresh
   const [isRefreshing, setIsRefreshing] = useState(false)
 
+  // Commit state
+  const [isCommitting, setIsCommitting] = useState(false)
+  const [commitError, setCommitError] = useState<string | null>(null)
+  const [validationErrors, setValidationErrors] = useState<{
+    missing: string[]
+    forbidden: string[]
+  } | null>(null)
+
+  // Get projectId from canvasStore
+  const projectId = useCanvasStore((state) => state.projectId)
+
   // Divider positions
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
   const [sourceResultDividerPos, setSourceResultDividerPos] = useState(50) // percentage for SOURCE | RESULT
@@ -371,6 +384,14 @@ export function NodeModal({
   const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+
+  // Chat pagination state
+  const CHAT_PAGE_SIZE = 100
+  const [chatOffset, setChatOffset] = useState(0)
+  const [chatHasMore, setChatHasMore] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const loadMoreAbortRef = useRef<AbortController | null>(null)
 
   // Resizable sidebar state (conversation)
   const [sidebarWidth, setSidebarWidth] = useState(280)
@@ -599,47 +620,372 @@ export function NodeModal({
     })))
   }, [keywordsThreshold])
 
-  // Handle Commit - create commit node
-  const handleCommit = useCallback(() => {
-    // Update data with final values
-    onUpdate({
-      summary: resultText,
-      bridgePrompt: template,
-      isGenerated: true,
-    })
-    // Trigger convert to commit
-    onConvertDraft?.()
-  }, [resultText, template, onUpdate, onConvertDraft])
+  // Handle Commit - create commit via API
+  const handleCommit = useCallback(async () => {
+    if (!projectId) {
+      setCommitError('No project selected')
+      return
+    }
+
+    // Get source conversation ID
+    const sourceConversationId = data.sourceConversationId
+    if (!sourceConversationId) {
+      setCommitError('No source conversation found')
+      return
+    }
+
+    setIsCommitting(true)
+    setCommitError(null)
+    setValidationErrors(null)
+
+    try {
+      // 1. Get conversation's turns to determine turn_window
+      const turnsResponse = await api.listTurns(projectId, sourceConversationId)
+      const turns = turnsResponse.turns
+
+      if (turns.length === 0) {
+        setCommitError('Conversation has no turns')
+        setIsCommitting(false)
+        return
+      }
+
+      // Determine turn_window (first to last turn)
+      const startTurnHash = turns[0].turn_hash
+      const endTurnHash = turns[turns.length - 1].turn_hash
+
+      // 2. Map template to bridge_id
+      const bridgeId = template === 'plan' ? 'plan' : 'summary'
+
+      // 3. Create Draft
+      const draft = await api.createDraft(
+        projectId,
+        sourceConversationId,
+        bridgeId as 'plan' | 'summary' | 'explain' | 'clarify',
+        data.title || 'Extract semantic content',
+        undefined, // base_commit_hash
+        endTurnHash // turn_anchor_hash
+      )
+
+      // 4. Check validation_status
+      if (draft.validation_status === 'failed' && draft.validation) {
+        setValidationErrors({
+          missing: draft.validation.missing_keywords,
+          forbidden: draft.validation.forbidden_keywords,
+        })
+        setIsCommitting(false)
+        return
+      }
+
+      // 5. If validation passed, create Commit
+      const branch = data.pendingBranch === 'branch' && data.pendingBranchName
+        ? data.pendingBranchName
+        : 'main'
+
+      await api.createCommit(
+        projectId,
+        { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
+        branch,
+        data.title,
+        draft.draft_id
+      )
+
+      // 6. Update local state with final values
+      onUpdate({
+        summary: draft.text || resultText,
+        bridgePrompt: template,
+        isGenerated: true,
+      })
+
+      // 7. Trigger convert to committed state
+      onConvertDraft?.()
+
+      // 8. Refresh canvas data
+      useCanvasStore.getState().loadProjectData(projectId)
+
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      setCommitError(error.message)
+      console.error('Failed to create commit:', error)
+    } finally {
+      setIsCommitting(false)
+    }
+  }, [projectId, data.sourceConversationId, data.title, data.pendingBranch, data.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
+  // Chat loading state - disable send while loading history
+  const [isChatLoading, setIsChatLoading] = useState(false)
+
+  // Load chat history from backend when modal opens for conversation
+  useEffect(() => {
+    const abortController = new AbortController()
+    const currentConversationId = data.conversationId
+
+    const loadChatHistory = async () => {
+      if (data.kind !== 'conversation' || !projectId || !currentConversationId) return
+
+      // Cancel any pending loadMore request when switching conversations
+      loadMoreAbortRef.current?.abort()
+      loadMoreAbortRef.current = null
+
+      // Clear old messages and reset pagination state
+      setChatMessages([])
+      setChatOffset(0)
+      setChatHasMore(false)
+      setIsChatLoading(true)
+      try {
+        // Fetch newest CHAT_PAGE_SIZE messages first (order=desc), then reverse for display
+        const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, 0, {
+          signal: abortController.signal,
+          order: 'desc',
+        })
+
+        // Check if conversation changed during request (race condition fix)
+        if (abortController.signal.aborted || data.conversationId !== currentConversationId) {
+          return
+        }
+
+        // Reverse the array since we fetched newest first (order=desc)
+        // but need to display oldest first in the chat UI
+        const messages = response.turns
+          .filter(turn => turn.role === 'user' || turn.role === 'assistant')
+          .map(turn => ({
+            id: turn.turn_hash,
+            role: turn.role as 'user' | 'assistant',
+            content: turn.content,
+          }))
+          .reverse()
+        setChatMessages(messages)
+
+        // Check if there are more messages to load
+        // If we got exactly CHAT_PAGE_SIZE turns, there might be more
+        setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE)
+        setChatOffset(response.turns.length)
+      } catch (err) {
+        // Only log non-abort errors (ABORTED is expected when switching conversations)
+        const isAbortError = abortController.signal.aborted ||
+          (err instanceof api.ApiError && err.code === 'ABORTED')
+        if (!isAbortError) {
+          console.error('Failed to load chat history:', err)
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsChatLoading(false)
+        }
+      }
+    }
+
+    loadChatHistory()
+
+    return () => {
+      abortController.abort()
+      loadMoreAbortRef.current?.abort()
+    }
+  }, [data.kind, data.conversationId, projectId])
+
+  // Load more (older) messages when scrolling to top
+  const loadMoreMessages = useCallback(async () => {
+    if (!projectId || !data.conversationId || isLoadingMore || !chatHasMore) return
+
+    // Cancel any pending load more request
+    loadMoreAbortRef.current?.abort()
+    const abortController = new AbortController()
+    loadMoreAbortRef.current = abortController
+
+    const currentConversationId = data.conversationId
+    const container = messagesContainerRef.current
+
+    // Capture scroll position before loading
+    const scrollHeightBefore = container?.scrollHeight ?? 0
+
+    setIsLoadingMore(true)
+    try {
+      const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, chatOffset, {
+        order: 'desc',
+        signal: abortController.signal,
+      })
+
+      // Check for race condition: conversation changed or request aborted
+      if (abortController.signal.aborted || data.conversationId !== currentConversationId) {
+        return
+      }
+
+      if (response.turns.length === 0) {
+        setChatHasMore(false)
+        return
+      }
+
+      // Older messages (fetched in desc order, need to reverse)
+      const olderMessages = response.turns
+        .filter(turn => turn.role === 'user' || turn.role === 'assistant')
+        .map(turn => ({
+          id: turn.turn_hash,
+          role: turn.role as 'user' | 'assistant',
+          content: turn.content,
+        }))
+        .reverse()
+
+      // Prepend older messages to the beginning
+      setChatMessages(prev => [...olderMessages, ...prev])
+      setChatOffset(prev => prev + response.turns.length)
+      setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE)
+
+      // Preserve scroll position after prepending
+      // Use requestAnimationFrame to wait for DOM update
+      requestAnimationFrame(() => {
+        if (container && data.conversationId === currentConversationId) {
+          const scrollHeightAfter = container.scrollHeight
+          const heightDiff = scrollHeightAfter - scrollHeightBefore
+          container.scrollTop = container.scrollTop + heightDiff
+        }
+      })
+    } catch (err) {
+      // Ignore abort errors
+      const isAbortError = abortController.signal.aborted ||
+        (err instanceof api.ApiError && err.code === 'ABORTED')
+      if (!isAbortError) {
+        console.error('Failed to load more messages:', err)
+      }
+    } finally {
+      if (!abortController.signal.aborted) {
+        setIsLoadingMore(false)
+      }
+    }
+  }, [projectId, data.conversationId, chatOffset, chatHasMore, isLoadingMore])
+
+  // Handle scroll to detect when user reaches top
+  const handleChatScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement
+    // Load more when scrolled near the top (within 50px)
+    if (target.scrollTop < 50 && chatHasMore && !isLoadingMore && !isChatLoading) {
+      loadMoreMessages()
+    }
+  }, [chatHasMore, isLoadingMore, isChatLoading, loadMoreMessages])
+
   const conversationAction = useMemo(() => quickActions?.find(a => a.key === 'add-draft'), [quickActions])
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return
+  // Chat streaming state
+  const [isChatStreaming, setIsChatStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [chatError, setChatError] = useState<string | null>(null)
 
+  // Capture current values for use in async callback (avoid stale closures)
+  const conversationIdRef = useRef(data.conversationId)
+  const nodeKindRef = useRef(data.kind)
+  const chatMessagesRef = useRef(chatMessages)
+  useEffect(() => {
+    conversationIdRef.current = data.conversationId
+    nodeKindRef.current = data.kind
+  }, [data.conversationId, data.kind])
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages
+  }, [chatMessages])
+
+  const handleSendMessage = useCallback(async () => {
+    if (!chatInput.trim() || isChatStreaming || isChatLoading) return
+
+    const userMessage = chatInput.trim()
+    setChatInput('')
+    setChatError(null)
+
+    // Add user message to chat
     const newUserMessage = {
       id: `msg-${Date.now()}`,
       role: 'user' as const,
-      content: chatInput.trim(),
+      content: userMessage,
     }
-
     setChatMessages(prev => [...prev, newUserMessage])
-    setChatInput('')
 
-    // Simulate assistant response (mock - not connected to LLM)
-    setTimeout(() => {
-      const mockResponse = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant' as const,
-        content: 'This is a placeholder response. LLM integration coming soon.',
+    // If no projectId, we can still chat (just won't save turns)
+    // For now, we'll use the chat API directly
+
+    setIsChatStreaming(true)
+    setStreamingContent('')
+
+    try {
+      // Build messages array from chat history (use ref to get latest)
+      const currentMessages = chatMessagesRef.current
+      const messages: api.ChatMessage[] = [
+        ...currentMessages.map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })),
+        { role: 'user' as const, content: userMessage },
+      ]
+
+      // Use streaming chat
+      let fullResponse = ''
+      let addedFinalMessage = false
+
+      for await (const event of api.chatStream({ messages })) {
+        if (event.type === 'token' && event.content) {
+          fullResponse += event.content
+          setStreamingContent(fullResponse)
+        } else if (event.type === 'done') {
+          // Add assistant message to chat (only once)
+          if (!addedFinalMessage) {
+            setChatMessages(prev => [...prev, {
+              id: `msg-${Date.now()}`,
+              role: 'assistant' as const,
+              content: event.content || fullResponse,
+            }])
+            setStreamingContent('')
+            addedFinalMessage = true
+          }
+        } else if (event.type === 'error') {
+          setChatError(event.message || 'Unknown error')
+        }
       }
-      setChatMessages(prev => [...prev, mockResponse])
-    }, 500)
-  }
+
+      // If we didn't get a done event but have content, add it
+      if (fullResponse && !addedFinalMessage) {
+        setChatMessages(prev => [...prev, {
+          id: `msg-${Date.now()}`,
+          role: 'assistant' as const,
+          content: fullResponse,
+        }])
+        setStreamingContent('')
+      }
+
+      // If projectId is available and this is a conversation node, save the turns
+      // Use refs to get current values (avoiding stale closure)
+      let currentConversationId = conversationIdRef.current
+      const currentKind = nodeKindRef.current
+      if (projectId && currentKind === 'conversation') {
+        try {
+          // If no conversationId yet, create one first
+          if (!currentConversationId) {
+            const newConv = await api.createConversation(projectId, data.title || 'Untitled Conversation')
+            currentConversationId = newConv.conversation_id
+            // Update the node with the new conversationId
+            onUpdate({ conversationId: currentConversationId })
+            conversationIdRef.current = currentConversationId
+          }
+
+          // Save user turn
+          await api.createTurn(projectId, currentConversationId, 'user', userMessage)
+          // Save assistant turn
+          if (fullResponse) {
+            await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
+          }
+        } catch (err) {
+          console.warn('Failed to save turns:', err)
+          // Don't show error to user - chat still worked
+        }
+      }
+
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      setChatError(error.message)
+      console.error('Chat error:', error)
+    } finally {
+      setIsChatStreaming(false)
+      setStreamingContent('') // Clear any residual streaming content
+    }
+  }, [chatInput, isChatStreaming, isChatLoading, projectId, data.title, onUpdate]) // chatMessages accessed via ref to avoid frequent rebuilds
 
   const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -740,21 +1086,66 @@ export function NodeModal({
 
             {/* Main Content - Chat Interface */}
             <div className="modal-v2__main conversation-v2__chat-container">
-              <div className="conversation-v2__chat-messages">
-                {chatMessages.length === 0 ? (
+              <div
+                ref={messagesContainerRef}
+                className="conversation-v2__chat-messages"
+                onScroll={handleChatScroll}
+              >
+                {chatMessages.length === 0 && !isChatStreaming ? (
                   <div className="conversation-v2__chat-empty">
                     <MessageSquarePlus size={48} strokeWidth={1} />
                     <p>Start a conversation with the LLM</p>
                     <span>Type a message below to begin</span>
                   </div>
                 ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className={`conversation-v2__chat-message conversation-v2__chat-message--${msg.role}`}>
-                      <div className="conversation-v2__chat-message-content">
-                        {msg.content}
+                  <>
+                    {/* Load more indicator at top */}
+                    {isLoadingMore && (
+                      <div className="conversation-v2__chat-loading-more">
+                        <Loader2 size={16} className="conversation-v2__spinner" />
+                        <span>Loading older messages...</span>
                       </div>
-                    </div>
-                  ))
+                    )}
+                    {chatHasMore && !isLoadingMore && (
+                      <div className="conversation-v2__chat-load-more">
+                        <button onClick={loadMoreMessages} className="conversation-v2__load-more-btn">
+                          Load older messages
+                        </button>
+                      </div>
+                    )}
+                    {chatMessages.map((msg) => (
+                      <div key={msg.id} className={`conversation-v2__chat-message conversation-v2__chat-message--${msg.role}`}>
+                        <div className="conversation-v2__chat-message-content">
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Streaming response */}
+                    {isChatStreaming && streamingContent && (
+                      <div className="conversation-v2__chat-message conversation-v2__chat-message--assistant conversation-v2__chat-message--streaming">
+                        <div className="conversation-v2__chat-message-content">
+                          {streamingContent}
+                          <span className="conversation-v2__streaming-cursor">▊</span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Loading indicator when streaming starts */}
+                    {isChatStreaming && !streamingContent && (
+                      <div className="conversation-v2__chat-message conversation-v2__chat-message--assistant">
+                        <div className="conversation-v2__chat-message-content conversation-v2__chat-loading">
+                          <Loader2 size={16} className="conversation-v2__spinner" />
+                          <span>Thinking...</span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Chat error */}
+                    {chatError && (
+                      <div className="conversation-v2__chat-error">
+                        <AlertCircle size={16} />
+                        <span>{chatError}</span>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -767,13 +1158,14 @@ export function NodeModal({
                   onKeyDown={handleChatKeyDown}
                   placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
                   rows={3}
+                  disabled={isChatStreaming || isChatLoading}
                 />
                 <button
                   className="conversation-v2__chat-send-btn"
                   onClick={handleSendMessage}
-                  disabled={!chatInput.trim()}
+                  disabled={!chatInput.trim() || isChatStreaming || isChatLoading}
                 >
-                  <Send size={20} />
+                  {isChatStreaming || isChatLoading ? <Loader2 size={20} className="conversation-v2__spinner" /> : <Send size={20} />}
                 </button>
               </div>
             </div>
@@ -988,14 +1380,51 @@ export function NodeModal({
                       Click phrases in SOURCE to toggle inclusion
                     </p>
 
+                    {/* Validation errors */}
+                    {validationErrors && (
+                      <div className="draft-svtz__validation-error">
+                        <AlertCircle size={14} />
+                        <div className="draft-svtz__validation-error-content">
+                          <span className="draft-svtz__validation-error-title">Validation Failed</span>
+                          {validationErrors.missing.length > 0 && (
+                            <div className="draft-svtz__validation-error-list">
+                              <span>Missing: {validationErrors.missing.join(', ')}</span>
+                            </div>
+                          )}
+                          {validationErrors.forbidden.length > 0 && (
+                            <div className="draft-svtz__validation-error-list">
+                              <span>Forbidden: {validationErrors.forbidden.join(', ')}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Commit error */}
+                    {commitError && !validationErrors && (
+                      <div className="draft-svtz__commit-error">
+                        <AlertCircle size={14} />
+                        <span>{commitError}</span>
+                      </div>
+                    )}
+
                     {/* Commit Button */}
                     <button
                       className="draft-svtz__commit-btn"
                       onClick={handleCommit}
-                      disabled={includedPhrasesCount === 0}
+                      disabled={includedPhrasesCount === 0 || isCommitting}
                     >
-                      <Check size={16} />
-                      <span>Commit</span>
+                      {isCommitting ? (
+                        <>
+                          <Loader2 size={16} className="draft-svtz__spinner" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={16} />
+                          <span>Commit</span>
+                        </>
+                      )}
                     </button>
                   </>
                 )}
