@@ -4,6 +4,7 @@ import { Background, Controls, MiniMap, ReactFlow } from 'reactflow'
 import type { Edge, Node, ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { canvasNodeTypes } from '../components/CanvasNodes'
+import { DeletionConfirmDialog } from '../components/DeletionConfirmDialog'
 import { LeafPanel } from '../components/LeafPanel'
 import { NodeModal, type NodeQuickAction } from '../components/NodeModal'
 import { useCanvasStore } from '../store/canvasStore'
@@ -464,6 +465,8 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           proOptions={{ hideAttribution: true }}
           fitView
           fitViewOptions={{ padding: 0.2 }}
+          deleteKeyCode={['Backspace', 'Delete']}
+          selectNodesOnDrag={false}
         >
           {isPanMode && <MiniMap />}
           <Controls />
@@ -510,6 +513,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         />
       )}
       <LeafPanel />
+      <DeletionConfirmDialog />
     </div>
   )
 }

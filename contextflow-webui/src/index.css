@@ -4167,6 +4167,12 @@ button {
   background: #fff;
 }
 
+/* Full width SOURCE when RESULT is removed */
+.draft-svtz__source--full {
+  width: 100% !important;
+  flex: 1;
+}
+
 .draft-svtz__source-content {
   flex: 1;
   overflow-y: auto;
@@ -4297,39 +4303,47 @@ button {
   color: #9ca3af;
 }
 
-/* Keyword in phrase - must_have 深绿 */
+/* Keyword in phrase - SOURCE area */
 .draft-svtz__keyword {
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
   transition: all 0.15s ease;
-  border-radius: 2px;
-  padding: 0 2px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: #374151;
 }
 
+/* must keyword - slightly deeper green than phrase bg */
 .draft-svtz__keyword--must {
-  color: #15803d;
-  background: rgba(21, 128, 61, 0.1);
+  background: #bbf7d0;
+  border: 1px solid #86efac;
 }
 
-.draft-svtz__keyword--must:hover {
-  background: rgba(21, 128, 61, 0.2);
-}
-
-/* Keyword in phrase - mustnt_have 深红 */
+/* mustnt keyword - light red bg with strikethrough */
 .draft-svtz__keyword--mustnt {
-  color: #dc2626;
-  background: rgba(220, 38, 38, 0.1);
+  background: #fecaca;
+  border: 1px solid #fca5a5;
   text-decoration: line-through;
 }
 
-.draft-svtz__keyword--mustnt:hover {
-  background: rgba(220, 38, 38, 0.2);
+/* Keyword hovered state - must: deep green, mustnt: deep red */
+.draft-svtz__keyword--must.draft-svtz__keyword--hovered {
+  background: #15803d !important;
+  color: #fff !important;
+  border-color: #15803d !important;
+}
+
+.draft-svtz__keyword--mustnt.draft-svtz__keyword--hovered {
+  background: #dc2626 !important;
+  color: #fff !important;
+  border-color: #dc2626 !important;
+  text-decoration: none !important;
 }
 
 /* Keyword disabled (when phrase is excluded) */
 .draft-svtz__keyword--disabled {
   color: #9ca3af !important;
-  background: transparent !important;
+  background: rgba(0, 0, 0, 0.05) !important;
   cursor: not-allowed;
   text-decoration: none !important;
 }
@@ -4430,22 +4444,28 @@ button {
   color: #9ca3af;
 }
 
-/* Result Inline Keywords */
-.draft-svtz__result-inline-keyword {
-  font-weight: 600;
-  border-radius: 2px;
-  padding: 0 2px;
+/* Result Text area Keywords - white bg with subtle border, highlight on hover */
+.draft-svtz__result-text-keyword {
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.draft-svtz__result-inline-keyword--must {
-  color: #15803d;
-  background: rgba(21, 128, 61, 0.1);
+.draft-svtz__result-text-keyword--hovered-must {
+  background: #15803d !important;
+  color: #fff !important;
+  border-color: #15803d !important;
 }
 
-.draft-svtz__result-inline-keyword--mustnt {
-  color: #dc2626;
-  background: rgba(220, 38, 38, 0.1);
-  text-decoration: line-through;
+.draft-svtz__result-text-keyword--hovered-mustnt {
+  background: #dc2626 !important;
+  color: #fff !important;
+  border-color: #dc2626 !important;
 }
 
 /* Result Keywords List */
@@ -4467,6 +4487,8 @@ button {
   border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .draft-svtz__result-keyword--must {
@@ -4480,6 +4502,21 @@ button {
   color: #dc2626;
   border: 1px solid #fca5a5;
   text-decoration: line-through;
+}
+
+/* Must-have keyword tag hovered - deep green bg, white text */
+.draft-svtz__result-keyword--must.draft-svtz__result-keyword--hovered {
+  background: #15803d !important;
+  color: #fff !important;
+  border-color: #15803d !important;
+}
+
+/* Mustnt-have keyword tag hovered - deep red bg, white text */
+.draft-svtz__result-keyword--mustnt.draft-svtz__result-keyword--hovered {
+  background: #dc2626 !important;
+  color: #fff !important;
+  border-color: #dc2626 !important;
+  text-decoration: none !important;
 }
 
 /* Inline keyword highlighting in text (SOURCE and RESULT) */
@@ -7374,5 +7411,400 @@ button {
   font-size: 0.75rem;
   font-weight: 500;
   color: #1f2937;
+}
+
+/* ========================================
+   Deletion Confirm Dialog
+   ======================================== */
+
+.deletion-confirm__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.deletion-confirm__dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  width: 400px;
+  max-width: 90vw;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.deletion-confirm__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deletion-confirm__icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.deletion-confirm__title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.deletion-confirm__close {
+  padding: 4px;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: background 0.15s, color 0.15s;
+}
+
+.deletion-confirm__close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.deletion-confirm__body {
+  padding: 20px;
+}
+
+.deletion-confirm__message {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.deletion-confirm__message:last-of-type {
+  margin-bottom: 0;
+}
+
+.deletion-confirm__summary {
+  margin: 16px 0 0;
+  padding: 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #92400e;
+}
+
+.deletion-confirm__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.deletion-confirm__btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.deletion-confirm__btn--cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.deletion-confirm__btn--cancel:hover {
+  background: #e5e7eb;
+}
+
+.deletion-confirm__btn--confirm {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.deletion-confirm__btn--confirm:hover {
+  background: #dc2626;
+}
+
+.deletion-confirm__btn--confirm:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
+
+/* ========================================
+   Selectable Text Block
+   ======================================== */
+
+.selectable-text-block {
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.selectable-text-block__tokens {
+  font-size: 0.95rem;
+  line-height: 2;
+  user-select: none;
+  cursor: default;
+}
+
+.selectable-token {
+  display: inline;
+  padding: 2px 0;
+  border-radius: 3px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.selectable-token:not([class*="--"]):hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* 浅绿 - 选中区域 (语义区域底层) */
+.selectable-token--selected {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* 悬停时显示深绿细边框，提示可点击标记为关键词 */
+.selectable-token--selected:hover {
+  background: #d1fae5;
+  border: 1.5px solid #059669;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin: 0 1px;
+}
+
+/* 深绿底白字 - must_have 关键词 */
+.selectable-token--keyword-must {
+  background: #059669;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: 0 1px;
+  font-weight: 500;
+}
+
+.selectable-token--keyword-must:hover {
+  background: #047857;
+}
+
+/* 深红底白字 - mustnt_have 关键词 */
+.selectable-token--keyword-mustnt {
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: 0 1px;
+  font-weight: 500;
+  text-decoration: line-through;
+}
+
+.selectable-token--keyword-mustnt:hover {
+  background: #b91c1c;
+}
+
+/* 浅红 - 排除区域 */
+.selectable-token--excluded {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.selectable-token--excluded:hover {
+  background: #fecaca;
+}
+
+/* 拖拽中的预览 - include (浅绿) */
+.selectable-token--dragging {
+  background: rgba(16, 185, 129, 0.3);
+  outline: 2px dashed #10b981;
+  outline-offset: -2px;
+}
+
+/* 拖拽中的预览 - exclude (浅红) */
+.selectable-token--dragging-exclude {
+  background: rgba(239, 68, 68, 0.3);
+  outline: 2px dashed #ef4444;
+  outline-offset: -2px;
+}
+
+.selectable-text-block__hint {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* ========================================
+   Pending Source Editor
+   ======================================== */
+
+.pending-source-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pending-source-editor__block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pending-source-editor__block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pending-source-editor__block-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+
+/* ========================================
+   Source Excerpt Viewer (Read-only for committed commits)
+   Shows only the semantic text selections, no keyword highlighting
+   ======================================== */
+
+.source-excerpt-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.source-excerpt-viewer--empty {
+  padding: 24px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.source-excerpt-viewer__text {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Commit V2 Section Styles */
+.commit-v2__source-excerpt {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  min-height: 80px;
+}
+
+.commit-v2__generated-output {
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.commit-v2__empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+/* ========================================
+   Pending Commit Summary Panel
+   ======================================== */
+
+.pending-commit-summary {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.pending-commit-summary__title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #166534;
+  margin: 0 0 12px;
+}
+
+.pending-commit-summary__section {
+  margin-bottom: 12px;
+}
+
+.pending-commit-summary__section:last-child {
+  margin-bottom: 0;
+}
+
+.pending-commit-summary__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #4ade80;
+  margin-bottom: 6px;
+}
+
+.pending-commit-summary__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pending-commit-summary__keyword {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.pending-commit-summary__keyword--must {
+  background: #059669;
+  color: #ffffff;
+}
+
+.pending-commit-summary__keyword--mustnt {
+  background: #ef4444;
+  color: #ffffff;
+  text-decoration: line-through;
+}
+
+.pending-commit-summary__text {
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.6;
+  background: #ffffff;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #d1fae5;
 }
 
