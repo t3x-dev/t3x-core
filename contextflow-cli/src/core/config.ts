@@ -76,7 +76,7 @@ export interface AppPreferences {
   };
 }
 
-export const USER_CONFIG_DIR = path.join(os.homedir(), '.contextflow');
+export const USER_CONFIG_DIR = path.join(os.homedir(), '.config', 'contextflow');
 export const USER_CONFIG_JSON_PATH = path.join(USER_CONFIG_DIR, 'config.json');
 const USER_CONFIG_YAML_PATH = path.join(USER_CONFIG_DIR, 'config.yml');
 const USER_CONFIG_YML_PATH = path.join(USER_CONFIG_DIR, 'config.yaml');
@@ -96,6 +96,29 @@ type CliOverrides = {
 };
 
 const cliOverrides = parseCliArgs(process.argv);
+
+// Legacy config directory (deprecated)
+const LEGACY_CONFIG_DIR = path.join(os.homedir(), '.contextflow');
+
+/**
+ * Check for legacy config and warn user to migrate
+ */
+export async function checkLegacyConfig(): Promise<void> {
+  const legacyPaths = [
+    path.join(LEGACY_CONFIG_DIR, 'config.json'),
+    path.join(LEGACY_CONFIG_DIR, 'config.yml'),
+    path.join(LEGACY_CONFIG_DIR, 'config.yaml'),
+  ];
+
+  for (const legacyPath of legacyPaths) {
+    if (await pathExists(legacyPath)) {
+      console.warn(`\n⚠️  Deprecated config location detected: ${legacyPath}`);
+      console.warn(`   Please migrate your config to: ${USER_CONFIG_DIR}/`);
+      console.warn(`   Run: mv ${LEGACY_CONFIG_DIR}/config.* ${USER_CONFIG_DIR}/\n`);
+      break;
+    }
+  }
+}
 
 export async function readUserConfig(): Promise<UserConfig> {
   const candidatePaths = [USER_CONFIG_YAML_PATH, USER_CONFIG_YML_PATH, USER_CONFIG_JSON_PATH];
@@ -180,6 +203,36 @@ export async function loadAppPreferences(): Promise<AppPreferences> {
     },
     trace: resolveTracePreferences(config),
   };
+}
+
+/**
+ * Resolve proxy URL from config or environment
+ * Priority: env.HTTPS_PROXY > env.HTTP_PROXY > config.proxyUrl
+ */
+export function resolveProxyUrl(config: UserConfig): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ??
+    process.env.https_proxy ??
+    process.env.HTTP_PROXY ??
+    process.env.http_proxy ??
+    config.proxyUrl
+  );
+}
+
+/**
+ * Setup proxy environment variables for global-agent
+ * Call this early in the application lifecycle
+ */
+export function setupProxyFromConfig(config: UserConfig): void {
+  const proxyUrl = resolveProxyUrl(config);
+  if (proxyUrl) {
+    // Set environment variables for global-agent and other libraries
+    process.env.GLOBAL_AGENT_HTTP_PROXY = proxyUrl;
+    process.env.GLOBAL_AGENT_HTTPS_PROXY = proxyUrl;
+    // Also set standard proxy env vars for consistency
+    if (!process.env.HTTP_PROXY) process.env.HTTP_PROXY = proxyUrl;
+    if (!process.env.HTTPS_PROXY) process.env.HTTPS_PROXY = proxyUrl;
+  }
 }
 
 /**

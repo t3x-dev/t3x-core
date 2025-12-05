@@ -8,7 +8,7 @@
 import { createServer, Server } from "./index";
 import { ServerConfig, ProviderConfig } from "./types";
 import { loadAppPreferences } from "../core/config";
-import { discoverProjectRoot } from "../core/root";
+import { resolveStorageRoot } from "@contextflow/core";
 
 /**
  * Server manager state
@@ -41,8 +41,8 @@ export async function startEmbeddedServer(options?: {
     }
   }
 
-  // Discover project root to get correct .contextflow directory
-  const projectRoot = await discoverProjectRoot(process.cwd());
+  // Resolve storage root using @contextflow/core
+  const storageRoot = resolveStorageRoot();
 
   // Load user preferences with proper provider configuration
   const preferences = await loadAppPreferences();
@@ -60,7 +60,7 @@ export async function startEmbeddedServer(options?: {
     port: options?.port ?? 8000,
     host: options?.host ?? "127.0.0.1",
     providers,
-    contextflowDir: projectRoot.contextflowDir,
+    contextflowDir: storageRoot.contextflowDir,
   };
 
   const server = createServer(config);

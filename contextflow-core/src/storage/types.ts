@@ -160,6 +160,8 @@ export interface ListConversationsOptions extends ListOptions {
 
 export interface ListTurnsV2Options extends ListOptions {
   conversation_id: string;
+  /** Sort order: 'asc' (oldest first) or 'desc' (newest first). Default: 'asc' */
+  order?: 'asc' | 'desc';
 }
 
 export interface ListBranchesOptions extends ListOptions {

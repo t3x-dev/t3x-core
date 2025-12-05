@@ -1,5 +1,5 @@
 # ContextFlow Configuration Example
-# Copy this file to ~/.contextflow/config.yml and customize
+# Copy this file to ~/.config/contextflow/config.yml and customize
 
 # API Provider Credentials
 providers:
@@ -43,7 +43,7 @@ defaults:
 storage:
   # Local storage
   local:
-    path: ~/.contextflow/storage
+    path: ~/.config/contextflow/storage
     autoBackup: true
     maxBackups: 10
 

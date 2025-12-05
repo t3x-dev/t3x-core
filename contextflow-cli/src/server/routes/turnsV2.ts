@@ -97,6 +97,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
   });
 
   // GET /api/v1/turns - List turns
+  // Query params: conversation_id (required), limit, offset, order (asc|desc)
   router.get("/api/v1/turns", async (ctx, _req, res) => {
     const conversation_id = ctx.query.get("conversation_id");
 
@@ -107,10 +108,12 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
 
     const limit = parseInt(ctx.query.get("limit") ?? "100", 10);
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
+    const orderParam = ctx.query.get("order");
+    const order = orderParam === "desc" ? "desc" : "asc";
 
     try {
-      const turns = listTurnsV2({ conversation_id, limit, offset });
-      sendJson(res, 200, successResponse({ turns, conversation_id, limit, offset }));
+      const turns = listTurnsV2({ conversation_id, limit, offset, order });
+      sendJson(res, 200, successResponse({ turns, conversation_id, limit, offset, order }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       sendJson(res, 500, errorResponse("LIST_FAILED", message));

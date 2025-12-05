@@ -26,7 +26,7 @@ type CanvasState = {
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   commitPendingCommit: (id: string) => void
   addPendingCommitFromConversation: (conversationId: string) => void
-  addConversationFromCommit: (commitId: string) => void
+  addConversationFromCommit: (commitId: string) => Promise<void>
   addPendingCommitFromCommit: (commitId: string) => void
   createMergePendingCommit: (commitId: string) => void
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode
@@ -464,6 +464,7 @@ const conversationToNode = (
       timestamp: conv.created_at,
       tags: ['conversation'],
       kind: 'conversation',
+      conversationId: conv.conversation_id, // Full ID for API calls
     },
   }
 }
@@ -493,6 +494,7 @@ const commitToNode = (
       branchType: commit.branch === 'main' ? 'main' : 'branch',
       branchName: commit.branch !== 'main' ? commit.branch : undefined,
       commitStatus: 'committed',
+      commitHash: commit.commit_hash, // Full hash for API calls
     },
   }
 }
@@ -554,23 +556,34 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const conversations = convResponse.conversations
       const commits = commitResponse.commits
 
-      // Build turn_hash → conversation_id map by fetching turns for each conversation
-      // This is needed to link commits (via turn_window) to their source conversations
+      // Build turn_hash → conversation_id map
+      // Optimization: Only fetch turns for commits that have turn_window
+      // Instead of fetching all turns for all conversations
       const turnToConvMap = new Map<string, string>()
 
-      // Fetch turns for each conversation to build the mapping
-      await Promise.all(
-        conversations.map(async (conv) => {
-          try {
-            const turnsResponse = await api.listTurns(projectId, conv.conversation_id, 200, 0)
-            turnsResponse.turns.forEach((turn) => {
-              turnToConvMap.set(turn.turn_hash, conv.conversation_id)
-            })
-          } catch {
-            // Skip if turns fetch fails for a conversation
-          }
-        })
-      )
+      // Collect unique turn hashes we need to look up (both start and end)
+      const turnHashesToLookup = new Set<string>()
+      commits.forEach((commit) => {
+        if (commit.turn_window) {
+          turnHashesToLookup.add(commit.turn_window.start_turn_hash)
+          turnHashesToLookup.add(commit.turn_window.end_turn_hash)
+        }
+      })
+
+      // If we have turns to look up, fetch them via individual turn detail API
+      // This is more efficient than fetching all turns for all conversations
+      if (turnHashesToLookup.size > 0) {
+        await Promise.all(
+          Array.from(turnHashesToLookup).map(async (turnHash) => {
+            try {
+              const turn = await api.getTurn(turnHash)
+              turnToConvMap.set(turn.turn_hash, turn.conversation_id)
+            } catch {
+              // Skip if turn fetch fails
+            }
+          })
+        )
+      }
 
       // Convert to canvas nodes
       const convNodes = conversations.map((conv, i) =>
@@ -587,15 +600,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const edges = buildEdgesFromCommits(commits)
 
       // Add conversation → commit edges based on turn_window
+      // Verify both start and end turns belong to the same conversation
       const convIds = new Set(conversations.map(c => c.conversation_id))
       commits.forEach((commit) => {
         if (commit.turn_window) {
           // Find which conversation this commit's turn_window belongs to
-          const convId = turnToConvMap.get(commit.turn_window.start_turn_hash)
-          if (convId && convIds.has(convId)) {
+          const startConvId = turnToConvMap.get(commit.turn_window.start_turn_hash)
+          const endConvId = turnToConvMap.get(commit.turn_window.end_turn_hash)
+          // Only create edge if both turns belong to the same conversation
+          if (startConvId && startConvId === endConvId && convIds.has(startConvId)) {
             edges.push({
-              id: `conv-${convId}-${commit.commit_hash}`,
-              source: convId,
+              id: `conv-${startConvId}-${commit.commit_hash}`,
+              source: startConvId,
               target: commit.commit_hash,
               type: edgeType,
               animated: false,
@@ -808,26 +824,35 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  addConversationFromCommit: (commitId) =>
-    set((state) => {
-      const source = state.nodes.find(
-        (node) => node.id === commitId && node.data.kind === 'commit',
-      )
-      if (!source) {
-        return {}
-      }
+  addConversationFromCommit: async (commitId) => {
+    const state = get()
+    const source = state.nodes.find(
+      (node) => node.id === commitId && node.data.kind === 'commit',
+    )
+    if (!source || !state.projectId) {
+      console.warn('addConversationFromCommit: source commit not found or no projectId')
+      return
+    }
+
+    try {
+      // Create conversation via API
+      const title = `Conversation from ${source.data.entryId}`
+      const conversation = await api.createConversation(state.projectId, title)
+
+      // Add node using the real conversation ID from API
       const newNode: Node<CanvasNodeData> = {
-        id: nextNodeId(),
+        id: conversation.conversation_id,
         type: 'conversation',
         position: computeAttachedPosition(source, 'conversation', commitQuickOffset),
         data: {
-          entryId: `CONV-${nodeCounter}`,
-          title: `Conversation from ${source.data.entryId}`,
-          summary: 'Capture the next exchange after this commit.',
+          entryId: conversation.conversation_id.slice(0, 12),
+          title: conversation.title || title,
+          summary: '0 turns',
           status: 'raw-input',
-          timestamp: 'just now',
+          timestamp: conversation.created_at,
           tags: ['conversation'],
           kind: 'conversation',
+          conversationId: conversation.conversation_id, // Full ID for API calls
         },
       }
       const newEdge: Edge = {
@@ -838,11 +863,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         animated: false,
         style: edgeStyle,
       }
-      return {
-        nodes: [...state.nodes, newNode],
-        edges: [...state.edges, newEdge],
-      }
-    }),
+
+      set({
+        nodes: [...get().nodes, newNode],
+        edges: [...get().edges, newEdge],
+      })
+    } catch (err) {
+      console.error('Failed to create conversation:', err)
+    }
+  },
 
   addPendingCommitFromCommit: (commitId) =>
     set((state) => {

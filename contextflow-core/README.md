@@ -676,7 +676,7 @@ Export with: `:export "myfile.cfpack"` (inside chat) or `cf export myfile.cfpack
 - ✅ Project-local `.contextflow/` directory structure
 - ✅ JSONL format for conversation turns
 - ✅ Metadata JSON for project and branch info
-- ✅ Global config file `~/.contextflowrc`
+- ✅ Global config file `~/.config/contextflow/config.json`
 
 **Layer 2: Lineage Protocol**
 - ✅ Turn chain with SHA-256 hashing

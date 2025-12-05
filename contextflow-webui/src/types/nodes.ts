@@ -103,4 +103,8 @@ export interface CanvasNodeData {
   leafConfig?: LeafNodeConfig
   // Commit status: pending (editable) or committed (read-only)
   commitStatus?: CommitStatus
+  // Full conversation_id for conversation nodes (entryId is truncated for display)
+  conversationId?: string
+  // Full commit_hash for commit nodes
+  commitHash?: string
 }

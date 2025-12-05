@@ -17,4 +17,6 @@ export { type LLMGenerateOptions, type LLMProvider, LLMProviderError, } from './
 export { type PosTag, type Polarity, type FacetType, type Keyword, type Ring1Output, type Facet, type Ring2Output, type Segment, type Ring3Output, type RingOutput, createEmptyRing1, createEmptyRing2, createEmptyRing3, createEmptyRingOutput, type PolarityRule, type PreferenceRelation, PolarityRuleEngine, createPolarityRuleEngine, type ExtractorConfig, RingExtractor, createRingExtractor, } from './extractors';
 export { DiffType, type SegmentMatch, type SegmentDiff, type DiffSegment, type DiffResult, type DiffStats, calculateDiffStats, type DiffEngineConfig, DiffEngine, createDiffEngine, } from './diff';
 export { ConflictType, type MergeSource, type MergeFacet, type AutoMergedFacet, type MergeConflict, type MergeResult, type MergeStats, type MergeEngineOptions, MergeEngine, createMergeEngine, } from './merge';
+export { openDB, getDb, closeDB, getDbPath, } from './db';
+export * from './storage';
 //# sourceMappingURL=index.d.ts.map

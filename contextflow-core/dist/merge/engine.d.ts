@@ -54,7 +54,13 @@ export declare class MergeEngine {
      */
     applyResolutions(mergeResult: MergeResult, resolutions: Map<string, string>): MergeResult;
     /**
+     * Get the merge key for a facet
+     * Priority: facet > id > type:text hash
+     */
+    private getFacetKey;
+    /**
      * Build facet lookup map
+     * Groups facets by key, with support for multiple matching strategies
      */
     private buildFacetMap;
     /**

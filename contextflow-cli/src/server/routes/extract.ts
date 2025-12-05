@@ -31,7 +31,7 @@ function createNLPProvider(providers: ProviderConfig): NLPProvider {
     throw new NLPProviderError(
       "google-cloud",
       undefined,
-      "Google Cloud NLP API key not configured. Set GOOGLE_CLOUD_NLP_KEY in ~/.contextflow/config.json"
+      "Google Cloud NLP API key not configured. Set GOOGLE_CLOUD_NLP_KEY in ~/.config/contextflow/config.json"
     );
   }
   return createGoogleCloudNLPProvider({

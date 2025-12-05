@@ -10,9 +10,27 @@
  */
 
 import type { ServerResponse } from "node:http";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const undici = require("undici");
 import type { Router } from "../router";
 import { sendJson } from "../router";
 import { successResponse, errorResponse, ProviderConfig } from "../types";
+
+// ============================================================================
+// Proxy Helper
+// ============================================================================
+
+/**
+ * Get proxy URL from environment variables
+ */
+function getProxyUrl(): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  );
+}
 
 // ============================================================================
 // Types
@@ -86,7 +104,11 @@ async function callClaudeNonStreaming(
   const systemMessage = messages.find(m => m.role === "system");
   const otherMessages = messages.filter(m => m.role !== "system");
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // Setup proxy if available
+  const proxyUrl = getProxyUrl();
+  const dispatcher = proxyUrl ? new undici.ProxyAgent(proxyUrl) : undefined;
+
+  const { statusCode, body } = await undici.request("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -103,14 +125,16 @@ async function callClaudeNonStreaming(
         content: m.content,
       })),
     }),
+    dispatcher,
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Claude API error: ${response.status} ${errorBody}`);
+  const responseText = await body.text();
+
+  if (statusCode !== 200) {
+    throw new Error(`Claude API error: ${statusCode} ${responseText}`);
   }
 
-  const data = await response.json() as {
+  const data = JSON.parse(responseText) as {
     content: Array<{ type: string; text: string }>;
     model: string;
     usage?: { input_tokens: number; output_tokens: number };
@@ -145,52 +169,59 @@ async function streamClaudeResponse(
   const systemMessage = messages.find(m => m.role === "system");
   const otherMessages = messages.filter(m => m.role !== "system");
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      stream: true,
-      ...(systemMessage && { system: systemMessage.content }),
-      messages: otherMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
-    }),
-  });
+  // Setup proxy if available
+  const proxyUrl = getProxyUrl();
+  const dispatcher = proxyUrl ? new undici.ProxyAgent(proxyUrl) : undefined;
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    const errorEvent = { type: "error", message: `Claude API error: ${response.status} ${errorBody}` };
-    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
-    res.end();
-    return;
-  }
-
-  if (!response.body) {
-    const errorEvent = { type: "error", message: "No response body" };
-    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
-    res.end();
-    return;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
-  let accumulatedContent = "";
+  let statusCode: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
 
   try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
+    const response = await undici.request("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        stream: true,
+        ...(systemMessage && { system: systemMessage.content }),
+        messages: otherMessages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+      }),
+      dispatcher,
+    });
+    statusCode = response.statusCode;
+    body = response.body;
+  } catch (err) {
+    const errorEvent = { type: "error", message: `Request failed: ${(err as Error).message}` };
+    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+    res.end();
+    return;
+  }
 
-      buffer += decoder.decode(value, { stream: true });
+  if (statusCode !== 200) {
+    const errorBody = await body.text();
+    const errorEvent = { type: "error", message: `Claude API error: ${statusCode} ${errorBody}` };
+    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+    res.end();
+    return;
+  }
+
+  let buffer = "";
+  let accumulatedContent = "";
+  let sentDone = false;
+
+  try {
+    for await (const chunk of body) {
+      buffer += chunk.toString();
 
       // Process SSE events from Claude
       const lines = buffer.split("\n");
@@ -217,14 +248,15 @@ async function streamClaudeResponse(
             // Send token event (matching Python format)
             const tokenEvent = { type: "token", content: token };
             res.write(`data: ${JSON.stringify(tokenEvent)}\n\n`);
-          } else if (event.type === "message_stop") {
-            // Send done event
+          } else if (event.type === "message_stop" && !sentDone) {
+            // Send done event (only once)
             const doneEvent = {
               type: "done",
               model,
               content: accumulatedContent,
             };
             res.write(`data: ${JSON.stringify(doneEvent)}\n\n`);
+            sentDone = true;
           }
         } catch {
           // Ignore parse errors
@@ -232,8 +264,8 @@ async function streamClaudeResponse(
       }
     }
 
-    // Ensure done event is sent
-    if (accumulatedContent) {
+    // Ensure done event is sent if we haven't sent it yet
+    if (accumulatedContent && !sentDone) {
       const doneEvent = {
         type: "done",
         model,
