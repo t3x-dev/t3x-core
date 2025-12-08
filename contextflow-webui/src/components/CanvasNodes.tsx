@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from 'react'
 import type { ComponentType, ReactNode } from 'react'
 import { GitCommit, GitMerge, PenSquare, Sparkles, MessageSquare, MessageSquarePlus, Plus, Twitter, FileText, Mail, MessageCircle } from 'lucide-react'

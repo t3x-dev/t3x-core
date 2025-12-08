@@ -10,7 +10,7 @@ export function tokenizeText(text: string): TextToken[] {
   // - English words
   // - Numbers
   // - Punctuation and whitespace
-  const regex = /[\u4e00-\u9fff]|[a-zA-Z]+|[0-9]+|[，。！？、；：""''（）《》【】\s]+|[.,!?;:'"()\[\]{}<>\s]+/g
+  const regex = /[\u4e00-\u9fff]|[a-zA-Z]+|[0-9]+|[，。！？、；：""''（）《》【】\s]+|[.,!?;:'"()[\]{}<>\s]+/g
 
   let match
   let index = 0
@@ -18,7 +18,7 @@ export function tokenizeText(text: string): TextToken[] {
   while ((match = regex.exec(text)) !== null) {
     const tokenText = match[0]
     // Skip pure whitespace tokens but keep punctuation
-    if (tokenText.trim() || /[，。！？、；：""''（）《》【】.,!?;:'"()\[\]{}<>]/.test(tokenText)) {
+    if (tokenText.trim() || /[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>]/.test(tokenText)) {
       tokens.push({
         id: `token-${index}`,
         text: tokenText,
