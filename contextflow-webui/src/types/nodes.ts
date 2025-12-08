@@ -60,6 +60,46 @@ export interface ConversationConstraints {
   mustnt_have: string[]
 }
 
+// ============================================
+// New: Free-form text selection types
+// ============================================
+
+// A single token (word/punctuation) in the source text
+export interface TextToken {
+  id: string
+  text: string
+  index: number  // Position in the token array
+}
+
+// A selected range - defined by start and end token indices
+export interface TextSelection {
+  id: string
+  startIndex: number  // Inclusive
+  endIndex: number    // Inclusive
+  type: 'include' | 'exclude'  // include = 浅绿, exclude = 浅红
+}
+
+// A keyword marker within a selection (深绿)
+export interface KeywordMarker {
+  id: string
+  tokenIndex: number  // Which token is marked as keyword
+  constraint: 'must_have' | 'mustnt_have'
+}
+
+// Source text block with all user selections
+export interface SourceTextBlock {
+  id: string
+  originalText: string           // The full original text
+  tokens: TextToken[]            // Tokenized text
+  selections: TextSelection[]    // User-selected ranges (浅绿)
+  keywords: KeywordMarker[]      // Marked keywords within selections (深绿)
+}
+
+// Pending commit source data - replaces old clause-based system for pending commits
+export interface PendingCommitSource {
+  textBlocks: SourceTextBlock[]  // Multiple source text blocks
+}
+
 // Draft-level constraint overrides
 export interface DraftConstraintOverrides {
   disabledClauseIds: string[]
@@ -107,4 +147,6 @@ export interface CanvasNodeData {
   conversationId?: string
   // Full commit_hash for commit nodes
   commitHash?: string
+  // Pending commit source data with free-form text selection
+  pendingSource?: PendingCommitSource
 }

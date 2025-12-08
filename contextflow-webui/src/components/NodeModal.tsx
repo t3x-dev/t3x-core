@@ -7,17 +7,23 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Settings, PenSquare, MessageSquarePlus, Check, GitBranch, Clock, Tag, Link2, Send, RefreshCw, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
+import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
 import * as api from '../services/api'
+import { PendingSourceEditor, SourceExcerptViewer } from './SelectableTextBlock'
+import {
+  getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
+  getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
+  extractWithThresholds,
+} from '../utils/tokenizer'
 
 const bridgeTemplates = [
   { id: 'prose', name: 'prose', description: 'General prose extraction' },
   { id: 'plan', name: 'plan', description: 'Extract action items and planning structure' },
   { id: 'story', name: 'story', description: 'Narrative extraction with flow preservation' },
-  { id: 'merge', name: 'merge', description: 'Combine multiple sources into unified view' },
+  { id: 'summary', name: 'summary', description: 'Concise summary of key points' },
   { id: 'refine', name: 'refine', description: 'Polish and tighten existing content' },
 ]
 
@@ -149,15 +155,15 @@ function generateResultText(phrases: Phrase[]): string {
   return includedPhrases.map(p => p.text).join('. ') + '.'
 }
 
-// Get all must_have keywords from included phrases
-function getMustHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+// Get all must_have keywords from included phrases (legacy phrase-based system)
+function getMustHaveKeywordsLegacy(phrases: Phrase[]): PhraseKeyword[] {
   return phrases
     .filter(p => p.included)
     .flatMap(p => p.keywords.filter(kw => !kw.isMustnt))
 }
 
-// Get all mustnt_have keywords from included phrases
-function getMustntHaveKeywords(phrases: Phrase[]): PhraseKeyword[] {
+// Get all mustnt_have keywords from included phrases (legacy phrase-based system)
+function getMustntHaveKeywordsLegacy(phrases: Phrase[]): PhraseKeyword[] {
   return phrases
     .filter(p => p.included)
     .flatMap(p => p.keywords.filter(kw => kw.isMustnt))
@@ -170,7 +176,9 @@ function renderPhraseWithKeywords(
   phrase: Phrase,
   canToggle: boolean,
   onPhraseClick: () => void,
-  onKeywordClick: (keywordId: string) => void
+  onKeywordClick: (keywordId: string) => void,
+  hoveredKeywordText: string | null,
+  onKeywordHover: (text: string | null) => void
 ): React.ReactNode[] {
   const { text, keywords, included } = phrase
 
@@ -218,14 +226,17 @@ function renderPhraseWithKeywords(
 
     // Add keyword (clickable to toggle must/mustnt, only when phrase is included)
     const keywordEndIndex = kw.startIndex + kw.originalWord.length
+    const isHovered = hoveredKeywordText === kw.text.toLowerCase()
     parts.push(
       <span
         key={`kw-${kw.id}`}
-        className={`draft-svtz__keyword ${kw.isMustnt ? 'draft-svtz__keyword--mustnt' : 'draft-svtz__keyword--must'} ${!included ? 'draft-svtz__keyword--disabled' : ''}`}
+        className={`draft-svtz__keyword ${kw.isMustnt ? 'draft-svtz__keyword--mustnt' : 'draft-svtz__keyword--must'} ${!included ? 'draft-svtz__keyword--disabled' : ''} ${isHovered ? 'draft-svtz__keyword--hovered' : ''}`}
         onClick={(e) => {
           e.stopPropagation()
           if (canToggle && included) onKeywordClick(kw.id)
         }}
+        onMouseEnter={() => onKeywordHover(kw.text.toLowerCase())}
+        onMouseLeave={() => onKeywordHover(null)}
         title={
           !canToggle ? 'Complete Step 1 to edit' :
           !included ? 'Include phrase first to edit keywords' :
@@ -259,48 +270,6 @@ function renderPhraseWithKeywords(
   return parts
 }
 
-// Helper to render phrase in RESULT with keyword highlighting (read-only)
-function renderResultPhraseWithKeywords(phrase: Phrase): React.ReactNode[] {
-  const { text, keywords } = phrase
-
-  if (keywords.length === 0) {
-    return [<span key="text">{text}</span>]
-  }
-
-  // Sort keywords by position
-  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
-
-  const parts: React.ReactNode[] = []
-  let lastIndex = 0
-
-  sortedKeywords.forEach((kw, idx) => {
-    // Add text before this keyword
-    if (kw.startIndex > lastIndex) {
-      parts.push(<span key={`text-${idx}`}>{text.slice(lastIndex, kw.startIndex)}</span>)
-    }
-
-    // Add keyword with appropriate styling
-    const keywordEndIndex = kw.startIndex + kw.originalWord.length
-    parts.push(
-      <span
-        key={`kw-${kw.id}`}
-        className={`draft-svtz__result-inline-keyword ${kw.isMustnt ? 'draft-svtz__result-inline-keyword--mustnt' : 'draft-svtz__result-inline-keyword--must'}`}
-      >
-        {text.slice(kw.startIndex, keywordEndIndex)}
-      </span>
-    )
-
-    lastIndex = keywordEndIndex
-  })
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>)
-  }
-
-  return parts
-}
-
 export function NodeModal({
   node,
   onClose,
@@ -311,28 +280,11 @@ export function NodeModal({
   onBranchNameChange,
   quickActions,
 }: NodeModalProps) {
-  if (!node) {
-    return null
-  }
-
-  const { data } = node
-  const isCommit = data.kind === 'commit'
-  const isConversation = data.kind === 'conversation'
-  // Pending commit (previously "draft") - editable state before committing
-  const isPendingCommit = isCommit && data.commitStatus === 'pending'
-  // Committed commit - read-only state
-  const isCommittedCommit = isCommit && data.commitStatus !== 'pending'
-  const isMergeDraft = isPendingCommit && data.bridgePrompt === 'merge' && !!data.mergeConfig
-  const shouldShowBranchSelect =
-    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
-  const requireBranchName =
-    !isMergeDraft &&
-    ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
-      draftBranchMode === 'branch-only')
+  // ========== ALL HOOKS MUST BE AT THE TOP - before any conditional returns ==========
 
   // ========== Single View Two Zones State ==========
   // Config state (STEP 1)
-  const [template, setTemplate] = useState(data.bridgePrompt || 'prose')
+  const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose')
   const [cosineThreshold, setCosineThreshold] = useState(0.75)
   const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
 
@@ -342,8 +294,10 @@ export function NodeModal({
   // Source boxes with phrases (SOURCE column) - baseline from Step 1
   const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
 
-  // Loading state for Refresh
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  // New: Text blocks for free-form selection (from pendingSource)
+  const [textBlocks, setTextBlocks] = useState<SourceTextBlock[]>(
+    node?.data.pendingSource?.textBlocks || []
+  )
 
   // Commit state
   const [isCommitting, setIsCommitting] = useState(false)
@@ -358,24 +312,9 @@ export function NodeModal({
 
   // Divider positions
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
-  const [sourceResultDividerPos, setSourceResultDividerPos] = useState(50) // percentage for SOURCE | RESULT
 
-  // Refs
-  const mainContentRef = useRef<HTMLDivElement>(null)
-  const draftBodyRef = useRef<HTMLDivElement>(null)
-
-  // Computed: all phrases from all source boxes
-  const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
-
-  // Computed: included phrases count
-  const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
-
-  // Computed: must_have and mustnt_have keywords
-  const mustHaveKeywords = useMemo(() => getMustHaveKeywords(allPhrases), [allPhrases])
-  const mustntHaveKeywords = useMemo(() => getMustntHaveKeywords(allPhrases), [allPhrases])
-
-  // Computed: result text from included phrases
-  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases])
+  // Hovered keyword (for cross-area highlighting)
+  const [hoveredKeywordText, setHoveredKeywordText] = useState<string | null>(null)
 
   // Sidebar state for conversation
   const [showSettings, setShowSettings] = useState(false)
@@ -383,7 +322,6 @@ export function NodeModal({
   // Chat state for conversation
   const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Chat pagination state
@@ -395,13 +333,141 @@ export function NodeModal({
 
   // Resizable sidebar state (conversation)
   const [sidebarWidth, setSidebarWidth] = useState(280)
-  const isDraggingRef = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   // Commit resizable state
   const [commitLeftWidth, setCommitLeftWidth] = useState(280)
   const [commitRightWidth, setCommitRightWidth] = useState(280)
+
+  // Refs
+  const mainContentRef = useRef<HTMLDivElement>(null)
+  const draftBodyRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const commitContainerRef = useRef<HTMLDivElement>(null)
+
+  // Handler for keyword hover
+  const handleKeywordHover = useCallback((text: string | null) => {
+    setHoveredKeywordText(text)
+  }, [])
+
+  // Computed: all phrases from all source boxes (legacy system)
+  const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
+
+  // Computed: included phrases count (legacy)
+  const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
+
+  // Computed: must_have and mustnt_have keywords (legacy)
+  const mustHaveKeywordsLegacy = useMemo(() => getMustHaveKeywordsLegacy(allPhrases), [allPhrases])
+  const mustntHaveKeywordsLegacy = useMemo(() => getMustntHaveKeywordsLegacy(allPhrases), [allPhrases])
+
+  // Computed: result text from included phrases (legacy)
+  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases])
+
+  // ========== New free-form selection computed values ==========
+  // Check if we have new-style pendingSource data
+  const hasNewSourceData = textBlocks.length > 0
+
+  // Computed: must_have keywords from all blocks
+  const mustHaveKeywordsNew = useMemo(() => {
+    return textBlocks.flatMap(block => getMustHaveKeywordsFromBlocks(block.tokens, block.keywords))
+  }, [textBlocks])
+
+  // Computed: mustnt_have keywords from all blocks
+  const mustntHaveKeywordsNew = useMemo(() => {
+    return textBlocks.flatMap(block => getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords))
+  }, [textBlocks])
+
+  // Computed: total selections count
+  const selectionsCount = useMemo(() => {
+    return textBlocks.reduce((acc, block) => acc + block.selections.length, 0)
+  }, [textBlocks])
+
+  // Persist text block edits (selections/keywords) back to canvas store
+  const handleTextBlocksChange = useCallback(
+    (updatedBlocks: SourceTextBlock[]) => {
+      setTextBlocks(updatedBlocks)
+      onUpdate({
+        pendingSource: {
+          textBlocks: updatedBlocks,
+        },
+      })
+    },
+    [onUpdate]
+  )
+
+  // Derive node-dependent values
+  const data = node?.data
+  const isCommit = data?.kind === 'commit'
+  const isConversation = data?.kind === 'conversation'
+  const isPendingCommit = isCommit && data?.commitStatus === 'pending'
+  const isCommittedCommit = isCommit && data?.commitStatus !== 'pending'
+  const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig
+  const shouldShowBranchSelect =
+    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
+  const requireBranchName =
+    !isMergeDraft &&
+    ((draftBranchMode === 'select' && data?.pendingBranch === 'branch') ||
+      draftBranchMode === 'branch-only')
+
+  // Initialize source boxes and textBlocks from baseline summary
+  // Note: setState in effect is intentional here for initialization based on props
+  useEffect(() => {
+    if (isPendingCommit && data?.baselineSummary) {
+      // Determine source type based on title or sourceConversationId
+      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
+      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
+      const sourceTitle = isFromCommit
+        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+
+      // Legacy: Initialize sourceBoxes
+      const initialBox: SourceBox = {
+        id: 'source-1',
+        title: sourceTitle,
+        type: sourceType,
+        content: data.baselineSummary,
+        expanded: true,
+        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
+      }
+       
+      setSourceBoxes([initialBox])
+
+      // New: Initialize textBlocks with model extraction based on thresholds
+      // Only initialize if not already set from data.pendingSource
+      if (!data.pendingSource?.textBlocks?.length) {
+        const initialTextBlock = extractWithThresholds(
+          'block-1',
+          data.baselineSummary,
+          cosineThreshold,
+          keywordsThreshold
+        )
+        setTextBlocks([initialTextBlock])
+      }
+    }
+  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, data?.pendingSource?.textBlocks?.length, keywordsThreshold, cosineThreshold])
+
+  // Auto re-extract when thresholds change (only when not locked)
+  // Note: setState in effect is intentional here to sync derived state with props
+  useEffect(() => {
+    if (isPendingCommit && data?.baselineSummary && !configLocked) {
+      const updatedTextBlock = extractWithThresholds(
+        'block-1',
+        data.baselineSummary,
+        cosineThreshold,
+        keywordsThreshold
+      )
+       
+      setTextBlocks([updatedTextBlock])
+    }
+  }, [cosineThreshold, keywordsThreshold, configLocked, isPendingCommit, data?.baselineSummary])
+
+  // Scroll to bottom when new messages added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const addCommitAction = useMemo(() => quickActions?.find(a => a.key === 'add-commit'), [quickActions])
 
   const handleDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -504,30 +570,6 @@ export function NodeModal({
     document.addEventListener('mouseup', handleMouseUp)
   }
 
-  // SOURCE | RESULT divider handler
-  const handleSourceResultDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!mainContentRef.current) return
-      const rect = mainContentRef.current.getBoundingClientRect()
-      const percentage = ((moveEvent.clientX - rect.left) / rect.width) * 100
-      setSourceResultDividerPos(Math.max(30, Math.min(70, percentage)))
-    }
-
-    const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
-
   // Toggle source box expansion
   const toggleSourceBoxExpand = useCallback((boxId: string) => {
     setSourceBoxes(prev => prev.map(sb =>
@@ -587,22 +629,7 @@ export function NodeModal({
       }
       setSourceBoxes([initialBox])
     }
-  }, [isPendingCommit, data.baselineSummary, data.title, data.sourceConversationId, keywordsThreshold])
-
-  // Handle Refresh - re-extract with current config
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true)
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 800))
-
-    // Re-extract phrases based on new config
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
-    })))
-
-    setIsRefreshing(false)
-  }, [keywordsThreshold])
+  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, keywordsThreshold])
 
   // Handle Proceed - lock Step 1 config and enable Step 2 editing
   const handleProceed = useCallback(() => {
@@ -709,7 +736,7 @@ export function NodeModal({
     } finally {
       setIsCommitting(false)
     }
-  }, [projectId, data.sourceConversationId, data.title, data.pendingBranch, data.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
+  }, [projectId, data?.sourceConversationId, data?.title, data?.pendingBranch, data?.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -784,7 +811,7 @@ export function NodeModal({
       abortController.abort()
       loadMoreAbortRef.current?.abort()
     }
-  }, [data.kind, data.conversationId, projectId])
+  }, [data?.kind, data?.conversationId, projectId])
 
   // Load more (older) messages when scrolling to top
   const loadMoreMessages = useCallback(async () => {
@@ -854,7 +881,7 @@ export function NodeModal({
         setIsLoadingMore(false)
       }
     }
-  }, [projectId, data.conversationId, chatOffset, chatHasMore, isLoadingMore])
+  }, [projectId, data?.conversationId, chatOffset, chatHasMore, isLoadingMore])
 
   // Handle scroll to detect when user reaches top
   const handleChatScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -865,21 +892,19 @@ export function NodeModal({
     }
   }, [chatHasMore, isLoadingMore, isChatLoading, loadMoreMessages])
 
-  const conversationAction = useMemo(() => quickActions?.find(a => a.key === 'add-draft'), [quickActions])
-
   // Chat streaming state
   const [isChatStreaming, setIsChatStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [chatError, setChatError] = useState<string | null>(null)
 
   // Capture current values for use in async callback (avoid stale closures)
-  const conversationIdRef = useRef(data.conversationId)
-  const nodeKindRef = useRef(data.kind)
+  const conversationIdRef = useRef(data?.conversationId)
+  const nodeKindRef = useRef(data?.kind)
   const chatMessagesRef = useRef(chatMessages)
   useEffect(() => {
-    conversationIdRef.current = data.conversationId
-    nodeKindRef.current = data.kind
-  }, [data.conversationId, data.kind])
+    conversationIdRef.current = data?.conversationId
+    nodeKindRef.current = data?.kind
+  }, [data?.conversationId, data?.kind])
   useEffect(() => {
     chatMessagesRef.current = chatMessages
   }, [chatMessages])
@@ -985,7 +1010,7 @@ export function NodeModal({
       setIsChatStreaming(false)
       setStreamingContent('') // Clear any residual streaming content
     }
-  }, [chatInput, isChatStreaming, isChatLoading, projectId, data.title, onUpdate]) // chatMessages accessed via ref to avoid frequent rebuilds
+  }, [chatInput, isChatStreaming, isChatLoading, projectId, data?.title, onUpdate]) // chatMessages accessed via ref to avoid frequent rebuilds
 
   const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1015,17 +1040,18 @@ export function NodeModal({
               >
                 <Settings size={18} />
               </button>
-              {conversationAction && (
+              {addCommitAction && (
                 <button
                   className="modal-v2__primary-btn"
                   onClick={() => {
-                    conversationAction.onClick()
+                    addCommitAction.onClick()
                     onClose()
                   }}
-                  disabled={conversationAction.disabled}
+                  disabled={addCommitAction.disabled}
+                  title="Create a pending commit node from this conversation"
                 >
-                  <PenSquare size={16} />
-                  <span>Create Draft</span>
+                  <GitCommit size={16} />
+                  <span>Create Commit</span>
                 </button>
               )}
               <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
@@ -1287,20 +1313,12 @@ export function NodeModal({
                       <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
                     </div>
 
-                    {/* Refresh + Proceed Buttons */}
+                    {/* Proceed Button */}
                     <div className="draft-svtz__step-actions">
-                      <button
-                        className="draft-svtz__refresh-btn"
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                      >
-                        <RefreshCw size={16} className={isRefreshing ? 'draft-svtz__spin' : ''} />
-                        <span>Refresh</span>
-                      </button>
                       <button
                         className="draft-svtz__proceed-btn"
                         onClick={handleProceed}
-                        disabled={sourceBoxes.length === 0 || isRefreshing}
+                        disabled={textBlocks.length === 0 && sourceBoxes.length === 0}
                         title="Lock configuration and proceed to curation"
                       >
                         <Check size={16} />
@@ -1371,13 +1389,25 @@ export function NodeModal({
                   /* Enabled state: Show stats and commit button */
                   <>
                     <div className="draft-svtz__stats">
-                      <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
-                      <span className="draft-svtz__stat">{mustHaveKeywords.length} must</span>
-                      <span className="draft-svtz__stat">{mustntHaveKeywords.length} mustnt</span>
+                      {hasNewSourceData ? (
+                        <>
+                          <span className="draft-svtz__stat">{selectionsCount} selections</span>
+                          <span className="draft-svtz__stat">{mustHaveKeywordsNew.length} must</span>
+                          <span className="draft-svtz__stat">{mustntHaveKeywordsNew.length} mustnt</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
+                          <span className="draft-svtz__stat">{mustHaveKeywordsLegacy.length} must</span>
+                          <span className="draft-svtz__stat">{mustntHaveKeywordsLegacy.length} mustnt</span>
+                        </>
+                      )}
                     </div>
 
                     <p className="draft-svtz__step-hint">
-                      Click phrases in SOURCE to toggle inclusion
+                      {hasNewSourceData
+                        ? 'Drag to select text · Click to mark keywords'
+                        : 'Click phrases in SOURCE to toggle inclusion'}
                     </p>
 
                     {/* Validation errors */}
@@ -1412,7 +1442,7 @@ export function NodeModal({
                     <button
                       className="draft-svtz__commit-btn"
                       onClick={handleCommit}
-                      disabled={includedPhrasesCount === 0 || isCommitting}
+                      disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) || isCommitting}
                     >
                       {isCommitting ? (
                         <>
@@ -1439,21 +1469,29 @@ export function NodeModal({
               <div className="draft-svtz__divider-handle" />
             </div>
 
-            {/* ========== MAIN CONTENT: SOURCE + RESULT ========== */}
-            <div className="draft-svtz__main" ref={mainContentRef}>
-              {/* SOURCE Column */}
-              <div className="draft-svtz__source" style={{ width: `${sourceResultDividerPos}%` }}>
+            {/* ========== MAIN CONTENT: SOURCE ========== */}
+            <div className="draft-svtz__main draft-svtz__main--full" ref={mainContentRef}>
+              {/* SOURCE Column - Full Width */}
+              <div className="draft-svtz__source draft-svtz__source--full">
                 <div className="draft-svtz__column-header">
                   <h3>SOURCE</h3>
                 </div>
                 <div className="draft-svtz__source-content">
-                  {sourceBoxes.length === 0 ? (
+                  {/* New free-form text selection UI */}
+                  {hasNewSourceData ? (
+                    <PendingSourceEditor
+                      blocks={textBlocks}
+                      onChange={handleTextBlocksChange}
+                      readOnly={!configLocked}
+                    />
+                  ) : sourceBoxes.length === 0 ? (
                     <div className="draft-svtz__source-empty">
                       <MessageSquarePlus size={32} strokeWidth={1} />
                       <p>No source content</p>
                       <span>Connect upstream conversation or commit</span>
                     </div>
                   ) : (
+                    /* Legacy phrase-based UI */
                     sourceBoxes.map((box) => (
                       <div key={box.id} className="draft-svtz__source-box">
                         {/* Source Box Header */}
@@ -1491,7 +1529,9 @@ export function NodeModal({
                                     phrase,
                                     canToggle,
                                     () => togglePhraseInclude(phrase.id),
-                                    (kwId) => toggleKeywordMustnt(phrase.id, kwId)
+                                    (kwId) => toggleKeywordMustnt(phrase.id, kwId),
+                                    hoveredKeywordText,
+                                    handleKeywordHover
                                   )}
                                 </div>
                               )
@@ -1501,76 +1541,6 @@ export function NodeModal({
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Draggable Divider */}
-              <div
-                className="draft-svtz__divider"
-                onMouseDown={handleSourceResultDivider}
-              >
-                <div className="draft-svtz__divider-handle" />
-              </div>
-
-              {/* RESULT Column */}
-              <div className="draft-svtz__result" style={{ width: `${100 - sourceResultDividerPos}%` }}>
-                <div className="draft-svtz__column-header">
-                  <h3>RESULT</h3>
-                </div>
-                <div className="draft-svtz__result-content">
-                  {/* Result Text with Keyword Highlighting */}
-                  <div className="draft-svtz__result-section">
-                    <h4 className="draft-svtz__result-section-title">Text</h4>
-                    <div className="draft-svtz__result-text">
-                      {allPhrases.filter(p => p.included).length > 0 ? (
-                        <div className="draft-svtz__result-text-content">
-                          {allPhrases.filter(p => p.included).map((phrase, idx, arr) => (
-                            <span key={phrase.id}>
-                              {renderResultPhraseWithKeywords(phrase)}
-                              {idx < arr.length - 1 ? '. ' : '.'}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="draft-svtz__result-empty">
-                          <p>No content yet</p>
-                          <span>Include phrases from SOURCE</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Must-have Keywords */}
-                  <div className="draft-svtz__result-section">
-                    <h4 className="draft-svtz__result-section-title">Must-have</h4>
-                    <div className="draft-svtz__result-keywords">
-                      {mustHaveKeywords.length > 0 ? (
-                        mustHaveKeywords.map(kw => (
-                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--must">
-                            {kw.text}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="draft-svtz__result-keywords-empty">None</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Mustnt-have Keywords */}
-                  <div className="draft-svtz__result-section">
-                    <h4 className="draft-svtz__result-section-title">Mustnt-have</h4>
-                    <div className="draft-svtz__result-keywords">
-                      {mustntHaveKeywords.length > 0 ? (
-                        mustntHaveKeywords.map(kw => (
-                          <span key={kw.id} className="draft-svtz__result-keyword draft-svtz__result-keyword--mustnt">
-                            {kw.text}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="draft-svtz__result-keywords-empty">None</span>
-                      )}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1606,9 +1576,14 @@ export function NodeModal({
   if (isCommittedCommit) {
     const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
 
-    // Mock constraints - in real app these would come from data
-    const commitMustHave = data.tags.slice(0, 3)
-    const commitMustntHave = data.tags.slice(3, 5)
+    // Get keywords from pendingSource textBlocks
+    const commitTextBlocks = data.pendingSource?.textBlocks || []
+    const commitMustHave = commitTextBlocks.flatMap(block =>
+      getMustHaveKeywordsFromBlocks(block.tokens, block.keywords)
+    )
+    const commitMustntHave = commitTextBlocks.flatMap(block =>
+      getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords)
+    )
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
@@ -1688,15 +1663,32 @@ export function NodeModal({
               onMouseDown={handleCommitLeftDivider}
             />
 
-            {/* Main Content - Semantic Snapshot */}
+            {/* Main Content - Source Excerpt & Generated Output */}
             <div className="modal-v2__main">
+              {/* Source Excerpt - User's semantic selections */}
               <div className="commit-v2__section">
                 <div className="commit-v2__section-header">
-                  <h3>Semantic Content</h3>
+                  <h3>Source Excerpt</h3>
                   <span className="commit-v2__readonly-badge">Read-only</span>
                 </div>
-                <div className="commit-v2__content">
-                  {data.summary || 'No content recorded.'}
+                <div className="commit-v2__source-excerpt">
+                  {data.pendingSource?.textBlocks && data.pendingSource.textBlocks.length > 0 ? (
+                    <SourceExcerptViewer blocks={data.pendingSource.textBlocks} />
+                  ) : (
+                    <div className="commit-v2__empty-state">
+                      <span>No source excerpt recorded</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Generated Output - LLM generated content */}
+              <div className="commit-v2__section">
+                <div className="commit-v2__section-header">
+                  <h3>Generated Output</h3>
+                </div>
+                <div className="commit-v2__generated-output">
+                  {data.summary || 'No generated content.'}
                 </div>
               </div>
 

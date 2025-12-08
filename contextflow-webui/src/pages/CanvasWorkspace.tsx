@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GitCommit, MessageSquarePlus } from 'lucide-react'
 import { Background, Controls, MiniMap, ReactFlow } from 'reactflow'
-import type { Edge, Node, ReactFlowInstance } from 'reactflow'
+import type { Node, ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { canvasNodeTypes } from '../components/CanvasNodes'
+import { DeletionConfirmDialog } from '../components/DeletionConfirmDialog'
 import { LeafPanel } from '../components/LeafPanel'
 import { NodeModal, type NodeQuickAction } from '../components/NodeModal'
 import { useCanvasStore } from '../store/canvasStore'
@@ -157,14 +158,21 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     return Array.from(names).sort((a, b) => a.localeCompare(b))
   }, [nodes])
 
+  // Reset branch filter when branch is removed - using a ref to avoid synchronous setState in effect
+  const prevBranchNamesRef = useRef(branchNames)
   useEffect(() => {
-    if (branchFilter !== 'all' && !branchNames.includes(branchFilter)) {
-      setBranchFilter('all')
-      if (highlight?.mode === 'branch') {
-        setHighlight({ mode: 'branch' })
-      }
+    const prevBranchNames = prevBranchNamesRef.current
+    prevBranchNamesRef.current = branchNames
+
+    // Only check if branch was removed (not on initial render)
+    if (branchFilter !== 'all' && !branchNames.includes(branchFilter) && prevBranchNames.includes(branchFilter)) {
+      // Use setTimeout to avoid synchronous setState in effect
+      setTimeout(() => {
+        setBranchFilter('all')
+        setHighlight((current) => current?.mode === 'branch' ? { mode: 'branch' } : current)
+      }, 0)
     }
-  }, [branchFilter, branchNames, highlight])
+  }, [branchFilter, branchNames])
 
   const getViewportCenter = () => {
     if (!reactFlowInstance || !canvasRef.current) {
@@ -201,21 +209,17 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     return false
   }
 
-  const computeHighlightSets = (
-    graphNodes: Node<CanvasNodeData>[],
-    graphEdges: Edge[],
-    mode: PathHighlight,
-  ) => {
-    if (!mode) {
+  const highlightSets = useMemo(() => {
+    if (!highlight) {
       return {
         nodes: new Set<string>(),
         edges: new Set<string>(),
       }
     }
 
-    const nodeMap = new Map(graphNodes.map((node) => [node.id, node]))
+    const nodeMap = new Map(nodes.map((node) => [node.id, node]))
     const adjacency = new Map<string, Set<string>>()
-    graphEdges.forEach((edge) => {
+    edges.forEach((edge) => {
       const out = adjacency.get(edge.source) ?? new Set<string>()
       out.add(edge.target)
       adjacency.set(edge.source, out)
@@ -225,7 +229,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
       adjacency.set(edge.target, inbound)
     })
 
-    const startNodes = graphNodes.filter((node) => matchesHighlightCommit(node, mode)).map((node) => node.id)
+    const startNodes = nodes.filter((node) => matchesHighlightCommit(node, highlight)).map((node) => node.id)
 
     if (startNodes.length === 0) {
       return {
@@ -251,7 +255,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         if (!neighborNode) {
           return
         }
-        if (neighborNode.data.kind === 'commit' && !matchesHighlightCommit(neighborNode, mode)) {
+        if (neighborNode.data.kind === 'commit' && !matchesHighlightCommit(neighborNode, highlight)) {
           return
         }
         visited.add(neighborId)
@@ -260,14 +264,14 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     }
 
     const highlightedEdges = new Set<string>()
-    graphEdges.forEach((edge) => {
+    edges.forEach((edge) => {
       const bothVisited = visited.has(edge.source) && visited.has(edge.target)
       if (bothVisited) {
         highlightedEdges.add(edge.id)
         return
       }
       if (
-        mode.mode !== 'main' &&
+        highlight.mode !== 'main' &&
         (commitStarts.has(edge.source) || commitStarts.has(edge.target))
       ) {
         highlightedEdges.add(edge.id)
@@ -278,12 +282,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
       nodes: visited,
       edges: highlightedEdges,
     }
-  }
-
-  const highlightSets = useMemo(
-    () => computeHighlightSets(nodes, edges, highlight),
-    [nodes, edges, highlight],
-  )
+  }, [nodes, edges, highlight])
 
   const highlightColor =
     highlight?.mode === 'main'
@@ -464,6 +463,8 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           proOptions={{ hideAttribution: true }}
           fitView
           fitViewOptions={{ padding: 0.2 }}
+          deleteKeyCode={['Backspace', 'Delete']}
+          selectNodesOnDrag={false}
         >
           {isPanMode && <MiniMap />}
           <Controls />
@@ -518,6 +519,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         />
       )}
       <LeafPanel />
+      <DeletionConfirmDialog />
     </div>
   )
 }
