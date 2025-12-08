@@ -39,7 +39,10 @@
       "Bash(git add:*)",
       "Bash(git pull:*)",
       "Bash(git merge:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(ls:*)",
+      "Bash(npx eslint:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

@@ -7,6 +7,14 @@ import * as api from '../services/api'
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
 
+// Deletion confirmation state
+type DeletionConfirmation = {
+  nodeIds: string[]
+  edgeIds: string[]
+  message: string
+  onConfirm: () => void
+} | null
+
 type CanvasState = {
   nodes: Node<CanvasNodeData>[]
   edges: Edge[]
@@ -22,6 +30,8 @@ type CanvasState = {
   // Data loading
   loadProjectData: (projectId: string) => Promise<void>
   clearCanvas: () => void
+  // Deletion confirmation state
+  deletionConfirmation: DeletionConfirmation
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   commitPendingCommit: (id: string) => void
@@ -50,6 +60,9 @@ type CanvasState = {
   openLeafPanel: (commitId: string) => void
   closeLeafPanel: () => void
   addLeafNode: (leafType: LeafType) => void
+  // Deletion confirmation methods
+  confirmDeletion: () => void
+  cancelDeletion: () => void
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -66,6 +79,14 @@ const canConnect = (
     return false
   }
   if (source.id === target.id) {
+    return false
+  }
+
+  // Committed commits cannot accept new incoming connections
+  if (
+    target.data.kind === 'commit' &&
+    target.data.commitStatus !== 'pending'
+  ) {
     return false
   }
 
@@ -143,52 +164,122 @@ const buildOutgoingMap = (edges: Edge[]) => {
   return outgoing
 }
 
-const collectAncestors = (startId: string, incomingMap: Map<string, string[]>) => {
-  const visited = new Set<string>()
-  const stack = [startId]
-  while (stack.length > 0) {
-    const current = stack.pop()!
-    if (visited.has(current)) {
-      continue
-    }
-    visited.add(current)
-    const sources = incomingMap.get(current) ?? []
-    sources.forEach((sourceId) => {
-      if (!visited.has(sourceId)) {
-        stack.push(sourceId)
-      }
-    })
-  }
-  return visited
-}
-
-const getLatestCommitIdsByBranch = (nodes: Node<CanvasNodeData>[]) => {
-  const latest = new Map<string, Node<CanvasNodeData>>()
-  nodes.forEach((node) => {
-    if (node.data.kind !== 'commit') {
-      return
-    }
-    const key =
-      node.data.branchType === 'main'
-        ? 'main'
-        : `branch:${(node.data.branchName ?? 'branch').toLowerCase()}`
-    const current = latest.get(key)
-    if (!current || getNumericId(node.id) > getNumericId(current.id)) {
-      latest.set(key, node)
-    }
-  })
-  return Array.from(latest.values()).map((node) => node.id)
-}
-
 const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const incomingMap = buildIncomingMap(edges)
   const locked = new Set<string>()
-  const latestCommits = getLatestCommitIdsByBranch(nodes)
-  latestCommits.forEach((commitId) => {
-    const ancestors = collectAncestors(commitId, incomingMap)
-    ancestors.forEach((nodeId) => locked.add(nodeId))
+
+  // Only lock committed commits and their upstream committed commits
+  // Pending commits and their upstream (non-committed) nodes are NOT locked
+  const committedCommits = nodes.filter(
+    (node) => node.data.kind === 'commit' && node.data.commitStatus === 'committed'
+  )
+
+  committedCommits.forEach((commit) => {
+    // Lock the committed commit itself
+    locked.add(commit.id)
+
+    // Lock upstream committed commits only (stop at pending commits or conversations)
+    const visited = new Set<string>()
+    const stack = [...(incomingMap.get(commit.id) ?? [])]
+    while (stack.length > 0) {
+      const currentId = stack.pop()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const currentNode = nodeMap.get(currentId)
+      if (!currentNode) continue
+
+      // Only lock if it's a committed commit
+      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'committed') {
+        locked.add(currentId)
+        // Continue traversing upstream
+        const parents = incomingMap.get(currentId) ?? []
+        parents.forEach((parentId) => {
+          if (!visited.has(parentId)) stack.push(parentId)
+        })
+      }
+      // Stop at pending commits, conversations, or leaves - they are NOT locked
+    }
   })
+
   return locked
+}
+
+// Check if a node is upstream of any pending commit (needs confirmation on delete)
+const isUpstreamOfPendingCommit = (
+  nodeId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+): boolean => {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const outgoingMap = buildOutgoingMap(edges)
+
+  const visited = new Set<string>()
+  const stack = [nodeId]
+
+  while (stack.length > 0) {
+    const currentId = stack.pop()!
+    if (visited.has(currentId)) continue
+    visited.add(currentId)
+
+    const currentNode = nodeMap.get(currentId)
+    if (!currentNode) continue
+
+    // Found a pending commit downstream
+    if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
+      return true
+    }
+
+    // Continue traversing downstream
+    const children = outgoingMap.get(currentId) ?? []
+    children.forEach((childId) => {
+      if (!visited.has(childId)) stack.push(childId)
+    })
+  }
+
+  return false
+}
+
+// Collect all nodes that would be affected by deleting the given nodes
+// Returns pending commits that would become orphaned
+const collectAffectedPendingCommits = (
+  nodeIds: string[],
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+): string[] => {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
+  const outgoingMap = buildOutgoingMap(edges)
+  const toDelete = new Set(nodeIds)
+  const affectedPendingCommits: string[] = []
+
+  // For each node being deleted, find downstream pending commits
+  nodeIds.forEach((nodeId) => {
+    const visited = new Set<string>()
+    const stack = [...(outgoingMap.get(nodeId) ?? [])]
+
+    while (stack.length > 0) {
+      const currentId = stack.pop()!
+      if (visited.has(currentId) || toDelete.has(currentId)) continue
+      visited.add(currentId)
+
+      const currentNode = nodeMap.get(currentId)
+      if (!currentNode) continue
+
+      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
+        if (!affectedPendingCommits.includes(currentId)) {
+          affectedPendingCommits.push(currentId)
+        }
+      }
+
+      const children = outgoingMap.get(currentId) ?? []
+      children.forEach((childId) => {
+        if (!visited.has(childId) && !toDelete.has(childId)) stack.push(childId)
+      })
+    }
+  })
+
+  return affectedPendingCommits
 }
 
 const findNearestMainAncestorCommit = (
@@ -536,6 +627,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   loadError: null,
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
+  deletionConfirmation: null,
 
   loadProjectData: async (projectId: string) => {
     // Skip if already loading the same project
@@ -1027,18 +1119,129 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (changes.length === 0) {
         return {}
       }
+
+      // Debug logging
+      console.log('[onNodesChange] changes:', changes)
+
+      const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
       const lockedNodes = getLockedNodeIds(state.nodes, state.edges)
-      const filteredChanges = changes.filter((change) => {
-        if (change.type !== 'remove') {
-          return true
+      console.log('[onNodesChange] lockedNodes:', Array.from(lockedNodes))
+
+      // Separate remove changes from other changes
+      const removeChanges = changes.filter((c) => c.type === 'remove')
+      const otherChanges = changes.filter((c) => c.type !== 'remove')
+      console.log('[onNodesChange] removeChanges:', removeChanges)
+
+      // Filter out locked nodes from removal
+      const allowedRemoves = removeChanges.filter((c) => !lockedNodes.has(c.id))
+      console.log('[onNodesChange] allowedRemoves:', allowedRemoves)
+
+      if (allowedRemoves.length === 0) {
+        // No removes, just apply other changes
+        if (otherChanges.length === 0) return {}
+        return {
+          nodes: applyNodeChanges(otherChanges, state.nodes).map((node) => ({
+            ...node,
+            position: snapPosition(node.position),
+          })),
         }
-        return !lockedNodes.has(change.id)
-      })
-      if (filteredChanges.length === 0) {
-        return {}
       }
+
+      // Check if any of the nodes to be removed need confirmation
+      const nodeIdsToRemove = allowedRemoves.map((c) => c.id)
+      const needsConfirmation: string[] = []
+      const directDeletes: string[] = []
+
+      nodeIdsToRemove.forEach((nodeId) => {
+        const node = nodeMap.get(nodeId)
+        if (!node) return
+
+        // Pending commit needs confirmation
+        if (node.data.kind === 'commit' && node.data.commitStatus === 'pending') {
+          needsConfirmation.push(nodeId)
+          return
+        }
+
+        // Node upstream of pending commit needs confirmation
+        if (isUpstreamOfPendingCommit(nodeId, state.nodes, state.edges)) {
+          needsConfirmation.push(nodeId)
+          return
+        }
+
+        // Otherwise, can delete directly
+        directDeletes.push(nodeId)
+      })
+
+      console.log('[onNodesChange] needsConfirmation:', needsConfirmation)
+      console.log('[onNodesChange] directDeletes:', directDeletes)
+
+      // If there are nodes needing confirmation, show dialog
+      if (needsConfirmation.length > 0) {
+        // Build confirmation message
+        const pendingCommitsInSelection = needsConfirmation.filter((id) => {
+          const n = nodeMap.get(id)
+          return n?.data.kind === 'commit' && n?.data.commitStatus === 'pending'
+        })
+        const upstreamNodes = needsConfirmation.filter((id) => !pendingCommitsInSelection.includes(id))
+        const affectedDownstream = collectAffectedPendingCommits(needsConfirmation, state.nodes, state.edges)
+
+        let message = ''
+        if (pendingCommitsInSelection.length > 0) {
+          message += `Discard ${pendingCommitsInSelection.length} pending commit(s)?`
+        }
+        if (upstreamNodes.length > 0) {
+          if (message) message += '\n'
+          message += `Delete ${upstreamNodes.length} upstream node(s)?`
+        }
+        if (affectedDownstream.length > 0) {
+          if (message) message += '\n'
+          message += `This will also affect ${affectedDownstream.length} downstream pending commit(s).`
+        }
+
+        // Collect edges that connect to/from nodes being deleted
+        const edgesToRemove = state.edges
+          .filter((e) => needsConfirmation.includes(e.source) || needsConfirmation.includes(e.target))
+          .map((e) => e.id)
+
+        // Apply direct deletes immediately, but defer confirmation nodes
+        const directRemoveChanges = allowedRemoves.filter((c) => directDeletes.includes(c.id))
+        const newNodes = directRemoveChanges.length > 0
+          ? applyNodeChanges([...otherChanges, ...directRemoveChanges], state.nodes).map((node) => ({
+              ...node,
+              position: snapPosition(node.position),
+            }))
+          : otherChanges.length > 0
+            ? applyNodeChanges(otherChanges, state.nodes).map((node) => ({
+                ...node,
+                position: snapPosition(node.position),
+              }))
+            : state.nodes
+
+        return {
+          nodes: newNodes,
+          deletionConfirmation: {
+            nodeIds: needsConfirmation,
+            edgeIds: edgesToRemove,
+            message,
+            onConfirm: () => {
+              // This will be called when user confirms
+              set((s) => {
+                const nodesToDelete = new Set(needsConfirmation)
+                const edgesToDelete = new Set(edgesToRemove)
+                return {
+                  nodes: s.nodes.filter((n) => !nodesToDelete.has(n.id)),
+                  edges: s.edges.filter((e) => !edgesToDelete.has(e.id) && !nodesToDelete.has(e.source) && !nodesToDelete.has(e.target)),
+                  deletionConfirmation: null,
+                }
+              })
+            },
+          },
+        }
+      }
+
+      // No confirmation needed, apply all changes
       return {
-        nodes: applyNodeChanges(filteredChanges, state.nodes).map((node) => ({
+        nodes: applyNodeChanges([...otherChanges, ...allowedRemoves], state.nodes).map((node) => ({
           ...node,
           position: snapPosition(node.position),
         })),
@@ -1050,27 +1253,106 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (changes.length === 0) {
         return {}
       }
+
+      const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
       const lockedNodes = getLockedNodeIds(state.nodes, state.edges)
-      const filtered = changes.filter((change) => {
-        if (change.type !== 'remove') {
-          return true
-        }
-        const edge = state.edges.find((candidate) => candidate.id === change.id)
-        if (!edge) {
-          return false
-        }
+
+      // Separate remove changes from other changes
+      const removeChanges = changes.filter((c) => c.type === 'remove')
+      const otherChanges = changes.filter((c) => c.type !== 'remove')
+
+      // Filter out edges between locked nodes
+      const allowedRemoves = removeChanges.filter((c) => {
+        const edge = state.edges.find((e) => e.id === c.id)
+        if (!edge) return false
         const sourceLocked = lockedNodes.has(edge.source)
         const targetLocked = lockedNodes.has(edge.target)
-        if (sourceLocked && targetLocked) {
-          return false
-        }
-        return true
+        // Only block if BOTH ends are locked (committed commits)
+        return !(sourceLocked && targetLocked)
       })
-      if (filtered.length === 0) {
-        return {}
+
+      if (allowedRemoves.length === 0) {
+        if (otherChanges.length === 0) return {}
+        return { edges: applyEdgeChanges(otherChanges, state.edges) }
       }
+
+      // Check if any edge removal needs confirmation
+      // An edge needs confirmation if it connects to a pending commit
+      const needsConfirmation: string[] = []
+      const directDeletes: string[] = []
+
+      allowedRemoves.forEach((c) => {
+        const edge = state.edges.find((e) => e.id === c.id)
+        if (!edge) return
+
+        const targetNode = nodeMap.get(edge.target)
+
+        // Edge going INTO a pending commit needs confirmation
+        if (targetNode?.data.kind === 'commit' && targetNode?.data.commitStatus === 'pending') {
+          needsConfirmation.push(c.id)
+          return
+        }
+
+        // Edge from a node that feeds into pending commit downstream
+        if (isUpstreamOfPendingCommit(edge.source, state.nodes, state.edges)) {
+          needsConfirmation.push(c.id)
+          return
+        }
+
+        directDeletes.push(c.id)
+      })
+
+      if (needsConfirmation.length > 0) {
+        // Find affected pending commits
+        const affectedPendingCommits = new Set<string>()
+        needsConfirmation.forEach((edgeId) => {
+          const edge = state.edges.find((e) => e.id === edgeId)
+          if (!edge) return
+
+          const targetNode = nodeMap.get(edge.target)
+          if (targetNode?.data.kind === 'commit' && targetNode?.data.commitStatus === 'pending') {
+            affectedPendingCommits.add(edge.target)
+          }
+
+          // Also check downstream
+          const downstream = collectAffectedPendingCommits([edge.source], state.nodes, state.edges)
+          downstream.forEach((id) => affectedPendingCommits.add(id))
+        })
+
+        const message = affectedPendingCommits.size > 0
+          ? `This will disconnect ${affectedPendingCommits.size} pending commit(s) from their source. Continue?`
+          : `Delete ${needsConfirmation.length} connection(s)?`
+
+        // Apply direct deletes immediately
+        const directRemoveChanges = allowedRemoves.filter((c) => directDeletes.includes(c.id))
+        const newEdges = directRemoveChanges.length > 0
+          ? applyEdgeChanges([...otherChanges, ...directRemoveChanges], state.edges)
+          : otherChanges.length > 0
+            ? applyEdgeChanges(otherChanges, state.edges)
+            : state.edges
+
+        return {
+          edges: newEdges,
+          deletionConfirmation: {
+            nodeIds: [],
+            edgeIds: needsConfirmation,
+            message,
+            onConfirm: () => {
+              set((s) => {
+                const edgesToDelete = new Set(needsConfirmation)
+                return {
+                  edges: s.edges.filter((e) => !edgesToDelete.has(e.id)),
+                  deletionConfirmation: null,
+                }
+              })
+            },
+          },
+        }
+      }
+
+      // No confirmation needed
       return {
-        edges: applyEdgeChanges(filtered, state.edges),
+        edges: applyEdgeChanges([...otherChanges, ...allowedRemoves], state.edges),
       }
     }),
 
@@ -1336,4 +1618,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         leafPanelCommitId: undefined,
       }
     }),
+
+  // Deletion confirmation methods
+  confirmDeletion: () => {
+    const state = get()
+    if (state.deletionConfirmation?.onConfirm) {
+      state.deletionConfirmation.onConfirm()
+    }
+  },
+
+  cancelDeletion: () => set({ deletionConfirmation: null }),
 }))
