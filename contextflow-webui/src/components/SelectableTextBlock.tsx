@@ -100,7 +100,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
   const removeFromOppositeSelections = useCallback(
     (selections: TextSelection[], start: number, end: number, keepType: 'include' | 'exclude'): TextSelection[] => {
       const oppositeType = keepType === 'include' ? 'exclude' : 'include'
-      let result: TextSelection[] = []
+      const result: TextSelection[] = []
 
       for (const sel of selections) {
         if (sel.type !== oppositeType) {
@@ -150,7 +150,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
 
   // Handle mouse up - finalize selection or toggle keyword
   const handleMouseUp = useCallback(
-    (_e: React.MouseEvent) => {
+    () => {
       if (readOnly) return
 
       if (isSelecting && selectionStart !== null && selectionEnd !== null) {
@@ -276,7 +276,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
           }
 
           // Skip interaction for pure punctuation
-          const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()\[\]{}<>\s]+$/.test(token.text)
+          const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>\s]+$/.test(token.text)
 
           return (
             <span

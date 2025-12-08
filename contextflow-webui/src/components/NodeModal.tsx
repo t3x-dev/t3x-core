@@ -177,7 +177,7 @@ function renderPhraseWithKeywords(
   onPhraseClick: () => void,
   onKeywordClick: (keywordId: string) => void,
   hoveredKeywordText: string | null,
-  onKeywordHover: (text: string | null, isMustnt: boolean) => void
+  onKeywordHover: (text: string | null) => void
 ): React.ReactNode[] {
   const { text, keywords, included } = phrase
 
@@ -234,8 +234,8 @@ function renderPhraseWithKeywords(
           e.stopPropagation()
           if (canToggle && included) onKeywordClick(kw.id)
         }}
-        onMouseEnter={() => onKeywordHover(kw.text.toLowerCase(), kw.isMustnt)}
-        onMouseLeave={() => onKeywordHover(null, false)}
+        onMouseEnter={() => onKeywordHover(kw.text.toLowerCase())}
+        onMouseLeave={() => onKeywordHover(null)}
         title={
           !canToggle ? 'Complete Step 1 to edit' :
           !included ? 'Include phrase first to edit keywords' :
@@ -279,28 +279,11 @@ export function NodeModal({
   onBranchNameChange,
   quickActions,
 }: NodeModalProps) {
-  if (!node) {
-    return null
-  }
-
-  const { data } = node
-  const isCommit = data.kind === 'commit'
-  const isConversation = data.kind === 'conversation'
-  // Pending commit (previously "draft") - editable state before committing
-  const isPendingCommit = isCommit && data.commitStatus === 'pending'
-  // Committed commit - read-only state
-  const isCommittedCommit = isCommit && data.commitStatus !== 'pending'
-  const isMergeDraft = isPendingCommit && data.bridgePrompt === 'merge' && !!data.mergeConfig
-  const shouldShowBranchSelect =
-    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
-  const requireBranchName =
-    !isMergeDraft &&
-    ((draftBranchMode === 'select' && data.pendingBranch === 'branch') ||
-      draftBranchMode === 'branch-only')
+  // ========== ALL HOOKS MUST BE AT THE TOP - before any conditional returns ==========
 
   // ========== Single View Two Zones State ==========
   // Config state (STEP 1)
-  const [template, setTemplate] = useState(data.bridgePrompt || 'prose')
+  const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose')
   const [cosineThreshold, setCosineThreshold] = useState(0.75)
   const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
 
@@ -312,7 +295,7 @@ export function NodeModal({
 
   // New: Text blocks for free-form selection (from pendingSource)
   const [textBlocks, setTextBlocks] = useState<SourceTextBlock[]>(
-    data.pendingSource?.textBlocks || []
+    node?.data.pendingSource?.textBlocks || []
   )
 
   // Divider positions
@@ -321,14 +304,32 @@ export function NodeModal({
   // Hovered keyword (for cross-area highlighting)
   const [hoveredKeywordText, setHoveredKeywordText] = useState<string | null>(null)
 
-  // Handler for keyword hover (isMustnt is used by the render functions to determine hover color)
-  const handleKeywordHover = useCallback((text: string | null, _isMustnt: boolean = false) => {
-    setHoveredKeywordText(text)
-  }, [])
+  // Sidebar state for conversation
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Chat state for conversation
+  const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+
+  // Resizable sidebar state (conversation)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+
+  // Commit resizable state
+  const [commitLeftWidth, setCommitLeftWidth] = useState(280)
+  const [commitRightWidth, setCommitRightWidth] = useState(280)
 
   // Refs
   const mainContentRef = useRef<HTMLDivElement>(null)
   const draftBodyRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const commitContainerRef = useRef<HTMLDivElement>(null)
+
+  // Handler for keyword hover
+  const handleKeywordHover = useCallback((text: string | null) => {
+    setHoveredKeywordText(text)
+  }, [])
 
   // Computed: all phrases from all source boxes (legacy system)
   const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
@@ -380,23 +381,183 @@ export function NodeModal({
     [onUpdate]
   )
 
-  // Sidebar state for conversation
-  const [showSettings, setShowSettings] = useState(false)
+  // Toggle source box expansion
+  const toggleSourceBoxExpand = useCallback((boxId: string) => {
+    setSourceBoxes(prev => prev.map(sb =>
+      sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb
+    ))
+  }, [])
 
-  // Chat state for conversation
-  const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Toggle phrase include/exclude (only in Step 2 when configLocked)
+  // Phrase: include (浅绿) ↔ exclude (浅红)
+  const togglePhraseInclude = useCallback((phraseId: string) => {
+    if (!configLocked) return // Only allow in Step 2
 
-  // Resizable sidebar state (conversation)
-  const [sidebarWidth, setSidebarWidth] = useState(280)
-  const isDraggingRef = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p =>
+        p.id === phraseId ? { ...p, included: !p.included } : p
+      )
+    })))
+  }, [configLocked])
 
-  // Commit resizable state
-  const [commitLeftWidth, setCommitLeftWidth] = useState(280)
-  const [commitRightWidth, setCommitRightWidth] = useState(280)
-  const commitContainerRef = useRef<HTMLDivElement>(null)
+  // Toggle keyword must/mustnt (only when parent phrase is included)
+  // Keyword: must_have (深绿) ↔ mustnt_have (深红)
+  const toggleKeywordMustnt = useCallback((phraseId: string, keywordId: string) => {
+    if (!configLocked) return // Only allow in Step 2
+
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: sb.phrases.map(p => {
+        if (p.id !== phraseId || !p.included) return p // Only toggle if phrase is included
+        return {
+          ...p,
+          keywords: p.keywords.map(kw =>
+            kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
+          )
+        }
+      })
+    })))
+  }, [configLocked])
+
+  // Handle Proceed - lock Step 1 config and enable Step 2 editing
+  const handleProceed = useCallback(() => {
+    // Check for either new textBlocks or legacy sourceBoxes
+    if (textBlocks.length === 0 && sourceBoxes.length === 0) return
+    setConfigLocked(true)
+  }, [textBlocks.length, sourceBoxes.length])
+
+  // Handle Reset - unlock Step 1 config and reset phrases to default
+  const handleReset = useCallback(() => {
+    setConfigLocked(false)
+    // Re-extract to reset all phrase/keyword states
+    setSourceBoxes(prev => prev.map(sb => ({
+      ...sb,
+      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
+    })))
+  }, [keywordsThreshold])
+
+  // Derive node-dependent values
+  const data = node?.data
+  const isCommit = data?.kind === 'commit'
+  const isConversation = data?.kind === 'conversation'
+  const isPendingCommit = isCommit && data?.commitStatus === 'pending'
+  const isCommittedCommit = isCommit && data?.commitStatus !== 'pending'
+  const isMergeDraft = isPendingCommit && data?.bridgePrompt === 'merge' && !!data?.mergeConfig
+  const shouldShowBranchSelect =
+    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
+  const requireBranchName =
+    !isMergeDraft &&
+    ((draftBranchMode === 'select' && data?.pendingBranch === 'branch') ||
+      draftBranchMode === 'branch-only')
+
+  // Handle Commit - create commit node
+  const handleCommit = useCallback(() => {
+    if (!data) return
+    const selectionSummary = selectedTextNew.trim()
+    const summaryToSave = hasNewSourceData
+      ? selectionSummary || data.summary
+      : resultText
+
+    // Update data with final values
+    onUpdate({
+      summary: summaryToSave,
+      bridgePrompt: template,
+      isGenerated: true,
+      pendingSource: hasNewSourceData ? { textBlocks } : data.pendingSource,
+    })
+    // Trigger convert to commit
+    onConvertDraft?.()
+  }, [selectedTextNew, hasNewSourceData, data, resultText, template, onUpdate, onConvertDraft, textBlocks])
+
+  // Initialize source boxes and textBlocks from baseline summary
+  // Note: setState in effect is intentional here for initialization based on props
+  useEffect(() => {
+    if (isPendingCommit && data?.baselineSummary) {
+      // Determine source type based on title or sourceConversationId
+      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
+      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
+      const sourceTitle = isFromCommit
+        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+
+      // Legacy: Initialize sourceBoxes
+      const initialBox: SourceBox = {
+        id: 'source-1',
+        title: sourceTitle,
+        type: sourceType,
+        content: data.baselineSummary,
+        expanded: true,
+        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSourceBoxes([initialBox])
+
+      // New: Initialize textBlocks with model extraction based on thresholds
+      // Only initialize if not already set from data.pendingSource
+      if (!data.pendingSource?.textBlocks?.length) {
+        const initialTextBlock = extractWithThresholds(
+          'block-1',
+          data.baselineSummary,
+          cosineThreshold,
+          keywordsThreshold
+        )
+        setTextBlocks([initialTextBlock])
+      }
+    }
+  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, data?.pendingSource?.textBlocks?.length, keywordsThreshold, cosineThreshold])
+
+  // Auto re-extract when thresholds change (only when not locked)
+  // Note: setState in effect is intentional here to sync derived state with props
+  useEffect(() => {
+    if (isPendingCommit && data?.baselineSummary && !configLocked) {
+      const updatedTextBlock = extractWithThresholds(
+        'block-1',
+        data.baselineSummary,
+        cosineThreshold,
+        keywordsThreshold
+      )
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTextBlocks([updatedTextBlock])
+    }
+  }, [cosineThreshold, keywordsThreshold, configLocked, isPendingCommit, data?.baselineSummary])
+
+  // Scroll to bottom when new messages added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const addCommitAction = useMemo(() => quickActions?.find(a => a.key === 'add-commit'), [quickActions])
+
+  const handleSendMessage = useCallback(() => {
+    if (!chatInput.trim()) return
+
+    const newUserMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user' as const,
+      content: chatInput.trim(),
+    }
+
+    setChatMessages(prev => [...prev, newUserMessage])
+    setChatInput('')
+
+    // Simulate assistant response (mock - not connected to LLM)
+    setTimeout(() => {
+      const mockResponse = {
+        id: `msg-${Date.now() + 1}`,
+        role: 'assistant' as const,
+        content: 'This is a placeholder response. LLM integration coming soon.',
+      }
+      setChatMessages(prev => [...prev, mockResponse])
+    }, 500)
+  }, [chatInput])
+
+  const handleChatKeyDown = useCallback((e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }, [handleSendMessage])
 
   const handleDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -499,163 +660,11 @@ export function NodeModal({
     document.addEventListener('mouseup', handleMouseUp)
   }
 
-  // Toggle source box expansion
-  const toggleSourceBoxExpand = useCallback((boxId: string) => {
-    setSourceBoxes(prev => prev.map(sb =>
-      sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb
-    ))
-  }, [])
-
-  // Toggle phrase include/exclude (only in Step 2 when configLocked)
-  // Phrase: include (浅绿) ↔ exclude (浅红)
-  const togglePhraseInclude = useCallback((phraseId: string) => {
-    if (!configLocked) return // Only allow in Step 2
-
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: sb.phrases.map(p =>
-        p.id === phraseId ? { ...p, included: !p.included } : p
-      )
-    })))
-  }, [configLocked])
-
-  // Toggle keyword must/mustnt (only when parent phrase is included)
-  // Keyword: must_have (深绿) ↔ mustnt_have (深红)
-  const toggleKeywordMustnt = useCallback((phraseId: string, keywordId: string) => {
-    if (!configLocked) return // Only allow in Step 2
-
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: sb.phrases.map(p => {
-        if (p.id !== phraseId || !p.included) return p // Only toggle if phrase is included
-        return {
-          ...p,
-          keywords: p.keywords.map(kw =>
-            kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
-          )
-        }
-      })
-    })))
-  }, [configLocked])
-
-  // Initialize source boxes and textBlocks from baseline summary
-  useEffect(() => {
-    if (isPendingCommit && data.baselineSummary) {
-      // Determine source type based on title or sourceConversationId
-      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
-      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
-      const sourceTitle = isFromCommit
-        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
-        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
-
-      // Legacy: Initialize sourceBoxes
-      const initialBox: SourceBox = {
-        id: 'source-1',
-        title: sourceTitle,
-        type: sourceType,
-        content: data.baselineSummary,
-        expanded: true,
-        phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
-      }
-      setSourceBoxes([initialBox])
-
-      // New: Initialize textBlocks with model extraction based on thresholds
-      // Only initialize if not already set from data.pendingSource
-      if (!data.pendingSource?.textBlocks?.length) {
-        const initialTextBlock = extractWithThresholds(
-          'block-1',
-          data.baselineSummary,
-          cosineThreshold,
-          keywordsThreshold
-        )
-        setTextBlocks([initialTextBlock])
-      }
-    }
-  }, [isPendingCommit, data.baselineSummary, data.title, data.sourceConversationId, data.pendingSource?.textBlocks?.length])
-
-  // Auto re-extract when thresholds change (only when not locked)
-  useEffect(() => {
-    if (isPendingCommit && data.baselineSummary && !configLocked) {
-      const updatedTextBlock = extractWithThresholds(
-        'block-1',
-        data.baselineSummary,
-        cosineThreshold,
-        keywordsThreshold
-      )
-      setTextBlocks([updatedTextBlock])
-    }
-  }, [cosineThreshold, keywordsThreshold, configLocked, isPendingCommit, data.baselineSummary])
-
-  // Handle Proceed - lock Step 1 config and enable Step 2 editing
-  const handleProceed = useCallback(() => {
-    // Check for either new textBlocks or legacy sourceBoxes
-    if (textBlocks.length === 0 && sourceBoxes.length === 0) return
-    setConfigLocked(true)
-  }, [textBlocks.length, sourceBoxes.length])
-
-  // Handle Reset - unlock Step 1 config and reset phrases to default
-  const handleReset = useCallback(() => {
-    setConfigLocked(false)
-    // Re-extract to reset all phrase/keyword states
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
-    })))
-  }, [keywordsThreshold])
-
-  // Handle Commit - create commit node
-  const handleCommit = useCallback(() => {
-    const selectionSummary = selectedTextNew.trim()
-    const summaryToSave = hasNewSourceData
-      ? selectionSummary || data.summary
-      : resultText
-
-    // Update data with final values
-    onUpdate({
-      summary: summaryToSave,
-      bridgePrompt: template,
-      isGenerated: true,
-      pendingSource: hasNewSourceData ? { textBlocks } : data.pendingSource,
-    })
-    // Trigger convert to commit
-    onConvertDraft?.()
-  }, [selectedTextNew, hasNewSourceData, data.summary, resultText, template, onUpdate, onConvertDraft, textBlocks, data.pendingSource])
-
-  // Scroll to bottom when new messages added
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
-
-  const addCommitAction = useMemo(() => quickActions?.find(a => a.key === 'add-commit'), [quickActions])
-
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return
-
-    const newUserMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user' as const,
-      content: chatInput.trim(),
-    }
-
-    setChatMessages(prev => [...prev, newUserMessage])
-    setChatInput('')
-
-    // Simulate assistant response (mock - not connected to LLM)
-    setTimeout(() => {
-      const mockResponse = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant' as const,
-        content: 'This is a placeholder response. LLM integration coming soon.',
-      }
-      setChatMessages(prev => [...prev, mockResponse])
-    }, 500)
-  }
-
-  const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
+  // ============================================
+  // Early return - must be after all hooks
+  // ============================================
+  if (!node || !data) {
+    return null
   }
 
   // ============================================
