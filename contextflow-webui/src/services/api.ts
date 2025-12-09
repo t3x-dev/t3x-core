@@ -418,16 +418,8 @@ export async function createProject(name: string, metadata?: Record<string, unkn
 }
 
 export interface DeleteProjectResponse {
-  deleted: string
-  name: string
-  cascade_deleted: {
-    turns: number
-    drafts: number
-    conversations: number
-    commits: number
-    branches: number
-    merge_results: number
-  }
+  deleted: boolean
+  project_id: string
 }
 
 export async function deleteProject(projectId: string): Promise<DeleteProjectResponse> {

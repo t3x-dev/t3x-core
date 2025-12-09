@@ -35,7 +35,7 @@ type CanvasState = {
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   commitPendingCommit: (id: string) => void
-  addPendingCommitFromConversation: (conversationId: string) => void
+  addPendingCommitFromConversation: (conversationId: string) => Promise<void>
   addConversationFromCommit: (commitId: string) => Promise<void>
   addPendingCommitFromCommit: (commitId: string) => void
   createMergePendingCommit: (commitId: string) => void
@@ -865,58 +865,74 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  addPendingCommitFromConversation: (conversationId) =>
-    set((state) => {
-      const source = state.nodes.find((node) => node.id === conversationId)
-      if (!source || source.data.kind !== 'conversation') {
-        return {}
-      }
-      const canSeed = canConversationSeedPendingCommit(
-        conversationId,
-        state.nodes,
-        state.edges,
-        state.hasMainCommit,
-      )
-      if (!canSeed) {
-        return {}
-      }
+  addPendingCommitFromConversation: async (conversationId) => {
+    const state = get()
+    const source = state.nodes.find((node) => node.id === conversationId)
+    if (!source || source.data.kind !== 'conversation') {
+      return
+    }
+    const canSeed = canConversationSeedPendingCommit(
+      conversationId,
+      state.nodes,
+      state.edges,
+      state.hasMainCommit,
+    )
+    if (!canSeed) {
+      return
+    }
 
-      const newNode: Node<CanvasNodeData> = {
-        id: nextNodeId(),
-        type: 'commit',
-        position: computeAttachedPosition(source, 'commit', conversationCommitOffset),
-        data: {
-          entryId: `COMMIT-${nodeCounter}`,
-          title: `Commit from ${source.data.entryId}`,
-          summary: '',
-          status: 'in progress',
-          timestamp: 'just now',
-          tags: ['commit'],
-          kind: 'commit',
-          bridgePrompt: 'prose',
-          pendingBranch: 'branch',
-          pendingBranchName: '',
-          commitStatus: 'pending',
-          // Pass upstream content to pending commit
-          baselineSummary: source.data.summary,
-          sourceConversationId: source.id,
-        },
+    // Fetch actual chat content from upstream conversation
+    let baselineSummary = ''
+    const projectId = state.projectId
+    if (projectId && source.data.conversationId) {
+      try {
+        const turnsData = await api.listTurns(projectId, source.data.conversationId)
+        if (turnsData.turns && turnsData.turns.length > 0) {
+          baselineSummary = turnsData.turns
+            .map((turn) => `**${turn.role}**: ${turn.content}`)
+            .join('\n\n')
+        }
+      } catch (err) {
+        console.warn('Failed to fetch turns for baselineSummary:', err)
       }
+    }
 
-      const newEdge: Edge = {
-        id: nextEdgeId(),
-        source: source.id,
-        target: newNode.id,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-      }
+    const newNode: Node<CanvasNodeData> = {
+      id: nextNodeId(),
+      type: 'commit',
+      position: computeAttachedPosition(source, 'commit', conversationCommitOffset),
+      data: {
+        entryId: `COMMIT-${nodeCounter}`,
+        title: `Commit from ${source.data.entryId}`,
+        summary: '',
+        status: 'in progress',
+        timestamp: 'just now',
+        tags: ['commit'],
+        kind: 'commit',
+        bridgePrompt: 'prose',
+        pendingBranch: 'branch',
+        pendingBranchName: '',
+        commitStatus: 'pending',
+        // Pass upstream chat content to pending commit
+        baselineSummary,
+        sourceConversationId: source.data.conversationId,
+      },
+    }
 
-      return {
-        nodes: [...state.nodes, newNode],
-        edges: [...state.edges, newEdge],
-      }
-    }),
+    const newEdge: Edge = {
+      id: nextEdgeId(),
+      source: source.id,
+      target: newNode.id,
+      type: edgeType,
+      animated: false,
+      style: edgeStyle,
+    }
+
+    set({
+      nodes: [...state.nodes, newNode],
+      edges: [...state.edges, newEdge],
+    })
+  },
 
   addConversationFromCommit: async (commitId) => {
     const state = get()
