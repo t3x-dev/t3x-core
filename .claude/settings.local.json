@@ -42,7 +42,8 @@
       "Bash(git push:*)",
       "Bash(ls:*)",
       "Bash(npx eslint:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

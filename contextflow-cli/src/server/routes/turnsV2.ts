@@ -1,5 +1,5 @@
 /**
- * Turns V2 API Routes (with Ring extraction and hash chain)
+ * Turns V2 API Routes (with Ring extraction, embedding, and hash chain)
  */
 
 import type { Router } from "../router";
@@ -11,9 +11,12 @@ import {
   listTurnsV2,
   getConversation,
   getTurnChain,
+  createSegmentEmbeddingsBatch,
 } from "../../core/storage";
 import { RingExtractor } from "../../core/extractors";
+import type { RingOutput } from "../../core/extractors";
 import { GoogleCloudNLPProvider } from "../../core/providers/nlp";
+import { GoogleAIEmbeddingProvider } from "../../core/providers/embedding";
 
 /**
  * Register turns V2 routes
@@ -64,7 +67,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
     }
 
     try {
-      let rings: unknown = null;
+      let rings: RingOutput | null = null;
 
       // Extract rings if requested and API key available
       const shouldExtract = body.extract_rings !== false;
@@ -89,7 +92,46 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
         rings,
       });
 
-      sendJson(res, 201, successResponse(turn));
+      // Auto-embed Ring 3 segments if API key available and rings extracted
+      let embeddingsCreated = 0;
+      if (rings && rings.ring3.segments.length > 0 && providers.googleAIStudioKey) {
+        try {
+          const embeddingProvider = new GoogleAIEmbeddingProvider({
+            apiKey: providers.googleAIStudioKey,
+          });
+
+          // Extract segment texts for batch embedding
+          const segmentTexts = rings.ring3.segments.map((seg) => seg.text);
+
+          // Batch embed all segments
+          const embeddings = await embeddingProvider.encode(segmentTexts);
+
+          // Store embeddings in database
+          const segments = rings.ring3.segments.map((seg, idx) => ({
+            index: idx,
+            text: seg.text,
+            embedding: embeddings[idx],
+          }));
+
+          createSegmentEmbeddingsBatch({
+            turn_hash: turn.turn_hash,
+            embedding_model: embeddingProvider.id,
+            embedding_dim: embeddingProvider.dim,
+            segments,
+          });
+
+          embeddingsCreated = segments.length;
+        } catch (embedErr) {
+          // Log but don't fail - embedding is optional
+          console.warn("Segment embedding failed:", embedErr);
+        }
+      }
+
+      // Return turn with embeddings count
+      sendJson(res, 201, successResponse({
+        ...turn,
+        _embeddings_created: embeddingsCreated,
+      }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       sendJson(res, 500, errorResponse("CREATE_FAILED", message));
