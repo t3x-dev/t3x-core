@@ -49,8 +49,8 @@ coverage.xml
 # Python
 .pytest_cache/
 
-# ContextFlow local data
-.contextflow/
+# ContextFlow local data (ignore in all directories)
+**/.contextflow/
 
 # SQLite database files
 *.db
