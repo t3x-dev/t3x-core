@@ -696,13 +696,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // Add conversation → commit edges based on turn_window
       // Verify both start and end turns belong to the same conversation
       const convIds = new Set(conversations.map(c => c.conversation_id))
+      console.log('[loadProjectData] convIds:', Array.from(convIds))
+      console.log('[loadProjectData] turnToConvMap:', Object.fromEntries(turnToConvMap))
       commits.forEach((commit) => {
+        console.log('[loadProjectData] Processing commit:', commit.commit_hash, 'turn_window:', commit.turn_window)
         if (commit.turn_window) {
           // Find which conversation this commit's turn_window belongs to
           const startConvId = turnToConvMap.get(commit.turn_window.start_turn_hash)
           const endConvId = turnToConvMap.get(commit.turn_window.end_turn_hash)
+          console.log('[loadProjectData] startConvId:', startConvId, 'endConvId:', endConvId)
           // Only create edge if both turns belong to the same conversation
           if (startConvId && startConvId === endConvId && convIds.has(startConvId)) {
+            console.log('[loadProjectData] Creating edge:', startConvId, '->', commit.commit_hash)
             edges.push({
               id: `conv-${startConvId}-${commit.commit_hash}`,
               source: startConvId,
@@ -711,6 +716,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
               animated: false,
               style: edgeStyle,
             })
+          } else {
+            console.warn('[loadProjectData] Edge NOT created - conditions not met:', { startConvId, endConvId, hasConvId: convIds.has(startConvId || '') })
           }
         }
       })

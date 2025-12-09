@@ -4,37 +4,21 @@ import { stdin, stdout } from 'node:process';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import {
-  openDB,
-  createTurn,
-  listTurns,
-  openDraft,
-  commitDraft,
-  status,
-  updateDraft,
-  type TurnRecord,
-  type DraftKind,
-  type TurnRole,
-} from '../core/db';
 import { resolveStorageRoot } from '@contextflow/core';
 import { ConversationStore } from '../core/conversationStore';
 import { ChatMessage, UserConfig, ConversationTurn } from '../core/types';
 import {
   DEFAULT_MODEL,
-  type StorageMode,
   loadAppPreferences,
   readUserConfig,
   resolveRuntimeConfig,
   shouldUseJsonlStorage,
-  shouldUseSqliteStorage,
   writeUserConfig,
 } from '../core/config';
-import { validateAll } from '../core/validate';
 // Note: Direct Claude API call removed. All LLM calls now go through Core API.
 // import { createChatCompletion } from '../providers/claude';
 import { getCoreClient, CoreApiError } from '../core/coreClient';
 import { ensureDir, pathExists } from '../utils/fs';
-import { startApiServer, getApiServerInfo } from '../server';
 import {
   startEmbeddedServer,
   stopEmbeddedServer,
@@ -101,36 +85,17 @@ const MAX_MEMORY_TURNS = 20;
 const HISTORY_SUMMARY_CHAR_LIMIT = 1500;
 
 let proxyActivationPending = false;
-let sqliteReady = false;
-let storageMode: StorageMode = 'both';
 let jsonlEnabled = true;
-let sqliteEnabled = true;
 
 export async function startContextflowShell(): Promise<void> {
   const preferences = await loadAppPreferences();
   configureLogger(preferences.trace);
-  storageMode = preferences.storageMode;
-  jsonlEnabled = shouldUseJsonlStorage(storageMode);
-  sqliteEnabled = shouldUseSqliteStorage(storageMode);
+  jsonlEnabled = shouldUseJsonlStorage(preferences.storageMode);
 
   await ensureProxyConfigured();
   await normalizeProxyEnv();
 
   const storageRoot = resolveStorageRoot();
-
-  if (sqliteEnabled) {
-    try {
-      const dbPath = openDB(storageRoot.projectRoot);
-      sqliteReady = true;
-      logger.info(`🧾 ContextFlow DB ready: ${dbPath}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`SQLite initialization failed, related commands unavailable: ${message}`);
-      sqliteReady = false;
-    }
-  } else {
-    logger.info('storageMode=JSONL, using JSONL storage only.');
-  }
 
   // Start embedded TypeScript API server (unified on port 8000)
   try {
@@ -279,8 +244,7 @@ async function handleChatMessage(
     role: 'user',
     text: input,
   });
-  persistTurnToDatabase(userTurn, state.project);
-  // Also persist to core_api for semantic extraction
+  // Persist to Core API for semantic extraction
   persistTurnToCoreApi(userTurn, state.project).catch(() => {
     // Silently ignore core_api errors
   });
@@ -341,8 +305,7 @@ async function handleChatMessage(
       role: 'assistant',
       text: assistantText,
     });
-    persistTurnToDatabase(assistantTurn, state.project);
-    // Also persist to core_api for semantic extraction
+    // Persist to Core API for semantic extraction
     persistTurnToCoreApi(assistantTurn, state.project).catch(() => {
       // Silently ignore core_api errors
     });
@@ -600,8 +563,6 @@ const CHAT_HELP_ENTRIES: HelpEntry[] = [
   },
   { usage: '/draft [kind]', description: 'Create new note/plan draft (summary|plan|note)' },
   { usage: '/commit ID', description: 'Commit draft, optionally with --msg "..."' },
-  { usage: '/validate', description: 'Execute data consistency validation' },
-  { usage: '/ui_init [opts]', description: 'Start local WebUI/API (supports --port/--token)' },
   { usage: '/exit|/quit', description: 'Exit CLI' },
 ];
 
@@ -707,33 +668,9 @@ async function hydrateSessionMessages(
     return;
   }
 
-  if (!sqliteEnabled || !sqliteReady) {
-    state.messages = [];
-    return;
-  }
-
-  try {
-    const rows = listTurns({ project: state.project, limit: 200 });
-    const turns = rows
-      .map((row) => convertTurnRecordToConversationTurn(row))
-      .reverse();
-    state.messages = buildMessagesFromTurns(turns);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn(`Failed to load history from SQLite: ${message}`);
-    state.messages = [];
-  }
-}
-
-function convertTurnRecordToConversationTurn(record: TurnRecord): ConversationTurn {
-  const role: ConversationTurn['role'] =
-    record.role === 'user' || record.role === 'assistant' ? record.role : 'system';
-  return {
-    id: `turn-sqlite-${record.id}`,
-    role,
-    text: record.text,
-    timestamp: record.ts,
-  };
+  // No JSONL store available, start with empty messages
+  // History will be loaded from Core API on first interaction
+  state.messages = [];
 }
 
 function buildMessagesFromTurns(turns: ConversationTurn[]): ChatMessage[] {
@@ -1046,34 +983,6 @@ async function appendConversationTurn(
 }
 
 /**
- * Persist turn to local SQLite (optional cache, secondary storage)
- * Primary storage is now Core API
- */
-function persistTurnToLocalCache(turn: ConversationTurn, project: string): void {
-  if (!sqliteEnabled || !sqliteReady) {
-    return;
-  }
-
-  if (turn.role !== 'user' && turn.role !== 'assistant') {
-    return;
-  }
-
-  try {
-    createTurn({
-      project,
-      role: turn.role,
-      text: turn.text,
-      at: turn.timestamp,
-      tags: [`project:${project}`],
-    });
-    logger.trace('sql', `Turn cached locally for project ${project}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.trace('sql', `Local cache write failed: ${message}`);
-  }
-}
-
-/**
  * Persist turn to Core API (primary storage with semantic extraction)
  */
 async function persistTurnToCoreApi(
@@ -1132,14 +1041,6 @@ async function persistTurnToCoreApi(
   }
 }
 
-/**
- * Legacy alias for backward compatibility
- * @deprecated Use persistTurnToLocalCache instead
- */
-function persistTurnToDatabase(turn: ConversationTurn, project: string): void {
-  persistTurnToLocalCache(turn, project);
-}
-
 async function handleSlashCommand(
   cmdline: string,
   state: SessionState,
@@ -1164,31 +1065,15 @@ async function handleSlashCommand(
 
   switch (command) {
     case 'status': {
-      // Try core_api first
       try {
         const apiStatus = await getSystemStatusViaApi();
-        logger.info('=== core_api status ===');
+        logger.info('=== ContextFlow Status ===');
         logger.info(`projects: ${apiStatus.projects_count}`);
         logger.info(`conversations: ${apiStatus.conversations_count}`);
         logger.info(`turns: ${apiStatus.turns_count}`);
         logger.info(`commits: ${apiStatus.commits_count}`);
       } catch {
-        logger.info('core_api unavailable');
-      }
-
-      // Also show local SQLite status
-      if (sqliteEnabled && sqliteReady) {
-        try {
-          const snapshot = status();
-          logger.info('=== Local SQLite status ===');
-          logger.info(`generation=${snapshot.generation}`);
-          logger.info(
-            `counts => turns:${snapshot.counts.turns} drafts:${snapshot.counts.drafts} commits:${snapshot.counts.commits} events:${snapshot.counts.events}`,
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.warn(`Local SQLite query failed: ${message}`);
-        }
+        logger.error('Core API unavailable. Please ensure the server is running.');
       }
       return true;
     }
@@ -1200,49 +1085,38 @@ async function handleSlashCommand(
       const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20;
       const roleFilter =
         opts.role === 'user' || opts.role === 'assistant' || opts.role === 'tool'
-          ? (opts.role as TurnRole)
+          ? (opts.role as 'user' | 'assistant' | 'tool')
           : undefined;
 
-      // Try core_api first, fall back to local SQLite
       const projectId = getProjectIdByName(state.project);
-      if (projectId) {
-        try {
-          const turns = await listTurnsViaApi(projectId, {
-            role: roleFilter,
-            limit,
-          });
-          if (turns.length === 0) {
-            logger.info('No turn records yet.');
-          } else {
-            turns.forEach((turn) => {
-              const preview = turn.content.length > 80 ? `${turn.content.slice(0, 77)}...` : turn.content;
-              logger.info(`[${turn.role}] ${preview}`);
-            });
-          }
-          return true;
-        } catch {
-          // Fall back to local SQLite
-        }
+      if (!projectId) {
+        logger.warn(`Project "${state.project}" not found. Use /new to create.`);
+        return true;
       }
 
-      // Fallback to local SQLite
-      return runDbCommand(() => {
-        const rows = listTurns({ project: state.project, limit, role: roleFilter });
-        if (rows.length === 0) {
-          logger.info('No turn records yet.');
-          return;
-        }
-        rows.forEach((row) => {
-          const preview = row.text.length > 80 ? `${row.text.slice(0, 77)}...` : row.text;
-          logger.info(`#${row.id} [${row.role}] ${preview}`);
+      try {
+        const turns = await listTurnsViaApi(projectId, {
+          role: roleFilter,
+          limit,
         });
-      });
+        if (turns.length === 0) {
+          logger.info('No turn records yet.');
+        } else {
+          turns.forEach((turn) => {
+            const preview = turn.content.length > 80 ? `${turn.content.slice(0, 77)}...` : turn.content;
+            logger.info(`[${turn.role}] ${preview}`);
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`Failed to list turns: ${message}`);
+      }
+      return true;
     }
     case 'draft': {
-      // /draft --api <bridge_id> <intent> - create via core_api
+      // /draft <bridge_id> <intent> - create draft via Core API
       // /draft show <draft_id> - show draft details
       // /draft feedback <draft_id> <feedback_text> - update with feedback
-      // /draft <kind> - legacy local draft
 
       const subcommand = rest[0];
 
@@ -1321,74 +1195,52 @@ async function handleSlashCommand(
         return true;
       }
 
-      // Check for --api flag to use core_api
-      const useApi = rest.includes('--api');
-      const filteredRest = rest.filter((t) => t !== '--api');
-
-      if (useApi) {
-        // /draft --api <bridge_id> <intent>
-        // bridge_id: plan | summary | explain | clarify
-        const projectId = getProjectIdByName(state.project);
-        if (!projectId) {
-          logger.warn(`Project "${state.project}" not created in core_api. Please use /new to create project first.`);
-          return true;
-        }
-
-        const conversationId = getCurrentConversationId();
-        if (!conversationId) {
-          logger.warn('No active conversation. Please send a message first.');
-          return true;
-        }
-
-        // Parse bridge_id and intent
-        const bridgeIdArg = filteredRest[0] || 'summary';
-        const validBridges = ['plan', 'summary', 'explain', 'clarify'];
-        const bridgeId = validBridges.includes(bridgeIdArg)
-          ? (bridgeIdArg as 'plan' | 'summary' | 'explain' | 'clarify')
-          : 'summary';
-
-        const intent = filteredRest.slice(validBridges.includes(filteredRest[0]) ? 1 : 0).join(' ') || 'Generate content';
-
-        try {
-          logger.info(`Generating draft (${bridgeId})...`);
-          const draft = await createDraftViaApi(projectId, conversationId, bridgeId, intent);
-
-          if (draft.status === 'ready') {
-            logger.info(`✅ Draft generated successfully #${draft.draft_id}`);
-            logger.info(`Validation: ${draft.validation_passed ? 'Passed' : 'Failed'}`);
-            logger.info(`Must-Have: ${draft.must_have.join(', ') || '(none)'}`);
-            logger.info('---');
-            logger.info(draft.text || '(no content)');
-          } else {
-            logger.warn(`⚠️ Draft generation failed #${draft.draft_id}`);
-            logger.info(`status: ${draft.status}`);
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.error(`Failed to generate draft: ${message}`);
-        }
+      // /draft <bridge_id> <intent> - create draft via Core API
+      // bridge_id: plan | summary | explain | clarify
+      const projectId = getProjectIdByName(state.project);
+      if (!projectId) {
+        logger.warn(`Project "${state.project}" not created. Please use /new to create project first.`);
         return true;
       }
 
-      // Legacy local draft
-      return runDbCommand(() => {
-        const kindCandidate = filteredRest.find((token) => !token.startsWith('--')) ?? 'summary';
-        const kind: DraftKind =
-          kindCandidate === 'plan' || kindCandidate === 'note' ? (kindCandidate as DraftKind) : 'summary';
-        const draft = openDraft(state.project, kind);
-        logger.info(`📝 draft opened #${draft.id} (${kind})`);
-      });
+      const conversationId = getCurrentConversationId();
+      if (!conversationId) {
+        logger.warn('No active conversation. Please send a message first.');
+        return true;
+      }
+
+      // Parse bridge_id and intent
+      const bridgeIdArg = rest[0] || 'summary';
+      const validBridges = ['plan', 'summary', 'explain', 'clarify'];
+      const bridgeId = validBridges.includes(bridgeIdArg)
+        ? (bridgeIdArg as 'plan' | 'summary' | 'explain' | 'clarify')
+        : 'summary';
+
+      const intent = rest.slice(validBridges.includes(rest[0]) ? 1 : 0).join(' ') || 'Generate content';
+
+      try {
+        logger.info(`Generating draft (${bridgeId})...`);
+        const draft = await createDraftViaApi(projectId, conversationId, bridgeId, intent);
+
+        if (draft.status === 'ready') {
+          logger.info(`✅ Draft generated successfully #${draft.draft_id}`);
+          logger.info(`Validation: ${draft.validation_passed ? 'Passed' : 'Failed'}`);
+          logger.info(`Must-Have: ${draft.must_have.join(', ') || '(none)'}`);
+          logger.info('---');
+          logger.info(draft.text || '(no content)');
+        } else {
+          logger.warn(`⚠️ Draft generation failed #${draft.draft_id}`);
+          logger.info(`status: ${draft.status}`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`Failed to generate draft: ${message}`);
+      }
+      return true;
     }
     case 'commit': {
       return handleCommitCommand(rest, state);
     }
-    case 'validate':
-      return runDbCommand(() => {
-        const result = validateAll();
-        result.report.forEach((line) => logger.info(line));
-      });
-    case 'ui_init':
-      return handleUiInit(rest, workspaceDir);
     case 'branch': {
       const projectId = getProjectIdByName(state.project);
       if (!projectId) {
@@ -1599,21 +1451,6 @@ async function handleSlashCommand(
   }
 }
 
-function runDbCommand(action: () => void): boolean {
-  if (!sqliteEnabled || !sqliteReady) {
-    logger.warn('SQLite not initialized or disabled, related commands unavailable.');
-    return true;
-  }
-
-  try {
-    action();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SQLite command execution failed: ${message}`);
-  }
-  return true;
-}
-
 function parseFlagOptions(tokens: string[]): Record<string, string> & { [key: string]: string } {
   const result: Record<string, string> = {};
   for (let i = 0; i < tokens.length; i += 1) {
@@ -1647,144 +1484,60 @@ async function handleCommitCommand(tokens: string[], state: SessionState): Promi
   const opts = parseFlagOptions(tokens);
   const positional = tokens.filter((token) => !token.startsWith('--'));
 
-  // Check if we should use core_api commit
-  // /commit --api [--msg "..."] - commit recent turns to core_api
-  // /commit <start_hash> <end_hash> [--msg "..."] - commit specific turn window
-  if (opts.api !== undefined || positional.length >= 2) {
-    const projectId = getProjectIdByName(state.project);
-    if (!projectId) {
-      logger.warn(`project "${state.project}" was not created in core_api. Please use /new createproject first.`);
-      return true;
-    }
-
-    const conversationId = getCurrentConversationId();
-    if (!conversationId) {
-      logger.warn('No active conversation. Please send a message to create conversation first.');
-      return true;
-    }
-
-    try {
-      let turnWindow: { start_turn_hash: string; end_turn_hash: string };
-
-      if (positional.length >= 2) {
-        // Explicit turn window
-        turnWindow = {
-          start_turn_hash: positional[0],
-          end_turn_hash: positional[1],
-        };
-      } else {
-        // Auto-detect from recent turns
-        const turns = await listTurnsViaApi(projectId, {
-          conversationId,
-          limit: 50,
-        });
-
-        if (turns.length === 0) {
-          logger.warn('Current conversation has no turns, cannot create commit.');
-          return true;
-        }
-
-        // Use all turns in current conversation
-        const sortedTurns = [...turns].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-        turnWindow = {
-          start_turn_hash: sortedTurns[0].turn_hash,
-          end_turn_hash: sortedTurns[sortedTurns.length - 1].turn_hash,
-        };
-      }
-
-      const commit = await createCommitViaApi(projectId, conversationId, turnWindow, {
-        message: opts.msg,
-      });
-
-      logger.info(`✅ commit ${commit.commit_hash.slice(0, 8)} [${commit.branch}]`);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to create commit: ${message}`);
-      return true;
-    }
-  }
-
-  // Fallback to local draft-based commit
-  if (positional.length === 0) {
-    logger.warn('Usage:');
-    logger.warn('  /commit --api [--msg "..."]  - Commit recent turns to core_api');
-    logger.warn('  /commit <start_hash> <end_hash> [--msg "..."]  - Commit specified turn window');
-    logger.warn('  /commit <draftId> [--msg "..."]  - Commit local draft');
+  const projectId = getProjectIdByName(state.project);
+  if (!projectId) {
+    logger.warn(`Project "${state.project}" not created. Please use /new to create project first.`);
     return true;
   }
 
-  const draftId = Number(positional[0]);
-  if (!Number.isInteger(draftId) || draftId <= 0) {
-    logger.warn('draftId must be a positive integer.');
+  const conversationId = getCurrentConversationId();
+  if (!conversationId) {
+    logger.warn('No active conversation. Please send a message to create conversation first.');
     return true;
   }
-  return runDbCommand(() => {
-    const result = commitDraft(draftId, opts.msg);
-    logger.info(`✅ commit #${result.id} ${result.hash.slice(0, 8)}`);
-  });
-}
-
-async function handleUiInit(tokens: string[], workspaceDir: string): Promise<boolean> {
-  // Show status of API server
-  const serverInfo = getEmbeddedServerInfo();
-
-  if (serverInfo) {
-    logger.info(`ContextFlow API server: http://${serverInfo.host}:${serverInfo.port}`);
-    logger.info('WebUI can connect to this server for all operations.');
-  } else {
-    logger.warn('API server not running. Start with: contextflow-serve');
-  }
-
-  // Show legacy WebUI API status if running
-  const legacyInfo = getApiServerInfo();
-  if (legacyInfo) {
-    logger.info(`WebUI API (legacy): http://127.0.0.1:${legacyInfo.port}`);
-    if (legacyInfo.token) {
-      logger.info(`X-CF-Token: ${legacyInfo.token}`);
-    }
-    return true;
-  }
-
-  // Legacy WebUI API requires SQLite
-  if (!sqliteEnabled || !sqliteReady) {
-    logger.info('SQLite mode not enabled. Use the main API server at port 8000.');
-    return true;
-  }
-
-  const opts = parseFlagOptions(tokens);
-  const portValue = opts.port ?? opts.p;
-  let port = 8765;
-  if (portValue && portValue !== 'auto') {
-    const parsed = Number(portValue);
-    if (Number.isInteger(parsed) && parsed > 0) {
-      port = parsed;
-    }
-  }
-  const tokenValue = opts.token;
-  const requireToken = tokenValue !== 'none';
-  const token = requireToken && tokenValue && tokenValue !== 'true' ? tokenValue : undefined;
 
   try {
-    const info = await startApiServer({
-      port,
-      contextflowDir: workspaceDir,
-      requireToken,
-      token,
-    });
-    logger.info(`WebUI API started: http://127.0.0.1:${info.port}`);
-    if (info.token) {
-      logger.info(`Include X-CF-Token in request header: ${info.token}`);
-    } else if (requireToken) {
-      logger.warn('Failed to generate token. Please check configuration.');
+    let turnWindow: { start_turn_hash: string; end_turn_hash: string };
+
+    if (positional.length >= 2) {
+      // Explicit turn window: /commit <start_hash> <end_hash> [--msg "..."]
+      turnWindow = {
+        start_turn_hash: positional[0],
+        end_turn_hash: positional[1],
+      };
+    } else {
+      // Auto-detect from recent turns
+      const turns = await listTurnsViaApi(projectId, {
+        conversationId,
+        limit: 50,
+      });
+
+      if (turns.length === 0) {
+        logger.warn('Current conversation has no turns, cannot create commit.');
+        return true;
+      }
+
+      // Use all turns in current conversation
+      const sortedTurns = [...turns].sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      turnWindow = {
+        start_turn_hash: sortedTurns[0].turn_hash,
+        end_turn_hash: sortedTurns[sortedTurns.length - 1].turn_hash,
+      };
     }
+
+    const commit = await createCommitViaApi(projectId, conversationId, turnWindow, {
+      message: opts.msg,
+    });
+
+    logger.info(`✅ commit ${commit.commit_hash.slice(0, 8)} [${commit.branch}]`);
+    return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`Failed to start WebUI API: ${message}`);
+    logger.error(`Failed to create commit: ${message}`);
+    return true;
   }
-  return true;
 }
 
 async function printProjectList(current: string): Promise<void> {

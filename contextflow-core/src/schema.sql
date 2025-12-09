@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS commits (
   FOREIGN KEY(parent_commit_id) REFERENCES commits(id)
 );
 
+-- DEPRECATED: V1 embeddings table (no longer used)
+-- Kept for backward compatibility with existing databases.
+-- New code should use segment_embeddings table instead.
 CREATE TABLE IF NOT EXISTS embeddings (
   id     INTEGER PRIMARY KEY AUTOINCREMENT,
   project TEXT NOT NULL,
@@ -130,6 +133,9 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   draft_id TEXT,
   draft_text_hash TEXT,
   signature_json TEXT,
+  source_excerpt_json TEXT,
+  must_have_json TEXT,
+  mustnt_have_json TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
@@ -173,3 +179,19 @@ CREATE TABLE IF NOT EXISTS merge_results (
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_merge_results_project ON merge_results(project_id);
+
+-- Segment Embeddings table (pre-computed vectors for Ring 3 segments)
+-- Stored separately from turns_v2 to keep main table lightweight
+CREATE TABLE IF NOT EXISTS segment_embeddings (
+  segment_id TEXT PRIMARY KEY,           -- "turn_hash:s-0", "turn_hash:s-1", etc.
+  turn_hash TEXT NOT NULL,               -- Reference to parent turn
+  segment_index INTEGER NOT NULL,        -- Index in Ring 3 segments array (0-based)
+  segment_text TEXT NOT NULL,            -- Original segment text
+  embedding_model TEXT NOT NULL,         -- e.g., "google-ai:text-embedding-004"
+  embedding_dim INTEGER NOT NULL,        -- e.g., 768
+  embedding BLOB NOT NULL,               -- Float32Array as binary (768 * 4 = 3072 bytes)
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(turn_hash) REFERENCES turns_v2(turn_hash) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
+CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
