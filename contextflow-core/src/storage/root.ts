@@ -55,23 +55,34 @@ export function resolveStorageRoot(startDir?: string): StorageRoot {
     current = parent;
   }
 
-  // 3. Walk up to find repo root (.git or root package.json)
+  // 3. Walk up to find repo root (.git first, then package.json as fallback)
+  // Prioritize .git to ensure monorepo root is used instead of sub-packages
   current = path.resolve(cwd);
   while (current !== root) {
     const hasGit = existsSync(path.join(current, '.git'));
-    const hasPkg = existsSync(path.join(current, 'package.json'));
-
-    if (hasGit || hasPkg) {
+    if (hasGit) {
       const contextflowDir = path.join(current, CONTEXTFLOW_DIR);
       return { projectRoot: current, contextflowDir, source: 'created' };
     }
-
     const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
   }
 
-  // 4. Fallback to startDir
+  // 4. Fallback: walk up to find package.json (for non-git projects)
+  current = path.resolve(cwd);
+  while (current !== root) {
+    const hasPkg = existsSync(path.join(current, 'package.json'));
+    if (hasPkg) {
+      const contextflowDir = path.join(current, CONTEXTFLOW_DIR);
+      return { projectRoot: current, contextflowDir, source: 'created' };
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  // 5. Fallback to startDir
   const contextflowDir = path.join(cwd, CONTEXTFLOW_DIR);
   return { projectRoot: cwd, contextflowDir, source: 'created' };
 }
