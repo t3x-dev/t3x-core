@@ -88,6 +88,17 @@ export interface MergeResultRecord {
   created_at: string;
 }
 
+export interface SegmentEmbeddingRecord {
+  segment_id: string;           // "turn_hash:s-0"
+  turn_hash: string;
+  segment_index: number;
+  segment_text: string;
+  embedding_model: string;      // "google-ai:text-embedding-004"
+  embedding_dim: number;        // 768
+  embedding: Buffer;            // Float32Array as binary
+  created_at: string;
+}
+
 // === Input Types ===
 
 export interface CreateProjectInput {
@@ -143,6 +154,26 @@ export interface CreateDraftV2Input {
   mustnt_have?: string[];
   llm_config: unknown;
   text: string;
+}
+
+export interface CreateSegmentEmbeddingInput {
+  turn_hash: string;
+  segment_index: number;
+  segment_text: string;
+  embedding_model: string;
+  embedding_dim: number;
+  embedding: number[];          // Float array from embedding provider
+}
+
+export interface CreateSegmentEmbeddingsBatchInput {
+  turn_hash: string;
+  embedding_model: string;
+  embedding_dim: number;
+  segments: Array<{
+    index: number;
+    text: string;
+    embedding: number[];
+  }>;
 }
 
 // === Query Options ===
