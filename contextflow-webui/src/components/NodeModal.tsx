@@ -12,7 +12,7 @@ import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
 import * as api from '../services/api'
-import { PendingSourceEditor, SourceExcerptViewer } from './SelectableTextBlock'
+import { PendingSourceEditor } from './SelectableTextBlock'
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
   getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
@@ -1583,14 +1583,11 @@ export function NodeModal({
   if (isCommittedCommit) {
     const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
 
-    // Get keywords from pendingSource textBlocks
-    const commitTextBlocks = data.pendingSource?.textBlocks || []
-    const commitMustHave = commitTextBlocks.flatMap(block =>
-      getMustHaveKeywordsFromBlocks(block.tokens, block.keywords)
-    )
-    const commitMustntHave = commitTextBlocks.flatMap(block =>
-      getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords)
-    )
+    // Get keywords and source excerpt from committed data (stored in database)
+    // These come from data.mustHave, data.mustntHave, data.sourceExcerpt fields
+    const commitMustHave = data.mustHave || []
+    const commitMustntHave = data.mustntHave || []
+    const commitSourceExcerpt = data.sourceExcerpt || []
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
@@ -1679,8 +1676,15 @@ export function NodeModal({
                   <span className="commit-v2__readonly-badge">Read-only</span>
                 </div>
                 <div className="commit-v2__source-excerpt">
-                  {data.pendingSource?.textBlocks && data.pendingSource.textBlocks.length > 0 ? (
-                    <SourceExcerptViewer blocks={data.pendingSource.textBlocks} />
+                  {commitSourceExcerpt.length > 0 ? (
+                    <div className="commit-v2__source-list">
+                      {commitSourceExcerpt.map((excerpt, idx) => (
+                        <div key={idx} className="commit-v2__source-item">
+                          <span className="commit-v2__source-marker">•</span>
+                          <span className="commit-v2__source-text">{excerpt}</span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <div className="commit-v2__empty-state">
                       <span>No source excerpt recorded</span>
