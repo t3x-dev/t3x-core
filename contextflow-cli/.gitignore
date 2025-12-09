@@ -1,4 +1,10 @@
 node_modules/
 dist/
-.contextflow/conversations/
+# ContextFlow runtime data
+.contextflow/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
 .DS_Store
