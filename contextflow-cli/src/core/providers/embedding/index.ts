@@ -18,3 +18,10 @@ export {
   createGoogleAIEmbeddingProvider,
 } from "./googleAI";
 
+// Export cached provider wrapper
+export {
+  CachedEmbeddingProvider,
+  CachedEmbeddingConfig,
+  createCachedEmbeddingProvider,
+} from "./cached";
+
