@@ -63,6 +63,8 @@ type CanvasState = {
   // Deletion confirmation methods
   confirmDeletion: () => void
   cancelDeletion: () => void
+  // Update node ID (for syncing local pending commit with API commit_hash)
+  updateNodeId: (oldId: string, newId: string) => void
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -1628,4 +1630,39 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   cancelDeletion: () => set({ deletionConfirmation: null }),
+
+  // Update node ID and all related edges (for syncing local pending commit with API commit_hash)
+  updateNodeId: (oldId, newId) =>
+    set((state) => {
+      // Update nodes
+      const updatedNodes = state.nodes.map((node) =>
+        node.id === oldId ? { ...node, id: newId } : node
+      )
+
+      // Update edges (both source and target references)
+      const updatedEdges = state.edges.map((edge) => {
+        let updated = edge
+        if (edge.source === oldId) {
+          updated = { ...updated, source: newId }
+        }
+        if (edge.target === oldId) {
+          updated = { ...updated, target: newId }
+        }
+        // Update edge ID if it contains the old node ID
+        if (edge.id.includes(oldId)) {
+          updated = { ...updated, id: edge.id.replace(oldId, newId) }
+        }
+        return updated
+      })
+
+      // Update latestMainCommitId if it matches
+      const latestMainCommitId =
+        state.latestMainCommitId === oldId ? newId : state.latestMainCommitId
+
+      return {
+        nodes: updatedNodes,
+        edges: updatedEdges,
+        latestMainCommitId,
+      }
+    }),
 }))

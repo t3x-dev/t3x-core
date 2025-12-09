@@ -708,7 +708,7 @@ export function NodeModal({
         ? data.pendingBranchName
         : 'main'
 
-      await api.createCommit(
+      const commit = await api.createCommit(
         projectId,
         { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
         branch,
@@ -716,17 +716,24 @@ export function NodeModal({
         draft.draft_id
       )
 
-      // 6. Update local state with final values
+      // 6. Update local node ID to match API commit_hash (before refresh)
+      // This ensures edges are preserved when loadProjectData rebuilds the canvas
+      if (node && commit.commit_hash) {
+        useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
+      }
+
+      // 7. Update local state with final values
       onUpdate({
         summary: draft.text || resultText,
         bridgePrompt: template,
         isGenerated: true,
+        commitHash: commit.commit_hash,
       })
 
-      // 7. Trigger convert to committed state
+      // 8. Trigger convert to committed state
       onConvertDraft?.()
 
-      // 8. Refresh canvas data
+      // 9. Refresh canvas data
       useCanvasStore.getState().loadProjectData(projectId)
 
     } catch (err) {
@@ -736,7 +743,7 @@ export function NodeModal({
     } finally {
       setIsCommitting(false)
     }
-  }, [projectId, data?.sourceConversationId, data?.title, data?.pendingBranch, data?.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
+  }, [projectId, node, data?.sourceConversationId, data?.title, data?.pendingBranch, data?.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
