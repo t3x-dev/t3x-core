@@ -495,7 +495,8 @@ export async function listTurns(
 }
 
 export async function getTurn(turnHash: string): Promise<TurnDetail> {
-  const res = await fetchWithTimeout(`${API_V1}/turns/${encodeURIComponent(turnHash)}`)
+  // Don't encode the colon in sha256:xxx - backend expects raw format
+  const res = await fetchWithTimeout(`${API_V1}/turns/${turnHash}`)
   const data = await handleResponse<ApiResponse<TurnDetail>>(res)
   return data.data
 }
