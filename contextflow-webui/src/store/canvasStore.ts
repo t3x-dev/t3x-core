@@ -588,6 +588,10 @@ const commitToNode = (
       branchName: commit.branch !== 'main' ? commit.branch : undefined,
       commitStatus: 'committed',
       commitHash: commit.commit_hash, // Full hash for API calls
+      // User selections from committed commit
+      sourceExcerpt: commit.source_excerpt ?? undefined,
+      mustHave: commit.must_have ?? undefined,
+      mustntHave: commit.mustnt_have ?? undefined,
     },
   }
 }
