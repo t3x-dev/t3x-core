@@ -5,6 +5,8 @@
  * API Reference: https://ai.google.dev/api/embeddings
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const undici = require("undici");
 import {
   EmbeddingProvider,
   EmbeddingProviderError,
@@ -13,6 +15,18 @@ import {
 
 const GOOGLE_AI_EMBEDDING_URL =
   "https://generativelanguage.googleapis.com/v1beta/models";
+
+/**
+ * Get proxy URL from environment variables
+ */
+function getProxyUrl(): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  );
+}
 
 /**
  * Configuration options for Google AI Studio Embedding Provider
@@ -101,11 +115,12 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
   private async embedSingle(text: string): Promise<number[]> {
     const url = `${GOOGLE_AI_EMBEDDING_URL}/${this.model}:embedContent?key=${this.apiKey}`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    // Setup proxy if available
+    const proxyUrl = getProxyUrl();
+    const dispatcher = proxyUrl ? new undici.ProxyAgent(proxyUrl) : undefined;
 
     try {
-      const response = await fetch(url, {
+      const { statusCode, body } = await undici.request(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -116,19 +131,20 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
             parts: [{ text }],
           },
         }),
-        signal: controller.signal,
+        dispatcher,
+        headersTimeout: this.timeout,
+        bodyTimeout: this.timeout,
       });
 
-      clearTimeout(timeoutId);
+      const responseText = await body.text();
 
-      if (!response.ok) {
-        const errorBody = await response.text();
+      if (statusCode !== 200) {
         throw new Error(
-          `Google AI API error (${response.status}): ${errorBody}`
+          `Google AI API error (${statusCode}): ${responseText}`
         );
       }
 
-      const data = (await response.json()) as GoogleAIEmbedResponse;
+      const data = JSON.parse(responseText) as GoogleAIEmbedResponse;
 
       if (!data.embedding?.values) {
         throw new Error("Invalid response: missing embedding values");
@@ -136,8 +152,6 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
 
       return data.embedding.values;
     } catch (error) {
-      clearTimeout(timeoutId);
-
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error(`Request timeout after ${this.timeout}ms`);
       }
