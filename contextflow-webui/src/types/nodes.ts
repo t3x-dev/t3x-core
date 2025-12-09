@@ -149,4 +149,8 @@ export interface CanvasNodeData {
   commitHash?: string
   // Pending commit source data with free-form text selection
   pendingSource?: PendingCommitSource
+  // Committed commit data (from database)
+  sourceExcerpt?: string[]  // User-selected source excerpts
+  mustHave?: string[]       // Must-have keywords
+  mustntHave?: string[]     // Must-not-have keywords
 }
