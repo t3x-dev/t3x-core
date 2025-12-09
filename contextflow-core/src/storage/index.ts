@@ -106,3 +106,19 @@ export {
   listMergeResults,
   deleteMergeResult,
 } from './mergeResults';
+
+// Segment Embeddings CRUD
+export {
+  float32ArrayToBuffer,
+  bufferToFloat32Array,
+  generateSegmentId,
+  createSegmentEmbedding,
+  createSegmentEmbeddingsBatch,
+  getSegmentEmbedding,
+  getSegmentEmbeddingsByTurn,
+  getSegmentEmbeddingsByTurns,
+  hasEmbeddingsForTurn,
+  deleteSegmentEmbeddingsByTurn,
+  getEmbeddingsCountForTurn,
+  getEmbeddingsByModel,
+} from './segmentEmbeddings';
