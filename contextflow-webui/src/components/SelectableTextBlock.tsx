@@ -275,8 +275,22 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
             classes.push(isRightDragging ? 'selectable-token--dragging-exclude' : 'selectable-token--dragging')
           }
 
-          // Skip interaction for pure punctuation
-          const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>\s]+$/.test(token.text)
+          // Skip interaction for pure punctuation (including | and │ separators)
+          const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>|│\s]+$/.test(token.text)
+
+          // Render newline as <br /> element
+          if (token.text === '\n') {
+            return <br key={token.id} />
+          }
+
+          // Render separator │ with special styling
+          if (token.text === '│') {
+            return (
+              <span key={token.id} className="selectable-token selectable-token--separator">
+                {token.text}
+              </span>
+            )
+          }
 
           return (
             <span
