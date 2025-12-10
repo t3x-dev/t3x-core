@@ -756,13 +756,26 @@ export function NodeModal({
   // Chat loading state - disable send while loading history
   const [isChatLoading, setIsChatLoading] = useState(false)
 
+  // Track previous conversationId to detect first-time assignment
+  const prevConversationIdRef = useRef<string | undefined>(undefined)
+
   // Load chat history from backend when modal opens for conversation
   useEffect(() => {
     const abortController = new AbortController()
     const currentConversationId = data?.conversationId
+    const prevConversationId = prevConversationIdRef.current
+    prevConversationIdRef.current = currentConversationId
 
     const loadChatHistory = async () => {
       if (!data || data.kind !== 'conversation' || !projectId || !currentConversationId) return
+
+      // If conversationId just changed from undefined to a value and we already have messages,
+      // this means we just created the conversation during an active chat session.
+      // Don't reload - the messages are already in state.
+      if (prevConversationId === undefined && chatMessagesRef.current.length > 0) {
+        console.log('[loadChatHistory] Skipping reload - conversation just created during active chat')
+        return
+      }
 
       // Cancel any pending loadMore request when switching conversations
       loadMoreAbortRef.current?.abort()

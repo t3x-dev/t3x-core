@@ -43,7 +43,8 @@
       "Bash(ls:*)",
       "Bash(npx eslint:*)",
       "Bash(grep:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []
