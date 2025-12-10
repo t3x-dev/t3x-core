@@ -35,6 +35,8 @@ export interface Conversation {
   project_id: string
   title?: string
   parent_commit_hash?: string
+  position_x?: number
+  position_y?: number
   created_at: string
   turns_count?: number
 }
@@ -97,6 +99,8 @@ export interface CommitRaw {
   source_excerpt_json: string | null
   must_have_json: string | null
   mustnt_have_json: string | null
+  position_x: number | null
+  position_y: number | null
   created_at: string
 }
 
@@ -157,6 +161,8 @@ export interface Commit {
   source_excerpt: string[] | null
   must_have: string[] | null
   mustnt_have: string[] | null
+  position_x: number | null
+  position_y: number | null
   created_at: string
 }
 
@@ -296,6 +302,8 @@ function parseCommit(raw: CommitRaw): Commit {
     source_excerpt: raw.source_excerpt_json ? JSON.parse(raw.source_excerpt_json) : null,
     must_have: raw.must_have_json ? JSON.parse(raw.must_have_json) : null,
     mustnt_have: raw.mustnt_have_json ? JSON.parse(raw.mustnt_have_json) : null,
+    position_x: raw.position_x,
+    position_y: raw.position_y,
     created_at: raw.created_at,
   }
 }
@@ -459,6 +467,7 @@ export async function createConversation(
   projectId: string,
   title?: string,
   parentCommitHash?: string,
+  position?: { x: number; y: number },
   metadata?: Record<string, unknown>
 ): Promise<Conversation> {
   const res = await fetchWithTimeout(`${API_V1}/conversations`, {
@@ -468,6 +477,8 @@ export async function createConversation(
       project_id: projectId,
       title,
       parent_commit_hash: parentCommitHash,
+      position_x: position?.x,
+      position_y: position?.y,
       metadata
     }),
   })
@@ -481,6 +492,36 @@ export async function deleteConversation(conversationId: string): Promise<{ dele
   })
   const data = await handleResponse<ApiResponse<{ deleted: boolean; conversation_id: string }>>(res)
   return data.data
+}
+
+export async function updateConversation(
+  conversationId: string,
+  updates: { title?: string; position_x?: number; position_y?: number }
+): Promise<Conversation> {
+  const res = await fetchWithTimeout(`${API_V1}/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  const data = await handleResponse<ApiResponse<Conversation>>(res)
+  return data.data
+}
+
+export async function updateCommitPosition(
+  commitHash: string,
+  position: { x?: number; y?: number }
+): Promise<Commit> {
+  // Don't encode the colon in sha256:xxx - backend expects raw format
+  const res = await fetchWithTimeout(`${API_V1}/commits/${commitHash}/position`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      position_x: position.x,
+      position_y: position.y,
+    }),
+  })
+  const rawData = await handleResponse<ApiResponse<CommitRaw>>(res)
+  return parseCommit(rawData.data)
 }
 
 // ============================================================================

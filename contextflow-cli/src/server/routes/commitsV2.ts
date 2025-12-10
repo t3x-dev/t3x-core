@@ -11,6 +11,7 @@ import {
   listCommitsV2,
   getCommitParents,
   getCommitHistory,
+  updateCommitPosition,
   findCommonAncestor,
   getProject,
   getTurnV2,
@@ -42,6 +43,8 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       source_excerpt?: string[];
       must_have?: string[];
       mustnt_have?: string[];
+      position_x?: number;
+      position_y?: number;
     } | null;
 
     if (!body?.project_id || !body?.turn_window) {
@@ -138,6 +141,8 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         source_excerpt: body.source_excerpt,
         must_have: body.must_have,
         mustnt_have: body.mustnt_have,
+        position_x: body.position_x,
+        position_y: body.position_y,
       });
 
       // Parse parents for response
@@ -214,6 +219,34 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       sendJson(res, 500, errorResponse("GET_FAILED", message));
+    }
+  });
+
+  // PATCH /api/v1/commits/:hash/position - Update commit position
+  router.patch(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/position$/, async (ctx, _req, res) => {
+    const match = ctx.path.match(/^\/api\/v1\/commits\/(sha256:[a-f0-9]+)\/position$/);
+    const commit_hash = match?.[1];
+
+    if (!commit_hash) {
+      sendJson(res, 400, errorResponse("INVALID_REQUEST", "commit_hash is required"));
+      return;
+    }
+
+    const body = ctx.body as { position_x?: number; position_y?: number } | null;
+
+    try {
+      const commit = updateCommitPosition(commit_hash, {
+        x: body?.position_x,
+        y: body?.position_y,
+      });
+      if (!commit) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", `Commit ${commit_hash} not found`));
+        return;
+      }
+      sendJson(res, 200, successResponse(commit));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      sendJson(res, 500, errorResponse("UPDATE_FAILED", message));
     }
   });
 

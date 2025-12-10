@@ -537,18 +537,65 @@ const LAYOUT = {
   COMMIT_SPACING_Y: 150,
 }
 
+// Debounced position save - collect position changes and save after 500ms of no changes
+const positionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingPositionSaves = new Map<string, { kind: NodeKind; position: { x: number; y: number } }>()
+
+function saveNodePosition(nodeId: string, kind: NodeKind, position: { x: number; y: number }) {
+  // Cancel existing timer for this node
+  const existingTimer = positionSaveTimers.get(nodeId)
+  if (existingTimer) {
+    clearTimeout(existingTimer)
+  }
+
+  // Store the pending position
+  pendingPositionSaves.set(nodeId, { kind, position })
+
+  // Set a new timer
+  const timer = setTimeout(() => {
+    const pending = pendingPositionSaves.get(nodeId)
+    if (!pending) return
+
+    pendingPositionSaves.delete(nodeId)
+    positionSaveTimers.delete(nodeId)
+
+    // Call appropriate API based on node kind
+    if (pending.kind === 'conversation') {
+      api.updateConversation(nodeId, {
+        position_x: pending.position.x,
+        position_y: pending.position.y,
+      }).catch((err) => {
+        console.warn('Failed to save conversation position:', err)
+      })
+    } else if (pending.kind === 'commit') {
+      api.updateCommitPosition(nodeId, {
+        x: pending.position.x,
+        y: pending.position.y,
+      }).catch((err) => {
+        console.warn('Failed to save commit position:', err)
+      })
+    }
+  }, 500)
+
+  positionSaveTimers.set(nodeId, timer)
+}
+
 // Convert API Conversation to Canvas Node
 const conversationToNode = (
   conv: api.Conversation,
   index: number
 ): Node<CanvasNodeData> => {
+  // Use saved position if available, otherwise calculate default position
+  const position = (conv.position_x != null && conv.position_y != null)
+    ? { x: conv.position_x, y: conv.position_y }
+    : {
+        x: LAYOUT.CONVERSATION_START_X,
+        y: LAYOUT.CONVERSATION_START_Y + index * LAYOUT.CONVERSATION_SPACING_Y,
+      }
   return {
     id: conv.conversation_id,
     type: 'conversation',
-    position: snapPosition({
-      x: LAYOUT.CONVERSATION_START_X,
-      y: LAYOUT.CONVERSATION_START_Y + index * LAYOUT.CONVERSATION_SPACING_Y,
-    }),
+    position: snapPosition(position),
     data: {
       entryId: conv.conversation_id.slice(0, 8),
       title: conv.title || 'Untitled Conversation',
@@ -569,13 +616,17 @@ const commitToNode = (
   baseY: number
 ): Node<CanvasNodeData> => {
   const facetCount = commit.facet_snapshot?.length || 0
+  // Use saved position if available, otherwise calculate default position
+  const position = (commit.position_x != null && commit.position_y != null)
+    ? { x: commit.position_x, y: commit.position_y }
+    : {
+        x: LAYOUT.CONVERSATION_START_X + LAYOUT.COMMIT_OFFSET_X,
+        y: baseY + index * LAYOUT.COMMIT_SPACING_Y,
+      }
   return {
     id: commit.commit_hash,
     type: 'commit',
-    position: snapPosition({
-      x: LAYOUT.CONVERSATION_START_X + LAYOUT.COMMIT_OFFSET_X,
-      y: baseY + index * LAYOUT.COMMIT_SPACING_Y,
-    }),
+    position: snapPosition(position),
     data: {
       entryId: commit.commit_hash.slice(0, 12),
       title: commit.message || 'Commit',
@@ -724,7 +775,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             const convParentHash = convParentCommitMap.get(sourceConvId)
             // If there's an intermediate conversation connecting parent to child, skip direct edge
             if (convParentHash === parentHash) {
-              console.log('[loadProjectData] Skipping commit→commit edge (has intermediate conversation):', parentHash, '->', commit.commit_hash)
               return
             }
           }
@@ -741,13 +791,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       })
 
       // Add conversation → commit edges based on turn_window
-      console.log('[loadProjectData] convIds:', Array.from(convIds))
-      console.log('[loadProjectData] turnToConvMap:', Object.fromEntries(turnToConvMap))
       commits.forEach((commit) => {
-        console.log('[loadProjectData] Processing commit:', commit.commit_hash, 'turn_window:', commit.turn_window)
         const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
         if (sourceConvId) {
-          console.log('[loadProjectData] Creating conv→commit edge:', sourceConvId, '->', commit.commit_hash)
           edges.push({
             id: `conv-${sourceConvId}-${commit.commit_hash}`,
             source: sourceConvId,
@@ -762,7 +808,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // Add commit → conversation edges based on parent_commit_hash
       conversations.forEach((conv) => {
         if (conv.parent_commit_hash && commitHashes.has(conv.parent_commit_hash)) {
-          console.log('[loadProjectData] Creating commit→conv edge:', conv.parent_commit_hash, '->', conv.conversation_id)
           edges.push({
             id: `commit-conv-${conv.parent_commit_hash}-${conv.conversation_id}`,
             source: conv.parent_commit_hash,
@@ -1198,21 +1243,29 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         return {}
       }
 
-      // Debug logging
-      console.log('[onNodesChange] changes:', changes)
-
       const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
       const lockedNodes = getLockedNodeIds(state.nodes, state.edges)
-      console.log('[onNodesChange] lockedNodes:', Array.from(lockedNodes))
+
+      // Handle position changes - save to database (debounced)
+      const positionChanges = changes.filter((c) => c.type === 'position' && c.position)
+      if (positionChanges.length > 0) {
+        positionChanges.forEach((change) => {
+          if (change.type !== 'position' || !change.position) return
+          const node = nodeMap.get(change.id)
+          if (!node) return
+
+          const snappedPos = snapPosition(change.position)
+          // Save position to database (fire and forget, debounced internally)
+          saveNodePosition(node.id, node.data.kind, snappedPos)
+        })
+      }
 
       // Separate remove changes from other changes
       const removeChanges = changes.filter((c) => c.type === 'remove')
       const otherChanges = changes.filter((c) => c.type !== 'remove')
-      console.log('[onNodesChange] removeChanges:', removeChanges)
 
       // Filter out locked nodes from removal
       const allowedRemoves = removeChanges.filter((c) => !lockedNodes.has(c.id))
-      console.log('[onNodesChange] allowedRemoves:', allowedRemoves)
 
       if (allowedRemoves.length === 0) {
         // No removes, just apply other changes
@@ -1249,9 +1302,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // Otherwise, can delete directly
         directDeletes.push(nodeId)
       })
-
-      console.log('[onNodesChange] needsConfirmation:', needsConfirmation)
-      console.log('[onNodesChange] directDeletes:', directDeletes)
 
       // If there are nodes needing confirmation, show dialog
       if (needsConfirmation.length > 0) {
