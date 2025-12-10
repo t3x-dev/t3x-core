@@ -12,11 +12,12 @@ import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
 import * as api from '../services/api'
-import { PendingSourceEditor, SourceExcerptViewer } from './SelectableTextBlock'
+import { PendingSourceEditor } from './SelectableTextBlock'
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
   getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
   extractWithThresholds,
+  getSelectedText,
 } from '../utils/tokenizer'
 
 const bridgeTemplates = [
@@ -649,7 +650,7 @@ export function NodeModal({
 
   // Handle Commit - create commit via API
   const handleCommit = useCallback(async () => {
-    if (!projectId) {
+    if (!projectId || !data) {
       setCommitError('No project selected')
       return
     }
@@ -680,51 +681,53 @@ export function NodeModal({
       const startTurnHash = turns[0].turn_hash
       const endTurnHash = turns[turns.length - 1].turn_hash
 
-      // 2. Map template to bridge_id
-      const bridgeId = template === 'plan' ? 'plan' : 'summary'
-
-      // 3. Create Draft
-      const draft = await api.createDraft(
-        projectId,
-        sourceConversationId,
-        bridgeId as 'plan' | 'summary' | 'explain' | 'clarify',
-        data.title || 'Extract semantic content',
-        undefined, // base_commit_hash
-        endTurnHash // turn_anchor_hash
-      )
-
-      // 4. Check validation_status
-      if (draft.validation_status === 'failed' && draft.validation) {
-        setValidationErrors({
-          missing: draft.validation.missing_keywords,
-          forbidden: draft.validation.forbidden_keywords,
-        })
-        setIsCommitting(false)
-        return
-      }
-
-      // 5. If validation passed, create Commit
+      // 2. Determine branch
       const branch = data.pendingBranch === 'branch' && data.pendingBranchName
         ? data.pendingBranchName
         : 'main'
 
+      // 3. Collect user selections
+      // Get source excerpts (included phrases) from textBlocks or legacy allPhrases
+      let sourceExcerpt: string[] = []
+      let mustHave: string[] = []
+      let mustntHave: string[] = []
+
+      if (textBlocks.length > 0) {
+        // New system: get selected text from each block
+        sourceExcerpt = textBlocks
+          .map(block => getSelectedText(block.tokens, block.selections))
+          .filter(text => text.length > 0)
+        mustHave = [...mustHaveKeywordsNew]
+        mustntHave = [...mustntHaveKeywordsNew]
+      } else {
+        // Legacy system: get included phrases
+        sourceExcerpt = allPhrases.filter(p => p.included).map(p => p.text)
+        mustHave = mustHaveKeywordsLegacy.map(kw => kw.text)
+        mustntHave = mustntHaveKeywordsLegacy.map(kw => kw.text)
+      }
+
+      // 4. Create Commit directly (Ring data already extracted during turn creation)
       const commit = await api.createCommit(
         projectId,
         { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
         branch,
         data.title,
-        draft.draft_id
+        {
+          sourceExcerpt,
+          mustHave,
+          mustntHave,
+        }
       )
 
-      // 6. Update local node ID to match API commit_hash (before refresh)
+      // 4. Update local node ID to match API commit_hash (before refresh)
       // This ensures edges are preserved when loadProjectData rebuilds the canvas
       if (node && commit.commit_hash) {
         useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
       }
 
-      // 7. Update local state with final values
+      // 5. Update local state with final values
       onUpdate({
-        summary: draft.text || resultText,
+        summary: resultText,
         bridgePrompt: template,
         isGenerated: true,
         commitHash: commit.commit_hash,
@@ -743,7 +746,7 @@ export function NodeModal({
     } finally {
       setIsCommitting(false)
     }
-  }, [projectId, node, data?.sourceConversationId, data?.title, data?.pendingBranch, data?.pendingBranchName, template, resultText, onUpdate, onConvertDraft])
+  }, [projectId, node, data, template, resultText, onUpdate, onConvertDraft, textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -756,10 +759,10 @@ export function NodeModal({
   // Load chat history from backend when modal opens for conversation
   useEffect(() => {
     const abortController = new AbortController()
-    const currentConversationId = data.conversationId
+    const currentConversationId = data?.conversationId
 
     const loadChatHistory = async () => {
-      if (data.kind !== 'conversation' || !projectId || !currentConversationId) return
+      if (!data || data.kind !== 'conversation' || !projectId || !currentConversationId) return
 
       // Cancel any pending loadMore request when switching conversations
       loadMoreAbortRef.current?.abort()
@@ -778,7 +781,7 @@ export function NodeModal({
         })
 
         // Check if conversation changed during request (race condition fix)
-        if (abortController.signal.aborted || data.conversationId !== currentConversationId) {
+        if (abortController.signal.aborted || data?.conversationId !== currentConversationId) {
           return
         }
 
@@ -822,14 +825,14 @@ export function NodeModal({
 
   // Load more (older) messages when scrolling to top
   const loadMoreMessages = useCallback(async () => {
-    if (!projectId || !data.conversationId || isLoadingMore || !chatHasMore) return
+    if (!projectId || !data?.conversationId || isLoadingMore || !chatHasMore) return
 
     // Cancel any pending load more request
     loadMoreAbortRef.current?.abort()
     const abortController = new AbortController()
     loadMoreAbortRef.current = abortController
 
-    const currentConversationId = data.conversationId
+    const currentConversationId = data?.conversationId
     const container = messagesContainerRef.current
 
     // Capture scroll position before loading
@@ -843,7 +846,7 @@ export function NodeModal({
       })
 
       // Check for race condition: conversation changed or request aborted
-      if (abortController.signal.aborted || data.conversationId !== currentConversationId) {
+      if (abortController.signal.aborted || data?.conversationId !== currentConversationId) {
         return
       }
 
@@ -870,7 +873,7 @@ export function NodeModal({
       // Preserve scroll position after prepending
       // Use requestAnimationFrame to wait for DOM update
       requestAnimationFrame(() => {
-        if (container && data.conversationId === currentConversationId) {
+        if (container && data?.conversationId === currentConversationId) {
           const scrollHeightAfter = container.scrollHeight
           const heightDiff = scrollHeightAfter - scrollHeightBefore
           container.scrollTop = container.scrollTop + heightDiff
@@ -957,12 +960,16 @@ export function NodeModal({
           fullResponse += event.content
           setStreamingContent(fullResponse)
         } else if (event.type === 'done') {
+          // Update fullResponse with done event content if available (ensures we have complete response)
+          if (event.content) {
+            fullResponse = event.content
+          }
           // Add assistant message to chat (only once)
           if (!addedFinalMessage) {
             setChatMessages(prev => [...prev, {
               id: `msg-${Date.now()}`,
               role: 'assistant' as const,
-              content: event.content || fullResponse,
+              content: fullResponse,
             }])
             setStreamingContent('')
             addedFinalMessage = true
@@ -986,27 +993,49 @@ export function NodeModal({
       // Use refs to get current values (avoiding stale closure)
       let currentConversationId = conversationIdRef.current
       const currentKind = nodeKindRef.current
+      console.log('[handleSendMessage] Save turns check:', {
+        projectId,
+        currentKind,
+        currentConversationId,
+        fullResponseLength: fullResponse.length,
+        fullResponsePreview: fullResponse.slice(0, 100),
+        addedFinalMessage
+      })
       if (projectId && currentKind === 'conversation') {
         try {
           // If no conversationId yet, create one first
           if (!currentConversationId) {
-            const newConv = await api.createConversation(projectId, data.title || 'Untitled Conversation')
+            console.log('[handleSendMessage] Creating new conversation...')
+            const newConv = await api.createConversation(projectId, data?.title || 'Untitled Conversation')
             currentConversationId = newConv.conversation_id
             // Update the node with the new conversationId
             onUpdate({ conversationId: currentConversationId })
             conversationIdRef.current = currentConversationId
+            console.log('[handleSendMessage] Created conversation:', currentConversationId)
           }
 
           // Save user turn
+          console.log('[handleSendMessage] Saving user turn...')
           await api.createTurn(projectId, currentConversationId, 'user', userMessage)
+          console.log('[handleSendMessage] User turn saved')
           // Save assistant turn
           if (fullResponse) {
-            await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
+            console.log('[handleSendMessage] Saving assistant turn...', { length: fullResponse.length })
+            try {
+              await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
+              console.log('[handleSendMessage] Assistant turn saved successfully')
+            } catch (assistantErr) {
+              console.error('[handleSendMessage] Failed to save assistant turn:', assistantErr)
+            }
+          } else {
+            console.warn('[handleSendMessage] No fullResponse to save as assistant turn')
           }
         } catch (err) {
-          console.warn('Failed to save turns:', err)
+          console.error('[handleSendMessage] Failed to save turns:', err)
           // Don't show error to user - chat still worked
         }
+      } else {
+        console.log('[handleSendMessage] Skipping turn save - conditions not met')
       }
 
     } catch (err) {
@@ -1583,14 +1612,11 @@ export function NodeModal({
   if (isCommittedCommit) {
     const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
 
-    // Get keywords from pendingSource textBlocks
-    const commitTextBlocks = data.pendingSource?.textBlocks || []
-    const commitMustHave = commitTextBlocks.flatMap(block =>
-      getMustHaveKeywordsFromBlocks(block.tokens, block.keywords)
-    )
-    const commitMustntHave = commitTextBlocks.flatMap(block =>
-      getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords)
-    )
+    // Get keywords and source excerpt from committed data (stored in database)
+    // These come from data.mustHave, data.mustntHave, data.sourceExcerpt fields
+    const commitMustHave = data.mustHave || []
+    const commitMustntHave = data.mustntHave || []
+    const commitSourceExcerpt = data.sourceExcerpt || []
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
@@ -1679,8 +1705,15 @@ export function NodeModal({
                   <span className="commit-v2__readonly-badge">Read-only</span>
                 </div>
                 <div className="commit-v2__source-excerpt">
-                  {data.pendingSource?.textBlocks && data.pendingSource.textBlocks.length > 0 ? (
-                    <SourceExcerptViewer blocks={data.pendingSource.textBlocks} />
+                  {commitSourceExcerpt.length > 0 ? (
+                    <div className="commit-v2__source-list">
+                      {commitSourceExcerpt.map((excerpt, idx) => (
+                        <div key={idx} className="commit-v2__source-item">
+                          <span className="commit-v2__source-marker">•</span>
+                          <span className="commit-v2__source-text">{excerpt}</span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <div className="commit-v2__empty-state">
                       <span>No source excerpt recorded</span>
@@ -1769,7 +1802,7 @@ export function NodeModal({
       <div className="modal-v2">
         <header className="modal-v2__topbar">
           <div className="modal-v2__topbar-left">
-            <h2 className="modal-v2__title">{data.title || 'Node'}</h2>
+            <h2 className="modal-v2__title">{data?.title || 'Node'}</h2>
           </div>
           <div className="modal-v2__topbar-right">
             <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">

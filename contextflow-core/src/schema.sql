@@ -133,6 +133,9 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   draft_id TEXT,
   draft_text_hash TEXT,
   signature_json TEXT,
+  source_excerpt_json TEXT,
+  must_have_json TEXT,
+  mustnt_have_json TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );

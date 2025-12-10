@@ -39,6 +39,9 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       draft_id?: string;
       pipeline_config?: unknown;
       signature?: unknown;
+      source_excerpt?: string[];
+      must_have?: string[];
+      mustnt_have?: string[];
     } | null;
 
     if (!body?.project_id || !body?.turn_window) {
@@ -132,6 +135,9 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         draft_id: body.draft_id,
         draft_text_hash,
         signature: body.signature,
+        source_excerpt: body.source_excerpt,
+        must_have: body.must_have,
+        mustnt_have: body.mustnt_have,
       });
 
       // Parse parents for response
