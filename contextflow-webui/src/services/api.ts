@@ -34,6 +34,7 @@ export interface Conversation {
   conversation_id: string
   project_id: string
   title?: string
+  parent_commit_hash?: string
   created_at: string
   turns_count?: number
 }
@@ -457,14 +458,28 @@ export async function listConversations(
 export async function createConversation(
   projectId: string,
   title?: string,
+  parentCommitHash?: string,
   metadata?: Record<string, unknown>
 ): Promise<Conversation> {
   const res = await fetchWithTimeout(`${API_V1}/conversations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project_id: projectId, title, metadata }),
+    body: JSON.stringify({
+      project_id: projectId,
+      title,
+      parent_commit_hash: parentCommitHash,
+      metadata
+    }),
   })
   const data = await handleResponse<ApiResponse<Conversation>>(res)
+  return data.data
+}
+
+export async function deleteConversation(conversationId: string): Promise<{ deleted: boolean; conversation_id: string }> {
+  const res = await fetchWithTimeout(`${API_V1}/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'DELETE',
+  })
+  const data = await handleResponse<ApiResponse<{ deleted: boolean; conversation_id: string }>>(res)
   return data.data
 }
 

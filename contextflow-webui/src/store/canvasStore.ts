@@ -596,29 +596,6 @@ const commitToNode = (
   }
 }
 
-// Build edges from commit parent relationships
-const buildEdgesFromCommits = (commits: api.Commit[]): Edge[] => {
-  const edges: Edge[] = []
-  const commitHashes = new Set(commits.map(c => c.commit_hash))
-
-  commits.forEach((commit) => {
-    commit.parent_hashes.forEach((parentHash) => {
-      // Only create edge if parent exists in our commits
-      if (commitHashes.has(parentHash)) {
-        edges.push({
-          id: `${parentHash}-${commit.commit_hash}`,
-          source: parentHash,
-          target: commit.commit_hash,
-          type: edgeType,
-          animated: false,
-          style: edgeStyle,
-        })
-      }
-    })
-  })
-
-  return edges
-}
 
 const leafNodeHeight = reactFlowGridSize * 5
 const leafNodeOffset = 80
@@ -654,6 +631,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const conversations = convResponse.conversations
       const commits = commitResponse.commits
 
+      // Preserve existing node positions
+      const existingNodePositions = new Map<string, { x: number; y: number }>()
+      get().nodes.forEach((node) => {
+        existingNodePositions.set(node.id, node.position)
+      })
+
       // Build turn_hash → conversation_id map
       // Optimization: Only fetch turns for commits that have turn_window
       // Instead of fetching all turns for all conversations
@@ -683,46 +666,111 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         )
       }
 
-      // Convert to canvas nodes
-      const convNodes = conversations.map((conv, i) =>
-        conversationToNode(conv, i)
-      )
+      // Convert to canvas nodes, preserving existing positions
+      const convNodes = conversations.map((conv, i) => {
+        const node = conversationToNode(conv, i)
+        const existingPos = existingNodePositions.get(node.id)
+        if (existingPos) {
+          node.position = existingPos
+        }
+        return node
+      })
 
-      const commitNodes = commits.map((commit, i) =>
-        commitToNode(commit, i, LAYOUT.CONVERSATION_START_Y)
-      )
+      const commitNodes = commits.map((commit, i) => {
+        const node = commitToNode(commit, i, LAYOUT.CONVERSATION_START_Y)
+        const existingPos = existingNodePositions.get(node.id)
+        if (existingPos) {
+          node.position = existingPos
+        }
+        return node
+      })
 
       const nodes = [...convNodes, ...commitNodes]
 
-      // Build edges: commit parents + conversation→commit links
-      const edges = buildEdgesFromCommits(commits)
+      const edges: Edge[] = []
+      const convIds = new Set(conversations.map(c => c.conversation_id))
+      const commitHashes = new Set(commits.map(c => c.commit_hash))
+
+      // Build a map: commit_hash -> conversation_id (if commit was created from a conversation)
+      const commitSourceConvMap = new Map<string, string>()
+      commits.forEach((commit) => {
+        if (commit.turn_window) {
+          const startConvId = turnToConvMap.get(commit.turn_window.start_turn_hash)
+          const endConvId = turnToConvMap.get(commit.turn_window.end_turn_hash)
+          if (startConvId && startConvId === endConvId && convIds.has(startConvId)) {
+            commitSourceConvMap.set(commit.commit_hash, startConvId)
+          }
+        }
+      })
+
+      // Build a map: conversation_id -> parent_commit_hash
+      const convParentCommitMap = new Map<string, string>()
+      conversations.forEach((conv) => {
+        if (conv.parent_commit_hash) {
+          convParentCommitMap.set(conv.conversation_id, conv.parent_commit_hash)
+        }
+      })
+
+      // Build commit→commit edges, but skip if there's an intermediate conversation
+      // i.e., skip edge parentCommit→childCommit if:
+      //   - childCommit was created from a conversation (has source conversation)
+      //   - AND that conversation's parent_commit_hash is parentCommit
+      commits.forEach((commit) => {
+        commit.parent_hashes.forEach((parentHash) => {
+          if (!commitHashes.has(parentHash)) return
+
+          const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
+          if (sourceConvId) {
+            const convParentHash = convParentCommitMap.get(sourceConvId)
+            // If there's an intermediate conversation connecting parent to child, skip direct edge
+            if (convParentHash === parentHash) {
+              console.log('[loadProjectData] Skipping commit→commit edge (has intermediate conversation):', parentHash, '->', commit.commit_hash)
+              return
+            }
+          }
+
+          edges.push({
+            id: `${parentHash}-${commit.commit_hash}`,
+            source: parentHash,
+            target: commit.commit_hash,
+            type: edgeType,
+            animated: false,
+            style: edgeStyle,
+          })
+        })
+      })
 
       // Add conversation → commit edges based on turn_window
-      // Verify both start and end turns belong to the same conversation
-      const convIds = new Set(conversations.map(c => c.conversation_id))
       console.log('[loadProjectData] convIds:', Array.from(convIds))
       console.log('[loadProjectData] turnToConvMap:', Object.fromEntries(turnToConvMap))
       commits.forEach((commit) => {
         console.log('[loadProjectData] Processing commit:', commit.commit_hash, 'turn_window:', commit.turn_window)
-        if (commit.turn_window) {
-          // Find which conversation this commit's turn_window belongs to
-          const startConvId = turnToConvMap.get(commit.turn_window.start_turn_hash)
-          const endConvId = turnToConvMap.get(commit.turn_window.end_turn_hash)
-          console.log('[loadProjectData] startConvId:', startConvId, 'endConvId:', endConvId)
-          // Only create edge if both turns belong to the same conversation
-          if (startConvId && startConvId === endConvId && convIds.has(startConvId)) {
-            console.log('[loadProjectData] Creating edge:', startConvId, '->', commit.commit_hash)
-            edges.push({
-              id: `conv-${startConvId}-${commit.commit_hash}`,
-              source: startConvId,
-              target: commit.commit_hash,
-              type: edgeType,
-              animated: false,
-              style: edgeStyle,
-            })
-          } else {
-            console.warn('[loadProjectData] Edge NOT created - conditions not met:', { startConvId, endConvId, hasConvId: convIds.has(startConvId || '') })
-          }
+        const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
+        if (sourceConvId) {
+          console.log('[loadProjectData] Creating conv→commit edge:', sourceConvId, '->', commit.commit_hash)
+          edges.push({
+            id: `conv-${sourceConvId}-${commit.commit_hash}`,
+            source: sourceConvId,
+            target: commit.commit_hash,
+            type: edgeType,
+            animated: false,
+            style: edgeStyle,
+          })
+        }
+      })
+
+      // Add commit → conversation edges based on parent_commit_hash
+      conversations.forEach((conv) => {
+        if (conv.parent_commit_hash && commitHashes.has(conv.parent_commit_hash)) {
+          console.log('[loadProjectData] Creating commit→conv edge:', conv.parent_commit_hash, '->', conv.conversation_id)
+          edges.push({
+            id: `commit-conv-${conv.parent_commit_hash}-${conv.conversation_id}`,
+            source: conv.parent_commit_hash,
+            target: conv.conversation_id,
+            type: edgeType,
+            animated: false,
+            style: edgeStyle,
+          })
         }
       })
 
@@ -956,9 +1004,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }
 
     try {
-      // Create conversation via API
+      // Create conversation via API with parent_commit_hash
       const title = `Conversation from ${source.data.entryId}`
-      const conversation = await api.createConversation(state.projectId, title)
+      const parentCommitHash = source.data.commitHash || source.id
+      const conversation = await api.createConversation(state.projectId, title, parentCommitHash)
 
       // Add node using the real conversation ID from API
       const newNode: Node<CanvasNodeData> = {
@@ -1234,6 +1283,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
         // Apply direct deletes immediately, but defer confirmation nodes
         const directRemoveChanges = allowedRemoves.filter((c) => directDeletes.includes(c.id))
+
+        // Delete conversations from database for directly deleted nodes
+        directDeletes.forEach((nodeId) => {
+          const node = nodeMap.get(nodeId)
+          if (node?.data.kind === 'conversation' && node.data.conversationId) {
+            api.deleteConversation(node.data.conversationId).catch((err) => {
+              console.warn('Failed to delete conversation from database:', err)
+            })
+          }
+        })
+
         const newNodes = directRemoveChanges.length > 0
           ? applyNodeChanges([...otherChanges, ...directRemoveChanges], state.nodes).map((node) => ({
               ...node,
@@ -1254,21 +1314,41 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             message,
             onConfirm: () => {
               // This will be called when user confirms
-              set((s) => {
-                const nodesToDelete = new Set(needsConfirmation)
-                const edgesToDelete = new Set(edgesToRemove)
-                return {
-                  nodes: s.nodes.filter((n) => !nodesToDelete.has(n.id)),
-                  edges: s.edges.filter((e) => !edgesToDelete.has(e.id) && !nodesToDelete.has(e.source) && !nodesToDelete.has(e.target)),
-                  deletionConfirmation: null,
+              const currentState = get()
+              const nodesToDelete = new Set(needsConfirmation)
+              const edgesToDelete = new Set(edgesToRemove)
+
+              // Delete conversations from database
+              needsConfirmation.forEach((nodeId) => {
+                const node = currentState.nodes.find((n) => n.id === nodeId)
+                if (node?.data.kind === 'conversation' && node.data.conversationId) {
+                  api.deleteConversation(node.data.conversationId).catch((err) => {
+                    console.warn('Failed to delete conversation from database:', err)
+                  })
                 }
               })
+
+              set((s) => ({
+                nodes: s.nodes.filter((n) => !nodesToDelete.has(n.id)),
+                edges: s.edges.filter((e) => !edgesToDelete.has(e.id) && !nodesToDelete.has(e.source) && !nodesToDelete.has(e.target)),
+                deletionConfirmation: null,
+              }))
             },
           },
         }
       }
 
       // No confirmation needed, apply all changes
+      // Delete conversations from database for removed nodes
+      allowedRemoves.forEach((change) => {
+        const node = nodeMap.get(change.id)
+        if (node?.data.kind === 'conversation' && node.data.conversationId) {
+          api.deleteConversation(node.data.conversationId).catch((err) => {
+            console.warn('Failed to delete conversation from database:', err)
+          })
+        }
+      })
+
       return {
         nodes: applyNodeChanges([...otherChanges, ...allowedRemoves], state.nodes).map((node) => ({
           ...node,

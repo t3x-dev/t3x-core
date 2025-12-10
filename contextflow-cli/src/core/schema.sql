@@ -77,11 +77,13 @@ CREATE TABLE IF NOT EXISTS conversations (
   conversation_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   title TEXT,
+  parent_commit_hash TEXT,
   created_at TEXT NOT NULL,
   metadata_json TEXT,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_parent_commit ON conversations(parent_commit_hash);
 
 -- Turns V2 table (with hash chain)
 CREATE TABLE IF NOT EXISTS turns_v2 (

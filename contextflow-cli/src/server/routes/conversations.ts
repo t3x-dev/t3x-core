@@ -24,6 +24,7 @@ export function registerConversationRoutes(router: Router): void {
     const body = ctx.body as {
       project_id?: string;
       title?: string;
+      parent_commit_hash?: string;
       metadata?: Record<string, unknown>;
     } | null;
 
@@ -43,6 +44,7 @@ export function registerConversationRoutes(router: Router): void {
       const conversation = createConversation({
         project_id: body.project_id,
         title: body.title,
+        parent_commit_hash: body.parent_commit_hash,
         metadata: body.metadata,
       });
       sendJson(res, 201, successResponse(conversation));
