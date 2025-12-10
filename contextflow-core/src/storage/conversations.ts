@@ -15,16 +15,18 @@ export function createConversation(input: CreateConversationInput): Conversation
   const conversation_id = generateConversationId();
   const created_at = isoNow();
   const metadata_json = input.metadata ? JSON.stringify(input.metadata) : null;
+  const parent_commit_hash = input.parent_commit_hash ?? null;
 
   db.prepare(
-    `INSERT INTO conversations (conversation_id, project_id, title, created_at, metadata_json)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(conversation_id, input.project_id, input.title ?? null, created_at, metadata_json);
+    `INSERT INTO conversations (conversation_id, project_id, title, parent_commit_hash, created_at, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(conversation_id, input.project_id, input.title ?? null, parent_commit_hash, created_at, metadata_json);
 
   return {
     conversation_id,
     project_id: input.project_id,
     title: input.title ?? null,
+    parent_commit_hash,
     created_at,
     metadata_json,
   };

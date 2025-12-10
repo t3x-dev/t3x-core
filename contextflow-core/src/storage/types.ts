@@ -16,6 +16,7 @@ export interface ConversationRecord {
   conversation_id: string;
   project_id: string;
   title: string | null;
+  parent_commit_hash: string | null;
   created_at: string;
   metadata_json: string | null;
 }
@@ -112,6 +113,7 @@ export interface CreateProjectInput {
 export interface CreateConversationInput {
   project_id: string;
   title?: string;
+  parent_commit_hash?: string;
   metadata?: Record<string, unknown>;
 }
 

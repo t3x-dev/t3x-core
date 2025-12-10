@@ -993,7 +993,14 @@ export function NodeModal({
       // Use refs to get current values (avoiding stale closure)
       let currentConversationId = conversationIdRef.current
       const currentKind = nodeKindRef.current
-      console.log('[handleSendMessage] Save turns check:', { projectId, currentKind, currentConversationId, fullResponseLength: fullResponse.length })
+      console.log('[handleSendMessage] Save turns check:', {
+        projectId,
+        currentKind,
+        currentConversationId,
+        fullResponseLength: fullResponse.length,
+        fullResponsePreview: fullResponse.slice(0, 100),
+        addedFinalMessage
+      })
       if (projectId && currentKind === 'conversation') {
         try {
           // If no conversationId yet, create one first
@@ -1013,14 +1020,18 @@ export function NodeModal({
           console.log('[handleSendMessage] User turn saved')
           // Save assistant turn
           if (fullResponse) {
-            console.log('[handleSendMessage] Saving assistant turn...')
-            await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
-            console.log('[handleSendMessage] Assistant turn saved')
+            console.log('[handleSendMessage] Saving assistant turn...', { length: fullResponse.length })
+            try {
+              await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
+              console.log('[handleSendMessage] Assistant turn saved successfully')
+            } catch (assistantErr) {
+              console.error('[handleSendMessage] Failed to save assistant turn:', assistantErr)
+            }
           } else {
             console.warn('[handleSendMessage] No fullResponse to save as assistant turn')
           }
         } catch (err) {
-          console.warn('Failed to save turns:', err)
+          console.error('[handleSendMessage] Failed to save turns:', err)
           // Don't show error to user - chat still worked
         }
       } else {
