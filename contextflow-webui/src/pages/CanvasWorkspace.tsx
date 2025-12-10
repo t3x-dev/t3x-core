@@ -93,7 +93,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           key: 'add-commit',
           label: 'Create Commit',
           icon: <GitCommit size={14} />,
-          onClick: () => addPendingCommitFromConversation(modalNode.id),
+          onClick: () => void addPendingCommitFromConversation(modalNode.id),
           disabled: !canSeedPendingCommitFromConversation,
         },
       ]

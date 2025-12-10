@@ -16,6 +16,7 @@ export interface ConversationRecord {
   conversation_id: string;
   project_id: string;
   title: string | null;
+  parent_commit_hash: string | null;
   created_at: string;
   metadata_json: string | null;
 }
@@ -56,6 +57,9 @@ export interface CommitV2Record {
   draft_id: string | null;
   draft_text_hash: string | null;
   signature_json: string | null;
+  source_excerpt_json: string | null;
+  must_have_json: string | null;
+  mustnt_have_json: string | null;
   created_at: string;
 }
 
@@ -109,6 +113,7 @@ export interface CreateProjectInput {
 export interface CreateConversationInput {
   project_id: string;
   title?: string;
+  parent_commit_hash?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -141,6 +146,9 @@ export interface CreateCommitV2Input {
   draft_id?: string;
   draft_text_hash?: string;
   signature?: unknown;
+  source_excerpt?: string[];
+  must_have?: string[];
+  mustnt_have?: string[];
 }
 
 export interface CreateDraftV2Input {

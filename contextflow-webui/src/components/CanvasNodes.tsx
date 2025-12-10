@@ -174,7 +174,7 @@ function ConversationNode(props: Props) {
     if (!canSeedPendingCommit) {
       return
     }
-    addPendingCommitFromConversation(id)
+    void addPendingCommitFromConversation(id)
   }
 
   return (

@@ -141,14 +141,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
 
     try {
-      const result = await api.deleteProject(id)
-      const { cascade_deleted } = result
-      const deletedCount = cascade_deleted.turns + cascade_deleted.conversations + cascade_deleted.commits
-
-      notify?.(
-        `Deleted "${project?.name || id}"${deletedCount > 0 ? ` (${deletedCount} items removed)` : ''}`,
-        'success'
-      )
+      await api.deleteProject(id)
+      notify?.(`Deleted "${project?.name || id}"`, 'success')
     } catch (err) {
       // Restore project on failure
       if (project) {
