@@ -6,19 +6,20 @@ export function tokenizeText(text: string): TextToken[] {
   const tokens: TextToken[] = []
 
   // Regex to match:
+  // - Newlines (preserve as separate tokens for line breaks)
   // - Chinese characters (including punctuation)
   // - English words
   // - Numbers
-  // - Punctuation and whitespace
-  const regex = /[\u4e00-\u9fff]|[a-zA-Z]+|[0-9]+|[，。！？、；：""''（）《》【】\s]+|[.,!?;:'"()[\]{}<>\s]+/g
+  // - Punctuation and whitespace (including | and │ as separators)
+  const regex = /\n|[\u4e00-\u9fff]|[a-zA-Z]+|[0-9]+|[，。！？、；：""''（）《》【】]+|[.,!?;:'"()[\]{}<>|│]+|[ \t]+/g
 
   let match
   let index = 0
 
   while ((match = regex.exec(text)) !== null) {
     const tokenText = match[0]
-    // Skip pure whitespace tokens but keep punctuation
-    if (tokenText.trim() || /[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>]/.test(tokenText)) {
+    // Skip pure spaces/tabs but keep newlines and punctuation
+    if (tokenText === '\n' || tokenText.trim() || /[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>]/.test(tokenText)) {
       tokens.push({
         id: `token-${index}`,
         text: tokenText,

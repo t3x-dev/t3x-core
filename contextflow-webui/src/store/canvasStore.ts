@@ -993,8 +993,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const turnsData = await api.listTurns(projectId, source.data.conversationId)
         if (turnsData.turns && turnsData.turns.length > 0) {
           baselineSummary = turnsData.turns
-            .map((turn) => `**${turn.role}**: ${turn.content}`)
-            .join('\n\n')
+            .map((turn) => {
+              // Replace newlines within each turn with ' │ ' separator (box drawing vertical line)
+              return turn.content
+                .split(/\n+/)
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join(' │ ')
+            })
+            .join('\n')
         }
       } catch (err) {
         console.warn('Failed to fetch turns for baselineSummary:', err)
