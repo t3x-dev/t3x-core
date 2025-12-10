@@ -17,6 +17,8 @@ export interface ConversationRecord {
   project_id: string;
   title: string | null;
   parent_commit_hash: string | null;
+  position_x: number | null;
+  position_y: number | null;
   created_at: string;
   metadata_json: string | null;
 }
@@ -60,6 +62,8 @@ export interface CommitV2Record {
   source_excerpt_json: string | null;
   must_have_json: string | null;
   mustnt_have_json: string | null;
+  position_x: number | null;
+  position_y: number | null;
   created_at: string;
 }
 
@@ -114,6 +118,8 @@ export interface CreateConversationInput {
   project_id: string;
   title?: string;
   parent_commit_hash?: string;
+  position_x?: number;
+  position_y?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -149,6 +155,8 @@ export interface CreateCommitV2Input {
   source_excerpt?: string[];
   must_have?: string[];
   mustnt_have?: string[];
+  position_x?: number;
+  position_y?: number;
 }
 
 export interface CreateDraftV2Input {
@@ -215,6 +223,20 @@ export interface ListCommitsV2Options extends ListOptions {
 export interface ListDraftsV2Options extends ListOptions {
   project_id: string;
   status?: 'ephemeral' | 'adopted' | 'superseded';
+}
+
+// === Update Types ===
+
+export interface UpdateConversationInput {
+  title?: string;
+  position_x?: number;
+  position_y?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateCommitPositionInput {
+  position_x?: number;
+  position_y?: number;
 }
 
 // === Stats Types ===
