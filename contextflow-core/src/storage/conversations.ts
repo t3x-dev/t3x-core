@@ -16,17 +16,21 @@ export function createConversation(input: CreateConversationInput): Conversation
   const created_at = isoNow();
   const metadata_json = input.metadata ? JSON.stringify(input.metadata) : null;
   const parent_commit_hash = input.parent_commit_hash ?? null;
+  const position_x = input.position_x ?? null;
+  const position_y = input.position_y ?? null;
 
   db.prepare(
-    `INSERT INTO conversations (conversation_id, project_id, title, parent_commit_hash, created_at, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(conversation_id, input.project_id, input.title ?? null, parent_commit_hash, created_at, metadata_json);
+    `INSERT INTO conversations (conversation_id, project_id, title, parent_commit_hash, position_x, position_y, created_at, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(conversation_id, input.project_id, input.title ?? null, parent_commit_hash, position_x, position_y, created_at, metadata_json);
 
   return {
     conversation_id,
     project_id: input.project_id,
     title: input.title ?? null,
     parent_commit_hash,
+    position_x,
+    position_y,
     created_at,
     metadata_json,
   };
@@ -65,20 +69,22 @@ export function deleteConversation(conversation_id: string): boolean {
 
 export function updateConversation(
   conversation_id: string,
-  updates: { title?: string; metadata?: Record<string, unknown> }
+  updates: { title?: string; position_x?: number; position_y?: number; metadata?: Record<string, unknown> }
 ): ConversationRecord | null {
   const db = getDb();
   const existing = getConversation(conversation_id);
   if (!existing) return null;
 
   const title = updates.title !== undefined ? updates.title : existing.title;
+  const position_x = updates.position_x !== undefined ? updates.position_x : existing.position_x;
+  const position_y = updates.position_y !== undefined ? updates.position_y : existing.position_y;
   const metadata_json = updates.metadata
     ? JSON.stringify(updates.metadata)
     : existing.metadata_json;
 
   db.prepare(
-    `UPDATE conversations SET title = ?, metadata_json = ? WHERE conversation_id = ?`
-  ).run(title, metadata_json, conversation_id);
+    `UPDATE conversations SET title = ?, position_x = ?, position_y = ?, metadata_json = ? WHERE conversation_id = ?`
+  ).run(title, position_x, position_y, metadata_json, conversation_id);
 
   return getConversation(conversation_id);
 }
