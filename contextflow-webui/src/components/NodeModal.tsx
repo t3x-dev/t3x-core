@@ -9,15 +9,15 @@ import {
 } from 'react'
 import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
 import type { Node } from 'reactflow'
-import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock } from '../types/nodes'
+import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock, TurnBoundary } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
 import * as api from '../services/api'
 import { PendingSourceEditor } from './SelectableTextBlock'
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
   getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
-  extractWithThresholds,
   getSelectedText,
+  tokenizeText,
 } from '../utils/tokenizer'
 
 const bridgeTemplates = [
@@ -308,8 +308,10 @@ export function NodeModal({
     forbidden: string[]
   } | null>(null)
 
-  // Get projectId from canvasStore
+  // Get projectId and edges from canvasStore
   const projectId = useCanvasStore((state) => state.projectId)
+  const edges = useCanvasStore((state) => state.edges)
+  const getUpstreamSourceNodes = useCanvasStore((state) => state.getUpstreamSourceNodes)
 
   // Divider positions
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
@@ -411,18 +413,15 @@ export function NodeModal({
     ((draftBranchMode === 'select' && data?.pendingBranch === 'branch') ||
       draftBranchMode === 'branch-only')
 
-  // Initialize source boxes and textBlocks from baseline summary
-  // Note: setState in effect is intentional here for initialization based on props
+  // Initialize source boxes (legacy) from baseline summary
   useEffect(() => {
     if (isPendingCommit && data?.baselineSummary) {
-      // Determine source type based on title or sourceConversationId
       const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
       const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
       const sourceTitle = isFromCommit
         ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
         : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
 
-      // Legacy: Initialize sourceBoxes
       const initialBox: SourceBox = {
         id: 'source-1',
         title: sourceTitle,
@@ -431,37 +430,105 @@ export function NodeModal({
         expanded: true,
         phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
       }
-       
+
       setSourceBoxes([initialBox])
-
-      // New: Initialize textBlocks with model extraction based on thresholds
-      // Only initialize if not already set from data.pendingSource
-      if (!data.pendingSource?.textBlocks?.length) {
-        const initialTextBlock = extractWithThresholds(
-          'block-1',
-          data.baselineSummary,
-          cosineThreshold,
-          keywordsThreshold
-        )
-        setTextBlocks([initialTextBlock])
-      }
     }
-  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, data?.pendingSource?.textBlocks?.length, keywordsThreshold, cosineThreshold])
+  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, keywordsThreshold])
 
-  // Auto re-extract when thresholds change (only when not locked)
-  // Note: setState in effect is intentional here to sync derived state with props
+  // Build textBlocks from upstream source nodes (reactive to edge changes)
+  // This effect runs whenever edges change, rebuilding textBlocks from all connected source nodes
   useEffect(() => {
-    if (isPendingCommit && data?.baselineSummary && !configLocked) {
-      const updatedTextBlock = extractWithThresholds(
-        'block-1',
-        data.baselineSummary,
-        cosineThreshold,
-        keywordsThreshold
-      )
-       
-      setTextBlocks([updatedTextBlock])
+    if (!isPendingCommit || !node?.id || !projectId) return
+
+    const buildTextBlocks = async () => {
+      const upstreamNodes = getUpstreamSourceNodes(node.id)
+
+      if (upstreamNodes.length === 0) {
+        // No upstream nodes, clear textBlocks
+        setTextBlocks([])
+        return
+      }
+
+      const newBlocks: SourceTextBlock[] = []
+
+      for (const sourceNode of upstreamNodes) {
+        if (sourceNode.data.kind === 'conversation') {
+          // Fetch turns for conversation
+          const conversationId = sourceNode.data.conversationId || sourceNode.id
+          try {
+            const turnsData = await api.listTurns(projectId, conversationId)
+            if (turnsData.turns && turnsData.turns.length > 0) {
+              const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
+              const tokens = tokenizeText(fullText)
+
+              // Build turn boundaries
+              const turnBoundaries: TurnBoundary[] = []
+              let currentTokenIndex = 0
+
+              for (const turn of turnsData.turns) {
+                const turnTokens = tokenizeText(turn.content)
+                const turnTokenCount = turnTokens.length
+
+                if (turnTokenCount > 0) {
+                  turnBoundaries.push({
+                    role: turn.role as 'user' | 'assistant',
+                    startTokenIndex: currentTokenIndex,
+                    endTokenIndex: currentTokenIndex + turnTokenCount - 1,
+                  })
+                }
+                currentTokenIndex += turnTokenCount + 1
+              }
+
+              // Try to preserve existing selections for this block
+              const existingBlock = textBlocks.find(b => b.sourceNodeId === conversationId)
+
+              newBlocks.push({
+                id: `block-conv-${conversationId}`,
+                originalText: fullText,
+                tokens,
+                selections: existingBlock?.selections || [],
+                keywords: existingBlock?.keywords || [],
+                sourceNodeId: conversationId,
+                sourceNodeType: 'conversation',
+                sourceNodeTitle: sourceNode.data.title || 'Conversation',
+                turnBoundaries,
+              })
+            }
+          } catch (err) {
+            console.warn('Failed to fetch turns for conversation:', err)
+          }
+        } else if (sourceNode.data.kind === 'commit' && sourceNode.data.commitStatus === 'committed') {
+          // Use sourceExcerpt from committed commit
+          const commitId = sourceNode.data.commitHash || sourceNode.id
+          const sourceExcerptArray = sourceNode.data.sourceExcerpt || []
+          const sourceExcerptText = sourceExcerptArray.join('\n')
+
+          if (sourceExcerptText) {
+            const tokens = tokenizeText(sourceExcerptText)
+
+            // Try to preserve existing selections for this block
+            const existingBlock = textBlocks.find(b => b.sourceNodeId === commitId)
+
+            newBlocks.push({
+              id: `block-commit-${commitId}`,
+              originalText: sourceExcerptText,
+              tokens,
+              selections: existingBlock?.selections || [],
+              keywords: existingBlock?.keywords || [],
+              sourceNodeId: commitId,
+              sourceNodeType: 'commit',
+              sourceNodeTitle: sourceNode.data.title || `Commit ${sourceNode.data.entryId}`,
+            })
+          }
+        }
+      }
+
+      setTextBlocks(newBlocks)
     }
-  }, [cosineThreshold, keywordsThreshold, configLocked, isPendingCommit, data?.baselineSummary])
+
+    buildTextBlocks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPendingCommit, node?.id, projectId, edges, getUpstreamSourceNodes])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
