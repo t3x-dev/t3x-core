@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus, SourceTextBlock, TurnBoundary } from '../types/nodes'
 import * as api from '../services/api'
+import { tokenizeText } from '../utils/tokenizer'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -65,6 +66,8 @@ type CanvasState = {
   cancelDeletion: () => void
   // Update node ID (for syncing local pending commit with API commit_hash)
   updateNodeId: (oldId: string, newId: string) => void
+  // Get direct upstream source nodes (conversations and committed commits) for a pending commit
+  getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[]
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -987,21 +990,54 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     // Fetch actual chat content from upstream conversation
     let baselineSummary = ''
+    let pendingSourceBlock: SourceTextBlock | undefined
     const projectId = state.projectId
     if (projectId && source.data.conversationId) {
       try {
         const turnsData = await api.listTurns(projectId, source.data.conversationId)
         if (turnsData.turns && turnsData.turns.length > 0) {
-          baselineSummary = turnsData.turns
-            .map((turn) => {
-              // Replace newlines within each turn with ' │ ' separator (box drawing vertical line)
-              return turn.content
-                .split(/\n+/)
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join(' │ ')
-            })
-            .join('\n')
+          // Build full text with turn separator (newline between turns)
+          const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
+
+          // Tokenize the full text
+          const tokens = tokenizeText(fullText)
+
+          // Build turn boundaries by tracking token positions
+          const turnBoundaries: TurnBoundary[] = []
+          let currentTokenIndex = 0
+
+          for (const turn of turnsData.turns) {
+            const turnTokens = tokenizeText(turn.content)
+            const turnTokenCount = turnTokens.length
+
+            if (turnTokenCount > 0) {
+              turnBoundaries.push({
+                role: turn.role as 'user' | 'assistant',
+                startTokenIndex: currentTokenIndex,
+                endTokenIndex: currentTokenIndex + turnTokenCount - 1,
+              })
+            }
+
+            // Account for the newline separator token between turns (+1)
+            // But not after the last turn
+            currentTokenIndex += turnTokenCount + 1
+          }
+
+          // Create the SourceTextBlock with source info and turn boundaries
+          pendingSourceBlock = {
+            id: 'block-conv-1',
+            originalText: fullText,
+            tokens,
+            selections: [],
+            keywords: [],
+            sourceNodeId: source.data.conversationId,
+            sourceNodeType: 'conversation',
+            sourceNodeTitle: source.data.title || 'Conversation',
+            turnBoundaries,
+          }
+
+          // Also keep baselineSummary for backward compatibility
+          baselineSummary = fullText
         }
       } catch (err) {
         console.warn('Failed to fetch turns for baselineSummary:', err)
@@ -1027,6 +1063,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // Pass upstream chat content to pending commit
         baselineSummary,
         sourceConversationId: source.data.conversationId,
+        // New: pendingSource with structured text blocks
+        pendingSource: pendingSourceBlock ? { textBlocks: [pendingSourceBlock] } : undefined,
       },
     }
 
@@ -1103,6 +1141,24 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (!source) {
         return {}
       }
+
+      // Build pending source block from commit's sourceExcerpt (semantic selections)
+      // Not from summary which is the generated output
+      const sourceExcerptArray = source.data.sourceExcerpt || []
+      const sourceExcerptText = sourceExcerptArray.join('\n')
+      const tokens = tokenizeText(sourceExcerptText)
+      const pendingSourceBlock: SourceTextBlock = {
+        id: 'block-commit-1',
+        originalText: sourceExcerptText,
+        tokens,
+        selections: [],
+        keywords: [],
+        sourceNodeId: source.data.commitHash || source.id,
+        sourceNodeType: 'commit',
+        sourceNodeTitle: source.data.title || `Commit ${source.data.entryId}`,
+        // No turnBoundaries for commit type
+      }
+
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
         type: 'commit',
@@ -1119,8 +1175,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           pendingBranch: 'branch',
           pendingBranchName: '',
           commitStatus: 'pending',
-          // Pass upstream content to pending commit
-          baselineSummary: source.data.summary,
+          // Pass upstream content to pending commit (use sourceExcerpt)
+          baselineSummary: sourceExcerptText,
+          // New: pendingSource with structured text block
+          pendingSource: tokens.length > 0 ? { textBlocks: [pendingSourceBlock] } : undefined,
         },
       }
       const newEdge: Edge = {
@@ -1829,4 +1887,31 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         latestMainCommitId,
       }
     }),
+
+  // Get direct upstream source nodes (conversations and committed commits) for a node
+  // Returns nodes that can provide source content for a pending commit
+  getUpstreamSourceNodes: (nodeId) => {
+    const state = get()
+    const incomingMap = buildIncomingMap(state.edges)
+    const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
+
+    const sourceNodeIds = incomingMap.get(nodeId) ?? []
+    const sourceNodes: Node<CanvasNodeData>[] = []
+
+    for (const sourceId of sourceNodeIds) {
+      const node = nodeMap.get(sourceId)
+      if (!node) continue
+
+      // Include conversations
+      if (node.data.kind === 'conversation') {
+        sourceNodes.push(node)
+      }
+      // Include committed commits (not pending)
+      else if (node.data.kind === 'commit' && node.data.commitStatus === 'committed') {
+        sourceNodes.push(node)
+      }
+    }
+
+    return sourceNodes
+  },
 }))
