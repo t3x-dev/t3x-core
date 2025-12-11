@@ -62,6 +62,15 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   const signature_json = input.signature
     ? JSON.stringify(input.signature)
     : null;
+  const source_excerpt_json = input.source_excerpt
+    ? JSON.stringify(input.source_excerpt)
+    : null;
+  const must_have_json = input.must_have
+    ? JSON.stringify(input.must_have)
+    : null;
+  const mustnt_have_json = input.mustnt_have
+    ? JSON.stringify(input.mustnt_have)
+    : null;
 
   // Compute commit hash
   const commit_hash = computeCommitHash({
@@ -77,11 +86,15 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     created_at,
   });
 
+  const position_x = input.position_x ?? null;
+  const position_y = input.position_y ?? null;
+
   db.prepare(
     `INSERT INTO commits_v2
      (commit_hash, project_id, branch, message, parents_json, turn_window_json,
-      facet_snapshot_json, pipeline_config_json, draft_id, draft_text_hash, signature_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      facet_snapshot_json, pipeline_config_json, draft_id, draft_text_hash, signature_json,
+      source_excerpt_json, must_have_json, mustnt_have_json, position_x, position_y, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     commit_hash,
     input.project_id,
@@ -94,6 +107,11 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     input.draft_id ?? null,
     input.draft_text_hash ?? null,
     signature_json,
+    source_excerpt_json,
+    must_have_json,
+    mustnt_have_json,
+    position_x,
+    position_y,
     created_at
   );
 
@@ -112,6 +130,11 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     draft_id: input.draft_id ?? null,
     draft_text_hash: input.draft_text_hash ?? null,
     signature_json,
+    source_excerpt_json,
+    must_have_json,
+    mustnt_have_json,
+    position_x,
+    position_y,
     created_at,
   };
 }
@@ -183,6 +206,24 @@ export function getCommitHistory(
   }
 
   return history;
+}
+
+export function updateCommitPosition(
+  commit_hash: string,
+  position: { x?: number; y?: number }
+): CommitV2Record | null {
+  const db = getDb();
+  const existing = getCommitV2(commit_hash);
+  if (!existing) return null;
+
+  const position_x = position.x !== undefined ? position.x : existing.position_x;
+  const position_y = position.y !== undefined ? position.y : existing.position_y;
+
+  db.prepare(
+    `UPDATE commits_v2 SET position_x = ?, position_y = ? WHERE commit_hash = ?`
+  ).run(position_x, position_y, commit_hash);
+
+  return getCommitV2(commit_hash);
 }
 
 export function findCommonAncestor(

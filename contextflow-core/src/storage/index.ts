@@ -82,6 +82,7 @@ export {
   listCommitsV2,
   getCommitParents,
   getCommitHistory,
+  updateCommitPosition,
   findCommonAncestor,
 } from './commits';
 

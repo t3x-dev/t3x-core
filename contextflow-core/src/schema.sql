@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   conversation_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   title TEXT,
+  position_x REAL,
+  position_y REAL,
   created_at TEXT NOT NULL,
   metadata_json TEXT,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
@@ -133,6 +135,11 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   draft_id TEXT,
   draft_text_hash TEXT,
   signature_json TEXT,
+  source_excerpt_json TEXT,
+  must_have_json TEXT,
+  mustnt_have_json TEXT,
+  position_x REAL,
+  position_y REAL,
   created_at TEXT NOT NULL,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );

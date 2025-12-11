@@ -7786,6 +7786,14 @@ button {
   outline-offset: -2px;
 }
 
+/* 分隔符 │ - 浅灰色，不可选中 */
+.selectable-token--separator {
+  color: #9ca3af;
+  margin: 0 4px;
+  cursor: default;
+  user-select: none;
+}
+
 .selectable-text-block__hint {
   margin-top: 12px;
   padding-top: 12px;
@@ -7870,13 +7878,13 @@ button {
   align-items: flex-start;
   gap: 8px;
   padding: 8px 12px;
-  background: #f0fdf4;
+  background: #f9fafb;
   border-radius: 6px;
-  border-left: 3px solid #22c55e;
+  border: 1px solid #e5e7eb;
 }
 
 .commit-v2__source-marker {
-  color: #22c55e;
+  color: #9ca3af;
   font-weight: bold;
   flex-shrink: 0;
 }
@@ -7885,6 +7893,8 @@ button {
   font-size: 0.875rem;
   line-height: 1.5;
   color: #374151;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .commit-v2__generated-output {
