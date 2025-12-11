@@ -131,9 +131,9 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
             parts: [{ text }],
           },
         }),
-        dispatcher,
-        headersTimeout: this.timeout,
         bodyTimeout: this.timeout,
+        headersTimeout: this.timeout,
+        dispatcher,
       });
 
       const responseText = await body.text();
@@ -152,7 +152,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
 
       return data.embedding.values;
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (error instanceof Error && error.message.includes("timeout")) {
         throw new Error(`Request timeout after ${this.timeout}ms`);
       }
 
