@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   conversation_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   title TEXT,
+  parent_commit_hash TEXT,
   position_x REAL,
   position_y REAL,
   created_at TEXT NOT NULL,
