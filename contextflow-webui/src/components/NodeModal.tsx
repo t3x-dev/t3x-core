@@ -722,10 +722,12 @@ export function NodeModal({
       return
     }
 
-    // Get source conversation ID
-    const sourceConversationId = data.sourceConversationId
+    // Get source conversation ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
+    // This allows commits created from other commits to work when a conversation is later connected
+    const conversationBlock = textBlocks.find(block => block.sourceNodeType === 'conversation')
+    const sourceConversationId = conversationBlock?.sourceNodeId || data.sourceConversationId
     if (!sourceConversationId) {
-      setCommitError('No source conversation found')
+      setCommitError('No source conversation found. Please connect a conversation to this commit.')
       return
     }
 
