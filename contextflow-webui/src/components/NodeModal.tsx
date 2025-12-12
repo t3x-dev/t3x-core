@@ -774,9 +774,10 @@ export function NodeModal({
 
   // Handle Proceed - lock Step 1 config and enable Step 2 editing
   const handleProceed = useCallback(() => {
-    if (sourceBoxes.length === 0) return
+    // Allow proceeding if either textBlocks or sourceBoxes has content
+    if (textBlocks.length === 0 && sourceBoxes.length === 0) return
     setConfigLocked(true)
-  }, [sourceBoxes])
+  }, [textBlocks, sourceBoxes])
 
   // Handle Reset - unlock Step 1 config and reset phrases to default
   const handleReset = useCallback(() => {
