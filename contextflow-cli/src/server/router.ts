@@ -9,6 +9,21 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Route, RouteHandler, RequestContext, errorResponse } from "./types";
 
 /**
+ * HTTP Error with status code
+ * Used to distinguish client errors (4xx) from server errors (5xx)
+ */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
+/**
  * Simple HTTP Router
  */
 export class Router {
@@ -82,7 +97,12 @@ export class Router {
         await route.handler(ctx, req, res);
         return;
       } catch (error) {
-        this.sendError(res, 500, "INTERNAL_ERROR", (error as Error).message);
+        // Handle HttpError with appropriate status code
+        if (error instanceof HttpError) {
+          this.sendError(res, error.status, error.code, error.message);
+        } else {
+          this.sendError(res, 500, "INTERNAL_ERROR", (error as Error).message);
+        }
         return;
       }
     }
@@ -121,7 +141,7 @@ export class Router {
           }
           resolve(JSON.parse(body));
         } catch (error) {
-          reject(new Error("Invalid JSON body"));
+          reject(new HttpError(400, "BAD_REQUEST", "Invalid JSON body"));
         }
       });
 

@@ -1017,9 +1017,36 @@ export function NodeModal({
         }
 
         // Determine branch
-        const branch = data.pendingBranch === 'branch' && data.pendingBranchName
-          ? data.pendingBranchName
+        // If user selected 'branch' mode, use their branch name or generate one
+        const branch = data.pendingBranch === 'branch'
+          ? (data.pendingBranchName?.trim() || `branch-${Date.now()}`)
           : 'main'
+
+        console.log('[handleCommit:merge] Branch decision:', {
+          pendingBranch: data.pendingBranch,
+          pendingBranchName: data.pendingBranchName,
+          computedBranch: branch,
+          existingBranches: branches.map(b => b.name),
+          branchExists: branches.some(b => b.name === branch),
+        })
+
+        // Create branch if needed (new branch that doesn't exist yet)
+        if (branch !== 'main' && !branches.some(b => b.name === branch)) {
+          console.log('[handleCommit:merge] Creating new branch:', branch)
+          try {
+            await api.createBranch(projectId, branch, 'main', undefined, false)
+            console.log('[handleCommit:merge] Branch created successfully:', branch)
+          } catch (branchErr) {
+            // Ignore if branch already exists (race condition)
+            const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr)
+            console.log('[handleCommit:merge] Branch creation error:', errMsg)
+            if (!errMsg.includes('already exists')) {
+              throw branchErr
+            }
+          }
+        } else {
+          console.log('[handleCommit:merge] Skipping branch creation:', { branch, isMain: branch === 'main', exists: branches.some(b => b.name === branch) })
+        }
 
         // Create merge commit
         const currentPosition = node?.position
@@ -1085,9 +1112,18 @@ export function NodeModal({
       }
 
       // 2. Determine branch
-      const branch = data.pendingBranch === 'branch' && data.pendingBranchName
-        ? data.pendingBranchName
+      // If user selected 'branch' mode, use their branch name or generate one
+      const branch = data.pendingBranch === 'branch'
+        ? (data.pendingBranchName?.trim() || `branch-${Date.now()}`)
         : 'main'
+
+      console.log('[handleCommit] Branch decision:', {
+        pendingBranch: data.pendingBranch,
+        pendingBranchName: data.pendingBranchName,
+        computedBranch: branch,
+        existingBranches: branches.map(b => b.name),
+        branchExists: branches.some(b => b.name === branch),
+      })
 
       // 3. Collect user selections
       // Get source excerpts (included phrases) from textBlocks or legacy allPhrases
@@ -1111,15 +1147,20 @@ export function NodeModal({
 
       // 4. Create branch if needed (new branch that doesn't exist yet)
       if (branch !== 'main' && !branches.some(b => b.name === branch)) {
+        console.log('[handleCommit] Creating new branch:', branch)
         try {
           await api.createBranch(projectId, branch, 'main', undefined, false)
+          console.log('[handleCommit] Branch created successfully:', branch)
         } catch (branchErr) {
           // Ignore if branch already exists (race condition)
           const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr)
+          console.log('[handleCommit] Branch creation error:', errMsg)
           if (!errMsg.includes('already exists')) {
             throw branchErr
           }
         }
+      } else {
+        console.log('[handleCommit] Skipping branch creation:', { branch, isMain: branch === 'main', exists: branches.some(b => b.name === branch) })
       }
 
       // 5. Build source_refs from all upstream source nodes
