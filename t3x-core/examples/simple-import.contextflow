@@ -1,0 +1,74 @@
+{
+  "t3x_version": "1.0",
+  "$schema": "https://t3x.dev/schema/v1.0.json",
+  "metadata": {
+    "id": "a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890",
+    "created": "2025-10-06T10:00:00Z",
+    "modified": "2025-10-06T14:30:00Z",
+    "name": "My ChatGPT Conversations",
+    "description": "Imported from ChatGPT export - my coding discussions",
+    "tags": [
+      "chatgpt",
+      "coding",
+      "python"
+    ]
+  },
+  "conversations": [
+    {
+      "id": "conv-001",
+      "title": "How to use Python type hints",
+      "created": "2025-10-05T14:00:00Z",
+      "source": "chatgpt",
+      "messages": [
+        {
+          "role": "user",
+          "content": "How do I use type hints in Python?",
+          "timestamp": "2025-10-05T14:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "Type hints in Python help document the expected types of variables, function parameters, and return values. Here's a simple example:\n\n```python\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n```\n\nThe `: str` after `name` indicates the parameter should be a string, and `-> str` indicates the function returns a string.",
+          "timestamp": "2025-10-05T14:00:15Z"
+        },
+        {
+          "role": "user",
+          "content": "What about for lists and dictionaries?",
+          "timestamp": "2025-10-05T14:01:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "For lists and dictionaries, you'll use the `typing` module or Python 3.9+ built-in generic types:\n\n```python\nfrom typing import List, Dict\n\ndef process_items(items: List[str]) -> Dict[str, int]:\n    return {item: len(item) for item in items}\n```\n\nOr in Python 3.9+:\n\n```python\ndef process_items(items: list[str]) -> dict[str, int]:\n    return {item: len(item) for item in items}\n```",
+          "timestamp": "2025-10-05T14:01:30Z"
+        }
+      ],
+      "tags": [
+        "python",
+        "type-hints",
+        "tutorial"
+      ]
+    },
+    {
+      "id": "conv-002",
+      "title": "FastAPI async patterns",
+      "created": "2025-10-06T09:00:00Z",
+      "source": "chatgpt",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Should I use async functions in FastAPI?",
+          "timestamp": "2025-10-06T09:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "Yes, async functions are highly recommended in FastAPI when you're performing I/O operations (database queries, API calls, file operations). FastAPI is built on ASGI and handles async natively.\n\n```python\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int):\n    user = await db.fetch_user(user_id)  # async database call\n    return user\n```\n\nHowever, if your endpoint only does CPU-bound work (calculations, data processing), a regular sync function is fine.",
+          "timestamp": "2025-10-06T09:00:45Z"
+        }
+      ],
+      "tags": [
+        "fastapi",
+        "async",
+        "python"
+      ]
+    }
+  ]
+}

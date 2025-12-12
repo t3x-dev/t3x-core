@@ -1,0 +1,45 @@
+{
+  "name": "@t3x/core",
+  "version": "0.1.0",
+  "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/schema.sql dist/",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "json-canonicalize": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "t3x",
+    "semantic",
+    "nlp",
+    "diff",
+    "merge",
+    "extraction"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/t3x.git",
+    "directory": "t3x-core"
+  }
+}

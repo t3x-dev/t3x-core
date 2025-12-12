@@ -1,5 +1,5 @@
 name: "🐛 Bug"
-description: "Report a reproducible bug in ContextFlow"
+description: "Report a reproducible bug in T3X"
 title: "[Bug]: "
 labels:
   - "type:bug"
@@ -63,7 +63,7 @@ body:
     id: logs
     attributes:
       label: "Logs / Screenshots / Minimal Sample"
-      description: "Paste logs, or attach a minimal .contextflow bundle / JSONL snippet"
+      description: "Paste logs, or attach a minimal .t3x bundle / JSONL snippet"
     validations:
       required: false
   - type: checkboxes

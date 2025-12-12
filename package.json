@@ -1,22 +1,22 @@
 {
-  "name": "contextflow",
+  "name": "t3x",
   "version": "0.1.0",
   "private": true,
-  "description": "ContextFlow - Semantic extraction, diff, and merge for conversational AI",
+  "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
   "workspaces": [
-    "contextflow-core",
-    "contextflow-core/sdk/javascript",
-    "contextflow-cli",
-    "contextflow-webui"
+    "t3x-core",
+    "t3x-core/sdk/javascript",
+    "t3x-cli",
+    "t3x-webui"
   ],
   "scripts": {
     "build": "npm run build:core && npm run build:cli",
-    "build:core": "npm run build -w @contextflow/core",
-    "build:cli": "npm run build -w contextflow-cli",
-    "build:webui": "npm run build -w contextflow-webui",
-    "clean": "npm run clean -w @contextflow/core && npm run clean -w contextflow-cli",
-    "test": "npm run test -w @contextflow/core && npm run test -w contextflow-cli",
-    "lint": "npm run lint -w @contextflow/core && npm run lint -w contextflow-cli"
+    "build:core": "npm run build -w @t3x/core",
+    "build:cli": "npm run build -w t3x-cli",
+    "build:webui": "npm run build -w t3x-webui",
+    "clean": "npm run clean -w @t3x/core && npm run clean -w t3x-cli",
+    "test": "npm run test -w @t3x/core && npm run test -w t3x-cli",
+    "lint": "npm run lint -w @t3x/core && npm run lint -w t3x-cli"
   },
   "engines": {
     "node": ">=18.0.0"
