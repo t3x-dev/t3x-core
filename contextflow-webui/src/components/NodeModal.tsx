@@ -773,7 +773,56 @@ export function NodeModal({
         mustntHave = mustntHaveKeywordsLegacy.map(kw => kw.text)
       }
 
-      // 4. Create Commit directly (Ring data already extracted during turn creation)
+      // 4. Build source_refs from all upstream source nodes
+      const sourceRefs: api.SourceRef[] = []
+
+      // Primary source: the conversation with turn_window
+      sourceRefs.push({
+        type: 'conversation',
+        conversation_id: sourceConversationId,
+        turn_window: { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
+      })
+
+      // Debug: Log textBlocks info
+      console.log('[handleCommit] Building sourceRefs:', {
+        sourceConversationId,
+        textBlocksCount: textBlocks.length,
+        textBlocks: textBlocks.map(b => ({
+          id: b.id,
+          sourceNodeId: b.sourceNodeId,
+          sourceNodeType: b.sourceNodeType,
+          sourceNodeTitle: b.sourceNodeTitle,
+        })),
+      })
+
+      // Additional sources from textBlocks (for multi-source commits)
+      if (textBlocks.length > 0) {
+        textBlocks.forEach(block => {
+          console.log('[handleCommit] Checking block:', {
+            blockSourceNodeId: block.sourceNodeId,
+            sourceConversationId,
+            isMatch: block.sourceNodeId === sourceConversationId,
+            willAdd: block.sourceNodeId && block.sourceNodeId !== sourceConversationId,
+          })
+          if (block.sourceNodeId && block.sourceNodeId !== sourceConversationId) {
+            if (block.sourceNodeType === 'conversation') {
+              sourceRefs.push({
+                type: 'conversation',
+                conversation_id: block.sourceNodeId,
+              })
+            } else if (block.sourceNodeType === 'commit') {
+              sourceRefs.push({
+                type: 'commit',
+                commit_hash: block.sourceNodeId,
+              })
+            }
+          }
+        })
+      }
+
+      console.log('[handleCommit] Final sourceRefs:', sourceRefs)
+
+      // 5. Create Commit directly (Ring data already extracted during turn creation)
       const commit = await api.createCommit(
         projectId,
         { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
@@ -783,16 +832,17 @@ export function NodeModal({
           sourceExcerpt,
           mustHave,
           mustntHave,
+          sourceRefs,
         }
       )
 
-      // 4. Update local node ID to match API commit_hash (before refresh)
+      // 6. Update local node ID to match API commit_hash (before refresh)
       // This ensures edges are preserved when loadProjectData rebuilds the canvas
       if (node && commit.commit_hash) {
         useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
       }
 
-      // 5. Update local state with final values
+      // 7. Update local state with final values
       onUpdate({
         summary: resultText,
         bridgePrompt: template,
