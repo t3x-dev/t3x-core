@@ -8365,9 +8365,138 @@ button {
 .pending-source-editor {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
+/* ========================================
+   Source Box (Collapsible container)
+   ======================================== */
+
+.source-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.source-box--expanded {
+  border-color: #d1d5db;
+}
+
+.source-box__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.source-box__header:hover {
+  background: #f3f4f6;
+}
+
+.source-box__toggle {
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.source-box__icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.source-box__icon--conv {
+  color: #3b82f6;
+}
+
+.source-box__icon--commit {
+  color: #8b5cf6;
+}
+
+.source-box__type-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+}
+
+.source-box__title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-box__content {
+  padding: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ========================================
+   Conversation Turn Renderer
+   ======================================== */
+
+.conversation-turn-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Turn group - container for each role's message */
+.turn-group {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.turn-group--user {
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.turn-group--assistant {
+  background: rgba(107, 114, 128, 0.05);
+  border: 1px solid rgba(107, 114, 128, 0.15);
+}
+
+/* Turn label - role indicator */
+.turn-group__label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  user-select: none;
+}
+
+.turn-group__label--user {
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.turn-group__label--assistant {
+  color: #4b5563;
+  background: rgba(107, 114, 128, 0.1);
+}
+
+/* Turn content - the actual message text */
+.turn-group__content {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  user-select: none;
+  cursor: default;
+}
+
+/* Legacy block styles (keeping for backwards compatibility) */
 .pending-source-editor__block {
   display: flex;
   flex-direction: column;

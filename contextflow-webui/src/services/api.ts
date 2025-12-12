@@ -101,6 +101,7 @@ export interface CommitRaw {
   mustnt_have_json: string | null
   position_x: number | null
   position_y: number | null
+  source_refs_json: string | null
   created_at: string
 }
 
@@ -137,6 +138,17 @@ export interface ContextFacet extends FacetBase {
 // Union type for all facet kinds, plus catch-all for unknown facet types
 export type Facet = GoalFacet | PreferenceFacet | ContextFacet | FacetBase
 
+// Source reference for multi-source commits
+export interface SourceRef {
+  type: 'conversation' | 'commit'
+  conversation_id?: string
+  turn_window?: {
+    start_turn_hash: string
+    end_turn_hash: string
+  }
+  commit_hash?: string
+}
+
 // Parsed commit for frontend use
 export interface Commit {
   commit_hash: string
@@ -163,6 +175,7 @@ export interface Commit {
   mustnt_have: string[] | null
   position_x: number | null
   position_y: number | null
+  source_refs: SourceRef[] | null
   created_at: string
 }
 
@@ -377,6 +390,7 @@ function parseCommit(raw: CommitRaw): Commit {
     mustnt_have: safeJsonParse<string[] | null>(raw.mustnt_have_json, null),
     position_x: raw.position_x,
     position_y: raw.position_y,
+    source_refs: raw.source_refs_json ? JSON.parse(raw.source_refs_json) : null,
     created_at: raw.created_at,
   }
 }
@@ -767,6 +781,7 @@ export async function createCommit(
     mustHave?: string[]
     mustntHave?: string[]
     position?: { x: number; y: number }
+    sourceRefs?: SourceRef[]
   }
 ): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
@@ -783,6 +798,7 @@ export async function createCommit(
       mustnt_have: options?.mustntHave,
       position_x: options?.position?.x,
       position_y: options?.position?.y,
+      source_refs: options?.sourceRefs,
     }),
   })
   const data = await handleResponse<ApiResponse<CommitRaw>>(res)

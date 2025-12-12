@@ -89,6 +89,13 @@ export interface KeywordMarker {
   constraint: 'must_have' | 'mustnt_have'
 }
 
+// Turn boundary for conversation source (UI display only)
+export interface TurnBoundary {
+  role: 'user' | 'assistant'
+  startTokenIndex: number   // Start token index of this turn (inclusive)
+  endTokenIndex: number     // End token index of this turn (inclusive)
+}
+
 // Source text block with all user selections
 export interface SourceTextBlock {
   id: string
@@ -96,6 +103,15 @@ export interface SourceTextBlock {
   tokens: TextToken[]            // Tokenized text
   selections: TextSelection[]    // User-selected ranges (浅绿)
   keywords: KeywordMarker[]      // Marked keywords within selections (深绿)
+
+  // Source node information
+  sourceNodeId?: string                        // Source node ID
+  sourceNodeType?: 'conversation' | 'commit'   // Source node type
+  sourceNodeTitle?: string                     // Display title
+
+  // Turn boundaries for conversation type (UI display only)
+  // Defines which token ranges belong to which role
+  turnBoundaries?: TurnBoundary[]
 }
 
 // Pending commit source data - replaces old clause-based system for pending commits

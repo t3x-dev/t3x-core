@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, MessageSquare, GitCommit } from 'lucide-react'
 import type { SourceTextBlock, TextSelection, KeywordMarker, TextToken } from '../types/nodes'
 import {
   isTokenInSelection,
@@ -320,11 +321,306 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
   )
 }
 
-// Container for multiple text blocks
+// Container for multiple text blocks with Box UI
 interface PendingSourceEditorProps {
   blocks: SourceTextBlock[]
   onChange: (blocks: SourceTextBlock[]) => void
   readOnly?: boolean
+}
+
+// Collapsible Source Box component
+interface SourceBoxProps {
+  block: SourceTextBlock
+  onChange: (block: SourceTextBlock) => void
+  readOnly?: boolean
+  defaultExpanded?: boolean
+}
+
+function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false }: SourceBoxProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+
+  // Determine display info based on source type
+  const isConversation = block.sourceNodeType === 'conversation'
+  const icon = isConversation ? <MessageSquare size={14} /> : <GitCommit size={14} />
+  const typeLabel = isConversation ? 'Conv' : 'Commit'
+  const title = block.sourceNodeTitle || (isConversation ? 'Conversation' : 'Commit')
+
+  return (
+    <div className={`source-box ${isExpanded ? 'source-box--expanded' : ''}`}>
+      {/* Box Header */}
+      <div
+        className="source-box__header"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span className="source-box__toggle">
+          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </span>
+        <span className={`source-box__icon source-box__icon--${isConversation ? 'conv' : 'commit'}`}>
+          {icon}
+        </span>
+        <span className="source-box__type-label">{typeLabel}:</span>
+        <span className="source-box__title">{title}</span>
+      </div>
+
+      {/* Box Content */}
+      {isExpanded && (
+        <div className="source-box__content">
+          {isConversation && block.turnBoundaries && block.turnBoundaries.length > 0 ? (
+            // Conversation: Render with turn groups
+            <ConversationTurnRenderer
+              block={block}
+              onChange={onChange}
+              readOnly={readOnly}
+            />
+          ) : (
+            // Commit: Render as simple block
+            <SelectableTextBlock
+              block={block}
+              onChange={onChange}
+              readOnly={readOnly}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Render conversation content with turn groups
+interface ConversationTurnRendererProps {
+  block: SourceTextBlock
+  onChange: (block: SourceTextBlock) => void
+  readOnly?: boolean
+}
+
+function ConversationTurnRenderer({ block, onChange, readOnly = false }: ConversationTurnRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [isRightDragging, setIsRightDragging] = useState(false)
+  const [selectionStart, setSelectionStart] = useState<number | null>(null)
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
+
+  // Group tokens by turn
+  const turnGroups = useMemo(() => {
+    if (!block.turnBoundaries || block.turnBoundaries.length === 0) {
+      return [{ turn: null, tokens: block.tokens }]
+    }
+
+    return block.turnBoundaries.map(turn => ({
+      turn,
+      tokens: block.tokens.filter(
+        token => token.index >= turn.startTokenIndex && token.index <= turn.endTokenIndex
+      ),
+    }))
+  }, [block.tokens, block.turnBoundaries])
+
+  // Handle mouse down on a token
+  const handleTokenMouseDown = useCallback(
+    (tokenIndex: number, e: React.MouseEvent) => {
+      if (readOnly) return
+      if (e.button !== 0) return
+      e.preventDefault()
+
+      setIsSelecting(true)
+      setIsRightDragging(false)
+      setSelectionStart(tokenIndex)
+      setSelectionEnd(tokenIndex)
+    },
+    [readOnly]
+  )
+
+  // Handle right mouse down
+  const handleTokenRightMouseDown = useCallback(
+    (tokenIndex: number, e: React.MouseEvent) => {
+      if (readOnly) return
+      e.preventDefault()
+
+      setIsSelecting(true)
+      setIsRightDragging(true)
+      setSelectionStart(tokenIndex)
+      setSelectionEnd(tokenIndex)
+    },
+    [readOnly]
+  )
+
+  // Handle mouse move
+  const handleTokenMouseEnter = useCallback(
+    (tokenIndex: number) => {
+      if (!isSelecting || readOnly) return
+      setSelectionEnd(tokenIndex)
+    },
+    [isSelecting, readOnly]
+  )
+
+  // Helper: Remove tokens from selections of opposite type
+  const removeFromOppositeSelections = useCallback(
+    (selections: TextSelection[], start: number, end: number, keepType: 'include' | 'exclude'): TextSelection[] => {
+      const oppositeType = keepType === 'include' ? 'exclude' : 'include'
+      const result: TextSelection[] = []
+
+      for (const sel of selections) {
+        if (sel.type !== oppositeType) {
+          result.push(sel)
+          continue
+        }
+
+        if (sel.endIndex < start || sel.startIndex > end) {
+          result.push(sel)
+        } else if (sel.startIndex >= start && sel.endIndex <= end) {
+          // Fully contained, remove
+        } else if (sel.startIndex < start && sel.endIndex > end) {
+          result.push({ ...sel, id: `${sel.id}-left`, endIndex: start - 1 })
+          result.push({ ...sel, id: `${sel.id}-right`, startIndex: end + 1 })
+        } else if (sel.startIndex < start) {
+          result.push({ ...sel, endIndex: start - 1 })
+        } else {
+          result.push({ ...sel, startIndex: end + 1 })
+        }
+      }
+
+      return result
+    },
+    []
+  )
+
+  // Handle mouse up
+  const handleMouseUp = useCallback(() => {
+    if (readOnly) return
+
+    if (isSelecting && selectionStart !== null && selectionEnd !== null) {
+      const start = Math.min(selectionStart, selectionEnd)
+      const end = Math.max(selectionStart, selectionEnd)
+      const isSingleClick = start === end
+
+      if (isRightDragging) {
+        let newSelections = removeFromOppositeSelections(block.selections, start, end, 'exclude')
+        newSelections = addSelection(newSelections, start, end, block.id, 'exclude')
+        const newKeywords = cleanupKeywords(block.keywords, newSelections)
+        onChange({ ...block, selections: newSelections, keywords: newKeywords })
+      } else {
+        if (isSingleClick) {
+          const isInInclude = isTokenInIncludeSelection(start, block.selections)
+
+          if (isInInclude) {
+            const existingKeyword = block.keywords.find(kw => kw.tokenIndex === start)
+            let newKeywords: KeywordMarker[]
+
+            if (!existingKeyword) {
+              newKeywords = toggleKeyword(block.keywords, start, 'must_have', block.id)
+            } else if (existingKeyword.constraint === 'must_have') {
+              newKeywords = block.keywords.map(kw =>
+                kw.tokenIndex === start ? { ...kw, constraint: 'mustnt_have' as const } : kw
+              )
+            } else {
+              newKeywords = block.keywords.filter(kw => kw.tokenIndex !== start)
+            }
+
+            onChange({ ...block, keywords: newKeywords })
+          } else {
+            let newSelections = removeFromOppositeSelections(block.selections, start, end, 'include')
+            newSelections = addSelection(newSelections, start, end, block.id, 'include')
+            onChange({ ...block, selections: newSelections })
+          }
+        } else {
+          let newSelections = removeFromOppositeSelections(block.selections, start, end, 'include')
+          newSelections = addSelection(newSelections, start, end, block.id, 'include')
+          const newKeywords = cleanupKeywords(block.keywords, newSelections)
+          onChange({ ...block, selections: newSelections, keywords: newKeywords })
+        }
+      }
+    }
+
+    setIsSelecting(false)
+    setIsRightDragging(false)
+    setSelectionStart(null)
+    setSelectionEnd(null)
+  }, [isSelecting, isRightDragging, selectionStart, selectionEnd, block, onChange, readOnly, removeFromOppositeSelections])
+
+  // Check if token is in drag selection
+  const isInDragSelection = (tokenIndex: number): boolean => {
+    if (!isSelecting || selectionStart === null || selectionEnd === null) return false
+    const start = Math.min(selectionStart, selectionEnd)
+    const end = Math.max(selectionStart, selectionEnd)
+    return tokenIndex >= start && tokenIndex <= end
+  }
+
+  // Render a single token
+  const renderToken = (token: TextToken, nextToken: TextToken | undefined) => {
+    const state = getTokenState(token, block.selections, block.keywords)
+    const isDragging = isInDragSelection(token.index)
+    const addSpace = needsSpaceAfter(token, nextToken)
+
+    const classes = ['selectable-token']
+    if (state === 'selected') classes.push('selectable-token--selected')
+    if (state === 'excluded') classes.push('selectable-token--excluded')
+    if (state === 'keyword-must') classes.push('selectable-token--keyword-must')
+    if (state === 'keyword-mustnt') classes.push('selectable-token--keyword-mustnt')
+    if (isDragging && !isTokenInSelection(token.index, block.selections)) {
+      classes.push(isRightDragging ? 'selectable-token--dragging-exclude' : 'selectable-token--dragging')
+    }
+
+    const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>|│\s]+$/.test(token.text)
+
+    if (token.text === '\n') {
+      return <br key={token.id} />
+    }
+
+    return (
+      <span
+        key={token.id}
+        className={classes.join(' ')}
+        onMouseDown={(e) => !isPunctuation && handleTokenMouseDown(token.index, e)}
+        onMouseEnter={() => handleTokenMouseEnter(token.index)}
+        onContextMenu={(e) => {
+          if (!isPunctuation && !readOnly) {
+            handleTokenRightMouseDown(token.index, e)
+          }
+        }}
+        data-index={token.index}
+      >
+        {token.text}{addSpace ? ' ' : ''}
+      </span>
+    )
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="conversation-turn-renderer"
+      onMouseUp={handleMouseUp}
+      onContextMenu={(e) => e.preventDefault()}
+      onMouseLeave={() => {
+        if (isSelecting) {
+          setIsSelecting(false)
+          setIsRightDragging(false)
+          setSelectionStart(null)
+          setSelectionEnd(null)
+        }
+      }}
+    >
+      {turnGroups.map((group, groupIdx) => (
+        <div
+          key={group.turn ? `turn-${group.turn.startTokenIndex}` : `ungrouped-${groupIdx}`}
+          className={`turn-group ${group.turn ? `turn-group--${group.turn.role}` : ''}`}
+        >
+          {group.turn && (
+            <div className={`turn-group__label turn-group__label--${group.turn.role}`}>
+              {group.turn.role === 'user' ? 'USER' : 'ASSISTANT'}
+            </div>
+          )}
+          <div className="turn-group__content">
+            {group.tokens.map((token, idx) => renderToken(token, group.tokens[idx + 1]))}
+          </div>
+        </div>
+      ))}
+
+      {!readOnly && (
+        <div className="selectable-text-block__hint">
+          <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function PendingSourceEditor({ blocks, onChange, readOnly = false }: PendingSourceEditorProps) {
@@ -336,17 +632,19 @@ export function PendingSourceEditor({ blocks, onChange, readOnly = false }: Pend
     [blocks, onChange]
   )
 
+  // Default to expanded if there's only one block
+  const defaultExpanded = blocks.length === 1
+
   return (
     <div className="pending-source-editor">
-      {blocks.map((block, index) => (
-        <div key={block.id} className="pending-source-editor__block">
-          {blocks.length > 1 && (
-            <div className="pending-source-editor__block-header">
-              <span className="pending-source-editor__block-label">Source {index + 1}</span>
-            </div>
-          )}
-          <SelectableTextBlock block={block} onChange={handleBlockChange} readOnly={readOnly} />
-        </div>
+      {blocks.map((block) => (
+        <SourceBox
+          key={block.id}
+          block={block}
+          onChange={handleBlockChange}
+          readOnly={readOnly}
+          defaultExpanded={defaultExpanded}
+        />
       ))}
     </div>
   )
