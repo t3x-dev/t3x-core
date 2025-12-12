@@ -1,0 +1,80 @@
+{
+  "t3x_version": "1.0",
+  "$schema": "https://t3x.dev/schema/v1.0.json",
+  "metadata": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "created": "2025-10-06T14:00:00Z",
+    "modified": "2025-10-06T14:30:00Z",
+    "name": "Learning React Context",
+    "description": "Conversations and knowledge about React development",
+    "tags": [
+      "react",
+      "learning",
+      "frontend"
+    ]
+  },
+  "context": {
+    "system": {
+      "role": "You are a React expert helping a developer learn"
+    },
+    "knowledge": [
+      {
+        "id": "k001",
+        "type": "text/markdown",
+        "topic": "React hooks",
+        "content": "# Key React Hooks\n\n- **useState**: Local component state\n- **useEffect**: Side effects and lifecycle\n- **useContext**: Access context values\n- **useMemo**: Memoize expensive calculations",
+        "tags": [
+          "react",
+          "hooks"
+        ],
+        "created": "2025-10-06T14:00:00Z",
+        "confidence": 0.95
+      }
+    ],
+    "preferences": {
+      "languages": [
+        "typescript"
+      ],
+      "frameworks": [
+        "React",
+        "Next.js"
+      ],
+      "style": "Functional components with hooks, TypeScript strict mode"
+    }
+  },
+  "conversations": [
+    {
+      "id": "conv-001",
+      "title": "Understanding useEffect dependencies",
+      "created": "2025-10-06T14:00:00Z",
+      "source": "chatgpt",
+      "messages": [
+        {
+          "role": "user",
+          "content": "How do useEffect dependencies work?",
+          "timestamp": "2025-10-06T14:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "useEffect dependencies control when the effect runs. The effect re-runs whenever any value in the dependency array changes...",
+          "timestamp": "2025-10-06T14:00:30Z"
+        },
+        {
+          "role": "user",
+          "content": "What happens if I omit the dependency array?",
+          "timestamp": "2025-10-06T14:01:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "If you omit the dependency array, the effect runs after every render, which usually causes performance issues...",
+          "timestamp": "2025-10-06T14:01:15Z"
+        }
+      ],
+      "tags": [
+        "react",
+        "hooks",
+        "useEffect"
+      ]
+    }
+  ]
+}

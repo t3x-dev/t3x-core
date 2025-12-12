@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schema/intent_graph/v1.0.json",
+  "title": "T3X Intent Graph",
+  "description": "Canonical representation of normalized intent nodes derived from conversations.",
+  "type": "object",
+  "properties": {
+    "intent_nodes": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "turn_id",
+          "slot_type",
+          "value",
+          "confidence",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^intent-[A-Za-z0-9_-]+$"
+          },
+          "turn_id": {
+            "type": "string",
+            "pattern": "^turn-[A-Za-z0-9_-]+$"
+          },
+          "slot_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "relation": {
+            "type": ["string", "null"]
+          },
+          "cluster": {
+            "type": ["string", "null"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "source": {
+            "type": "string"
+          },
+          "embedding_ref": {
+            "type": ["string", "null"]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["intent_nodes"],
+  "additionalProperties": false
+}

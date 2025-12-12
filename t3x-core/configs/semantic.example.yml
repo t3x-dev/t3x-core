@@ -1,0 +1,32 @@
+# T3X semantic pipeline configuration (Phase 2)
+#
+# Copy this file to .t3x/config.yml inside your project and adjust.
+
+semantic:
+  extractor:
+    # clustering | spacy | stanza | spark_nlp | custom
+    type: spacy
+    model: en_core_web_md
+    version: 3.7.2
+    language: en
+    settings:
+      entity_filter:
+        - PERSON
+        - ORG
+        - GPE
+      pattern_library: semantic/patterns.yaml
+
+  validator:
+    # minilm | bert | custom
+    type: minilm
+    model: sentence-transformers/all-MiniLM-L6-v2
+    threshold: 0.82
+    version: 2.0.0
+    settings:
+      calibration_manifest: configs/validator-calibration.json
+
+  intent_mode: knowledge   # knowledge | decision | analysis | creative | plan | custom
+  status: active           # active | disabled | experimental
+  last_updated: 2024-10-12T11:50:00Z
+  notes: |
+    Dual-model pipeline enabled for Evidence@1 regressions.

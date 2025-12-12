@@ -55,7 +55,9 @@
       "Bash(node /tmp/check_diff.mjs:*)",
       "Bash(node /tmp/deep_verify_v2.mjs:*)",
       "Bash(node /tmp/check_merge.mjs:*)",
-      "Bash(node /tmp/test_conflict.mjs:*)"
+      "Bash(node /tmp/test_conflict.mjs:*)",
+      "Bash(git mv:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

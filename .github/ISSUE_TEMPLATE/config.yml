@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: ContextFlow Discussions
-    url: https://github.com/contextflow/contextflow/discussions
+  - name: T3X Discussions
+    url: https://github.com/t3x/t3x/discussions
     about: "Use Discussions for brainstorming or support threads."
-  - name: ContextFlow Docs
-    url: https://contextflow.dev/docs
+  - name: T3X Docs
+    url: https://t3x.dev/docs
     about: "Reference architecture notes, schema specs, and user guides."

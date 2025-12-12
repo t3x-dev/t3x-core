@@ -1,0 +1,38 @@
+{
+  "name": "t3x-cli",
+  "version": "0.1.0",
+  "description": "T3X Chat CLI MVP for local-first conversational logging.",
+  "license": "MIT",
+  "main": "dist/bin/t3x.js",
+  "bin": {
+    "t3x": "./dist/bin/t3x.js",
+    "t3x-serve": "./dist/src/serve.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "start": "node dist/bin/t3x.js",
+    "serve": "node dist/src/serve.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@t3x/core": "*",
+    "better-sqlite3": "^12.5.0",
+    "commander": "^12.1.0",
+    "global-agent": "^3.0.0",
+    "json-canonicalize": "^2.0.0",
+    "undici": "^6.22.0",
+    "yaml": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
