@@ -64,7 +64,21 @@ export interface CommitV2Record {
   mustnt_have_json: string | null;
   position_x: number | null;
   position_y: number | null;
+  source_refs_json: string | null;
   created_at: string;
+}
+
+// Source reference for multi-source commits
+export interface SourceRef {
+  type: 'conversation' | 'commit';
+  // For conversation source
+  conversation_id?: string;
+  turn_window?: {
+    start_turn_hash: string;
+    end_turn_hash: string;
+  };
+  // For commit source
+  commit_hash?: string;
 }
 
 export interface DraftV2Record {
@@ -157,6 +171,8 @@ export interface CreateCommitV2Input {
   mustnt_have?: string[];
   position_x?: number;
   position_y?: number;
+  // Multi-source references (optional, for multi-source commits)
+  source_refs?: SourceRef[];
 }
 
 export interface CreateDraftV2Input {
