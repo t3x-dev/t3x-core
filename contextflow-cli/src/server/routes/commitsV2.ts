@@ -19,6 +19,7 @@ import {
   getDraftV2,
   getDraftTextHash,
   getBranch,
+  createBranch,
   TurnWindowError,
   CommitError,
 } from "../../core/storage";
@@ -166,16 +167,17 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       }
     }
 
-    // Verify branch exists (if specified and not 'main')
+    // Ensure branch exists (create if not exists for non-main branches)
     const targetBranch = body.branch ?? "main";
     if (targetBranch !== "main") {
       const branch = getBranch(body.project_id, targetBranch);
       if (!branch) {
-        sendJson(res, 404, errorResponse(
-          "NOT_FOUND",
-          `Branch '${targetBranch}' does not exist`
-        ));
-        return;
+        // Auto-create the branch with 'main' as parent
+        createBranch({
+          project_id: body.project_id,
+          name: targetBranch,
+          parent_branch: "main",
+        });
       }
     }
 
