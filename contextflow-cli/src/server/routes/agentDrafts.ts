@@ -94,10 +94,17 @@ function isValueableKeyword(keyword: string): boolean {
   const kw = keyword.toLowerCase().trim();
   // Skip empty or very short keywords
   if (kw.length < 2) return false;
+  // Skip keywords that are too short (< 3 chars) unless they are meaningful acronyms
+  if (kw.length < 3) return false;
   // Skip stop words
   if (DRAFT_STOP_WORDS.has(kw)) return false;
   // Skip pure numbers
   if (/^\d+$/.test(kw)) return false;
+  // Skip keywords that don't start with a letter (e.g., "'d", "-ing")
+  if (!/^[a-z]/i.test(kw)) return false;
+  // Skip keywords that contain only non-alphanumeric characters mixed with letters
+  // (e.g., contractions fragments like "'d", "'ll", "'ve")
+  if (/^[^a-z0-9]*[a-z]{1,2}$/i.test(kw)) return false;
   return true;
 }
 

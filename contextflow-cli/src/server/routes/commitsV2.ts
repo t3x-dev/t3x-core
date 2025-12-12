@@ -28,6 +28,9 @@ import {
  */
 export function registerCommitsV2Routes(router: Router, _providers: ProviderConfig): void {
   // POST /api/v1/commits - Create commit
+  // Supports two modes:
+  // 1. Regular commit: requires turn_window, facet_snapshot is auto-generated
+  // 2. Merge commit: requires merge_parents + facet_snapshot (resolved facets)
   router.post("/api/v1/commits", async (ctx, _req, res) => {
     const body = ctx.body as {
       project_id?: string;
@@ -37,6 +40,9 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         start_turn_hash: string;
         end_turn_hash: string;
       };
+      // Merge commit fields
+      merge_parents?: string[];  // [source_hash, target_hash]
+      facet_snapshot?: unknown[];  // Required for merge commits, auto-generated for regular
       draft_id?: string;
       pipeline_config?: unknown;
       signature?: unknown;
@@ -47,12 +53,55 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       position_y?: number;
     } | null;
 
-    if (!body?.project_id || !body?.turn_window) {
+    if (!body?.project_id) {
       sendJson(res, 400, errorResponse(
         "INVALID_REQUEST",
-        "project_id and turn_window are required"
+        "project_id is required"
       ));
       return;
+    }
+
+    // Determine commit type - enforce mutual exclusivity
+    const hasMergeParents = body.merge_parents && body.merge_parents.length > 0;
+    const hasTurnWindow = !!body.turn_window;
+
+    // Mutual exclusivity check
+    if (hasMergeParents && hasTurnWindow) {
+      sendJson(res, 400, errorResponse(
+        "INVALID_REQUEST",
+        "Cannot specify both merge_parents and turn_window. Use one or the other."
+      ));
+      return;
+    }
+
+    const isMergeCommit = hasMergeParents;
+
+    // Validate based on commit type
+    if (isMergeCommit) {
+      // Merge commit requires facet_snapshot
+      if (!body.facet_snapshot || !Array.isArray(body.facet_snapshot)) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "merge commits require facet_snapshot with resolved facets"
+        ));
+        return;
+      }
+      if (body.merge_parents!.length < 2) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "merge_parents must contain at least 2 commit hashes"
+        ));
+        return;
+      }
+    } else {
+      // Regular commit requires turn_window
+      if (!body.turn_window) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "turn_window is required for regular commits (or use merge_parents for merge commits)"
+        ));
+        return;
+      }
     }
 
     // Verify project exists
@@ -62,29 +111,52 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       return;
     }
 
-    // Verify turns exist and belong to same conversation
-    const startTurn = getTurnV2(body.turn_window.start_turn_hash);
-    const endTurn = getTurnV2(body.turn_window.end_turn_hash);
-
-    if (!startTurn || !endTurn) {
-      sendJson(res, 404, errorResponse("NOT_FOUND", "Start or end turn not found"));
-      return;
+    // For merge commits: verify parent commits exist
+    if (isMergeCommit) {
+      for (const parentHash of body.merge_parents!) {
+        const parentCommit = getCommitV2(parentHash);
+        if (!parentCommit) {
+          sendJson(res, 404, errorResponse(
+            "NOT_FOUND",
+            `Parent commit ${parentHash} not found`
+          ));
+          return;
+        }
+        if (parentCommit.project_id !== body.project_id) {
+          sendJson(res, 400, errorResponse(
+            "INVALID_REQUEST",
+            `Parent commit ${parentHash} does not belong to project ${body.project_id}`
+          ));
+          return;
+        }
+      }
     }
 
-    if (startTurn.conversation_id !== endTurn.conversation_id) {
-      sendJson(res, 400, errorResponse(
-        "INVALID_REQUEST",
-        "Start and end turns must be in the same conversation"
-      ));
-      return;
-    }
+    // For regular commits: verify turns exist and belong to same conversation
+    if (!isMergeCommit && body.turn_window) {
+      const startTurn = getTurnV2(body.turn_window.start_turn_hash);
+      const endTurn = getTurnV2(body.turn_window.end_turn_hash);
 
-    if (startTurn.project_id !== body.project_id || endTurn.project_id !== body.project_id) {
-      sendJson(res, 400, errorResponse(
-        "INVALID_REQUEST",
-        "Turns must belong to the specified project"
-      ));
-      return;
+      if (!startTurn || !endTurn) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", "Start or end turn not found"));
+        return;
+      }
+
+      if (startTurn.conversation_id !== endTurn.conversation_id) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "Start and end turns must be in the same conversation"
+        ));
+        return;
+      }
+
+      if (startTurn.project_id !== body.project_id || endTurn.project_id !== body.project_id) {
+        sendJson(res, 400, errorResponse(
+          "INVALID_REQUEST",
+          "Turns must belong to the specified project"
+        ));
+        return;
+      }
     }
 
     // Verify branch exists (if specified and not 'main')
@@ -119,20 +191,27 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     }
 
     try {
-      // Get turns in window for facet aggregation
-      const turns = getTurnsInWindow(
-        body.turn_window.start_turn_hash,
-        body.turn_window.end_turn_hash
-      );
+      let facet_snapshot: unknown[];
 
-      // Aggregate facet snapshot from turns' rings
-      const facet_snapshot = aggregateFacets(turns);
+      if (isMergeCommit) {
+        // Use provided facet_snapshot for merge commits
+        facet_snapshot = body.facet_snapshot!;
+      } else {
+        // Get turns in window for facet aggregation (regular commits)
+        const turns = getTurnsInWindow(
+          body.turn_window!.start_turn_hash,
+          body.turn_window!.end_turn_hash
+        );
+        // Aggregate facet snapshot from turns' rings
+        facet_snapshot = aggregateFacets(turns);
+      }
 
       const commit = createCommitV2({
         project_id: body.project_id,
         branch: targetBranch,
         message: body.message,
         turn_window: body.turn_window,
+        merge_parents: body.merge_parents,
         facet_snapshot,
         pipeline_config: body.pipeline_config,
         draft_id: body.draft_id,
@@ -154,8 +233,12 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         _meta: {
           is_root_commit: parents.length === 0,
           parent_count: parents.length,
+          is_merge_commit: isMergeCommit,
           ...(parents.length === 0 && {
             note: "This is the first commit on this branch (root commit)",
+          }),
+          ...(isMergeCommit && {
+            note: "This is a merge commit combining multiple parent commits",
           }),
         },
       };
@@ -316,6 +399,8 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
 
 /**
  * Aggregate facets from turns' ring data
+ * Primary source: ring3.segments (semantic segments)
+ * Fallback: ring2.facets, ring2.intent_seeds, ring2.preferences, ring1.keywords
  */
 function aggregateFacets(turns: Array<{ rings_json: string | null }>): unknown[] {
   const facets: unknown[] = [];
@@ -325,20 +410,51 @@ function aggregateFacets(turns: Array<{ rings_json: string | null }>): unknown[]
 
     try {
       const rings = JSON.parse(turn.rings_json);
+      const sourceTurn = (turn as any).turn_hash;
 
-      // Extract goal facets from ring2 intents
+      // Primary: Extract segments from ring3 (main facet data)
+      if (rings.ring3?.segments && Array.isArray(rings.ring3.segments)) {
+        // Extract keywords from ring1 for enrichment
+        const keywords = rings.ring1?.keywords?.map((kw: any) => kw.lemma || kw.text) ?? [];
+
+        for (const seg of rings.ring3.segments) {
+          facets.push({
+            facet: seg.segmentId,
+            text: seg.text,
+            keywords,
+            source_turn: sourceTurn,
+          });
+        }
+      }
+
+      // Fallback: Extract facets from ring2 if present
+      if (rings.ring2?.facets && Array.isArray(rings.ring2.facets)) {
+        for (const facet of rings.ring2.facets) {
+          // Avoid duplicates if already extracted from ring3
+          if (!facets.some((f: any) => f.text === facet.text)) {
+            facets.push({
+              facet: facet.id || "ring2-facet",
+              text: facet.text,
+              confidence: facet.confidence,
+              source_turn: sourceTurn,
+            });
+          }
+        }
+      }
+
+      // Legacy: Extract goal facets from ring2 intents
       if (rings.ring2?.intent_seeds) {
         for (const seed of rings.ring2.intent_seeds) {
           facets.push({
             facet: "goal",
             text: seed.text,
             confidence: seed.confidence,
-            source_turn: (turn as any).turn_hash,
+            source_turn: sourceTurn,
           });
         }
       }
 
-      // Extract preference facets from ring2 preferences
+      // Legacy: Extract preference facets from ring2 preferences
       if (rings.ring2?.preferences) {
         for (const pref of rings.ring2.preferences) {
           facets.push({
@@ -346,12 +462,12 @@ function aggregateFacets(turns: Array<{ rings_json: string | null }>): unknown[]
             key: pref.key,
             value: pref.value,
             confidence: pref.confidence,
-            source_turn: (turn as any).turn_hash,
+            source_turn: sourceTurn,
           });
         }
       }
 
-      // Extract context facets from ring1 entities
+      // Legacy: Extract context facets from ring1 entities
       if (rings.ring1?.keywords) {
         const entities = rings.ring1.keywords.filter((k: any) => k.entity_type);
         for (const entity of entities) {
@@ -360,7 +476,7 @@ function aggregateFacets(turns: Array<{ rings_json: string | null }>): unknown[]
             entity_type: entity.entity_type,
             text: entity.text,
             confidence: entity.confidence,
-            source_turn: (turn as any).turn_hash,
+            source_turn: sourceTurn,
           });
         }
       }

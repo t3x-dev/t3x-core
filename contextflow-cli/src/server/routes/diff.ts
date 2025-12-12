@@ -23,20 +23,25 @@ import { createDiffEngine, DiffSegment } from "../../core/diff";
 import {
   getTurnV2,
   getSegmentEmbeddingsByTurn,
+  getCommitV2,
 } from "../../core/storage";
 import type { RingOutput } from "../../core/extractors";
 
 /**
  * Two-way diff request body
- * Supports two modes:
- * 1. turn_hash mode: baseTurnHash + targetTurnHash (uses cached embeddings)
- * 2. segments mode: baseSegments + targetSegments (legacy, calls API)
+ * Supports three modes:
+ * 1. commit_hash mode: base_commit_hash + target_commit_hash (uses turn_window from commits)
+ * 2. turn_hash mode: baseTurnHash + targetTurnHash (uses cached embeddings)
+ * 3. segments mode: baseSegments + targetSegments (legacy, calls API)
  */
 interface TwoWayDiffRequest {
-  // Mode 1: turn hash (preferred)
+  // Mode 1: commit hash (new, frontend-friendly)
+  base_commit_hash?: string;
+  target_commit_hash?: string;
+  // Mode 2: turn hash (preferred for direct turn comparison)
   baseTurnHash?: string;
   targetTurnHash?: string;
-  // Mode 2: direct segments (legacy)
+  // Mode 3: direct segments (legacy)
   baseId?: string;
   baseSegments?: DiffSegment[];
   targetId?: string;
@@ -146,9 +151,77 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
     let targetId: string;
     let targetSegments: DiffSegment[];
     let usedCache = false;
+    let baseTurnHashForCache: string | undefined;
+    let targetTurnHashForCache: string | undefined;
 
-    // Mode 1: turn_hash mode (preferred)
-    if (body.baseTurnHash && body.targetTurnHash) {
+    // Mode 1: commit_hash mode (new, frontend-friendly)
+    if (body.base_commit_hash && body.target_commit_hash) {
+      // Get commits and extract turn_window
+      const baseCommit = getCommitV2(body.base_commit_hash);
+      const targetCommit = getCommitV2(body.target_commit_hash);
+
+      if (!baseCommit) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", `Base commit ${body.base_commit_hash} not found`));
+        return;
+      }
+      if (!targetCommit) {
+        sendJson(res, 404, errorResponse("NOT_FOUND", `Target commit ${body.target_commit_hash} not found`));
+        return;
+      }
+
+      // Parse turn_window from commits
+      let baseTurnWindow: { start_turn_hash: string; end_turn_hash: string } | null = null;
+      let targetTurnWindow: { start_turn_hash: string; end_turn_hash: string } | null = null;
+
+      try {
+        baseTurnWindow = baseCommit.turn_window_json ? JSON.parse(baseCommit.turn_window_json) : null;
+        targetTurnWindow = targetCommit.turn_window_json ? JSON.parse(targetCommit.turn_window_json) : null;
+      } catch {
+        sendJson(res, 500, errorResponse("DATA_CORRUPTED", "Invalid turn_window_json in commit"));
+        return;
+      }
+
+      if (!baseTurnWindow?.end_turn_hash) {
+        sendJson(res, 400, errorResponse("INVALID_REQUEST", `Base commit ${body.base_commit_hash} has no turn_window (may be a merge commit)`));
+        return;
+      }
+      if (!targetTurnWindow?.end_turn_hash) {
+        sendJson(res, 400, errorResponse("INVALID_REQUEST", `Target commit ${body.target_commit_hash} has no turn_window (may be a merge commit)`));
+        return;
+      }
+
+      // Use end_turn_hash for diff (represents the final state of the commit)
+      const baseTurnHash = baseTurnWindow.end_turn_hash;
+      const targetTurnHash = targetTurnWindow.end_turn_hash;
+
+      const baseResult = extractSegmentsFromTurn(baseTurnHash);
+      const targetResult = extractSegmentsFromTurn(targetTurnHash);
+
+      if (!baseResult.ok) {
+        const status = baseResult.error === "corrupted" ? 500 : 404;
+        const code = baseResult.error === "corrupted" ? "DATA_CORRUPTED" :
+                     baseResult.error === "no_rings" ? "NO_RINGS" : "NOT_FOUND";
+        sendJson(res, status, errorResponse(code, baseResult.message));
+        return;
+      }
+      if (!targetResult.ok) {
+        const status = targetResult.error === "corrupted" ? 500 : 404;
+        const code = targetResult.error === "corrupted" ? "DATA_CORRUPTED" :
+                     targetResult.error === "no_rings" ? "NO_RINGS" : "NOT_FOUND";
+        sendJson(res, status, errorResponse(code, targetResult.message));
+        return;
+      }
+
+      baseId = baseResult.id;
+      baseSegments = baseResult.segments;
+      targetId = targetResult.id;
+      targetSegments = targetResult.segments;
+      baseTurnHashForCache = baseTurnHash;
+      targetTurnHashForCache = targetTurnHash;
+      usedCache = true;
+    }
+    // Mode 2: turn_hash mode (preferred for direct turn comparison)
+    else if (body.baseTurnHash && body.targetTurnHash) {
       const baseResult = extractSegmentsFromTurn(body.baseTurnHash);
       const targetResult = extractSegmentsFromTurn(body.targetTurnHash);
 
@@ -171,9 +244,11 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
       baseSegments = baseResult.segments;
       targetId = targetResult.id;
       targetSegments = targetResult.segments;
+      baseTurnHashForCache = body.baseTurnHash;
+      targetTurnHashForCache = body.targetTurnHash;
       usedCache = true;
     }
-    // Mode 2: direct segments (legacy)
+    // Mode 3: direct segments (legacy)
     else if (body.baseId && body.targetId) {
       baseId = body.baseId;
       baseSegments = body.baseSegments ?? [];
@@ -182,7 +257,7 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
     } else {
       sendJson(res, 400, errorResponse(
         "INVALID_REQUEST",
-        "Provide either (baseTurnHash, targetTurnHash) or (baseId, baseSegments, targetId, targetSegments)"
+        "Provide either (base_commit_hash, target_commit_hash), (baseTurnHash, targetTurnHash), or (baseId, baseSegments, targetId, targetSegments)"
       ));
       return;
     }
@@ -203,12 +278,12 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
       let embeddingProvider;
       let cacheStats = null;
 
-      if (usedCache && body.baseTurnHash && body.targetTurnHash) {
+      if (usedCache && baseTurnHashForCache && targetTurnHashForCache) {
         const cachedProvider = createCachedEmbeddingProvider(baseProvider);
         // Load cached embeddings with model validation
         const loaded = loadCachedEmbeddingsIntoProvider(cachedProvider, [
-          body.baseTurnHash,
-          body.targetTurnHash,
+          baseTurnHashForCache,
+          targetTurnHashForCache,
         ]);
         embeddingProvider = cachedProvider;
         cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };

@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
+import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, GitCompare, GitMerge, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
 import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
@@ -300,6 +300,11 @@ export function NodeModal({
     node?.data.pendingSource?.textBlocks || []
   )
 
+  // Draft validation state
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
+  const [currentDraft, setCurrentDraft] = useState<api.Draft | null>(null)
+  const [draftError, setDraftError] = useState<string | null>(null)
+
   // Commit state
   const [isCommitting, setIsCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
@@ -308,8 +313,54 @@ export function NodeModal({
     forbidden: string[]
   } | null>(null)
 
+  // Validation derived from draft
+  const validationPassed = currentDraft?.validation?.passed ?? false
+
   // Get projectId from canvasStore
   const projectId = useCanvasStore((state) => state.projectId)
+
+  // Branches state for Step 1 dropdown
+  const [branches, setBranches] = useState<api.Branch[]>([])
+  const [branchesLoading, setBranchesLoading] = useState(false)
+
+  // Diff state for committed commit comparison
+  const [showDiffPanel, setShowDiffPanel] = useState(false)
+  const [diffTargetCommit, setDiffTargetCommit] = useState<string>('')
+  const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null)
+  const [isDiffLoading, setIsDiffLoading] = useState(false)
+  const [diffError, setDiffError] = useState<string | null>(null)
+
+  // Merge state for merge drafts
+  const [mergeResult, setMergeResult] = useState<api.MergeResult | null>(null)
+  const [isMergeAnalyzing, setIsMergeAnalyzing] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
+  // Conflict resolutions: facet -> 'source' | 'target' | 'custom'
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, {
+    choice: 'source' | 'target' | 'custom'
+    customText?: string
+  }>>({})
+
+  // Check if all conflicts are resolved (needed before handleCommit)
+  const allConflictsResolved = useMemo(() => {
+    if (!mergeResult || mergeResult.status !== 'conflicts') return true
+    return mergeResult.conflicts.every(conflict => {
+      const resolution = conflictResolutions[conflict.facet]
+      if (!resolution) return false
+      // For delete_modify / modify_delete conflicts, one side may legitimately be null/empty
+      // Only require non-empty text for 'custom' choice
+      if (resolution.choice === 'custom' && !resolution.customText?.trim()) return false
+      // For source/target choices, just require a choice was made (empty text is valid for deletions)
+      return true
+    })
+  }, [mergeResult, conflictResolutions])
+
+  // Get all committed commits for diff target selection
+  // Use nodes directly and filter in useMemo to avoid infinite loop from .filter() creating new arrays
+  const nodes = useCanvasStore((state) => state.nodes)
+  const allCommittedCommits = useMemo(
+    () => nodes.filter(n => n.data.kind === 'commit' && n.data.commitStatus === 'committed'),
+    [nodes]
+  )
 
   // Divider positions
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
@@ -410,6 +461,27 @@ export function NodeModal({
     !isMergeDraft &&
     ((draftBranchMode === 'select' && data?.pendingBranch === 'branch') ||
       draftBranchMode === 'branch-only')
+
+  // Load branches from API when opening pending commit modal
+  useEffect(() => {
+    if (!isPendingCommit || !projectId) return
+
+    const loadBranches = async () => {
+      setBranchesLoading(true)
+      try {
+        const response = await api.listBranches(projectId)
+        setBranches(response.branches)
+      } catch (err) {
+        console.error('Failed to load branches:', err)
+        // Fallback to empty - user can still type branch name manually
+        setBranches([])
+      } finally {
+        setBranchesLoading(false)
+      }
+    }
+
+    loadBranches()
+  }, [isPendingCommit, projectId])
 
   // Initialize source boxes and textBlocks from baseline summary
   // Note: setState in effect is intentional here for initialization based on props
@@ -648,17 +720,159 @@ export function NodeModal({
     })))
   }, [keywordsThreshold])
 
-  // Handle Commit - create commit via API
-  const handleCommit = useCallback(async () => {
-    if (!projectId || !data) {
-      setCommitError('No project selected')
+  // Check if this pending commit has a source conversation (from conversation) or not (from commit)
+  const hasSourceConversation = !!data?.sourceConversationId
+  // Check if this commit-derived pending has inherited turn_window for direct commit
+  const hasSourceTurnWindow = !!data?.sourceTurnWindow
+
+  // Local validation state for commit-derived pending commits
+  const [localValidationPassed, setLocalValidationPassed] = useState<boolean | null>(null)
+  const [localValidationErrors, setLocalValidationErrors] = useState<{ missing: string[], forbidden: string[] } | null>(null)
+
+  // Reset local validation when selections or keywords change
+  // This ensures user must re-validate after modifying source selection
+  useEffect(() => {
+    if (localValidationPassed !== null) {
+      setLocalValidationPassed(null)
+      setLocalValidationErrors(null)
+    }
+  // Only reset when actual content changes, not on initial render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    // Track selection changes via these derived values
+    selectionsCount,
+    mustHaveKeywordsNew.length,
+    mustntHaveKeywordsNew.length,
+    includedPhrasesCount,
+    mustHaveKeywordsLegacy.length,
+    mustntHaveKeywordsLegacy.length,
+  ])
+
+  // Helper: normalize keyword for comparison (lowercase, trim, remove punctuation)
+  // Use Unicode-aware regex to preserve CJK characters
+  const normalizeKeyword = (kw: string) => kw.toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, '')
+
+  // Handle local validation for commit-derived pending commits
+  // This validates must_have/mustnt_have keywords against selected source text
+  const handleLocalValidation = useCallback(() => {
+    // Get selected source text and normalize
+    let selectedText = ''
+    if (textBlocks.length > 0) {
+      selectedText = textBlocks
+        .map(block => getSelectedText(block.tokens, block.selections))
+        .filter(text => text.length > 0)
+        .join(' ')
+    } else {
+      selectedText = allPhrases
+        .filter(p => p.included)
+        .map(p => p.text)
+        .join(' ')
+    }
+
+    // Normalize selected text (lowercase, remove punctuation for matching)
+    // Use Unicode-aware regex to preserve CJK characters
+    const normalizedText = selectedText.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '')
+
+    if (!normalizedText.trim()) {
+      setLocalValidationPassed(false)
+      setLocalValidationErrors({ missing: ['No source text selected'], forbidden: [] })
       return
     }
 
-    // Get source conversation ID
+    // Get must_have and mustnt_have keywords, normalized
+    const mustHave = textBlocks.length > 0 ? mustHaveKeywordsNew : mustHaveKeywordsLegacy.map(kw => kw.text)
+    const mustntHave = textBlocks.length > 0 ? mustntHaveKeywordsNew : mustntHaveKeywordsLegacy.map(kw => kw.text)
+
+    // Validate must_have: all keywords must be present in selected text
+    const missingKeywords = mustHave.filter(kw => {
+      const normalized = normalizeKeyword(kw)
+      return normalized.length > 0 && !normalizedText.includes(normalized)
+    })
+
+    // Validate mustnt_have: none of these keywords should be present
+    const forbiddenKeywords = mustntHave.filter(kw => {
+      const normalized = normalizeKeyword(kw)
+      return normalized.length > 0 && normalizedText.includes(normalized)
+    })
+
+    const passed = missingKeywords.length === 0 && forbiddenKeywords.length === 0
+    setLocalValidationPassed(passed)
+    setLocalValidationErrors(
+      passed ? null : { missing: missingKeywords, forbidden: forbiddenKeywords }
+    )
+  }, [textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy])
+
+  // Handle Generate Draft - call Draft API for validation
+  // Only available for pending commits created from conversations
+  const handleGenerateDraft = useCallback(async () => {
+    if (!projectId || !data) {
+      setDraftError('No project selected')
+      return
+    }
+
     const sourceConversationId = data.sourceConversationId
     if (!sourceConversationId) {
-      setCommitError('No source conversation found')
+      // This shouldn't happen - button should be hidden for commit-derived pending commits
+      setDraftError('No source conversation - validation not available')
+      return
+    }
+
+    setIsGeneratingDraft(true)
+    setDraftError(null)
+    setCurrentDraft(null)
+    setValidationErrors(null)
+
+    try {
+      // Get intent from source selection
+      let intent = ''
+      if (textBlocks.length > 0) {
+        intent = textBlocks
+          .map(block => getSelectedText(block.tokens, block.selections))
+          .filter(text => text.length > 0)
+          .join('\n')
+      } else {
+        intent = allPhrases.filter(p => p.included).map(p => p.text).join('\n')
+      }
+
+      if (!intent.trim()) {
+        setDraftError('Please select some source text first')
+        setIsGeneratingDraft(false)
+        return
+      }
+
+      // Map template to bridge_id
+      const bridgeId = (template === 'prose' || template === 'plan' || template === 'summary' || template === 'explain' || template === 'clarify')
+        ? template as 'plan' | 'summary' | 'explain' | 'clarify'
+        : 'summary'
+
+      const draft = await api.createDraft(
+        projectId,
+        sourceConversationId,
+        bridgeId,
+        intent
+      )
+
+      setCurrentDraft(draft)
+
+      // Set validation errors if validation failed
+      if (draft.validation && !draft.validation.passed) {
+        setValidationErrors({
+          missing: draft.validation.missing_keywords,
+          forbidden: draft.validation.forbidden_keywords,
+        })
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      setDraftError(error.message)
+    } finally {
+      setIsGeneratingDraft(false)
+    }
+  }, [projectId, data, template, textBlocks, allPhrases])
+
+  // Handle Commit - create commit via API (or merge for merge drafts)
+  const handleCommit = useCallback(async () => {
+    if (!projectId || !data) {
+      setCommitError('No project selected')
       return
     }
 
@@ -667,19 +881,127 @@ export function NodeModal({
     setValidationErrors(null)
 
     try {
-      // 1. Get conversation's turns to determine turn_window
-      const turnsResponse = await api.listTurns(projectId, sourceConversationId)
-      const turns = turnsResponse.turns
+      // Check if this is a merge draft
+      const isMerge = data.bridgePrompt === '/merge' && !!data.mergeConfig
 
-      if (turns.length === 0) {
-        setCommitError('Conversation has no turns')
+      if (isMerge) {
+        // Merge commit flow
+        if (!mergeResult) {
+          setCommitError('Please analyze the merge first')
+          setIsCommitting(false)
+          return
+        }
+        if (!allConflictsResolved) {
+          setCommitError('Please resolve all conflicts first')
+          setIsCommitting(false)
+          return
+        }
+
+        const { sourceCommitHash, targetCommitHash } = data.mergeConfig!
+
+        // Build resolved facets from auto-merged + conflict resolutions
+        const resolvedFacets: api.ResolvedFacet[] = []
+
+        // Add auto-merged facets
+        for (const auto of mergeResult.auto_merged_facets) {
+          resolvedFacets.push({
+            facet: auto.facet,
+            text: auto.merged_text,
+            source: auto.source,  // backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
+            keywords: auto.keywords || [],
+          })
+        }
+
+        // Add resolved conflicts
+        for (const conflict of mergeResult.conflicts) {
+          const resolution = conflictResolutions[conflict.facet]
+          if (!resolution) continue
+
+          // For delete_modify / modify_delete conflicts, one side may be null
+          let text: string | null
+          if (resolution.choice === 'source') {
+            text = conflict.source_text
+          } else if (resolution.choice === 'target') {
+            text = conflict.target_text
+          } else {
+            text = resolution.customText || ''
+          }
+
+          resolvedFacets.push({
+            facet: conflict.facet,
+            text,
+            source: resolution.choice,
+            keywords: [],
+          })
+        }
+
+        // Determine branch
+        const branch = data.pendingBranch === 'branch' && data.pendingBranchName
+          ? data.pendingBranchName
+          : 'main'
+
+        // Create merge commit
+        const currentPosition = node?.position
+        const commit = await api.createMergeCommit(
+          projectId,
+          sourceCommitHash!,
+          targetCommitHash!,
+          branch,
+          data.title || `Merge ${data.mergeConfig?.sourceCommitTitle} into ${data.mergeConfig?.targetCommitTitle}`,
+          resolvedFacets,
+          currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined
+        )
+
+        // Update local node ID to match API commit_hash
+        if (node && commit.commit_hash) {
+          useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
+        }
+
+        // Update local state with final values
+        onUpdate({
+          commitHash: commit.commit_hash,
+          isMergeCommit: true,
+        })
+
+        // Trigger convert to committed state
+        onConvertDraft?.()
+
+        // Refresh canvas data
+        useCanvasStore.getState().loadProjectData(projectId)
+
         setIsCommitting(false)
         return
       }
 
-      // Determine turn_window (first to last turn)
-      const startTurnHash = turns[0].turn_hash
-      const endTurnHash = turns[turns.length - 1].turn_hash
+      // Regular commit flow
+      let startTurnHash: string
+      let endTurnHash: string
+
+      // Determine turn_window: from source conversation or inherited from parent commit
+      const sourceConversationId = data.sourceConversationId
+      if (sourceConversationId) {
+        // Case 1: Pending commit from conversation - fetch turns
+        const turnsResponse = await api.listTurns(projectId, sourceConversationId)
+        const turns = turnsResponse.turns
+
+        if (turns.length === 0) {
+          setCommitError('Conversation has no turns')
+          setIsCommitting(false)
+          return
+        }
+
+        startTurnHash = turns[0].turn_hash
+        endTurnHash = turns[turns.length - 1].turn_hash
+      } else if (data.sourceTurnWindow) {
+        // Case 2: Pending commit from commit - use inherited turn_window
+        startTurnHash = data.sourceTurnWindow.start_turn_hash
+        endTurnHash = data.sourceTurnWindow.end_turn_hash
+      } else {
+        // Case 3: No valid source - cannot commit
+        setCommitError('Cannot commit: no source conversation or turn window available.')
+        setIsCommitting(false)
+        return
+      }
 
       // 2. Determine branch
       const branch = data.pendingBranch === 'branch' && data.pendingBranchName
@@ -706,7 +1028,22 @@ export function NodeModal({
         mustntHave = mustntHaveKeywordsLegacy.map(kw => kw.text)
       }
 
-      // 4. Create Commit directly (Ring data already extracted during turn creation)
+      // 4. Create branch if needed (new branch that doesn't exist yet)
+      if (branch !== 'main' && !branches.some(b => b.name === branch)) {
+        try {
+          await api.createBranch(projectId, branch, 'main', undefined, false)
+        } catch (branchErr) {
+          // Ignore if branch already exists (race condition)
+          const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr)
+          if (!errMsg.includes('already exists')) {
+            throw branchErr
+          }
+        }
+      }
+
+      // 5. Create Commit directly (Ring data already extracted during turn creation)
+      // Get the current node position to save with the commit
+      const currentPosition = node?.position
       const commit = await api.createCommit(
         projectId,
         { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
@@ -716,6 +1053,7 @@ export function NodeModal({
           sourceExcerpt,
           mustHave,
           mustntHave,
+          position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
         }
       )
 
@@ -746,7 +1084,74 @@ export function NodeModal({
     } finally {
       setIsCommitting(false)
     }
-  }, [projectId, node, data, template, resultText, onUpdate, onConvertDraft, textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy])
+  }, [projectId, node, data, template, resultText, onUpdate, onConvertDraft, textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy, mergeResult, conflictResolutions, allConflictsResolved, branches])
+
+  // Handle Diff - compare two commits
+  const handleDiff = useCallback(async () => {
+    if (!data?.commitHash || !diffTargetCommit) {
+      setDiffError('Please select a commit to compare with')
+      return
+    }
+
+    if (data.commitHash === diffTargetCommit) {
+      setDiffError('Cannot compare a commit with itself')
+      return
+    }
+
+    setIsDiffLoading(true)
+    setDiffError(null)
+    setDiffResult(null)
+
+    try {
+      const result = await api.diff(data.commitHash, diffTargetCommit)
+      setDiffResult(result)
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      setDiffError(error.message)
+    } finally {
+      setIsDiffLoading(false)
+    }
+  }, [data?.commitHash, diffTargetCommit])
+
+  // Handle Merge Analysis - analyze merge conflicts
+  const handleMergeAnalysis = useCallback(async () => {
+    if (!projectId || !data?.mergeConfig) {
+      setMergeError('No merge configuration available')
+      return
+    }
+
+    const { baseCommitHash, sourceCommitHash, targetCommitHash } = data.mergeConfig
+    if (!baseCommitHash || !sourceCommitHash || !targetCommitHash) {
+      setMergeError('Missing commit hashes for merge analysis')
+      return
+    }
+
+    setIsMergeAnalyzing(true)
+    setMergeError(null)
+    setMergeResult(null)
+    setConflictResolutions({})
+
+    try {
+      const result = await api.merge(projectId, baseCommitHash, sourceCommitHash, targetCommitHash)
+      setMergeResult(result)
+
+      // Auto-resolve clean merges (no user action needed)
+      // For conflicts, user must choose
+      if (result.status === 'conflicts') {
+        // Initialize conflict resolutions with 'target' as default
+        const initialResolutions: Record<string, { choice: 'source' | 'target' | 'custom'; customText?: string }> = {}
+        result.conflicts.forEach(conflict => {
+          initialResolutions[conflict.facet] = { choice: 'target' }
+        })
+        setConflictResolutions(initialResolutions)
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      setMergeError(error.message)
+    } finally {
+      setIsMergeAnalyzing(false)
+    }
+  }, [projectId, data?.mergeConfig])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -1166,11 +1571,16 @@ export function NodeModal({
                 className="conversation-v2__chat-messages"
                 onScroll={handleChatScroll}
               >
-                {chatMessages.length === 0 && !isChatStreaming ? (
+                {isChatLoading ? (
+                  <div className="conversation-v2__chat-empty">
+                    <Loader2 size={48} strokeWidth={1} className="conversation-v2__spinner" />
+                    <p>Loading conversation...</p>
+                  </div>
+                ) : chatMessages.length === 0 && !isChatStreaming ? (
                   <div className="conversation-v2__chat-empty">
                     <MessageSquarePlus size={48} strokeWidth={1} />
-                    <p>Start a conversation with the LLM</p>
-                    <span>Type a message below to begin</span>
+                    <p>No messages yet</p>
+                    <span>Type a message below to start the conversation</span>
                   </div>
                 ) : (
                   <>
@@ -1275,45 +1685,236 @@ export function NodeModal({
           <div className="modal-v2__body draft-svtz__body" ref={draftBodyRef}>
             {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
             <aside className="draft-svtz__sidebar" style={{ width: sidebarSourceDividerPos }}>
-              {/* STEP 1: Configure */}
-              <div className={`draft-svtz__step ${configLocked ? 'draft-svtz__step--locked' : ''}`}>
+              {/* STEP 1: Configure (or Merge for merge drafts) */}
+              <div className={`draft-svtz__step ${(configLocked || isMergeDraft) ? 'draft-svtz__step--locked' : ''}`}>
                 <div className="draft-svtz__step-header">
-                  <span className="draft-svtz__step-number">STEP 1</span>
+                  <span className="draft-svtz__step-number">{isMergeDraft ? 'MERGE' : 'STEP 1'}</span>
                   <span className="draft-svtz__step-label">
-                    <span className={`draft-svtz__step-dot ${!configLocked ? 'draft-svtz__step-dot--active' : 'draft-svtz__step-dot--completed'}`} />
-                    Configure
-                    {configLocked && <Lock size={12} className="draft-svtz__lock-icon" />}
+                    <span className={`draft-svtz__step-dot ${(!configLocked && !isMergeDraft) ? 'draft-svtz__step-dot--active' : 'draft-svtz__step-dot--completed'}`} />
+                    {isMergeDraft ? 'Analyze & Resolve' : 'Configure'}
+                    {(configLocked && !isMergeDraft) && <Lock size={12} className="draft-svtz__lock-icon" />}
                   </span>
                 </div>
 
-                {!configLocked ? (
+                {/* Merge Draft: Show merge-specific UI */}
+                {isMergeDraft ? (
+                  <div className="draft-svtz__merge-section">
+                    {/* Merge info header */}
+                    <div className="draft-svtz__merge-header">
+                      <GitCompare size={16} />
+                      <span>Merge: {data?.mergeConfig?.sourceCommitTitle} → {data?.mergeConfig?.targetCommitTitle}</span>
+                    </div>
+
+                    {/* Merge error */}
+                    {mergeError && (
+                      <div className="draft-svtz__merge-error">
+                        <AlertCircle size={14} />
+                        <span>{mergeError}</span>
+                      </div>
+                    )}
+
+                    {/* Analyze button - only show if not analyzed yet */}
+                    {!mergeResult && (
+                      <button
+                        className="draft-svtz__generate-btn"
+                        onClick={handleMergeAnalysis}
+                        disabled={isMergeAnalyzing}
+                      >
+                        {isMergeAnalyzing ? (
+                          <>
+                            <Loader2 size={16} className="draft-svtz__spinner" />
+                            <span>Analyzing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitCompare size={16} />
+                            <span>Analyze Merge</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Merge result */}
+                    {mergeResult && (
+                      <div className="draft-svtz__merge-result">
+                        {/* Status badge */}
+                        <div className={`draft-svtz__merge-status draft-svtz__merge-status--${mergeResult.status}`}>
+                          {mergeResult.status === 'clean' ? (
+                            <>
+                              <Check size={14} />
+                              <span>Clean merge - no conflicts</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle size={14} />
+                              <span>{mergeResult.conflicts.length} conflict(s) need resolution</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Auto-merged facets summary */}
+                        {mergeResult.auto_merged_facets.length > 0 && (
+                          <div className="draft-svtz__merge-auto">
+                            <span>{mergeResult.auto_merged_facets.length} facet(s) auto-merged</span>
+                          </div>
+                        )}
+
+                        {/* Conflicts list */}
+                        {mergeResult.conflicts.length > 0 && (
+                          <div className="draft-svtz__conflicts">
+                            <div className="draft-svtz__conflicts-header">Resolve Conflicts:</div>
+                            {mergeResult.conflicts.map(conflict => (
+                              <div key={conflict.facet} className="draft-svtz__conflict-item">
+                                <div className="draft-svtz__conflict-facet">{conflict.facet}</div>
+                                <div className="draft-svtz__conflict-options">
+                                  <label className="draft-svtz__conflict-option">
+                                    <input
+                                      type="radio"
+                                      name={`conflict-${conflict.facet}`}
+                                      checked={conflictResolutions[conflict.facet]?.choice === 'source'}
+                                      onChange={() => setConflictResolutions(prev => ({
+                                        ...prev,
+                                        [conflict.facet]: { choice: 'source' }
+                                      }))}
+                                    />
+                                    <span className="draft-svtz__conflict-label">Source</span>
+                                    <span className="draft-svtz__conflict-preview">
+                                      {conflict.source_text ? `${conflict.source_text.slice(0, 50)}...` : '(deleted)'}
+                                    </span>
+                                  </label>
+                                  <label className="draft-svtz__conflict-option">
+                                    <input
+                                      type="radio"
+                                      name={`conflict-${conflict.facet}`}
+                                      checked={conflictResolutions[conflict.facet]?.choice === 'target'}
+                                      onChange={() => setConflictResolutions(prev => ({
+                                        ...prev,
+                                        [conflict.facet]: { choice: 'target' }
+                                      }))}
+                                    />
+                                    <span className="draft-svtz__conflict-label">Target</span>
+                                    <span className="draft-svtz__conflict-preview">
+                                      {conflict.target_text ? `${conflict.target_text.slice(0, 50)}...` : '(deleted)'}
+                                    </span>
+                                  </label>
+                                  <label className="draft-svtz__conflict-option">
+                                    <input
+                                      type="radio"
+                                      name={`conflict-${conflict.facet}`}
+                                      checked={conflictResolutions[conflict.facet]?.choice === 'custom'}
+                                      onChange={() => setConflictResolutions(prev => ({
+                                        ...prev,
+                                        [conflict.facet]: { choice: 'custom', customText: prev[conflict.facet]?.customText || '' }
+                                      }))}
+                                    />
+                                    <span className="draft-svtz__conflict-label">Custom</span>
+                                  </label>
+                                  {conflictResolutions[conflict.facet]?.choice === 'custom' && (
+                                    <textarea
+                                      className="draft-svtz__conflict-custom"
+                                      placeholder="Enter custom resolution..."
+                                      value={conflictResolutions[conflict.facet]?.customText || ''}
+                                      onChange={(e) => setConflictResolutions(prev => ({
+                                        ...prev,
+                                        [conflict.facet]: { choice: 'custom', customText: e.target.value }
+                                      }))}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Re-analyze button */}
+                        <button
+                          className="draft-svtz__generate-btn draft-svtz__generate-btn--secondary"
+                          onClick={handleMergeAnalysis}
+                          disabled={isMergeAnalyzing}
+                        >
+                          <RotateCcw size={14} />
+                          <span>Re-analyze</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Commit button for merge */}
+                    <div className="draft-svtz__action-buttons" style={{ marginTop: '16px' }}>
+                      <button
+                        className="draft-svtz__commit-btn"
+                        onClick={handleCommit}
+                        disabled={!mergeResult || !allConflictsResolved || isCommitting}
+                        title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                      >
+                        {isCommitting ? (
+                          <>
+                            <Loader2 size={16} className="draft-svtz__spinner" />
+                            <span>Committing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitCommit size={16} />
+                            <span>Commit Merge</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : !configLocked ? (
                   /* Unlocked state: Show editable controls */
                   <div className="draft-svtz__config-controls">
-                    {/* Branch Selection */}
+                    {/* Branch Selection - from real API data */}
                     {shouldShowBranchSelect && (
                       <div className="draft-svtz__control-group">
-                        <label className="draft-svtz__control-label">Branch</label>
+                        <label className="draft-svtz__control-label">
+                          Branch
+                          {branchesLoading && <Loader2 size={12} className="draft-svtz__spinner" style={{ marginLeft: 4 }} />}
+                        </label>
                         <select
                           className="draft-svtz__select draft-svtz__select--full"
-                          value={data.pendingBranch || 'branch'}
-                          onChange={(e) => onBranchChange?.(e.target.value as 'main' | 'branch')}
+                          value={
+                            // Map the value to a valid option
+                            data.pendingBranch === 'main' ? 'main' :
+                            data.pendingBranchName && branches.some(b => b.name === data.pendingBranchName) ? data.pendingBranchName :
+                            data.pendingBranchName ? '__new__' : // Has custom name, show as new branch
+                            '__new__' // Default: new branch mode
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === 'main') {
+                              onBranchChange?.('main')
+                              onBranchNameChange?.('')
+                            } else if (value === '__new__') {
+                              onBranchChange?.('branch')
+                              onBranchNameChange?.('')
+                            } else {
+                              onBranchChange?.('branch')
+                              onBranchNameChange?.(value)
+                            }
+                          }}
+                          disabled={branchesLoading}
                         >
                           <option value="main">main</option>
-                          <option value="branch">branch</option>
+                          {branches.filter(b => b.name !== 'main').map((branch) => (
+                            <option key={branch.branch_id} value={branch.name}>
+                              {branch.name}{branch.is_current ? ' (current)' : ''}
+                            </option>
+                          ))}
+                          <option value="__new__">+ New branch...</option>
                         </select>
                       </div>
                     )}
 
-                    {/* Branch Name - only shown when branch is selected */}
-                    {requireBranchName && (
+                    {/* Branch Name - only shown when creating new branch */}
+                    {requireBranchName && data.pendingBranch === 'branch' && !branches.some(b => b.name === data.pendingBranchName) && (
                       <div className="draft-svtz__control-group">
-                        <label className="draft-svtz__control-label">Branch Name</label>
+                        <label className="draft-svtz__control-label">New Branch Name</label>
                         <input
                           type="text"
                           className="draft-svtz__input draft-svtz__input--full"
                           value={data.pendingBranchName || ''}
                           onChange={(e) => onBranchNameChange?.(e.target.value)}
-                          placeholder="Enter branch name"
+                          placeholder="Enter new branch name"
                         />
                       </div>
                     )}
@@ -1459,52 +2060,196 @@ export function NodeModal({
                         : 'Click phrases in SOURCE to toggle inclusion'}
                     </p>
 
-                    {/* Validation errors */}
-                    {validationErrors && (
-                      <div className="draft-svtz__validation-error">
+                    {/* Draft error */}
+                    {draftError && (
+                      <div className="draft-svtz__commit-error">
                         <AlertCircle size={14} />
-                        <div className="draft-svtz__validation-error-content">
-                          <span className="draft-svtz__validation-error-title">Validation Failed</span>
-                          {validationErrors.missing.length > 0 && (
-                            <div className="draft-svtz__validation-error-list">
-                              <span>Missing: {validationErrors.missing.join(', ')}</span>
+                        <span>{draftError}</span>
+                      </div>
+                    )}
+
+                    {/* Validation result */}
+                    {currentDraft && (
+                      <div className={`draft-svtz__validation-result ${validationPassed ? 'draft-svtz__validation-result--passed' : 'draft-svtz__validation-result--failed'}`}>
+                        {validationPassed ? (
+                          <>
+                            <Check size={14} />
+                            <span>Validation passed</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle size={14} />
+                            <div className="draft-svtz__validation-error-content">
+                              <span className="draft-svtz__validation-error-title">Validation Failed</span>
+                              {validationErrors?.missing && validationErrors.missing.length > 0 && (
+                                <div className="draft-svtz__validation-error-list">
+                                  <span>Missing: {validationErrors.missing.join(', ')}</span>
+                                </div>
+                              )}
+                              {validationErrors?.forbidden && validationErrors.forbidden.length > 0 && (
+                                <div className="draft-svtz__validation-error-list">
+                                  <span>Forbidden: {validationErrors.forbidden.join(', ')}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          {validationErrors.forbidden.length > 0 && (
-                            <div className="draft-svtz__validation-error-list">
-                              <span>Forbidden: {validationErrors.forbidden.join(', ')}</span>
-                            </div>
-                          )}
-                        </div>
+                          </>
+                        )}
                       </div>
                     )}
 
                     {/* Commit error */}
-                    {commitError && !validationErrors && (
+                    {commitError && (
                       <div className="draft-svtz__commit-error">
                         <AlertCircle size={14} />
                         <span>{commitError}</span>
                       </div>
                     )}
 
-                    {/* Commit Button */}
-                    <button
-                      className="draft-svtz__commit-btn"
-                      onClick={handleCommit}
-                      disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) || isCommitting}
-                    >
-                      {isCommitting ? (
+                    {/* Action Buttons */}
+                    <div className="draft-svtz__action-buttons">
+                      {/* Show different buttons based on source type */}
+                      {isMergeDraft ? (
+                        /* Merge draft - analyze and commit */
+                        <button
+                          className="draft-svtz__commit-btn"
+                          onClick={handleCommit}
+                          disabled={!mergeResult || !allConflictsResolved || isCommitting}
+                          title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                        >
+                          {isCommitting ? (
+                            <>
+                              <Loader2 size={16} className="draft-svtz__spinner" />
+                              <span>Creating merge commit...</span>
+                            </>
+                          ) : (
+                            <>
+                              <GitMerge size={16} />
+                              <span>Create Merge Commit</span>
+                            </>
+                          )}
+                        </button>
+                      ) : hasSourceConversation ? (
                         <>
-                          <Loader2 size={16} className="draft-svtz__spinner" />
-                          <span>Creating...</span>
+                          {/* Generate Draft Button - only for conversation-derived pending commits */}
+                          <button
+                            className="draft-svtz__generate-btn"
+                            onClick={handleGenerateDraft}
+                            disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) || isGeneratingDraft}
+                          >
+                            {isGeneratingDraft ? (
+                              <>
+                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <span>Validating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <GitBranch size={16} />
+                                <span>{currentDraft ? 'Re-validate' : 'Validate'}</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Commit Button - only enabled after validation passed */}
+                          {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
+                          <button
+                            className="draft-svtz__commit-btn"
+                            onClick={handleCommit}
+                            disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (!validationPassed || isCommitting)}
+                            title={isMergeDraft
+                              ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
+                              : (!currentDraft ? 'Run validation first' : !validationPassed ? 'Validation must pass before committing' : '')}
+                          >
+                            {isCommitting ? (
+                              <>
+                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <span>Creating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={16} />
+                                <span>Commit</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      ) : hasSourceTurnWindow ? (
+                        /* Commit-derived pending commits with inherited turn_window - local validation */
+                        <>
+                          {/* Local Validate Button */}
+                          <button
+                            className="draft-svtz__generate-btn"
+                            onClick={handleLocalValidation}
+                            disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0)}
+                          >
+                            <GitBranch size={16} />
+                            <span>{localValidationPassed !== null ? 'Re-validate' : 'Validate'}</span>
+                          </button>
+
+                          {/* Local Validation Result */}
+                          {localValidationPassed !== null && (
+                            <div className={`draft-svtz__validation-result ${localValidationPassed ? 'draft-svtz__validation-result--passed' : 'draft-svtz__validation-result--failed'}`}>
+                              {localValidationPassed ? (
+                                <>
+                                  <Check size={14} />
+                                  <span>Local validation passed</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle size={14} />
+                                  <span>Local validation failed</span>
+                                  {localValidationErrors?.missing && localValidationErrors.missing.length > 0 && (
+                                    <div className="draft-svtz__validation-error-list">
+                                      <span>Missing: {localValidationErrors.missing.join(', ')}</span>
+                                    </div>
+                                  )}
+                                  {localValidationErrors?.forbidden && localValidationErrors.forbidden.length > 0 && (
+                                    <div className="draft-svtz__validation-error-list">
+                                      <span>Forbidden: {localValidationErrors.forbidden.join(', ')}</span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Commit Button - enabled after local validation passed */}
+                          {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
+                          <button
+                            className="draft-svtz__commit-btn"
+                            onClick={handleCommit}
+                            disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (localValidationPassed !== true || isCommitting)}
+                            title={isMergeDraft
+                              ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
+                              : (localValidationPassed === null ? 'Run validation first' : localValidationPassed ? '' : 'Validation must pass before committing')}
+                          >
+                            {isCommitting ? (
+                              <>
+                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <span>Creating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={16} />
+                                <span>Commit</span>
+                              </>
+                            )}
+                          </button>
                         </>
                       ) : (
-                        <>
-                          <Check size={16} />
-                          <span>Commit</span>
-                        </>
+                        /* No valid source - cannot commit */
+                        <div className="draft-svtz__no-source-warning">
+                          <AlertCircle size={14} />
+                          <div className="draft-svtz__no-source-details">
+                            <span className="draft-svtz__no-source-title">Cannot commit</span>
+                            <span className="draft-svtz__no-source-reason">
+                              {!data.sourceConversationId && !data.sourceTurnWindow
+                                ? 'Source commit is missing turn window data (legacy commit). Please create a new conversation from this commit first, then create a commit from that conversation.'
+                                : 'No source conversation or turn window available.'}
+                            </span>
+                          </div>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -1523,11 +2268,105 @@ export function NodeModal({
               {/* SOURCE Column - Full Width */}
               <div className="draft-svtz__source draft-svtz__source--full">
                 <div className="draft-svtz__column-header">
-                  <h3>SOURCE</h3>
+                  <h3>{isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}</h3>
                 </div>
                 <div className="draft-svtz__source-content">
-                  {/* New free-form text selection UI */}
-                  {hasNewSourceData ? (
+                  {/* Merge draft - show merge analysis results */}
+                  {isMergeDraft ? (
+                    <div className="draft-svtz__merge-source">
+                      {!mergeResult ? (
+                        /* Before analysis - show prompt */
+                        <div className="draft-svtz__merge-pending">
+                          <GitCompare size={48} strokeWidth={1} />
+                          <h4>Merge Analysis Required</h4>
+                          <p>Click "Analyze Merge" in the sidebar to compare semantic content between commits.</p>
+                          <div className="draft-svtz__merge-pending-info">
+                            <div className="draft-svtz__merge-pending-item">
+                              <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--source">SOURCE</span>
+                              <span>{data?.mergeConfig?.sourceCommitTitle}</span>
+                            </div>
+                            <div className="draft-svtz__merge-pending-arrow">→</div>
+                            <div className="draft-svtz__merge-pending-item">
+                              <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--target">TARGET</span>
+                              <span>{data?.mergeConfig?.targetCommitTitle}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* After analysis - show merge results */
+                        <div className="draft-svtz__merge-results">
+                          {/* Auto-merged facets */}
+                          {mergeResult.auto_merged_facets.length > 0 && (
+                            <div className="draft-svtz__merge-facets-section">
+                              <div className="draft-svtz__merge-facets-header">
+                                <Check size={16} />
+                                <span>Auto-merged ({mergeResult.auto_merged_facets.length})</span>
+                              </div>
+                              <div className="draft-svtz__merge-facets-list">
+                                {mergeResult.auto_merged_facets.map((facet, idx) => (
+                                  <div key={idx} className="draft-svtz__merge-facet-item draft-svtz__merge-facet-item--resolved">
+                                    <div className="draft-svtz__merge-facet-header">
+                                      <span className="draft-svtz__merge-facet-id">{facet.facet}</span>
+                                      <span className={`draft-svtz__merge-facet-source draft-svtz__merge-facet-source--${facet.source}`}>
+                                        from {facet.source}
+                                      </span>
+                                    </div>
+                                    <div className="draft-svtz__merge-facet-text">
+                                      {facet.merged_text || '(deleted)'}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Conflicts */}
+                          {mergeResult.conflicts.length > 0 && (
+                            <div className="draft-svtz__merge-facets-section draft-svtz__merge-facets-section--conflicts">
+                              <div className="draft-svtz__merge-facets-header draft-svtz__merge-facets-header--conflicts">
+                                <AlertCircle size={16} />
+                                <span>Conflicts ({mergeResult.conflicts.length})</span>
+                              </div>
+                              <div className="draft-svtz__merge-facets-list">
+                                {mergeResult.conflicts.map((conflict, idx) => (
+                                  <div key={idx} className="draft-svtz__merge-facet-item draft-svtz__merge-facet-item--conflict">
+                                    <div className="draft-svtz__merge-facet-header">
+                                      <span className="draft-svtz__merge-facet-id">{conflict.facet}</span>
+                                      <span className="draft-svtz__merge-facet-type">{conflict.conflict_type}</span>
+                                    </div>
+                                    <div className="draft-svtz__merge-conflict-compare">
+                                      <div className="draft-svtz__merge-conflict-side">
+                                        <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--source">SOURCE</span>
+                                        <div className="draft-svtz__merge-conflict-text">
+                                          {conflict.source_text || '(deleted)'}
+                                        </div>
+                                      </div>
+                                      <div className="draft-svtz__merge-conflict-side">
+                                        <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--target">TARGET</span>
+                                        <div className="draft-svtz__merge-conflict-text">
+                                          {conflict.target_text || '(deleted)'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Clean merge message */}
+                          {mergeResult.status === 'clean' && mergeResult.auto_merged_facets.length === 0 && (
+                            <div className="draft-svtz__merge-pending">
+                              <Check size={48} strokeWidth={1} />
+                              <h4>No Changes Detected</h4>
+                              <p>The source and target commits have identical semantic content.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : hasNewSourceData ? (
+                    /* New free-form text selection UI */
                     <PendingSourceEditor
                       blocks={textBlocks}
                       onChange={handleTextBlocksChange}
@@ -1630,6 +2469,15 @@ export function NodeModal({
     const commitMustHave = data.mustHave || []
     const commitMustntHave = data.mustntHave || []
     const commitSourceExcerpt = data.sourceExcerpt || []
+    const commitFacets = data.facetSnapshot || []
+
+    // Group facets by type for display
+    const facetsByType = commitFacets.reduce((acc, facet) => {
+      const type = facet.facet || 'unknown'
+      if (!acc[type]) acc[type] = []
+      acc[type].push(facet)
+      return acc
+    }, {} as Record<string, typeof commitFacets>)
 
     return (
       <div className="node-modal__overlay" role="dialog" aria-modal="true">
@@ -1755,6 +2603,55 @@ export function NodeModal({
                   </div>
                 </div>
               )}
+
+              {/* Facets - Extracted semantic data */}
+              <div className="commit-v2__section">
+                <div className="commit-v2__section-header">
+                  <h3>Facets</h3>
+                  <span className="commit-v2__facet-count">{commitFacets.length} extracted</span>
+                </div>
+                <div className="commit-v2__facets">
+                  {commitFacets.length > 0 ? (
+                    <div className="commit-v2__facets-list">
+                      {Object.entries(facetsByType).map(([type, facets]) => (
+                        <div key={type} className="commit-v2__facet-group">
+                          <h5 className={`commit-v2__facet-type commit-v2__facet-type--${type}`}>
+                            {type}
+                            <span className="commit-v2__facet-type-count">({facets.length})</span>
+                          </h5>
+                          <div className="commit-v2__facet-items">
+                            {facets.map((facet, idx) => (
+                              <div key={idx} className="commit-v2__facet-item">
+                                {facet.text && (
+                                  <span className="commit-v2__facet-text">{facet.text}</span>
+                                )}
+                                {facet.key && facet.value !== undefined && (
+                                  <span className="commit-v2__facet-kv">
+                                    <span className="commit-v2__facet-key">{facet.key}:</span>
+                                    <span className="commit-v2__facet-value">{String(facet.value)}</span>
+                                  </span>
+                                )}
+                                {facet.entity_type && (
+                                  <span className="commit-v2__facet-entity">[{facet.entity_type}]</span>
+                                )}
+                                {facet.confidence !== undefined && (
+                                  <span className="commit-v2__facet-confidence">
+                                    {Math.round(facet.confidence * 100)}%
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="commit-v2__empty-state">
+                      <span>No facets extracted</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Right Divider */}
@@ -1801,6 +2698,148 @@ export function NodeModal({
                     <span className="commit-v2__constraints-empty">None</span>
                   )}
                 </div>
+              </div>
+
+              <div className="modal-v2__sidebar-divider" />
+
+              {/* Diff Section */}
+              <div className="modal-v2__sidebar-section">
+                <h4>
+                  <GitCompare size={14} style={{ marginRight: 6 }} />
+                  Compare
+                </h4>
+
+                {!showDiffPanel ? (
+                  <button
+                    className="commit-v2__diff-btn"
+                    onClick={() => setShowDiffPanel(true)}
+                    disabled={allCommittedCommits.length <= 1}
+                    title={allCommittedCommits.length <= 1 ? 'Need at least 2 commits to compare' : 'Compare with another commit'}
+                  >
+                    <GitCompare size={14} />
+                    <span>Compare with...</span>
+                  </button>
+                ) : (
+                  <div className="commit-v2__diff-panel">
+                    <div className="commit-v2__diff-select-group">
+                      <label className="commit-v2__diff-label">Compare with:</label>
+                      <select
+                        className="commit-v2__diff-select"
+                        value={diffTargetCommit}
+                        onChange={(e) => {
+                          setDiffTargetCommit(e.target.value)
+                          setDiffResult(null)
+                          setDiffError(null)
+                        }}
+                      >
+                        <option value="">Select a commit...</option>
+                        {allCommittedCommits
+                          .filter(c => c.data.commitHash !== data.commitHash)
+                          .map((c) => (
+                            <option key={c.id} value={c.data.commitHash}>
+                              {c.data.title || c.data.entryId} ({c.data.commitHash?.slice(0, 8)})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="commit-v2__diff-actions">
+                      <button
+                        className="commit-v2__diff-run-btn"
+                        onClick={handleDiff}
+                        disabled={!diffTargetCommit || isDiffLoading}
+                      >
+                        {isDiffLoading ? (
+                          <>
+                            <Loader2 size={14} className="draft-svtz__spinner" />
+                            <span>Comparing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitCompare size={14} />
+                            <span>Run Diff</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        className="commit-v2__diff-cancel-btn"
+                        onClick={() => {
+                          setShowDiffPanel(false)
+                          setDiffTargetCommit('')
+                          setDiffResult(null)
+                          setDiffError(null)
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    {diffError && (
+                      <div className="commit-v2__diff-error">
+                        <AlertCircle size={14} />
+                        <span>{diffError}</span>
+                      </div>
+                    )}
+
+                    {diffResult && (
+                      <div className="commit-v2__diff-result">
+                        <div className="commit-v2__diff-summary">
+                          <span className="commit-v2__diff-summary-label">Facet Changes:</span>
+                          <span className="commit-v2__diff-summary-count">
+                            {diffResult.diff.facet_changes.length}
+                          </span>
+                        </div>
+
+                        {diffResult.diff.facet_changes.length > 0 && (
+                          <div className="commit-v2__diff-changes">
+                            {diffResult.diff.facet_changes.map((change, idx) => (
+                              <div key={idx} className={`commit-v2__diff-change commit-v2__diff-change--${change.change_type}`}>
+                                <div className="commit-v2__diff-change-header">
+                                  <span className={`commit-v2__diff-change-type commit-v2__diff-change-type--${change.change_type}`}>
+                                    {change.change_type}
+                                  </span>
+                                  <span className="commit-v2__diff-change-facet">{change.facet}</span>
+                                </div>
+                                {change.base_text && (
+                                  <div className="commit-v2__diff-change-text commit-v2__diff-change-text--removed">
+                                    - {change.base_text}
+                                  </div>
+                                )}
+                                {change.target_text && (
+                                  <div className="commit-v2__diff-change-text commit-v2__diff-change-text--added">
+                                    + {change.target_text}
+                                  </div>
+                                )}
+                                {change.added_keywords.length > 0 && (
+                                  <div className="commit-v2__diff-keywords">
+                                    <span className="commit-v2__diff-keywords-label">Added:</span>
+                                    {change.added_keywords.map((kw, i) => (
+                                      <span key={i} className="commit-v2__diff-keyword commit-v2__diff-keyword--added">{kw}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {change.removed_keywords.length > 0 && (
+                                  <div className="commit-v2__diff-keywords">
+                                    <span className="commit-v2__diff-keywords-label">Removed:</span>
+                                    {change.removed_keywords.map((kw, i) => (
+                                      <span key={i} className="commit-v2__diff-keyword commit-v2__diff-keyword--removed">{kw}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {diffResult.diff.facet_changes.length === 0 && (
+                          <div className="commit-v2__diff-empty">
+                            No facet changes detected
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </aside>
           </div>

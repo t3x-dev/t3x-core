@@ -5,6 +5,7 @@ import { GitCommit, GitMerge, PenSquare, Sparkles, MessageSquare, MessageSquareP
 import { Handle, Position } from 'reactflow'
 import type { NodeProps } from 'reactflow'
 import { useCanvasStore } from '../store/canvasStore'
+import { useProjectStore } from '../store/projectStore'
 import type { CanvasNodeData, LeafType } from '../types/nodes'
 
 // Leaf type definitions with icons and labels
@@ -242,6 +243,7 @@ function CommitNode(props: Props) {
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit)
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit)
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel)
+  const notify = useProjectStore((state) => state.notifyCallback)
   const [showHandleActions, setShowHandleActions] = useState(false)
   const hideTimer = useRef<number | undefined>(undefined)
 
@@ -250,8 +252,14 @@ function CommitNode(props: Props) {
 
   const branchLabel =
     data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN'
-  const handleAddConversation = () => {
-    addConversationFromCommit(id)
+  const handleAddConversation = async () => {
+    try {
+      await addConversationFromCommit(id)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create conversation'
+      notify?.(message, 'error')
+      console.error('Failed to create conversation:', err)
+    }
   }
   const handleAddPendingCommit = () => {
     addPendingCommitFromCommit(id)
@@ -338,7 +346,9 @@ function CommitNode(props: Props) {
         }
       >
         <div className="commit-node__top-row">
-          <span className="commit-node__badge">{data.entryId}</span>
+          <span className="commit-node__badge">
+            {data.commitHash ? data.commitHash.slice(0, 8) : data.entryId}
+          </span>
           <div className="commit-node__top-actions">
             {isPending && (
               <span className="commit-node__pending-flag" aria-label="Pending commit">
@@ -380,7 +390,15 @@ function CommitNode(props: Props) {
             <Sparkles size={14} />
             <span>{data.status}</span>
           </div>
-          <span>{data.timestamp}</span>
+          {isPending ? (
+            <span className="commit-node__constraints-count">
+              {(data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0
+                ? `${data.mustHave?.length || 0}✓ ${data.mustntHave?.length || 0}✗`
+                : 'No constraints'}
+            </span>
+          ) : (
+            <span>{data.summary || data.timestamp}</span>
+          )}
         </footer>
       </NodeShell>
       <Handle

@@ -47,14 +47,24 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     );
   }
 
-  // Get parent commits from TARGET branch's head (not current branch)
-  const parent_hashes: string[] = [];
-  if (branch.head_commit_hash) {
-    parent_hashes.push(branch.head_commit_hash);
+  // Determine parent hashes
+  // For merge commits: use explicit merge_parents
+  // For regular commits: use branch head
+  let parent_hashes: string[];
+  if (input.merge_parents && input.merge_parents.length > 0) {
+    // Merge commit: use provided parent hashes
+    parent_hashes = input.merge_parents;
+  } else {
+    // Regular commit: use branch head as parent
+    parent_hashes = [];
+    if (branch.head_commit_hash) {
+      parent_hashes.push(branch.head_commit_hash);
+    }
   }
 
   const parents_json = JSON.stringify(parent_hashes);
-  const turn_window_json = JSON.stringify(input.turn_window);
+  // For merge commits, turn_window may be null/undefined
+  const turn_window_json = input.turn_window ? JSON.stringify(input.turn_window) : JSON.stringify(null);
   const facet_snapshot_json = JSON.stringify(input.facet_snapshot);
   const pipeline_config_json = input.pipeline_config
     ? JSON.stringify(input.pipeline_config)

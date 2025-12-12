@@ -44,7 +44,18 @@
       "Bash(npx eslint:*)",
       "Bash(grep:*)",
       "Bash(sqlite3:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git stash:*)",
+      "Bash(git fetch:*)",
+      "Bash(tree:*)",
+      "Bash(time http_proxy= https_proxy= curl -s -X POST \"http://127.0.0.1:8000/api/v1/agent/drafts\" -H \"Content-Type: application/json\" -d '{\n    \"\"\"\"project_id\"\"\"\": \"\"\"\"proj_a82130b7\"\"\"\",\n    \"\"\"\"conversation_id\"\"\"\": \"\"\"\"conv_c48f5902\"\"\"\",\n    \"\"\"\"bridge_id\"\"\"\": \"\"\"\"summary\"\"\"\",\n    \"\"\"\"intent\"\"\"\": \"\"\"\"test\"\"\"\"\n  }')",
+      "Bash(ALL_PROXY= http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= curl -s \"http://127.0.0.1:8000/health\")",
+      "Bash(node /tmp/simulate_webui.mjs:*)",
+      "Bash(node /tmp/deep_verify.mjs:*)",
+      "Bash(node /tmp/check_diff.mjs:*)",
+      "Bash(node /tmp/deep_verify_v2.mjs:*)",
+      "Bash(node /tmp/check_merge.mjs:*)",
+      "Bash(node /tmp/test_conflict.mjs:*)"
     ],
     "deny": [],
     "ask": []

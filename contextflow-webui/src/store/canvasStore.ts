@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType } from '../types/nodes'
 import * as api from '../services/api'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
@@ -32,7 +32,7 @@ type CanvasState = {
   clearCanvas: () => void
   // Deletion confirmation state
   deletionConfirmation: DeletionConfirmation
-  addNode: (kind: NodeKind, position?: { x: number; y: number }) => void
+  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void
   commitPendingCommit: (id: string) => void
   addPendingCommitFromConversation: (conversationId: string) => Promise<void>
@@ -643,6 +643,10 @@ const commitToNode = (
       sourceExcerpt: commit.source_excerpt ?? undefined,
       mustHave: commit.must_have ?? undefined,
       mustntHave: commit.mustnt_have ?? undefined,
+      // Facet snapshot for display
+      facetSnapshot: commit.facet_snapshot ?? undefined,
+      // Turn window for creating child commits
+      sourceTurnWindow: commit.turn_window ?? undefined,
     },
   }
 }
@@ -853,47 +857,65 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })
   },
 
-  addNode: (kind, position) => {
-    const total = get().nodes.length
+  addNode: async (kind, position) => {
+    const state = get()
+    const total = state.nodes.length
     const basePosition =
       position ?? {
         x: 140 + (total % 3) * 220,
         y: 100 + Math.floor(total / 3) * 180,
       }
     const snappedPosition = snapPosition(basePosition)
-    const newNode: Node<CanvasNodeData> = {
-      id: nextNodeId(),
-      type: kind,
-      position: snappedPosition,
-      data: {
-        entryId: kind.toUpperCase(),
-        title:
-          kind === 'conversation'
-            ? 'New Conversation'
-            : 'New Commit',
-        summary:
-          kind === 'conversation'
-            ? 'Capture the latest exchange before structuring.'
-            : 'Snapshot that passed validator.',
-        status:
-          kind === 'conversation'
-            ? 'raw-input'
-            : 'stable',
-        timestamp: 'just now',
-        tags: [kind],
-        kind,
-        ...(kind === 'commit'
-          ? {
-              branchType: 'branch' as const,
-              commitStatus: 'committed' as CommitStatus,
-            }
-          : {}),
-      },
+
+    // For conversations, must create via API - no local fallback (MVP requirement)
+    if (kind === 'conversation') {
+      if (!state.projectId) {
+        throw new Error('Cannot create conversation: no project selected')
+      }
+
+      const conversation = await api.createConversation(
+        state.projectId,
+        'New Conversation',
+        undefined, // no parent commit
+        { x: snappedPosition.x, y: snappedPosition.y }
+      )
+
+      const newNode: Node<CanvasNodeData> = {
+        id: conversation.conversation_id,
+        type: 'conversation',
+        position: snappedPosition,
+        data: {
+          entryId: conversation.conversation_id.slice(0, 12),
+          title: conversation.title || 'New Conversation',
+          summary: '0 turns',
+          status: 'raw-input',
+          timestamp: conversation.created_at,
+          tags: ['conversation'],
+          kind: 'conversation',
+          conversationId: conversation.conversation_id,
+        },
+      }
+
+      set((s) => ({
+        nodes: [...s.nodes, newNode],
+      }))
+      return
     }
 
-    set((state) => ({
-      nodes: [...state.nodes, newNode],
-    }))
+    // For commit nodes: must be created via dedicated flow (from conversation or commit)
+    // Direct creation would create a fake node without backend data
+    if (kind === 'commit') {
+      throw new Error('Cannot create commit directly. Use "Create Commit" from a conversation or existing commit.')
+    }
+
+    // For leaf nodes: must be created via LeafPanel from a commit
+    // Direct creation would create a fake node without backend data
+    if (kind === 'leaf') {
+      throw new Error('Cannot create leaf directly. Use the Leaf Panel from a committed commit.')
+    }
+
+    // Fallback for any unknown kinds - should not happen
+    throw new Error(`Cannot create node of kind "${kind}" directly.`)
   },
 
   updateNode: (id, patch) =>
@@ -1050,49 +1072,54 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const source = state.nodes.find(
       (node) => node.id === commitId && node.data.kind === 'commit',
     )
-    if (!source || !state.projectId) {
-      console.warn('addConversationFromCommit: source commit not found or no projectId')
-      return
+    if (!source) {
+      throw new Error('Cannot create conversation: source commit not found')
+    }
+    if (!state.projectId) {
+      throw new Error('Cannot create conversation: no project selected')
     }
 
-    try {
-      // Create conversation via API with parent_commit_hash
-      const title = `Conversation from ${source.data.entryId}`
-      const parentCommitHash = source.data.commitHash || source.id
-      const conversation = await api.createConversation(state.projectId, title, parentCommitHash)
+    // Create conversation via API with parent_commit_hash
+    const title = `Conversation from ${source.data.entryId}`
+    const parentCommitHash = source.data.commitHash || source.id
+    // Calculate position before API call so we can save it
+    const position = computeAttachedPosition(source, 'conversation', commitQuickOffset)
+    const conversation = await api.createConversation(
+      state.projectId,
+      title,
+      parentCommitHash,
+      { x: position.x, y: position.y }
+    )
 
-      // Add node using the real conversation ID from API
-      const newNode: Node<CanvasNodeData> = {
-        id: conversation.conversation_id,
-        type: 'conversation',
-        position: computeAttachedPosition(source, 'conversation', commitQuickOffset),
-        data: {
-          entryId: conversation.conversation_id.slice(0, 12),
-          title: conversation.title || title,
-          summary: '0 turns',
-          status: 'raw-input',
-          timestamp: conversation.created_at,
-          tags: ['conversation'],
-          kind: 'conversation',
-          conversationId: conversation.conversation_id, // Full ID for API calls
-        },
-      }
-      const newEdge: Edge = {
-        id: nextEdgeId(),
-        source: source.id,
-        target: newNode.id,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-      }
-
-      set({
-        nodes: [...get().nodes, newNode],
-        edges: [...get().edges, newEdge],
-      })
-    } catch (err) {
-      console.error('Failed to create conversation:', err)
+    // Add node using the real conversation ID from API
+    const newNode: Node<CanvasNodeData> = {
+      id: conversation.conversation_id,
+      type: 'conversation',
+      position,
+      data: {
+        entryId: conversation.conversation_id.slice(0, 12),
+        title: conversation.title || title,
+        summary: '0 turns',
+        status: 'raw-input',
+        timestamp: conversation.created_at,
+        tags: ['conversation'],
+        kind: 'conversation',
+        conversationId: conversation.conversation_id, // Full ID for API calls
+      },
     }
+    const newEdge: Edge = {
+      id: nextEdgeId(),
+      source: source.id,
+      target: newNode.id,
+      type: edgeType,
+      animated: false,
+      style: edgeStyle,
+    }
+
+    set({
+      nodes: [...get().nodes, newNode],
+      edges: [...get().edges, newEdge],
+    })
   },
 
   addPendingCommitFromCommit: (commitId) =>
@@ -1121,6 +1148,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           commitStatus: 'pending',
           // Pass upstream content to pending commit
           baselineSummary: source.data.summary,
+          // Inherit source commit info for creating child commits without conversation
+          sourceCommitHash: source.data.commitHash,
+          sourceTurnWindow: source.data.sourceTurnWindow,
         },
       }
       const newEdge: Edge = {
@@ -1181,12 +1211,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         targetCommitId: latestMainCommit.id,
         targetCommitTitle: latestMainCommit.data.title,
         targetContent: latestMainCommit.data.summary,
+        targetCommitHash: latestMainCommit.data.commitHash || latestMainCommit.id,
         sourceCommitId: branchCommit.id,
         sourceCommitTitle: branchCommit.data.title,
         sourceContent: branchCommit.data.summary,
+        sourceCommitHash: branchCommit.data.commitHash || branchCommit.id,
         baseCommitId: baseCommit?.id,
         baseCommitTitle: baseCommit?.data.title,
         baseContent: baseCommit?.data.summary,
+        baseCommitHash: baseCommit?.data.commitHash || baseCommit?.id,
       }
       const mergePendingCommit: Node<CanvasNodeData> = {
         id: mergeNodeId,
@@ -1342,12 +1375,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const directRemoveChanges = allowedRemoves.filter((c) => directDeletes.includes(c.id))
 
         // Delete conversations from database for directly deleted nodes
+        // Note: Commit deletion is local only - backend deleteCommit API not available
         directDeletes.forEach((nodeId) => {
           const node = nodeMap.get(nodeId)
           if (node?.data.kind === 'conversation' && node.data.conversationId) {
             api.deleteConversation(node.data.conversationId).catch((err) => {
               console.warn('Failed to delete conversation from database:', err)
             })
+          }
+          if (node?.data.kind === 'commit' && node.data.commitHash) {
+            console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
           }
         })
 
@@ -1376,12 +1413,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
               const edgesToDelete = new Set(edgesToRemove)
 
               // Delete conversations from database
+              // Note: Commit deletion is local only - backend deleteCommit API not available
               needsConfirmation.forEach((nodeId) => {
                 const node = currentState.nodes.find((n) => n.id === nodeId)
                 if (node?.data.kind === 'conversation' && node.data.conversationId) {
                   api.deleteConversation(node.data.conversationId).catch((err) => {
                     console.warn('Failed to delete conversation from database:', err)
                   })
+                }
+                if (node?.data.kind === 'commit' && node.data.commitHash) {
+                  console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
                 }
               })
 
@@ -1397,12 +1438,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
       // No confirmation needed, apply all changes
       // Delete conversations from database for removed nodes
+      // Note: Commit deletion is local only - backend deleteCommit API not available
       allowedRemoves.forEach((change) => {
         const node = nodeMap.get(change.id)
         if (node?.data.kind === 'conversation' && node.data.conversationId) {
           api.deleteConversation(node.data.conversationId).catch((err) => {
             console.warn('Failed to delete conversation from database:', err)
           })
+        }
+        if (node?.data.kind === 'commit' && node.data.commitHash) {
+          console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
         }
       })
 

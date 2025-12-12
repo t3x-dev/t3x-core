@@ -24,12 +24,15 @@ export interface MergeConfig {
   targetCommitId: string
   targetCommitTitle: string
   targetContent: string
+  targetCommitHash: string  // Full commit hash for API calls
   sourceCommitId: string
   sourceCommitTitle: string
   sourceContent: string
+  sourceCommitHash: string  // Full commit hash for API calls
   baseCommitId?: string
   baseCommitTitle?: string
   baseContent?: string
+  baseCommitHash?: string   // Full commit hash for API calls
 }
 
 // Clause (sentence) status in Manage mode
@@ -153,4 +156,19 @@ export interface CanvasNodeData {
   sourceExcerpt?: string[]  // User-selected source excerpts
   mustHave?: string[]       // Must-have keywords
   mustntHave?: string[]     // Must-not-have keywords
+  // Facet snapshot from committed commit
+  facetSnapshot?: Array<{
+    facet: string
+    text?: string
+    key?: string
+    value?: unknown
+    entity_type?: string
+    confidence?: number
+  }>
+  // Source commit info (for pending commits derived from committed commits)
+  sourceCommitHash?: string  // Parent commit hash
+  sourceTurnWindow?: {
+    start_turn_hash: string
+    end_turn_hash: string
+  }  // Turn window inherited from source commit
 }
