@@ -71,6 +71,9 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   const mustnt_have_json = input.mustnt_have
     ? JSON.stringify(input.mustnt_have)
     : null;
+  const source_refs_json = input.source_refs
+    ? JSON.stringify(input.source_refs)
+    : null;
 
   // Compute commit hash
   const commit_hash = computeCommitHash({
@@ -93,8 +96,8 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     `INSERT INTO commits_v2
      (commit_hash, project_id, branch, message, parents_json, turn_window_json,
       facet_snapshot_json, pipeline_config_json, draft_id, draft_text_hash, signature_json,
-      source_excerpt_json, must_have_json, mustnt_have_json, position_x, position_y, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      source_excerpt_json, must_have_json, mustnt_have_json, position_x, position_y, source_refs_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     commit_hash,
     input.project_id,
@@ -112,6 +115,7 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     mustnt_have_json,
     position_x,
     position_y,
+    source_refs_json,
     created_at
   );
 
@@ -135,6 +139,7 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
     mustnt_have_json,
     position_x,
     position_y,
+    source_refs_json,
     created_at,
   };
 }

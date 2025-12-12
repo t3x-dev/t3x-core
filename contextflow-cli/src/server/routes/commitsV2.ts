@@ -45,6 +45,13 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
       mustnt_have?: string[];
       position_x?: number;
       position_y?: number;
+      // Multi-source references (optional)
+      source_refs?: Array<{
+        type: 'conversation' | 'commit';
+        conversation_id?: string;
+        turn_window?: { start_turn_hash: string; end_turn_hash: string };
+        commit_hash?: string;
+      }>;
     } | null;
 
     if (!body?.project_id || !body?.turn_window) {
@@ -143,6 +150,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         mustnt_have: body.mustnt_have,
         position_x: body.position_x,
         position_y: body.position_y,
+        source_refs: body.source_refs,
       });
 
       // Parse parents for response
