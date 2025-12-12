@@ -8,6 +8,7 @@ import { DeletionConfirmDialog } from '../components/DeletionConfirmDialog'
 import { LeafPanel } from '../components/LeafPanel'
 import { NodeModal, type NodeQuickAction } from '../components/NodeModal'
 import { useCanvasStore } from '../store/canvasStore'
+import { useProjectStore } from '../store/projectStore'
 import type { CanvasNodeData, NodeKind } from '../types/nodes'
 
 const GRID_SIZE = 16
@@ -47,6 +48,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     updatePendingCommitConstraintOverrides,
     hasDownstreamPendingCommits,
   } = useCanvasStore()
+  const notify = useProjectStore((state) => state.notifyCallback)
 
   const modalNode = nodes.find((node) => node.id === openNodeId)
   const pendingCommitBranchMode = useCanvasStore((state) => {
@@ -105,7 +107,15 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           key: 'add-conversation',
           label: 'Create Conversation',
           icon: <MessageSquarePlus size={14} />,
-          onClick: () => addConversationFromCommit(modalNode.id),
+          onClick: async () => {
+            try {
+              await addConversationFromCommit(modalNode.id)
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Failed to create conversation'
+              notify?.(message, 'error')
+              console.error('Failed to create conversation:', err)
+            }
+          },
         },
         {
           key: 'add-commit',
@@ -122,6 +132,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     canSeedPendingCommitFromConversation,
     addConversationFromCommit,
     addPendingCommitFromCommit,
+    notify,
   ])
 
   useEffect(() => {
@@ -185,9 +196,15 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     })
   }
 
-  const handleAddNode = (kind: NodeKind) => {
+  const handleAddNode = async (kind: NodeKind) => {
     const position = getViewportCenter()
-    addNode(kind, position)
+    try {
+      await addNode(kind, position)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create node'
+      notify?.(message, 'error')
+      console.error('Failed to add node:', err)
+    }
   }
 
   const matchesHighlightCommit = (node: Node<CanvasNodeData>, mode: PathHighlight) => {

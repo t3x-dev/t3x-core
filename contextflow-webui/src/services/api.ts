@@ -192,6 +192,31 @@ export interface Draft {
   completed_at: string | null
 }
 
+// Raw diff response from backend
+interface DiffResultRaw {
+  baseId: string
+  targetId: string
+  segmentDiffs: Array<{
+    segmentId: string
+    text: string
+    diffType: 'same' | 'added' | 'removed' | 'modified'
+    matchedSegmentId?: string
+    similarity?: number
+  }>
+  threshold: number
+  stats: {
+    totalSegments: number
+    sameCount: number
+    addedCount: number
+    removedCount: number
+    modifiedCount: number
+    conflictCount: number
+  }
+  method: string
+  usedCache: boolean
+}
+
+// Transformed diff result for UI
 export interface DiffResult {
   base_commit_hash: string
   target_commit_hash: string
@@ -206,36 +231,71 @@ export interface DiffResult {
     }>
     segment_changes: Array<{
       segment_id: string
-      change_type: 'added' | 'removed' | 'modified'
+      change_type: 'added' | 'removed' | 'modified' | 'same'
       text: string
       similarity_to_base?: number
     }>
   }
   computed_at: string
+  stats?: DiffResultRaw['stats']
 }
 
+// Raw merge result from backend (camelCase)
+interface MergeResultRaw {
+  autoMerged: Array<{
+    facet: string
+    mergedText: string | null
+    source: 'base' | 'source' | 'target' | 'llm' | 'manual'
+    keywords: string[]
+  }>
+  conflicts: Array<{
+    facet: string
+    baseText: string | null
+    sourceText: string | null
+    targetText: string | null
+    conflictType: 'divergent_edit' | 'delete_modify' | 'modify_delete'
+  }>
+  status: 'clean' | 'conflicts'
+  stats: {
+    totalFacets: number
+    autoMergedCount: number
+    conflictCount: number
+    llmResolvedCount: number
+    bySource: {
+      base: number
+      source: number
+      target: number
+      llm: number
+      manual: number
+    }
+  }
+}
+
+// Frontend-friendly merge result (snake_case)
 export interface MergeResult {
-  merge_result_id: string
   base_commit_hash: string
   source_commit_hash: string
   target_commit_hash: string
   status: 'clean' | 'conflicts'
   auto_merged_facets: Array<{
     facet: string
-    merged_text: string
-    source: 'source' | 'target'
+    merged_text: string | null
+    source: 'base' | 'source' | 'target' | 'llm' | 'manual'
     keywords: string[]
   }>
   conflicts: Array<{
     facet: string
-    base_text?: string
-    source_text?: string
-    target_text?: string
-    conflict_type: string
+    base_text: string | null
+    source_text: string | null
+    target_text: string | null
+    conflict_type: 'divergent_edit' | 'delete_modify' | 'modify_delete'
   }>
-  auto_merged_count: number
-  conflict_count: number
-  created_at: string
+  stats: {
+    total_facets: number
+    auto_merged_count: number
+    conflict_count: number
+    llm_resolved_count: number
+  }
 }
 
 // List response types - CLI returns nested structure: { status, data: { items: [...], limit, offset } }
@@ -286,6 +346,19 @@ export interface ApiResponse<T> {
 // ============================================================================
 
 /**
+ * Safely parse JSON string, returning fallback on error
+ */
+function safeJsonParse<T>(json: string | null, fallback: T): T {
+  if (!json) return fallback
+  try {
+    return JSON.parse(json) as T
+  } catch {
+    console.warn('Failed to parse JSON:', json.slice(0, 100))
+    return fallback
+  }
+}
+
+/**
  * Parse raw commit from API (with JSON string fields) into frontend Commit type
  */
 function parseCommit(raw: CommitRaw): Commit {
@@ -294,14 +367,14 @@ function parseCommit(raw: CommitRaw): Commit {
     project_id: raw.project_id,
     branch: raw.branch,
     message: raw.message,
-    parent_hashes: raw.parents_json ? JSON.parse(raw.parents_json) : [],
-    turn_window: raw.turn_window_json ? JSON.parse(raw.turn_window_json) : null,
-    facet_snapshot: raw.facet_snapshot_json ? JSON.parse(raw.facet_snapshot_json) : null,
-    draft_ref: raw.draft_ref_json ? JSON.parse(raw.draft_ref_json) : null,
-    signature: raw.signature_json ? JSON.parse(raw.signature_json) : null,
-    source_excerpt: raw.source_excerpt_json ? JSON.parse(raw.source_excerpt_json) : null,
-    must_have: raw.must_have_json ? JSON.parse(raw.must_have_json) : null,
-    mustnt_have: raw.mustnt_have_json ? JSON.parse(raw.mustnt_have_json) : null,
+    parent_hashes: safeJsonParse<string[]>(raw.parents_json, []),
+    turn_window: safeJsonParse(raw.turn_window_json, null),
+    facet_snapshot: safeJsonParse(raw.facet_snapshot_json, null),
+    draft_ref: safeJsonParse(raw.draft_ref_json, null),
+    signature: safeJsonParse(raw.signature_json, null),
+    source_excerpt: safeJsonParse<string[] | null>(raw.source_excerpt_json, null),
+    must_have: safeJsonParse<string[] | null>(raw.must_have_json, null),
+    mustnt_have: safeJsonParse<string[] | null>(raw.mustnt_have_json, null),
     position_x: raw.position_x,
     position_y: raw.position_y,
     created_at: raw.created_at,
@@ -693,6 +766,7 @@ export async function createCommit(
     sourceExcerpt?: string[]
     mustHave?: string[]
     mustntHave?: string[]
+    position?: { x: number; y: number }
   }
 ): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
@@ -707,6 +781,47 @@ export async function createCommit(
       source_excerpt: options?.sourceExcerpt,
       must_have: options?.mustHave,
       mustnt_have: options?.mustntHave,
+      position_x: options?.position?.x,
+      position_y: options?.position?.y,
+    }),
+  })
+  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
+  return parseCommit(data.data)
+}
+
+// Resolved facet for merge commit
+// source values: backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
+// UI adds 'custom' for user-provided text
+export interface ResolvedFacet {
+  facet: string
+  text: string | null
+  source: 'base' | 'source' | 'target' | 'llm' | 'manual' | 'custom'
+  keywords: string[]
+}
+
+// Create a merge commit from resolved merge results
+export async function createMergeCommit(
+  projectId: string,
+  sourceCommitHash: string,
+  targetCommitHash: string,
+  branch = 'main',
+  message?: string,
+  resolvedFacets?: ResolvedFacet[],
+  position?: { x: number; y: number }
+): Promise<Commit> {
+  const res = await fetchWithTimeout(`${API_V1}/commits`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_id: projectId,
+      branch,
+      message,
+      // Merge mode: specify parent commits instead of turn_window
+      merge_parents: [sourceCommitHash, targetCommitHash],
+      // Resolved facets from user decisions
+      facet_snapshot: resolvedFacets,
+      // Position for canvas display
+      ...(position && { position_x: position.x, position_y: position.y }),
     }),
   })
   const data = await handleResponse<ApiResponse<CommitRaw>>(res)
@@ -718,7 +833,7 @@ export async function createCommit(
 // ============================================================================
 
 export async function diff(baseCommitHash: string, targetCommitHash: string): Promise<DiffResult> {
-  const res = await fetchWithTimeout(`${API_V1}/diff`, {
+  const res = await fetchWithTimeout(`${API_V1}/diff/two-way`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -726,12 +841,75 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       target_commit_hash: targetCommitHash,
     }),
   })
-  const data = await handleResponse<ApiResponse<DiffResult>>(res)
-  return data.data
+  const data = await handleResponse<ApiResponse<DiffResultRaw>>(res)
+  const raw = data.data
+
+  // Transform backend response to frontend format
+  const segmentChanges = raw.segmentDiffs.map(seg => ({
+    segment_id: seg.segmentId,
+    change_type: seg.diffType as 'added' | 'removed' | 'modified' | 'same',
+    text: seg.text,
+    similarity_to_base: seg.similarity,
+  }))
+
+  // Group segments by change type to create facet-like changes for display
+  const addedSegments = segmentChanges.filter(s => s.change_type === 'added')
+  const removedSegments = segmentChanges.filter(s => s.change_type === 'removed')
+  const modifiedSegments = segmentChanges.filter(s => s.change_type === 'modified')
+
+  // Create facet_changes from segment diffs for UI display
+  const facetChanges: DiffResult['diff']['facet_changes'] = []
+
+  // Add removed segments as facet changes
+  removedSegments.forEach((seg, idx) => {
+    facetChanges.push({
+      facet: `removed_${idx + 1}`,
+      change_type: 'removed',
+      base_text: seg.text,
+      target_text: undefined,
+      added_keywords: [],
+      removed_keywords: [],
+    })
+  })
+
+  // Add added segments as facet changes
+  addedSegments.forEach((seg, idx) => {
+    facetChanges.push({
+      facet: `added_${idx + 1}`,
+      change_type: 'added',
+      base_text: undefined,
+      target_text: seg.text,
+      added_keywords: [],
+      removed_keywords: [],
+    })
+  })
+
+  // Add modified segments as facet changes
+  modifiedSegments.forEach((seg, idx) => {
+    facetChanges.push({
+      facet: `modified_${idx + 1}`,
+      change_type: 'modified',
+      base_text: seg.text,
+      target_text: seg.text,
+      added_keywords: [],
+      removed_keywords: [],
+    })
+  })
+
+  return {
+    base_commit_hash: baseCommitHash,
+    target_commit_hash: targetCommitHash,
+    diff: {
+      facet_changes: facetChanges,
+      segment_changes: segmentChanges,
+    },
+    computed_at: new Date().toISOString(),
+    stats: raw.stats,
+  }
 }
 
 export async function merge(
-  projectId: string,
+  _projectId: string,  // Not used by backend, kept for API compatibility
   baseCommitHash: string,
   sourceCommitHash: string,
   targetCommitHash: string
@@ -740,14 +918,40 @@ export async function merge(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      project_id: projectId,
       base_commit_hash: baseCommitHash,
       source_commit_hash: sourceCommitHash,
       target_commit_hash: targetCommitHash,
     }),
   })
-  const data = await handleResponse<ApiResponse<MergeResult>>(res)
-  return data.data
+  const data = await handleResponse<ApiResponse<MergeResultRaw>>(res)
+  const raw = data.data
+
+  // Transform backend camelCase to frontend snake_case
+  return {
+    base_commit_hash: baseCommitHash,
+    source_commit_hash: sourceCommitHash,
+    target_commit_hash: targetCommitHash,
+    status: raw.status,
+    auto_merged_facets: raw.autoMerged.map(f => ({
+      facet: f.facet,
+      merged_text: f.mergedText,
+      source: f.source,
+      keywords: f.keywords,
+    })),
+    conflicts: raw.conflicts.map(c => ({
+      facet: c.facet,
+      base_text: c.baseText,
+      source_text: c.sourceText,
+      target_text: c.targetText,
+      conflict_type: c.conflictType,
+    })),
+    stats: {
+      total_facets: raw.stats.totalFacets,
+      auto_merged_count: raw.stats.autoMergedCount,
+      conflict_count: raw.stats.conflictCount,
+      llm_resolved_count: raw.stats.llmResolvedCount,
+    },
+  }
 }
 
 // ============================================================================
@@ -762,6 +966,7 @@ export async function createDraft(
   baseCommitHash?: string,
   turnAnchorHash?: string
 ): Promise<Draft> {
+  // LLM draft generation typically takes 10-20 seconds for a single call
   const res = await fetchWithTimeout(`${API_V1}/agent/drafts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -773,7 +978,7 @@ export async function createDraft(
       base_commit_hash: baseCommitHash,
       turn_anchor_hash: turnAnchorHash,
     }),
-  })
+  }, 30000)
   const data = await handleResponse<ApiResponse<Draft>>(res)
   return data.data
 }

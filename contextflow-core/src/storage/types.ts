@@ -143,10 +143,13 @@ export interface CreateCommitV2Input {
   project_id: string;
   branch: string;
   message?: string;
-  turn_window: {
+  // For regular commits: turn window reference
+  turn_window?: {
     start_turn_hash: string;
     end_turn_hash: string;
   };
+  // For merge commits: explicit parent hashes and resolved facets
+  merge_parents?: string[];  // [source_hash, target_hash]
   facet_snapshot: unknown[];
   pipeline_config?: unknown;
   draft_id?: string;
