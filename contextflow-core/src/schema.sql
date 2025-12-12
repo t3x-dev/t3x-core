@@ -141,6 +141,9 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   mustnt_have_json TEXT,
   position_x REAL,
   position_y REAL,
+  -- source_refs_json: Array of source references for multi-source commits
+  -- Each element: { type: 'conversation' | 'commit', conversation_id?, turn_window?, commit_hash? }
+  source_refs_json TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );

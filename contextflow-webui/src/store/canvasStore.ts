@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
-import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus } from '../types/nodes'
+import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, CommitStatus, SourceTextBlock, TurnBoundary } from '../types/nodes'
 import * as api from '../services/api'
+import { tokenizeText } from '../utils/tokenizer'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
@@ -65,6 +66,8 @@ type CanvasState = {
   cancelDeletion: () => void
   // Update node ID (for syncing local pending commit with API commit_hash)
   updateNodeId: (oldId: string, newId: string) => void
+  // Get direct upstream source nodes (conversations and committed commits) for a pending commit
+  getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[]
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -171,8 +174,8 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
   const incomingMap = buildIncomingMap(edges)
   const locked = new Set<string>()
 
-  // Only lock committed commits and their upstream committed commits
-  // Pending commits and their upstream (non-committed) nodes are NOT locked
+  // Lock committed commits and ALL their upstream nodes (including conversations)
+  // This prevents deletion of committed commits and any nodes that contributed to them
   const committedCommits = nodes.filter(
     (node) => node.data.kind === 'commit' && node.data.commitStatus === 'committed'
   )
@@ -181,7 +184,7 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
     // Lock the committed commit itself
     locked.add(commit.id)
 
-    // Lock upstream committed commits only (stop at pending commits or conversations)
+    // Lock ALL upstream nodes (committed commits, conversations, etc.)
     const visited = new Set<string>()
     const stack = [...(incomingMap.get(commit.id) ?? [])]
     while (stack.length > 0) {
@@ -192,8 +195,16 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
       const currentNode = nodeMap.get(currentId)
       if (!currentNode) continue
 
-      // Only lock if it's a committed commit
-      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'committed') {
+      // Lock this node (regardless of type - commit, conversation, etc.)
+      // Only skip pending commits as they can be modified/deleted
+      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
+        // Pending commits are NOT locked, but still traverse their upstream
+        const parents = incomingMap.get(currentId) ?? []
+        parents.forEach((parentId) => {
+          if (!visited.has(parentId)) stack.push(parentId)
+        })
+      } else {
+        // Lock committed commits, conversations, and other node types
         locked.add(currentId)
         // Continue traversing upstream
         const parents = incomingMap.get(currentId) ?? []
@@ -201,7 +212,6 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
           if (!visited.has(parentId)) stack.push(parentId)
         })
       }
-      // Stop at pending commits, conversations, or leaves - they are NOT locked
     }
   })
 
@@ -364,6 +374,13 @@ const hasCommitDescendant = (
   return false
 }
 
+// Compare timestamps (ISO strings) - returns true if a is newer than b
+const isNewerTimestamp = (a: string | undefined, b: string | undefined): boolean => {
+  if (!a) return false
+  if (!b) return true
+  return new Date(a).getTime() > new Date(b).getTime()
+}
+
 const resolveLatestMainCommitId = (
   nodes: Node<CanvasNodeData>[],
   preferredId?: string,
@@ -383,9 +400,18 @@ const resolveLatestMainCommitId = (
   if (mainCommits.length === 0) {
     return undefined
   }
-  return mainCommits.reduce((latest, node) =>
-    getNumericId(node.id) > getNumericId(latest.id) ? node : latest,
-  ).id
+  // Use timestamp (created_at) to determine latest commit, fallback to numeric ID comparison
+  return mainCommits.reduce((latest, node) => {
+    // First try comparing by timestamp
+    if (isNewerTimestamp(node.data.timestamp, latest.data.timestamp)) {
+      return node
+    }
+    if (isNewerTimestamp(latest.data.timestamp, node.data.timestamp)) {
+      return latest
+    }
+    // Fallback to numeric ID comparison (for pending commits without proper timestamps)
+    return getNumericId(node.id) > getNumericId(latest.id) ? node : latest
+  }).id
 }
 
 const buildSeedConversationNode = (): Node<CanvasNodeData> => {
@@ -445,9 +471,17 @@ const computeCommitTone = (
     const activeCandidates = branchCommits.filter((node) => !ensureHasDescendant(node.id))
     const activeCommit =
       activeCandidates.length > 0
-        ? activeCandidates.reduce((latest, node) =>
-            getNumericId(node.id) > getNumericId(latest.id) ? node : latest,
-          )
+        ? activeCandidates.reduce((latest, node) => {
+            // Use timestamp to determine latest commit
+            if (isNewerTimestamp(node.data.timestamp, latest.data.timestamp)) {
+              return node
+            }
+            if (isNewerTimestamp(latest.data.timestamp, node.data.timestamp)) {
+              return latest
+            }
+            // Fallback to numeric ID comparison
+            return getNumericId(node.id) > getNumericId(latest.id) ? node : latest
+          })
         : undefined
     if (!activeCommit) {
       return 'branch-history'
@@ -790,18 +824,56 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         })
       })
 
-      // Add conversation → commit edges based on turn_window
+      // Add source → commit edges
+      // Priority: source_refs (new multi-source) > turn_window (legacy single-source)
       commits.forEach((commit) => {
-        const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
-        if (sourceConvId) {
-          edges.push({
-            id: `conv-${sourceConvId}-${commit.commit_hash}`,
-            source: sourceConvId,
-            target: commit.commit_hash,
-            type: edgeType,
-            animated: false,
-            style: edgeStyle,
+        // Debug: Log commit source_refs
+        console.log('[loadProjectData] Commit source_refs:', {
+          commit_hash: commit.commit_hash,
+          source_refs: commit.source_refs,
+          has_source_refs: commit.source_refs && commit.source_refs.length > 0,
+        })
+
+        // New: Use source_refs for multi-source support
+        if (commit.source_refs && commit.source_refs.length > 0) {
+          commit.source_refs.forEach((ref, idx) => {
+            if (ref.type === 'conversation' && ref.conversation_id && convIds.has(ref.conversation_id)) {
+              edges.push({
+                id: `source-ref-conv-${ref.conversation_id}-${commit.commit_hash}-${idx}`,
+                source: ref.conversation_id,
+                target: commit.commit_hash,
+                type: edgeType,
+                animated: false,
+                style: edgeStyle,
+              })
+            } else if (ref.type === 'commit' && ref.commit_hash && commitHashes.has(ref.commit_hash)) {
+              // Source from another commit - only add if not already a parent edge
+              const isParent = commit.parent_hashes.includes(ref.commit_hash)
+              if (!isParent) {
+                edges.push({
+                  id: `source-ref-commit-${ref.commit_hash}-${commit.commit_hash}-${idx}`,
+                  source: ref.commit_hash,
+                  target: commit.commit_hash,
+                  type: edgeType,
+                  animated: false,
+                  style: edgeStyle,
+                })
+              }
+            }
           })
+        } else {
+          // Legacy: Use turn_window for single conversation source
+          const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
+          if (sourceConvId) {
+            edges.push({
+              id: `conv-${sourceConvId}-${commit.commit_hash}`,
+              source: sourceConvId,
+              target: commit.commit_hash,
+              type: edgeType,
+              animated: false,
+              style: edgeStyle,
+            })
+          }
         }
       })
 
@@ -987,21 +1059,54 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     // Fetch actual chat content from upstream conversation
     let baselineSummary = ''
+    let pendingSourceBlock: SourceTextBlock | undefined
     const projectId = state.projectId
     if (projectId && source.data.conversationId) {
       try {
         const turnsData = await api.listTurns(projectId, source.data.conversationId)
         if (turnsData.turns && turnsData.turns.length > 0) {
-          baselineSummary = turnsData.turns
-            .map((turn) => {
-              // Replace newlines within each turn with ' │ ' separator (box drawing vertical line)
-              return turn.content
-                .split(/\n+/)
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join(' │ ')
-            })
-            .join('\n')
+          // Build full text with turn separator (newline between turns)
+          const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
+
+          // Tokenize the full text
+          const tokens = tokenizeText(fullText)
+
+          // Build turn boundaries by tracking token positions
+          const turnBoundaries: TurnBoundary[] = []
+          let currentTokenIndex = 0
+
+          for (const turn of turnsData.turns) {
+            const turnTokens = tokenizeText(turn.content)
+            const turnTokenCount = turnTokens.length
+
+            if (turnTokenCount > 0) {
+              turnBoundaries.push({
+                role: turn.role as 'user' | 'assistant',
+                startTokenIndex: currentTokenIndex,
+                endTokenIndex: currentTokenIndex + turnTokenCount - 1,
+              })
+            }
+
+            // Account for the newline separator token between turns (+1)
+            // But not after the last turn
+            currentTokenIndex += turnTokenCount + 1
+          }
+
+          // Create the SourceTextBlock with source info and turn boundaries
+          pendingSourceBlock = {
+            id: 'block-conv-1',
+            originalText: fullText,
+            tokens,
+            selections: [],
+            keywords: [],
+            sourceNodeId: source.data.conversationId,
+            sourceNodeType: 'conversation',
+            sourceNodeTitle: source.data.title || 'Conversation',
+            turnBoundaries,
+          }
+
+          // Also keep baselineSummary for backward compatibility
+          baselineSummary = fullText
         }
       } catch (err) {
         console.warn('Failed to fetch turns for baselineSummary:', err)
@@ -1027,6 +1132,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // Pass upstream chat content to pending commit
         baselineSummary,
         sourceConversationId: source.data.conversationId,
+        // New: pendingSource with structured text blocks
+        pendingSource: pendingSourceBlock ? { textBlocks: [pendingSourceBlock] } : undefined,
       },
     }
 
@@ -1103,6 +1210,24 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (!source) {
         return {}
       }
+
+      // Build pending source block from commit's sourceExcerpt (semantic selections)
+      // Not from summary which is the generated output
+      const sourceExcerptArray = source.data.sourceExcerpt || []
+      const sourceExcerptText = sourceExcerptArray.join('\n')
+      const tokens = tokenizeText(sourceExcerptText)
+      const pendingSourceBlock: SourceTextBlock = {
+        id: 'block-commit-1',
+        originalText: sourceExcerptText,
+        tokens,
+        selections: [],
+        keywords: [],
+        sourceNodeId: source.data.commitHash || source.id,
+        sourceNodeType: 'commit',
+        sourceNodeTitle: source.data.title || `Commit ${source.data.entryId}`,
+        // No turnBoundaries for commit type
+      }
+
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
         type: 'commit',
@@ -1119,8 +1244,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           pendingBranch: 'branch',
           pendingBranchName: '',
           commitStatus: 'pending',
-          // Pass upstream content to pending commit
-          baselineSummary: source.data.summary,
+          // Pass upstream content to pending commit (use sourceExcerpt)
+          baselineSummary: sourceExcerptText,
+          // New: pendingSource with structured text block
+          pendingSource: tokens.length > 0 ? { textBlocks: [pendingSourceBlock] } : undefined,
         },
       }
       const newEdge: Edge = {
@@ -1427,13 +1554,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const removeChanges = changes.filter((c) => c.type === 'remove')
       const otherChanges = changes.filter((c) => c.type !== 'remove')
 
-      // Filter out edges between locked nodes
+      // Filter out edges that connect locked nodes
+      // An edge is protected if BOTH source and target are locked
+      // (this means the edge is part of committed history)
       const allowedRemoves = removeChanges.filter((c) => {
         const edge = state.edges.find((e) => e.id === c.id)
         if (!edge) return false
         const sourceLocked = lockedNodes.has(edge.source)
         const targetLocked = lockedNodes.has(edge.target)
-        // Only block if BOTH ends are locked (committed commits)
+        // Block if BOTH ends are locked (edge is part of committed history)
         return !(sourceLocked && targetLocked)
       })
 
@@ -1829,4 +1958,31 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         latestMainCommitId,
       }
     }),
+
+  // Get direct upstream source nodes (conversations and committed commits) for a node
+  // Returns nodes that can provide source content for a pending commit
+  getUpstreamSourceNodes: (nodeId) => {
+    const state = get()
+    const incomingMap = buildIncomingMap(state.edges)
+    const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
+
+    const sourceNodeIds = incomingMap.get(nodeId) ?? []
+    const sourceNodes: Node<CanvasNodeData>[] = []
+
+    for (const sourceId of sourceNodeIds) {
+      const node = nodeMap.get(sourceId)
+      if (!node) continue
+
+      // Include conversations
+      if (node.data.kind === 'conversation') {
+        sourceNodes.push(node)
+      }
+      // Include committed commits (not pending)
+      else if (node.data.kind === 'commit' && node.data.commitStatus === 'committed') {
+        sourceNodes.push(node)
+      }
+    }
+
+    return sourceNodes
+  },
 }))
