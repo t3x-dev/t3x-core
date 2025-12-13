@@ -54,7 +54,18 @@ export type RunTrace = z.infer<typeof RunTraceSchema>;
 export const TestStepSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(['contains', 'not_contains', 'regex', 'json_path', 'semantic', 'custom']),
+  type: z.enum([
+    'contains',
+    'not_contains',
+    'regex',
+    'json_path',
+    'semantic',
+    'custom',
+    // New assertion types for agent eval
+    'json_schema',      // Validate output structure
+    'trace_must_call',  // Tool must be called
+    'trace_order',      // Tool A before Tool B
+  ]),
   target: z.enum(['input', 'output', 'llm_call', 'tool_call', 'trace']),
   assertion: z.object({
     value: z.string().optional(),
@@ -62,6 +73,11 @@ export const TestStepSchema = z.object({
     path: z.string().optional(),
     threshold: z.number().optional(),
     fn: z.string().optional(), // for custom assertions
+    // New fields for agent assertions
+    schema: z.record(z.unknown()).optional(),  // JSON schema for json_schema
+    tool: z.string().optional(),               // Tool name for trace_must_call
+    before: z.string().optional(),             // For trace_order
+    after: z.string().optional(),              // For trace_order
   }),
   severity: z.enum(['error', 'warning', 'info']).default('error'),
 });

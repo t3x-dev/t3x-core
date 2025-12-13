@@ -57,7 +57,8 @@
       "Bash(node /tmp/check_merge.mjs:*)",
       "Bash(node /tmp/test_conflict.mjs:*)",
       "Bash(git mv:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

@@ -6,6 +6,17 @@ import type {
   EvalResponse
 } from './types.js';
 
+// Graybox trace event from agent (different from internal TraceEvent)
+interface GrayboxTraceEvent {
+  type: 'step' | 'tool_call' | 'tool_result' | 'error';
+  name: string;
+  ok: boolean;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  latency_ms?: number;
+  error?: string;
+}
+
 /**
  * Eval Engine - Runs test steps against agent traces
  *
@@ -92,6 +103,15 @@ export class EvalEngine {
 
         case 'custom':
           return await this.assertCustom(baseResult, targetValue, step.assertion.fn!, trace);
+
+        case 'json_schema':
+          return this.assertJsonSchema(baseResult, targetValue, step.assertion.schema!);
+
+        case 'trace_must_call':
+          return this.assertTraceMustCall(baseResult, trace, step.assertion.tool!);
+
+        case 'trace_order':
+          return this.assertTraceOrder(baseResult, trace, step.assertion.before!, step.assertion.after!);
 
         default:
           return {
@@ -295,6 +315,193 @@ export class EvalEngine {
         message: `Custom assertion error: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
+  }
+
+  /**
+   * Assert JSON schema validation
+   */
+  private assertJsonSchema(
+    result: TestResult,
+    value: unknown,
+    schema: Record<string, unknown>
+  ): TestResult {
+    try {
+      const obj = typeof value === 'object' ? value : JSON.parse(String(value));
+      const errors = this.validateJsonSchema(obj, schema);
+
+      if (errors.length === 0) {
+        return {
+          ...result,
+          passed: true,
+          expected: 'match JSON schema',
+          actual: 'valid',
+        };
+      }
+
+      return {
+        ...result,
+        passed: false,
+        expected: 'match JSON schema',
+        actual: errors.join('; '),
+        message: `Schema validation failed: ${errors.join('; ')}`,
+        suggestion: 'Ensure output structure matches the expected schema',
+      };
+    } catch (error) {
+      return {
+        ...result,
+        passed: false,
+        message: `Schema validation error: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Simple JSON schema validator (subset of JSON Schema)
+   * For production, use ajv or zod
+   */
+  private validateJsonSchema(obj: unknown, schema: Record<string, unknown>, path = ''): string[] {
+    const errors: string[] = [];
+
+    if (schema.type) {
+      const actualType = Array.isArray(obj) ? 'array' : typeof obj;
+      if (schema.type !== actualType) {
+        errors.push(`${path || 'root'}: expected ${schema.type}, got ${actualType}`);
+        return errors;
+      }
+    }
+
+    if (schema.const !== undefined && obj !== schema.const) {
+      errors.push(`${path || 'root'}: expected const "${schema.const}", got "${obj}"`);
+    }
+
+    if (schema.required && Array.isArray(schema.required) && typeof obj === 'object' && obj !== null) {
+      for (const key of schema.required as string[]) {
+        if (!(key in obj)) {
+          errors.push(`${path || 'root'}: missing required property "${key}"`);
+        }
+      }
+    }
+
+    if (schema.properties && typeof obj === 'object' && obj !== null) {
+      const props = schema.properties as Record<string, Record<string, unknown>>;
+      for (const [key, propSchema] of Object.entries(props)) {
+        if (key in obj) {
+          const propErrors = this.validateJsonSchema(
+            (obj as Record<string, unknown>)[key],
+            propSchema,
+            path ? `${path}.${key}` : key
+          );
+          errors.push(...propErrors);
+        }
+      }
+    }
+
+    if (schema.minLength && typeof obj === 'string' && obj.length < (schema.minLength as number)) {
+      errors.push(`${path || 'root'}: string length ${obj.length} < minLength ${schema.minLength}`);
+    }
+
+    return errors;
+  }
+
+  /**
+   * Assert that a tool was called in the trace
+   */
+  private assertTraceMustCall(
+    result: TestResult,
+    trace: RunTrace,
+    toolName: string
+  ): TestResult {
+    // Check internal trace events
+    const internalCalls = trace.events.filter(
+      e => e.type === 'tool_call' && e.data.tool_name === toolName
+    );
+
+    // Check graybox trace_events in output (from agent response)
+    const output = trace.output as { trace_events?: GrayboxTraceEvent[] } | null;
+    const grayboxCalls = (output?.trace_events || []).filter(
+      (e: GrayboxTraceEvent) => e.type === 'tool_call' && e.name === toolName
+    );
+
+    const found = internalCalls.length > 0 || grayboxCalls.length > 0;
+
+    return {
+      ...result,
+      passed: found,
+      expected: `tool "${toolName}" to be called`,
+      actual: found ? 'called' : 'not called',
+      message: found ? undefined : `Expected tool "${toolName}" to be called, but it was not`,
+      suggestion: found ? undefined : `Ensure the agent calls the "${toolName}" tool`,
+    };
+  }
+
+  /**
+   * Assert tool call order: 'before' must be called before 'after'
+   */
+  private assertTraceOrder(
+    result: TestResult,
+    trace: RunTrace,
+    before: string,
+    after: string
+  ): TestResult {
+    // Get graybox trace_events from output
+    const output = trace.output as { trace_events?: GrayboxTraceEvent[] } | null;
+    const events = output?.trace_events || [];
+
+    // Find indices of tool calls (or steps)
+    let beforeIndex = -1;
+    let afterIndex = -1;
+
+    events.forEach((e: GrayboxTraceEvent, i: number) => {
+      if ((e.type === 'tool_call' || e.type === 'step') && e.name === before && beforeIndex === -1) {
+        beforeIndex = i;
+      }
+      if ((e.type === 'tool_call' || e.type === 'step') && e.name === after && afterIndex === -1) {
+        afterIndex = i;
+      }
+    });
+
+    // Also check internal events
+    if (beforeIndex === -1 || afterIndex === -1) {
+      trace.events.forEach((e, i) => {
+        if (e.type === 'tool_call' && e.data.tool_name === before && beforeIndex === -1) {
+          beforeIndex = i;
+        }
+        if (e.type === 'tool_call' && e.data.tool_name === after && afterIndex === -1) {
+          afterIndex = i;
+        }
+      });
+    }
+
+    if (beforeIndex === -1) {
+      return {
+        ...result,
+        passed: false,
+        expected: `"${before}" before "${after}"`,
+        actual: `"${before}" not found`,
+        message: `"${before}" was not called`,
+      };
+    }
+
+    if (afterIndex === -1) {
+      return {
+        ...result,
+        passed: false,
+        expected: `"${before}" before "${after}"`,
+        actual: `"${after}" not found`,
+        message: `"${after}" was not called`,
+      };
+    }
+
+    const passed = beforeIndex < afterIndex;
+
+    return {
+      ...result,
+      passed,
+      expected: `"${before}" before "${after}"`,
+      actual: passed ? 'correct order' : `"${after}" came first`,
+      message: passed ? undefined : `Expected "${before}" before "${after}", but order was reversed`,
+      suggestion: passed ? undefined : `Reorder agent steps: ${before} should happen before ${after}`,
+    };
   }
 
   /**
