@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, BarChart3, FileText, Github } from 'lucide-react'
+import { Home, BarChart3, FileText, Github, Rocket } from 'lucide-react'
 
 // T3X Logo - Two obtuse angles facing each other (bowtie shape)
 function LogoIcon() {
@@ -92,6 +92,7 @@ function AgentIcon({ className }: { className?: string }) {
 export function Sidebar() {
   const location = useLocation()
   const isAgentDemo = location.pathname.startsWith('/agent-demo')
+  const isDeploy = location.pathname.startsWith('/deploy') || location.pathname.startsWith('/eval')
   const isInsights = location.pathname.startsWith('/insights')
   const isHome = location.pathname === '/' || location.pathname.startsWith('/project')
 
@@ -122,6 +123,16 @@ export function Sidebar() {
           title="Agent Demo"
         >
           <AgentIcon />
+        </NavLink>
+
+        <NavLink
+          to="/deploy"
+          className={() =>
+            `sidebar__nav-item ${isDeploy ? 'sidebar__nav-item--active' : ''}`
+          }
+          title="Deploy & Eval"
+        >
+          <Rocket size={20} />
         </NavLink>
       </nav>
 
