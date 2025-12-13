@@ -8,7 +8,8 @@
     "t3x-core/sdk/javascript",
     "t3x-cli",
     "t3x-webui",
-    "t3x-runner"
+    "t3x-runner",
+    "agent-demo"
   ],
   "scripts": {
     "build": "npm run build:core && npm run build:cli",
@@ -21,9 +22,11 @@
     "lint": "npm run lint -w @t3x/core && npm run lint -w t3x-cli",
     "runner:dev": "npm run dev -w @t3x/runner",
     "runner:start": "npm run start -w @t3x/runner",
-    "docker:up": "docker-compose -f t3x-runner/docker-compose.yml up",
-    "docker:up:full": "docker-compose -f t3x-runner/docker-compose.yml --profile full up",
-    "docker:down": "docker-compose -f t3x-runner/docker-compose.yml down"
+    "agent-demo:dev": "npm run dev -w agent-demo",
+    "docker:up": "docker-compose up",
+    "docker:up:n8n": "docker-compose --profile n8n up",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build"
   },
   "engines": {
     "node": ">=18.0.0"
