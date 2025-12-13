@@ -105,7 +105,7 @@ async function main(): Promise<void> {
   console.log("T3X Server starting...");
 
   // Resolve storage root using @t3x/core
-  // Priority: CONTEXTFLOW_ROOT env > discover .t3x/ > create at repo root
+  // Priority: T3X_ROOT env > discover .t3x/ > create at repo root
   const storageRoot = resolveStorageRoot();
   const t3xDir = storageRoot.t3xDir;
 

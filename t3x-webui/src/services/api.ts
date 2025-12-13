@@ -1116,6 +1116,232 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
 /**
  * Streaming chat - returns async generator for SSE events
  */
+// ============================================================================
+// Runner API (t3x-runner)
+// ============================================================================
+
+const RUNNER_URL = import.meta.env.VITE_RUNNER_API_URL || 'http://localhost:8080'
+
+// Agent configuration
+export interface AgentConfig {
+  id: string
+  name: string
+  endpoint: string
+  type: 'http' | 'websocket' | 'subprocess'
+  auth?: {
+    type: 'none' | 'bearer' | 'api_key' | 'basic'
+    token?: string
+    header?: string
+  }
+  metadata?: Record<string, unknown>
+}
+
+// Run trace
+export interface RunTrace {
+  run_id: string
+  agent_id: string
+  started_at: string
+  completed_at?: string
+  status: 'running' | 'completed' | 'failed' | 'timeout'
+  input: Record<string, unknown>
+  output?: unknown
+  events: Array<{
+    id: string
+    timestamp: string
+    type: 'llm_call' | 'tool_call' | 'agent_input' | 'agent_output' | 'error'
+    data: {
+      input?: unknown
+      output?: unknown
+      model?: string
+      tool_name?: string
+      latency_ms?: number
+      error?: string
+    }
+  }>
+  metrics?: {
+    total_latency_ms?: number
+    llm_calls: number
+    tool_calls: number
+    tokens_used?: number
+  }
+}
+
+// Test step
+export interface TestStep {
+  id: string
+  name: string
+  type: 'contains' | 'not_contains' | 'regex' | 'json_path' | 'semantic' | 'custom'
+  target: 'input' | 'output' | 'llm_call' | 'tool_call' | 'trace'
+  assertion: {
+    value?: string
+    pattern?: string
+    path?: string
+    threshold?: number
+    fn?: string
+  }
+  severity: 'error' | 'warning' | 'info'
+}
+
+// Test result
+export interface TestResult {
+  step_id: string
+  step_name: string
+  passed: boolean
+  severity: 'error' | 'warning' | 'info'
+  message?: string
+  expected?: unknown
+  actual?: unknown
+  suggestion?: string
+}
+
+// Eval response
+export interface EvalResponse {
+  run_id: string
+  passed: boolean
+  total_steps: number
+  passed_steps: number
+  failed_steps: number
+  results: TestResult[]
+  suggestions?: Array<{
+    type: 'prompt_change' | 'config_change' | 'tool_fix' | 'other'
+    description: string
+    confidence: number
+    diff?: string
+  }>
+  t3x_commit_id?: string
+}
+
+/**
+ * Check runner health
+ */
+export async function checkRunnerHealth(): Promise<{ status: string; service: string }> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/health`, undefined, 5000)
+  return handleResponse(res)
+}
+
+/**
+ * Register an agent with the runner
+ */
+export async function registerAgent(config: AgentConfig): Promise<{ success: boolean; agent_id: string }> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/agents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  return handleResponse(res)
+}
+
+/**
+ * Get agent configuration
+ */
+export async function getAgent(agentId: string): Promise<AgentConfig> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/agents/${encodeURIComponent(agentId)}`)
+  return handleResponse(res)
+}
+
+/**
+ * Run an agent
+ */
+export async function runAgent(
+  agentId: string,
+  input: Record<string, unknown>,
+  config?: { timeout_ms?: number }
+): Promise<{ run_id: string; output: unknown; trace: RunTrace }> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_id: agentId,
+      input,
+      config,
+    }),
+  }, config?.timeout_ms ?? 60000)
+  return handleResponse(res)
+}
+
+/**
+ * Get run trace
+ */
+export async function getRunTrace(runId: string): Promise<RunTrace> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/run/${encodeURIComponent(runId)}`)
+  return handleResponse(res)
+}
+
+/**
+ * List runs
+ */
+export async function listRuns(agentId?: string): Promise<{ runs: RunTrace[] }> {
+  const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''
+  const res = await fetchWithTimeout(`${RUNNER_URL}/runs${query}`)
+  return handleResponse(res)
+}
+
+/**
+ * Run evaluation
+ */
+export async function runEval(
+  runId: string,
+  testSteps: TestStep[],
+  options?: { stop_on_first_failure?: boolean; generate_suggestions?: boolean }
+): Promise<EvalResponse> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/eval`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      run_id: runId,
+      test_steps: testSteps,
+      options,
+    }),
+  })
+  return handleResponse(res)
+}
+
+/**
+ * Run agent with auto-eval (webhook mode)
+ */
+export async function runAgentWithEval(
+  agentId: string,
+  input: Record<string, unknown>,
+  testSteps: TestStep[]
+): Promise<{
+  run_id: string
+  output: unknown
+  trace: RunTrace
+  eval_result: EvalResponse | null
+}> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/webhook/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_id: agentId,
+      input,
+      auto_eval: true,
+      test_steps: testSteps,
+    }),
+  }, 120000) // 2 minute timeout for run + eval
+  return handleResponse(res)
+}
+
+/**
+ * Create t3x commit from eval results
+ */
+export async function createCommitFromEval(
+  runId: string,
+  evalResult: EvalResponse,
+  message?: string
+): Promise<{ success: boolean; commit: Commit }> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      run_id: runId,
+      eval_result: evalResult,
+      message,
+    }),
+  })
+  return handleResponse(res)
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {

@@ -277,7 +277,7 @@ export function shouldUseSqliteStorage(mode: StorageMode): boolean {
 }
 
 function resolveStorageModeValue(config: UserConfig): StorageMode {
-  const envValueRaw = process.env.CONTEXTFLOW_STORAGE_MODE;
+  const envValueRaw = process.env.T3X_STORAGE_MODE;
   const envValue = isValidStorageMode(envValueRaw?.toLowerCase()) ? (envValueRaw?.toLowerCase() as StorageMode) : undefined;
   return (
     cliOverrides.storageMode ??

@@ -8,6 +8,8 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 import AgentDemoChatPage from './pages/AgentDemoChatPage'
 import AgentDemoOptimiserPage from './pages/AgentDemoOptimiserPage'
 import InsightsPage from './pages/InsightsPage'
+import DeployPage from './pages/DeployPage'
+import EvalPage from './pages/EvalPage'
 
 function App() {
   const { messages, addToast, dismissToast } = useToast()
@@ -28,6 +30,8 @@ function App() {
           <Route path="/project/:projectId" element={<ProjectDetailPage />} />
           <Route path="/agent-demo/chat" element={<AgentDemoChatPage />} />
           <Route path="/agent-demo/optimiser" element={<AgentDemoOptimiserPage />} />
+          <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/eval/:runId" element={<EvalPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           {/* Redirect old route */}
           <Route path="/agent-optimiser" element={<Navigate to="/agent-demo/chat" replace />} />

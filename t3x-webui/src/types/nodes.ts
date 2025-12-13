@@ -4,11 +4,43 @@ export type NodeKind = 'conversation' | 'commit' | 'leaf'
 export type CommitStatus = 'pending' | 'committed'
 
 // Leaf node types for output destinations
-export type LeafType = 'twitter' | 'weibo' | 'wechat' | 'article' | 'email' | 'slack'
+export type LeafType = 'twitter' | 'weibo' | 'wechat' | 'article' | 'email' | 'slack' | 'deploy' | 'eval'
+
+// Deploy status for leaf nodes connected to runner
+export type DeployStatus = 'idle' | 'deploying' | 'running' | 'stopped' | 'error'
+
+// Eval status for leaf nodes
+export type EvalStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped'
 
 export interface LeafNodeConfig {
   leafType: LeafType
   // Additional config can be added per leaf type
+}
+
+// Deploy leaf configuration
+export interface DeployLeafConfig extends LeafNodeConfig {
+  leafType: 'deploy'
+  agentId?: string
+  agentName?: string
+  agentEndpoint?: string
+  status: DeployStatus
+  lastRunId?: string
+  lastRunAt?: string
+}
+
+// Eval leaf configuration
+export interface EvalLeafConfig extends LeafNodeConfig {
+  leafType: 'eval'
+  runId?: string
+  testStepsCount?: number
+  passedCount?: number
+  failedCount?: number
+  status: EvalStatus
+  suggestions?: Array<{
+    type: string
+    description: string
+    confidence: number
+  }>
 }
 export type BranchType = 'main' | 'branch'
 
