@@ -57,3 +57,4 @@ coverage.xml
 *.db-journal
 *.db-shm
 *.db-wal
+.contextflow/
