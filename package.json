@@ -23,10 +23,10 @@
     "runner:dev": "npm run dev -w @t3x/runner",
     "runner:start": "npm run start -w @t3x/runner",
     "agent-demo:dev": "npm run dev -w agent-demo",
-    "docker:up": "docker-compose up",
-    "docker:up:n8n": "docker-compose --profile n8n up",
-    "docker:down": "docker-compose down",
-    "docker:build": "docker-compose build"
+    "docker:up": "docker compose up",
+    "docker:up:n8n": "docker compose --profile n8n up",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -28,7 +28,7 @@ export function registerProjectRoutes(router: Router): void {
     }
 
     try {
-      const project = createProject({
+      const project = await createProject({
         name: body.name,
         metadata: body.metadata,
       });
@@ -45,7 +45,7 @@ export function registerProjectRoutes(router: Router): void {
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
 
     try {
-      const projects = listProjects({ limit, offset });
+      const projects = await listProjects({ limit, offset });
       sendJson(res, 200, successResponse({ projects, limit, offset }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -64,7 +64,7 @@ export function registerProjectRoutes(router: Router): void {
     }
 
     try {
-      const project = getProjectWithStats(project_id);
+      const project = await getProjectWithStats(project_id);
       if (!project) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${project_id} not found`));
         return;
@@ -89,7 +89,7 @@ export function registerProjectRoutes(router: Router): void {
     const body = ctx.body as { name?: string; metadata?: Record<string, unknown> } | null;
 
     try {
-      const project = updateProject(project_id, {
+      const project = await updateProject(project_id, {
         name: body?.name,
         metadata: body?.metadata,
       });
@@ -115,7 +115,7 @@ export function registerProjectRoutes(router: Router): void {
     }
 
     try {
-      const deleted = deleteProject(project_id);
+      const deleted = await deleteProject(project_id);
       if (!deleted) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${project_id} not found`));
         return;

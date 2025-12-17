@@ -1,45 +1,70 @@
-# T3X Full Stack
+# T3X Full Stack (root compose =唯一入口)
 #
-# Services:
-# - t3x-core:    Python FastAPI backend (commits, conversations, lineage)
-# - t3x-webui:   React frontend (canvas visualization)
-# - t3x-runner:  Node.js eval engine (grey-box testing)
-# - agent-demo:  Demo agent for testing (summarize + email)
+# 默认只启动：
+# - t3x-core   (8000)  Core API (Node server in t3x-cli)
+# - t3x-webui  (3000)  WebUI (Vite build -> static serve)
+#
+# 可选组件通过 profiles 启动（避免 Phase A 一起拉起太多）：
+# - t3x-runner   profile: runner
+# - agent-demo   profile: agent-demo
+# - n8n          profile: n8n
 #
 # Usage:
-#   docker-compose up                    # Start all services
-#   docker-compose up -d                 # Start in background
-#   docker-compose --profile n8n up      # Include n8n workflow engine
-#   docker-compose down                  # Stop all services
-#
-# Ports:
-#   3000 - WebUI
-#   8000 - Core API
-#   8080 - Runner API
-#   9000 - Demo Agent
-
-version: '3.8'
+#   docker compose up -d --build
+#   docker compose --profile runner up -d --build
+#   docker compose --profile agent-demo up -d --build
+#   docker compose --profile n8n up -d
+#   docker compose down
 
 services:
   # ============================================
-  # T3X Core API (Python FastAPI)
+  # PostgreSQL (optional storage backend for Core)
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: t3x-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-t3x}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-t3x_dev_password}
+      - POSTGRES_DB=${POSTGRES_DB:-t3x}
+    volumes:
+      - t3x-pgdata:/var/lib/postgresql/data
+      # optional init scripts:
+      # - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-t3x} -d ${POSTGRES_DB:-t3x}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - t3x-network
+
+  # ============================================
+  # T3X Core API (Node server in t3x-cli)
   # ============================================
   t3x-core:
     build:
-      context: ./t3x-core
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: t3x-cli/Dockerfile
     container_name: t3x-core
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - t3x-data:/app/.t3x
     environment:
-      - CF_HOST=0.0.0.0
-      - CF_PORT=8000
-      - LOG_LEVEL=info
+      - HOST=0.0.0.0
+      - PORT=8000
+      - T3X_ROOT=/app
+      - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -53,12 +78,12 @@ services:
     build:
       context: ./t3x-webui
       dockerfile: Dockerfile
+      args:
+        VITE_CORE_API_URL: ${VITE_CORE_API_URL:-http://localhost:8000}
+        VITE_RUNNER_API_URL: ${VITE_RUNNER_API_URL:-http://localhost:8080}
     container_name: t3x-webui
     ports:
       - "3000:3000"
-    environment:
-      - VITE_CORE_API_URL=http://localhost:8000
-      - VITE_RUNNER_API_URL=http://localhost:8080
     depends_on:
       t3x-core:
         condition: service_healthy
@@ -84,6 +109,8 @@ services:
       t3x-core:
         condition: service_healthy
     restart: unless-stopped
+    profiles:
+      - runner
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
       interval: 30s
@@ -107,6 +134,8 @@ services:
     volumes:
       - agent-outbox:/app/outbox
     restart: unless-stopped
+    profiles:
+      - agent-demo
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:9000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
       interval: 30s
@@ -126,6 +155,8 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
     environment:
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
@@ -143,6 +174,8 @@ networks:
 
 volumes:
   t3x-data:
+    driver: local
+  t3x-pgdata:
     driver: local
   agent-outbox:
     driver: local

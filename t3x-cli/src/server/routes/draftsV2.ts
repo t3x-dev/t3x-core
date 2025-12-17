@@ -43,13 +43,13 @@ export function registerDraftsV2Routes(router: Router): void {
     }
 
     // Verify project and conversation exist
-    const project = getProject(body.project_id);
+    const project = await getProject(body.project_id);
     if (!project) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
       return;
     }
 
-    const conversation = getConversation(body.conversation_id);
+    const conversation = await getConversation(body.conversation_id);
     if (!conversation) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Conversation ${body.conversation_id} not found`));
       return;
@@ -64,7 +64,7 @@ export function registerDraftsV2Routes(router: Router): void {
     }
 
     try {
-      const draft = createDraftV2({
+      const draft = await createDraftV2({
         project_id: body.project_id,
         conversation_id: body.conversation_id,
         base_commit_hash: body.base_commit_hash,
@@ -98,7 +98,7 @@ export function registerDraftsV2Routes(router: Router): void {
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
 
     try {
-      const drafts = listDraftsV2({
+      const drafts = await listDraftsV2({
         project_id,
         status: status ?? undefined,
         limit,
@@ -122,7 +122,7 @@ export function registerDraftsV2Routes(router: Router): void {
     }
 
     try {
-      const draft = getDraftV2(draft_id);
+      const draft = await getDraftV2(draft_id);
       if (!draft) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Draft ${draft_id} not found`));
         return;
@@ -156,7 +156,7 @@ export function registerDraftsV2Routes(router: Router): void {
     }
 
     try {
-      const draft = updateDraftV2Status(
+      const draft = await updateDraftV2Status(
         draft_id,
         body.status as "ephemeral" | "adopted" | "superseded"
       );
@@ -182,7 +182,7 @@ export function registerDraftsV2Routes(router: Router): void {
     }
 
     try {
-      const deleted = deleteDraftV2(draft_id);
+      const deleted = await deleteDraftV2(draft_id);
       if (!deleted) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Draft ${draft_id} not found`));
         return;

@@ -36,14 +36,14 @@ export function registerConversationRoutes(router: Router): void {
     }
 
     // Verify project exists
-    const project = getProject(body.project_id);
+    const project = await getProject(body.project_id);
     if (!project) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
       return;
     }
 
     try {
-      const conversation = createConversation({
+      const conversation = await createConversation({
         project_id: body.project_id,
         title: body.title,
         parent_commit_hash: body.parent_commit_hash,
@@ -71,7 +71,7 @@ export function registerConversationRoutes(router: Router): void {
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
 
     try {
-      const conversations = listConversations({ project_id, limit, offset });
+      const conversations = await listConversations({ project_id, limit, offset });
       sendJson(res, 200, successResponse({ conversations, project_id, limit, offset }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -90,13 +90,13 @@ export function registerConversationRoutes(router: Router): void {
     }
 
     try {
-      const conversation = getConversation(conversation_id);
+      const conversation = await getConversation(conversation_id);
       if (!conversation) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Conversation ${conversation_id} not found`));
         return;
       }
 
-      const turns_count = getConversationTurnCount(conversation_id);
+      const turns_count = await getConversationTurnCount(conversation_id);
       sendJson(res, 200, successResponse({ ...conversation, turns_count }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -117,7 +117,7 @@ export function registerConversationRoutes(router: Router): void {
     const body = ctx.body as { title?: string; position_x?: number; position_y?: number; metadata?: Record<string, unknown> } | null;
 
     try {
-      const conversation = updateConversation(conversation_id, {
+      const conversation = await updateConversation(conversation_id, {
         title: body?.title,
         position_x: body?.position_x,
         position_y: body?.position_y,
@@ -145,7 +145,7 @@ export function registerConversationRoutes(router: Router): void {
     }
 
     try {
-      const deleted = deleteConversation(conversation_id);
+      const deleted = await deleteConversation(conversation_id);
       if (!deleted) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Conversation ${conversation_id} not found`));
         return;

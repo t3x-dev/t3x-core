@@ -47,8 +47,8 @@ type ExtractResult =
  * Extract facets from a commit's turn
  * Converts ring3 segments to MergeFacet format
  */
-function extractFacetsFromCommit(commitHash: string): ExtractResult {
-  const commit = getCommitV2(commitHash);
+async function extractFacetsFromCommit(commitHash: string): Promise<ExtractResult> {
+  const commit = await getCommitV2(commitHash);
   if (!commit) {
     return { ok: false, error: "commit_not_found", message: `Commit ${commitHash} not found` };
   }
@@ -66,7 +66,7 @@ function extractFacetsFromCommit(commitHash: string): ExtractResult {
   }
 
   const turnHash = turnWindow.end_turn_hash;
-  const turn = getTurnV2(turnHash);
+  const turn = await getTurnV2(turnHash);
   if (!turn) {
     return { ok: false, error: "turn_not_found", message: `Turn ${turnHash} not found` };
   }
@@ -140,9 +140,9 @@ export function registerMergeRoutes(router: Router, providers: ProviderConfig): 
 
     // Mode 1: commit_hash mode (new, frontend-friendly)
     if (body.base_commit_hash && body.source_commit_hash && body.target_commit_hash) {
-      const baseResult = extractFacetsFromCommit(body.base_commit_hash);
-      const sourceResult = extractFacetsFromCommit(body.source_commit_hash);
-      const targetResult = extractFacetsFromCommit(body.target_commit_hash);
+      const baseResult = await extractFacetsFromCommit(body.base_commit_hash);
+      const sourceResult = await extractFacetsFromCommit(body.source_commit_hash);
+      const targetResult = await extractFacetsFromCommit(body.target_commit_hash);
 
       // Handle errors for each commit
       for (const [name, result] of [

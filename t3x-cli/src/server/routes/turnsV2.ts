@@ -51,7 +51,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
     }
 
     // Verify conversation exists
-    const conversation = getConversation(body.conversation_id);
+    const conversation = await getConversation(body.conversation_id);
     if (!conversation) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Conversation ${body.conversation_id} not found`));
       return;
@@ -83,7 +83,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
         }
       }
 
-      const turn = createTurnV2({
+      const turn = await createTurnV2({
         project_id: body.project_id,
         conversation_id: body.conversation_id,
         role: body.role as "user" | "assistant" | "system" | "tool",
@@ -113,7 +113,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
             embedding: embeddings[idx],
           }));
 
-          createSegmentEmbeddingsBatch({
+          await createSegmentEmbeddingsBatch({
             turn_hash: turn.turn_hash,
             embedding_model: embeddingProvider.id,
             embedding_dim: embeddingProvider.dim,
@@ -154,7 +154,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
     const order = orderParam === "desc" ? "desc" : "asc";
 
     try {
-      const turns = listTurnsV2({ conversation_id, limit, offset, order });
+      const turns = await listTurnsV2({ conversation_id, limit, offset, order });
       sendJson(res, 200, successResponse({ turns, conversation_id, limit, offset, order }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -173,7 +173,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
     }
 
     try {
-      const turn = getTurnV2(turn_hash);
+      const turn = await getTurnV2(turn_hash);
       if (!turn) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Turn ${turn_hash} not found`));
         return;
@@ -198,7 +198,7 @@ export function registerTurnsV2Routes(router: Router, providers: ProviderConfig)
     const limit = parseInt(ctx.query.get("limit") ?? "50", 10);
 
     try {
-      const chain = getTurnChain(turn_hash, limit);
+      const chain = await getTurnChain(turn_hash, limit);
       sendJson(res, 200, successResponse({ chain, end_turn_hash: turn_hash }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

@@ -7,14 +7,12 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer, Server } from "../src/server/index";
-import { openDB } from "../src/core/db";
+import { openDB, closeDB } from "@t3x/core";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-// Test configuration
-const TEST_PORT = 18765;
-const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+let baseUrl: string;
 
 let server: Server;
 let testDir: string;
@@ -26,7 +24,7 @@ async function apiRequest(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
+  const res = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -45,11 +43,11 @@ describe("API Contract Tests", () => {
     fs.mkdirSync(t3xDir, { recursive: true });
 
     // Initialize database
-    openDB(testDir);
+    await openDB(testDir);
 
     // Create and start server
     server = createServer({
-      port: TEST_PORT,
+      port: 0,
       host: "127.0.0.1",
       providers: {
         embeddingProvider: "mock",
@@ -60,6 +58,11 @@ describe("API Contract Tests", () => {
     });
 
     await server.start();
+    const addr = server.address();
+    if (!addr) {
+      throw new Error("Server failed to start");
+    }
+    baseUrl = `http://${addr.host}:${addr.port}`;
 
     // Wait for server to be ready
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -67,6 +70,7 @@ describe("API Contract Tests", () => {
 
   afterAll(async () => {
     await server.stop();
+    await closeDB();
     // Clean up temp directory
     fs.rmSync(testDir, { recursive: true, force: true });
   });

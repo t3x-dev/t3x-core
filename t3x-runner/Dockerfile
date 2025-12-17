@@ -1,40 +1,55 @@
 # T3X Runner - Grey-box Agent Evaluation
 #
-# Build:
-#   docker build -t t3x-runner .
-#
-# Run:
-#   docker run -p 8080:8080 t3x-runner
+# Build context: repo root (.)
+#   docker build -f t3x-runner/Dockerfile -t t3x-runner .
 
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copy workspace files
-COPY package*.json ./
-COPY tsconfig.json ./
+# Native deps for better-sqlite3 (workspace dep via @t3x/core)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy t3x-core (dependency)
-COPY ../t3x-core/package*.json ./t3x-core/
-COPY ../t3x-core/src ./t3x-core/src/
-COPY ../t3x-core/tsconfig.json ./t3x-core/
+# Copy manifests first for better layer caching
+COPY package.json package-lock.json ./
+COPY t3x-core/package.json t3x-core/package.json
+COPY t3x-core/sdk/javascript/package.json t3x-core/sdk/javascript/package.json
+COPY t3x-cli/package.json t3x-cli/package.json
+COPY t3x-runner/package.json t3x-runner/package.json
+COPY t3x-webui/package.json t3x-webui/package.json
+COPY agent-demo/package.json agent-demo/package.json
 
-# Copy runner source
-COPY src ./src/
+# Install only required workspaces (Core + Runner)
+RUN npm ci --include-workspace-root -w @t3x/core -w @t3x/runner --no-audit --no-fund
 
-# Install dependencies and build
-RUN npm install
-RUN npm run build
+# Copy sources needed to build
+COPY t3x-core/src t3x-core/src
+COPY t3x-core/tsconfig.json t3x-core/tsconfig.json
+COPY t3x-runner/src t3x-runner/src
+COPY t3x-runner/schemas t3x-runner/schemas
+COPY t3x-runner/scripts t3x-runner/scripts
+COPY t3x-runner/tsconfig.json t3x-runner/tsconfig.json
+
+# Build
+RUN npm run build -w @t3x/core && npm run build -w @t3x/runner
 
 # Production image
 FROM node:20-slim AS runner
 
 WORKDIR /app
 
-# Copy built files
-COPY --from=builder /app/dist ./dist
+# Copy runtime deps + built output
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+COPY --from=builder /app/t3x-core/dist ./t3x-core/dist
+COPY --from=builder /app/t3x-core/package.json ./t3x-core/package.json
+COPY --from=builder /app/t3x-runner/dist ./t3x-runner/dist
+COPY --from=builder /app/t3x-runner/package.json ./t3x-runner/package.json
+# npm workspaces may install some deps under workspace-level node_modules (e.g. zod)
+COPY --from=builder /app/t3x-runner/node_modules ./t3x-runner/node_modules
 
 # Environment
 ENV NODE_ENV=production
@@ -46,4 +61,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
 
 EXPOSE 8080
 
+WORKDIR /app/t3x-runner
 CMD ["node", "dist/server.js"]

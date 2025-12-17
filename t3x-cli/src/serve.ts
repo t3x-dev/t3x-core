@@ -53,7 +53,7 @@ require("global-agent/bootstrap");
 
 import { createServer } from "./server/index";
 import { loadAppPreferences, checkLegacyConfig } from "./core/config";
-import { resolveStorageRoot, detectLegacyStorageDirs, openDB } from "@t3x/core";
+import { resolveStorageRoot, detectLegacyStorageDirs, openDB, getDb } from "@t3x/core";
 import { ProviderConfig } from "./server/types";
 
 // Parse command line arguments
@@ -123,8 +123,13 @@ async function main(): Promise<void> {
 
   // Initialize database
   try {
-    const dbPath = openDB(storageRoot.projectRoot);
-    console.log(`  Database: ${dbPath}`);
+    const dbDisplay = await openDB(storageRoot.projectRoot);
+    const dialect = getDb().dialect;
+    console.log(`  Database: ${dbDisplay}`);
+    console.log(`  Dialect: ${dialect}`);
+    if (dialect === "postgres") {
+      console.log("  Connected to Postgres");
+    }
   } catch (error) {
     console.error(`Error: Failed to open database: ${(error as Error).message}`);
     process.exit(1);

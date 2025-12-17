@@ -10,7 +10,7 @@ import type {
 } from './types';
 import { generateDraftId, isoNow, computeTextHash } from './utils';
 
-export function createDraftV2(input: CreateDraftV2Input): DraftV2Record {
+export async function createDraftV2(input: CreateDraftV2Input): Promise<DraftV2Record> {
   const db = getDb();
   const draft_id = generateDraftId();
   const created_at = isoNow();
@@ -21,7 +21,7 @@ export function createDraftV2(input: CreateDraftV2Input): DraftV2Record {
   const llm_config_json = JSON.stringify(input.llm_config);
 
   // ephemeral drafts have NULL completed_at until adopted/superseded
-  db.prepare(
+  await db.prepare(
     `INSERT INTO drafts_v2
      (draft_id, project_id, conversation_id, base_commit_hash, turn_anchor_hash,
       bridge_id, bridge_payload_json, must_have_json, mustnt_have_json,
@@ -60,21 +60,21 @@ export function createDraftV2(input: CreateDraftV2Input): DraftV2Record {
   };
 }
 
-export function getDraftV2(draft_id: string): DraftV2Record | null {
+export async function getDraftV2(draft_id: string): Promise<DraftV2Record | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT * FROM drafts_v2 WHERE draft_id = ?`)
     .get(draft_id) as DraftV2Record | undefined;
   return row ?? null;
 }
 
-export function listDraftsV2(options: ListDraftsV2Options): DraftV2Record[] {
+export async function listDraftsV2(options: ListDraftsV2Options): Promise<DraftV2Record[]> {
   const db = getDb();
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
   if (options.status) {
-    return db
+    return await db
       .prepare(
         `SELECT * FROM drafts_v2
          WHERE project_id = ? AND status = ?
@@ -84,7 +84,7 @@ export function listDraftsV2(options: ListDraftsV2Options): DraftV2Record[] {
       .all(options.project_id, options.status, limit, offset) as DraftV2Record[];
   }
 
-  return db
+  return await db
     .prepare(
       `SELECT * FROM drafts_v2
        WHERE project_id = ?
@@ -94,42 +94,42 @@ export function listDraftsV2(options: ListDraftsV2Options): DraftV2Record[] {
     .all(options.project_id, limit, offset) as DraftV2Record[];
 }
 
-export function updateDraftV2Status(
+export async function updateDraftV2Status(
   draft_id: string,
   status: 'ephemeral' | 'adopted' | 'superseded'
-): DraftV2Record | null {
+): Promise<DraftV2Record | null> {
   const db = getDb();
-  const existing = getDraftV2(draft_id);
+  const existing = await getDraftV2(draft_id);
   if (!existing) return null;
 
   // Set completed_at when transitioning to adopted/superseded
   // Clear it when reverting to ephemeral
   const completed_at = status !== 'ephemeral' ? isoNow() : null;
 
-  db.prepare(
+  await db.prepare(
     `UPDATE drafts_v2 SET status = ?, completed_at = ? WHERE draft_id = ?`
   ).run(status, completed_at, draft_id);
 
-  return getDraftV2(draft_id);
+  return await getDraftV2(draft_id);
 }
 
-export function adoptDraft(draft_id: string): DraftV2Record | null {
-  return updateDraftV2Status(draft_id, 'adopted');
+export async function adoptDraft(draft_id: string): Promise<DraftV2Record | null> {
+  return await updateDraftV2Status(draft_id, 'adopted');
 }
 
-export function supersedeDraft(draft_id: string): DraftV2Record | null {
-  return updateDraftV2Status(draft_id, 'superseded');
+export async function supersedeDraft(draft_id: string): Promise<DraftV2Record | null> {
+  return await updateDraftV2Status(draft_id, 'superseded');
 }
 
-export function getDraftTextHash(draft_id: string): string | null {
-  const draft = getDraftV2(draft_id);
+export async function getDraftTextHash(draft_id: string): Promise<string | null> {
+  const draft = await getDraftV2(draft_id);
   if (!draft) return null;
   return computeTextHash(draft.text);
 }
 
-export function deleteDraftV2(draft_id: string): boolean {
+export async function deleteDraftV2(draft_id: string): Promise<boolean> {
   const db = getDb();
-  const result = db
+  const result = await db
     .prepare(`DELETE FROM drafts_v2 WHERE draft_id = ?`)
     .run(draft_id);
   return result.changes > 0;

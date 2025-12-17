@@ -121,9 +121,9 @@ function generateDraftId(): string {
  * Extract must_have keywords from conversation turns
  * Filters out stop words and prioritizes domain-specific terms
  */
-function extractMustHave(projectId: string, conversationId: string): string[] {
+async function extractMustHave(projectId: string, conversationId: string): Promise<string[]> {
   const db = getDb();
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT rings_json FROM turns_v2
     WHERE project_id = ? AND conversation_id = ?
     ORDER BY created_at ASC
@@ -200,9 +200,9 @@ function extractMustHave(projectId: string, conversationId: string): string[] {
  * Extract mustnt_have keywords from conversation turns
  * These are items the user explicitly wants to avoid
  */
-function extractMustntHave(projectId: string, conversationId: string): string[] {
+async function extractMustntHave(projectId: string, conversationId: string): Promise<string[]> {
   const db = getDb();
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT rings_json FROM turns_v2
     WHERE project_id = ? AND conversation_id = ?
     ORDER BY created_at ASC
@@ -423,14 +423,14 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
 
     // Verify project exists
     const db = getDb();
-    const project = db.prepare("SELECT 1 FROM projects WHERE project_id = ?").get(body.project_id);
+    const project = await db.prepare("SELECT 1 FROM projects WHERE project_id = ?").get(body.project_id);
     if (!project) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
       return;
     }
 
     // Verify conversation exists
-    const conversation = db.prepare(
+    const conversation = await db.prepare(
       "SELECT 1 FROM conversations WHERE conversation_id = ? AND project_id = ?"
     ).get(body.conversation_id, body.project_id);
     if (!conversation) {
@@ -446,15 +446,15 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
 
     try {
       // Get conversation turns
-      const turns = db.prepare(`
+      const turns = await db.prepare(`
         SELECT role, content FROM turns_v2
         WHERE project_id = ? AND conversation_id = ?
         ORDER BY created_at ASC
       `).all(body.project_id, body.conversation_id) as Array<{ role: string; content: string }>;
 
       // Extract constraints
-      const mustHave = extractMustHave(body.project_id, body.conversation_id);
-      const mustntHave = extractMustntHave(body.project_id, body.conversation_id);
+      const mustHave = await extractMustHave(body.project_id, body.conversation_id);
+      const mustntHave = await extractMustntHave(body.project_id, body.conversation_id);
 
       // LLM config
       const llmConfig: LLMConfig = {
@@ -499,7 +499,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       const validationStatus = validation?.passed ? "passed" : "failed" as const;
 
       // Save to database
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO drafts_v2 (
           draft_id, project_id, conversation_id, base_commit_hash, turn_anchor_hash,
           bridge_id, bridge_payload_json, must_have_json, mustnt_have_json,
@@ -564,7 +564,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
 
     try {
       const db = getDb();
-      const row = db.prepare(`
+      const row = await db.prepare(`
         SELECT draft_id, project_id, conversation_id, base_commit_hash, turn_anchor_hash,
                bridge_id, bridge_payload_json, must_have_json, mustnt_have_json,
                llm_config_json, text, status, created_at, completed_at
@@ -650,7 +650,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
 
     try {
       const db = getDb();
-      const row = db.prepare(`
+      const row = await db.prepare(`
         SELECT draft_id, project_id, conversation_id, base_commit_hash, turn_anchor_hash,
                bridge_id, bridge_payload_json, must_have_json, mustnt_have_json,
                llm_config_json, text, status, created_at
@@ -695,7 +695,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       }
 
       // Get conversation context
-      const turns = db.prepare(`
+      const turns = await db.prepare(`
         SELECT role, content FROM turns_v2
         WHERE project_id = ? AND conversation_id = ?
         ORDER BY created_at ASC
@@ -725,7 +725,7 @@ export function registerAgentDraftsRoutes(router: Router, providers: ProviderCon
       const lifecycleStatus = row.status as "ephemeral" | "adopted" | "superseded";
 
       // Update database (lifecycle status unchanged, only update text and must_have)
-      db.prepare(`
+      await db.prepare(`
         UPDATE drafts_v2
         SET text = ?, must_have_json = ?, completed_at = ?, bridge_payload_json = ?
         WHERE draft_id = ?

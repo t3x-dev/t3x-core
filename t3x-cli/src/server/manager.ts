@@ -8,7 +8,7 @@
 import { createServer, Server } from "./index";
 import { ServerConfig, ProviderConfig } from "./types";
 import { loadAppPreferences } from "../core/config";
-import { resolveStorageRoot } from "@t3x/core";
+import { resolveStorageRoot, openDB } from "@t3x/core";
 
 /**
  * Server manager state
@@ -43,6 +43,7 @@ export async function startEmbeddedServer(options?: {
 
   // Resolve storage root using @t3x/core
   const storageRoot = resolveStorageRoot();
+  await openDB(storageRoot.projectRoot);
 
   // Load user preferences with proper provider configuration
   const preferences = await loadAppPreferences();

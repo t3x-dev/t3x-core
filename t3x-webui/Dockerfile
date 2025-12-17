@@ -11,6 +11,12 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
+# Vite envs are build-time injected into static assets
+ARG VITE_CORE_API_URL=http://localhost:8000
+ARG VITE_RUNNER_API_URL=http://localhost:8080
+ENV VITE_CORE_API_URL=$VITE_CORE_API_URL
+ENV VITE_RUNNER_API_URL=$VITE_RUNNER_API_URL
+
 # Copy package files
 COPY package*.json ./
 

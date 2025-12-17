@@ -16,7 +16,7 @@ export interface CreateMergeResultInput {
   conflicts: unknown[];
 }
 
-export function createMergeResult(input: CreateMergeResultInput): MergeResultRecord {
+export async function createMergeResult(input: CreateMergeResultInput): Promise<MergeResultRecord> {
   const db = getDb();
   const merge_result_id = generateMergeResultId();
   const created_at = isoNow();
@@ -24,7 +24,7 @@ export function createMergeResult(input: CreateMergeResultInput): MergeResultRec
   const auto_merged_json = JSON.stringify(input.auto_merged);
   const conflicts_json = JSON.stringify(input.conflicts);
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO merge_results
      (merge_result_id, project_id, base_commit_hash, source_commit_hash, target_commit_hash,
       status, auto_merged_json, conflicts_json, created_at)
@@ -54,21 +54,21 @@ export function createMergeResult(input: CreateMergeResultInput): MergeResultRec
   };
 }
 
-export function getMergeResult(merge_result_id: string): MergeResultRecord | null {
+export async function getMergeResult(merge_result_id: string): Promise<MergeResultRecord | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT * FROM merge_results WHERE merge_result_id = ?`)
     .get(merge_result_id) as MergeResultRecord | undefined;
   return row ?? null;
 }
 
-export function findMergeResult(
+export async function findMergeResult(
   base_commit_hash: string,
   source_commit_hash: string,
   target_commit_hash: string
-): MergeResultRecord | null {
+): Promise<MergeResultRecord | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(
       `SELECT * FROM merge_results
        WHERE base_commit_hash = ? AND source_commit_hash = ? AND target_commit_hash = ?
@@ -79,13 +79,13 @@ export function findMergeResult(
   return row ?? null;
 }
 
-export function listMergeResults(
+export async function listMergeResults(
   project_id: string,
   limit = 100,
   offset = 0
-): MergeResultRecord[] {
+): Promise<MergeResultRecord[]> {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       `SELECT * FROM merge_results
        WHERE project_id = ?
@@ -95,9 +95,9 @@ export function listMergeResults(
     .all(project_id, limit, offset) as MergeResultRecord[];
 }
 
-export function deleteMergeResult(merge_result_id: string): boolean {
+export async function deleteMergeResult(merge_result_id: string): Promise<boolean> {
   const db = getDb();
-  const result = db
+  const result = await db
     .prepare(`DELETE FROM merge_results WHERE merge_result_id = ?`)
     .run(merge_result_id);
   return result.changes > 0;

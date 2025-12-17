@@ -41,21 +41,41 @@ export function generateSegmentId(turnHash: string, segmentIndex: number): strin
   return `${turnHash}:s-${segmentIndex}`;
 }
 
+function upsertSegmentEmbeddingSql(dialect: 'sqlite' | 'postgres'): string {
+  if (dialect === 'postgres') {
+    return `
+      INSERT INTO segment_embeddings
+        (segment_id, turn_hash, segment_index, segment_text, embedding_model, embedding_dim, embedding, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (segment_id) DO UPDATE SET
+        turn_hash = EXCLUDED.turn_hash,
+        segment_index = EXCLUDED.segment_index,
+        segment_text = EXCLUDED.segment_text,
+        embedding_model = EXCLUDED.embedding_model,
+        embedding_dim = EXCLUDED.embedding_dim,
+        embedding = EXCLUDED.embedding,
+        created_at = EXCLUDED.created_at
+    `;
+  }
+
+  return `
+    INSERT OR REPLACE INTO segment_embeddings
+      (segment_id, turn_hash, segment_index, segment_text, embedding_model, embedding_dim, embedding, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+}
+
 /**
  * Create a single segment embedding
  * Uses INSERT OR REPLACE to handle re-embedding scenarios (e.g., model upgrade)
  */
-export function createSegmentEmbedding(input: CreateSegmentEmbeddingInput): SegmentEmbeddingRecord {
+export async function createSegmentEmbedding(input: CreateSegmentEmbeddingInput): Promise<SegmentEmbeddingRecord> {
   const db = getDb();
   const created_at = isoNow();
   const segment_id = generateSegmentId(input.turn_hash, input.segment_index);
   const embeddingBlob = float32ArrayToBuffer(input.embedding);
 
-  db.prepare(
-    `INSERT OR REPLACE INTO segment_embeddings
-     (segment_id, turn_hash, segment_index, segment_text, embedding_model, embedding_dim, embedding, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  await db.prepare(upsertSegmentEmbeddingSql(db.dialect)).run(
     segment_id,
     input.turn_hash,
     input.segment_index,
@@ -82,24 +102,19 @@ export function createSegmentEmbedding(input: CreateSegmentEmbeddingInput): Segm
  * Create multiple segment embeddings in a batch (within transaction)
  * Uses INSERT OR REPLACE to handle re-embedding scenarios (e.g., model upgrade)
  */
-export function createSegmentEmbeddingsBatch(input: CreateSegmentEmbeddingsBatchInput): SegmentEmbeddingRecord[] {
+export async function createSegmentEmbeddingsBatch(input: CreateSegmentEmbeddingsBatchInput): Promise<SegmentEmbeddingRecord[]> {
   const db = getDb();
   const created_at = isoNow();
 
-  const stmt = db.prepare(
-    `INSERT OR REPLACE INTO segment_embeddings
-     (segment_id, turn_hash, segment_index, segment_text, embedding_model, embedding_dim, embedding, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-
   const results: SegmentEmbeddingRecord[] = [];
 
-  const insertMany = db.transaction(() => {
+  await db.transaction(async (tx) => {
+    const stmt = tx.prepare(upsertSegmentEmbeddingSql(tx.dialect));
     for (const seg of input.segments) {
       const segment_id = generateSegmentId(input.turn_hash, seg.index);
       const embeddingBlob = float32ArrayToBuffer(seg.embedding);
 
-      stmt.run(
+      await stmt.run(
         segment_id,
         input.turn_hash,
         seg.index,
@@ -123,16 +138,15 @@ export function createSegmentEmbeddingsBatch(input: CreateSegmentEmbeddingsBatch
     }
   });
 
-  insertMany();
   return results;
 }
 
 /**
  * Get a single segment embedding by ID
  */
-export function getSegmentEmbedding(segment_id: string): SegmentEmbeddingRecord | null {
+export async function getSegmentEmbedding(segment_id: string): Promise<SegmentEmbeddingRecord | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT * FROM segment_embeddings WHERE segment_id = ?`)
     .get(segment_id) as SegmentEmbeddingRecord | undefined;
   return row ?? null;
@@ -141,9 +155,9 @@ export function getSegmentEmbedding(segment_id: string): SegmentEmbeddingRecord 
 /**
  * Get all segment embeddings for a turn
  */
-export function getSegmentEmbeddingsByTurn(turn_hash: string): SegmentEmbeddingRecord[] {
+export async function getSegmentEmbeddingsByTurn(turn_hash: string): Promise<SegmentEmbeddingRecord[]> {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       `SELECT * FROM segment_embeddings
        WHERE turn_hash = ?
@@ -155,14 +169,14 @@ export function getSegmentEmbeddingsByTurn(turn_hash: string): SegmentEmbeddingR
 /**
  * Get segment embeddings for multiple turns (batch query)
  */
-export function getSegmentEmbeddingsByTurns(turn_hashes: string[]): Map<string, SegmentEmbeddingRecord[]> {
+export async function getSegmentEmbeddingsByTurns(turn_hashes: string[]): Promise<Map<string, SegmentEmbeddingRecord[]>> {
   if (turn_hashes.length === 0) {
     return new Map();
   }
 
   const db = getDb();
   const placeholders = turn_hashes.map(() => '?').join(',');
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT * FROM segment_embeddings
        WHERE turn_hash IN (${placeholders})
@@ -184,9 +198,9 @@ export function getSegmentEmbeddingsByTurns(turn_hashes: string[]): Map<string, 
 /**
  * Check if embeddings exist for a turn
  */
-export function hasEmbeddingsForTurn(turn_hash: string): boolean {
+export async function hasEmbeddingsForTurn(turn_hash: string): Promise<boolean> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT 1 FROM segment_embeddings WHERE turn_hash = ? LIMIT 1`)
     .get(turn_hash);
   return row !== undefined;
@@ -195,9 +209,9 @@ export function hasEmbeddingsForTurn(turn_hash: string): boolean {
 /**
  * Delete all embeddings for a turn
  */
-export function deleteSegmentEmbeddingsByTurn(turn_hash: string): number {
+export async function deleteSegmentEmbeddingsByTurn(turn_hash: string): Promise<number> {
   const db = getDb();
-  const result = db
+  const result = await db
     .prepare(`DELETE FROM segment_embeddings WHERE turn_hash = ?`)
     .run(turn_hash);
   return result.changes;
@@ -206,10 +220,10 @@ export function deleteSegmentEmbeddingsByTurn(turn_hash: string): number {
 /**
  * Get embeddings count for a turn
  */
-export function getEmbeddingsCountForTurn(turn_hash: string): number {
+export async function getEmbeddingsCountForTurn(turn_hash: string): Promise<number> {
   const db = getDb();
-  const row = db
-    .prepare(`SELECT COUNT(*) as count FROM segment_embeddings WHERE turn_hash = ?`)
+  const row = await db
+    .prepare(`SELECT CAST(COUNT(*) AS INTEGER) as count FROM segment_embeddings WHERE turn_hash = ?`)
     .get(turn_hash) as { count: number };
   return row.count;
 }
@@ -217,9 +231,9 @@ export function getEmbeddingsCountForTurn(turn_hash: string): number {
 /**
  * Get all embeddings with a specific model (for migration/cleanup)
  */
-export function getEmbeddingsByModel(model: string, limit = 1000): SegmentEmbeddingRecord[] {
+export async function getEmbeddingsByModel(model: string, limit = 1000): Promise<SegmentEmbeddingRecord[]> {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       `SELECT * FROM segment_embeddings
        WHERE embedding_model = ?
