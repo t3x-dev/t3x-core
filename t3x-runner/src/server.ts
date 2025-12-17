@@ -278,8 +278,12 @@ app.post('/commit', async (req, res) => {
       }),
     });
 
-    const commit = await response.json();
-    logger.info({ run_id, commit_id: commit.id }, 'T3X commit created');
+    const commit: unknown = await response.json();
+    const commitId =
+      typeof commit === 'object' && commit !== null && 'id' in commit
+        ? (commit as { id?: unknown }).id
+        : undefined;
+    logger.info({ run_id, commit_id: commitId }, 'T3X commit created');
 
     res.json({ success: true, commit });
   } catch (error) {
@@ -321,7 +325,7 @@ app.post('/webhook/run', async (req, res) => {
       evalResult = await evalEngine.evaluate({
         trace,
         test_steps,
-        options: { generate_suggestions: true },
+        options: { stop_on_first_failure: false, generate_suggestions: true },
       });
     }
 

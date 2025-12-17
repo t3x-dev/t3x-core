@@ -113,7 +113,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     }
 
     // Verify project exists
-    const project = getProject(body.project_id);
+    const project = await getProject(body.project_id);
     if (!project) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
       return;
@@ -122,7 +122,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     // For merge commits: verify parent commits exist
     if (isMergeCommit) {
       for (const parentHash of body.merge_parents!) {
-        const parentCommit = getCommitV2(parentHash);
+        const parentCommit = await getCommitV2(parentHash);
         if (!parentCommit) {
           sendJson(res, 404, errorResponse(
             "NOT_FOUND",
@@ -142,8 +142,8 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
 
     // For regular commits: verify turns exist and belong to same conversation
     if (!isMergeCommit && body.turn_window) {
-      const startTurn = getTurnV2(body.turn_window.start_turn_hash);
-      const endTurn = getTurnV2(body.turn_window.end_turn_hash);
+      const startTurn = await getTurnV2(body.turn_window.start_turn_hash);
+      const endTurn = await getTurnV2(body.turn_window.end_turn_hash);
 
       if (!startTurn || !endTurn) {
         sendJson(res, 404, errorResponse("NOT_FOUND", "Start or end turn not found"));
@@ -170,10 +170,10 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     // Ensure branch exists (create if not exists for non-main branches)
     const targetBranch = body.branch ?? "main";
     if (targetBranch !== "main") {
-      const branch = getBranch(body.project_id, targetBranch);
+      const branch = await getBranch(body.project_id, targetBranch);
       if (!branch) {
         // Auto-create the branch with 'main' as parent
-        createBranch({
+        await createBranch({
           project_id: body.project_id,
           name: targetBranch,
           parent_branch: "main",
@@ -184,7 +184,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     // Validate draft belongs to same project if specified
     let draft_text_hash: string | undefined;
     if (body.draft_id) {
-      const draft = getDraftV2(body.draft_id);
+      const draft = await getDraftV2(body.draft_id);
       if (!draft) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Draft ${body.draft_id} not found`));
         return;
@@ -196,7 +196,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         ));
         return;
       }
-      draft_text_hash = getDraftTextHash(body.draft_id) ?? undefined;
+      draft_text_hash = (await getDraftTextHash(body.draft_id)) ?? undefined;
     }
 
     try {
@@ -207,7 +207,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         facet_snapshot = body.facet_snapshot!;
       } else {
         // Get turns in window for facet aggregation (regular commits)
-        const turns = getTurnsInWindow(
+        const turns = await getTurnsInWindow(
           body.turn_window!.start_turn_hash,
           body.turn_window!.end_turn_hash
         );
@@ -215,7 +215,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
         facet_snapshot = aggregateFacets(turns);
       }
 
-      const commit = createCommitV2({
+      const commit = await createCommitV2({
         project_id: body.project_id,
         branch: targetBranch,
         message: body.message,
@@ -284,7 +284,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
 
     try {
-      const commits = listCommitsV2({ project_id, branch, limit, offset });
+      const commits = await listCommitsV2({ project_id, branch, limit, offset });
       sendJson(res, 200, successResponse({ commits, project_id, branch, limit, offset }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -303,7 +303,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     }
 
     try {
-      const commit = getCommitV2(commit_hash);
+      const commit = await getCommitV2(commit_hash);
       if (!commit) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Commit ${commit_hash} not found`));
         return;
@@ -328,7 +328,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     const body = ctx.body as { position_x?: number; position_y?: number } | null;
 
     try {
-      const commit = updateCommitPosition(commit_hash, {
+      const commit = await updateCommitPosition(commit_hash, {
         x: body?.position_x,
         y: body?.position_y,
       });
@@ -354,7 +354,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     }
 
     try {
-      const parents = getCommitParents(commit_hash);
+      const parents = await getCommitParents(commit_hash);
       sendJson(res, 200, successResponse({ parents, commit_hash }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -375,7 +375,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     const limit = parseInt(ctx.query.get("limit") ?? "50", 10);
 
     try {
-      const history = getCommitHistory(commit_hash, limit);
+      const history = await getCommitHistory(commit_hash, limit);
       sendJson(res, 200, successResponse({ history, commit_hash }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -394,7 +394,7 @@ export function registerCommitsV2Routes(router: Router, _providers: ProviderConf
     }
 
     try {
-      const ancestor = findCommonAncestor(hash1, hash2);
+      const ancestor = await findCommonAncestor(hash1, hash2);
       if (!ancestor) {
         sendJson(res, 404, errorResponse("NOT_FOUND", "No common ancestor found"));
         return;

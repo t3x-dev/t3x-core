@@ -34,21 +34,21 @@ export function registerBranchesRoutes(router: Router): void {
     }
 
     // Verify project exists
-    const project = getProject(body.project_id);
+    const project = await getProject(body.project_id);
     if (!project) {
       sendJson(res, 404, errorResponse("NOT_FOUND", `Project ${body.project_id} not found`));
       return;
     }
 
     // Check if branch already exists
-    const existing = getBranch(body.project_id, body.name);
+    const existing = await getBranch(body.project_id, body.name);
     if (existing) {
       sendJson(res, 409, errorResponse("CONFLICT", `Branch ${body.name} already exists`));
       return;
     }
 
     try {
-      const branch = createBranch({
+      const branch = await createBranch({
         project_id: body.project_id,
         name: body.name,
         parent_branch: body.parent_branch,
@@ -74,7 +74,7 @@ export function registerBranchesRoutes(router: Router): void {
     const offset = parseInt(ctx.query.get("offset") ?? "0", 10);
 
     try {
-      const branches = listBranches({ project_id, limit, offset });
+      const branches = await listBranches({ project_id, limit, offset });
       sendJson(res, 200, successResponse({ branches, project_id, limit, offset }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -92,7 +92,7 @@ export function registerBranchesRoutes(router: Router): void {
     }
 
     try {
-      const branch = getCurrentBranch(project_id);
+      const branch = await getCurrentBranch(project_id);
       if (!branch) {
         sendJson(res, 404, errorResponse("NOT_FOUND", "No current branch set"));
         return;
@@ -119,12 +119,12 @@ export function registerBranchesRoutes(router: Router): void {
 
     try {
       // Check if branch exists
-      let branch = getBranch(body.project_id, body.branch_name);
+      let branch = await getBranch(body.project_id, body.branch_name);
 
       if (!branch) {
         if (body.create_if_missing) {
           // Create the branch
-          branch = createBranch({
+          branch = await createBranch({
             project_id: body.project_id,
             name: body.branch_name,
           });
@@ -134,7 +134,7 @@ export function registerBranchesRoutes(router: Router): void {
         }
       }
 
-      const switched = switchBranch(body.project_id, body.branch_name);
+      const switched = await switchBranch(body.project_id, body.branch_name);
       if (!switched) {
         sendJson(res, 500, errorResponse("SWITCH_FAILED", "Failed to switch branch"));
         return;
@@ -159,7 +159,7 @@ export function registerBranchesRoutes(router: Router): void {
     }
 
     try {
-      const branch = getBranch(project_id, decodeURIComponent(branch_name));
+      const branch = await getBranch(project_id, decodeURIComponent(branch_name));
       if (!branch) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Branch ${branch_name} not found`));
         return;
@@ -183,7 +183,7 @@ export function registerBranchesRoutes(router: Router): void {
     }
 
     try {
-      const deleted = deleteBranch(project_id, decodeURIComponent(branch_name));
+      const deleted = await deleteBranch(project_id, decodeURIComponent(branch_name));
       if (!deleted) {
         sendJson(res, 400, errorResponse(
           "DELETE_FAILED",

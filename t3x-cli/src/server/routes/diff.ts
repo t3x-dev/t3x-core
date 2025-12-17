@@ -81,8 +81,8 @@ type ExtractResult =
  * Extract segments from turn's Ring 3
  * Returns explicit error information instead of silent null
  */
-function extractSegmentsFromTurn(turnHash: string): ExtractResult {
-  const turn = getTurnV2(turnHash);
+async function extractSegmentsFromTurn(turnHash: string): Promise<ExtractResult> {
+  const turn = await getTurnV2(turnHash);
   if (!turn) {
     return { ok: false, error: "not_found", message: `Turn ${turnHash} not found` };
   }
@@ -121,13 +121,13 @@ function extractSegmentsFromTurn(turnHash: string): ExtractResult {
  * Load cached embeddings into a CachedEmbeddingProvider
  * Uses setCacheFromRecords to validate embedding_model
  */
-function loadCachedEmbeddingsIntoProvider(
+async function loadCachedEmbeddingsIntoProvider(
   cachedProvider: CachedEmbeddingProvider,
   turnHashes: string[]
-): number {
+): Promise<number> {
   let totalLoaded = 0;
   for (const turnHash of turnHashes) {
-    const records = getSegmentEmbeddingsByTurn(turnHash);
+    const records = await getSegmentEmbeddingsByTurn(turnHash);
     totalLoaded += cachedProvider.setCacheFromRecords(records);
   }
   return totalLoaded;
@@ -157,8 +157,8 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
     // Mode 1: commit_hash mode (new, frontend-friendly)
     if (body.base_commit_hash && body.target_commit_hash) {
       // Get commits and extract turn_window
-      const baseCommit = getCommitV2(body.base_commit_hash);
-      const targetCommit = getCommitV2(body.target_commit_hash);
+      const baseCommit = await getCommitV2(body.base_commit_hash);
+      const targetCommit = await getCommitV2(body.target_commit_hash);
 
       if (!baseCommit) {
         sendJson(res, 404, errorResponse("NOT_FOUND", `Base commit ${body.base_commit_hash} not found`));
@@ -194,8 +194,8 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
       const baseTurnHash = baseTurnWindow.end_turn_hash;
       const targetTurnHash = targetTurnWindow.end_turn_hash;
 
-      const baseResult = extractSegmentsFromTurn(baseTurnHash);
-      const targetResult = extractSegmentsFromTurn(targetTurnHash);
+      const baseResult = await extractSegmentsFromTurn(baseTurnHash);
+      const targetResult = await extractSegmentsFromTurn(targetTurnHash);
 
       if (!baseResult.ok) {
         const status = baseResult.error === "corrupted" ? 500 : 404;
@@ -222,8 +222,8 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
     }
     // Mode 2: turn_hash mode (preferred for direct turn comparison)
     else if (body.baseTurnHash && body.targetTurnHash) {
-      const baseResult = extractSegmentsFromTurn(body.baseTurnHash);
-      const targetResult = extractSegmentsFromTurn(body.targetTurnHash);
+      const baseResult = await extractSegmentsFromTurn(body.baseTurnHash);
+      const targetResult = await extractSegmentsFromTurn(body.targetTurnHash);
 
       if (!baseResult.ok) {
         const status = baseResult.error === "corrupted" ? 500 : 404;
@@ -279,9 +279,9 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
       let cacheStats = null;
 
       if (usedCache && baseTurnHashForCache && targetTurnHashForCache) {
-        const cachedProvider = createCachedEmbeddingProvider(baseProvider);
+        const cachedProvider = await createCachedEmbeddingProvider(baseProvider);
         // Load cached embeddings with model validation
-        const loaded = loadCachedEmbeddingsIntoProvider(cachedProvider, [
+        const loaded = await loadCachedEmbeddingsIntoProvider(cachedProvider, [
           baseTurnHashForCache,
           targetTurnHashForCache,
         ]);
@@ -333,9 +333,9 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
 
     // Mode 1: turn_hash mode (preferred)
     if (body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) {
-      const baseResult = extractSegmentsFromTurn(body.baseTurnHash);
-      const sourceResult = extractSegmentsFromTurn(body.sourceTurnHash);
-      const targetResult = extractSegmentsFromTurn(body.targetTurnHash);
+      const baseResult = await extractSegmentsFromTurn(body.baseTurnHash);
+      const sourceResult = await extractSegmentsFromTurn(body.sourceTurnHash);
+      const targetResult = await extractSegmentsFromTurn(body.targetTurnHash);
 
       if (!baseResult.ok) {
         const status = baseResult.error === "corrupted" ? 500 : 404;
@@ -400,9 +400,9 @@ export function registerDiffRoutes(router: Router, providers: ProviderConfig): v
       let cacheStats = null;
 
       if (usedCache && body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) {
-        const cachedProvider = createCachedEmbeddingProvider(baseProvider);
+        const cachedProvider = await createCachedEmbeddingProvider(baseProvider);
         // Load cached embeddings with model validation
-        const loaded = loadCachedEmbeddingsIntoProvider(cachedProvider, [
+        const loaded = await loadCachedEmbeddingsIntoProvider(cachedProvider, [
           body.baseTurnHash,
           body.sourceTurnHash,
           body.targetTurnHash,

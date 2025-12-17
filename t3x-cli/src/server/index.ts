@@ -114,7 +114,12 @@ export function createServer(config: ServerConfig): Server {
         });
 
         httpServer.listen(port, host, () => {
-          serverAddress = { host, port };
+          const addr = httpServer.address();
+          if (addr && typeof addr === "object") {
+            serverAddress = { host, port: addr.port };
+          } else {
+            serverAddress = { host, port };
+          }
           server = httpServer;
           resolve();
         });

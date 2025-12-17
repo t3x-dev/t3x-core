@@ -49,7 +49,7 @@ export default function EvalPage() {
   const navigate = useNavigate()
   const [trace, setTrace] = useState<RunTrace | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
-  const [testSteps, setTestSteps] = useState<TestStep[]>(DEFAULT_TEST_STEPS)
+  const [testSteps] = useState<TestStep[]>(DEFAULT_TEST_STEPS)
   const [loading, setLoading] = useState(true)
   const [evaluating, setEvaluating] = useState(false)
   const [committing, setCommitting] = useState(false)
@@ -256,12 +256,12 @@ export default function EvalPage() {
                       {!result.passed && (
                         <div className="test-result__details">
                           {result.message && <p className="test-result__message">{result.message}</p>}
-                          {result.expected && (
+                          {result.expected != null && (
                             <div className="test-result__expected">
                               <strong>Expected:</strong> {String(result.expected)}
                             </div>
                           )}
-                          {result.actual && (
+                          {result.actual != null && (
                             <div className="test-result__actual">
                               <strong>Actual:</strong> {String(result.actual)}
                             </div>
@@ -351,13 +351,13 @@ export default function EvalPage() {
                   </div>
                   {expandedEvents.has(event.id) && (
                     <div className="trace-event__body">
-                      {event.data.input && (
+                      {event.data.input != null && (
                         <div className="trace-event__data">
                           <strong>Input:</strong>
                           <pre>{JSON.stringify(event.data.input, null, 2)}</pre>
                         </div>
                       )}
-                      {event.data.output && (
+                      {event.data.output != null && (
                         <div className="trace-event__data">
                           <strong>Output:</strong>
                           <pre>{JSON.stringify(event.data.output, null, 2)}</pre>

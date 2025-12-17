@@ -1920,6 +1920,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         article: '文章',
         email: 'Email',
         slack: 'Slack',
+        deploy: 'Deploy',
+        eval: 'Eval',
       }
 
       // Position leaf above the commit node

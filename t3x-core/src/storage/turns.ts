@@ -10,12 +10,12 @@ import type {
 } from './types';
 import { computeTurnHash, isoNow } from './utils';
 
-export function createTurnV2(input: CreateTurnV2Input): TurnV2Record {
+export async function createTurnV2(input: CreateTurnV2Input): Promise<TurnV2Record> {
   const db = getDb();
   const created_at = isoNow();
 
   // Get parent turn hash (last turn in conversation)
-  const lastTurn = db
+  const lastTurn = await db
     .prepare(
       `SELECT turn_hash FROM turns_v2
        WHERE conversation_id = ?
@@ -40,7 +40,7 @@ export function createTurnV2(input: CreateTurnV2Input): TurnV2Record {
     created_at,
   });
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO turns_v2
      (turn_hash, parent_turn_hash, project_id, conversation_id, role, content, language, rings_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -69,15 +69,15 @@ export function createTurnV2(input: CreateTurnV2Input): TurnV2Record {
   };
 }
 
-export function getTurnV2(turn_hash: string): TurnV2Record | null {
+export async function getTurnV2(turn_hash: string): Promise<TurnV2Record | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT * FROM turns_v2 WHERE turn_hash = ?`)
     .get(turn_hash) as TurnV2Record | undefined;
   return row ?? null;
 }
 
-export function listTurnsV2(options: ListTurnsV2Options): TurnV2Record[] {
+export async function listTurnsV2(options: ListTurnsV2Options): Promise<TurnV2Record[]> {
   const db = getDb();
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
@@ -86,7 +86,7 @@ export function listTurnsV2(options: ListTurnsV2Options): TurnV2Record[] {
 
   // Use turn_hash as secondary sort key for stable ordering
   // when multiple turns have the same created_at timestamp
-  return db
+  return await db
     .prepare(
       `SELECT * FROM turns_v2
        WHERE conversation_id = ?
@@ -96,9 +96,9 @@ export function listTurnsV2(options: ListTurnsV2Options): TurnV2Record[] {
     .all(options.conversation_id, limit, offset) as TurnV2Record[];
 }
 
-export function listTurnsV2ByProject(project_id: string, limit = 100, offset = 0): TurnV2Record[] {
+export async function listTurnsV2ByProject(project_id: string, limit = 100, offset = 0): Promise<TurnV2Record[]> {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       `SELECT * FROM turns_v2
        WHERE project_id = ?
@@ -108,9 +108,9 @@ export function listTurnsV2ByProject(project_id: string, limit = 100, offset = 0
     .all(project_id, limit, offset) as TurnV2Record[];
 }
 
-export function getLastTurnInConversation(conversation_id: string): TurnV2Record | null {
+export async function getLastTurnInConversation(conversation_id: string): Promise<TurnV2Record | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(
       `SELECT * FROM turns_v2
        WHERE conversation_id = ?
@@ -121,13 +121,13 @@ export function getLastTurnInConversation(conversation_id: string): TurnV2Record
   return row ?? null;
 }
 
-export function getTurnChain(end_turn_hash: string, limit = 50): TurnV2Record[] {
+export async function getTurnChain(end_turn_hash: string, limit = 50): Promise<TurnV2Record[]> {
   const db = getDb();
   const chain: TurnV2Record[] = [];
   let current_hash: string | null = end_turn_hash;
 
   while (current_hash && chain.length < limit) {
-    const turn = getTurnV2(current_hash);
+    const turn = await getTurnV2(current_hash);
     if (!turn) break;
     chain.unshift(turn); // Add to beginning to maintain order
     current_hash = turn.parent_turn_hash;
@@ -149,12 +149,12 @@ export class TurnWindowError extends Error {
   }
 }
 
-export function getTurnsInWindow(
+export async function getTurnsInWindow(
   start_turn_hash: string,
   end_turn_hash: string
-): TurnV2Record[] {
+): Promise<TurnV2Record[]> {
   // Verify end turn exists
-  const endTurn = getTurnV2(end_turn_hash);
+  const endTurn = await getTurnV2(end_turn_hash);
   if (!endTurn) {
     throw new TurnWindowError(
       `End turn ${end_turn_hash} not found`,
@@ -163,7 +163,7 @@ export function getTurnsInWindow(
   }
 
   // Get the chain ending at end_turn_hash
-  const chain = getTurnChain(end_turn_hash, 1000);
+  const chain = await getTurnChain(end_turn_hash, 1000);
 
   // Find the start index - it MUST be in the chain
   const startIndex = chain.findIndex((t) => t.turn_hash === start_turn_hash);

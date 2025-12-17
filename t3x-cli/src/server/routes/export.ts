@@ -210,7 +210,7 @@ export function registerExportRoutes(router: Router): void {
       const db = getDb();
 
       // Get project
-      const project = db.prepare(
+      const project = await db.prepare(
         "SELECT project_id, name, created_at FROM projects WHERE project_id = ?"
       ).get(projectId) as { project_id: string; name: string; created_at: string } | undefined;
 
@@ -220,7 +220,7 @@ export function registerExportRoutes(router: Router): void {
       }
 
       // Get all turns
-      const turnRows = db.prepare(`
+      const turnRows = await db.prepare(`
         SELECT turn_hash, parent_turn_hash, role, content, rings_json, created_at
         FROM turns_v2
         WHERE project_id = ?
@@ -263,7 +263,7 @@ export function registerExportRoutes(router: Router): void {
       }
 
       // Get all commits
-      const commitRows = db.prepare(`
+      const commitRows = await db.prepare(`
         SELECT commit_hash, parents_json, branch, turn_window_json,
                facet_snapshot_json, pipeline_config_json, created_at
         FROM commits_v2
@@ -374,7 +374,7 @@ export function registerExportRoutes(router: Router): void {
       const db = getDb();
 
       // Check project exists
-      const project = db.prepare(
+      const project = await db.prepare(
         "SELECT project_id, name, created_at FROM projects WHERE project_id = ?"
       ).get(projectId) as { project_id: string; name: string; created_at: string } | undefined;
 
@@ -401,7 +401,7 @@ export function registerExportRoutes(router: Router): void {
       }) + "\n");
 
       // 2. Conversations
-      const conversations = db.prepare(`
+      const conversations = await db.prepare(`
         SELECT conversation_id, project_id, title, created_at
         FROM conversations
         WHERE project_id = ?
@@ -424,7 +424,7 @@ export function registerExportRoutes(router: Router): void {
       }
 
       // 3. Turns
-      const turns = db.prepare(`
+      const turns = await db.prepare(`
         SELECT turn_hash, parent_turn_hash, project_id, conversation_id,
                role, content, rings_json, created_at
         FROM turns_v2
@@ -457,7 +457,7 @@ export function registerExportRoutes(router: Router): void {
       }
 
       // 4. Commits
-      const commits = db.prepare(`
+      const commits = await db.prepare(`
         SELECT commit_hash, project_id, branch, message, parents_json,
                turn_window_json, facet_snapshot_json, pipeline_config_json,
                draft_id, draft_text_hash, created_at

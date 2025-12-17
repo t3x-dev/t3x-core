@@ -1,54 +1,34 @@
-# T3X Core API - Docker Compose 配置
+# DEV-ONLY / LEGACY
 #
-# 启动：
-#   docker-compose up
+# 仅用于“单跑 core”调试；不要作为 full-stack 入口使用。
+# Full-stack 请使用仓库根目录的 `docker-compose.yml`：
+#   docker compose up -d --build
 #
-# 后台启动：
-#   docker-compose up -d
-#
-# 停止：
-#   docker-compose down
-
-version: '3.8'
+# Core-only (this file):
+#   docker compose -f t3x-core/docker-compose.yml up -d --build
+#   docker compose -f t3x-core/docker-compose.yml down
 
 services:
-  core-api:
-    build: .
-    container_name: t3x-core-api
+  t3x-core:
+    build:
+      context: ..
+      dockerfile: t3x-cli/Dockerfile
+    container_name: t3x-core
     ports:
       - "8000:8000"
     volumes:
-      # 持久化数据
-      - ./.t3x:/app/.t3x
+      - t3x-data:/app/.t3x
     environment:
-      - CF_HOST=0.0.0.0
-      - CF_PORT=8000
-      - CF_LOG_LEVEL=info
-      # 可选：启用认证
-      # - CF_AUTH_ENABLED=true
-      # - CF_AUTH_TOKEN=your-secret-token
+      - HOST=0.0.0.0
+      - PORT=8000
+      - T3X_ROOT=/app
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 5s
 
-  # 可选：开发模式（自动重载）
-  core-api-dev:
-    build: .
-    container_name: t3x-core-api-dev
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./core:/app/core
-      - ./core_api:/app/core_api
-      - ./.t3x:/app/.t3x
-    environment:
-      - CF_HOST=0.0.0.0
-      - CF_PORT=8000
-      - CF_RELOAD=true
-    profiles:
-      - dev
-    command: ["python", "-m", "core_api", "--reload"]
+volumes:
+  t3x-data:
+    driver: local

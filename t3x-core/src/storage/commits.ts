@@ -24,7 +24,7 @@ export class CommitError extends Error {
   }
 }
 
-export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
+export async function createCommitV2(input: CreateCommitV2Input): Promise<CommitV2Record> {
   const db = getDb();
   const created_at = isoNow();
 
@@ -32,11 +32,11 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   const targetBranch = input.branch ?? 'main';
 
   // Get the target branch - it MUST exist
-  let branch = getBranch(input.project_id, targetBranch);
+  let branch = await getBranch(input.project_id, targetBranch);
 
   // If targeting 'main' and it doesn't exist, create it
   if (!branch && targetBranch === 'main') {
-    branch = ensureMainBranch(input.project_id);
+    branch = await ensureMainBranch(input.project_id);
   }
 
   // Branch must exist at this point
@@ -102,7 +102,7 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   const position_x = input.position_x ?? null;
   const position_y = input.position_y ?? null;
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO commits_v2
      (commit_hash, project_id, branch, message, parents_json, turn_window_json,
       facet_snapshot_json, pipeline_config_json, draft_id, draft_text_hash, signature_json,
@@ -130,7 +130,7 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   );
 
   // Update branch head
-  updateBranchHead(input.project_id, targetBranch, commit_hash);
+  await updateBranchHead(input.project_id, targetBranch, commit_hash);
 
   return {
     commit_hash,
@@ -154,21 +154,21 @@ export function createCommitV2(input: CreateCommitV2Input): CommitV2Record {
   };
 }
 
-export function getCommitV2(commit_hash: string): CommitV2Record | null {
+export async function getCommitV2(commit_hash: string): Promise<CommitV2Record | null> {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(`SELECT * FROM commits_v2 WHERE commit_hash = ?`)
     .get(commit_hash) as CommitV2Record | undefined;
   return row ?? null;
 }
 
-export function listCommitsV2(options: ListCommitsV2Options): CommitV2Record[] {
+export async function listCommitsV2(options: ListCommitsV2Options): Promise<CommitV2Record[]> {
   const db = getDb();
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
   if (options.branch) {
-    return db
+    return await db
       .prepare(
         `SELECT * FROM commits_v2
          WHERE project_id = ? AND branch = ?
@@ -178,7 +178,7 @@ export function listCommitsV2(options: ListCommitsV2Options): CommitV2Record[] {
       .all(options.project_id, options.branch, limit, offset) as CommitV2Record[];
   }
 
-  return db
+  return await db
     .prepare(
       `SELECT * FROM commits_v2
        WHERE project_id = ?
@@ -188,20 +188,19 @@ export function listCommitsV2(options: ListCommitsV2Options): CommitV2Record[] {
     .all(options.project_id, limit, offset) as CommitV2Record[];
 }
 
-export function getCommitParents(commit_hash: string): CommitV2Record[] {
-  const commit = getCommitV2(commit_hash);
+export async function getCommitParents(commit_hash: string): Promise<CommitV2Record[]> {
+  const commit = await getCommitV2(commit_hash);
   if (!commit) return [];
 
   const parent_hashes = JSON.parse(commit.parents_json) as string[];
-  return parent_hashes
-    .map((h) => getCommitV2(h))
-    .filter((c): c is CommitV2Record => c !== null);
+  const parents = await Promise.all(parent_hashes.map((h) => getCommitV2(h)));
+  return parents.filter((c): c is CommitV2Record => c !== null);
 }
 
-export function getCommitHistory(
+export async function getCommitHistory(
   commit_hash: string,
   limit = 50
-): CommitV2Record[] {
+): Promise<CommitV2Record[]> {
   const history: CommitV2Record[] = [];
   const visited = new Set<string>();
   const queue: string[] = [commit_hash];
@@ -211,7 +210,7 @@ export function getCommitHistory(
     if (visited.has(current_hash)) continue;
     visited.add(current_hash);
 
-    const commit = getCommitV2(current_hash);
+    const commit = await getCommitV2(current_hash);
     if (!commit) continue;
 
     history.push(commit);
@@ -223,28 +222,28 @@ export function getCommitHistory(
   return history;
 }
 
-export function updateCommitPosition(
+export async function updateCommitPosition(
   commit_hash: string,
   position: { x?: number; y?: number }
-): CommitV2Record | null {
+): Promise<CommitV2Record | null> {
   const db = getDb();
-  const existing = getCommitV2(commit_hash);
+  const existing = await getCommitV2(commit_hash);
   if (!existing) return null;
 
   const position_x = position.x !== undefined ? position.x : existing.position_x;
   const position_y = position.y !== undefined ? position.y : existing.position_y;
 
-  db.prepare(
+  await db.prepare(
     `UPDATE commits_v2 SET position_x = ?, position_y = ? WHERE commit_hash = ?`
   ).run(position_x, position_y, commit_hash);
 
-  return getCommitV2(commit_hash);
+  return await getCommitV2(commit_hash);
 }
 
-export function findCommonAncestor(
+export async function findCommonAncestor(
   hash1: string,
   hash2: string
-): CommitV2Record | null {
+): Promise<CommitV2Record | null> {
   const ancestors1 = new Set<string>();
   const queue1: string[] = [hash1];
 
@@ -254,7 +253,7 @@ export function findCommonAncestor(
     if (ancestors1.has(h)) continue;
     ancestors1.add(h);
 
-    const commit = getCommitV2(h);
+    const commit = await getCommitV2(h);
     if (commit) {
       const parents = JSON.parse(commit.parents_json) as string[];
       queue1.push(...parents);
@@ -271,10 +270,10 @@ export function findCommonAncestor(
     visited2.add(h);
 
     if (ancestors1.has(h)) {
-      return getCommitV2(h);
+      return await getCommitV2(h);
     }
 
-    const commit = getCommitV2(h);
+    const commit = await getCommitV2(h);
     if (commit) {
       const parents = JSON.parse(commit.parents_json) as string[];
       queue2.push(...parents);

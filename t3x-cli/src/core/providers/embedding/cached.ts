@@ -48,10 +48,10 @@ export class CachedEmbeddingProvider implements EmbeddingProvider {
    * Load embeddings from database for given turn hashes
    * Returns the number of embeddings loaded
    */
-  loadFromTurns(turnHashes: string[]): number {
+  async loadFromTurns(turnHashes: string[]): Promise<number> {
     if (turnHashes.length === 0) return 0;
 
-    const embeddingsByTurn = getSegmentEmbeddingsByTurns(turnHashes);
+    const embeddingsByTurn = await getSegmentEmbeddingsByTurns(turnHashes);
     let loaded = 0;
 
     for (const [_turnHash, records] of embeddingsByTurn) {
@@ -187,13 +187,13 @@ export class CachedEmbeddingProvider implements EmbeddingProvider {
 /**
  * Factory function to create a cached embedding provider
  */
-export function createCachedEmbeddingProvider(
+export async function createCachedEmbeddingProvider(
   provider: EmbeddingProvider,
   turnHashes?: string[]
-): CachedEmbeddingProvider {
+): Promise<CachedEmbeddingProvider> {
   const cached = new CachedEmbeddingProvider({ provider });
   if (turnHashes && turnHashes.length > 0) {
-    cached.loadFromTurns(turnHashes);
+    await cached.loadFromTurns(turnHashes);
   }
   return cached;
 }

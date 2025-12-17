@@ -57,12 +57,12 @@ interface DraftRequest {
  * Load turns from database by hashes
  * Returns { turns, missing } to allow caller to handle missing turns
  */
-function loadTurnsFromHashes(turnHashes: string[]): { turns: Turn[]; missing: string[] } {
+async function loadTurnsFromHashes(turnHashes: string[]): Promise<{ turns: Turn[]; missing: string[] }> {
   const turns: Turn[] = [];
   const missing: string[] = [];
 
   for (const hash of turnHashes) {
-    const turn = getTurnV2(hash);
+    const turn = await getTurnV2(hash);
     if (turn) {
       turns.push({
         turnHash: turn.turn_hash,
@@ -81,13 +81,13 @@ function loadTurnsFromHashes(turnHashes: string[]): { turns: Turn[]; missing: st
  * Load cached embeddings into a CachedEmbeddingProvider
  * Uses setCacheFromRecords to validate embedding_model
  */
-function loadCachedEmbeddingsIntoProvider(
+async function loadCachedEmbeddingsIntoProvider(
   cachedProvider: CachedEmbeddingProvider,
   turnHashes: string[]
-): number {
+): Promise<number> {
   let totalLoaded = 0;
   for (const turnHash of turnHashes) {
-    const records = getSegmentEmbeddingsByTurn(turnHash);
+    const records = await getSegmentEmbeddingsByTurn(turnHash);
     totalLoaded += cachedProvider.setCacheFromRecords(records);
   }
   return totalLoaded;
@@ -170,7 +170,7 @@ export function registerDraftRoutes(router: Router, providers: ProviderConfig, t
 
       if (body.turnHashes && body.turnHashes.length > 0) {
         // Mode 1: Load turns from database and use cached embeddings
-        const result = loadTurnsFromHashes(body.turnHashes);
+        const result = await loadTurnsFromHashes(body.turnHashes);
         turns = result.turns;
         missingTurns = result.missing;
 
@@ -202,9 +202,9 @@ export function registerDraftRoutes(router: Router, providers: ProviderConfig, t
       let cacheStats: Record<string, unknown> | null = null;
 
       if (usedCache && body.turnHashes) {
-        const cachedProvider = createCachedEmbeddingProvider(baseProvider);
+        const cachedProvider = await createCachedEmbeddingProvider(baseProvider);
         // Load cached embeddings with model validation
-        const loaded = loadCachedEmbeddingsIntoProvider(cachedProvider, body.turnHashes);
+        const loaded = await loadCachedEmbeddingsIntoProvider(cachedProvider, body.turnHashes);
         embeddingProvider = cachedProvider;
         cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };
       } else {
