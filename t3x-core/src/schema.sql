@@ -203,3 +203,22 @@ CREATE TABLE IF NOT EXISTS segment_embeddings (
 );
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
+
+-- Runs table (Engine run management)
+CREATE TABLE IF NOT EXISTS runs (
+  run_id TEXT PRIMARY KEY,
+  project_id TEXT,
+  runner_run_id TEXT,
+  commit_ref TEXT,
+  leaf_json TEXT,           -- { id, type, content }
+  inputs_json TEXT,         -- { key: value }
+  workflow_json TEXT,       -- { type, webhook_id }
+  status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','running','completed','failed')),
+  result_json TEXT,         -- { run_report, assertions, evidence_pack }
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
+CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at);

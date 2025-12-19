@@ -6,8 +6,11 @@ import {
   registerAgent,
   listRuns,
   runAgent,
+  createEngineRun,
+  listEngineRuns,
   type AgentConfig,
   type RunTrace,
+  type EngineRun,
 } from '../services/api'
 
 interface Agent extends AgentConfig {
@@ -20,7 +23,8 @@ export default function DeployPage() {
   const navigate = useNavigate()
   const [runnerHealthy, setRunnerHealthy] = useState<boolean | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
-  const [runs, setRuns] = useState<RunTrace[]>([])
+  const [runs, setRuns] = useState<EngineRun[]>([])
+  const [legacyRuns, setLegacyRuns] = useState<RunTrace[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddAgent, setShowAddAgent] = useState(false)
   const [newAgent, setNewAgent] = useState({
@@ -36,8 +40,21 @@ export default function DeployPage() {
         const health = await checkRunnerHealth()
         setRunnerHealthy(health.status === 'ok')
 
-        const runsData = await listRuns()
-        setRuns(runsData.runs)
+        // Load Engine runs (new flow)
+        try {
+          const engineRunsData = await listEngineRuns()
+          setRuns(engineRunsData.runs)
+        } catch (err) {
+          console.warn('Failed to load Engine runs:', err)
+        }
+
+        // Also load legacy Runner runs for backward compatibility
+        try {
+          const runsData = await listRuns()
+          setLegacyRuns(runsData.runs)
+        } catch (err) {
+          console.warn('Failed to load Runner runs:', err)
+        }
       } catch (err) {
         console.error('Failed to connect to runner:', err)
         setRunnerHealthy(false)
@@ -83,7 +100,11 @@ export default function DeployPage() {
         a.id === agent.id ? { ...a, status: 'running' as const } : a
       ))
 
-      const result = await runAgent(agent.id, { test: true })
+      // Use Engine API to create run (triggers Runner → n8n flow)
+      const result = await createEngineRun({
+        inputs: { agent_id: agent.id, test: true },
+        workflow: { type: 'n8n', webhook_id: 'agent-run' },
+      })
 
       setAgents(agents.map(a =>
         a.id === agent.id
@@ -112,8 +133,10 @@ export default function DeployPage() {
     }
   }
 
-  const getRunStatusBadge = (status: RunTrace['status']) => {
+  const getRunStatusBadge = (status: EngineRun['status'] | RunTrace['status']) => {
     switch (status) {
+      case 'queued':
+        return <span className="badge badge--queued">Queued</span>
       case 'running':
         return <span className="badge badge--running">Running</span>
       case 'completed':
@@ -270,7 +293,7 @@ export default function DeployPage() {
         </div>
 
         <div className="deploy-page__runs">
-          {runs.length === 0 ? (
+          {runs.length === 0 && legacyRuns.length === 0 ? (
             <div className="deploy-page__empty">
               <p>No runs yet. Run an agent to see results here.</p>
             </div>
@@ -279,25 +302,41 @@ export default function DeployPage() {
               <thead>
                 <tr>
                   <th>Run ID</th>
-                  <th>Agent</th>
+                  <th>Source</th>
                   <th>Status</th>
-                  <th>Started</th>
-                  <th>Duration</th>
+                  <th>Created</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
+                {/* Engine runs (new flow) */}
                 {runs.slice(0, 10).map((run) => (
                   <tr key={run.run_id}>
                     <td><code>{run.run_id}</code></td>
-                    <td>{run.agent_id}</td>
+                    <td>Engine</td>
                     <td>{getRunStatusBadge(run.status)}</td>
-                    <td>{new Date(run.started_at).toLocaleString()}</td>
-                    <td>{run.metrics?.total_latency_ms ? `${run.metrics.total_latency_ms}ms` : '-'}</td>
+                    <td>{new Date(run.created_at).toLocaleString()}</td>
                     <td>
                       <button
                         className="btn btn--link btn--sm"
                         onClick={() => navigate(`/eval/${run.run_id}`)}
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {/* Legacy Runner runs */}
+                {legacyRuns.slice(0, 5).map((run) => (
+                  <tr key={run.run_id} className="legacy-run">
+                    <td><code>{run.run_id}</code></td>
+                    <td>Runner</td>
+                    <td>{getRunStatusBadge(run.status)}</td>
+                    <td>{new Date(run.started_at).toLocaleString()}</td>
+                    <td>
+                      <button
+                        className="btn btn--link btn--sm"
+                        onClick={() => navigate(`/eval/${run.run_id}?legacy=1`)}
                       >
                         View
                       </button>

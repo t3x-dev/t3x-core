@@ -27,6 +27,9 @@ import {
   registerAgentDraftsRoutes,
   registerChatRoutes,
   registerExportRoutes,
+  // Run management routes (Engine → Runner → n8n flow)
+  registerRunsRoutes,
+  registerIngestRoutes,
 } from "./routes";
 
 /**
@@ -70,6 +73,10 @@ export function createServer(config: ServerConfig): Server {
   registerAgentDraftsRoutes(router, config.providers);
   registerChatRoutes(router, config.providers);
   registerExportRoutes(router);
+
+  // Run management routes (Engine → Runner → n8n flow)
+  registerRunsRoutes(router);
+  registerIngestRoutes(router);
 
   // Create HTTP server
   const httpServer = http.createServer(async (req, res) => {

@@ -16,9 +16,11 @@ import {
 } from 'lucide-react'
 import {
   getRunTrace,
+  getEngineRun,
   runEval,
   createCommitFromEval,
   type RunTrace,
+  type EngineRun,
   type TestStep,
   type TestResult,
   type EvalResponse,
@@ -47,6 +49,7 @@ const DEFAULT_TEST_STEPS: TestStep[] = [
 export default function EvalPage() {
   const { runId } = useParams<{ runId: string }>()
   const navigate = useNavigate()
+  const [engineRun, setEngineRun] = useState<EngineRun | null>(null)
   const [trace, setTrace] = useState<RunTrace | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
   const [testSteps] = useState<TestStep[]>(DEFAULT_TEST_STEPS)
@@ -54,23 +57,56 @@ export default function EvalPage() {
   const [evaluating, setEvaluating] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set())
+  const [isLegacyRun, setIsLegacyRun] = useState(false)
 
-  // Load run trace
+  // Load run (try Engine first, fall back to Runner)
   useEffect(() => {
-    async function loadTrace() {
+    async function loadRun() {
       if (!runId) return
 
+      // Check if this is a legacy run (via query param)
+      const urlParams = new URLSearchParams(window.location.search)
+      const legacy = urlParams.get('legacy') === '1'
+
+      if (legacy) {
+        // Load from Runner directly
+        setIsLegacyRun(true)
+        try {
+          const traceData = await getRunTrace(runId)
+          setTrace(traceData)
+        } catch (err) {
+          console.error('Failed to load legacy trace:', err)
+        } finally {
+          setLoading(false)
+        }
+        return
+      }
+
+      // Try Engine first
       try {
-        const traceData = await getRunTrace(runId)
-        setTrace(traceData)
+        const run = await getEngineRun(runId)
+        setEngineRun(run)
+
+        // Extract trace from result if available
+        if (run.result?.evidence_pack?.trace) {
+          setTrace(run.result.evidence_pack.trace as RunTrace)
+        }
       } catch (err) {
-        console.error('Failed to load trace:', err)
+        console.warn('Run not found in Engine, trying Runner:', err)
+        // Fall back to Runner
+        try {
+          const traceData = await getRunTrace(runId)
+          setTrace(traceData)
+          setIsLegacyRun(true)
+        } catch (runnerErr) {
+          console.error('Failed to load trace from both Engine and Runner:', runnerErr)
+        }
       } finally {
         setLoading(false)
       }
     }
 
-    loadTrace()
+    loadRun()
   }, [runId])
 
   const handleRunEval = async () => {
