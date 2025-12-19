@@ -123,3 +123,20 @@ export {
   getEmbeddingsCountForTurn,
   getEmbeddingsByModel,
 } from './segmentEmbeddings';
+
+// Runs CRUD
+export {
+  type RunStatus,
+  type RunRecord,
+  type LeafInput,
+  type WorkflowInput,
+  type CreateRunInput,
+  type UpdateRunInput,
+  type ListRunsOptions,
+  generateRunId,
+  createRun,
+  getRun,
+  listRuns,
+  updateRun,
+  deleteRun,
+} from './runs';

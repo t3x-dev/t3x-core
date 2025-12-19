@@ -25,3 +25,7 @@ export { registerStatusRoutes } from "./status";
 export { registerAgentDraftsRoutes } from "./agentDrafts";
 export { registerChatRoutes } from "./chat";
 export { registerExportRoutes } from "./export";
+
+// Run management routes (Engine → Runner → n8n flow)
+export { registerRunsRoutes } from "./runs";
+export { registerIngestRoutes } from "./ingest";
