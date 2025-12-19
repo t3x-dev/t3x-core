@@ -20,6 +20,22 @@ docker compose up -d --build
 - Postgres 使用命名卷 `t3x-pgdata` 持久化（容器内：`/var/lib/postgresql/data`）。
 - Core 仍使用命名卷 `t3x-data` 持久化 `.t3x/` 目录（容器内：`/app/.t3x`，用于 ledger/缓存等文件）。
 
+## API Keys（LLM / Embedding / NLP）
+
+Docker 启动时，`t3x-core` 需要以下环境变量才能启用相关能力（已在根 `docker-compose.yml` 中透传到容器）：
+
+- `ANTHROPIC_API_KEY`（WebUI 对话、Drafts）
+- `GOOGLE_AI_STUDIO_KEY`（Embeddings / semantic diff）
+- `GOOGLE_CLOUD_NLP_KEY`（NLP 抽取）
+
+配置方式：
+
+```bash
+cp .env.example .env
+# 在 .env 里填入以上 3 个 key
+docker compose up -d
+```
+
 ## 可选组件（profiles）
 
 为避免 Phase A 一起拉起太多服务，以下都放在 profile 里：

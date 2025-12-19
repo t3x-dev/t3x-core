@@ -1,6 +1,7 @@
 # T3X Full Stack (root compose =唯一入口)
 #
-# 默认只启动：
+# 默认启动：
+# - postgres   (5432)  Postgres (dev)
 # - t3x-core   (8000)  Core API (Node server in t3x-cli)
 # - t3x-webui  (3000)  WebUI (Vite build -> static serve)
 #
@@ -62,6 +63,9 @@ services:
       - PORT=8000
       - T3X_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
+      - ANTHROPIC_API_KEY
+      - GOOGLE_AI_STUDIO_KEY
+      - GOOGLE_CLOUD_NLP_KEY
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -131,6 +135,7 @@ services:
       - "9000:9000"
     environment:
       - PORT=9000
+      - AGENT_DEMO_OUTBOX_DIR=/app/outbox
     volumes:
       - agent-outbox:/app/outbox
     restart: unless-stopped
