@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all turns
-    const turnRows = await findTurnsByProject(db, projectId, 10000);
+    const turnRows = await findTurnsByProject(db, { projectId, limit: 10000 });
 
     const turns: CfpackTurn[] = [];
     const allKeywords: Map<string, { count: number; polarity: string }> = new Map();

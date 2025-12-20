@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Turns
-    const turns = await findTurnsByProject(db, projectId, 10000);
+    const turns = await findTurnsByProject(db, { projectId, limit: 10000 });
     for (const turn of turns) {
       const rings = turn.ringsJson ? JSON.parse(turn.ringsJson) : null;
       lines.push(

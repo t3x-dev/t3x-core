@@ -36,6 +36,7 @@ export {
 export {
   type CreateTurnInput,
   type ListTurnsOptions,
+  type ListTurnsByProjectOptions,
   TurnWindowError,
   insertTurn,
   findTurnByHash,

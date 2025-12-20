@@ -25,6 +25,12 @@ export interface ListTurnsOptions {
   order?: 'asc' | 'desc';
 }
 
+export interface ListTurnsByProjectOptions {
+  projectId: string;
+  limit?: number;
+  offset?: number;
+}
+
 /**
  * Insert a new turn
  */
@@ -108,14 +114,15 @@ export async function findTurnsByConversation(
  */
 export async function findTurnsByProject(
   db: AnyDB,
-  projectId: string,
-  limit = 100,
-  offset = 0
+  options: ListTurnsByProjectOptions
 ): Promise<Turn[]> {
+  const limit = options.limit ?? 100;
+  const offset = options.offset ?? 0;
+
   return db
     .select()
     .from(turns)
-    .where(eq(turns.projectId, projectId))
+    .where(eq(turns.projectId, options.projectId))
     .orderBy(desc(turns.createdAt))
     .limit(limit)
     .offset(offset);
