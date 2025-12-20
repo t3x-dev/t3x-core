@@ -58,7 +58,9 @@
       "Bash(node /tmp/test_conflict.mjs:*)",
       "Bash(git mv:*)",
       "Bash(git rm:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(mkdir:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
