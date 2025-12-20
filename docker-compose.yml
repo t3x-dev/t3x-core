@@ -47,18 +47,18 @@ services:
       - t3x-network
 
   # ============================================
-  # T3X WebUI (React + Vite)
+  # T3X WebUI (Next.js)
   # ============================================
   t3x-webui:
     build:
-      context: ./t3x-webui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: t3x-webui/Dockerfile
     container_name: t3x-webui
     ports:
       - "3000:3000"
     environment:
-      - VITE_CORE_API_URL=http://localhost:8000
-      - VITE_RUNNER_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_CORE_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
     depends_on:
       t3x-core:
         condition: service_healthy

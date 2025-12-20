@@ -58,3 +58,6 @@ coverage.xml
 *.db-shm
 *.db-wal
 .contextflow/
+
+# Next.js
+.next/
