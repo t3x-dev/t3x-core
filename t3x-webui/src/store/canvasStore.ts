@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, SourceTextBlock, TurnBoundary } from '../types/nodes'
-import * as api from '../services/api'
+import * as api from '@/lib/api'
 import { tokenizeText } from '../utils/tokenizer'
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
@@ -1920,6 +1920,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         article: '文章',
         email: 'Email',
         slack: 'Slack',
+        deploy: 'Deploy',
+        eval: 'Eval',
       }
 
       // Position leaf above the commit node
