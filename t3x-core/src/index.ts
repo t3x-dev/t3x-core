@@ -97,13 +97,6 @@ export {
   createMergeEngine,
 } from './merge';
 
-// Database
-export {
-  openDB,
-  getDb,
-  closeDB,
-  getDbPath,
-} from './db';
-
-// Storage (path resolution + CRUD)
+// Storage (types + pure utils only)
+// For CRUD operations, use @t3x/storage package
 export * from './storage';
