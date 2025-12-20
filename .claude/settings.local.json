@@ -69,7 +69,8 @@
       "Bash(npx @next/codemod@canary next-lint-to-eslint-cli .)",
       "Bash(npx:*)",
       "Bash(pkill:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run build:storage:*)"
     ],
     "deny": [],
     "ask": []
