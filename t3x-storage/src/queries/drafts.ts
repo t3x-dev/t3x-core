@@ -115,6 +115,39 @@ export async function findDraftsByProject(
 }
 
 /**
+ * Update draft content
+ */
+export interface UpdateDraftInput {
+  text?: string;
+  mustHave?: unknown[];
+  bridgePayload?: unknown;
+  completedAt?: Date;
+}
+
+export async function updateDraft(
+  db: AnyDB,
+  draftId: string,
+  input: UpdateDraftInput
+): Promise<Draft | null> {
+  const existing = await findDraftById(db, draftId);
+  if (!existing) return null;
+
+  const updates: Partial<NewDraft> = {};
+  if (input.text !== undefined) updates.text = input.text;
+  if (input.mustHave !== undefined) updates.mustHaveJson = JSON.stringify(input.mustHave);
+  if (input.bridgePayload !== undefined) updates.bridgePayloadJson = JSON.stringify(input.bridgePayload);
+  if (input.completedAt !== undefined) updates.completedAt = input.completedAt;
+
+  const [updated] = await db
+    .update(drafts)
+    .set(updates)
+    .where(eq(drafts.draftId, draftId))
+    .returning();
+
+  return updated ?? null;
+}
+
+/**
  * Update draft status
  */
 export async function updateDraftStatus(
