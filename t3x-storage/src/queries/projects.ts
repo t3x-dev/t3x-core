@@ -4,8 +4,8 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
-import { eq, desc } from 'drizzle-orm';
-import { projects, type Project, type NewProject } from '../schema';
+import { eq, desc, sql } from 'drizzle-orm';
+import { projects, conversations, turns, commits, branches, drafts, type Project, type NewProject } from '../schema';
 import { generateProjectId, isoNow } from '@t3x/core';
 import type { AnyDB } from '../adapters';
 
@@ -17,6 +17,18 @@ export interface CreateProjectInput {
 export interface ListProjectsOptions {
   limit?: number;
   offset?: number;
+}
+
+export interface ProjectStats {
+  conversationsCount: number;
+  turnsCount: number;
+  commitsCount: number;
+  branchesCount: number;
+  draftsCount: number;
+}
+
+export interface ProjectWithStats extends Project {
+  stats: ProjectStats;
 }
 
 /**
@@ -115,4 +127,52 @@ export async function deleteProject(
     .returning();
 
   return result.length > 0;
+}
+
+/**
+ * Find project with stats (counts of related entities)
+ */
+export async function findProjectWithStats(
+  db: AnyDB,
+  projectId: string
+): Promise<ProjectWithStats | null> {
+  const project = await findProjectById(db, projectId);
+  if (!project) return null;
+
+  // Get counts for all related entities
+  const [convCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(conversations)
+    .where(eq(conversations.projectId, projectId));
+
+  const [turnCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(turns)
+    .where(eq(turns.projectId, projectId));
+
+  const [commitCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(commits)
+    .where(eq(commits.projectId, projectId));
+
+  const [branchCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(branches)
+    .where(eq(branches.projectId, projectId));
+
+  const [draftCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(drafts)
+    .where(eq(drafts.projectId, projectId));
+
+  return {
+    ...project,
+    stats: {
+      conversationsCount: Number(convCount?.count ?? 0),
+      turnsCount: Number(turnCount?.count ?? 0),
+      commitsCount: Number(commitCount?.count ?? 0),
+      branchesCount: Number(branchCount?.count ?? 0),
+      draftsCount: Number(draftCount?.count ?? 0),
+    },
+  };
 }
