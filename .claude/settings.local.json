@@ -75,7 +75,10 @@
       "Bash(npm run test:core:*)",
       "Bash(npm run test:storage:*)",
       "Bash(npm run build:core:*)",
-      "Bash(npm run test:webui:*)"
+      "Bash(npm run test:webui:*)",
+      "Bash(chmod:*)",
+      "Bash(timeout 15 npm run dev:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

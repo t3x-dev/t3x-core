@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
-import { findTurnByHash, findCommitByHash, findSegmentEmbeddingsByTurn } from '@t3x/storage';
+import { findTurnByHash, findCommitByHash, findSegmentEmbeddingsByTurn } from '@t3x/storage/pglite';
 import { createDiffEngine, type DiffSegment, type RingOutput } from '@t3x/core';
 import {
   createGoogleAIEmbeddingProvider,

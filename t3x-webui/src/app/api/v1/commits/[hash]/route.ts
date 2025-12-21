@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
-import { findCommitByHash } from '@t3x/storage';
+import { findCommitByHash } from '@t3x/storage/pglite';
 
 interface ApiResponse<T> {
   success: boolean;
