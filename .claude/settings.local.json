@@ -71,7 +71,9 @@
       "Bash(pkill:*)",
       "Bash(npm install:*)",
       "Bash(npm run build:storage:*)",
-      "Bash(npm run test:*)"
+      "Bash(npm run test:*)",
+      "Bash(npm run test:core:*)",
+      "Bash(npm run test:storage:*)"
     ],
     "deny": [],
     "ask": []
