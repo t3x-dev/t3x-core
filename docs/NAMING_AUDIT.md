@@ -345,11 +345,11 @@ All error codes use SCREAMING_SNAKE_CASE ✓
 | Mixed lib files | `claude.ts`, `db.ts` | Review |
 
 **Recommendations:**
-| Current | Proposed | Reason |
+| Current | Proposed | Status |
 |---------|----------|--------|
-| `lib/providers/claude.ts` | `lib/providers/claude.provider.ts` | Clarity |
-| `lib/providers/embedding.ts` | `lib/providers/embedding.provider.ts` | Clarity |
-| `lib/db.ts` | Keep | Short, clear |
+| `lib/providers/claude.ts` | `lib/providers/claude.provider.ts` | ✓ DONE |
+| `lib/providers/embedding.ts` | `lib/providers/embedding.provider.ts` | ✓ DONE |
+| `lib/db.ts` | Keep | N/A |
 
 ---
 
@@ -382,10 +382,10 @@ These are being superseded by @t3x/storage (Drizzle-based).
 3. **`get*` for computed values**: Different from `find*` for entities (semantic clarity)
 
 ### Action Items
-| Priority | Item | Effort |
+| Priority | Item | Status |
 |----------|------|--------|
-| Low | Rename provider files to `*.provider.ts` | Small |
+| Low | Rename provider files to `*.provider.ts` | ✓ DONE |
 | None | Everything else | Already consistent |
 
 ### Conclusion
-**The T3X codebase is well-aligned with industry naming conventions.** No major refactoring needed.
+**The T3X codebase is fully aligned with industry naming conventions.** All action items completed.
