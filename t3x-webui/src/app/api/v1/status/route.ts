@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
-import { findProjects } from '@t3x/storage';
+import { findProjects } from '@t3x/storage/pglite';
 
 const startTime = Date.now();
 

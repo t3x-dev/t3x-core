@@ -12,7 +12,7 @@ import {
   findDraftsByProject,
   findProjectById,
   type DraftStatus,
-} from '@t3x/storage';
+} from '@t3x/storage/pglite';
 
 interface ApiResponse<T> {
   success: boolean;

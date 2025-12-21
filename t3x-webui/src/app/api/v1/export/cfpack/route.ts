@@ -11,7 +11,7 @@ import {
   findProjectById,
   findTurnsByProject,
   findCommitsByProject,
-} from '@t3x/storage';
+} from '@t3x/storage/pglite';
 
 // ============================================================================
 // Types (matching Python schemas)
