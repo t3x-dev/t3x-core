@@ -16,7 +16,7 @@ import type { LLMProvider, LLMGenerateOptions } from '../llm';
  */
 export class StubEmbeddingProvider implements EmbeddingProvider {
   readonly id = 'stub-embedding';
-  readonly dimensions = 1;
+  readonly dim = 1;
 
   /**
    * Encode texts to simple length-based vectors
@@ -44,7 +44,7 @@ export class StubEmbeddingProvider implements EmbeddingProvider {
  */
 export class WordOverlapEmbeddingProvider implements EmbeddingProvider {
   readonly id = 'word-overlap';
-  readonly dimensions = 100; // Arbitrary, not used
+  readonly dim = 100; // Arbitrary, not used
 
   private wordCache = new Map<string, Set<string>>();
 
@@ -98,7 +98,7 @@ export class WordOverlapEmbeddingProvider implements EmbeddingProvider {
  */
 export class ExactMatchEmbeddingProvider implements EmbeddingProvider {
   readonly id = 'exact-match';
-  readonly dimensions = 256;
+  readonly dim = 256;
 
   private textToVec = new Map<string, number[]>();
   private vecCounter = 0;
@@ -109,8 +109,8 @@ export class ExactMatchEmbeddingProvider implements EmbeddingProvider {
       let vec = this.textToVec.get(normalized);
       if (!vec) {
         // Create unique vector for each unique text
-        vec = Array(this.dimensions).fill(0);
-        vec[this.vecCounter % this.dimensions] = 1;
+        vec = Array(this.dim).fill(0);
+        vec[this.vecCounter % this.dim] = 1;
         this.vecCounter++;
         this.textToVec.set(normalized, vec);
       }

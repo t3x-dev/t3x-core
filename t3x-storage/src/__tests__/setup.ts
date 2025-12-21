@@ -10,8 +10,11 @@ import { drizzle } from 'drizzle-orm/pglite';
 import * as schema from '../schema';
 import type { AnyDB } from '../adapters';
 
-// SQL to create all tables (matching schema.ts)
-const CREATE_TABLES_SQL = `
+/**
+ * SQL to create all tables (matching schema.ts)
+ * Exported for reuse in other packages (e.g., t3x-webui tests)
+ */
+export const CREATE_TABLES_SQL = `
 -- Projects
 CREATE TABLE IF NOT EXISTS projects (
   project_id TEXT PRIMARY KEY,
