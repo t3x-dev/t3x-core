@@ -24,9 +24,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Clean install dependencies
+      - name: Install dependencies
         run: |
-          rm -rf node_modules
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
           npm install
 
       - name: Build packages
@@ -52,9 +53,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Clean install dependencies
+      - name: Install dependencies
         run: |
-          rm -rf node_modules
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
           npm install
 
       - name: Build all packages
@@ -73,9 +75,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Clean install dependencies
+      - name: Install dependencies
         run: |
-          rm -rf node_modules
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
           npm install
 
       - name: Build core (required for lint)
