@@ -11,7 +11,7 @@ import {
   findTurnsByProject,
   findCommitsByProject,
   findConversationsByProject,
-} from '@t3x/storage';
+} from '@t3x/storage/pglite';
 
 function errorResponse(code: string, message: string) {
   return { success: false, error: { code, message } };

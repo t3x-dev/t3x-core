@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
-import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x/storage';
+import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x/storage/pglite';
 import { createClaudeProvider } from '@/lib/providers';
 import { LLMProviderError } from '@t3x/core';
 
