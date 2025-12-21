@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
-import { insertProject, findProjects } from '@t3x/storage';
+import { insertProject, findProjects } from '@t3x/storage/pglite';
 
 interface ApiResponse<T> {
   success: boolean;

@@ -1,24 +1,54 @@
 # T3X Full Stack
 #
 # Services:
-# - t3x-webui:   Next.js frontend + API (uses @t3x/storage with PGLite)
+# - postgres:    PostgreSQL database (shared storage)
+# - t3x-webui:   Next.js frontend + API (uses @t3x/storage)
 # - t3x-runner:  Node.js eval engine (grey-box testing)
 # - agent-demo:  Demo agent for testing (summarize + email)
 #
+# Database Modes:
+#   Default (docker): Uses PostgreSQL container
+#   Local dev:        Uses PGLite (run webui directly with npm run dev)
+#   Cloud:            Uses Supabase (set SUPABASE_DATABASE_URL)
+#
 # Usage:
-#   docker-compose up                    # Start all services
+#   docker-compose up                    # Start all services with PostgreSQL
 #   docker-compose up -d                 # Start in background
 #   docker-compose --profile n8n up      # Include n8n workflow engine
 #   docker-compose down                  # Stop all services
 #
 # Ports:
 #   3000 - WebUI (includes API routes)
+#   5432 - PostgreSQL
 #   8080 - Runner API
 #   9000 - Demo Agent
 
 version: '3.8'
 
 services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: t3x-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: t3x
+      POSTGRES_PASSWORD: t3x_dev_password
+      POSTGRES_DB: t3x
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U t3x -d t3x"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - t3x-network
+
   # ============================================
   # T3X WebUI (Next.js + API Routes)
   # ============================================
@@ -29,10 +59,14 @@ services:
     container_name: t3x-webui
     ports:
       - "3000:3000"
-    volumes:
-      - t3x-data:/app/.t3x
     environment:
-      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
+      # Use PostgreSQL in Docker mode
+      DATABASE_ADAPTER: postgres
+      DATABASE_URL: postgresql://t3x:t3x_dev_password@postgres:5432/t3x
+      NEXT_PUBLIC_RUNNER_API_URL: http://localhost:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -53,8 +87,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PORT=8080
-      - LOG_LEVEL=info
+      PORT: 8080
+      LOG_LEVEL: info
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -75,7 +109,7 @@ services:
     ports:
       - "9000:9000"
     environment:
-      - PORT=9000
+      PORT: 9000
     volumes:
       - agent-outbox:/app/outbox
     restart: unless-stopped
@@ -98,11 +132,11 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
     environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678
-      - GENERIC_TIMEZONE=UTC
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678
+      GENERIC_TIMEZONE: UTC
     restart: unless-stopped
     profiles:
       - n8n
@@ -114,7 +148,7 @@ networks:
     driver: bridge
 
 volumes:
-  t3x-data:
+  postgres-data:
     driver: local
   agent-outbox:
     driver: local

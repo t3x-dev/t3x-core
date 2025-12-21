@@ -14,7 +14,7 @@ import {
   findSegmentEmbeddingsByTurns,
   bufferToFloat32Array,
   type AnyDB,
-} from '@t3x/storage';
+} from '@t3x/storage/pglite';
 
 const GOOGLE_AI_EMBEDDING_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 

@@ -23,10 +23,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
+          npm install
 
       - name: Build packages
         run: npm run build:core && npm run build:storage
@@ -50,10 +52,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
+          npm install
 
       - name: Build all packages
         run: npm run build
@@ -70,10 +74,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
+          npm install
 
       - name: Build core (required for lint)
         run: npm run build:core

@@ -11,7 +11,7 @@ import {
   findConversationById,
   findTurnsByConversation,
   insertDraft,
-} from '@t3x/storage';
+} from '@t3x/storage/pglite';
 import { createClaudeProvider } from '@/lib/providers';
 import { LLMProviderError } from '@t3x/core';
 
