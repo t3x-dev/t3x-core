@@ -1,16 +1,14 @@
 /**
- * Core API client for t3x-webui
+ * API client for t3x-webui
  *
- * Connects to t3x-core FastAPI backend.
- * All data is shared with CLI through the same SQLite database.
+ * Calls local Next.js API routes which use @t3x/storage directly.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:8000'
-const API_V1 = `${BASE_URL}/api/v1`
+const API_V1 = '/api/v1'
 const DEFAULT_TIMEOUT = 10000
 
 // ============================================================================
-// Types (aligned with core_api/schemas.py)
+// Types (aligned with @t3x/storage schema)
 // ============================================================================
 
 export interface Project {
@@ -475,7 +473,7 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 // ============================================================================
 
 export async function checkHealth(): Promise<{ status: string; version: string; uptime: number }> {
-  const res = await fetchWithTimeout(`${BASE_URL}/health`, undefined, 5000)
+  const res = await fetchWithTimeout(`/api/v1/health`, undefined, 5000)
   return handleResponse(res)
 }
 

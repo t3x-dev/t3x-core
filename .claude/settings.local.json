@@ -73,7 +73,9 @@
       "Bash(npm run build:storage:*)",
       "Bash(npm run test:*)",
       "Bash(npm run test:core:*)",
-      "Bash(npm run test:storage:*)"
+      "Bash(npm run test:storage:*)",
+      "Bash(npm run build:core:*)",
+      "Bash(npm run test:webui:*)"
     ],
     "deny": [],
     "ask": []
