@@ -1,5 +1,45 @@
 # T3X Naming Convention Audit
 
+## 0. Industry Standards Validation
+
+Our naming conventions were validated against popular open source projects:
+
+### Prisma ORM ([docs](https://www.prisma.io/docs/orm/reference/prisma-client-reference))
+| Prisma Pattern | T3X Pattern | Match |
+|----------------|-------------|-------|
+| `prisma.user.findUnique()` | `findProjectById()` | Similar (we use `find*ById`) |
+| `prisma.user.findMany()` | `findProjects()` | Similar |
+| `prisma.user.create()` | `insertProject()` | Different (we use `insert*`) |
+| `prisma.user.update()` | `updateProject()` | Match |
+| `prisma.user.delete()` | `deleteProject()` | Match |
+| PascalCase models | PascalCase types | Match |
+| camelCase properties | camelCase properties | Match |
+
+**Decision**: Keep `insert*` for database operations (SQL-oriented), `create*` for factories.
+
+### NestJS ([guide](https://mahabub-r.medium.com/mastering-file-and-folder-naming-conventions-in-nestjs-for-a-scalable-backend-0edb1115033d))
+| NestJS Pattern | T3X Pattern | Match |
+|----------------|-------------|-------|
+| `users.controller.ts` | `route.ts` | Different (Next.js convention) |
+| `users.service.ts` | `*.ts` (flat) | Different |
+| `create-user.dto.ts` | `CreateUserInput` (inline) | Similar |
+| kebab-case files | Mixed | Needs review |
+| PascalCase classes | PascalCase types | Match |
+
+**Decision**: Follow Next.js App Router conventions for routes; consider service layer if complexity grows.
+
+### REST API Standards ([Medium](https://medium.com/@nadinCodeHat/rest-api-naming-conventions-and-best-practices-1c4e781eb6a5), [API Gov AU](https://api.gov.au/sections/naming-conventions.html))
+| Standard | T3X Pattern | Match |
+|----------|-------------|-------|
+| Plural nouns for resources | `/projects`, `/turns` | Match |
+| kebab-case for URI paths | `/two-way`, `/three-way` | Match |
+| snake_case OR camelCase (consistent) | snake_case in responses | Match |
+| No verbs in URIs | `/branches/switch` (verb) | Minor issue |
+
+**Decision**: `/branches/switch` is acceptable as a command endpoint; alternative is `PUT /branches/current`.
+
+---
+
 ## 1. API Routes (Current)
 
 | Route | Methods | Description |
@@ -246,3 +286,106 @@ All error codes use SCREAMING_SNAKE_CASE ✓
 
 ### Error Codes
 - SCREAMING_SNAKE_CASE: `INVALID_REQUEST`, `NOT_FOUND`, `LLM_ERROR`
+
+---
+
+## 8. Codebase Audit Results
+
+### Storage Layer (@t3x/storage) ✓ GOOD
+
+**Function Prefix Distribution:**
+| Prefix | Count | Status |
+|--------|-------|--------|
+| `find*` | 29 | ✓ Consistent |
+| `insert*` | 9 | ✓ Consistent |
+| `update*` | 6 | ✓ Consistent |
+| `delete*` | 6 | ✓ Consistent |
+| `get*` | 3 | Review: should be `find*`? |
+| Other | 6 | Domain-specific (adopt, supersede, etc.) |
+
+**Type Naming:** ✓ All follow patterns
+- `Create*Input` (9 types)
+- `List*Options` (7 types)
+- `Update*Input` (2 types)
+
+**Issues Found:**
+| Current | Issue | Recommendation |
+|---------|-------|----------------|
+| `getConversationTurnCount` | Uses `get*` | Keep (returns computed value, not entity) |
+| `getDraftTextHash` | Uses `get*` | Keep (returns computed value) |
+| `getEmbeddingsCountForTurn` | Uses `get*` | Keep (returns computed value) |
+
+**Verdict:** `get*` is acceptable for computed/derived values. `find*` for entity retrieval.
+
+---
+
+### API Routes ✓ GOOD
+
+**Error Codes:** All use SCREAMING_SNAKE_CASE
+- `INVALID_REQUEST`, `INVALID_JSON`
+- `NOT_FOUND`, `BRANCH_NOT_FOUND`
+- `*_FAILED` pattern for operation errors
+- `*_ERROR` pattern for external service errors
+
+**Response Fields:** All use snake_case
+- `project_id`, `conversation_id`, `draft_id`
+- `created_at`, `updated_at`, `completed_at`
+- `base_commit_hash`, `turn_anchor_hash`
+
+---
+
+### File Naming - NEEDS REVIEW
+
+**Current State:**
+| Pattern | Files | Status |
+|---------|-------|--------|
+| PascalCase components | `Sidebar.tsx`, `NodeModal.tsx` | ✓ React convention |
+| camelCase stores | `projectStore.ts`, `canvasStore.ts` | ✓ Good |
+| camelCase hooks | `useApi.ts` | ✓ React convention |
+| Mixed lib files | `claude.ts`, `db.ts` | Review |
+
+**Recommendations:**
+| Current | Proposed | Reason |
+|---------|----------|--------|
+| `lib/providers/claude.ts` | `lib/providers/claude.provider.ts` | Clarity |
+| `lib/providers/embedding.ts` | `lib/providers/embedding.provider.ts` | Clarity |
+| `lib/db.ts` | Keep | Short, clear |
+
+---
+
+### Core Package (@t3x/core) - LEGACY CODE
+
+**Note:** Some functions in @t3x/core follow older patterns from SQLite-based storage.
+These are being superseded by @t3x/storage (Drizzle-based).
+
+| Legacy Function | Status |
+|-----------------|--------|
+| `listTurnsV1`, `listDraftsV1` | Deprecated - use @t3x/storage |
+| `updateDraftV1` | Deprecated - use @t3x/storage |
+| `openDB`, `closeDB`, `getDb` | SQLite-specific, not used by webui |
+
+---
+
+## 9. Summary
+
+### What's Aligned with Industry Standards ✓
+1. **Prisma-like query naming**: `find*ById`, `find*sByProject`
+2. **REST API conventions**: Plural nouns, kebab-case paths
+3. **Response field naming**: Consistent snake_case
+4. **Error codes**: Consistent SCREAMING_SNAKE_CASE
+5. **Type naming**: `Create*Input`, `List*Options`, `*Response`
+6. **Factory pattern**: `create*Engine`, `create*Provider`
+
+### Minor Deviations (Acceptable)
+1. **`insert*` vs `create*`**: We use `insert*` for DB ops, `create*` for factories (clearer distinction)
+2. **`/branches/switch`**: Verb in path, but acceptable for command endpoints
+3. **`get*` for computed values**: Different from `find*` for entities (semantic clarity)
+
+### Action Items
+| Priority | Item | Effort |
+|----------|------|--------|
+| Low | Rename provider files to `*.provider.ts` | Small |
+| None | Everything else | Already consistent |
+
+### Conclusion
+**The T3X codebase is well-aligned with industry naming conventions.** No major refactoring needed.
