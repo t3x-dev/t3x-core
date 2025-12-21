@@ -67,6 +67,7 @@ export async function findMergeResultById(
 
 /**
  * Find merge result by commit hashes
+ * Returns the most recent result when multiple matches exist
  */
 export async function findMergeResultByHashes(
   db: AnyDB,
@@ -82,7 +83,9 @@ export async function findMergeResultByHashes(
       eq(mergeResults.sourceCommitHash, sourceCommitHash),
       eq(mergeResults.targetCommitHash, targetCommitHash)
     ))
-    .orderBy(desc(mergeResults.createdAt))
+    // Sort by createdAt desc, then by mergeResultId desc for deterministic ordering
+    // when timestamps are equal (e.g., in fast test execution)
+    .orderBy(desc(mergeResults.createdAt), desc(mergeResults.mergeResultId))
     .limit(1);
 
   return result ?? null;
