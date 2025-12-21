@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@t3x/core": "file:../t3x-core",
@@ -19,12 +21,15 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.15",
     "@eslint/eslintrc": "^3.3.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "drizzle-orm": "^0.38.3",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   }
 }

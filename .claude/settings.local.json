@@ -70,7 +70,8 @@
       "Bash(npx:*)",
       "Bash(pkill:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build:storage:*)"
+      "Bash(npm run build:storage:*)",
+      "Bash(npm run test:*)"
     ],
     "deny": [],
     "ask": []
