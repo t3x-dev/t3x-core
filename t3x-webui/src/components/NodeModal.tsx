@@ -11,7 +11,7 @@ import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, GitCompare
 import type { Node } from 'reactflow'
 import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock, TurnBoundary } from '../types/nodes'
 import { useCanvasStore } from '../store/canvasStore'
-import * as api from '../services/api'
+import * as api from '@/lib/api'
 import { PendingSourceEditor } from './SelectableTextBlock'
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
