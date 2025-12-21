@@ -1,8 +1,7 @@
 # T3X Full Stack
 #
 # Services:
-# - t3x-core:    Python FastAPI backend (commits, conversations, lineage)
-# - t3x-webui:   React frontend (canvas visualization)
+# - t3x-webui:   Next.js frontend + API (uses @t3x/storage with PGLite)
 # - t3x-runner:  Node.js eval engine (grey-box testing)
 # - agent-demo:  Demo agent for testing (summarize + email)
 #
@@ -13,8 +12,7 @@
 #   docker-compose down                  # Stop all services
 #
 # Ports:
-#   3000 - WebUI
-#   8000 - Core API
+#   3000 - WebUI (includes API routes)
 #   8080 - Runner API
 #   9000 - Demo Agent
 
@@ -22,47 +20,25 @@ version: '3.8'
 
 services:
   # ============================================
-  # T3X Core API (Python FastAPI)
-  # ============================================
-  t3x-core:
-    build:
-      context: ./t3x-core
-      dockerfile: Dockerfile
-    container_name: t3x-core
-    ports:
-      - "8000:8000"
-    volumes:
-      - t3x-data:/app/.t3x
-    environment:
-      - CF_HOST=0.0.0.0
-      - CF_PORT=8000
-      - LOG_LEVEL=info
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-    networks:
-      - t3x-network
-
-  # ============================================
-  # T3X WebUI (React + Vite)
+  # T3X WebUI (Next.js + API Routes)
   # ============================================
   t3x-webui:
     build:
-      context: ./t3x-webui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: t3x-webui/Dockerfile
     container_name: t3x-webui
     ports:
       - "3000:3000"
+    volumes:
+      - t3x-data:/app/.t3x
     environment:
-      - VITE_CORE_API_URL=http://localhost:8000
-      - VITE_RUNNER_API_URL=http://localhost:8080
-    depends_on:
-      t3x-core:
-        condition: service_healthy
+      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
     networks:
       - t3x-network
 
@@ -78,11 +54,7 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
-      - T3X_CORE_URL=http://t3x-core:8000
       - LOG_LEVEL=info
-    depends_on:
-      t3x-core:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]

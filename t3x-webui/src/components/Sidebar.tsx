@@ -1,5 +1,8 @@
-import { NavLink, useLocation } from 'react-router-dom'
-import { Home, BarChart3, FileText, Github, Rocket } from 'lucide-react'
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Home, BarChart3, FileText, Github, Rocket } from 'lucide-react';
 
 // T3X Logo - Two obtuse angles facing each other (bowtie shape)
 function LogoIcon() {
@@ -34,7 +37,7 @@ function LogoIcon() {
         fill="none"
       />
     </svg>
-  )
+  );
 }
 
 // Robot/Agent icon
@@ -86,15 +89,15 @@ function AgentIcon({ className }: { className?: string }) {
         strokeLinecap="round"
       />
     </svg>
-  )
+  );
 }
 
 export function Sidebar() {
-  const location = useLocation()
-  const isAgentDemo = location.pathname.startsWith('/agent-demo')
-  const isDeploy = location.pathname.startsWith('/deploy') || location.pathname.startsWith('/eval')
-  const isInsights = location.pathname.startsWith('/insights')
-  const isHome = location.pathname === '/' || location.pathname.startsWith('/project')
+  const pathname = usePathname();
+  const isAgentDemo = pathname.startsWith('/agent-demo');
+  const isDeploy = pathname.startsWith('/deploy') || pathname.startsWith('/eval');
+  const isInsights = pathname.startsWith('/insights');
+  const isHome = pathname === '/' || pathname.startsWith('/project');
 
   return (
     <aside className="sidebar">
@@ -105,48 +108,40 @@ export function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="sidebar__nav">
-        <NavLink
-          to="/"
-          className={() =>
-            `sidebar__nav-item ${isHome ? 'sidebar__nav-item--active' : ''}`
-          }
+        <Link
+          href="/"
+          className={`sidebar__nav-item ${isHome ? 'sidebar__nav-item--active' : ''}`}
           title="Projects"
         >
           <Home size={20} />
-        </NavLink>
+        </Link>
 
-        <NavLink
-          to="/agent-demo/chat"
-          className={() =>
-            `sidebar__nav-item ${isAgentDemo ? 'sidebar__nav-item--active' : ''}`
-          }
+        <Link
+          href="/agent-demo/chat"
+          className={`sidebar__nav-item ${isAgentDemo ? 'sidebar__nav-item--active' : ''}`}
           title="Agent Demo"
         >
           <AgentIcon />
-        </NavLink>
+        </Link>
 
-        <NavLink
-          to="/deploy"
-          className={() =>
-            `sidebar__nav-item ${isDeploy ? 'sidebar__nav-item--active' : ''}`
-          }
+        <Link
+          href="/deploy"
+          className={`sidebar__nav-item ${isDeploy ? 'sidebar__nav-item--active' : ''}`}
           title="Deploy & Eval"
         >
           <Rocket size={20} />
-        </NavLink>
+        </Link>
       </nav>
 
       {/* Bottom Navigation */}
       <nav className="sidebar__nav sidebar__nav--bottom">
-        <NavLink
-          to="/insights"
-          className={() =>
-            `sidebar__nav-item ${isInsights ? 'sidebar__nav-item--active' : ''}`
-          }
+        <Link
+          href="/insights"
+          className={`sidebar__nav-item ${isInsights ? 'sidebar__nav-item--active' : ''}`}
           title="Insights"
         >
           <BarChart3 size={20} />
-        </NavLink>
+        </Link>
 
         <button
           className="sidebar__nav-item"
@@ -167,5 +162,5 @@ export function Sidebar() {
         </a>
       </nav>
     </aside>
-  )
+  );
 }

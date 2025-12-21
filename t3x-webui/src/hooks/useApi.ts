@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import * as api from '../services/api'
+import * as api from '@/lib/api'
 import type {
   Project,
   ProjectDetail,
@@ -14,7 +14,7 @@ import type {
   Commit,
   CommitDetail,
   Draft,
-} from '../services/api'
+} from '@/lib/api'
 
 // ============================================================================
 // Generic fetch hook with proper dependency handling
