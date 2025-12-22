@@ -17,6 +17,8 @@ import {
   findTurnsByProject,
   findLastTurnInConversation,
   findTurnChain,
+  findTurnsInWindow,
+  TurnWindowError,
 } from '../queries/turns';
 import { turns } from '../schema';
 import type { AnyDB } from '../adapters';
@@ -287,6 +289,99 @@ describe('Turns Storage', () => {
 
       expect(chain).toHaveLength(1);
       expect(chain[0].turnHash).toBe(root.turnHash);
+    });
+  });
+
+  describe('findTurnsInWindow', () => {
+    it('returns turns between start and end hash (inclusive)', async () => {
+      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Window Test' }));
+
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
+      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
+      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Third' }));
+      const t4 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' }));
+
+      // Get window from t2 to t4
+      const window = await findTurnsInWindow(db, t2.turnHash, t4.turnHash);
+
+      expect(window).toHaveLength(3);
+      expect(window[0].turnHash).toBe(t2.turnHash);
+      expect(window[1].turnHash).toBe(t3.turnHash);
+      expect(window[2].turnHash).toBe(t4.turnHash);
+    });
+
+    it('returns single turn when start equals end', async () => {
+      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Single Window' }));
+
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Only' }));
+
+      const window = await findTurnsInWindow(db, t1.turnHash, t1.turnHash);
+
+      expect(window).toHaveLength(1);
+      expect(window[0].turnHash).toBe(t1.turnHash);
+    });
+
+    it('returns full chain when start is root', async () => {
+      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Full Window' }));
+
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
+      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
+      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'End' }));
+
+      const window = await findTurnsInWindow(db, t1.turnHash, t3.turnHash);
+
+      expect(window).toHaveLength(3);
+      expect(window[0].turnHash).toBe(t1.turnHash);
+      expect(window[2].turnHash).toBe(t3.turnHash);
+    });
+
+    it('throws END_NOT_FOUND when end turn does not exist', async () => {
+      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Error Test 1' }));
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Start' }));
+
+      await expect(
+        findTurnsInWindow(db, t1.turnHash, 'sha256:nonexistent')
+      ).rejects.toThrow(TurnWindowError);
+
+      try {
+        await findTurnsInWindow(db, t1.turnHash, 'sha256:nonexistent');
+      } catch (e) {
+        expect(e).toBeInstanceOf(TurnWindowError);
+        expect((e as TurnWindowError).code).toBe('END_NOT_FOUND');
+      }
+    });
+
+    it('throws START_NOT_IN_CHAIN when start is not ancestor of end', async () => {
+      // Create two separate conversations (parallel chains)
+      const conv1 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain A' }));
+      const conv2 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain B' }));
+
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv1.conversationId, { content: 'Chain A' }));
+      const t2 = await insertTurn(db, testData.turn(testProjectId, conv2.conversationId, { content: 'Chain B' }));
+
+      // t1 is not an ancestor of t2 (different chains)
+      await expect(
+        findTurnsInWindow(db, t1.turnHash, t2.turnHash)
+      ).rejects.toThrow(TurnWindowError);
+
+      try {
+        await findTurnsInWindow(db, t1.turnHash, t2.turnHash);
+      } catch (e) {
+        expect(e).toBeInstanceOf(TurnWindowError);
+        expect((e as TurnWindowError).code).toBe('START_NOT_IN_CHAIN');
+      }
+    });
+
+    it('throws START_NOT_IN_CHAIN when start comes after end in chain', async () => {
+      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Reverse Test' }));
+
+      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Earlier' }));
+      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Later' }));
+
+      // t2 comes after t1, so t2 is not an ancestor of t1
+      await expect(
+        findTurnsInWindow(db, t2.turnHash, t1.turnHash)
+      ).rejects.toThrow(TurnWindowError);
     });
   });
 });
