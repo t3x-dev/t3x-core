@@ -20,7 +20,6 @@ import {
   runEval,
   createCommitFromEval,
   type RunTrace,
-  type EngineRun,
   type TestStep,
   type TestResult,
   type EvalResponse,
@@ -49,7 +48,6 @@ const DEFAULT_TEST_STEPS: TestStep[] = [
 export default function EvalPage() {
   const { runId } = useParams<{ runId: string }>()
   const navigate = useNavigate()
-  const [engineRun, setEngineRun] = useState<EngineRun | null>(null)
   const [trace, setTrace] = useState<RunTrace | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
   const [testSteps] = useState<TestStep[]>(DEFAULT_TEST_STEPS)
@@ -57,7 +55,6 @@ export default function EvalPage() {
   const [evaluating, setEvaluating] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set())
-  const [isLegacyRun, setIsLegacyRun] = useState(false)
 
   // Load run (try Engine first, fall back to Runner)
   useEffect(() => {
@@ -70,7 +67,6 @@ export default function EvalPage() {
 
       if (legacy) {
         // Load from Runner directly
-        setIsLegacyRun(true)
         try {
           const traceData = await getRunTrace(runId)
           setTrace(traceData)
@@ -85,7 +81,6 @@ export default function EvalPage() {
       // Try Engine first
       try {
         const run = await getEngineRun(runId)
-        setEngineRun(run)
 
         // Extract trace from result if available
         if (run.result?.evidence_pack?.trace) {
@@ -97,7 +92,6 @@ export default function EvalPage() {
         try {
           const traceData = await getRunTrace(runId)
           setTrace(traceData)
-          setIsLegacyRun(true)
         } catch (runnerErr) {
           console.error('Failed to load trace from both Engine and Runner:', runnerErr)
         }

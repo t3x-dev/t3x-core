@@ -22,6 +22,18 @@ const logger = pino({
 });
 
 const app = express();
+
+// CORS middleware - allow WebUI access
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 
 // In-memory store for pending runs (awaiting n8n callback)
@@ -29,6 +41,23 @@ const pendingRuns = new Map<string, PendingRun>();
 
 // Engine callback URL
 const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
+
+// Root route - service info
+app.get('/', (_req, res) => {
+  res.json({
+    service: 't3x-runner',
+    version: '0.1.0',
+    endpoints: {
+      health: 'GET /health',
+      agents: 'POST /agents',
+      run: 'POST /run',
+      eval: 'POST /eval',
+      commit: 'POST /commit',
+      webhook: 'POST /webhook/run',
+    },
+    docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
+  });
+});
 
 // Health check
 app.get('/health', (_req, res) => {
