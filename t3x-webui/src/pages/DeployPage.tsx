@@ -18,10 +18,35 @@ interface Agent extends AgentConfig {
   lastRunAt?: string
 }
 
+// LocalStorage key for persisting agents
+const AGENTS_STORAGE_KEY = 't3x-agents'
+
+// Load agents from localStorage
+function loadAgentsFromStorage(): Agent[] {
+  try {
+    const stored = localStorage.getItem(AGENTS_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (err) {
+    console.warn('Failed to load agents from storage:', err)
+  }
+  return []
+}
+
+// Save agents to localStorage
+function saveAgentsToStorage(agents: Agent[]) {
+  try {
+    localStorage.setItem(AGENTS_STORAGE_KEY, JSON.stringify(agents))
+  } catch (err) {
+    console.warn('Failed to save agents to storage:', err)
+  }
+}
+
 export default function DeployPage() {
   const navigate = useNavigate()
   const [runnerHealthy, setRunnerHealthy] = useState<boolean | null>(null)
-  const [agents, setAgents] = useState<Agent[]>([])
+  const [agents, setAgents] = useState<Agent[]>(loadAgentsFromStorage)
   const [runs, setRuns] = useState<EngineRun[]>([])
   const [legacyRuns, setLegacyRuns] = useState<RunTrace[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +89,11 @@ export default function DeployPage() {
 
     loadData()
   }, [])
+
+  // Persist agents to localStorage when they change
+  useEffect(() => {
+    saveAgentsToStorage(agents)
+  }, [agents])
 
   const handleAddAgent = async () => {
     if (!newAgent.id || !newAgent.name || !newAgent.endpoint) return
