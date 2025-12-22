@@ -191,11 +191,20 @@ export default function EvalPage() {
   if (!trace) {
     return (
       <div className="eval-page">
-        <div className="eval-page__error">
-          <XCircle size={32} />
+        <header className="eval-page__header">
+          <div className="eval-page__header-left">
+            <FlaskConical size={20} />
+            <h1>Eval</h1>
+          </div>
+        </header>
+        <div className="eval-page__not-found">
+          <XCircle size={48} />
           <h2>Run not found</h2>
-          <p>The run ID "{runId}" could not be found.</p>
-          <button className="btn btn--secondary" onClick={() => navigate('/deploy')}>
+          <p>The run ID "<code>{runId}</code>" could not be found.</p>
+          <p className="eval-page__not-found-hint">
+            This usually means the n8n workflow hasn't been set up or activated yet.
+          </p>
+          <button className="eval-page__btn eval-page__btn--secondary" onClick={() => navigate('/deploy')}>
             <ArrowLeft size={16} /> Back to Deploy
           </button>
         </div>

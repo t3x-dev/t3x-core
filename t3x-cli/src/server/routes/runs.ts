@@ -16,6 +16,8 @@ import {
 
 // Runner URL from environment
 const RUNNER_URL = process.env.T3X_RUNNER_URL || 'http://localhost:8080';
+// Engine URL for Runner callback (use container name in Docker, localhost for local dev)
+const ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
 
 /**
  * Register runs routes
@@ -52,7 +54,7 @@ export function registerRunsRoutes(router: Router): void {
             leaf: body?.leaf,
             inputs: body?.inputs,
             callback_url: `${RUNNER_URL}/callbacks/n8n`,
-            engine_callback_url: `http://localhost:8000/api/v1/ingest/run`,
+            engine_callback_url: `${ENGINE_URL}/api/v1/ingest/run`,
             workflow: body?.workflow,
           }),
           signal: AbortSignal.timeout(10000),

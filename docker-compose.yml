@@ -64,6 +64,7 @@ services:
       - T3X_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
       - T3X_RUNNER_URL=http://t3x-runner:8080
+      - T3X_ENGINE_URL=http://t3x-core:8000
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
       - GOOGLE_CLOUD_NLP_KEY

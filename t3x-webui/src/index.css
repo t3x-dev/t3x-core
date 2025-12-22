@@ -9490,3 +9490,131 @@ button {
   background: #fef9c3;
   color: #ca8a04;
 }
+
+/* ============================================================================
+   Eval Page Styles (matching deploy-page style)
+   ============================================================================ */
+
+.eval-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+}
+
+.eval-page__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: #64748b;
+}
+
+.eval-page__loading svg {
+  animation: spin 1s linear infinite;
+}
+
+/* Header */
+.eval-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.eval-page__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eval-page__header-left svg {
+  color: #8b5cf6;
+}
+
+.eval-page__header-left h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Not Found State */
+.eval-page__not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px;
+  text-align: center;
+}
+
+.eval-page__not-found svg {
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.eval-page__not-found h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.eval-page__not-found p {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.eval-page__not-found code {
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.eval-page__not-found-hint {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-bottom: 20px;
+}
+
+/* Buttons */
+.eval-page__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.eval-page__btn--primary {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.eval-page__btn--primary:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+.eval-page__btn--secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.eval-page__btn--secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
