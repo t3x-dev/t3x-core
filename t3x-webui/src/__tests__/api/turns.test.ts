@@ -8,7 +8,8 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { setupTestDB, testData } from '../setup';
 import type { AnyDB } from '@t3x/storage';
-import { insertProject, insertConversation, insertTurn, findTurnsByConversation } from '@t3x/storage';
+import { insertProject, insertConversation, insertTurn, findTurnsByConversation, findTurnByHash } from '@t3x/storage';
+import { computeTurnHash } from '@t3x/core';
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
@@ -277,6 +278,48 @@ describe('Turns API Routes', () => {
 
       // Verify parent hash points to previous turn
       expect(data.data.parent_turn_hash).toBeDefined();
+    });
+
+    it('verifies hash consistency between API response, core computation, and database', async () => {
+      // Create a new turn via API
+      const content = 'Hash consistency test message';
+      const request = new NextRequest('http://localhost/api/v1/turns', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: testProjectId,
+          conversation_id: testConversationId,
+          role: 'user',
+          content,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+      expect(response.status).toBe(201);
+
+      const apiTurnHash = data.data.turn_hash;
+
+      // Verify hash exists in database
+      const dbTurn = await findTurnByHash(mockDB, apiTurnHash);
+      expect(dbTurn).not.toBeNull();
+      expect(dbTurn!.turnHash).toBe(apiTurnHash);
+
+      // Recompute hash using @t3x/core and verify consistency
+      const recomputedHash = computeTurnHash({
+        parent_turn_hash: data.data.parent_turn_hash,
+        project_id: data.data.project_id,
+        conversation_id: data.data.conversation_id,
+        role: data.data.role,
+        content: data.data.content,
+        language: data.data.language,
+        rings_json: data.data.rings ? JSON.stringify(data.data.rings) : null,
+        created_at: data.data.created_at,
+      });
+
+      // All three should match: API response == DB record == Core recomputation
+      expect(apiTurnHash).toBe(recomputedHash);
+      expect(dbTurn!.turnHash).toBe(recomputedHash);
     });
   });
 });
