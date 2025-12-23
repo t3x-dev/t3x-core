@@ -13,7 +13,13 @@ import {
   findProjects,
   updateProject,
   deleteProject,
+  findProjectWithStats,
 } from '../queries/projects';
+import { insertConversation } from '../queries/conversations';
+import { insertTurn } from '../queries/turns';
+import { insertBranch } from '../queries/branches';
+import { insertDraft } from '../queries/drafts';
+import { insertCommit } from '../queries/commits';
 import { projects } from '../schema';
 import type { AnyDB } from '../adapters';
 import type { PGlite } from '@electric-sql/pglite';
@@ -169,6 +175,77 @@ describe('Projects Storage', () => {
       const deleted = await deleteProject(db, 'proj_nonexistent');
 
       expect(deleted).toBe(false);
+    });
+  });
+
+  describe('findProjectWithStats', () => {
+    it('returns null for non-existent project', async () => {
+      const result = await findProjectWithStats(db, 'proj_nonexistent');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns project with zero counts when no related entities', async () => {
+      const project = await insertProject(db, testData.project({ name: 'Empty Stats' }));
+
+      const result = await findProjectWithStats(db, project.projectId);
+
+      expect(result).toBeDefined();
+      expect(result!.projectId).toBe(project.projectId);
+      expect(result!.name).toBe('Empty Stats');
+      expect(result!.stats).toEqual({
+        conversationsCount: 0,
+        turnsCount: 0,
+        commitsCount: 0,
+        branchesCount: 0,
+        draftsCount: 0,
+      });
+    });
+
+    it('returns correct counts for all related entities', async () => {
+      // Create project with related entities
+      const project = await insertProject(db, testData.project({ name: 'With Stats' }));
+      const projectId = project.projectId;
+
+      // Create 2 conversations
+      const conv1 = await insertConversation(db, { projectId, title: 'Conv 1' });
+      const conv2 = await insertConversation(db, { projectId, title: 'Conv 2' });
+
+      // Create 3 turns
+      await insertTurn(db, { projectId, conversationId: conv1.conversationId, role: 'user', content: 'Hello 1' });
+      await insertTurn(db, { projectId, conversationId: conv1.conversationId, role: 'assistant', content: 'Hi 1' });
+      await insertTurn(db, { projectId, conversationId: conv2.conversationId, role: 'user', content: 'Hello 2' });
+
+      // Create 1 branch
+      await insertBranch(db, { projectId, name: 'main' });
+
+      // Create 1 draft
+      await insertDraft(db, {
+        projectId,
+        conversationId: conv1.conversationId,
+        bridgeId: 'test',
+        bridgePayload: {},
+        llmConfig: { provider: 'test', model: 'test' },
+        text: 'Draft text',
+      });
+
+      // Create 1 commit
+      await insertCommit(db, {
+        projectId,
+        branch: 'main',
+        message: 'Initial',
+        turnWindow: null,
+        facetSnapshot: [],
+      });
+
+      const result = await findProjectWithStats(db, projectId);
+
+      expect(result).toBeDefined();
+      expect(result!.stats.conversationsCount).toBe(2);
+      expect(result!.stats.turnsCount).toBe(3);
+      expect(result!.stats.branchesCount).toBe(1);
+      expect(result!.stats.draftsCount).toBe(1);
+      expect(result!.stats.commitsCount).toBe(1);
     });
   });
 });

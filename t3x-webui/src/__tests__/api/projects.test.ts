@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { setupTestDB, testData, getTestDB } from '../setup';
+import { setupTestDB, testData } from '../setup';
 import type { AnyDB } from '@t3x/storage';
 import { insertProject, findProjects } from '@t3x/storage';
 

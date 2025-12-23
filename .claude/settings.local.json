@@ -79,8 +79,7 @@
       "Bash(chmod:*)",
       "Bash(timeout 15 npm run dev:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(npm ls:*)",
-      "Bash(rm:*)"
+      "Bash(npm run)"
     ],
     "deny": [],
     "ask": []

@@ -41,13 +41,14 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@t3x/core": "file:../t3x-core",
     "@electric-sql/pglite": "^0.2.15",
+    "@t3x/core": "file:../t3x-core",
     "drizzle-orm": "^0.38.3",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
+    "@vitest/coverage-v8": "^2.1.9",
     "drizzle-kit": "^0.30.1",
     "typescript": "^5.9.3",
     "vitest": "^2.1.0"
