@@ -78,7 +78,9 @@
       "Bash(npm run test:webui:*)",
       "Bash(chmod:*)",
       "Bash(timeout 15 npm run dev:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm ls:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
