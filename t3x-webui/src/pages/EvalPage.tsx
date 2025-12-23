@@ -13,6 +13,7 @@ import {
   Clock,
   Loader2,
   ArrowLeft,
+  RefreshCw,
 } from 'lucide-react'
 import {
   getRunTrace,
@@ -85,6 +86,42 @@ export default function EvalPage() {
         // Extract trace from result if available
         if (run.result?.evidence_pack?.trace) {
           setTrace(run.result.evidence_pack.trace as RunTrace)
+        } else if (run.result) {
+          // Generate a minimal trace from engine run result for display
+          const syntheticTrace: RunTrace = {
+            run_id: run.run_id,
+            agent_id: 'n8n-workflow',
+            started_at: run.created_at,
+            completed_at: run.updated_at,
+            status: run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : 'running',
+            input: run.inputs || {},
+            output: run.result.run_report?.output || run.result.evidence_pack?.n8n_output,
+            events: [
+              {
+                id: 'input',
+                timestamp: run.created_at,
+                type: 'agent_input',
+                data: { input: run.inputs },
+              },
+              {
+                id: 'output',
+                timestamp: run.updated_at,
+                type: 'agent_output',
+                data: {
+                  output: run.result.run_report?.output || run.result.evidence_pack?.n8n_output,
+                  latency_ms: (run.result.run_report?.meta as { latency_ms?: number } | undefined)?.latency_ms ||
+                              (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)?.latency_ms,
+                },
+              },
+            ],
+            metrics: {
+              total_latency_ms: (run.result.run_report?.meta as { latency_ms?: number } | undefined)?.latency_ms ||
+                               (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)?.latency_ms || 0,
+              llm_calls: 0,
+              tool_calls: 0,
+            },
+          }
+          setTrace(syntheticTrace)
         }
       } catch (err) {
         console.warn('Run not found in Engine, trying Runner:', err)
@@ -127,7 +164,6 @@ export default function EvalPage() {
         evalResult,
         `Eval run: ${runId} - ${evalResult.passed ? 'passed' : 'failed'}`
       )
-      // Navigate to canvas with the new commit
       navigate(`/project/${result.commit.project_id}`)
     } catch (err) {
       console.error('Failed to create commit:', err)
@@ -148,41 +184,46 @@ export default function EvalPage() {
 
   const getResultIcon = (result: TestResult) => {
     if (result.passed) {
-      return <CheckCircle size={16} className="text-green-500" />
+      return <CheckCircle size={14} style={{ color: '#16a34a' }} />
     }
     switch (result.severity) {
       case 'error':
-        return <XCircle size={16} className="text-red-500" />
+        return <XCircle size={14} style={{ color: '#dc2626' }} />
       case 'warning':
-        return <AlertTriangle size={16} className="text-yellow-500" />
+        return <AlertTriangle size={14} style={{ color: '#d97706' }} />
       default:
-        return <AlertTriangle size={16} className="text-gray-500" />
+        return <AlertTriangle size={14} style={{ color: '#6b7280' }} />
     }
   }
 
-  const getEventIcon = (type: string) => {
-    switch (type) {
-      case 'llm_call':
-        return <span className="event-icon event-icon--llm">LLM</span>
-      case 'tool_call':
-        return <span className="event-icon event-icon--tool">Tool</span>
-      case 'agent_input':
-        return <span className="event-icon event-icon--input">IN</span>
-      case 'agent_output':
-        return <span className="event-icon event-icon--output">OUT</span>
-      case 'error':
-        return <span className="event-icon event-icon--error">ERR</span>
-      default:
-        return <span className="event-icon">{type}</span>
+  const getEventTypeBadge = (type: string) => {
+    const labels: Record<string, string> = {
+      llm_call: 'LLM',
+      tool_call: 'Tool',
+      agent_input: 'Input',
+      agent_output: 'Output',
+      error: 'Error',
     }
+    const colors: Record<string, string> = {
+      llm_call: 'eval-page__badge--info',
+      tool_call: 'eval-page__badge--warning',
+      agent_input: 'eval-page__badge--default',
+      agent_output: 'eval-page__badge--success',
+      error: 'eval-page__badge--error',
+    }
+    return (
+      <span className={`eval-page__badge ${colors[type] || ''}`}>
+        {labels[type] || type}
+      </span>
+    )
   }
 
   if (loading) {
     return (
       <div className="eval-page">
         <div className="eval-page__loading">
-          <Loader2 size={32} className="animate-spin" />
-          <span>Loading trace...</span>
+          <Loader2 size={24} className="eval-page__icon--spin" />
+          <span>Loading run...</span>
         </div>
       </div>
     )
@@ -198,7 +239,7 @@ export default function EvalPage() {
           </div>
         </header>
         <div className="eval-page__not-found">
-          <XCircle size={48} />
+          <XCircle size={48} style={{ color: '#dc2626' }} />
           <h2>Run not found</h2>
           <p>The run ID "<code>{runId}</code>" could not be found.</p>
           <p className="eval-page__not-found-hint">
@@ -214,161 +255,73 @@ export default function EvalPage() {
 
   return (
     <div className="eval-page">
+      {/* Header */}
       <header className="eval-page__header">
-        <div className="eval-page__breadcrumb">
-          <button className="btn btn--link" onClick={() => navigate('/deploy')}>
-            <ArrowLeft size={16} /> Deploy
+        <div className="eval-page__header-left">
+          <button className="eval-page__btn eval-page__btn--link" onClick={() => navigate('/deploy')}>
+            <ArrowLeft size={16} />
           </button>
-          <span>/</span>
-          <span>Eval</span>
+          <FlaskConical size={20} />
+          <h1>Eval</h1>
+          <code className="eval-page__run-id">{runId}</code>
         </div>
-        <div className="eval-page__title">
-          <FlaskConical size={24} />
-          <h1>Eval: {runId}</h1>
-        </div>
-        <div className="eval-page__actions">
-          <button
-            className="btn btn--primary"
-            onClick={handleRunEval}
-            disabled={evaluating}
-          >
-            {evaluating ? (
-              <><Loader2 size={16} className="animate-spin" /> Evaluating...</>
-            ) : (
-              <><Play size={16} /> Run Eval</>
-            )}
-          </button>
-          {evalResult && (
-            <button
-              className="btn btn--secondary"
-              onClick={handleCreateCommit}
-              disabled={committing}
-            >
-              {committing ? (
-                <><Loader2 size={16} className="animate-spin" /> Creating...</>
-              ) : (
-                <><GitCommit size={16} /> Create Commit</>
-              )}
-            </button>
-          )}
+        <div className="eval-page__header-right">
+          <span className={`eval-page__status eval-page__status--${trace.status}`}>
+            {trace.status === 'completed' ? <CheckCircle size={14} /> :
+             trace.status === 'failed' ? <XCircle size={14} /> :
+             <Loader2 size={14} className="eval-page__icon--spin" />}
+            {trace.status}
+          </span>
         </div>
       </header>
 
-      <div className="eval-page__content">
-        {/* Left: Eval Results */}
-        <div className="eval-page__results">
-          {evalResult ? (
-            <>
-              <div className={`eval-summary ${evalResult.passed ? 'eval-summary--passed' : 'eval-summary--failed'}`}>
-                <div className="eval-summary__icon">
-                  {evalResult.passed ? (
-                    <CheckCircle size={32} />
-                  ) : (
-                    <XCircle size={32} />
-                  )}
-                </div>
-                <div className="eval-summary__stats">
-                  <h2>{evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}</h2>
-                  <div className="eval-summary__counts">
-                    <span className="count count--passed">{evalResult.passed_steps} passed</span>
-                    <span className="count count--failed">{evalResult.failed_steps} failed</span>
-                    <span className="count count--total">{evalResult.total_steps} total</span>
-                  </div>
-                </div>
-              </div>
-
-              <section className="eval-section">
-                <h3>Test Results</h3>
-                <div className="test-results">
-                  {evalResult.results.map((result) => (
-                    <div
-                      key={result.step_id}
-                      className={`test-result ${result.passed ? 'test-result--passed' : 'test-result--failed'}`}
-                    >
-                      <div className="test-result__header">
-                        {getResultIcon(result)}
-                        <span className="test-result__name">{result.step_name}</span>
-                        <span className={`test-result__severity test-result__severity--${result.severity}`}>
-                          {result.severity}
-                        </span>
-                      </div>
-                      {!result.passed && (
-                        <div className="test-result__details">
-                          {result.message && <p className="test-result__message">{result.message}</p>}
-                          {result.expected != null && (
-                            <div className="test-result__expected">
-                              <strong>Expected:</strong> {String(result.expected)}
-                            </div>
-                          )}
-                          {result.actual != null && (
-                            <div className="test-result__actual">
-                              <strong>Actual:</strong> {String(result.actual)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {evalResult.suggestions && evalResult.suggestions.length > 0 && (
-                <section className="eval-section">
-                  <h3>
-                    <Lightbulb size={18} /> Suggestions
-                  </h3>
-                  <div className="suggestions">
-                    {evalResult.suggestions.map((suggestion, i) => (
-                      <div key={i} className="suggestion">
-                        <div className="suggestion__header">
-                          <span className={`suggestion__type suggestion__type--${suggestion.type}`}>
-                            {suggestion.type.replace('_', ' ')}
-                          </span>
-                          <span className="suggestion__confidence">
-                            {Math.round(suggestion.confidence * 100)}% confidence
-                          </span>
-                        </div>
-                        <p className="suggestion__description">{suggestion.description}</p>
-                        {suggestion.diff && (
-                          <pre className="suggestion__diff">{suggestion.diff}</pre>
-                        )}
-                        <button className="btn btn--sm btn--primary">Apply</button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          ) : (
-            <div className="eval-page__empty">
-              <FlaskConical size={48} />
-              <h3>No Evaluation Yet</h3>
-              <p>Click "Run Eval" to evaluate this trace against test steps.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Trace Timeline */}
-        <div className="eval-page__trace">
-          <div className="trace-header">
-            <h3>Trace Timeline</h3>
-            <div className="trace-meta">
-              <span><Clock size={14} /> {trace.metrics?.total_latency_ms || 0}ms</span>
-              <span>LLM: {trace.metrics?.llm_calls || 0}</span>
-              <span>Tools: {trace.metrics?.tool_calls || 0}</span>
-            </div>
+      {/* Run Info Section */}
+      <section className="eval-page__section">
+        <div className="eval-page__section-header">
+          <h2>Run Info</h2>
+          <div className="eval-page__meta">
+            <span><Clock size={14} /> {trace.metrics?.total_latency_ms || 0}ms</span>
+            <span>LLM: {trace.metrics?.llm_calls || 0}</span>
+            <span>Tools: {trace.metrics?.tool_calls || 0}</span>
           </div>
+        </div>
+        <div className="eval-page__content">
+          <div className="eval-page__info-grid">
+            <div className="eval-page__info-item">
+              <label>Agent</label>
+              <code>{trace.agent_id}</code>
+            </div>
+            <div className="eval-page__info-item">
+              <label>Started</label>
+              <span>{new Date(trace.started_at).toLocaleString()}</span>
+            </div>
+            {trace.completed_at && (
+              <div className="eval-page__info-item">
+                <label>Completed</label>
+                <span>{new Date(trace.completed_at).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
-          <div className="trace-timeline">
-            {trace.events.map((event, index) => (
-              <div key={event.id} className="trace-event">
-                <div className="trace-event__line">
-                  <div className="trace-event__dot" />
-                  {index < trace.events.length - 1 && <div className="trace-event__connector" />}
-                </div>
-                <div className="trace-event__content">
+      {/* Trace Events Section */}
+      <section className="eval-page__section">
+        <div className="eval-page__section-header">
+          <h2>Trace Events</h2>
+          <span className="eval-page__count">{trace.events.length} events</span>
+        </div>
+        <div className="eval-page__content">
+          {trace.events.length === 0 ? (
+            <div className="eval-page__empty">
+              <p>No trace events recorded.</p>
+            </div>
+          ) : (
+            <div className="eval-page__events">
+              {trace.events.map((event) => (
+                <div key={event.id} className="eval-page__event">
                   <div
-                    className="trace-event__header"
+                    className="eval-page__event-header"
                     onClick={() => toggleEventExpand(event.id)}
                   >
                     {expandedEvents.has(event.id) ? (
@@ -376,34 +329,36 @@ export default function EvalPage() {
                     ) : (
                       <ChevronRight size={14} />
                     )}
-                    {getEventIcon(event.type)}
-                    <span className="trace-event__type">{event.type.replace('_', ' ')}</span>
+                    {getEventTypeBadge(event.type)}
+                    <span className="eval-page__event-time">
+                      {new Date(event.timestamp).toLocaleTimeString()}
+                    </span>
                     {event.data.latency_ms && (
-                      <span className="trace-event__latency">{event.data.latency_ms}ms</span>
+                      <span className="eval-page__event-latency">{event.data.latency_ms}ms</span>
                     )}
                     {event.data.model && (
-                      <span className="trace-event__model">{event.data.model}</span>
+                      <span className="eval-page__event-model">{event.data.model}</span>
                     )}
                     {event.data.tool_name && (
-                      <span className="trace-event__tool">{event.data.tool_name}</span>
+                      <span className="eval-page__event-tool">{event.data.tool_name}</span>
                     )}
                   </div>
                   {expandedEvents.has(event.id) && (
-                    <div className="trace-event__body">
+                    <div className="eval-page__event-body">
                       {event.data.input != null && (
-                        <div className="trace-event__data">
+                        <div className="eval-page__event-data">
                           <strong>Input:</strong>
                           <pre>{JSON.stringify(event.data.input, null, 2)}</pre>
                         </div>
                       )}
                       {event.data.output != null && (
-                        <div className="trace-event__data">
+                        <div className="eval-page__event-data">
                           <strong>Output:</strong>
                           <pre>{JSON.stringify(event.data.output, null, 2)}</pre>
                         </div>
                       )}
                       {event.data.error && (
-                        <div className="trace-event__data trace-event__data--error">
+                        <div className="eval-page__event-data eval-page__event-data--error">
                           <strong>Error:</strong>
                           <pre>{event.data.error}</pre>
                         </div>
@@ -411,11 +366,120 @@ export default function EvalPage() {
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Evaluation Section */}
+      <section className="eval-page__section">
+        <div className="eval-page__section-header">
+          <h2>Evaluation</h2>
+          <div className="eval-page__actions">
+            <button
+              className="eval-page__btn eval-page__btn--primary"
+              onClick={handleRunEval}
+              disabled={evaluating}
+            >
+              {evaluating ? (
+                <><Loader2 size={14} className="eval-page__icon--spin" /> Running...</>
+              ) : (
+                <><Play size={14} /> Run Eval</>
+              )}
+            </button>
+            {evalResult && (
+              <button
+                className="eval-page__btn eval-page__btn--secondary"
+                onClick={handleCreateCommit}
+                disabled={committing}
+              >
+                {committing ? (
+                  <><Loader2 size={14} className="eval-page__icon--spin" /> Creating...</>
+                ) : (
+                  <><GitCommit size={14} /> Create Commit</>
+                )}
+              </button>
+            )}
+            <button className="eval-page__btn eval-page__btn--secondary" onClick={() => window.location.reload()}>
+              <RefreshCw size={14} />
+            </button>
           </div>
         </div>
-      </div>
+        <div className="eval-page__content">
+          {evalResult ? (
+            <>
+              {/* Summary */}
+              <div className={`eval-page__summary ${evalResult.passed ? 'eval-page__summary--passed' : 'eval-page__summary--failed'}`}>
+                {evalResult.passed ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                <span>{evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}</span>
+                <span className="eval-page__summary-counts">
+                  {evalResult.passed_steps}/{evalResult.total_steps} passed
+                </span>
+              </div>
+
+              {/* Test Results Table */}
+              <table className="eval-page__table">
+                <thead>
+                  <tr>
+                    <th>Test</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evalResult.results.map((result) => (
+                    <tr key={result.step_id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {getResultIcon(result)}
+                          {result.step_name}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`eval-page__badge eval-page__badge--${result.severity}`}>
+                          {result.severity}
+                        </span>
+                      </td>
+                      <td>
+                        {result.passed ? (
+                          <span className="eval-page__badge eval-page__badge--success">passed</span>
+                        ) : (
+                          <span className="eval-page__badge eval-page__badge--error">failed</span>
+                        )}
+                      </td>
+                      <td>{result.message || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Suggestions */}
+              {evalResult.suggestions && evalResult.suggestions.length > 0 && (
+                <div className="eval-page__suggestions">
+                  <h3><Lightbulb size={16} /> Suggestions</h3>
+                  {evalResult.suggestions.map((suggestion, i) => (
+                    <div key={i} className="eval-page__suggestion">
+                      <div className="eval-page__suggestion-header">
+                        <span className="eval-page__badge">{suggestion.type.replace('_', ' ')}</span>
+                        <span>{Math.round(suggestion.confidence * 100)}% confidence</span>
+                      </div>
+                      <p>{suggestion.description}</p>
+                      {suggestion.diff && <pre>{suggestion.diff}</pre>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="eval-page__empty">
+              <FlaskConical size={32} style={{ color: '#9ca3af' }} />
+              <p>No evaluation yet. Click "Run Eval" to evaluate this trace.</p>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   )
 }
