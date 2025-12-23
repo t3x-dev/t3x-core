@@ -26,6 +26,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Clean npm cache to avoid EEXIST race condition errors
+          npm cache clean --force
           # Delete lock file to avoid cross-platform optional dependency issues
           rm -f package-lock.json
           npm install
@@ -62,6 +64,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Clean npm cache to avoid EEXIST race condition errors
+          npm cache clean --force
           # Delete lock file to avoid cross-platform optional dependency issues
           rm -f package-lock.json
           npm install
@@ -84,6 +88,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Clean npm cache to avoid EEXIST race condition errors
+          npm cache clean --force
           # Delete lock file to avoid cross-platform optional dependency issues
           rm -f package-lock.json
           npm install
