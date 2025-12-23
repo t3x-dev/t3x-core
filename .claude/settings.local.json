@@ -79,7 +79,12 @@
       "Bash(chmod:*)",
       "Bash(timeout 15 npm run dev:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(npm run)"
+      "Bash(npm run)",
+      "WebFetch(domain:pglite.dev)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

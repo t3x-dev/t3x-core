@@ -3,13 +3,97 @@ name: CI
 on:
   push:
     branches: [main, develop, 'feature/*']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+# Required for dorny/paths-filter to access PR info
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  test:
-    name: Test
+  # Detect which packages changed
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      storage: ${{ steps.filter.outputs.storage }}
+      webui: ${{ steps.filter.outputs.webui }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for accurate diff
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 't3x-core/**'
+              - 'package.json'
+            storage:
+              - 't3x-storage/**'
+              - 't3x-core/**'
+              - 'package.json'
+            webui:
+              - 't3x-webui/**'
+              - 't3x-storage/**'
+              - 't3x-core/**'
+              - 'package.json'
+
+  # ===========================================
+  # FAST CHECKS - Run on every push (feature branches)
+  # ===========================================
+  quick-check:
+    name: Quick Check (Lint & Typecheck)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
+
+      - name: Build core (required for typecheck)
+        run: npm run build:core
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p t3x-core/tsconfig.json
+
+      - name: Lint
+        run: npm run lint
+
+  # ===========================================
+  # FULL TESTS - Run on PRs and main
+  # ===========================================
+  test-core-storage:
+    name: Test Core & Storage
+    runs-on: ubuntu-latest
+    needs: changes
+    # Run on PR, or push to main, if relevant files changed
+    if: |
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      (needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true')
 
     strategy:
       matrix:
@@ -26,7 +110,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Delete lock file to avoid cross-platform optional dependency issues
           rm -f package-lock.json
           npm install
 
@@ -39,17 +122,14 @@ jobs:
       - name: Run t3x-storage tests
         run: npm run test:storage
 
-      - name: Build webui
-        run: npm run build:webui
-
-      - name: Run t3x-webui tests
-        run: npm run test:webui
-        continue-on-error: true  # Don't block CI initially until tests are proven stable
-
-  build:
-    name: Build
+  test-webui:
+    name: Test WebUI
     runs-on: ubuntu-latest
-    needs: test
+    needs: changes
+    # Run on PR, or push to main, if webui or its dependencies changed
+    if: |
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      (needs.changes.outputs.webui == 'true' || needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true')
 
     steps:
       - name: Checkout code
@@ -62,16 +142,58 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Delete lock file to avoid cross-platform optional dependency issues
+          rm -f package-lock.json
+          npm install
+
+      - name: Build dependencies
+        run: npm run build:core && npm run build:storage
+
+      - name: Build webui
+        run: npm run build:webui
+
+      - name: Run t3x-webui tests
+        run: npm run test:webui
+
+  # ===========================================
+  # BUILD - Run on PRs and main
+  # ===========================================
+  build:
+    name: Build All
+    runs-on: ubuntu-latest
+    needs: [changes, test-core-storage, test-webui]
+    if: |
+      always() &&
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      (needs.test-core-storage.result == 'success' || needs.test-core-storage.result == 'skipped') &&
+      (needs.test-webui.result == 'success' || needs.test-webui.result == 'skipped')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
           rm -f package-lock.json
           npm install
 
       - name: Build all packages
         run: npm run build
 
+  # ===========================================
+  # LINT - Run on PRs (already covered in quick-check for pushes)
+  # ===========================================
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      github.event_name == 'pull_request' &&
+      (needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true' || needs.changes.outputs.webui == 'true')
 
     steps:
       - name: Checkout code
@@ -84,7 +206,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Delete lock file to avoid cross-platform optional dependency issues
           rm -f package-lock.json
           npm install
 
@@ -93,4 +214,3 @@ jobs:
 
       - name: Run linter
         run: npm run lint
-        continue-on-error: true  # Don't fail CI on lint warnings initially

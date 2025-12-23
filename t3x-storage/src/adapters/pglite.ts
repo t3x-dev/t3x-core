@@ -51,6 +51,16 @@ export function getPGLiteDB(): PGLiteDB {
 }
 
 /**
+ * Get the raw PGLite client for direct SQL execution (dev tools only)
+ */
+export function getPGLiteClient(): PGlite {
+  if (!client) {
+    throw new Error('PGLite client not initialized. Call createPGLiteStorage() first.');
+  }
+  return client;
+}
+
+/**
  * Close the database connection
  */
 export async function closePGLiteStorage(): Promise<void> {

@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db": "node scripts/db-inspector.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite-repl": "^0.2.32",
     "@t3x/core": "file:../t3x-core",
     "@t3x/storage": "file:../t3x-storage",
     "lucide-react": "^0.553.0",
@@ -21,7 +23,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.2.15",
+    "@electric-sql/pglite": "^0.3.14",
     "@eslint/eslintrc": "^3.3.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
