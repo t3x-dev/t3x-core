@@ -22,6 +22,7 @@ export {
   type PGLiteConfig,
   createPGLiteStorage,
   getPGLiteDB,
+  getPGLiteClient,
   closePGLiteStorage,
 } from './adapters/pglite';
 

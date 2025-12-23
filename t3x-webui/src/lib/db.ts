@@ -9,10 +9,13 @@
  * for local development.
  */
 
+import type { PGlite } from '@electric-sql/pglite';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbInstance: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let initPromise: Promise<any> | null = null;
+let getPGLiteClientFn: (() => PGlite) | null = null;
 
 /**
  * Get the database instance (initializes on first call)
@@ -35,12 +38,24 @@ export async function getDB(): Promise<any> {
     console.log(`[db] Initializing PGLite storage at: ${dataDir}`);
 
     // Dynamic import from pglite-only entry point to avoid bundling postgres.js
-    const { createPGLiteStorage } = await import('@t3x/storage/pglite');
+    const { createPGLiteStorage, getPGLiteClient } = await import('@t3x/storage/pglite');
     dbInstance = await createPGLiteStorage({ dataDir });
+    getPGLiteClientFn = getPGLiteClient;
     console.log('[db] Database initialized');
 
     return dbInstance;
   })();
 
   return initPromise;
+}
+
+/**
+ * Get raw PGLite client for direct SQL execution (dev tools only)
+ * Must call getDB() first to ensure initialization.
+ */
+export function getRawClient(): PGlite {
+  if (!getPGLiteClientFn) {
+    throw new Error('Database not initialized. Call getDB() first.');
+  }
+  return getPGLiteClientFn();
 }
