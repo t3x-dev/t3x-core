@@ -1,199 +1,434 @@
-3.3 Storage Layer (Ledger + Indexes)
+# T3X Storage Architecture
 
-T3X's storage is divided into two layers:
-
-1. **JSONL Primary Ledger (Ledger)**: All auditable, reproducible semantic state (Turn chain, Commit chain, etc.) is written as JSON Lines under the `.t3x/` directory, using JCS canonicalization + SHA-256 hashing to form an append-only hash chain.
-2. **SQLite Indexes Layer (Index)**: The local SQLite database is only responsible for query acceleration, association, and caching. It can be completely rebuilt from the JSONL primary ledger at any time and is not considered the sole source of truth.
-
-In the future, when integrating with backends like Postgres / S3, you only need to reuse the same "Ledger JSON structure" and replace the Indexes implementation.
+**PostgreSQL Persistence Layer with Drizzle ORM**
 
 ---
 
-### 3.3.1 JSONL Primary Ledger
+## Overview
 
-The primary ledger is split into multiple JSONL streams by entity, located under `.t3x/` (actual path is defined in `STORAGE_ARCHITECTURE.md`). Each line is a record, hashed after JCS canonicalization.
-
-#### (1) Turn Ledger
-
-Records original conversation turns and their hash chain:
-
-```json
-{
-  "turn_hash": "sha256:...",          // SHA-256 of JCS(this record), serves as primary key
-  "parent_turn_hash": "sha256:...",   // Previous turn_hash; null for root turn
-  "project_id": "proj_...",
-  "conversation_id": "conv_...",
-  "role": "user|assistant|system|tool",
-  "content": "...",                   // Original text or structured payload
-  "metadata": { ... },                // optional: model name, token statistics, etc.
-  "created_at": "2025-11-18T12:34:56Z",
-  "schema_version": "turn_v1"
-}
-```
-
-- Hash rule: `turn_hash = SHA256(JCS(record_without_hash))`.
-- Append-only guarantee: Any modification to turn content or metadata will change the `turn_hash`, thereby breaking the chain, facilitating audits.
-
-#### (2) Commit Ledger
-
-Records immutable semantic snapshots and their DAG structure:
-
-```json
-{
-  "commit_hash": "sha256:...",        // Hash of commit payload
-  "parent_hashes": ["sha256:..."],    // Usually 0-1 parents; can be multiple during merge
-  "project_id": "proj_...",
-  "branch": "main|feature/...",       // Branch name where this commit resides
-  "turn_window": {
-    "start_turn_hash": "sha256:...",
-    "end_turn_hash": "sha256:..."
-  },
-  "facet_snapshot": [ ... ],          // Stable semantic facets aggregated from Rings 1-3
-  "pipeline_config": { ... },         // Configuration snapshot of extractor / aggregator / weights, etc.
-  "draft_ref": {
-    "draft_id": "draft_...",
-    "text_hash": "sha256:..."         // Hash of polished text
-  },
-  "signature": {
-    "key_id": "ed25519:...",
-    "algo": "ed25519",
-    "value": "base64:..."
-  },
-  "created_at": "2025-11-18T12:34:56Z",
-  "schema_version": "commit_v1"
-}
-```
-
-- Merge does not become a separate entity, but rather: a Commit with `parent_hashes.length > 1`.
-- The Commit's canonical payload (participating in hash and signature) includes the facet snapshot and pipeline configuration, ensuring it can be replayed / validated later.
-
-#### (3) Draft Ledger (optional persistence)
-
-Draft is a candidate generated based on a certain base snapshot. To ensure Draft→Commit reproducibility, at least its configuration needs to be persisted:
-
-```json
-{
-  "draft_id": "draft_...",
-  "project_id": "proj_...",
-  "base_commit_hash": "sha256:...",   // Which semantic snapshot to base on
-  "turn_anchor_hash": "sha256:...",   // optional: anchor turn for focus
-  "bridge_id": "plan|rewrite|...",    // Draft mode/bridge name
-  "bridge_payload": { ... },          // Bridge prompt template and parameter snapshot
-  "must_have": [ ... ],               // Must-Have list
-  "mustnt_have": [ ... ],             // Mustn't-Have list
-  "llm_config": {                     // Generation configuration affecting output
-    "provider": "openai|anthropic|...",
-    "model": "gpt-4.1|claude-3.5-sonnet|...",
-    "temperature": 0.3,
-    "max_tokens": 2048
-  },
-  "text": "...",                      // Generated draft text
-  "status": "ephemeral|adopted|superseded",
-  "created_at": "2025-11-18T12:34:56Z",
-  "schema_version": "draft_v1"
-}
-```
-
-Commit can either reference just the `draft_id`, or embed a streamlined configuration copy in its own payload for long-term archival.
-
-Other auxiliary Ledgers (such as branch metadata, validation logs) can be supplemented in `STORAGE_ARCHITECTURE.md`, not expanded here.
+T3X uses PostgreSQL as its storage backend, accessed through Drizzle ORM. The storage layer supports multiple deployment scenarios through interchangeable adapters.
 
 ---
 
-### 3.3.2 SQLite Indexes Layer (reference schema)
+## Storage Backends
 
-SQLite serves as local query indexes, all data can be completely rebuilt from JSONL Ledger. Core tables are listed below, showing only key fields and constraints (actual DDL is defined in `schema.sql`).
+| Backend | Use Case | Data Location |
+|---------|----------|---------------|
+| **PGLite** | Local development | `.t3x/database/` (WASM PostgreSQL) |
+| **PostgreSQL** | Docker/production | Docker container or external server |
+| **Supabase** | Cloud deployment | Supabase cloud instance |
 
-#### (1) projects
+### Backend Selection
 
-- `project_id TEXT PRIMARY KEY`
-- `name TEXT NOT NULL`
-- `created_at TEXT NOT NULL`
+```typescript
+// Local development (PGLite)
+import { createPGLiteStorage } from '@t3x/storage';
+const db = await createPGLiteStorage({ dataDir: '.t3x/database' });
 
-Aligns with the `project_id` in all Ledger records.
+// Docker/Production (PostgreSQL)
+import { createPostgresStorage } from '@t3x/storage';
+const db = await createPostgresStorage({
+  connectionString: process.env.DATABASE_URL
+});
 
-#### (2) conversations
-
-- `conversation_id TEXT PRIMARY KEY`
-- `project_id TEXT NOT NULL` → `projects.project_id`
-- `title TEXT`
-- `created_at TEXT NOT NULL`
-- `meta_json TEXT`
-
-Conversation is more like a "container", no longer maintaining a separate hash chain; history is guaranteed by the `turns` chain.
-
-#### (3) turns
-
-- `turn_hash TEXT PRIMARY KEY`           // Corresponds to `turn_hash` in Turn Ledger
-- `parent_turn_hash TEXT`
-- `project_id TEXT NOT NULL`
-- `conversation_id TEXT NOT NULL`
-- `role TEXT NOT NULL`
-- `created_at TEXT NOT NULL`
-- `ledger_file TEXT NOT NULL`            // JSONL file path
-- `ledger_offset INTEGER NOT NULL`       // Line number/offset within file
-
-Constraints (logical):
-
-- `parent_turn_hash` is either `NULL` or points to another row under the same `project_id`;
-- Implementation should avoid `UPDATE/DELETE` on `turns` to maintain consistency with Ledger's append-only nature.
-
-#### (4) drafts
-
-- `draft_id TEXT PRIMARY KEY`
-- `project_id TEXT NOT NULL`
-- `base_commit_hash TEXT NOT NULL`
-- `turn_anchor_hash TEXT`
-- `bridge_id TEXT NOT NULL`
-- `bridge_payload_json TEXT NOT NULL`
-- `must_have_json TEXT`
-- `mustnt_have_json TEXT`
-- `llm_config_json TEXT NOT NULL`
-- `text TEXT NOT NULL`
-- `status TEXT NOT NULL`
-- `created_at TEXT NOT NULL`
-
-These fields correspond one-to-one with the JSON structure in Draft Ledger, facilitating queries and filtering in CLI / WebUI.
-
-#### (5) commits
-
-- `commit_hash TEXT PRIMARY KEY`
-- `project_id TEXT NOT NULL`
-- `branch TEXT NOT NULL`
-- `parents_json TEXT NOT NULL`
-- `turn_window_start_hash TEXT`
-- `turn_window_end_hash TEXT`
-- `facet_snapshot_json TEXT NOT NULL`
-- `pipeline_config_json TEXT NOT NULL`
-- `draft_id TEXT`
-- `polished_text TEXT`
-- `signature_key_id TEXT`
-- `signature_value TEXT`
-- `created_at TEXT NOT NULL`
-- `schema_version TEXT NOT NULL`
-
-Merge no longer has a separate table; multi-parent relationships are fully expressed by `parents_json`.
-
-#### (6) diffs (cache)
-
-- `base_commit_hash TEXT NOT NULL`
-- `target_commit_hash TEXT NOT NULL`
-- `algo_version TEXT NOT NULL`
-- `diff_json TEXT NOT NULL`
-- `computed_at TEXT NOT NULL`
-
-Primary key: `(base_commit_hash, target_commit_hash, algo_version)`.
-
-Description:
-
-- `diffs` only serves as a cache layer, can be safely cleared and recalculated from Commit Ledger;
-- Does not participate in any hash chain or signature, not considered part of the "immutable ledger".
+// Cloud (Supabase)
+import { createSupabaseStorage } from '@t3x/storage';
+const db = await createSupabaseStorage({
+  connectionString: process.env.SUPABASE_URL
+});
+```
 
 ---
 
-This version of the structure achieves:
+## Database Schema
 
-- Clearly defines the boundary between JSONL as primary ledger and SQLite as Indexes;
-- Clarifies the hash chains of Turn/Commit, Commit DAG, and multi-parent Merge semantics;
-- Supplements Draft, Commit, Diff with fields required for reproducibility;
-- Does not hardcode specific DDL, but provides clear enough targets for SQLite refactoring.
+### Entity Relationship Diagram
+
+```
+┌──────────────┐       ┌─────────────────┐       ┌──────────────┐
+│   projects   │◄──────│  conversations  │◄──────│   turns_v2   │
+│              │       │                 │       │              │
+│ project_id   │       │ conversation_id │       │ turn_hash    │
+│ name         │       │ project_id (FK) │       │ parent_hash  │
+│ created_at   │       │ title           │       │ conv_id (FK) │
+│ metadata     │       │ parent_commit   │       │ role         │
+└──────────────┘       │ position_x/y    │       │ content      │
+       │               │ created_at      │       │ rings_json   │
+       │               └─────────────────┘       │ created_at   │
+       │                                         └──────────────┘
+       │
+       ▼
+┌──────────────┐       ┌─────────────────┐       ┌──────────────┐
+│   branches   │       │   commits_v2    │       │  drafts_v2   │
+│              │       │                 │       │              │
+│ branch_id    │       │ commit_hash     │       │ draft_id     │
+│ project_id   │       │ project_id (FK) │       │ project_id   │
+│ name         │       │ branch          │       │ conv_id (FK) │
+│ head_commit  │       │ parents_json    │       │ base_commit  │
+│ is_current   │       │ turn_window     │       │ bridge_id    │
+│ created_at   │       │ facet_snapshot  │       │ text         │
+└──────────────┘       │ source_refs     │       │ status       │
+                       │ created_at      │       │ created_at   │
+                       └─────────────────┘       └──────────────┘
+
+┌──────────────────┐   ┌─────────────────────┐
+│  merge_results   │   │  segment_embeddings │
+│                  │   │                     │
+│ merge_result_id  │   │ segment_id          │
+│ project_id (FK)  │   │ turn_hash (FK)      │
+│ base_commit      │   │ segment_index       │
+│ source_commit    │   │ segment_text        │
+│ target_commit    │   │ embedding_model     │
+│ status           │   │ embedding (bytea)   │
+│ auto_merged      │   │ created_at          │
+│ conflicts        │   └─────────────────────┘
+│ created_at       │
+└──────────────────┘
+```
+
+---
+
+## Table Definitions
+
+### projects
+
+Top-level container for all T3X data.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `project_id` | TEXT PK | Unique identifier (e.g., `proj_abc123`) |
+| `name` | TEXT | Human-readable project name |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `metadata_json` | TEXT | Optional JSON metadata |
+
+### conversations
+
+Container for turns within a project.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `conversation_id` | TEXT PK | Unique identifier (e.g., `conv_xyz789`) |
+| `project_id` | TEXT FK | Reference to projects |
+| `title` | TEXT | Optional conversation title |
+| `parent_commit_hash` | TEXT | Optional parent commit reference |
+| `position_x` | REAL | Canvas X position |
+| `position_y` | REAL | Canvas Y position |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `metadata_json` | TEXT | Optional JSON metadata |
+
+### turns_v2
+
+Individual conversation turns with hash chain.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `turn_hash` | TEXT PK | SHA-256 content hash (e.g., `sha256:...`) |
+| `parent_turn_hash` | TEXT | Previous turn in chain (NULL for first) |
+| `project_id` | TEXT FK | Reference to projects |
+| `conversation_id` | TEXT FK | Reference to conversations |
+| `role` | TEXT | `user` \| `assistant` \| `system` \| `tool` |
+| `content` | TEXT | Message content |
+| `language` | TEXT | Detected language code |
+| `rings_json` | TEXT | JSON-encoded Ring 1/2/3 extraction |
+| `created_at` | TIMESTAMP | Creation timestamp |
+
+**Hash Chain**: Each turn's `turn_hash` is computed from its content and `parent_turn_hash`, forming an immutable linked list.
+
+### branches
+
+Git-like branches for versioning.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `branch_id` | TEXT PK | Unique identifier (e.g., `branch_abc123`) |
+| `project_id` | TEXT FK | Reference to projects |
+| `name` | TEXT | Branch name (e.g., `main`, `feature/x`) |
+| `parent_branch` | TEXT | Parent branch name |
+| `head_commit_hash` | TEXT | Latest commit on this branch |
+| `description` | TEXT | Optional branch description |
+| `is_current` | INTEGER | 1 if current branch, 0 otherwise |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+
+**Unique Constraint**: `(project_id, name)` - One branch name per project.
+
+### commits_v2
+
+Semantic snapshots forming a DAG structure.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `commit_hash` | TEXT PK | SHA-256 content hash |
+| `project_id` | TEXT FK | Reference to projects |
+| `branch` | TEXT | Branch name |
+| `message` | TEXT | Commit message |
+| `parents_json` | TEXT | JSON array of parent commit hashes |
+| `turn_window_json` | TEXT | `{ start_turn_hash, end_turn_hash }` |
+| `facet_snapshot_json` | TEXT | Semantic extraction result |
+| `pipeline_config_json` | TEXT | Extraction configuration snapshot |
+| `draft_id` | TEXT | Reference to source draft |
+| `draft_text_hash` | TEXT | Hash of polished text |
+| `signature_json` | TEXT | Optional Ed25519 signature |
+| `source_excerpt_json` | TEXT | Source text excerpts |
+| `must_have_json` | TEXT | Required keywords |
+| `mustnt_have_json` | TEXT | Forbidden keywords |
+| `position_x` | REAL | Canvas X position |
+| `position_y` | REAL | Canvas Y position |
+| `source_refs_json` | TEXT | Multi-source references |
+| `created_at` | TIMESTAMP | Creation timestamp |
+
+**DAG Structure**: Commits with multiple parents in `parents_json` represent merge commits.
+
+### drafts_v2
+
+LLM-generated drafts pending adoption.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `draft_id` | TEXT PK | Unique identifier (e.g., `draft_abc123`) |
+| `project_id` | TEXT FK | Reference to projects |
+| `conversation_id` | TEXT FK | Reference to conversations |
+| `base_commit_hash` | TEXT | Base commit for this draft |
+| `turn_anchor_hash` | TEXT | Anchor turn reference |
+| `bridge_id` | TEXT | Bridge template ID |
+| `bridge_payload_json` | TEXT | Bridge configuration |
+| `must_have_json` | TEXT | Required keywords |
+| `mustnt_have_json` | TEXT | Forbidden keywords |
+| `llm_config_json` | TEXT | LLM generation config |
+| `text` | TEXT | Generated draft text |
+| `status` | TEXT | `ephemeral` \| `adopted` \| `superseded` |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `completed_at` | TIMESTAMP | Completion timestamp |
+
+### merge_results
+
+Cached merge computation results.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `merge_result_id` | TEXT PK | Unique identifier |
+| `project_id` | TEXT FK | Reference to projects |
+| `base_commit_hash` | TEXT | Common ancestor commit |
+| `source_commit_hash` | TEXT | Source branch tip |
+| `target_commit_hash` | TEXT | Target branch tip |
+| `status` | TEXT | `clean` \| `conflicts` |
+| `auto_merged_json` | TEXT | Auto-merged facets |
+| `conflicts_json` | TEXT | Conflict list |
+| `created_at` | TIMESTAMP | Computation timestamp |
+
+### segment_embeddings
+
+Pre-computed vectors for Ring 3 segments.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `segment_id` | TEXT PK | `{turn_hash}:s-{index}` |
+| `turn_hash` | TEXT FK | Reference to turns_v2 |
+| `segment_index` | INTEGER | Segment position (0-based) |
+| `segment_text` | TEXT | Segment content |
+| `embedding_model` | TEXT | Model used for embedding |
+| `embedding_dim` | INTEGER | Vector dimension |
+| `embedding` | BYTEA | Float32Array as binary |
+| `created_at` | TIMESTAMP | Creation timestamp |
+
+---
+
+## Hash Chain Verification
+
+### Turn Chain
+
+Turns form a linked list per conversation:
+
+```
+turn_1 (parent: NULL)
+   ↓
+turn_2 (parent: turn_1.hash)
+   ↓
+turn_3 (parent: turn_2.hash)
+   ...
+```
+
+Each turn hash is computed from:
+```typescript
+hash = SHA256(JCS({
+  parent_turn_hash,
+  project_id,
+  conversation_id,
+  role,
+  content,
+  language,
+  rings_json,
+  created_at
+}))
+```
+
+### Commit DAG
+
+Commits form a directed acyclic graph (DAG):
+
+```
+commit_1 (parents: [])           # Initial commit
+   ↓
+commit_2 (parents: [commit_1])   # Linear history
+   ↓
+   ├─── commit_3a (parents: [commit_2])  # Branch A
+   │
+   └─── commit_3b (parents: [commit_2])  # Branch B
+         ↓
+commit_4 (parents: [commit_3a, commit_3b])  # Merge commit
+```
+
+---
+
+## Query Functions
+
+The storage layer provides typed query functions for all operations:
+
+### Projects
+
+```typescript
+insertProject(db, { name: 'My Project' }): Promise<Project>
+findProjectById(db, projectId): Promise<Project | null>
+findAllProjects(db): Promise<Project[]>
+updateProject(db, projectId, { name: 'New Name' }): Promise<void>
+deleteProject(db, projectId): Promise<void>
+```
+
+### Conversations
+
+```typescript
+insertConversation(db, { projectId, title }): Promise<Conversation>
+findConversationById(db, conversationId): Promise<Conversation | null>
+findConversationsByProject(db, projectId): Promise<Conversation[]>
+updateConversation(db, conversationId, updates): Promise<void>
+deleteConversation(db, conversationId): Promise<void>
+```
+
+### Turns
+
+```typescript
+insertTurn(db, { projectId, conversationId, role, content }): Promise<Turn>
+findTurnByHash(db, turnHash): Promise<Turn | null>
+findTurnsByConversation(db, conversationId): Promise<Turn[]>
+findTurnChain(db, turnHash): Promise<Turn[]>  // Walk parent chain
+```
+
+### Branches
+
+```typescript
+insertBranch(db, { projectId, name }): Promise<Branch>
+findBranchByName(db, projectId, name): Promise<Branch | null>
+findBranchesByProject(db, projectId): Promise<Branch[]>
+updateBranchHead(db, branchId, commitHash): Promise<void>
+setCurrentBranch(db, projectId, branchId): Promise<void>
+```
+
+### Commits
+
+```typescript
+insertCommit(db, { projectId, branch, turnWindow, facetSnapshot }): Promise<Commit>
+findCommitByHash(db, commitHash): Promise<Commit | null>
+findCommitsByProject(db, projectId): Promise<Commit[]>
+findCommitsByBranch(db, projectId, branch): Promise<Commit[]>
+```
+
+### Drafts
+
+```typescript
+insertDraft(db, { projectId, conversationId, bridgeId, text }): Promise<Draft>
+findDraftById(db, draftId): Promise<Draft | null>
+findDraftsByProject(db, projectId): Promise<Draft[]>
+updateDraftStatus(db, draftId, status): Promise<void>
+```
+
+### Merge Results
+
+```typescript
+insertMergeResult(db, { projectId, base, source, target, result }): Promise<MergeResult>
+findMergeResult(db, base, source, target): Promise<MergeResult | null>
+findMergeResultsByProject(db, projectId): Promise<MergeResult[]>
+```
+
+### Segment Embeddings
+
+```typescript
+insertSegmentEmbedding(db, { turnHash, index, text, embedding }): Promise<void>
+findSegmentsByTurn(db, turnHash): Promise<SegmentEmbedding[]>
+findSimilarSegments(db, embedding, limit): Promise<SegmentEmbedding[]>
+```
+
+---
+
+## Indexes
+
+Indexes are created for common query patterns:
+
+```sql
+-- Conversations
+CREATE INDEX idx_conversations_project ON conversations(project_id);
+
+-- Turns
+CREATE INDEX idx_turns_v2_conversation ON turns_v2(conversation_id);
+CREATE INDEX idx_turns_v2_project ON turns_v2(project_id);
+CREATE INDEX idx_turns_v2_parent ON turns_v2(parent_turn_hash);
+
+-- Branches
+CREATE INDEX idx_branches_project ON branches(project_id);
+
+-- Commits
+CREATE INDEX idx_commits_v2_project ON commits_v2(project_id);
+CREATE INDEX idx_commits_v2_branch ON commits_v2(branch);
+CREATE INDEX idx_commits_v2_draft ON commits_v2(draft_id);
+
+-- Drafts
+CREATE INDEX idx_drafts_v2_project ON drafts_v2(project_id);
+CREATE INDEX idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
+
+-- Merge Results
+CREATE INDEX idx_merge_results_project ON merge_results(project_id);
+
+-- Segment Embeddings
+CREATE INDEX idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
+CREATE INDEX idx_segment_embeddings_model ON segment_embeddings(embedding_model);
+```
+
+---
+
+## Data Integrity
+
+### Constraints
+
+1. **Foreign Keys**: All FK relationships enforce referential integrity with CASCADE delete
+2. **Unique Constraints**: Branch names are unique per project
+3. **Hash Verification**: Turn and commit hashes can be recomputed for verification
+
+### Append-Only Semantics
+
+While PostgreSQL allows updates, the T3X application layer treats turns and commits as append-only:
+
+- **Turns**: Never updated after creation (hash would change)
+- **Commits**: Never updated after creation (hash would change)
+- **Drafts**: Status can be updated (`ephemeral` → `adopted`)
+- **Branches**: Head commit can be updated
+
+---
+
+## Migration Strategy
+
+Schema migrations are managed via Drizzle Kit:
+
+```bash
+# Generate migration
+npm run db:generate
+
+# Apply migration
+npm run db:migrate
+
+# Open Drizzle Studio (visual DB explorer)
+npm run db:studio
+```
+
+---
+
+_Document Version: 2.0_
+_Last Updated: 2025-12-23_
