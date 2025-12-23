@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { eq } from 'drizzle-orm';
+// drizzle-orm utilities available if needed
 import { NextRequest } from 'next/server';
 
 // Import storage schema

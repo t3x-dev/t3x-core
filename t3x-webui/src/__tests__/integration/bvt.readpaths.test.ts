@@ -39,7 +39,7 @@ import { POST as createCommit, GET as listCommits } from '@/app/api/v1/commits/r
 describe('BVT-4: 读路径冒烟测试', () => {
   let projectId: string;
   let conversationId: string;
-  let turnHashes: string[] = [];
+  const turnHashes: string[] = [];
   let commitHash: string;
 
   beforeAll(async () => {
