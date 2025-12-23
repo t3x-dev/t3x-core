@@ -22,7 +22,7 @@
     "test:core": "npm run test -w @t3x/core",
     "test:storage": "npm run test -w @t3x/storage",
     "test:webui": "npm run test -w t3x-webui",
-    "lint": "npm run lint -w @t3x/core",
+    "lint": "npm run lint -w t3x-webui",
     "runner:dev": "npm run dev -w @t3x/runner",
     "runner:start": "npm run start -w @t3x/runner",
     "agent-demo:dev": "npm run dev -w agent-demo",

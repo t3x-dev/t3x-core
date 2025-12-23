@@ -16,6 +16,11 @@ on:
       - '.gitignore'
       - 'LICENSE'
 
+# Required for dorny/paths-filter to access PR info
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   # Detect which packages changed
   changes:
@@ -27,6 +32,8 @@ jobs:
       webui: ${{ steps.filter.outputs.webui }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for accurate diff
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -36,9 +43,12 @@ jobs:
               - 'package.json'
             storage:
               - 't3x-storage/**'
+              - 't3x-core/**'
               - 'package.json'
             webui:
               - 't3x-webui/**'
+              - 't3x-storage/**'
+              - 't3x-core/**'
               - 'package.json'
 
   # ===========================================
@@ -69,11 +79,9 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit -p t3x-core/tsconfig.json
-        continue-on-error: true
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
   # ===========================================
   # FULL TESTS - Run on PRs and main
@@ -145,7 +153,6 @@ jobs:
 
       - name: Run t3x-webui tests
         run: npm run test:webui
-        continue-on-error: true  # Don't block CI until tests are proven stable
 
   # ===========================================
   # BUILD - Run on PRs and main
@@ -207,4 +214,3 @@ jobs:
 
       - name: Run linter
         run: npm run lint
-        continue-on-error: true
