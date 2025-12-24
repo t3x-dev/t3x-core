@@ -831,13 +831,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // Add source → commit edges
       // Priority: source_refs (new multi-source) > turn_window (legacy single-source)
       commits.forEach((commit) => {
-        // Debug: Log commit source_refs
-        console.log('[loadProjectData] Commit source_refs:', {
-          commit_hash: commit.commit_hash,
-          source_refs: commit.source_refs,
-          has_source_refs: commit.source_refs && commit.source_refs.length > 0,
-        })
-
         // New: Use source_refs for multi-source support
         if (commit.source_refs && commit.source_refs.length > 0) {
           commit.source_refs.forEach((ref, idx) => {
