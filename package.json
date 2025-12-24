@@ -27,10 +27,12 @@
     "dev:runner": "turbo run dev --filter=@t3x/runner",
     "dev:api": "turbo run dev --filter=@t3x/api",
     "dev:agent": "turbo run dev --filter=agent-demo",
-    "docker:up": "docker-compose up",
-    "docker:up:n8n": "docker-compose --profile n8n up",
-    "docker:down": "docker-compose down",
-    "docker:build": "docker-compose build"
+    "docker:up": "docker compose up",
+    "docker:up:all": "docker compose --profile runner --profile n8n up",
+    "docker:up:n8n": "docker compose --profile n8n up",
+    "docker:up:runner": "docker compose --profile runner up",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build"
   },
   "engines": {
     "node": ">=20.9.0"

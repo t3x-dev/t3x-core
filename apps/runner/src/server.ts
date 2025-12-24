@@ -1,13 +1,19 @@
 import express, { type Express } from 'express';
+import cors from 'cors';
 import pino from 'pino';
 import { observer } from './observer.js';
 import { evalEngine } from './eval.js';
+import { randomUUID } from 'crypto';
 import {
   AgentInputSchema,
   AgentConfigSchema,
   EvalRequestSchema,
   TestStepSchema,
+  EngineRunRequestSchema,
+  N8nCallbackSchema,
+  type PendingRun,
 } from './types.js';
+import { triggerN8nWorkflow } from './n8n.js';
 
 const logger = pino({
   transport: {
@@ -17,7 +23,38 @@ const logger = pino({
 });
 
 const app: Express = express();
+
+// CORS - whitelist origins (extend via CORS_ORIGINS env var if needed)
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:3000'];
+
+app.use(cors({ origin: allowedOrigins }));
+
 app.use(express.json({ limit: '10mb' }));
+
+// In-memory store for pending runs (awaiting n8n callback)
+const pendingRuns = new Map<string, PendingRun>();
+
+// Engine callback URL
+const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
+
+// Root route - service info
+app.get('/', (_req, res) => {
+  res.json({
+    service: 't3x-runner',
+    version: '0.1.0',
+    endpoints: {
+      health: 'GET /health',
+      agents: 'POST /agents',
+      run: 'POST /run',
+      eval: 'POST /eval',
+      commit: 'POST /commit',
+      webhook: 'POST /webhook/run',
+    },
+    docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
+  });
+});
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -179,6 +216,115 @@ app.get('/runs', (req, res) => {
 });
 
 // ============================================
+// Engine → Runner → n8n Flow
+// ============================================
+
+/**
+ * POST /runs - Engine triggers a run (triggers n8n workflow)
+ *
+ * This endpoint is called by the Engine to start a run.
+ * It triggers the n8n workflow and returns immediately.
+ */
+app.post('/runs', async (req, res) => {
+  try {
+    const data = EngineRunRequestSchema.parse(req.body);
+    const runner_run_id = `runner_run_${randomUUID().slice(0, 8)}`;
+
+    // Store pending run info for callback handling
+    pendingRuns.set(runner_run_id, {
+      run_id: data.run_id,
+      engine_callback_url: data.engine_callback_url,
+      started_at: new Date().toISOString(),
+      inputs: data.inputs,
+      leaf: data.leaf,
+    });
+
+    logger.info({ run_id: data.run_id, runner_run_id }, 'Run started, triggering n8n');
+
+    // Trigger n8n workflow (async, fire-and-forget)
+    if (data.workflow?.webhook_id) {
+      triggerN8nWorkflow(data, runner_run_id).catch(err => {
+        logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
+      });
+    }
+
+    res.json({ runner_run_id, status: 'running' });
+  } catch (error) {
+    res.status(400).json({ error: String(error) });
+  }
+});
+
+/**
+ * POST /callbacks/n8n - n8n workflow calls back with results
+ *
+ * This endpoint is called by n8n when the workflow completes.
+ * It processes the result and calls back to the Engine.
+ */
+app.post('/callbacks/n8n', async (req, res) => {
+  try {
+    const data = N8nCallbackSchema.parse(req.body);
+    const pending = pendingRuns.get(data.runner_run_id);
+
+    if (!pending) {
+      logger.warn({ runner_run_id: data.runner_run_id }, 'No pending run found for callback');
+      return res.status(404).json({ error: 'Pending run not found' });
+    }
+
+    logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
+
+    // Prepare result for Engine
+    const status = data.error ? 'failed' : 'completed';
+    const ingestPayload = {
+      run_id: data.run_id,
+      runner_run_id: data.runner_run_id,
+      status,
+      run_report: {
+        output: data.output,
+        meta: data.meta,
+      },
+      assertions: [],  // TODO: Run eval if test steps provided
+      evidence_pack: {
+        n8n_output: data.output,
+        n8n_meta: data.meta,
+        error: data.error,
+      },
+    };
+
+    // Call back to Engine
+    try {
+      const engineResponse = await fetch(pending.engine_callback_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ingestPayload),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!engineResponse.ok) {
+        const errorText = await engineResponse.text();
+        logger.error(
+          { run_id: data.run_id, status: engineResponse.status, error: errorText },
+          'Engine ingest failed'
+        );
+      } else {
+        logger.info({ run_id: data.run_id }, 'Engine ingest successful');
+      }
+    } catch (engineError) {
+      logger.error(
+        { run_id: data.run_id, error: String(engineError) },
+        'Failed to call Engine ingest'
+      );
+    }
+
+    // Clean up pending run
+    pendingRuns.delete(data.runner_run_id);
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ error: String(error) });
+  }
+});
+
+// ============================================
 // Evaluation
 // ============================================
 
@@ -278,8 +424,12 @@ app.post('/commit', async (req, res) => {
       }),
     });
 
-    const commit = await response.json() as { id: string };
-    logger.info({ run_id, commit_id: commit.id }, 'T3X commit created');
+    const commit: unknown = await response.json();
+    const commitId =
+      typeof commit === 'object' && commit !== null && 'id' in commit
+        ? (commit as { id?: unknown }).id
+        : undefined;
+    logger.info({ run_id, commit_id: commitId }, 'T3X commit created');
 
     res.json({ success: true, commit });
   } catch (error) {

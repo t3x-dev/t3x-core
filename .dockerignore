@@ -1,0 +1,24 @@
+.DS_Store
+.git
+.github
+
+# Local data / artifacts
+.t3x
+**/.t3x
+**/outbox.jsonl
+
+# Node artifacts
+node_modules
+**/node_modules
+**/dist
+**/.turbo
+**/.vite
+**/.cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test/coverage artifacts
+coverage
+**/coverage

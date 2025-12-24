@@ -40,7 +40,10 @@ export class EvalEngine {
     }
 
     const results: TestResult[] = [];
-    const options = request.options ?? { stop_on_first_failure: false, generate_suggestions: true };
+    const options = {
+      stop_on_first_failure: request.options?.stop_on_first_failure ?? false,
+      generate_suggestions: request.options?.generate_suggestions ?? true,
+    };
 
     for (const step of request.test_steps) {
       const result = await this.runStep(step, trace);
