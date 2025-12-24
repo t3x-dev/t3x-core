@@ -429,23 +429,9 @@ describe('Chat API Routes', () => {
   describe('Real API Integration (requires ANTHROPIC_API_KEY)', () => {
     const hasApiKey = !!process.env.ANTHROPIC_API_KEY;
 
-    beforeEach(() => {
-      // Restore real undici fetch for real API tests
-      vi.doUnmock('undici');
-    });
-
-    afterEach(() => {
-      // Re-enable mock for other tests
-      vi.doMock('undici', async () => {
-        const actual = await vi.importActual<typeof import('undici')>('undici');
-        return {
-          ...actual,
-          fetch: vi.fn(),
-        };
-      });
-    });
-
     it.skipIf(!hasApiKey)('calls real Claude API and gets response', async () => {
+      // Restore real undici fetch for this test only
+      vi.doUnmock('undici');
       vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
@@ -474,6 +460,8 @@ describe('Chat API Routes', () => {
     }, 30000); // 30s timeout for real API call
 
     it.skipIf(!hasApiKey)('handles multi-turn conversation', async () => {
+      vi.doUnmock('undici');
+      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -498,6 +486,8 @@ describe('Chat API Routes', () => {
     }, 30000);
 
     it.skipIf(!hasApiKey)('respects system message', async () => {
+      vi.doUnmock('undici');
+      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
