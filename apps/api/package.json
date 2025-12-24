@@ -1,0 +1,30 @@
+{
+  "name": "@t3x/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "start": "node dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.15.2",
+    "@hono/zod-openapi": "^1.2.0",
+    "@scalar/hono-api-reference": "^0.9.30",
+    "@t3x/core": "workspace:*",
+    "@t3x/storage": "workspace:*",
+    "hono": "^4.7.10",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  }
+}

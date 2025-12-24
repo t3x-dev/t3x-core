@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
+*.tsbuildinfo
 
 # Environment files
 .env
@@ -17,6 +18,9 @@ build/
 !.vscode/extensions.json
 *.swp
 *.swo
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # OS files
 .DS_Store
@@ -61,3 +65,6 @@ coverage.xml
 
 # Next.js
 .next/
+
+# Turborepo
+.turbo/
