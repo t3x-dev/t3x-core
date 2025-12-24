@@ -1,9 +1,8 @@
-// T3X Runner - Grey-box agent evaluation and CI/CD
+// T3X Runner - Grey-box agent evaluation engine
 //
 // Components:
 // - Observer: Captures agent I/O traces
 // - EvalEngine: Runs test steps against traces
-// - Server: HTTP API for runner operations
 //
 // Usage:
 //   import { observer, evalEngine } from '@t3x/runner';
@@ -35,7 +34,6 @@
 
 export { Observer, observer } from './observer.js';
 export { EvalEngine, evalEngine } from './eval.js';
-export { app } from './server.js';
 
 export type {
   AgentInput,
