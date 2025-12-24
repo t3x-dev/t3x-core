@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Toast, useToast } from '@/components/Toast';
 import { useProjectStore } from '@/store/projectStore';
+import { useCanvasStore } from '@/store/canvasStore';
 import './App.css';
 
 export default function ClientLayout({
@@ -12,13 +13,18 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const { messages, addToast, dismissToast } = useToast();
-  const setNotifyCallback = useProjectStore((state) => state.setNotifyCallback);
+  const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
+  const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
 
-  // Register toast callback with project store
+  // Register toast callback with stores
   useEffect(() => {
-    setNotifyCallback(addToast);
-    return () => setNotifyCallback(null);
-  }, [setNotifyCallback, addToast]);
+    setProjectNotify(addToast);
+    setCanvasNotify(addToast);
+    return () => {
+      setProjectNotify(null);
+      setCanvasNotify(null);
+    };
+  }, [setProjectNotify, setCanvasNotify, addToast]);
 
   return (
     <div className="app-layout">
