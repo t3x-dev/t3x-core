@@ -5,7 +5,6 @@
  */
 
 import { NextRequest } from 'next/server';
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 /**
  * Get proxy URL from environment variables
@@ -20,14 +19,23 @@ function getProxyUrl(): string | undefined {
 }
 
 /**
- * Create fetch options with proxy support
+ * Fetch with proxy support - uses undici when proxy is configured
  */
-function getFetchOptions(): { dispatcher?: ProxyAgent } {
+async function fetchWithProxy(
+  url: string,
+  options: RequestInit
+): Promise<Response> {
   const proxyUrl = getProxyUrl();
   if (proxyUrl) {
-    return { dispatcher: new ProxyAgent(proxyUrl) };
+    // Dynamic import to avoid build-time issues with undici
+    const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+    const response = await undiciFetch(url, {
+      ...options,
+      dispatcher: new ProxyAgent(proxyUrl),
+    } as Parameters<typeof undiciFetch>[1]);
+    return response as unknown as Response;
   }
-  return {};
+  return fetch(url, options);
 }
 
 interface ChatMessage {
@@ -121,7 +129,7 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const response = await undiciFetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetchWithProxy('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -139,7 +147,6 @@ export async function POST(request: NextRequest) {
               content: m.content,
             })),
           }),
-          ...getFetchOptions(),
         });
 
         if (!response.ok) {
