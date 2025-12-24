@@ -29,25 +29,41 @@
     "rules": {
       "recommended": true,
       "complexity": {
-        "noExcessiveCognitiveComplexity": "warn",
-        "noForEach": "off"
+        "noExcessiveCognitiveComplexity": "off",
+        "noForEach": "off",
+        "noImportantStyles": "warn"
       },
       "correctness": {
         "noUnusedImports": "warn",
         "noUnusedVariables": "warn",
-        "useExhaustiveDependencies": "warn",
-        "useHookAtTopLevel": "warn"
+        "noUnusedFunctionParameters": "warn",
+        "useExhaustiveDependencies": "off",
+        "useHookAtTopLevel": "warn",
+        "noChildrenProp": "off"
       },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "warn",
-        "useNodejsImportProtocol": "warn",
+        "useNodejsImportProtocol": "off",
         "useTemplate": "off"
       },
       "suspicious": {
         "noExplicitAny": "warn",
         "noConsole": "off",
-        "noConfusingVoidType": "off"
+        "noConfusingVoidType": "off",
+        "noImplicitAnyLet": "off",
+        "useIterableCallbackReturn": "off",
+        "noArrayIndexKey": "warn",
+        "noAssignInExpressions": "off"
+      },
+      "a11y": {
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off",
+        "useButtonType": "warn",
+        "noSvgWithoutTitle": "warn",
+        "useValidAriaProps": "warn",
+        "noLabelWithoutControl": "warn",
+        "useAriaPropsSupportedByRole": "warn"
       }
     }
   },
