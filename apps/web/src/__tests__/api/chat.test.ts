@@ -247,8 +247,14 @@ describe('Chat API Routes', () => {
   // Mock Integration Tests - Test full flow with mocked external API
   // ===========================================================================
   describe('Mock Integration - POST /api/v1/chat', () => {
+    beforeEach(() => {
+      // Set proxy to force using undici fetch (which we mock)
+      process.env.HTTPS_PROXY = 'http://mock-proxy:8080';
+    });
+
     afterEach(() => {
       vi.restoreAllMocks();
+      delete process.env.HTTPS_PROXY;
     });
 
     it('successfully calls Claude API and returns response', async () => {
