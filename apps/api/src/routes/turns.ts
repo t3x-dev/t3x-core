@@ -1,0 +1,197 @@
+/**
+ * Turns Routes
+ *
+ * GET  /v1/turns - List turns (requires conversation_id query)
+ * POST /v1/turns - Create turn
+ * GET  /v1/turns/:hash - Get turn by hash
+ * GET  /v1/turns/:hash/chain - Get turn chain (history)
+ */
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonSuccess, jsonError } from '../lib/response';
+import {
+  insertTurn,
+  findTurnsByConversation,
+  findConversationById,
+  findTurnByHash,
+  findTurnChain,
+} from '@t3x/storage/pglite';
+
+export const turnRoutes = new Hono();
+
+/**
+ * GET /v1/turns - List turns
+ */
+turnRoutes.get('/v1/turns', async (c) => {
+  const conversationId = c.req.query('conversation_id');
+
+  if (!conversationId) {
+    return jsonError(c, 'INVALID_REQUEST', 'conversation_id query param is required', 400);
+  }
+
+  const limit = parseInt(c.req.query('limit') ?? '100', 10);
+  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const orderParam = c.req.query('order');
+  const order = orderParam === 'desc' ? 'desc' : 'asc';
+
+  try {
+    const db = await getDB();
+    const turns = await findTurnsByConversation(db, { conversationId, limit, offset, order });
+
+    const apiTurns = turns.map((t) => ({
+      turn_hash: t.turnHash,
+      parent_turn_hash: t.parentTurnHash,
+      project_id: t.projectId,
+      conversation_id: t.conversationId,
+      role: t.role,
+      content: t.content,
+      language: t.language,
+      rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      created_at: t.createdAt.toISOString(),
+    }));
+
+    return jsonSuccess(c, {
+      turns: apiTurns,
+      conversation_id: conversationId,
+      limit,
+      offset,
+      order,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'LIST_FAILED', message, 500);
+  }
+});
+
+/**
+ * POST /v1/turns - Create turn
+ */
+turnRoutes.post('/v1/turns', async (c) => {
+  let body: {
+    project_id?: string;
+    conversation_id?: string;
+    role?: string;
+    content?: string;
+    language?: string;
+    rings?: unknown;
+  } | null = null;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  if (!body?.project_id || !body?.conversation_id || !body?.role || !body?.content) {
+    return jsonError(c, 'INVALID_REQUEST', 'project_id, conversation_id, role, and content are required', 400);
+  }
+
+  const validRoles = ['user', 'assistant', 'system', 'tool'];
+  if (!validRoles.includes(body.role)) {
+    return jsonError(c, 'INVALID_REQUEST', `role must be one of: ${validRoles.join(', ')}`, 400);
+  }
+
+  try {
+    const db = await getDB();
+
+    // Verify conversation exists
+    const conversation = await findConversationById(db, body.conversation_id);
+    if (!conversation) {
+      return jsonError(c, 'NOT_FOUND', `Conversation ${body.conversation_id} not found`, 404);
+    }
+
+    // Verify project matches
+    if (conversation.projectId !== body.project_id) {
+      return jsonError(c, 'INVALID_REQUEST', 'conversation does not belong to the specified project', 400);
+    }
+
+    const turn = await insertTurn(db, {
+      projectId: body.project_id,
+      conversationId: body.conversation_id,
+      role: body.role as 'user' | 'assistant' | 'system' | 'tool',
+      content: body.content,
+      language: body.language,
+      rings: body.rings as Record<string, unknown> | undefined,
+    });
+
+    const apiTurn = {
+      turn_hash: turn.turnHash,
+      parent_turn_hash: turn.parentTurnHash,
+      project_id: turn.projectId,
+      conversation_id: turn.conversationId,
+      role: turn.role,
+      content: turn.content,
+      language: turn.language,
+      rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      created_at: turn.createdAt.toISOString(),
+    };
+
+    return jsonSuccess(c, apiTurn, 201);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'CREATE_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/turns/:hash - Get turn by hash
+ */
+turnRoutes.get('/v1/turns/:hash', async (c) => {
+  const turnHash = decodeURIComponent(c.req.param('hash'));
+
+  try {
+    const db = await getDB();
+    const turn = await findTurnByHash(db, turnHash);
+
+    if (!turn) {
+      return jsonError(c, 'NOT_FOUND', `Turn ${turnHash} not found`, 404);
+    }
+
+    const apiTurn = {
+      turn_hash: turn.turnHash,
+      parent_turn_hash: turn.parentTurnHash,
+      project_id: turn.projectId,
+      conversation_id: turn.conversationId,
+      role: turn.role,
+      content: turn.content,
+      language: turn.language,
+      rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      created_at: turn.createdAt.toISOString(),
+    };
+
+    return jsonSuccess(c, apiTurn);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'GET_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/turns/:hash/chain - Get turn chain (history)
+ */
+turnRoutes.get('/v1/turns/:hash/chain', async (c) => {
+  const turnHash = decodeURIComponent(c.req.param('hash'));
+  const limit = parseInt(c.req.query('limit') ?? '50', 10);
+
+  try {
+    const db = await getDB();
+    const chain = await findTurnChain(db, turnHash, limit);
+
+    const apiChain = chain.map((t) => ({
+      turn_hash: t.turnHash,
+      parent_turn_hash: t.parentTurnHash,
+      project_id: t.projectId,
+      conversation_id: t.conversationId,
+      role: t.role,
+      content: t.content,
+      language: t.language,
+      rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      created_at: t.createdAt.toISOString(),
+    }));
+
+    return jsonSuccess(c, { chain: apiChain, end_turn_hash: turnHash });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'GET_FAILED', message, 500);
+  }
+});

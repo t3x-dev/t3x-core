@@ -1,0 +1,39 @@
+{
+  "name": "@t3x/api-client",
+  "version": "0.1.0",
+  "description": "TypeScript client for T3X API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "test": "vitest run --passWithNoTests",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "t3x",
+    "api",
+    "client",
+    "typescript"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@t3x/cli",
+  "version": "0.1.0",
+  "description": "T3X Command Line Interface",
+  "type": "module",
+  "bin": {
+    "t3x": "./dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "@t3x/api-client": "workspace:*",
+    "@t3x/core": "workspace:*",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "ora": "^8.1.1",
+    "table": "^6.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "t3x",
+    "cli",
+    "semantic",
+    "version-control",
+    "ai"
+  ],
+  "license": "MIT"
+}
