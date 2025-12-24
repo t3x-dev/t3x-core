@@ -8,7 +8,7 @@
  * 2. facets mode: baseFacets + sourceFacets + targetFacets (legacy)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findTurnByHash, findCommitByHash } from '@t3x/storage/pglite';
 import { createMergeEngine, type MergeFacet, type RingOutput } from '@t3x/core';

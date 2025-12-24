@@ -4,7 +4,7 @@
  * GET /api/v1/export/cfpack - Export project as .cfpack (JSON archive)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { getDB } from '@/lib/db';
 import {

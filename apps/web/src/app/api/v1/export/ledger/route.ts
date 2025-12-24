@@ -4,7 +4,7 @@
  * GET /api/v1/export/ledger - Export project as JSONL ledger
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   findProjectById,

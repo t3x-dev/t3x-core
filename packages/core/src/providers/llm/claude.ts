@@ -4,7 +4,7 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
-import { LLMProvider, LLMGenerateOptions, LLMProviderError } from '@t3x/core';
+import { type LLMProvider, type LLMGenerateOptions, LLMProviderError } from '../../llm/types';
 
 /**
  * Claude provider configuration

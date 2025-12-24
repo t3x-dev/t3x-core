@@ -85,7 +85,7 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
       type: 'tool_call',
       name: 'email.send',
       ok: true,
-      args: emailArgs,
+      args: emailArgs as unknown as Record<string, unknown>,
     });
 
     const toolStart = Date.now();

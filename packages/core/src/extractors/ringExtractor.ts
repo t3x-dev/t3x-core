@@ -9,25 +9,25 @@
  * Ring 3 (分句结构): sentence segments
  */
 
-import {
+import type {
   NLPProvider,
   NLPAnalysis,
   NLPToken,
   NLPEntity,
 } from "../providers/nlp";
 import {
-  RingOutput,
-  Ring1Output,
-  Ring2Output,
-  Ring3Output,
-  Keyword,
-  Facet,
-  Segment,
-  Polarity,
+  type RingOutput,
+  type Ring1Output,
+  type Ring2Output,
+  type Ring3Output,
+  type Keyword,
+  type Facet,
+  type Segment,
+  type Polarity,
   createEmptyRingOutput,
 } from "./types";
 import {
-  PolarityRuleEngine,
+  type PolarityRuleEngine,
   createPolarityRuleEngine,
 } from "./polarityRules";
 

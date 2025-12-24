@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  PolarityRuleEngine,
+  type PolarityRuleEngine,
   createPolarityRuleEngine,
   PolarityRule,
 } from '../../extractors/polarityRules';

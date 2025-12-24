@@ -5,7 +5,7 @@
  * POST /api/v1/commits - Create commit
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   insertCommit,

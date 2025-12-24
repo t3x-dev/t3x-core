@@ -1,7 +1,7 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import { runAgent, type AgentInput } from './agent.js';
 
-const app = express();
+const app: Express = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 9000;

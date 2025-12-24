@@ -4,7 +4,7 @@
  * POST /api/v1/chat - Non-streaming chat
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';

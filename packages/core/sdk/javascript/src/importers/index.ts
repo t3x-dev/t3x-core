@@ -1,4 +1,4 @@
-import { BaseImporter } from './base';
+import type { BaseImporter } from './base';
 import { ChatGPTImporter } from './chatgpt';
 
 export * from './base';

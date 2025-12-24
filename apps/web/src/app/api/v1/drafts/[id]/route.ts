@@ -5,7 +5,7 @@
  * DELETE /api/v1/drafts/:id - Delete draft
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findDraftById, deleteDraft } from '@t3x/storage/pglite';
 

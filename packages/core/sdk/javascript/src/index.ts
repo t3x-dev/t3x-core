@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { T3XFile } from './types';
+import type { T3XFile } from './types';
 import { ImporterRegistry } from './importers';
 import { ExporterRegistry } from './exporters';
 

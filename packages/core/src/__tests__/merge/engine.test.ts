@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MergeEngine, ConflictType, createMergeEngine } from '../../merge';
+import { type MergeEngine, ConflictType, createMergeEngine } from '../../merge';
 import { StubLLMProvider, testFacets } from '../setup';
 
 describe('MergeEngine', () => {

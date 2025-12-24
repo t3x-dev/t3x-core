@@ -10,13 +10,13 @@
  * 3. Calculate cosine(emb(sA_i), Emb(B)), if above threshold → "same", otherwise → "different/added"
  */
 
-import { EmbeddingProvider } from "../providers/embedding";
+import type { EmbeddingProvider } from "../providers/embedding";
 import {
   DiffType,
-  DiffResult,
-  DiffSegment,
-  SegmentDiff,
-  SegmentMatch,
+  type DiffResult,
+  type DiffSegment,
+  type SegmentDiff,
+  type SegmentMatch,
   calculateDiffStats,
 } from "./types";
 

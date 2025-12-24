@@ -5,7 +5,7 @@
  * POST /api/v1/branches - Create branch
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   insertBranch,

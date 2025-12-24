@@ -1,5 +1,5 @@
-import { BaseExporter, ExporterConfig } from './base';
-import { T3XFile } from '../types';
+import { BaseExporter, type ExporterConfig } from './base';
+import type { T3XFile } from '../types';
 
 export class OpenAIExporter extends BaseExporter {
   readonly name = 'openai';

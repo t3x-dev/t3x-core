@@ -1,5 +1,5 @@
-import { BaseImporter, ImporterConfig } from './base';
-import { T3XFile, Conversation, Message } from '../types';
+import { BaseImporter, type ImporterConfig } from './base';
+import type { T3XFile, Conversation, Message } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ChatGPTExport {

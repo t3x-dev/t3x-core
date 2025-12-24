@@ -5,7 +5,7 @@
  * POST /api/v1/drafts - Create draft
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   insertDraft,

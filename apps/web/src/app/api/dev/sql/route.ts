@@ -6,7 +6,7 @@
  * SECURITY: This route only works in development mode.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB, getRawClient } from '@/lib/db';
 
 export async function POST(request: NextRequest) {

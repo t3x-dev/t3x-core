@@ -1,4 +1,4 @@
-import { T3XFile } from '../types';
+import type { T3XFile } from '../types';
 
 export interface ExporterConfig {
   includeMetadata?: boolean;

@@ -7,3 +7,15 @@ export {
   EmbeddingProviderError,
   cosineSimilarity,
 } from './base';
+
+export {
+  GoogleAIEmbeddingProvider,
+  createGoogleAIEmbeddingProvider,
+  type GoogleAIEmbeddingConfig,
+} from './google-ai';
+
+export {
+  CachedEmbeddingProvider,
+  createCachedEmbeddingProvider,
+  type CachedEmbeddingConfig,
+} from './cached';

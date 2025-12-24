@@ -23,7 +23,7 @@ import {
 } from '@t3x/storage';
 
 // Import shared SQL from @t3x/storage test utilities
-import { CREATE_TABLES_SQL } from '../../../t3x-storage/src/__tests__/setup';
+import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';
 
 const schema = {
   projects,

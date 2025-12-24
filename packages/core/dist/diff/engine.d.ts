@@ -9,8 +9,8 @@
  * 2. Take the full text of target version B and encode Emb(B)
  * 3. Calculate cosine(emb(sA_i), Emb(B)), if above threshold → "same", otherwise → "different/added"
  */
-import { EmbeddingProvider } from "../providers/embedding";
-import { DiffResult, DiffSegment } from "./types";
+import type { EmbeddingProvider } from "../providers/embedding";
+import { type DiffResult, type DiffSegment } from "./types";
 /**
  * Diff engine configuration
  */

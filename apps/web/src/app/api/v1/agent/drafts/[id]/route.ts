@@ -5,7 +5,7 @@
  * PATCH /api/v1/agent/drafts/:id - Update draft with feedback
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x/storage/pglite';
 import { createClaudeProvider } from '@/lib/providers';

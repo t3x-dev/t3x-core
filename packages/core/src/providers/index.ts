@@ -21,4 +21,18 @@ export {
   type EmbeddingProvider,
   EmbeddingProviderError,
   cosineSimilarity,
+  // Implementations
+  GoogleAIEmbeddingProvider,
+  createGoogleAIEmbeddingProvider,
+  type GoogleAIEmbeddingConfig,
+  CachedEmbeddingProvider,
+  createCachedEmbeddingProvider,
+  type CachedEmbeddingConfig,
 } from './embedding';
+
+// LLM Provider
+export {
+  ClaudeProvider,
+  createClaudeProvider,
+  type ClaudeProviderConfig,
+} from './llm';

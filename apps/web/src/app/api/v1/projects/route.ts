@@ -5,7 +5,7 @@
  * POST /api/v1/projects - Create project
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { insertProject, findProjects } from '@t3x/storage/pglite';
 

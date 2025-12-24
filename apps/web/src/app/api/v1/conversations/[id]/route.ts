@@ -6,7 +6,7 @@
  * DELETE /api/v1/conversations/:id - Delete conversation
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   findConversationById,

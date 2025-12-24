@@ -4,7 +4,7 @@
  * POST /api/v1/chat/stream - Streaming chat with SSE
  */
 
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';

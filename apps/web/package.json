@@ -6,33 +6,30 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "biome lint src",
     "test": "vitest run",
     "test:watch": "vitest",
     "db": "node scripts/db-inspector.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite-repl": "^0.2.32",
-    "@t3x/core": "file:../t3x-core",
-    "@t3x/storage": "file:../t3x-storage",
+    "@t3x/core": "workspace:*",
+    "@t3x/storage": "workspace:*",
     "lucide-react": "^0.553.0",
-    "next": "^15.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "reactflow": "^11.11.4",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.14",
-    "@eslint/eslintrc": "^3.3.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^2.1.9",
     "drizzle-orm": "^0.38.3",
-    "eslint": "^9.17.0",
-    "eslint-config-next": "^15.1.0",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   }
 }

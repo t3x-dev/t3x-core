@@ -27,13 +27,13 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createMergeEngine = exports.MergeEngine = exports.ConflictType = exports.createDiffEngine = exports.DiffEngine = exports.calculateDiffStats = exports.DiffType = exports.createRingExtractor = exports.RingExtractor = exports.createPolarityRuleEngine = exports.PolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.LLMProviderError = exports.cosineSimilarity = exports.EmbeddingProviderError = exports.normalizeDependencyLabel = exports.normalizePosTag = exports.POS_TAG_MAPPING = exports.NLPProviderError = exports.sha256 = exports.hashText = exports.canonText = void 0;
+exports.createMergeEngine = exports.MergeEngine = exports.ConflictType = exports.createDiffEngine = exports.DiffEngine = exports.calculateDiffStats = exports.DiffType = exports.createRingExtractor = exports.RingExtractor = exports.createPolarityRuleEngine = exports.PolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.LLMProviderError = exports.createClaudeProvider = exports.ClaudeProvider = exports.createCachedEmbeddingProvider = exports.CachedEmbeddingProvider = exports.createGoogleAIEmbeddingProvider = exports.GoogleAIEmbeddingProvider = exports.cosineSimilarity = exports.EmbeddingProviderError = exports.normalizeDependencyLabel = exports.normalizePosTag = exports.POS_TAG_MAPPING = exports.NLPProviderError = exports.sha256 = exports.hashText = exports.canonText = void 0;
 // Common utilities
 var common_1 = require("./common");
 Object.defineProperty(exports, "canonText", { enumerable: true, get: function () { return common_1.canonText; } });
 Object.defineProperty(exports, "hashText", { enumerable: true, get: function () { return common_1.hashText; } });
 Object.defineProperty(exports, "sha256", { enumerable: true, get: function () { return common_1.sha256; } });
-// Provider interfaces
+// Provider interfaces and implementations
 var providers_1 = require("./providers");
 Object.defineProperty(exports, "NLPProviderError", { enumerable: true, get: function () { return providers_1.NLPProviderError; } });
 Object.defineProperty(exports, "POS_TAG_MAPPING", { enumerable: true, get: function () { return providers_1.POS_TAG_MAPPING; } });
@@ -41,7 +41,15 @@ Object.defineProperty(exports, "normalizePosTag", { enumerable: true, get: funct
 Object.defineProperty(exports, "normalizeDependencyLabel", { enumerable: true, get: function () { return providers_1.normalizeDependencyLabel; } });
 Object.defineProperty(exports, "EmbeddingProviderError", { enumerable: true, get: function () { return providers_1.EmbeddingProviderError; } });
 Object.defineProperty(exports, "cosineSimilarity", { enumerable: true, get: function () { return providers_1.cosineSimilarity; } });
-// LLM Provider
+// Embedding Provider (implementations)
+Object.defineProperty(exports, "GoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.GoogleAIEmbeddingProvider; } });
+Object.defineProperty(exports, "createGoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createGoogleAIEmbeddingProvider; } });
+Object.defineProperty(exports, "CachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.CachedEmbeddingProvider; } });
+Object.defineProperty(exports, "createCachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createCachedEmbeddingProvider; } });
+// LLM Provider (implementations)
+Object.defineProperty(exports, "ClaudeProvider", { enumerable: true, get: function () { return providers_1.ClaudeProvider; } });
+Object.defineProperty(exports, "createClaudeProvider", { enumerable: true, get: function () { return providers_1.createClaudeProvider; } });
+// LLM Provider (interface)
 var llm_1 = require("./llm");
 Object.defineProperty(exports, "LLMProviderError", { enumerable: true, get: function () { return llm_1.LLMProviderError; } });
 // Extractors (Ring 1/2/3)

@@ -16,14 +16,14 @@
  */
 
 import {
-  MergeFacet,
-  MergeResult,
-  AutoMergedFacet,
-  MergeConflict,
+  type MergeFacet,
+  type MergeResult,
+  type AutoMergedFacet,
+  type MergeConflict,
   ConflictType,
-  MergeStats,
+  type MergeStats,
 } from "./types";
-import { LLMProvider } from "../llm";
+import type { LLMProvider } from "../llm";
 
 /**
  * Merge engine options

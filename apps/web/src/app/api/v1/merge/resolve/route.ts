@@ -4,7 +4,7 @@
  * POST /api/v1/merge/resolve - Apply conflict resolutions
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { createMergeEngine, type MergeResult } from '@t3x/core';
 
 interface ResolveRequest {

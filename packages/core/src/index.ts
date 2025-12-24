@@ -15,7 +15,7 @@
 // Common utilities
 export { canonText, hashText, sha256 } from './common';
 
-// Provider interfaces
+// Provider interfaces and implementations
 export {
   // NLP Provider
   type DependencyLabel,
@@ -28,13 +28,24 @@ export {
   POS_TAG_MAPPING,
   normalizePosTag,
   normalizeDependencyLabel,
-  // Embedding Provider
+  // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
   cosineSimilarity,
+  // Embedding Provider (implementations)
+  GoogleAIEmbeddingProvider,
+  createGoogleAIEmbeddingProvider,
+  type GoogleAIEmbeddingConfig,
+  CachedEmbeddingProvider,
+  createCachedEmbeddingProvider,
+  type CachedEmbeddingConfig,
+  // LLM Provider (implementations)
+  ClaudeProvider,
+  createClaudeProvider,
+  type ClaudeProviderConfig,
 } from './providers';
 
-// LLM Provider
+// LLM Provider (interface)
 export {
   type LLMGenerateOptions,
   type LLMProvider,

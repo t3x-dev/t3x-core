@@ -6,7 +6,7 @@
  * DELETE /api/v1/projects/:id - Delete project
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findProjectWithStats, updateProject, deleteProject } from '@t3x/storage/pglite';
 

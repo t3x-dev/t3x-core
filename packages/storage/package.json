@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",
-    "@t3x/core": "file:../t3x-core",
+    "@t3x/core": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "postgres": "^3.4.5"
   },

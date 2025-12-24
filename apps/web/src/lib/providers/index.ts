@@ -1,8 +1,23 @@
 /**
  * Providers
  *
- * LLM and embedding providers for T3X WebUI.
+ * Re-exports from @t3x/core for backward compatibility.
+ * These are now defined in the core package.
  */
 
-export * from './claude.provider';
-export * from './embedding.provider';
+// Re-export from @t3x/core
+export {
+  // Embedding providers
+  GoogleAIEmbeddingProvider,
+  createGoogleAIEmbeddingProvider,
+  type GoogleAIEmbeddingConfig,
+  CachedEmbeddingProvider,
+  createCachedEmbeddingProvider,
+  type CachedEmbeddingConfig,
+  EmbeddingProviderError,
+  cosineSimilarity,
+  // LLM providers
+  ClaudeProvider,
+  createClaudeProvider,
+  type ClaudeProviderConfig,
+} from '@t3x/core';

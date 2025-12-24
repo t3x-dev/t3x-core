@@ -1,10 +1,13 @@
 /**
  * API client for t3x-webui
  *
- * Calls local Next.js API routes which use @t3x/storage directly.
+ * Calls the standalone T3X API server.
+ * Falls back to embedded Next.js API routes if standalone API is not configured.
  */
 
-const API_V1 = '/api/v1'
+// Use standalone API if configured, otherwise fall back to embedded routes
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+const API_V1 = `${API_BASE}/api/v1`
 const DEFAULT_TIMEOUT = 10000
 
 // ============================================================================
@@ -348,8 +351,12 @@ export interface BranchListData {
 }
 
 export interface ApiResponse<T> {
-  status: string
-  data: T
+  success: boolean
+  data?: T
+  error?: {
+    code: string
+    message: string
+  }
 }
 
 // ============================================================================
@@ -410,15 +417,16 @@ export class ApiError extends Error {
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
+  const json = await response.json().catch(() => ({ success: false, error: { code: 'PARSE_ERROR', message: 'Failed to parse response' } })) as ApiResponse<T>
+
+  if (!response.ok || !json.success) {
     throw new ApiError(
-      errorData.error?.code || 'UNKNOWN_ERROR',
-      errorData.error?.message || `HTTP ${response.status}`,
-      errorData.error?.details
+      json.error?.code || 'UNKNOWN_ERROR',
+      json.error?.message || `HTTP ${response.status}`,
+      (json.error as { details?: Record<string, unknown> })?.details
     )
   }
-  return response.json()
+  return json.data as T
 }
 
 // Fetch with timeout wrapper
@@ -473,7 +481,7 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 // ============================================================================
 
 export async function checkHealth(): Promise<{ status: string; version: string; uptime: number }> {
-  const res = await fetchWithTimeout(`/api/v1/health`, undefined, 5000)
+  const res = await fetchWithTimeout(`${API_BASE}/health`, undefined, 5000)
   return handleResponse(res)
 }
 
@@ -484,13 +492,12 @@ export async function getStatus(): Promise<{
   commits_count: number
 }> {
   const res = await fetchWithTimeout(`${API_V1}/status`)
-  const data = await handleResponse<ApiResponse<{
+  return handleResponse<{
     projects_count: number
     conversations_count: number
     turns_count: number
     commits_count: number
-  }>>(res)
-  return data.data
+  }>(res)
 }
 
 // ============================================================================
@@ -500,14 +507,12 @@ export async function getStatus(): Promise<{
 export async function listProjects(limit = 50, offset = 0): Promise<ProjectListData> {
   const query = buildQueryString({ limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`)
-  const response = await handleResponse<ApiResponse<ProjectListData>>(res)
-  return response.data
+  return handleResponse<ProjectListData>(res)
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`)
-  const data = await handleResponse<ApiResponse<ProjectDetail>>(res)
-  return data.data
+  return handleResponse<ProjectDetail>(res)
 }
 
 export async function createProject(name: string, metadata?: Record<string, unknown>): Promise<Project> {
@@ -516,8 +521,7 @@ export async function createProject(name: string, metadata?: Record<string, unkn
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, metadata }),
   })
-  const data = await handleResponse<ApiResponse<Project>>(res)
-  return data.data
+  return handleResponse<Project>(res)
 }
 
 export interface DeleteProjectResponse {
@@ -529,8 +533,7 @@ export async function deleteProject(projectId: string): Promise<DeleteProjectRes
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
     method: 'DELETE',
   })
-  const data = await handleResponse<ApiResponse<DeleteProjectResponse>>(res)
-  return data.data
+  return handleResponse<DeleteProjectResponse>(res)
 }
 
 // ============================================================================
@@ -544,8 +547,7 @@ export async function listConversations(
 ): Promise<ConversationListData> {
   const query = buildQueryString({ project_id: projectId, limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/conversations?${query}`)
-  const response = await handleResponse<ApiResponse<ConversationListData>>(res)
-  return response.data
+  return handleResponse<ConversationListData>(res)
 }
 
 export async function createConversation(
@@ -567,16 +569,14 @@ export async function createConversation(
       metadata
     }),
   })
-  const data = await handleResponse<ApiResponse<Conversation>>(res)
-  return data.data
+  return handleResponse<Conversation>(res)
 }
 
 export async function deleteConversation(conversationId: string): Promise<{ deleted: boolean; conversation_id: string }> {
   const res = await fetchWithTimeout(`${API_V1}/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'DELETE',
   })
-  const data = await handleResponse<ApiResponse<{ deleted: boolean; conversation_id: string }>>(res)
-  return data.data
+  return handleResponse<{ deleted: boolean; conversation_id: string }>(res)
 }
 
 export async function updateConversation(
@@ -588,8 +588,7 @@ export async function updateConversation(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   })
-  const data = await handleResponse<ApiResponse<Conversation>>(res)
-  return data.data
+  return handleResponse<Conversation>(res)
 }
 
 export async function updateCommitPosition(
@@ -605,8 +604,8 @@ export async function updateCommitPosition(
       position_y: position.y,
     }),
   })
-  const rawData = await handleResponse<ApiResponse<CommitRaw>>(res)
-  return parseCommit(rawData.data)
+  const rawData = await handleResponse<CommitRaw>(res)
+  return parseCommit(rawData)
 }
 
 // ============================================================================
@@ -632,15 +631,13 @@ export async function listTurns(
     order: options?.order,
   })
   const res = await fetchWithTimeout(`${API_V1}/turns?${query}`, undefined, DEFAULT_TIMEOUT, options?.signal)
-  const response = await handleResponse<ApiResponse<TurnListData>>(res)
-  return response.data
+  return handleResponse<TurnListData>(res)
 }
 
 export async function getTurn(turnHash: string): Promise<TurnDetail> {
   // Don't encode the colon in sha256:xxx - backend expects raw format
   const res = await fetchWithTimeout(`${API_V1}/turns/${turnHash}`)
-  const data = await handleResponse<ApiResponse<TurnDetail>>(res)
-  return data.data
+  return handleResponse<TurnDetail>(res)
 }
 
 export async function createTurn(
@@ -661,8 +658,7 @@ export async function createTurn(
       language,
     }),
   })
-  const data = await handleResponse<ApiResponse<Turn>>(res)
-  return data.data
+  return handleResponse<Turn>(res)
 }
 
 // ============================================================================
@@ -672,8 +668,7 @@ export async function createTurn(
 export async function listBranches(projectId: string): Promise<BranchListData> {
   const query = buildQueryString({ project_id: projectId })
   const res = await fetchWithTimeout(`${API_V1}/branches?${query}`)
-  const response = await handleResponse<ApiResponse<BranchListData>>(res)
-  return response.data
+  return handleResponse<BranchListData>(res)
 }
 
 export async function getCurrentBranch(projectId: string): Promise<{
@@ -683,12 +678,11 @@ export async function getCurrentBranch(projectId: string): Promise<{
 }> {
   const query = buildQueryString({ project_id: projectId })
   const res = await fetchWithTimeout(`${API_V1}/branches/current?${query}`)
-  const data = await handleResponse<ApiResponse<{
+  return handleResponse<{
     project_id: string
     current_branch: string
     head_commit_hash?: string
-  }>>(res)
-  return data.data
+  }>(res)
 }
 
 export async function createBranch(
@@ -709,8 +703,7 @@ export async function createBranch(
       checkout,
     }),
   })
-  const data = await handleResponse<ApiResponse<Branch>>(res)
-  return data.data
+  return handleResponse<Branch>(res)
 }
 
 export async function switchBranch(
@@ -729,8 +722,7 @@ export async function switchBranch(
       from_branch: fromBranch,
     }),
   })
-  const data = await handleResponse<ApiResponse<Branch>>(res)
-  return data.data
+  return handleResponse<Branch>(res)
 }
 
 export async function deleteBranch(projectId: string, name: string, force = false): Promise<void> {
@@ -754,18 +746,18 @@ export async function listCommits(
 ): Promise<CommitListData> {
   const query = buildQueryString({ project_id: projectId, branch, limit, offset })
   const res = await fetchWithTimeout(`${API_V1}/commits?${query}`)
-  const response = await handleResponse<ApiResponse<CommitListDataRaw>>(res)
+  const response = await handleResponse<CommitListDataRaw>(res)
   return {
-    commits: response.data.commits.map(parseCommit),
-    limit: response.data.limit,
-    offset: response.data.offset,
+    commits: response.commits.map(parseCommit),
+    limit: response.limit,
+    offset: response.offset,
   }
 }
 
 export async function getCommit(commitHash: string): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`)
-  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
-  return parseCommit(data.data)
+  const data = await handleResponse<CommitRaw>(res)
+  return parseCommit(data)
 }
 
 export async function createCommit(
@@ -799,8 +791,8 @@ export async function createCommit(
       source_refs: options?.sourceRefs,
     }),
   })
-  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
-  return parseCommit(data.data)
+  const data = await handleResponse<CommitRaw>(res)
+  return parseCommit(data)
 }
 
 // Resolved facet for merge commit
@@ -838,8 +830,8 @@ export async function createMergeCommit(
       ...(position && { position_x: position.x, position_y: position.y }),
     }),
   })
-  const data = await handleResponse<ApiResponse<CommitRaw>>(res)
-  return parseCommit(data.data)
+  const data = await handleResponse<CommitRaw>(res)
+  return parseCommit(data)
 }
 
 // ============================================================================
@@ -855,8 +847,7 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       target_commit_hash: targetCommitHash,
     }),
   })
-  const data = await handleResponse<ApiResponse<DiffResultRaw>>(res)
-  const raw = data.data
+  const raw = await handleResponse<DiffResultRaw>(res)
 
   // Transform backend response to frontend format
   const segmentChanges = raw.segmentDiffs.map(seg => ({
@@ -937,8 +928,7 @@ export async function merge(
       target_commit_hash: targetCommitHash,
     }),
   })
-  const data = await handleResponse<ApiResponse<MergeResultRaw>>(res)
-  const raw = data.data
+  const raw = await handleResponse<MergeResultRaw>(res)
 
   // Transform backend camelCase to frontend snake_case
   return {
@@ -993,14 +983,12 @@ export async function createDraft(
       turn_anchor_hash: turnAnchorHash,
     }),
   }, 30000)
-  const data = await handleResponse<ApiResponse<Draft>>(res)
-  return data.data
+  return handleResponse<Draft>(res)
 }
 
 export async function getDraft(draftId: string): Promise<Draft> {
   const res = await fetchWithTimeout(`${API_V1}/agent/drafts/${encodeURIComponent(draftId)}`)
-  const data = await handleResponse<ApiResponse<Draft>>(res)
-  return data.data
+  return handleResponse<Draft>(res)
 }
 
 export async function updateDraft(
@@ -1016,8 +1004,7 @@ export async function updateDraft(
       append_must_have: appendMustHave,
     }),
   })
-  const data = await handleResponse<ApiResponse<Draft>>(res)
-  return data.data
+  return handleResponse<Draft>(res)
 }
 
 // ============================================================================
@@ -1094,8 +1081,7 @@ export interface ChatProvidersResponse {
  */
 export async function getChatProviders(): Promise<ChatProvidersResponse> {
   const res = await fetchWithTimeout(`${API_V1}/chat/providers`)
-  const data = await handleResponse<ApiResponse<ChatProvidersResponse>>(res)
-  return data.data
+  return handleResponse<ChatProvidersResponse>(res)
 }
 
 /**
@@ -1107,8 +1093,7 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   }, 120000) // 2 minute timeout for LLM
-  const data = await handleResponse<ApiResponse<ChatResponse>>(res)
-  return data.data
+  return handleResponse<ChatResponse>(res)
 }
 
 /**

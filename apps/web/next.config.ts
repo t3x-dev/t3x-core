@@ -5,21 +5,12 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   // Transpile workspace packages
   transpilePackages: ['@t3x/core', '@t3x/storage'],
-  // Externalize packages with binary/WASM files that webpack cannot bundle
+  // Externalize packages with binary/WASM files that bundler cannot handle
   // - @electric-sql/pglite: has postgres.data WASM file
   // - postgres: has binary data files (for Docker/production)
   serverExternalPackages: ['@electric-sql/pglite', 'postgres'],
-  // Additional webpack config to handle binary files
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Prevent bundling of postgres binary data
-      config.externals = config.externals || [];
-      if (Array.isArray(config.externals)) {
-        config.externals.push('postgres');
-      }
-    }
-    return config;
-  },
+  // Next.js 16: Enable Turbopack (default bundler)
+  turbopack: {},
 };
 
 export default nextConfig;

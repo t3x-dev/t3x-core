@@ -4,7 +4,7 @@
  * GET /api/v1/turns/:hash - Get turn by hash
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findTurnByHash } from '@t3x/storage/pglite';
 

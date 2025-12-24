@@ -4,7 +4,7 @@
  * GET /api/v1/commits/:hash - Get commit by hash
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findCommitByHash } from '@t3x/storage/pglite';
 

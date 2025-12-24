@@ -12,8 +12,8 @@
  *
  * Does not use sentiment dictionaries (VADER/SentiWordNet), ensuring determinism.
  */
-import { NLPToken } from "../providers/nlp";
-import { Polarity } from "./types";
+import type { NLPToken } from "../providers/nlp";
+import type { Polarity } from "./types";
 /**
  * Polarity rule entry
  */

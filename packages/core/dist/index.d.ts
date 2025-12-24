@@ -12,7 +12,7 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 export { canonText, hashText, sha256 } from './common';
-export { type DependencyLabel, type NLPToken, type NLPEntity, type NLPSentence, type NLPAnalysis, type NLPProvider, NLPProviderError, POS_TAG_MAPPING, normalizePosTag, normalizeDependencyLabel, type EmbeddingProvider, EmbeddingProviderError, cosineSimilarity, } from './providers';
+export { type DependencyLabel, type NLPToken, type NLPEntity, type NLPSentence, type NLPAnalysis, type NLPProvider, NLPProviderError, POS_TAG_MAPPING, normalizePosTag, normalizeDependencyLabel, type EmbeddingProvider, EmbeddingProviderError, cosineSimilarity, GoogleAIEmbeddingProvider, createGoogleAIEmbeddingProvider, type GoogleAIEmbeddingConfig, CachedEmbeddingProvider, createCachedEmbeddingProvider, type CachedEmbeddingConfig, ClaudeProvider, createClaudeProvider, type ClaudeProviderConfig, } from './providers';
 export { type LLMGenerateOptions, type LLMProvider, LLMProviderError, } from './llm';
 export { type PosTag, type Polarity, type FacetType, type Keyword, type Ring1Output, type Facet, type Ring2Output, type Segment, type Ring3Output, type RingOutput, createEmptyRing1, createEmptyRing2, createEmptyRing3, createEmptyRingOutput, type PolarityRule, type PreferenceRelation, PolarityRuleEngine, createPolarityRuleEngine, type ExtractorConfig, RingExtractor, createRingExtractor, } from './extractors';
 export { DiffType, type SegmentMatch, type SegmentDiff, type DiffSegment, type DiffResult, type DiffStats, calculateDiffStats, type DiffEngineConfig, DiffEngine, createDiffEngine, } from './diff';

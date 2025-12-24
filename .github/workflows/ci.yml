@@ -30,6 +30,7 @@ jobs:
       core: ${{ steps.filter.outputs.core }}
       storage: ${{ steps.filter.outputs.storage }}
       webui: ${{ steps.filter.outputs.webui }}
+      api: ${{ steps.filter.outputs.api }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,17 +40,26 @@ jobs:
         with:
           filters: |
             core:
-              - 't3x-core/**'
+              - 'packages/core/**'
               - 'package.json'
+              - 'pnpm-lock.yaml'
             storage:
-              - 't3x-storage/**'
-              - 't3x-core/**'
+              - 'packages/storage/**'
+              - 'packages/core/**'
               - 'package.json'
+              - 'pnpm-lock.yaml'
             webui:
-              - 't3x-webui/**'
-              - 't3x-storage/**'
-              - 't3x-core/**'
+              - 'apps/web/**'
+              - 'packages/storage/**'
+              - 'packages/core/**'
               - 'package.json'
+              - 'pnpm-lock.yaml'
+            api:
+              - 'apps/api/**'
+              - 'packages/storage/**'
+              - 'packages/core/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
 
   # ===========================================
   # FAST CHECKS - Run on every push (feature branches)
@@ -69,19 +79,19 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build core (required for typecheck)
-        run: npm run build:core
-
-      - name: Typecheck
-        run: npx tsc --noEmit -p t3x-core/tsconfig.json
+        run: pnpm build:core
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
   # ===========================================
   # FULL TESTS - Run on PRs and main
@@ -97,7 +107,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - name: Checkout code
@@ -108,19 +118,22 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build:core && npm run build:storage
+        run: pnpm build:core && pnpm build:storage
 
-      - name: Run t3x-core tests
-        run: npm run test:core
+      - name: Run @t3x/core tests
+        run: pnpm --filter @t3x/core test
 
-      - name: Run t3x-storage tests
-        run: npm run test:storage
+      - name: Run @t3x/storage tests
+        run: pnpm --filter @t3x/storage test
 
   test-webui:
     name: Test WebUI
@@ -140,19 +153,22 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build dependencies
-        run: npm run build:core && npm run build:storage
+        run: pnpm build:core && pnpm build:storage
 
       - name: Build webui
-        run: npm run build:webui
+        run: pnpm build:webui
 
       - name: Run t3x-webui tests
-        run: npm run test:webui
+        run: pnpm --filter t3x-webui test
 
   # ===========================================
   # BUILD - Run on PRs and main
@@ -176,13 +192,16 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build all packages
-        run: npm run build
+        run: pnpm build
 
   # ===========================================
   # LINT - Run on PRs (already covered in quick-check for pushes)
@@ -193,7 +212,7 @@ jobs:
     needs: changes
     if: |
       github.event_name == 'pull_request' &&
-      (needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true' || needs.changes.outputs.webui == 'true')
+      (needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true' || needs.changes.outputs.webui == 'true' || needs.changes.outputs.api == 'true')
 
     steps:
       - name: Checkout code
@@ -204,13 +223,16 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build core (required for lint)
-        run: npm run build:core
+        run: pnpm build:core
 
       - name: Run linter
-        run: npm run lint
+        run: pnpm lint

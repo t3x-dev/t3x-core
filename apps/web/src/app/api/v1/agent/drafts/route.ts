@@ -4,7 +4,7 @@
  * POST /api/v1/agent/drafts - Create draft with LLM generation
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import {
   findProjectById,

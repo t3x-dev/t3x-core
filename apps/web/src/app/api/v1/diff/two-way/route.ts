@@ -9,7 +9,7 @@
  * 3. segments mode: baseSegments + targetSegments (legacy)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findTurnByHash, findCommitByHash, findSegmentEmbeddingsByTurn } from '@t3x/storage/pglite';
 import { createDiffEngine, type DiffSegment, type RingOutput } from '@t3x/core';

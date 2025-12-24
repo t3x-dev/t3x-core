@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import pino from 'pino';
 import { observer } from './observer.js';
 import { evalEngine } from './eval.js';
@@ -16,7 +16,7 @@ const logger = pino({
   },
 });
 
-const app = express();
+const app: Express = express();
 app.use(express.json({ limit: '10mb' }));
 
 // Health check
@@ -278,7 +278,7 @@ app.post('/commit', async (req, res) => {
       }),
     });
 
-    const commit = await response.json();
+    const commit = await response.json() as { id: string };
     logger.info({ run_id, commit_id: commit.id }, 'T3X commit created');
 
     res.json({ success: true, commit });
@@ -321,7 +321,7 @@ app.post('/webhook/run', async (req, res) => {
       evalResult = await evalEngine.evaluate({
         trace,
         test_steps,
-        options: { generate_suggestions: true },
+        options: { stop_on_first_failure: false, generate_suggestions: true },
       });
     }
 

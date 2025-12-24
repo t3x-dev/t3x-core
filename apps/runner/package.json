@@ -16,13 +16,13 @@
     "clean": "rm -rf dist",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "docker:build": "docker build -t t3x-runner .",
     "docker:up": "docker-compose up",
     "docker:down": "docker-compose down"
   },
   "dependencies": {
-    "@t3x/core": "*",
+    "@t3x/core": "workspace:*",
     "express": "^4.21.0",
     "zod": "^3.23.0",
     "pino": "^9.0.0",

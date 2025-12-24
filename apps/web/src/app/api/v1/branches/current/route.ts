@@ -4,7 +4,7 @@
  * GET /api/v1/branches/current - Get current branch
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findCurrentBranch } from '@t3x/storage/pglite';
 

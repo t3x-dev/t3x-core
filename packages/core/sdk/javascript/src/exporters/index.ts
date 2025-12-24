@@ -1,4 +1,4 @@
-import { BaseExporter } from './base';
+import type { BaseExporter } from './base';
 import { ClaudeExporter } from './claude';
 import { OpenAIExporter } from './openai';
 

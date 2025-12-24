@@ -4,7 +4,7 @@
  * GET /api/v1/turns/:hash/chain - Get turn history chain
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { findTurnChain } from '@t3x/storage/pglite';
 
