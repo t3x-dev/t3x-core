@@ -12,51 +12,51 @@ T3X is "Git for Meaning" — a semantic version control system for AI conversati
 
 ```
 t3x/
-├── t3x-core/       # Deterministic semantic engine (TypeScript)
-├── t3x-cli/        # Interactive shell CLI
-├── t3x-webui/      # React frontend (Vite + ReactFlow)
-├── t3x-runner/     # Grey-box agent evaluation engine
-├── agent-demo/     # Demo agent for testing
+├── apps/
+│   ├── api/            # Standalone REST API (Hono)
+│   ├── web/            # Next.js frontend (React + ReactFlow)
+│   ├── runner/         # Grey-box agent evaluation engine
+│   └── agent-demo/     # Demo agent for testing
+├── packages/
+│   ├── core/           # Deterministic semantic engine (TypeScript)
+│   └── storage/        # PostgreSQL persistence (Drizzle ORM)
+├── turbo.json          # Turborepo config
+├── pnpm-workspace.yaml # pnpm workspace config
 └── docker-compose.yml
 ```
 
 ## Build Commands
 
-### t3x-core (TypeScript + SQLite)
+This project uses **pnpm** and **Turborepo** for monorepo management.
+
+### Install dependencies
 ```bash
-cd t3x-core
-npm install
-npm run build          # tsc + copy schema.sql
-npm test               # vitest run
-npm run test:watch     # vitest watch mode
+pnpm install
 ```
 
-### t3x-cli
+### Build all packages
 ```bash
-cd t3x-cli
-npm install
-npm run build          # tsc
-npm run start          # node dist/bin/t3x.js
-npm test
+pnpm build              # Build all (parallel, cached)
+pnpm build:core         # Build only @t3x/core
+pnpm build:storage      # Build only @t3x/storage
+pnpm build:webui        # Build only t3x-webui
+pnpm build:api          # Build only @t3x/api
 ```
 
-### t3x-webui (React + Vite)
+### Run tests
 ```bash
-cd t3x-webui
-npm install
-npm run dev            # vite dev server
-npm run build          # tsc -b && vite build
-npm run lint           # eslint
+pnpm test               # Test all (parallel, cached)
+pnpm test:core          # Test only @t3x/core
+pnpm test:storage       # Test only @t3x/storage
+pnpm test:webui         # Test only t3x-webui
 ```
 
-### t3x-runner
+### Development
 ```bash
-cd t3x-runner
-npm install
-npm run build          # tsc
-npm run dev            # tsx watch src/server.ts
-npm run start          # node dist/server.js
-npm test
+pnpm dev:api            # Start API dev server (port 8000)
+pnpm dev:webui          # Start webui dev server (port 3000)
+pnpm dev:runner         # Start runner dev server
+pnpm dev:agent          # Start agent-demo dev server
 ```
 
 ### Docker
@@ -66,7 +66,7 @@ docker-compose up -d                 # Background mode
 docker-compose --profile n8n up      # Include n8n workflow engine
 ```
 
-Ports: WebUI (3000), Core API (8000), Runner API (8080), Demo Agent (9000)
+Ports: API (8000), WebUI (3000), Runner API (8080), Demo Agent (9000)
 
 ## Architecture
 
@@ -74,15 +74,17 @@ Ports: WebUI (3000), Core API (8000), Runner API (8080), Demo Agent (9000)
 
 | Layer | Package | LLM Required? |
 |-------|---------|---------------|
-| **Framework Core** | `t3x-core` | No (deterministic) |
+| **Framework Core** | `packages/core` | No (deterministic) |
+| **Storage Layer** | `packages/storage` | No |
+| **API Layer** | `apps/api` | No |
 | **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
-| **Product Layer** | `t3x-cli`, `t3x-webui` | No |
+| **Product Layer** | `apps/web`, `apps/runner` | No |
 
 ### Storage Architecture
 
 T3X uses dual-layer storage:
 1. **JSONL Ledger** (source of truth): Append-only hash chains under `.t3x/`
-2. **SQLite Index** (query layer): Rebuildable from ledger, used for fast queries
+2. **PostgreSQL Index** (query layer): Rebuildable from ledger, used for fast queries (PGLite for dev)
 
 Key entities: `projects`, `conversations`, `turns`, `drafts`, `commits`, `diffs`
 
@@ -134,9 +136,10 @@ Portable JSON archive for sharing conversations across T3X instances. Contains: 
 
 All packages use **vitest** for testing:
 ```bash
-npm test                 # Run tests
-npm run test:watch       # Watch mode
-vitest run path/to/test  # Single test file
+pnpm test                    # Run all tests
+pnpm test:core               # Run core tests
+pnpm test:storage            # Run storage tests
+vitest run path/to/test      # Single test file
 ```
 
 ## Important Design Constraints
@@ -148,6 +151,7 @@ vitest run path/to/test  # Single test file
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY`: For Claude API access (t3x-cli)
-- `T3X_CORE_URL`: Core API URL (default: http://localhost:8000)
+- `ANTHROPIC_API_KEY`: For Claude API access
+- `GOOGLE_AI_STUDIO_KEY`: For embedding operations
+- `T3X_DATA_DIR`: Database location (default: `.t3x/database`)
 - `LOG_LEVEL`: Logging verbosity (debug/info/warn/error)

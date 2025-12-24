@@ -1,0 +1,36 @@
+{
+  "name": "t3x-webui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome lint src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db": "node scripts/db-inspector.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite-repl": "^0.2.32",
+    "@t3x/core": "workspace:*",
+    "@t3x/storage": "workspace:*",
+    "lucide-react": "^0.553.0",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "reactflow": "^11.11.4",
+    "undici": "^7.16.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "drizzle-orm": "^0.38.3",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
