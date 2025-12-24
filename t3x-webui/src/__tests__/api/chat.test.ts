@@ -13,16 +13,30 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { fetch as undiciFetch } from 'undici';
 
-// Store original env and fetch
+// Store original env
 const originalEnv = process.env;
-const originalFetch = global.fetch;
+
+// Mock undici module
+vi.mock('undici', async () => {
+  const actual = await vi.importActual<typeof import('undici')>('undici');
+  return {
+    ...actual,
+    fetch: vi.fn(),
+  };
+});
+
+// Helper to get mocked undici fetch
+const getMockedFetch = () => vi.mocked(undiciFetch);
 
 describe('Chat API Routes', () => {
   beforeEach(() => {
     vi.resetModules();
     // Reset env for each test
     process.env = { ...originalEnv };
+    // Clear all mocks
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -234,7 +248,6 @@ describe('Chat API Routes', () => {
   // ===========================================================================
   describe('Mock Integration - POST /api/v1/chat', () => {
     afterEach(() => {
-      global.fetch = originalFetch;
       vi.restoreAllMocks();
     });
 
@@ -249,12 +262,11 @@ describe('Chat API Routes', () => {
         stop_reason: 'end_turn',
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      getMockedFetch().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify(mockClaudeResponse)),
-      });
+      } as unknown as Response);
 
-      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -275,7 +287,7 @@ describe('Chat API Routes', () => {
       expect(data.data.usage).toEqual({ input_tokens: 10, output_tokens: 15 });
 
       // Verify fetch was called with correct parameters
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(getMockedFetch()).toHaveBeenCalledWith(
         'https://api.anthropic.com/v1/messages',
         expect.objectContaining({
           method: 'POST',
@@ -291,13 +303,12 @@ describe('Chat API Routes', () => {
       process.env.ANTHROPIC_API_KEY = 'test-api-key';
 
       // Mock Claude API error
-      global.fetch = vi.fn().mockResolvedValue({
+      getMockedFetch().mockResolvedValue({
         ok: false,
         status: 429,
         text: () => Promise.resolve('Rate limit exceeded'),
-      });
+      } as unknown as Response);
 
-      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -321,9 +332,8 @@ describe('Chat API Routes', () => {
       process.env.ANTHROPIC_API_KEY = 'test-api-key';
 
       // Mock network error
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      getMockedFetch().mockRejectedValue(new Error('Network error'));
 
-      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -351,12 +361,11 @@ describe('Chat API Routes', () => {
         model: 'claude-sonnet-4-5-20250929',
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      getMockedFetch().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify(mockClaudeResponse)),
-      });
+      } as unknown as Response);
 
-      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -373,7 +382,7 @@ describe('Chat API Routes', () => {
       await POST(request);
 
       // Verify system message was extracted and passed correctly
-      const fetchCall = vi.mocked(global.fetch).mock.calls[0];
+      const fetchCall = getMockedFetch().mock.calls[0];
       const body = JSON.parse(fetchCall[1]?.body as string);
       expect(body.system).toBe('You are a helpful assistant.');
       expect(body.messages).toHaveLength(1); // Only user message
@@ -388,12 +397,11 @@ describe('Chat API Routes', () => {
         model: 'claude-sonnet-4-5-20250929',
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      getMockedFetch().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify(mockClaudeResponse)),
-      });
+      } as unknown as Response);
 
-      vi.resetModules();
       const { POST } = await import('@/app/api/v1/chat/route');
 
       const request = new NextRequest('http://localhost/api/v1/chat', {
@@ -408,7 +416,7 @@ describe('Chat API Routes', () => {
 
       await POST(request);
 
-      const fetchCall = vi.mocked(global.fetch).mock.calls[0];
+      const fetchCall = getMockedFetch().mock.calls[0];
       const body = JSON.parse(fetchCall[1]?.body as string);
       expect(body.temperature).toBe(0.5);
       expect(body.max_tokens).toBe(1000);
