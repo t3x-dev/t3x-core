@@ -18,6 +18,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "reactflow": "^11.11.4",
+    "undici": "^7.16.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
