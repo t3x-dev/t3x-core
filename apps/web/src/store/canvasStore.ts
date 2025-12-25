@@ -1162,7 +1162,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         tags: ['commit'],
         kind: 'commit',
         bridgePrompt: 'prose',
-        pendingBranch: 'branch',
+        // Default to 'main' for first commit, 'branch' for subsequent commits
+        pendingBranch: state.hasMainCommit ? 'branch' : 'main',
         pendingBranchName: '',
         commitStatus: 'pending',
         // Pass upstream chat content to pending commit
@@ -1282,7 +1283,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           tags: ['commit'],
           kind: 'commit',
           bridgePrompt: 'prose',
-          pendingBranch: 'branch',
+          // Default to 'main' for first commit, 'branch' for subsequent commits
+          pendingBranch: state.hasMainCommit ? 'branch' : 'main',
           pendingBranchName: '',
           commitStatus: 'pending',
           // Pass upstream content to pending commit (use sourceExcerpt)

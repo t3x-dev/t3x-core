@@ -3927,7 +3927,7 @@ button {
   background: #fafafa;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   flex-shrink: 0;
 }
 
@@ -3938,7 +3938,7 @@ button {
   gap: 16px;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .draft-svtz__step-header {
