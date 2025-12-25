@@ -1325,6 +1325,109 @@ export async function createCommitFromEval(
   return handleResponse(res)
 }
 
+// ============================================================================
+// Engine Run API (Engine → Runner → n8n flow)
+// ============================================================================
+
+// Run record from Engine
+export interface EngineRun {
+  run_id: string
+  project_id: string | null
+  runner_run_id: string | null
+  commit_ref: string | null
+  leaf: {
+    id: string
+    type: 'deploy' | 'eval'
+    content?: string
+  } | null
+  inputs: Record<string, unknown> | null
+  workflow: {
+    type: string
+    webhook_id?: string
+  } | null
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  result: {
+    run_report?: Record<string, unknown>
+    assertions?: unknown[]
+    evidence_pack?: Record<string, unknown>
+  } | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateEngineRunInput {
+  project_id?: string
+  commit_ref?: string
+  leaf?: {
+    id: string
+    type: 'deploy' | 'eval'
+    content?: string
+  }
+  inputs?: Record<string, unknown>
+  workflow?: {
+    type: string
+    webhook_id?: string
+  }
+}
+
+export interface EngineRunListData {
+  runs: EngineRun[]
+  limit: number
+  offset: number
+}
+
+/**
+ * Create a run via Engine (triggers Runner → n8n flow)
+ */
+export async function createEngineRun(input: CreateEngineRunInput): Promise<{
+  run_id: string
+  status: string
+  runner_run_id?: string
+  warning?: string
+}> {
+  const res = await fetchWithTimeout(`${API_V1}/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const data = await handleResponse<ApiResponse<{
+    run_id: string
+    status: string
+    runner_run_id?: string
+    warning?: string
+  }>>(res)
+  return data.data!
+}
+
+/**
+ * Get a run by ID from Engine
+ */
+export async function getEngineRun(runId: string): Promise<EngineRun> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`)
+  const data = await handleResponse<ApiResponse<EngineRun>>(res)
+  return data.data!
+}
+
+/**
+ * List runs from Engine
+ */
+export async function listEngineRuns(options?: {
+  project_id?: string
+  status?: 'queued' | 'running' | 'completed' | 'failed'
+  limit?: number
+  offset?: number
+}): Promise<EngineRunListData> {
+  const query = buildQueryString({
+    project_id: options?.project_id,
+    status: options?.status,
+    limit: options?.limit ?? 50,
+    offset: options?.offset ?? 0,
+  })
+  const res = await fetchWithTimeout(`${API_V1}/runs?${query}`)
+  const data = await handleResponse<ApiResponse<EngineRunListData>>(res)
+  return data.data!
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {

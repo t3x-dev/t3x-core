@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/suite.schema.json",
+  "title": "T3X Runner Suite (Phase 0)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["cases"],
+  "anyOf": [{ "required": ["id"] }, { "required": ["suite_id"] }],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Optional protocol schema version (e.g. \"0.1\")."
+    },
+    "id": {
+      "type": "string",
+      "description": "Suite identifier (legacy)."
+    },
+    "suite_id": {
+      "type": "string",
+      "description": "Suite identifier (preferred)."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable suite name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional suite description."
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Optional agent id this suite targets."
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" },
+      "description": "List of suite cases."
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "input", "assertions"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "input": { "description": "Case input payload (not validated in Phase 0)." },
+        "context": { "type": "object", "additionalProperties": true },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/test_step" }
+        }
+      }
+    },
+    "test_step": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "name", "type", "target", "assertion"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "contains",
+            "not_contains",
+            "regex",
+            "json_path",
+            "semantic",
+            "custom",
+            "json_schema",
+            "trace_must_call",
+            "trace_order"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "enum": ["input", "output", "llm_call", "tool_call", "trace"]
+        },
+        "assertion": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "type": { "const": "contains" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["value"],
+                  "properties": {
+                    "value": { "type": "string" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "not_contains" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["value"],
+                  "properties": {
+                    "value": { "type": "string" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "regex" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["pattern"],
+                  "properties": {
+                    "pattern": { "type": "string" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "json_path" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["path"],
+                  "properties": {
+                    "path": { "type": "string" },
+                    "value": {}
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "semantic" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["value"],
+                  "properties": {
+                    "value": { "type": "string" },
+                    "threshold": { "type": "number" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "custom" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["fn"],
+                  "properties": {
+                    "fn": { "type": "string" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "json_schema" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["schema"],
+                  "properties": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "trace_must_call" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["tool"],
+                  "properties": {
+                    "tool": { "type": "string" }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "type": { "const": "trace_order" },
+                "assertion": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["before", "after"],
+                  "properties": {
+                    "before": { "type": "string" },
+                    "after": { "type": "string" }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

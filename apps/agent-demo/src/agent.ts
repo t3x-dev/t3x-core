@@ -4,7 +4,7 @@ export interface TraceEvent {
   type: 'step' | 'tool_call' | 'tool_result' | 'error';
   name: string;
   ok: boolean;
-  args?: Record<string, unknown>;
+  args?: unknown;
   result?: unknown;
   latency_ms?: number;
   error?: string;

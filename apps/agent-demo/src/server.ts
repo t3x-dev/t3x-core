@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import { runAgent, type AgentInput } from './agent.js';
+import { getOutboxPath } from './outbox.js';
 
 const app: Express = express();
 app.use(express.json());
@@ -72,11 +73,7 @@ app.post('/run', async (req, res) => {
 app.get('/outbox', async (_req, res) => {
   try {
     const { readFileSync, existsSync } = await import('fs');
-    const { join, dirname } = await import('path');
-    const { fileURLToPath } = await import('url');
-
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const outboxPath = join(__dirname, '../outbox.jsonl');
+    const outboxPath = getOutboxPath();
 
     if (!existsSync(outboxPath)) {
       return res.json({ emails: [] });
@@ -100,11 +97,7 @@ app.get('/outbox', async (_req, res) => {
 app.delete('/outbox', async (_req, res) => {
   try {
     const { unlinkSync, existsSync } = await import('fs');
-    const { join, dirname } = await import('path');
-    const { fileURLToPath } = await import('url');
-
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const outboxPath = join(__dirname, '../outbox.jsonl');
+    const outboxPath = getOutboxPath();
 
     if (existsSync(outboxPath)) {
       unlinkSync(outboxPath);

@@ -1,5 +1,8 @@
 # T3X Core API - Docker 镜像
 #
+# NOTE: LEGACY / dev-only.
+# 根目录 `docker-compose.yml` 现在使用 `t3x-cli/Dockerfile` 作为 Core API（Node server）。
+#
 # 构建：
 #   docker build -t t3x-core-api .
 #
