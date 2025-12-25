@@ -1,9 +1,6 @@
 import { appendFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUTBOX_PATH = join(__dirname, '../../outbox.jsonl');
+import { dirname } from 'path';
+import { getOutboxPath } from '../outbox.js';
 
 export interface EmailArgs {
   to: string;
@@ -23,6 +20,7 @@ export interface EmailResult {
  * This makes the agent deterministic and assertable
  */
 export function sendEmail(args: EmailArgs): EmailResult {
+  const outboxPath = getOutboxPath();
   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   const record = {
@@ -34,10 +32,10 @@ export function sendEmail(args: EmailArgs): EmailResult {
   };
 
   // Ensure directory exists
-  mkdirSync(dirname(OUTBOX_PATH), { recursive: true });
+  mkdirSync(dirname(outboxPath), { recursive: true });
 
   // Append to outbox
-  appendFileSync(OUTBOX_PATH, JSON.stringify(record) + '\n');
+  appendFileSync(outboxPath, JSON.stringify(record) + '\n');
 
   return {
     message_id: messageId,

@@ -139,7 +139,7 @@ export async function findLastTurnInConversation(
     .select()
     .from(turns)
     .where(eq(turns.conversationId, conversationId))
-    .orderBy(desc(turns.createdAt))
+    .orderBy(desc(turns.createdAt), desc(turns.turnHash))
     .limit(1);
 
   return turn ?? null;
