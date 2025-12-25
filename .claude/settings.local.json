@@ -90,7 +90,8 @@
       "Bash(/dev/null pkill -f node.*next)",
       "Bash(node -e:*)",
       "Bash(pnpm install:*)",
-      "Bash(pnpm build:runner:*)"
+      "Bash(pnpm build:runner:*)",
+      "Bash(pnpm build:api:*)"
     ],
     "deny": [],
     "ask": []
