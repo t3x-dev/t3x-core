@@ -34,6 +34,16 @@
 
 export { Observer, observer } from './observer.js';
 export { EvalEngine, evalEngine } from './eval.js';
+export {
+  loadSuite,
+  loadSuites,
+  getDefaultSuitesPath,
+  caseToTestSteps,
+  EvalSuiteSchema,
+  type EvalSuite,
+  type EvalCase,
+  type SuiteRunResult,
+} from './suites.js';
 
 export type {
   AgentInput,
