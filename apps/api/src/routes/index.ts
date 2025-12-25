@@ -14,3 +14,4 @@ export { chatRoutes } from './chat';
 export { diffRoutes } from './diff';
 export { exportRoutes } from './export';
 export { mergeRoutes } from './merge';
+export { runnerRoutes } from './runner';
