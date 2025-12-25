@@ -8,6 +8,9 @@ import { tokenizeText } from '../utils/tokenizer'
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked'
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history'
 
+// Callback type for notifications
+type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void
+
 // Deletion confirmation state
 type DeletionConfirmation = {
   nodeIds: string[]
@@ -25,6 +28,9 @@ type CanvasState = {
   projectId: string | null
   loading: boolean
   loadError: Error | null
+  // Notification callback
+  notifyCallback: NotifyCallback | null
+  setNotifyCallback: (cb: NotifyCallback | null) => void
   // Leaf panel state
   leafPanelOpen: boolean
   leafPanelCommitId?: string
@@ -697,9 +703,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   projectId: null,
   loading: false,
   loadError: null,
+  notifyCallback: null,
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
   deletionConfirmation: null,
+
+  setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
   loadProjectData: async (projectId: string) => {
     // Skip if already loading the same project
@@ -831,13 +840,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // Add source → commit edges
       // Priority: source_refs (new multi-source) > turn_window (legacy single-source)
       commits.forEach((commit) => {
-        // Debug: Log commit source_refs
-        console.log('[loadProjectData] Commit source_refs:', {
-          commit_hash: commit.commit_hash,
-          source_refs: commit.source_refs,
-          has_source_refs: commit.source_refs && commit.source_refs.length > 0,
-        })
-
         // New: Use source_refs for multi-source support
         if (commit.source_refs && commit.source_refs.length > 0) {
           commit.source_refs.forEach((ref, idx) => {
@@ -997,17 +999,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       ),
     })),
 
-  commitPendingCommit: (id) =>
-    set((state) => {
-      const pendingNode = state.nodes.find((node) => node.id === id && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
-      if (!pendingNode) {
-        return {}
-      }
+  commitPendingCommit: (id) => {
+    const state = get()
+    const notify = state.notifyCallback
 
-      const branchMode = determinePendingCommitBranchMode(state, id)
-      if (branchMode === 'blocked') {
-        return {}
-      }
+    const pendingNode = state.nodes.find((node) => node.id === id && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
+    if (!pendingNode) {
+      notify?.('Pending commit not found', 'error')
+      return
+    }
+
+    const branchMode = determinePendingCommitBranchMode(state, id)
+    if (branchMode === 'blocked') {
+      notify?.('Cannot commit: blocked by existing commits', 'warning')
+      return
+    }
+
+    set((state) => {
       const isMergeCommit = pendingNode.data.bridgePrompt === '/merge' && !!pendingNode.data.mergeConfig
       let branchType: BranchType = 'branch'
 
@@ -1061,12 +1069,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         hasMainCommit: state.hasMainCommit || branchType === 'main',
         latestMainCommitId: branchType === 'main' ? id : latestMainId,
       }
-    }),
+    })
+  },
 
   addPendingCommitFromConversation: async (conversationId) => {
     const state = get()
+    const notify = state.notifyCallback
+
     const source = state.nodes.find((node) => node.id === conversationId)
     if (!source || source.data.kind !== 'conversation') {
+      notify?.('Conversation not found', 'error')
       return
     }
     const canSeed = canConversationSeedPendingCommit(
@@ -1076,6 +1088,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       state.hasMainCommit,
     )
     if (!canSeed) {
+      notify?.('Cannot create pending commit from this conversation', 'warning')
       return
     }
 
@@ -1132,6 +1145,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         }
       } catch (err) {
         console.warn('Failed to fetch turns for baselineSummary:', err)
+        notify?.('Failed to fetch conversation content', 'warning')
       }
     }
 
@@ -1895,15 +1909,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
   closeLeafPanel: () => set({ leafPanelOpen: false, leafPanelCommitId: undefined }),
 
-  addLeafNode: (leafType) =>
-    set((state) => {
-      const commitId = state.leafPanelCommitId
-      if (!commitId) return {}
+  addLeafNode: (leafType) => {
+    const state = get()
+    const notify = state.notifyCallback
 
-      const commitNode = state.nodes.find(
-        (node) => node.id === commitId && node.data.kind === 'commit'
-      )
-      if (!commitNode) return {}
+    const commitId = state.leafPanelCommitId
+    if (!commitId) {
+      notify?.('No commit selected', 'error')
+      return
+    }
+
+    const commitNode = state.nodes.find(
+      (node) => node.id === commitId && node.data.kind === 'commit'
+    )
+    if (!commitNode) {
+      notify?.('Commit not found', 'error')
+      return
+    }
+
+    set((state) => {
 
       // Count existing leaf nodes connected to this commit to offset position
       const existingLeafCount = state.edges.filter((edge) => {
@@ -1959,7 +1983,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         leafPanelOpen: false,
         leafPanelCommitId: undefined,
       }
-    }),
+    })
+  },
 
   // Deletion confirmation methods
   confirmDeletion: () => {

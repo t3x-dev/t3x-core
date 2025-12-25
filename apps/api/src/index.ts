@@ -23,6 +23,7 @@ import {
   diffRoutes,
   exportRoutes,
   mergeRoutes,
+  runnerRoutes,
 } from './routes';
 import { projectRoutes } from './routes/projects.openapi';
 import { getDB, closeDB } from './lib/db';
@@ -52,6 +53,7 @@ api.route('/', chatRoutes);         // /v1/chat
 api.route('/', diffRoutes);         // /v1/diff
 api.route('/', exportRoutes);       // /v1/export
 api.route('/', mergeRoutes);        // /v1/merge
+api.route('/', runnerRoutes);       // /v1/runner/*
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -80,6 +82,7 @@ api.doc('/openapi.json', {
     { name: 'Merge', description: 'Merge operations' },
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
+    { name: 'Runner', description: 'Grey-box agent evaluation' },
   ],
 });
 

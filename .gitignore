@@ -7,6 +7,9 @@ dist-ssr/
 build/
 *.tsbuildinfo
 
+# Turborepo
+.turbo/
+
 # Environment files
 .env
 .env.local
@@ -18,6 +21,9 @@ build/
 !.vscode/extensions.json
 *.swp
 *.swo
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Claude Code local settings
 .claude/settings.local.json

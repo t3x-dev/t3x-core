@@ -170,6 +170,12 @@ export async function createTestDB(): Promise<{
 }
 
 /**
+ * Sleep helper for tests that need unique timestamps
+ * (ensures turns inserted in sequence have different createdAt values)
+ */
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
  * Test data factories
  */
 export const testData = {
