@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
+import { createTestDB, testData, sleep } from './setup';
 import { insertProject } from '../queries/projects';
 import { insertConversation } from '../queries/conversations';
 import {
@@ -103,6 +103,8 @@ describe('Turns Storage', () => {
         content: 'First message',
       }));
 
+      await sleep(2); // Ensure unique timestamp for correct parent chain
+
       const turn2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
         content: 'Second message',
       }));
@@ -183,6 +185,7 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'List Turns' }));
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' }));
+      await sleep(2);
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' }));
 
       const results = await findTurnsByConversation(db, { conversationId: conv.conversationId });
@@ -203,7 +206,9 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Limit Test' }));
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'A' }));
+      await sleep(2);
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'B' }));
+      await sleep(2);
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'C' }));
 
       const results = await findTurnsByConversation(db, { conversationId: conv.conversationId, limit: 2 });
@@ -215,6 +220,7 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Order Test' }));
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
+      await sleep(2);
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
 
       const asc = await findTurnsByConversation(db, { conversationId: conv.conversationId, order: 'asc' });
@@ -245,7 +251,9 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Last Turn' }));
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
+      await sleep(2); // Ensure unique timestamp
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
+      await sleep(2); // Ensure unique timestamp
       const last = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Last' }));
 
       const found = await findLastTurnInConversation(db, conv.conversationId);
@@ -269,7 +277,9 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain' }));
 
       const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
+      await sleep(2); // Ensure unique timestamp for parent chain
       const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Child' }));
+      await sleep(2); // Ensure unique timestamp for parent chain
       const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Grandchild' }));
 
       const chain = await findTurnChain(db, t3.turnHash);
@@ -297,8 +307,11 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Window Test' }));
 
       const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
+      await sleep(2);
       const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
+      await sleep(2);
       const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Third' }));
+      await sleep(2);
       const t4 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' }));
 
       // Get window from t2 to t4
@@ -325,7 +338,9 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Full Window' }));
 
       const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
+      await sleep(2);
       const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
+      await sleep(2);
       const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'End' }));
 
       const window = await findTurnsInWindow(db, t1.turnHash, t3.turnHash);
@@ -376,6 +391,7 @@ describe('Turns Storage', () => {
       const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Reverse Test' }));
 
       const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Earlier' }));
+      await sleep(2);
       const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Later' }));
 
       // t2 comes after t1, so t2 is not an ancestor of t1

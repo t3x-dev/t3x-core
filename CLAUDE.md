@@ -12,51 +12,57 @@ T3X is "Git for Meaning" — a semantic version control system for AI conversati
 
 ```
 t3x/
-├── apps/
-│   ├── api/            # Standalone REST API (Hono)
-│   ├── web/            # Next.js frontend (React + ReactFlow)
-│   ├── runner/         # Grey-box agent evaluation engine
-│   └── agent-demo/     # Demo agent for testing
-├── packages/
-│   ├── core/           # Deterministic semantic engine (TypeScript)
-│   └── storage/        # PostgreSQL persistence (Drizzle ORM)
-├── turbo.json          # Turborepo config
-├── pnpm-workspace.yaml # pnpm workspace config
+├── t3x-core/       # Deterministic semantic engine (TypeScript)
+├── t3x-storage/    # PostgreSQL persistence layer (Drizzle ORM)
+├── t3x-webui/      # Next.js 15 frontend (App Router + ReactFlow)
+├── t3x-runner/     # Grey-box agent evaluation engine
+├── agent-demo/     # Demo agent for testing
 └── docker-compose.yml
 ```
 
 ## Build Commands
 
-This project uses **pnpm** and **Turborepo** for monorepo management.
-
-### Install dependencies
+### t3x-core
 ```bash
-pnpm install
+cd t3x-core
+npm install
+npm run build          # tsc
+npm test               # vitest (102 tests)
+npm run test:watch     # watch mode
 ```
 
-### Build all packages
+### t3x-storage
 ```bash
-pnpm build              # Build all (parallel, cached)
-pnpm build:core         # Build only @t3x/core
-pnpm build:storage      # Build only @t3x/storage
-pnpm build:webui        # Build only t3x-webui
-pnpm build:api          # Build only @t3x/api
+cd t3x-storage
+npm install
+npm run build          # tsc
+npm test               # vitest (151 tests)
+npm run db:studio      # Drizzle Studio
 ```
 
-### Run tests
+### t3x-webui
 ```bash
-pnpm test               # Test all (parallel, cached)
-pnpm test:core          # Test only @t3x/core
-pnpm test:storage       # Test only @t3x/storage
-pnpm test:webui         # Test only t3x-webui
+cd t3x-webui
+npm install
+npm run dev            # Next.js dev server (port 3000)
+npm run build          # next build
+npm run lint           # eslint
+npm test               # vitest (44 tests)
 ```
 
-### Development
+### t3x-runner
 ```bash
-pnpm dev:api            # Start API dev server (port 8000)
-pnpm dev:webui          # Start webui dev server (port 3000)
-pnpm dev:runner         # Start runner dev server
-pnpm dev:agent          # Start agent-demo dev server
+cd t3x-runner
+npm install
+npm run build          # tsc
+npm run dev            # tsx watch src/server.ts
+npm run start          # node dist/server.js
+```
+
+### Run Single Test
+```bash
+vitest run src/__tests__/api/projects.test.ts   # specific file
+vitest run -t "creates a new project"           # by test name
 ```
 
 ### Docker
@@ -66,46 +72,98 @@ docker-compose up -d                 # Background mode
 docker-compose --profile n8n up      # Include n8n workflow engine
 ```
 
-Ports: API (8000), WebUI (3000), Runner API (8080), Demo Agent (9000)
+Ports: WebUI (3000), Core API (8000), Runner API (8080), Demo Agent (9000)
 
 ## Architecture
+
+### Package Dependencies
+
+```
+t3x-webui ──depends──► @t3x/storage ──depends──► @t3x/core
+```
 
 ### Three-Layer Design
 
 | Layer | Package | LLM Required? |
 |-------|---------|---------------|
-| **Framework Core** | `packages/core` | No (deterministic) |
-| **Storage Layer** | `packages/storage` | No |
-| **API Layer** | `apps/api` | No |
+| **Framework Core** | `@t3x/core` | No (deterministic) |
+| **Storage Layer** | `@t3x/storage` | No |
 | **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
-| **Product Layer** | `apps/web`, `apps/runner` | No |
+| **Product Layer** | `t3x-webui`, `t3x-runner` | No |
 
 ### Storage Architecture
 
-T3X uses dual-layer storage:
-1. **JSONL Ledger** (source of truth): Append-only hash chains under `.t3x/`
-2. **PostgreSQL Index** (query layer): Rebuildable from ledger, used for fast queries (PGLite for dev)
+T3X uses PostgreSQL (via Drizzle ORM):
+- **PGLite** for local development (PostgreSQL WASM, data in `.t3x/database/`)
+- **Postgres** for production
+- **Supabase** adapter available
 
-Key entities: `projects`, `conversations`, `turns`, `drafts`, `commits`, `diffs`
+Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `merge_results`, `segment_embeddings`
 
 ### Hash Chains
 
-- **Turn chain**: `prev_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized JSON)
+- **Turn chain**: `parent_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized JSON)
 - **Commit chain**: DAG with `parent_hashes[]`, supports branching and merging
 
-### Extractor Rings
+### Extractor Rings (t3x-core)
 
 Semantic extraction happens in three rings:
 - **Ring 1**: Keywords, entities, temporal anchors, preference tags
 - **Ring 2**: Intent seeds, relations, facets
 - **Ring 3**: Sentence-level segments
 
+## WebUI Architecture
+
+### Directory Structure
+```
+t3x-webui/src/
+├── app/                    # Next.js App Router
+│   ├── api/v1/            # REST API routes
+│   │   ├── projects/      # CRUD operations
+│   │   ├── conversations/ # Conversation management
+│   │   ├── turns/         # Turn (message) management
+│   │   ├── commits/       # Commit operations
+│   │   ├── branches/      # Branch management
+│   │   └── drafts/        # Draft commit workflow
+│   └── project/[projectId]/ # Project canvas page
+├── components/            # React components
+├── store/canvasStore.ts   # Zustand state management
+├── hooks/useApi.ts        # Data fetching hooks
+├── lib/
+│   ├── api.ts             # API client functions
+│   └── db.ts              # Database singleton
+└── __tests__/             # API route tests
+```
+
+### API Response Format
+```json
+{ "success": true, "data": {...} }
+{ "success": false, "error": { "code": "...", "message": "..." } }
+```
+
+API uses snake_case for JSON fields, internal code uses camelCase.
+
+### Canvas State (Zustand)
+- **Nodes**: Conversations, commits (pending/committed), leaf nodes
+- **Edges**: Data flow connections
+- **Locking**: Committed commits and upstream nodes are immutable
+
+## Testing
+
+All packages use **vitest** with PGLite for isolated test databases:
+
+```typescript
+// Test setup pattern
+import { setupTestDB, testData } from '../setup';
+
+vi.mock('@/lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+```
+
 ## Key Data Formats
 
-### .cfpack Export Format
-Portable JSON archive for sharing conversations across T3X instances. Contains: `turns`, `findings`, `commits`, `pipeline` config, with full provenance metadata.
-
-### Turn Record (JSONL)
+### Turn Record
 ```json
 {
   "turn_hash": "sha256:...",
@@ -114,8 +172,7 @@ Portable JSON archive for sharing conversations across T3X instances. Contains: 
   "conversation_id": "conv_...",
   "role": "user|assistant|system|tool",
   "content": "...",
-  "created_at": "ISO8601",
-  "schema_version": "turn_v1"
+  "created_at": "ISO8601"
 }
 ```
 
@@ -127,31 +184,20 @@ Portable JSON archive for sharing conversations across T3X instances. Contains: 
   "branch": "main",
   "turn_window": { "start_turn_hash": "...", "end_turn_hash": "..." },
   "facet_snapshot": [...],
-  "pipeline_config": {...},
-  "signature": { "algo": "ed25519", "key_id": "...", "value": "..." }
+  "source_refs": [{ "type": "conversation", "conversation_id": "..." }]
 }
-```
-
-## Testing
-
-All packages use **vitest** for testing:
-```bash
-pnpm test                    # Run all tests
-pnpm test:core               # Run core tests
-pnpm test:storage            # Run storage tests
-vitest run path/to/test      # Single test file
 ```
 
 ## Important Design Constraints
 
 1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
-2. **Append-only**: JSONL ledgers are immutable; any modification breaks hash chains
-3. **Plugin architecture**: Extractors and embedders are pluggable via `.t3x/config.yml`
+2. **Append-only**: Hash chains are immutable; any modification breaks integrity
+3. **Plugin architecture**: Extractors and embedders are pluggable
 4. **Evidence-backed**: Every semantic finding traces to source turns with confidence scores
 
 ## Environment Variables
 
 - `ANTHROPIC_API_KEY`: For Claude API access
-- `GOOGLE_AI_STUDIO_KEY`: For embedding operations
-- `T3X_DATA_DIR`: Database location (default: `.t3x/database`)
+- `T3X_DATA_DIR`: PGLite data directory (default: `.t3x/database`)
+- `DATABASE_URL`: PostgreSQL connection string (production)
 - `LOG_LEVEL`: Logging verbosity (debug/info/warn/error)

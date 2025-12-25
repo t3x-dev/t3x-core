@@ -1,290 +1,380 @@
-# T3X Schema (T3X 1.0)
+# T3X Schema Specification (v2.0)
 
-> This spec mirrors `docs/ARCHITECTURE.md` and `docs/STORAGE_ARCHITECTURE.md`. The runtime source of truth is the JSONL ledger + SQLite index; a `.t3x` file (a.k.a. `.cfpack`) is the portable export view of that ledger. The spec only defines the internal JSON structure; whether implementations leave it as-is or wrap/compress it (zip/gzip/etc.) is an optional transport detail, not part of the protocol.
+> This spec defines the `.cfpack` export format for T3X. The runtime storage uses PostgreSQL (see `STORAGE_ARCHITECTURE.md`). The `.cfpack` file is a portable JSON export that can be imported into any T3X instance.
 
 ---
 
 ## 1. Overview
 
-The T3X schema (formerly T3X) is the canonical specification for hybrid memories. It defines a minimal JSON structure that carries turn chains, drafts, commits, diffs, and optional notes/preferences/files in a portable, provider-neutral way. Tools (CLI, SDKs, cloud) layer intelligence on top—hybrid summarisation, semantic indexing, lineage tracking, prompt/chain DSLs.
+The T3X schema defines a portable JSON format for exporting semantic versioning data. It packages turn chains, commits, branches, and drafts in a provider-neutral way that can be:
+
+- Imported into other T3X instances
+- Fed to LLMs for context
+- Archived for long-term storage
+- Validated programmatically
+
+---
 
 ## 2. Core Principles
 
-- **Ledger-driven**: All deterministic state maps to the JSONL ledger. The schema guarantees replayability and auditability.
-- **Minimal required fields**: At the top level only `t3x_version` and `metadata.created` are mandatory. Each ledger section (`turns`, `drafts`, `commits`, `diffs`) defines its own required fields in the sections below.
-- **Natural structure**: Organised around turns → drafts → commits → diffs, with optional extensions (notes, preferences, files, prompts).
-- **Portable JSON**: No vendor lock-in; easy to parse and validate.
-- **Progressive enhancement**: Format stays simple; tools add complexity over time.
+- **PostgreSQL as runtime storage**: The `.cfpack` format is an export view, not the primary storage
+- **Minimal required fields**: Only `t3x_version` and `metadata.created` are mandatory at top level
+- **Portable JSON**: No vendor lock-in; easy to parse and validate
+- **Hash chain integrity**: All hashes can be recomputed for verification
+
+---
 
 ## 3. File Format
 
-T3X files are valid JSON documents with the `.t3x` extension.
+T3X files are valid JSON documents with the `.cfpack` extension.
 
-- **MIME**: `application/t3x+json`
-- **Extension**: `.t3x` (a.k.a. `.cfpack`)
+- **MIME**: `application/cfpack+json`
+- **Extension**: `.cfpack`
 
 ### 3.1 Minimal Valid Example
 
 ```json
 {
-  "t3x_version": "1.0",
+  "t3x_version": "2.0",
   "metadata": {
-    "created": "2025-10-06T12:00:00Z"
+    "created": "2025-12-23T10:00:00Z"
   },
   "turns": [],
-  "drafts": [],
-  "commits": []
+  "commits": [],
+  "branches": []
 }
 ```
 
-### 3.2 Top-level Structure
+### 3.2 Full Structure
 
 ```json
 {
-  "t3x_version": "1.0",
-  "$schema": "https://t3x.dev/schema/v1.0.json",
-  "metadata": { ... },
-  "turns": [ ... ],
-  "drafts": [ ... ],
-  "commits": [ ... ],
-  "diffs": [ ... ],
-  "conversations": [ ... ],   // optional UI container
-  "notes": [ ... ],           // optional
-  "preferences": { ... },     // optional
-  "files": [ ... ],           // optional
-  "prompts": [ ... ],         // optional
-  "usage_summary": { ... },   // optional
-  "_tooling": { ... }         // optional extensions
+  "t3x_version": "2.0",
+  "$schema": "https://t3x.dev/schema/v2.0.json",
+  "metadata": {
+    "created": "2025-12-23T10:00:00Z",
+    "project_id": "proj_abc123",
+    "project_name": "My Project",
+    "exported_by": "t3x-webui@0.1.0"
+  },
+  "conversations": [...],
+  "turns": [...],
+  "commits": [...],
+  "branches": [...],
+  "drafts": [...],
+  "merge_results": [...]
 }
 ```
-
-`turns/drafts/commits/diffs` mirror the JSONL ledger. `conversations/notes/...` are product-level extensions; omit them if unused.
 
 ---
 
-## 4. Field Reference (ledger-aligned)
+## 4. Section Schemas
 
 ### 4.1 Metadata
 
-```json
-{
-  "metadata": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "created": "2025-10-06T12:00:00Z",
-    "modified": "2025-10-06T14:30:00Z",
-    "name": "My AI Context",
-    "description": "Personal context for coding",
-    "tags": ["coding", "personal"],
-    "version": "1.0"
-  }
+```typescript
+interface Metadata {
+  created: string;           // ISO 8601 timestamp (required)
+  project_id?: string;       // Source project ID
+  project_name?: string;     // Human-readable name
+  exported_by?: string;      // Exporter tool and version
+  description?: string;      // Optional description
 }
 ```
 
-`created` is required; others are optional.
+### 4.2 Conversations
 
-### 4.2 Turns (ledger export)
-
-Each turn must include hash-chain info and Ring snapshots.
-
-```json
-{
-  "turns": [
-    {
-      "turn_hash": "sha256:e9f...",
-      "parent_turn_hash": "sha256:aa1...",
-      "project_id": "proj_demo",
-      "conversation_id": "conv_main",
-      "role": "user",
-      "content": "I want to travel to Japan in November",
-      "rings": {
-        "ring1": {
-          "keywords": [
-            {"lemma": "travel", "polarity": +1},
-            {"lemma": "Japan", "polarity": +1},
-            {"lemma": "November", "polarity": +1}
-          ],
-          "time_anchor": "2025-11"
-        },
-        "ring2": {
-          "intent_seed": ["plan_trip"],
-          "time_window": "2025-11"
-        },
-        "ring3": {
-          "segments": [
-            {"id": "s1-1", "text": "I want to travel to Japan"},
-            {"id": "s1-2", "text": "Prefer late November"}
-          ]
-        }
-      },
-      "metadata": {
-        "model": "gpt-4.1-mini",
-        "tokens": {"prompt": 32, "completion": 0}
-      },
-      "created_at": "2025-11-18T12:34:56Z",
-      "schema_version": "turn_v1"
-    }
-  ]
+```typescript
+interface Conversation {
+  conversation_id: string;   // Required: unique ID
+  project_id: string;        // Required: parent project
+  title?: string;            // Optional title
+  created_at: string;        // ISO 8601 timestamp
+  metadata_json?: string;    // Optional JSON metadata
 }
 ```
 
-`turn_hash = SHA256(JCS(record_without_hash))`. `parent_turn_hash` NULL means the chain root. `rings` align with the extractor output.
+### 4.3 Turns
 
-> Draft generation typically walks Ring 1 keywords: polarity `+1` feeds `must_have`, polarity `-1` feeds `mustnt_have`, ensuring Must/Mustn’t stay anchored to source turns.
-
-### 4.3 Drafts
-
-```json
-{
-  "drafts": [
-    {
-      "draft_id": "draft_2025-11-18T12:40",
-      "project_id": "proj_demo",
-      "base_commit_hash": "sha256:commit_prev",
-      "turn_anchor_hash": "sha256:e9f...",
-      "bridge_id": "plan",
-      "bridge_payload": {
-        "prompt": "...bridge snapshot...",
-        "threshold": 0.60
-      },
-      "must_have": ["travel", "Japan"],
-      "mustnt_have": ["cancel"],
-      "llm_config": {
-        "provider": "openai",
-        "model": "gpt-4.1",
-        "temperature": 0.3,
-        "max_tokens": 2048
-      },
-      "text": "...polished draft...",
-      "status": "adopted",
-      "created_at": "2025-11-18T12:42:00Z",
-      "schema_version": "draft_v1"
-    }
-  ]
+```typescript
+interface Turn {
+  turn_hash: string;         // Required: SHA-256 content hash
+  parent_turn_hash?: string; // NULL for first turn
+  project_id: string;        // Required
+  conversation_id: string;   // Required
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;           // Required: message content
+  language?: string;         // ISO 639-1 code
+  rings_json?: string;       // Ring 1/2/3 extraction result
+  created_at: string;        // ISO 8601 timestamp
 }
+```
+
+**Hash computation:**
+```
+turn_hash = "sha256:" + SHA256(JCS({
+  parent_turn_hash,
+  project_id,
+  conversation_id,
+  role,
+  content,
+  language,
+  rings_json,
+  created_at
+}))
 ```
 
 ### 4.4 Commits
 
-```json
-{
-  "commits": [
-    {
-      "commit_hash": "sha256:commit_tip",
-      "parent_hashes": ["sha256:commit_prev"],
-      "project_id": "proj_demo",
-      "branch": "main",
-      "turn_window": {
-        "start_turn_hash": "sha256:aa1...",
-        "end_turn_hash": "sha256:e9f..."
-      },
-      "facet_snapshot": [
-        {"facet": "goal", "text": "Visit Japan in November"},
-        {"facet": "constraints", "text": "Avoid crowded places"}
-      ],
-      "pipeline_config": {
-        "extractors": {"plugin": "spacy@v1"},
-        "embedder": {"plugin": "minilm@v2"},
-        "thresholds": {"plan": 0.60}
-      },
-      "draft_ref": {
-        "draft_id": "draft_2025-11-18T12:40",
-        "text_hash": "sha256:draft_text"
-      },
-      "signature": {
-        "algo": "ed25519",
-        "key_id": "ed25519:demo",
-        "value": "base64:..."
-      },
-      "created_at": "2025-11-18T12:45:00Z",
-      "schema_version": "commit_v1"
-    }
-  ]
+```typescript
+interface Commit {
+  commit_hash: string;       // Required: SHA-256 content hash
+  project_id: string;        // Required
+  branch: string;            // Required: branch name
+  message?: string;          // Commit message
+  parents_json: string;      // JSON array of parent hashes
+  turn_window_json: string;  // { start_turn_hash, end_turn_hash }
+  facet_snapshot_json: string; // Semantic extraction result
+  source_refs_json?: string; // Multi-source references
+  created_at: string;        // ISO 8601 timestamp
 }
 ```
 
-- Merge = multiple entries in `parent_hashes` (no separate entity).
-- `facet_snapshot` mirrors the Ring-based aggregation used during validation.
-- `pipeline_config` + `draft_ref` capture the replayable config snapshot.
+**Hash computation:**
+```
+commit_hash = "sha256:" + SHA256(JCS({
+  parent_hashes,
+  project_id,
+  branch,
+  turn_window,
+  facet_snapshot,
+  created_at
+}))
+```
 
-> Terminology: `commit_hash` here is equivalent to `commit_id` in `docs/ARCHITECTURE.md` §3.4—it’s the SHA-256 hash of the canonical payload (JCS-normalised).
+### 4.5 Branches
 
-### 4.5 Diffs (optional cache)
+```typescript
+interface Branch {
+  branch_id: string;         // Required: unique ID
+  project_id: string;        // Required
+  name: string;              // Required: branch name
+  parent_branch?: string;    // Parent branch name
+  head_commit_hash?: string; // Latest commit hash
+  description?: string;      // Optional description
+  is_current: boolean;       // True if current branch
+  created_at: string;        // ISO 8601 timestamp
+}
+```
 
-```json
-{
-  "diffs": [
-    {
-      "base_commit_hash": "sha256:commit_prev",
-      "target_commit_hash": "sha256:commit_tip",
-      "algo_version": "semantic_diff@v1",
-      "diff_json": {"added": [...], "removed": [...]},
-      "computed_at": "2025-11-18T12:46:00Z"
-    }
-  ]
+### 4.6 Drafts
+
+```typescript
+interface Draft {
+  draft_id: string;          // Required: unique ID
+  project_id: string;        // Required
+  conversation_id: string;   // Required
+  base_commit_hash?: string; // Base commit reference
+  bridge_id: string;         // Bridge template ID
+  bridge_payload_json: string; // Bridge configuration
+  llm_config_json: string;   // LLM generation config
+  text: string;              // Generated content
+  status: 'ephemeral' | 'adopted' | 'superseded';
+  created_at: string;        // ISO 8601 timestamp
+}
+```
+
+### 4.7 Merge Results
+
+```typescript
+interface MergeResult {
+  merge_result_id: string;   // Required: unique ID
+  project_id: string;        // Required
+  base_commit_hash: string;  // Common ancestor
+  source_commit_hash: string; // Source branch tip
+  target_commit_hash: string; // Target branch tip
+  status: 'clean' | 'conflicts';
+  auto_merged_json: string;  // Auto-merged facets
+  conflicts_json: string;    // Conflict list
+  created_at: string;        // ISO 8601 timestamp
 }
 ```
 
 ---
 
-## 5. Optional Extensions
+## 5. Ring Output Format
 
-### 5.1 Conversations (UI container)
+Ring extraction produces structured semantic data:
+
+```typescript
+interface RingOutput {
+  ring1: {
+    keywords: Array<{
+      text: string;        // Surface form
+      lemma: string;       // Lemmatized form
+      polarity: -1 | 0 | 1; // Negative/neutral/positive
+      pos: string;         // Part of speech
+      span: [number, number]; // Character offsets
+    }>;
+    entities: Array<{
+      text: string;
+      type: string;        // PERSON, ORG, GPE, etc.
+      salience: number;    // 0-1 importance score
+    }>;
+    timeAnchor: string | null;
+    topic: string | null;
+  };
+  ring2: {
+    facets: Array<{
+      type: string;        // goal, preference, constraint
+      text: string;
+      confidence: number;
+    }>;
+    intentSeed: string | null;
+  };
+  ring3: {
+    segments: Array<{
+      id: string;          // "s-0", "s-1", etc.
+      text: string;
+      startOffset: number;
+      endOffset: number;
+    }>;
+  };
+}
+```
+
+---
+
+## 6. Facet Snapshot Format
+
+Commits store semantic facets extracted from turns:
+
+```typescript
+interface FacetSnapshot {
+  facets: Array<{
+    type: string;          // Facet type
+    text: string;          // Facet content
+    confidence: number;    // 0-1 confidence
+    source_turn_hashes: string[]; // Evidence sources
+  }>;
+  extracted_at: string;    // ISO 8601 timestamp
+  pipeline_version: string; // Extractor version
+}
+```
+
+---
+
+## 7. Source References
+
+Commits can reference multiple source conversations:
+
+```typescript
+interface SourceRef {
+  type: 'conversation' | 'turn' | 'external';
+  conversation_id?: string;
+  turn_hash?: string;
+  external_url?: string;
+  description?: string;
+}
+```
+
+---
+
+## 8. Validation
+
+### 8.1 Required Validations
+
+1. **Schema version**: `t3x_version` must be "2.0"
+2. **Timestamp format**: All timestamps must be valid ISO 8601
+3. **Hash format**: All hashes must start with "sha256:"
+4. **Hash chain**: Parent references must point to existing entries
+
+### 8.2 Optional Validations
+
+1. **Hash verification**: Recompute and compare hashes
+2. **Referential integrity**: All foreign keys resolve
+3. **Branch consistency**: HEAD commits exist
+
+---
+
+## 9. Migration from v1.0
+
+Version 2.0 changes from 1.0:
+
+| Change | v1.0 | v2.0 |
+|--------|------|------|
+| Storage | JSONL + SQLite | PostgreSQL |
+| Conversations | Implicit | Explicit table |
+| Branches | Simple | Full Git-like model |
+| Merge | Basic | Three-way with conflicts |
+
+To migrate v1.0 files:
+1. Parse v1.0 JSON
+2. Generate conversation IDs for orphan turns
+3. Update `t3x_version` to "2.0"
+4. Add missing branch records
+
+---
+
+## 10. Example Export
 
 ```json
 {
+  "t3x_version": "2.0",
+  "metadata": {
+    "created": "2025-12-23T10:00:00Z",
+    "project_id": "proj_abc123",
+    "project_name": "Japan Trip Planning"
+  },
   "conversations": [
     {
-      "id": "conv_main",
-      "title": "Trip planning",
-      "created": "2025-11-18T12:30:00Z",
-      "source": "t3x-cli",
-      "turn_refs": ["sha256:aa1...", "sha256:e9f..."]
+      "conversation_id": "conv_xyz789",
+      "project_id": "proj_abc123",
+      "title": "Initial Planning",
+      "created_at": "2025-12-23T10:00:00Z"
     }
-  ]
+  ],
+  "turns": [
+    {
+      "turn_hash": "sha256:abc123...",
+      "parent_turn_hash": null,
+      "project_id": "proj_abc123",
+      "conversation_id": "conv_xyz789",
+      "role": "user",
+      "content": "I want to visit Japan in November",
+      "language": "en",
+      "rings_json": "{...}",
+      "created_at": "2025-12-23T10:00:00Z"
+    }
+  ],
+  "commits": [
+    {
+      "commit_hash": "sha256:def456...",
+      "project_id": "proj_abc123",
+      "branch": "main",
+      "message": "Initial trip planning",
+      "parents_json": "[]",
+      "turn_window_json": "{\"start_turn_hash\":\"sha256:abc123...\",\"end_turn_hash\":\"sha256:abc123...\"}",
+      "facet_snapshot_json": "{\"facets\":[{\"type\":\"goal\",\"text\":\"Visit Japan in November\"}]}",
+      "created_at": "2025-12-23T10:05:00Z"
+    }
+  ],
+  "branches": [
+    {
+      "branch_id": "branch_main",
+      "project_id": "proj_abc123",
+      "name": "main",
+      "head_commit_hash": "sha256:def456...",
+      "is_current": true,
+      "created_at": "2025-12-23T10:00:00Z"
+    }
+  ],
+  "drafts": [],
+  "merge_results": []
 }
 ```
 
-### 5.2 Notes / Preferences / Files / Prompts / Usage Summary /
-### 5.3 `_tooling`
-
-(unchanged from previous spec; still optional, not part of the ledger.)
-
 ---
 
-## 6. Lineage Protocol (Turn & Commit chains)
-
-Whenever a `.t3x` file contains ledger data, it MUST preserve the full turn chain and commit DAG (empty projects may keep `turns`/`commits` empty arrays):
-
-1. **Turn chain**: `turn_hash` + `parent_turn_hash` form an append-only chain; `hash = SHA256(JCS(record_without_hash))`.
-2. **Commit chain**: `parent_hashes` lists parents (merge = multi-parent). `turn_window.end_turn_hash` records the latest turn seen by the snapshot.
-
-### 6.1 Workflow Tips
-
-- Continue chatting: append turns, then write commits referencing the current head.
-- Merge: mint a commit with multiple parents, then keep drafting/committing atop it.
-- Validation: incremental operations only check new segments; full audits recompute hashes along `turns`/`commits`. Drafts never enter the commit chain.
-
----
-
-## 7. Security Considerations
-
-(unchanged text)
-
----
-
-## 8. Reference Implementations
-
-Python SDK (`sdk/python/`), JavaScript/TypeScript SDK (`sdk/javascript/`), CLI (`cli/`).
-
----
-
-## 9. Changelog
-
-- 1.0 (2025-10-06): initial release.
-- 2025-11 alignment: mapped schema to ledger (`turns/drafts/commits/diffs`), added hash-chain fields, clarified `.t3x`/`.cfpack`, merge = multi-parent commits.
-
----
-
-## 10. License & Contributing
-
-MIT License. Submit issues/PRs at https://github.com/chivereaper/t3x. EOF
+_Specification Version: 2.0_
+_Last Updated: 2025-12-23_
