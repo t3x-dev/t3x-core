@@ -16,6 +16,7 @@
     "@hono/zod-openapi": "^1.2.0",
     "@scalar/hono-api-reference": "^0.9.30",
     "@t3x/core": "workspace:*",
+    "@t3x/runner": "workspace:*",
     "@t3x/storage": "workspace:*",
     "hono": "^4.7.10",
     "zod": "^4.2.1"
