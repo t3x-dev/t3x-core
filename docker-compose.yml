@@ -1,14 +1,19 @@
-# T3X Full Stack (root compose =唯一入口)
+# T3X Full Stack (root compose = 唯一入口)
 #
 # 默认启动：
-# - postgres   (5432)  Postgres (dev)
-# - t3x-core   (8000)  Core API (Node server in t3x-cli)
-# - t3x-webui  (3000)  WebUI (Vite build -> static serve)
+# - postgres   (5432)  PostgreSQL database
+# - t3x-api    (8000)  Core API (Hono + Zod OpenAPI)
+# - t3x-webui  (3000)  WebUI (Next.js)
 #
-# 可选组件通过 profiles 启动（避免 Phase A 一起拉起太多）：
-# - t3x-runner   profile: runner
-# - agent-demo   profile: agent-demo
-# - n8n          profile: n8n
+# 可选组件通过 profiles 启动：
+# - t3x-runner   profile: runner   (8080)
+# - agent-demo   profile: agent-demo (9000)
+# - n8n          profile: n8n      (5678)
+#
+# Database Modes:
+#   Default (docker): Uses PostgreSQL container
+#   Local dev:        Uses PGLite (run webui directly with pnpm dev)
+#   Cloud:            Uses Supabase (set SUPABASE_DATABASE_URL)
 #
 # Usage:
 #   docker compose up -d --build
@@ -16,10 +21,18 @@
 #   docker compose --profile agent-demo up -d --build
 #   docker compose --profile n8n up -d
 #   docker compose down
+#
+# Ports:
+#   3000 - WebUI
+#   5432 - PostgreSQL
+#   8000 - API
+#   8080 - Runner
+#   9000 - Agent Demo
+#   5678 - n8n
 
 services:
   # ============================================
-  # PostgreSQL (optional storage backend for Core)
+  # PostgreSQL Database
   # ============================================
   postgres:
     image: postgres:16-alpine
@@ -31,7 +44,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-t3x_dev_password}
       - POSTGRES_DB=${POSTGRES_DB:-t3x}
     volumes:
-      - t3x-pgdata:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
       # optional init scripts:
       # - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -44,27 +57,22 @@ services:
       - t3x-network
 
   # ============================================
-  # T3X Core API (Node server in t3x-cli)
+  # T3X API (Hono + Zod OpenAPI)
   # ============================================
-  t3x-core:
+  t3x-api:
     build:
       context: .
-      dockerfile: t3x-cli/Dockerfile
-    container_name: t3x-core
+      dockerfile: apps/api/Dockerfile
+    container_name: t3x-api
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - t3x-data:/app/.t3x
     environment:
       - HOST=0.0.0.0
       - PORT=8000
-      - T3X_ROOT=/app
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
-      - T3X_RUNNER_URL=http://t3x-runner:8080
-      - T3X_ENGINE_URL=http://t3x-core:8000
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
       - GOOGLE_CLOUD_NLP_KEY
@@ -78,43 +86,51 @@ services:
       - t3x-network
 
   # ============================================
-  # T3X WebUI (React + Vite)
+  # T3X WebUI (Next.js)
   # ============================================
   t3x-webui:
     build:
-      context: ./t3x-webui
-      dockerfile: Dockerfile
-      args:
-        VITE_CORE_API_URL: ${VITE_CORE_API_URL:-http://localhost:8000}
-        VITE_RUNNER_API_URL: ${VITE_RUNNER_API_URL:-http://localhost:8080}
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: t3x-webui
     ports:
       - "3000:3000"
+    environment:
+      - DATABASE_ADAPTER=postgres
+      - DATABASE_URL=postgresql://t3x:t3x_dev_password@postgres:5432/t3x
+      - NEXT_PUBLIC_API_URL=http://t3x-api:8000
+      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
     depends_on:
-      t3x-core:
+      postgres:
+        condition: service_healthy
+      t3x-api:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
     networks:
       - t3x-network
 
   # ============================================
-  # T3X Runner (Node.js Eval Engine)
+  # T3X Runner (Eval Engine)
   # ============================================
   t3x-runner:
     build:
       context: .
-      dockerfile: t3x-runner/Dockerfile
+      dockerfile: apps/runner/Dockerfile
     container_name: t3x-runner
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
-      - T3X_CORE_URL=http://t3x-core:8000
-      - T3X_ENGINE_URL=http://t3x-core:8000
+      - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - LOG_LEVEL=info
     depends_on:
-      t3x-core:
+      t3x-api:
         condition: service_healthy
     restart: unless-stopped
     profiles:
@@ -132,7 +148,7 @@ services:
   # ============================================
   agent-demo:
     build:
-      context: ./agent-demo
+      context: ./apps/agent-demo
       dockerfile: Dockerfile
     container_name: agent-demo
     ports:
@@ -182,9 +198,7 @@ networks:
     driver: bridge
 
 volumes:
-  t3x-data:
-    driver: local
-  t3x-pgdata:
+  postgres-data:
     driver: local
   agent-outbox:
     driver: local

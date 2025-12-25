@@ -3,32 +3,42 @@
   "version": "0.1.0",
   "private": true,
   "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
-  "workspaces": [
-    "t3x-core",
-    "t3x-core/sdk/javascript",
-    "t3x-cli",
-    "t3x-webui",
-    "t3x-runner",
-    "agent-demo"
-  ],
+  "packageManager": "pnpm@10.26.2",
   "scripts": {
-    "build": "npm run build:core && npm run build:cli",
-    "build:core": "npm run build -w @t3x/core",
-    "build:cli": "npm run build -w t3x-cli",
-    "build:webui": "npm run build -w t3x-webui",
-    "build:runner": "npm run build -w @t3x/runner",
-    "clean": "npm run clean -w @t3x/core && npm run clean -w t3x-cli",
-    "test": "npm run test -w @t3x/core && npm run test -w t3x-cli",
-    "lint": "npm run lint -w @t3x/core && npm run lint -w t3x-cli",
-    "runner:dev": "npm run dev -w @t3x/runner",
-    "runner:start": "npm run start -w @t3x/runner",
-    "agent-demo:dev": "npm run dev -w agent-demo",
+    "build": "turbo run build",
+    "build:core": "turbo run build --filter=@t3x/core",
+    "build:storage": "turbo run build --filter=@t3x/storage",
+    "build:webui": "turbo run build --filter=t3x-webui",
+    "build:runner": "turbo run build --filter=@t3x/runner",
+    "build:api": "turbo run build --filter=@t3x/api",
+    "clean": "turbo run clean",
+    "test": "turbo run test",
+    "test:core": "turbo run test --filter=@t3x/core",
+    "test:storage": "turbo run test --filter=@t3x/storage",
+    "test:webui": "turbo run test --filter=t3x-webui",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "dev": "turbo run dev",
+    "dev:webui": "turbo run dev --filter=t3x-webui",
+    "dev:runner": "turbo run dev --filter=@t3x/runner",
+    "dev:api": "turbo run dev --filter=@t3x/api",
+    "dev:agent": "turbo run dev --filter=agent-demo",
     "docker:up": "docker compose up",
+    "docker:up:all": "docker compose --profile runner --profile n8n up",
     "docker:up:n8n": "docker compose --profile n8n up",
+    "docker:up:runner": "docker compose --profile runner up",
     "docker:down": "docker compose down",
     "docker:build": "docker compose build"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.9.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.10",
+    "turbo": "^2.7.2"
   }
 }

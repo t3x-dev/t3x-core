@@ -1,0 +1,60 @@
+{
+  "name": "@t3x/runner",
+  "version": "0.1.0",
+  "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "t3x-runner": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run --passWithNoTests",
+    "schema:check": "node ./scripts/schema_check.mjs",
+    "docker:build": "docker build -t t3x-runner .",
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down"
+  },
+  "dependencies": {
+    "@t3x/core": "workspace:*",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "zod": "^3.23.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.7",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "t3x",
+    "agent",
+    "eval",
+    "runner",
+    "greybox",
+    "testing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/t3x.git",
+    "directory": "apps/runner"
+  }
+}
