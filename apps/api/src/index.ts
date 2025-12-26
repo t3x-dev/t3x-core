@@ -8,6 +8,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
+import fs from 'node:fs';
+import path from 'node:path';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware } from './middleware/logger';
 import {
@@ -25,8 +27,35 @@ import {
   mergeRoutes,
   runnerRoutes,
 } from './routes';
-import { projectRoutes } from './routes/projects.openapi';
+import { projectRoutes } from './routes/projects';
 import { getDB, closeDB } from './lib/db';
+
+function loadEnvLocal(): void {
+  const candidates = [
+    path.resolve(process.cwd(), '.env.local'),
+    path.resolve(process.cwd(), 'apps/api/.env.local'),
+  ];
+
+  const envPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!envPath) return;
+
+  const content = fs.readFileSync(envPath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex === -1) continue;
+    const key = trimmed.slice(0, equalsIndex).trim();
+    let value = trimmed.slice(equalsIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!key || process.env[key] !== undefined) continue;
+    process.env[key] = value;
+  }
+}
+
+loadEnvLocal();
 
 const app = new Hono();
 

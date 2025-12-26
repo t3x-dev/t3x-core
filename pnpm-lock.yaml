@@ -50,7 +50,7 @@ importers:
         version: link:../../packages/core
       '@t3x/runner':
         specifier: workspace:*
-        version: link:../../packages/runner
+        version: link:../runner
       '@t3x/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -291,22 +291,6 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
-
-  packages/runner:
-    dependencies:
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.7
-        version: 20.19.27
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@20.19.27)
 
   packages/storage:
     dependencies:

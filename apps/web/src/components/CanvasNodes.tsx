@@ -53,196 +53,12 @@ const sourceHandleStyle = {
   right: -9,
 }
 
-function NodeShell({
-  children,
-  kind,
-  Icon,
-  selected,
-  onToggle,
-  expanded,
-  meta,
-  variantClass,
-  highlightMode,
-  dropdownContent,
-  customHeader,
-  bodyClassName,
-}: {
-  children: ReactNode
-  kind: CanvasNodeData['kind']
-  Icon: ComponentType<{ size?: number }>
-  selected?: boolean
-  onToggle: () => void
-  expanded: boolean
-  meta?: ReactNode
-  variantClass?: string
-  highlightMode?: CanvasNodeData['highlightMode']
-  dropdownContent?: ReactNode
-  customHeader?: ReactNode
-  bodyClassName?: string
-}) {
-  const classes = ['canvas-node', `canvas-node--${kind}`]
-  if (selected) {
-    classes.push('canvas-node--selected')
-  }
-  if (variantClass) {
-    classes.push(variantClass)
-  }
-  if (highlightMode) {
-    classes.push(`canvas-node--path-${highlightMode}`)
-  }
-
-  const expandButtonClass = expanded ? 'node-expand-btn node-expand-btn--open' : 'node-expand-btn'
-  const bodyClasses = ['canvas-node__content']
-  if (bodyClassName) {
-    bodyClasses.push(bodyClassName)
-  }
-  const lockInteractions = expanded && !!dropdownContent
-  if (lockInteractions) {
-    classes.push('canvas-node--locked', 'nodrag')
-  }
-
-  const headerContent =
-    customHeader !== undefined ? (
-      customHeader
-    ) : (
-      <header>
-        <div className="node-header__title">
-          <Icon size={16} />
-          <strong>{kind.toUpperCase()}</strong>
-        </div>
-        <div className="node-header__actions">
-          {meta}
-          <button
-            className={expandButtonClass}
-            onClick={onToggle}
-            aria-label="Toggle node text"
-            aria-expanded={expanded}
-            type="button"
-          >
-            <svg className="node-expand-icon" width="16" height="16" viewBox="0 0 16 16" role="presentation" aria-hidden="true">
-              <path
-                d="M4 6l4 4 4-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </header>
-    )
-
-  return (
-    <div className={classes.join(' ')}>
-      {headerContent}
-      <div className={bodyClasses.join(' ')}>{children}</div>
-      {expanded && dropdownContent && <div className="node-dropdown nodrag">{dropdownContent}</div>}
-    </div>
-  )
-}
-
-function ConversationNode(props: Props) {
-  const { data, selected, id } = props
-  const [expanded, setExpanded] = useState(false)
-  const addPendingCommitFromConversation = useCanvasStore((state) => state.addPendingCommitFromConversation)
-  const canSeedPendingCommit = useCanvasStore((state) => state.canCreatePendingCommitFromConversation(id))
-  const [showHandleActions, setShowHandleActions] = useState(false)
-  const hideTimer = useRef<number | undefined>(undefined)
-  const showActions = () => {
-    if (hideTimer.current) {
-      window.clearTimeout(hideTimer.current)
-      hideTimer.current = undefined
-    }
-    setShowHandleActions(true)
-  }
-  const hideActions = () => {
-    if (hideTimer.current) {
-      window.clearTimeout(hideTimer.current)
-    }
-    hideTimer.current = window.setTimeout(() => {
-      setShowHandleActions(false)
-      hideTimer.current = undefined
-    }, 250)
-  }
-  useEffect(
-    () => () => {
-      if (hideTimer.current) {
-        window.clearTimeout(hideTimer.current)
-      }
-    },
-    [],
-  )
-  const handleAddPendingCommit = () => {
-    if (!canSeedPendingCommit) {
-      return
-    }
-    void addPendingCommitFromConversation(id)
-  }
-
-  return (
-    <>
-      <Handle type="target" position={Position.Left} style={targetHandleStyle} />
-      <NodeShell
-        kind="conversation"
-        Icon={MessageSquare}
-        selected={selected}
-        expanded={expanded}
-        onToggle={() => setExpanded((previous) => !previous)}
-        highlightMode={data.highlightMode}
-        dropdownContent={
-          <>
-            <div className="node-summary-field node-summary-field--static">
-              <p>{data.summary || 'No summary is available yet.'}</p>
-            </div>
-            <footer>
-              <span>{data.timestamp}</span>
-              <span>{data.status}</span>
-            </footer>
-          </>
-        }
-      >
-        <h4>{data.title}</h4>
-        <footer>
-          <span>{data.timestamp}</span>
-          <span>{data.status}</span>
-        </footer>
-      </NodeShell>
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={sourceHandleStyle}
-        onMouseEnter={showActions}
-        onMouseLeave={hideActions}
-      />
-      <div
-        className={
-          showHandleActions ? 'node-handle-actions node-handle-actions--visible' : 'node-handle-actions'
-        }
-        onMouseEnter={showActions}
-        onMouseLeave={hideActions}
-      >
-        <button
-          className="node-handle-action-btn"
-          onClick={handleAddPendingCommit}
-          disabled={!canSeedPendingCommit}
-          aria-label="Add Commit"
-          type="button"
-        >
-          <GitCommit size={14} />
-        </button>
-      </div>
-    </>
-  )
-}
-
-function CommitNode(props: Props) {
+// Unit Node - Combined Conversation + Commit
+function UnitNode(props: Props) {
   const { data, selected, id } = props
   const [expanded, setExpanded] = useState(false)
   const tone = useCanvasStore((state) => state.getCommitTone(id))
-  const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit)
-  const addPendingCommitFromCommit = useCanvasStore((state) => state.addPendingCommitFromCommit)
+  const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit)
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit)
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit)
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel)
@@ -250,23 +66,23 @@ function CommitNode(props: Props) {
   const [showHandleActions, setShowHandleActions] = useState(false)
   const hideTimer = useRef<number | undefined>(undefined)
 
-  // Check if commit is in pending state
-  const isPending = data.commitStatus === 'pending'
+  // Check if commit is in staging state
+  const isStaging = data.commitStatus === 'staging'
+  const isCommitted = data.commitStatus === 'committed'
 
   const branchLabel =
     data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN'
-  const handleAddConversation = async () => {
+
+  const handleAddUnit = () => {
     try {
-      await addConversationFromCommit(id)
+      addUnitFromUnit(id)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create conversation'
+      const message = err instanceof Error ? err.message : 'Failed to create unit'
       notify?.(message, 'error')
-      console.error('Failed to create conversation:', err)
+      console.error('Failed to create unit:', err)
     }
   }
-  const handleAddPendingCommit = () => {
-    addPendingCommitFromCommit(id)
-  }
+
   const canTriggerMerge =
     data.branchType === 'branch' && tone === 'branch-latest' && hasMainCommit
   const handleMerge = () => {
@@ -275,9 +91,11 @@ function CommitNode(props: Props) {
     }
     startMergeFromCommit(id)
   }
+
   const handleOpenLeafPanel = () => {
     openLeafPanel(id)
   }
+
   const showActions = () => {
     if (hideTimer.current) {
       window.clearTimeout(hideTimer.current)
@@ -285,6 +103,7 @@ function CommitNode(props: Props) {
     }
     setShowHandleActions(true)
   }
+
   const hideActions = () => {
     if (hideTimer.current) {
       window.clearTimeout(hideTimer.current)
@@ -294,6 +113,7 @@ function CommitNode(props: Props) {
       hideTimer.current = undefined
     }, 250)
   }
+
   useEffect(
     () => () => {
       if (hideTimer.current) {
@@ -303,21 +123,30 @@ function CommitNode(props: Props) {
     [],
   )
 
-  // Build variant class with pending state
-  const variantClasses: string[] = []
-  if (tone) {
-    variantClasses.push(`canvas-node--commit-${tone}`)
+  // Build variant classes
+  const classes = ['canvas-node', 'canvas-node--unit']
+  if (selected) {
+    classes.push('canvas-node--selected')
   }
-  if (isPending) {
-    variantClasses.push('canvas-node--commit-pending')
+  if (tone) {
+    classes.push(`canvas-node--unit-${tone}`)
+  }
+  if (isStaging) {
+    classes.push('canvas-node--unit-staging')
+  }
+  if (data.highlightMode) {
+    classes.push(`canvas-node--path-${data.highlightMode}`)
+  }
+  if (expanded) {
+    classes.push('canvas-node--locked', 'nodrag')
   }
 
   return (
     <>
-      {/* Top Add Leaf Button - n8n style, only for committed nodes */}
-      {!isPending && (
+      {/* Top Add Leaf Button - only for committed units */}
+      {isCommitted && (
         <button
-          className="commit-node__add-leaf-btn"
+          className="unit-node__add-leaf-btn"
           onClick={handleOpenLeafPanel}
           aria-label="Add Leaf Node"
           type="button"
@@ -326,84 +155,89 @@ function CommitNode(props: Props) {
         </button>
       )}
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
-      <NodeShell
-        kind="commit"
-        Icon={isPending ? PenSquare : GitCommit}
-        selected={selected}
-        expanded={expanded}
-        onToggle={() => setExpanded((previous) => !previous)}
-        variantClass={variantClasses.length > 0 ? variantClasses.join(' ') : undefined}
-        customHeader={null}
-        bodyClassName="commit-node__body"
-        highlightMode={data.highlightMode}
-        dropdownContent={
-          <>
-            <div className="node-summary-field node-summary-field--static">
-              <p>{data.summary || (isPending ? 'Pending commit - click to edit' : 'No summary recorded.')}</p>
-            </div>
-            <footer>
-              <Sparkles size={14} />
-              <span>{data.status}</span>
-            </footer>
-          </>
-        }
-      >
-        <div className="commit-node__top-row">
-          <span className="commit-node__badge">
-            {data.commitHash ? data.commitHash.slice(0, 8) : data.entryId}
-          </span>
-          <div className="commit-node__top-actions">
-            {isPending && (
-              <span className="commit-node__pending-flag" aria-label="Pending commit">
-                pending
-              </span>
-            )}
-            {data.isMergeCommit && (
-              <span className="commit-node__merge-flag" aria-label="Merge commit">
-                merge
-              </span>
-            )}
-            <span className="node-branch-badge">{branchLabel}</span>
-            <button
-              className={
-                expanded ? 'node-expand-btn node-expand-btn--open commit-node__toggle' : 'node-expand-btn commit-node__toggle'
-              }
-              onClick={() => setExpanded((previous) => !previous)}
-              aria-label="Toggle node text"
-              aria-expanded={expanded}
-            >
-              <svg className="node-expand-icon" width="16" height="16" viewBox="0 0 16 16" role="presentation" aria-hidden="true">
-                <path
-                  d="M4 6l4 4 4-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+
+      <div className={classes.join(' ')}>
+        {/* Conversation Section (Top) */}
+        <div className="unit-node__conversation">
+          <div className="unit-node__conv-header">
+            <MessageSquare size={14} />
+            <span className="unit-node__conv-label">CONVERSATION</span>
           </div>
-        </div>
-        <div className="commit-node__title-row">
-          <h4>{data.title}</h4>
-        </div>
-        <footer className="commit-node__meta">
-          <div className="commit-node__signal">
-            <Sparkles size={14} />
+          <h4 className="unit-node__conv-title">{data.title}</h4>
+          <div className="unit-node__conv-meta">
+            <span>{data.timestamp}</span>
             <span>{data.status}</span>
           </div>
-          {isPending ? (
-            <span className="commit-node__constraints-count">
-              {(data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0
-                ? `${data.mustHave?.length || 0}✓ ${data.mustntHave?.length || 0}✗`
-                : 'No constraints'}
-            </span>
-          ) : (
-            <span>{data.summary || data.timestamp}</span>
-          )}
-        </footer>
-      </NodeShell>
+        </div>
+
+        {/* Divider */}
+        <div className="unit-node__divider" />
+
+        {/* Commit Section (Bottom) */}
+        <div className="unit-node__commit">
+          <div className="unit-node__commit-header">
+            <div className="unit-node__commit-left">
+              {isStaging ? <PenSquare size={14} /> : <GitCommit size={14} />}
+              <span className="unit-node__commit-badge">
+                {data.commitHash ? data.commitHash.slice(0, 8) : data.entryId}
+              </span>
+            </div>
+            <div className="unit-node__commit-right">
+              {isStaging && (
+                <span className="unit-node__staging-flag">staging</span>
+              )}
+              {data.isMergeCommit && (
+                <span className="unit-node__merge-flag">merge</span>
+              )}
+              <span className="unit-node__branch-badge">{branchLabel}</span>
+              <button
+                className={expanded ? 'node-expand-btn node-expand-btn--open' : 'node-expand-btn'}
+                onClick={() => setExpanded((prev) => !prev)}
+                aria-label="Toggle details"
+                aria-expanded={expanded}
+                type="button"
+              >
+                <svg className="node-expand-icon" width="16" height="16" viewBox="0 0 16 16">
+                  <path
+                    d="M4 6l4 4 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="unit-node__commit-meta">
+            <div className="unit-node__signal">
+              <Sparkles size={14} />
+              <span>{isStaging ? 'Staging' : 'Committed'}</span>
+            </div>
+            {isStaging ? (
+              <span className="unit-node__constraints-count">
+                {(data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0
+                  ? `${data.mustHave?.length || 0}✓ ${data.mustntHave?.length || 0}✗`
+                  : 'No constraints'}
+              </span>
+            ) : (
+              <span>{data.summary || data.timestamp}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Expanded Dropdown */}
+        {expanded && (
+          <div className="unit-node__dropdown nodrag">
+            <div className="unit-node__summary">
+              <p>{data.summary || (isStaging ? 'Staging - click to edit' : 'No summary recorded.')}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <Handle
         type="source"
         position={Position.Right}
@@ -414,22 +248,19 @@ function CommitNode(props: Props) {
       <div
         className={
           showHandleActions
-            ? 'node-handle-actions node-handle-actions--commit node-handle-actions--visible'
-            : 'node-handle-actions node-handle-actions--commit'
+            ? 'node-handle-actions node-handle-actions--unit node-handle-actions--visible'
+            : 'node-handle-actions node-handle-actions--unit'
         }
         onMouseEnter={showActions}
         onMouseLeave={hideActions}
       >
         <button
           className="node-handle-action-btn"
-          onClick={handleAddConversation}
-          aria-label="Add Conversation"
+          onClick={handleAddUnit}
+          aria-label="Add Unit"
           type="button"
         >
           <MessageSquarePlus size={14} />
-        </button>
-        <button className="node-handle-action-btn" onClick={handleAddPendingCommit} aria-label="Add Commit" type="button">
-          <GitCommit size={14} />
         </button>
         {data.branchType === 'branch' && (
           <button
@@ -508,7 +339,6 @@ function LeafNode(props: Props) {
 }
 
 export const canvasNodeTypes = {
-  conversation: ConversationNode,
-  commit: CommitNode,
+  unit: UnitNode,
   leaf: LeafNode,
 }

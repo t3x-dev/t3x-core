@@ -53,7 +53,7 @@ interface PhraseKeyword {
 interface SourceBox {
   id: string
   title: string
-  type: 'commit' | 'conversation'
+  type: 'unit'
   content: string
   expanded: boolean
   phrases: Phrase[]
@@ -307,6 +307,9 @@ export function NodeModal({
 
   // Commit state
   const [isCommitting, setIsCommitting] = useState(false)
+
+  // For staging units: toggle between conversation view and commit config view
+  const [showCommitConfig, setShowCommitConfig] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<{
     missing: string[]
@@ -360,7 +363,7 @@ export function NodeModal({
   // Use nodes directly and filter in useMemo to avoid infinite loop from .filter() creating new arrays
   const nodes = useCanvasStore((state) => state.nodes)
   const allCommittedCommits = useMemo(
-    () => nodes.filter(n => n.data.kind === 'commit' && n.data.commitStatus === 'committed'),
+    () => nodes.filter(n => n.data.kind === 'unit' && n.data.commitStatus === 'committed'),
     [nodes]
   )
 
@@ -452,10 +455,17 @@ export function NodeModal({
 
   // Derive node-dependent values
   const data = node?.data
-  const isCommit = data?.kind === 'commit'
-  const isConversation = data?.kind === 'conversation'
-  const isPendingCommit = isCommit && data?.commitStatus === 'pending'
-  const isCommittedCommit = isCommit && data?.commitStatus !== 'pending'
+  const isUnit = data?.kind === 'unit'
+  const isStagingUnit = isUnit && data?.commitStatus === 'staging'
+  const isCommittedUnit = isUnit && data?.commitStatus === 'committed'
+  // In Unit model:
+  // - Staging units show conversation view by default, can switch to commit config view
+  // - Committed units show committed commit view (facets, source excerpts, etc.)
+  const isCommit = isUnit
+  // Show conversation view only for staging units not in commit config mode
+  const isConversation = isStagingUnit && !showCommitConfig
+  const isPendingCommit = isStagingUnit && showCommitConfig
+  const isCommittedCommit = isCommittedUnit
   const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig
   // Always show branch select for pending commits (except merge drafts)
   // Previously only shown for 'select' or 'branch-only' modes, but users want control
@@ -489,16 +499,12 @@ export function NodeModal({
   // Note: setState in effect is intentional here for initialization based on props
   useEffect(() => {
     if (isPendingCommit && data?.baselineSummary) {
-      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
-      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
-      const sourceTitle = isFromCommit
-        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
-        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`
 
       const initialBox: SourceBox = {
         id: 'source-1',
         title: sourceTitle,
-        type: sourceType,
+        type: 'unit',
         content: data.baselineSummary,
         expanded: true,
         phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
@@ -508,100 +514,68 @@ export function NodeModal({
     }
   }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, keywordsThreshold])
 
-  // Build textBlocks from upstream source nodes (reactive to edge changes)
-  // This effect runs whenever edges change, rebuilding textBlocks from all connected source nodes
+  // Build textBlocks from own conversation
+  // Commit config view always loads source content from its own conversation
   useEffect(() => {
     if (!isPendingCommit || !node?.id || !projectId) return
 
     const buildTextBlocks = async () => {
-      const upstreamNodes = getUpstreamSourceNodes(node.id)
-
-      if (upstreamNodes.length === 0) {
-        // No upstream nodes, clear textBlocks
+      const ownConversationId = data?.conversationId || data?.sourceConversationId
+      if (!ownConversationId) {
         setTextBlocks([])
         return
       }
 
-      const newBlocks: SourceTextBlock[] = []
+      try {
+        const turnsData = await api.listTurns(projectId, ownConversationId)
+        if (turnsData.turns && turnsData.turns.length > 0) {
+          const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
+          const tokens = tokenizeText(fullText)
 
-      for (const sourceNode of upstreamNodes) {
-        if (sourceNode.data.kind === 'conversation') {
-          // Fetch turns for conversation
-          const conversationId = sourceNode.data.conversationId || sourceNode.id
-          try {
-            const turnsData = await api.listTurns(projectId, conversationId)
-            if (turnsData.turns && turnsData.turns.length > 0) {
-              const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
-              const tokens = tokenizeText(fullText)
+          // Build turn boundaries
+          const turnBoundaries: TurnBoundary[] = []
+          let currentTokenIndex = 0
 
-              // Build turn boundaries
-              const turnBoundaries: TurnBoundary[] = []
-              let currentTokenIndex = 0
+          for (const turn of turnsData.turns) {
+            const turnTokens = tokenizeText(turn.content)
+            const turnTokenCount = turnTokens.length
 
-              for (const turn of turnsData.turns) {
-                const turnTokens = tokenizeText(turn.content)
-                const turnTokenCount = turnTokens.length
-
-                if (turnTokenCount > 0) {
-                  turnBoundaries.push({
-                    role: turn.role as 'user' | 'assistant',
-                    startTokenIndex: currentTokenIndex,
-                    endTokenIndex: currentTokenIndex + turnTokenCount - 1,
-                  })
-                }
-                currentTokenIndex += turnTokenCount + 1
-              }
-
-              // Try to preserve existing selections for this block
-              const existingBlock = textBlocks.find(b => b.sourceNodeId === conversationId)
-
-              newBlocks.push({
-                id: `block-conv-${conversationId}`,
-                originalText: fullText,
-                tokens,
-                selections: existingBlock?.selections || [],
-                keywords: existingBlock?.keywords || [],
-                sourceNodeId: conversationId,
-                sourceNodeType: 'conversation',
-                sourceNodeTitle: sourceNode.data.title || 'Conversation',
-                turnBoundaries,
+            if (turnTokenCount > 0) {
+              turnBoundaries.push({
+                role: turn.role as 'user' | 'assistant',
+                startTokenIndex: currentTokenIndex,
+                endTokenIndex: currentTokenIndex + turnTokenCount - 1,
               })
             }
-          } catch (err) {
-            console.warn('Failed to fetch turns for conversation:', err)
+            currentTokenIndex += turnTokenCount + 1
           }
-        } else if (sourceNode.data.kind === 'commit' && sourceNode.data.commitStatus === 'committed') {
-          // Use sourceExcerpt from committed commit
-          const commitId = sourceNode.data.commitHash || sourceNode.id
-          const sourceExcerptArray = sourceNode.data.sourceExcerpt || []
-          const sourceExcerptText = sourceExcerptArray.join('\n')
 
-          if (sourceExcerptText) {
-            const tokens = tokenizeText(sourceExcerptText)
+          // Try to preserve existing selections for this block
+          const existingBlock = textBlocks.find(b => b.sourceNodeId === ownConversationId)
 
-            // Try to preserve existing selections for this block
-            const existingBlock = textBlocks.find(b => b.sourceNodeId === commitId)
-
-            newBlocks.push({
-              id: `block-commit-${commitId}`,
-              originalText: sourceExcerptText,
-              tokens,
-              selections: existingBlock?.selections || [],
-              keywords: existingBlock?.keywords || [],
-              sourceNodeId: commitId,
-              sourceNodeType: 'commit',
-              sourceNodeTitle: sourceNode.data.title || `Commit ${sourceNode.data.entryId}`,
-            })
-          }
+          setTextBlocks([{
+            id: `block-self-${ownConversationId}`,
+            originalText: fullText,
+            tokens,
+            selections: existingBlock?.selections || [],
+            keywords: existingBlock?.keywords || [],
+            sourceNodeId: ownConversationId,
+            sourceNodeType: 'unit',
+            sourceNodeTitle: data?.title || 'Current Conversation',
+            turnBoundaries,
+          }])
+        } else {
+          setTextBlocks([])
         }
+      } catch (err) {
+        console.warn('Failed to fetch conversation turns:', err)
+        setTextBlocks([])
       }
-
-      setTextBlocks(newBlocks)
     }
 
     buildTextBlocks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPendingCommit, node?.id, projectId, edges, getUpstreamSourceNodes])
+  }, [isPendingCommit, node?.id, projectId, data?.conversationId, data?.sourceConversationId])
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -753,17 +727,12 @@ export function NodeModal({
   // Initialize source boxes from baseline summary
   useEffect(() => {
     if (isPendingCommit && data.baselineSummary) {
-      // Determine source type based on title or sourceConversationId
-      const isFromCommit = data.title?.includes('Commit') || (!data.sourceConversationId && data.title?.includes('COMMIT'))
-      const sourceType: 'commit' | 'conversation' = isFromCommit ? 'commit' : 'conversation'
-      const sourceTitle = isFromCommit
-        ? `Commit – ${data.title?.replace('Draft from ', '') || 'Source'}`
-        : `Conversation – ${data.title?.replace('Draft from ', '') || 'Source'}`
+      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`
 
       const initialBox: SourceBox = {
         id: 'source-1',
         title: sourceTitle,
-        type: sourceType,
+        type: 'unit',
         content: data.baselineSummary,
         expanded: true,
         phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
@@ -790,7 +759,12 @@ export function NodeModal({
   }, [keywordsThreshold])
 
   // Check if this pending commit has a source conversation (from conversation) or not (from commit)
-  const hasSourceConversation = !!data?.sourceConversationId
+  const hasSourceConversation = !!data?.sourceConversationId || !!data?.conversationId
+  if (isPendingCommit) {
+    console.log('[NodeModal] hasSourceConversation:', hasSourceConversation,
+      'sourceConversationId:', data?.sourceConversationId,
+      'conversationId:', data?.conversationId)
+  }
   // Check if this commit-derived pending has inherited turn_window for direct commit
   const hasSourceTurnWindow = !!data?.sourceTurnWindow
 
@@ -880,10 +854,10 @@ export function NodeModal({
       return
     }
 
-    // Get source conversation ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
-    // This allows commits created from other commits to work when a conversation is later connected
-    const conversationBlock = textBlocks.find(block => block.sourceNodeType === 'conversation')
-    const sourceConversationId = conversationBlock?.sourceNodeId || data.sourceConversationId
+    // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
+    // This allows commits created from other commits to work when a unit is later connected
+    const sourceUnitBlock = textBlocks.find(block => block.sourceNodeType === 'unit')
+    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId
     if (!sourceConversationId) {
       // This shouldn't happen - button should be hidden for commit-derived pending commits
       setDraftError('No source conversation - validation not available')
@@ -949,10 +923,10 @@ export function NodeModal({
       return
     }
 
-    // Get source conversation ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
-    // This allows commits created from other commits to work when a conversation is later connected
-    const conversationBlock = textBlocks.find(block => block.sourceNodeType === 'conversation')
-    const sourceConversationId = conversationBlock?.sourceNodeId || data.sourceConversationId
+    // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
+    // This allows commits created from other commits to work when a unit is later connected
+    const sourceUnitBlock = textBlocks.find(block => block.sourceNodeType === 'unit')
+    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId
     if (!sourceConversationId) {
       setCommitError('No source conversation found. Please connect a conversation to this commit.')
       return
@@ -1088,7 +1062,8 @@ export function NodeModal({
       let endTurnHash: string
 
       // Determine turn_window: from source conversation or inherited from parent commit
-      const sourceConversationId = data.sourceConversationId
+      // For staging units, use conversationId if sourceConversationId is not set
+      const sourceConversationId = data.sourceConversationId || data.conversationId
       if (sourceConversationId) {
         // Case 1: Pending commit from conversation - fetch turns
         const turnsResponse = await api.listTurns(projectId, sourceConversationId)
@@ -1200,12 +1175,14 @@ export function NodeModal({
             willAdd: block.sourceNodeId && block.sourceNodeId !== sourceConversationId,
           })
           if (block.sourceNodeId && block.sourceNodeId !== sourceConversationId) {
-            if (block.sourceNodeType === 'conversation') {
+            // In the unit model, source blocks come from units
+            // Determine if it's a conversation ID or commit hash based on format
+            if (block.sourceNodeId.startsWith('conv_')) {
               sourceRefs.push({
                 type: 'conversation',
                 conversation_id: block.sourceNodeId,
               })
-            } else if (block.sourceNodeType === 'commit') {
+            } else if (block.sourceNodeId.startsWith('sha256:')) {
               sourceRefs.push({
                 type: 'commit',
                 commit_hash: block.sourceNodeId,
@@ -1350,7 +1327,7 @@ export function NodeModal({
     prevConversationIdRef.current = currentConversationId
 
     const loadChatHistory = async () => {
-      if (!data || data.kind !== 'conversation' || !projectId || !currentConversationId) return
+      if (!data || data.kind !== 'unit' || !projectId || !currentConversationId) return
 
       // If conversationId just changed from undefined to a value and we already have messages,
       // this means we just created the conversation during an active chat session.
@@ -1597,16 +1574,23 @@ export function NodeModal({
         fullResponsePreview: fullResponse.slice(0, 100),
         addedFinalMessage
       })
-      if (projectId && currentKind === 'conversation') {
+      if (projectId && currentKind === 'unit') {
         try {
           // If no conversationId yet, create one first
           if (!currentConversationId) {
             console.log('[handleSendMessage] Creating new conversation...')
             const newConv = await api.createConversation(projectId, data?.title || 'Untitled Conversation')
             currentConversationId = newConv.conversation_id
-            // Update the node with the new conversationId
-            onUpdate({ conversationId: currentConversationId })
+            // Update the node with the new conversationId and sourceConversationId
+            onUpdate({
+              conversationId: currentConversationId,
+              sourceConversationId: currentConversationId,
+            })
             conversationIdRef.current = currentConversationId
+            // Also update the node ID in the store to match conversation ID
+            if (node?.id && node.id !== currentConversationId) {
+              useCanvasStore.getState().updateNodeId(node.id, currentConversationId)
+            }
             console.log('[handleSendMessage] Created conversation:', currentConversationId)
           }
 
@@ -1661,8 +1645,11 @@ export function NodeModal({
           {/* Top Bar */}
           <header className="modal-v2__topbar">
             <div className="modal-v2__topbar-left">
-              <h2 className="modal-v2__title">Conversation: {data.title || 'Untitled'}</h2>
+              <h2 className="modal-v2__title">
+                {isStagingUnit ? 'Unit (Staging)' : 'Unit'}: {data.title || 'Untitled'}
+              </h2>
               <span className="modal-v2__id">{data.entryId}</span>
+              {isStagingUnit && <span className="modal-v2__pending-badge">staging</span>}
             </div>
             <div className="modal-v2__topbar-right">
               <button
@@ -1672,7 +1659,22 @@ export function NodeModal({
               >
                 <Settings size={18} />
               </button>
-              {addCommitAction && (
+              {/* For staging units: show Commit button to enter commit config view */}
+              {isStagingUnit && (
+                <button
+                  className="modal-v2__primary-btn modal-v2__commit-btn"
+                  onClick={() => {
+                    console.log('[NodeModal] Commit button clicked - switching to commit config view')
+                    setShowCommitConfig(true)
+                  }}
+                  title="Configure and commit this unit"
+                >
+                  <Check size={16} />
+                  <span>Commit</span>
+                </button>
+              )}
+              {/* For committed units: show Create Unit button */}
+              {addCommitAction && !isStagingUnit && (
                 <button
                   className="modal-v2__primary-btn"
                   onClick={() => {
@@ -1680,10 +1682,10 @@ export function NodeModal({
                     onClose()
                   }}
                   disabled={addCommitAction.disabled}
-                  title="Create a pending commit node from this conversation"
+                  title="Create a new unit from this one"
                 >
                   <GitCommit size={16} />
-                  <span>Create Commit</span>
+                  <span>Create Unit</span>
                 </button>
               )}
               <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">

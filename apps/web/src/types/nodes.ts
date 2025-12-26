@@ -1,7 +1,7 @@
-export type NodeKind = 'conversation' | 'commit' | 'leaf'
+export type NodeKind = 'unit' | 'leaf'
 
-// Commit status: pending (editable) or committed (read-only)
-export type CommitStatus = 'pending' | 'committed'
+// Unit commit status: staging (editable) or committed (read-only)
+export type CommitStatus = 'staging' | 'committed'
 
 // Leaf node types for output destinations
 export type LeafType = 'twitter' | 'weibo' | 'wechat' | 'article' | 'email' | 'slack' | 'deploy' | 'eval'
@@ -137,8 +137,8 @@ export interface SourceTextBlock {
   keywords: KeywordMarker[]      // Marked keywords within selections (深绿)
 
   // Source node information
-  sourceNodeId?: string                        // Source node ID
-  sourceNodeType?: 'conversation' | 'commit'   // Source node type
+  sourceNodeId?: string                        // Source node ID (unit ID)
+  sourceNodeType?: 'unit'                      // Source node type (always unit now)
   sourceNodeTitle?: string                     // Display title
 
   // Turn boundaries for conversation type (UI display only)
@@ -161,50 +161,48 @@ export interface DraftConstraintOverrides {
 }
 
 export interface CanvasNodeData {
-  entryId: string
-  title: string
-  summary: string
-  status: string
-  timestamp: string
-  tags: string[]
-  kind: NodeKind
-  facets?: string[]
-  bridgePrompt?: string
-  branchType?: BranchType
-  branchName?: string
-  pendingBranch?: 'main' | 'branch'
-  pendingBranchName?: string
+  // ============================================
+  // Common fields
+  // ============================================
+  entryId: string           // Display ID (truncated)
+  title: string             // Node title
+  summary: string           // Summary text
+  status: string            // Display status
+  timestamp: string         // Created time
+  tags: string[]            // Tags
+  kind: NodeKind            // 'unit' | 'leaf'
   highlightMode?: 'main' | 'branch'
-  validationChecks?: DraftValidationCheck[]
-  baselineSummary?: string
-  draftInstructions?: string
-  draftDiff?: string
-  mergeConfig?: MergeConfig
-  isMergeCommit?: boolean
-  // Conversation constraints from Manage mode
-  constraints?: ConversationConstraints
-  // Draft-level constraint overrides
-  constraintOverrides?: DraftConstraintOverrides
-  // Source conversation ID for draft inheritance
-  sourceConversationId?: string
-  // Draft generation state - true after Generate is clicked
-  isGenerated?: boolean
-  // Leaf node specific data
-  leafType?: LeafType
-  leafConfig?: LeafNodeConfig
-  // Commit status: pending (editable) or committed (read-only)
-  commitStatus?: CommitStatus
-  // Full conversation_id for conversation nodes (entryId is truncated for display)
-  conversationId?: string
-  // Full commit_hash for commit nodes
-  commitHash?: string
-  // Pending commit source data with free-form text selection
+
+  // ============================================
+  // Unit node: Conversation part
+  // ============================================
+  conversationId?: string   // Full conversation_id
+
+  // ============================================
+  // Unit node: Commit part
+  // ============================================
+  commitStatus?: CommitStatus  // 'staging' | 'committed'
+  commitHash?: string          // Full commit_hash (only when committed)
+  branchType?: BranchType      // 'main' | 'branch'
+  branchName?: string          // Branch name for branch commits
+  pendingBranch?: 'main' | 'branch'     // Branch selection for staging
+  pendingBranchName?: string            // Branch name for staging
+
+  // Staging commit: source data with free-form text selection
   pendingSource?: PendingCommitSource
+  // Source unit ID for staging commits created from another unit
+  sourceUnitId?: string
+  // Source commit hash (parent commit for new commits)
+  sourceCommitHash?: string
+  sourceTurnWindow?: {
+    start_turn_hash: string
+    end_turn_hash: string
+  }
+
   // Committed commit data (from database)
-  sourceExcerpt?: string[]  // User-selected source excerpts
-  mustHave?: string[]       // Must-have keywords
-  mustntHave?: string[]     // Must-not-have keywords
-  // Facet snapshot from committed commit
+  sourceExcerpt?: string[]    // User-selected source excerpts
+  mustHave?: string[]         // Must-have keywords
+  mustntHave?: string[]       // Must-not-have keywords
   facetSnapshot?: Array<{
     facet: string
     text?: string
@@ -213,10 +211,32 @@ export interface CanvasNodeData {
     entity_type?: string
     confidence?: number
   }>
-  // Source commit info (for pending commits derived from committed commits)
-  sourceCommitHash?: string  // Parent commit hash
-  sourceTurnWindow?: {
-    start_turn_hash: string
-    end_turn_hash: string
-  }  // Turn window inherited from source commit
+  facets?: string[]           // Legacy facets field
+
+  // Merge commit configuration
+  mergeConfig?: MergeConfig
+  isMergeCommit?: boolean
+
+  // Validation and generation
+  validationChecks?: DraftValidationCheck[]
+  baselineSummary?: string
+  draftInstructions?: string
+  draftDiff?: string
+  bridgePrompt?: string
+  isGenerated?: boolean
+
+  // Conversation constraints
+  constraints?: ConversationConstraints
+  constraintOverrides?: DraftConstraintOverrides
+
+  // ============================================
+  // Leaf node specific
+  // ============================================
+  leafType?: LeafType
+  leafConfig?: LeafNodeConfig
+
+  // ============================================
+  // Deprecated fields (keep for migration)
+  // ============================================
+  sourceConversationId?: string  // Replaced by sourceUnitId
 }
