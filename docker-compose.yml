@@ -133,6 +133,8 @@ services:
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - LOG_LEVEL=info
+      # CORS: Allow WebUI access from common local origins
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       t3x-api:
         condition: service_healthy

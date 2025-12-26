@@ -177,6 +177,48 @@ export const mergeResults = pgTable('merge_results', {
 ]);
 
 /**
+ * Deploy Agents - Registered agents for deployment and evaluation
+ * Note: This is different from the "agent" layer (LLM draft generation)
+ */
+export const deployAgents = pgTable('deploy_agents', {
+  deployAgentId: text('deploy_agent_id').primaryKey(),
+  projectId: text('project_id')
+    .references(() => projects.projectId, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  endpoint: text('endpoint').notNull(),
+  type: text('type').notNull().default('http'), // 'http' | 'websocket' | 'grpc'
+  authJson: text('auth_json'), // { type: 'bearer' | 'api_key', token, header? }
+  status: text('status').notNull().default('idle'), // 'idle' | 'running' | 'error'
+  lastRunId: text('last_run_id'),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('idx_deploy_agents_project').on(table.projectId),
+]);
+
+/**
+ * Runs - Engine run records for tracking workflow executions
+ */
+export const runs = pgTable('runs', {
+  runId: text('run_id').primaryKey(),
+  projectId: text('project_id')
+    .references(() => projects.projectId, { onDelete: 'cascade' }),
+  runnerRunId: text('runner_run_id'),
+  commitRef: text('commit_ref'),
+  leafJson: text('leaf_json'), // { id, type, content? }
+  inputsJson: text('inputs_json'),
+  workflowJson: text('workflow_json'), // { type, webhook_id? }
+  status: text('status').notNull().default('queued'), // 'queued' | 'running' | 'completed' | 'failed'
+  resultJson: text('result_json'), // { run_report, assertions, evidence_pack }
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (table) => [
+  index('idx_runs_project').on(table.projectId),
+  index('idx_runs_status').on(table.status),
+]);
+
+/**
  * Segment Embeddings - Pre-computed vectors for Ring 3 segments
  */
 export const segmentEmbeddings = pgTable('segment_embeddings', {
@@ -222,3 +264,9 @@ export type NewMergeResult = typeof mergeResults.$inferInsert;
 
 export type SegmentEmbedding = typeof segmentEmbeddings.$inferSelect;
 export type NewSegmentEmbedding = typeof segmentEmbeddings.$inferInsert;
+
+export type DeployAgent = typeof deployAgents.$inferSelect;
+export type NewDeployAgent = typeof deployAgents.$inferInsert;
+
+export type Run = typeof runs.$inferSelect;
+export type NewRun = typeof runs.$inferInsert;
