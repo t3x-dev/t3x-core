@@ -635,6 +635,10 @@ export async function listTurns(
 }
 
 export async function getTurn(turnHash: string): Promise<TurnDetail> {
+  // Validate turnHash to prevent /api/v1/turns/undefined errors
+  if (!turnHash || turnHash === 'undefined') {
+    throw new Error('getTurn: turnHash is required')
+  }
   // Don't encode the colon in sha256:xxx - backend expects raw format
   const res = await fetchWithTimeout(`${API_V1}/turns/${turnHash}`)
   return handleResponse<TurnDetail>(res)
@@ -688,7 +692,7 @@ export async function getCurrentBranch(projectId: string): Promise<{
 export async function createBranch(
   projectId: string,
   name: string,
-  fromBranch?: string,
+  parentBranch?: string,
   description?: string,
   checkout = false
 ): Promise<Branch> {
@@ -698,7 +702,7 @@ export async function createBranch(
     body: JSON.stringify({
       project_id: projectId,
       name,
-      from_branch: fromBranch,
+      parent_branch: parentBranch,  // Fixed: was 'from_branch', backend expects 'parent_branch'
       description,
       checkout,
     }),
