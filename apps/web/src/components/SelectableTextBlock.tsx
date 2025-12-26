@@ -340,10 +340,10 @@ function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false 
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   // Determine display info based on source type
-  const isConversation = block.sourceNodeType === 'conversation'
-  const icon = isConversation ? <MessageSquare size={14} /> : <GitCommit size={14} />
-  const typeLabel = isConversation ? 'Conv' : 'Commit'
-  const title = block.sourceNodeTitle || (isConversation ? 'Conversation' : 'Commit')
+  const isUnit = block.sourceNodeType === 'unit'
+  const icon = <GitCommit size={14} />
+  const typeLabel = 'Unit'
+  const title = block.sourceNodeTitle || 'Unit'
 
   return (
     <div className={`source-box ${isExpanded ? 'source-box--expanded' : ''}`}>
@@ -355,7 +355,7 @@ function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false 
         <span className="source-box__toggle">
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <span className={`source-box__icon source-box__icon--${isConversation ? 'conv' : 'commit'}`}>
+        <span className={`source-box__icon source-box__icon--unit`}>
           {icon}
         </span>
         <span className="source-box__type-label">{typeLabel}:</span>
@@ -365,15 +365,15 @@ function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false 
       {/* Box Content */}
       {isExpanded && (
         <div className="source-box__content">
-          {isConversation && block.turnBoundaries && block.turnBoundaries.length > 0 ? (
-            // Conversation: Render with turn groups
+          {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
+            // Unit with turns: Render with turn groups
             <ConversationTurnRenderer
               block={block}
               onChange={onChange}
               readOnly={readOnly}
             />
           ) : (
-            // Commit: Render as simple block
+            // Unit without turns: Render as simple block
             <SelectableTextBlock
               block={block}
               onChange={onChange}

@@ -2,7 +2,7 @@
  * Commits API Routes
  *
  * GET  /api/v1/commits - List commits (requires project_id query)
- * POST /api/v1/commits - Create commit
+ * POST /api/v1/commits - Create commit (with automatic Ring extraction)
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
@@ -11,6 +11,7 @@ import {
   insertCommit,
   findCommitsByProject,
   findProjectById,
+  findTurnsInWindow,
   CommitError,
 } from '@t3x/storage/pglite';
 
@@ -152,6 +153,109 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Collect facets from turns' rings data if turn_window is provided and no facets given
+    let facetSnapshot = body.facet_snapshot ?? [];
+
+    if (hasTurnWindow && facetSnapshot.length === 0 && body.turn_window) {
+      try {
+        // Get turns in the window - they already have rings data from conversation
+        const turns = await findTurnsInWindow(
+          db,
+          body.turn_window.start_turn_hash,
+          body.turn_window.end_turn_hash
+        );
+
+        if (turns.length > 0) {
+          // Collect all facets from turns' rings data
+          const collectedFacets: unknown[] = [];
+
+          for (const turn of turns) {
+            // Parse rings JSON if present
+            if (turn.ringsJson) {
+              try {
+                const rings = JSON.parse(turn.ringsJson);
+
+                // Extract facets from Ring1 keywords
+                if (rings.ring1?.keywords) {
+                  for (const keyword of rings.ring1.keywords) {
+                    collectedFacets.push({
+                      facet: 'keyword',
+                      text: keyword.text,
+                      key: keyword.lemma,
+                      value: keyword.text,
+                      confidence: keyword.confidence ?? 1.0,
+                      polarity: keyword.polarity,
+                      pos: keyword.pos,
+                      entity_type: keyword.entityType,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                // Extract Ring2 facets directly
+                if (rings.ring2?.facets) {
+                  for (const facet of rings.ring2.facets) {
+                    collectedFacets.push({
+                      facet: facet.facetType,
+                      key: facet.key,
+                      value: facet.value,
+                      confidence: facet.confidence ?? 1.0,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                // Extract Ring3 segments
+                if (rings.ring3?.segments) {
+                  for (const segment of rings.ring3.segments) {
+                    collectedFacets.push({
+                      facet: 'segment',
+                      key: segment.segmentId,
+                      text: segment.text,
+                      value: segment.text,
+                      confidence: 1.0,
+                      start_char: segment.startChar,
+                      end_char: segment.endChar,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                // Add topic if available
+                if (rings.ring1?.topic) {
+                  collectedFacets.push({
+                    facet: 'topic',
+                    key: 'topic',
+                    value: rings.ring1.topic,
+                    confidence: 0.8,
+                    turn_hash: turn.turnHash,
+                  });
+                }
+
+                // Add time anchor if available
+                if (rings.ring1?.timeAnchor) {
+                  collectedFacets.push({
+                    facet: 'time_anchor',
+                    key: 'time',
+                    value: rings.ring1.timeAnchor,
+                    confidence: 0.9,
+                    turn_hash: turn.turnHash,
+                  });
+                }
+              } catch (parseErr) {
+                console.warn('[commits] Failed to parse rings JSON for turn:', turn.turnHash, parseErr);
+              }
+            }
+          }
+
+          facetSnapshot = collectedFacets;
+        }
+      } catch (collectErr) {
+        // Log but don't fail - facets are optional
+        console.warn('[commits] Failed to collect facets from turns:', collectErr);
+      }
+    }
+
     const commit = await insertCommit(db, {
       projectId: body.project_id,
       branch: body.branch,
@@ -160,7 +264,7 @@ export async function POST(request: NextRequest) {
         startTurnHash: body.turn_window.start_turn_hash,
         endTurnHash: body.turn_window.end_turn_hash,
       } : undefined,
-      facetSnapshot: body.facet_snapshot ?? [],
+      facetSnapshot,
       mergeParents: body.merge_parents,
       pipelineConfig: body.pipeline_config,
       draftId: body.draft_id,

@@ -13,6 +13,7 @@ import {
   findCommitsByProject,
   findCommitByHash,
   findProjectById,
+  findTurnsInWindow,
   CommitError,
 } from '@t3x/storage/pglite';
 
@@ -120,6 +121,113 @@ commitRoutes.post('/v1/commits', async (c) => {
       return jsonError(c, 'NOT_FOUND', `Project ${body.project_id} not found`, 404);
     }
 
+    let facetSnapshot = body.facet_snapshot ?? [];
+
+    if (hasTurnWindow && facetSnapshot.length === 0 && body.turn_window) {
+      try {
+        const turns = await findTurnsInWindow(
+          db,
+          body.turn_window.start_turn_hash,
+          body.turn_window.end_turn_hash
+        );
+
+        if (turns.length > 0) {
+          const collectedFacets: unknown[] = [];
+
+          for (const turn of turns) {
+            if (turn.ringsJson) {
+              try {
+                const parsed = JSON.parse(turn.ringsJson);
+                const rings = parsed?.rings ?? parsed;
+
+                if (rings?.ring1?.keywords) {
+                  for (const keyword of rings.ring1.keywords) {
+                    const text = typeof keyword === 'string' ? keyword : keyword.text;
+                    const lemma = typeof keyword === 'string' ? keyword : keyword.lemma;
+                    collectedFacets.push({
+                      facet: 'keyword',
+                      text,
+                      key: lemma ?? text,
+                      value: text,
+                      confidence: keyword?.confidence ?? 1.0,
+                      polarity: keyword?.polarity,
+                      pos: keyword?.pos,
+                      entity_type: keyword?.entityType,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                if (rings?.ring2?.facets) {
+                  for (const facet of rings.ring2.facets) {
+                    if (typeof facet === 'string') {
+                      collectedFacets.push({
+                        facet: 'facet',
+                        key: facet,
+                        value: facet,
+                        confidence: 1.0,
+                        turn_hash: turn.turnHash,
+                      });
+                      continue;
+                    }
+                    collectedFacets.push({
+                      facet: facet.facetType ?? facet.facet ?? 'facet',
+                      key: facet.key,
+                      value: facet.value,
+                      confidence: facet.confidence ?? 1.0,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                if (rings?.ring3?.segments) {
+                  for (const segment of rings.ring3.segments) {
+                    const segmentId = segment.segmentId ?? segment.id;
+                    collectedFacets.push({
+                      facet: 'segment',
+                      key: segmentId,
+                      text: segment.text,
+                      value: segment.text,
+                      confidence: 1.0,
+                      start_char: segment.startChar ?? segment.start_char,
+                      end_char: segment.endChar ?? segment.end_char,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
+
+                if (rings?.ring1?.topic) {
+                  collectedFacets.push({
+                    facet: 'topic',
+                    key: 'topic',
+                    value: rings.ring1.topic,
+                    confidence: 0.8,
+                    turn_hash: turn.turnHash,
+                  });
+                }
+
+                if (rings?.ring1?.timeAnchor) {
+                  collectedFacets.push({
+                    facet: 'time_anchor',
+                    key: 'time',
+                    value: rings.ring1.timeAnchor,
+                    confidence: 0.9,
+                    turn_hash: turn.turnHash,
+                  });
+                }
+              } catch (parseErr) {
+                console.warn('[commits] Failed to parse rings JSON for turn:', turn.turnHash, parseErr);
+              }
+            }
+          }
+
+          facetSnapshot = collectedFacets;
+        }
+      } catch (collectErr) {
+        console.warn('[commits] Failed to collect facets from turns:', collectErr);
+      }
+    }
+
     const commit = await insertCommit(db, {
       projectId: body.project_id,
       branch: body.branch,
@@ -128,7 +236,7 @@ commitRoutes.post('/v1/commits', async (c) => {
         startTurnHash: body.turn_window.start_turn_hash,
         endTurnHash: body.turn_window.end_turn_hash,
       } : undefined,
-      facetSnapshot: body.facet_snapshot ?? [],
+      facetSnapshot,
       mergeParents: body.merge_parents,
       pipelineConfig: body.pipeline_config,
       draftId: body.draft_id,
