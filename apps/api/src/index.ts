@@ -24,6 +24,8 @@ import {
   exportRoutes,
   mergeRoutes,
   runnerRoutes,
+  deployAgentRoutes,
+  runsRoutes,
 } from './routes';
 import { projectRoutes } from './routes/projects.openapi';
 import { getDB, closeDB } from './lib/db';
@@ -54,6 +56,8 @@ api.route('/', diffRoutes);         // /v1/diff
 api.route('/', exportRoutes);       // /v1/export
 api.route('/', mergeRoutes);        // /v1/merge
 api.route('/', runnerRoutes);       // /v1/runner/*
+api.route('/', deployAgentRoutes);  // /v1/deploy-agents
+api.route('/', runsRoutes);         // /v1/runs
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {

@@ -42,23 +42,26 @@ const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
 // Root route - service info
 app.get('/', (_req, res) => {
   res.json({
-    service: 't3x-runner',
-    version: '0.1.0',
-    endpoints: {
-      health: 'GET /health',
-      agents: 'POST /agents',
-      run: 'POST /run',
-      eval: 'POST /eval',
-      commit: 'POST /commit',
-      webhook: 'POST /webhook/run',
+    success: true,
+    data: {
+      service: 't3x-runner',
+      version: '0.1.0',
+      endpoints: {
+        health: 'GET /health',
+        agents: 'POST /agents',
+        run: 'POST /run',
+        eval: 'POST /eval',
+        commit: 'POST /commit',
+        webhook: 'POST /webhook/run',
+      },
+      docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
     },
-    docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
   });
 });
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 't3x-runner' });
+  res.json({ success: true, data: { status: 'ok', service: 't3x-runner' } });
 });
 
 // ============================================
@@ -73,9 +76,9 @@ app.post('/agents', (req, res) => {
     const config = AgentConfigSchema.parse(req.body);
     observer.registerAgent(config);
     logger.info({ agent_id: config.id }, 'Agent registered');
-    res.json({ success: true, agent_id: config.id });
+    res.json({ success: true, data: { agent_id: config.id } });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -85,9 +88,9 @@ app.post('/agents', (req, res) => {
 app.get('/agents/:id', (req, res) => {
   const agent = observer.getAgent(req.params.id);
   if (!agent) {
-    return res.status(404).json({ error: 'Agent not found' });
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Agent not found' } });
   }
-  res.json(agent);
+  res.json({ success: true, data: agent });
 });
 
 // ============================================
@@ -105,7 +108,7 @@ app.post('/run', async (req, res) => {
     const agent = observer.getAgent(input.agent_id);
 
     if (!agent) {
-      return res.status(404).json({ error: `Agent not found: ${input.agent_id}` });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Agent not found: ${input.agent_id}` } });
     }
 
     // Start observing
@@ -138,9 +141,8 @@ app.post('/run', async (req, res) => {
       logger.info({ run_id: runId, latency_ms: latencyMs }, 'Run completed');
 
       res.json({
-        run_id: runId,
-        output,
-        trace,
+        success: true,
+        data: { run_id: runId, output, trace },
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -149,13 +151,13 @@ app.post('/run', async (req, res) => {
 
       logger.error({ run_id: runId, error: errorMsg }, 'Run failed');
       res.status(500).json({
-        run_id: runId,
-        error: errorMsg,
-        trace,
+        success: false,
+        error: { code: 'RUN_FAILED', message: errorMsg },
+        data: { run_id: runId, trace },
       });
     }
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -189,9 +191,9 @@ app.post('/run/:id/event', (req, res) => {
       observer.recordError(runId, data.error);
     }
 
-    res.json({ success: true });
+    res.json({ success: true, data: {} });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -201,9 +203,9 @@ app.post('/run/:id/event', (req, res) => {
 app.get('/run/:id', (req, res) => {
   const trace = observer.getTrace(req.params.id);
   if (!trace) {
-    return res.status(404).json({ error: 'Run not found' });
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Run not found' } });
   }
-  res.json(trace);
+  res.json({ success: true, data: trace });
 });
 
 /**
@@ -212,7 +214,7 @@ app.get('/run/:id', (req, res) => {
 app.get('/runs', (req, res) => {
   const agentId = req.query.agent_id as string | undefined;
   const traces = observer.listTraces(agentId);
-  res.json({ runs: traces });
+  res.json({ success: true, data: { runs: traces } });
 });
 
 // ============================================
@@ -248,9 +250,9 @@ app.post('/runs', async (req, res) => {
       });
     }
 
-    res.json({ runner_run_id, status: 'running' });
+    res.json({ success: true, data: { runner_run_id, status: 'running' } });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -267,7 +269,7 @@ app.post('/callbacks/n8n', async (req, res) => {
 
     if (!pending) {
       logger.warn({ runner_run_id: data.runner_run_id }, 'No pending run found for callback');
-      return res.status(404).json({ error: 'Pending run not found' });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Pending run not found' } });
     }
 
     logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
@@ -318,9 +320,9 @@ app.post('/callbacks/n8n', async (req, res) => {
     // Clean up pending run
     pendingRuns.delete(data.runner_run_id);
 
-    res.json({ ok: true });
+    res.json({ success: true, data: { ok: true } });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -339,7 +341,7 @@ app.post('/eval', async (req, res) => {
     if (request.run_id && !request.trace) {
       const trace = observer.getTrace(request.run_id);
       if (!trace) {
-        return res.status(404).json({ error: `Run not found: ${request.run_id}` });
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Run not found: ${request.run_id}` } });
       }
       request.trace = trace;
     }
@@ -352,9 +354,9 @@ app.post('/eval', async (req, res) => {
       failed_steps: result.failed_steps,
     }, 'Eval completed');
 
-    res.json(result);
+    res.json({ success: true, data: result });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -373,9 +375,9 @@ app.post('/eval/validate', (req, res) => {
       }
     });
 
-    res.json({ steps: validated });
+    res.json({ success: true, data: { steps: validated } });
   } catch (error) {
-    res.status(400).json({ error: String(error) });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -396,7 +398,7 @@ app.post('/commit', async (req, res) => {
 
     const trace = observer.getTrace(run_id);
     if (!trace) {
-      return res.status(404).json({ error: `Run not found: ${run_id}` });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Run not found: ${run_id}` } });
     }
 
     // Convert trace to t3x conversation format
@@ -431,9 +433,9 @@ app.post('/commit', async (req, res) => {
         : undefined;
     logger.info({ run_id, commit_id: commitId }, 'T3X commit created');
 
-    res.json({ success: true, commit });
+    res.json({ success: true, data: { commit } });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: String(error) } });
   }
 });
 
@@ -451,7 +453,7 @@ app.post('/webhook/run', async (req, res) => {
     // Run agent
     const agent = observer.getAgent(agent_id);
     if (!agent) {
-      return res.status(404).json({ error: `Agent not found: ${agent_id}` });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Agent not found: ${agent_id}` } });
     }
 
     const runId = observer.startRun(agent_id, { agent_id, input });
@@ -476,13 +478,11 @@ app.post('/webhook/run', async (req, res) => {
     }
 
     res.json({
-      run_id: runId,
-      output,
-      trace,
-      eval_result: evalResult,
+      success: true,
+      data: { run_id: runId, output, trace, eval_result: evalResult },
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: String(error) } });
   }
 });
 

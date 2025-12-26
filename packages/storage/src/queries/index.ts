@@ -122,3 +122,29 @@ export {
   getEmbeddingsCountForTurn,
   findEmbeddingsByModel,
 } from './segmentEmbeddings';
+
+// Deploy Agents (for Deploy page, different from agent layer)
+export {
+  type CreateDeployAgentInput,
+  type UpdateDeployAgentInput,
+  type ListDeployAgentsOptions,
+  insertDeployAgent,
+  findDeployAgentById,
+  findDeployAgents,
+  updateDeployAgent,
+  deleteDeployAgent,
+  updateDeployAgentRunStatus,
+} from './deployAgents';
+
+// Runs (Engine → Runner → n8n flow)
+export {
+  type RunStatus,
+  type CreateRunInput,
+  type UpdateRunInput,
+  type ListRunsOptions,
+  insertRun,
+  getRun,
+  listRuns,
+  updateRun,
+  deleteRun,
+} from './runs';

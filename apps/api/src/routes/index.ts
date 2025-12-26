@@ -15,3 +15,5 @@ export { diffRoutes } from './diff';
 export { exportRoutes } from './export';
 export { mergeRoutes } from './merge';
 export { runnerRoutes } from './runner';
+export { deployAgentRoutes } from './deploy-agents';
+export { runsRoutes } from './runs';
