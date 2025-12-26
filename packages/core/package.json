@@ -17,7 +17,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "json-canonicalize": "^2.0.0"
+    "json-canonicalize": "^2.0.0",
+    "undici": "^7.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

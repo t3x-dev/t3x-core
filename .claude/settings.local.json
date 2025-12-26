@@ -91,7 +91,10 @@
       "Bash(node -e:*)",
       "Bash(pnpm install:*)",
       "Bash(pnpm build:runner:*)",
-      "Bash(pnpm build:api:*)"
+      "Bash(pnpm build:api:*)",
+      "Bash(pnpm --filter t3x-webui test -- src/__tests__/api/chat.test.ts)",
+      "Bash(git merge-base:*)",
+      "Bash(pnpm build:core:*)"
     ],
     "deny": [],
     "ask": []
