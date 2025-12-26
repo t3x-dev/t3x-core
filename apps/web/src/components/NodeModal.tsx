@@ -457,12 +457,12 @@ export function NodeModal({
   const isPendingCommit = isCommit && data?.commitStatus === 'pending'
   const isCommittedCommit = isCommit && data?.commitStatus !== 'pending'
   const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig
-  const shouldShowBranchSelect =
-    (draftBranchMode === 'select' || draftBranchMode === 'branch-only') && !isMergeDraft
+  // Always show branch select for pending commits (except merge drafts)
+  // Previously only shown for 'select' or 'branch-only' modes, but users want control
+  const shouldShowBranchSelect = isPendingCommit && !isMergeDraft
+  // Show branch name input when user selects "+ New branch..." (pendingBranch === 'branch')
   const requireBranchName =
-    !isMergeDraft &&
-    ((draftBranchMode === 'select' && data?.pendingBranch === 'branch') ||
-      draftBranchMode === 'branch-only')
+    !isMergeDraft && isPendingCommit && data?.pendingBranch === 'branch'
 
   // Load branches from API when opening pending commit modal
   useEffect(() => {
@@ -1061,6 +1061,10 @@ export function NodeModal({
           currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined
         )
 
+        // Trigger convert to committed state BEFORE updating node ID
+        // (onConvertDraft closure captures the old node.id, so must be called first)
+        onConvertDraft?.()
+
         // Update local node ID to match API commit_hash
         if (node && commit.commit_hash) {
           useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
@@ -1071,9 +1075,6 @@ export function NodeModal({
           commitHash: commit.commit_hash,
           isMergeCommit: true,
         })
-
-        // Trigger convert to committed state
-        onConvertDraft?.()
 
         // Refresh canvas data
         useCanvasStore.getState().loadProjectData(projectId)
@@ -1113,10 +1114,13 @@ export function NodeModal({
       }
 
       // 2. Determine branch
-      // If user selected 'branch' mode, use their branch name or generate one
-      const branch = data.pendingBranch === 'branch'
-        ? (data.pendingBranchName?.trim() || `branch-${Date.now()}`)
-        : 'main'
+      // User's explicit choice (pendingBranch) takes priority
+      let branch: string
+      if (data.pendingBranch === 'branch') {
+        branch = data.pendingBranchName?.trim() || `branch-${Date.now()}`
+      } else {
+        branch = 'main'
+      }
 
       console.log('[handleCommit] Branch decision:', {
         pendingBranch: data.pendingBranch,
@@ -1230,22 +1234,23 @@ export function NodeModal({
         }
       )
 
-      // 7. Update local node ID to match API commit_hash (before refresh)
+      // 7. Trigger convert to committed state BEFORE updating node ID
+      // (onConvertDraft closure captures the old node.id, so must be called first)
+      onConvertDraft?.()
+
+      // 8. Update local node ID to match API commit_hash (before refresh)
       // This ensures edges are preserved when loadProjectData rebuilds the canvas
       if (node && commit.commit_hash) {
         useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
       }
 
-      // 7. Update local state with final values
+      // 9. Update local state with final values
       onUpdate({
         summary: resultText,
         bridgePrompt: template,
         isGenerated: true,
         commitHash: commit.commit_hash,
       })
-
-      // 8. Trigger convert to committed state
-      onConvertDraft?.()
 
       // 9. Refresh canvas data
       useCanvasStore.getState().loadProjectData(projectId)
