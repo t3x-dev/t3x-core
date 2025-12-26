@@ -55,7 +55,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     if (!openNodeId) {
       return undefined
     }
-    const pendingNode = state.nodes.find((node) => node.id === openNodeId && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
+    const pendingNode = state.nodes.find((node) => node.id === openNodeId && node.data.kind === 'unit' && node.data.commitStatus === 'staging')
     if (!pendingNode) {
       return undefined
     }
@@ -71,7 +71,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
 
   // Get effective constraints for pending commit nodes
   const effectiveConstraints = useMemo(() => {
-    if (!openNodeId || !modalNode || modalNode.data.kind !== 'commit' || modalNode.data.commitStatus !== 'pending') {
+    if (!openNodeId || !modalNode || modalNode.data.kind !== 'unit' || modalNode.data.commitStatus !== 'staging') {
       return undefined
     }
     return getPendingCommitEffectiveConstraints(openNodeId)
@@ -79,7 +79,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
 
   // Check if conversation is locked (has downstream pending commits)
   const isConversationLocked = useMemo(() => {
-    if (!openNodeId || !modalNode || modalNode.data.kind !== 'conversation') {
+    if (!openNodeId || !modalNode || modalNode.data.kind !== 'unit') {
       return false
     }
     return hasDownstreamPendingCommits(openNodeId)
@@ -89,37 +89,12 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     if (!modalNode) {
       return undefined
     }
-    if (modalNode.data.kind === 'conversation') {
+    // Only show quick actions for committed units, not staging ones
+    if (modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'committed') {
       return [
         {
-          key: 'add-commit',
-          label: 'Create Commit',
-          icon: <GitCommit size={14} />,
-          onClick: () => void addPendingCommitFromConversation(modalNode.id),
-          disabled: !canSeedPendingCommitFromConversation,
-        },
-      ]
-    }
-    // Only show quick actions for committed commits, not pending ones
-    if (modalNode.data.kind === 'commit' && modalNode.data.commitStatus !== 'pending') {
-      return [
-        {
-          key: 'add-conversation',
-          label: 'Create Conversation',
-          icon: <MessageSquarePlus size={14} />,
-          onClick: async () => {
-            try {
-              await addConversationFromCommit(modalNode.id)
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'Failed to create conversation'
-              notify?.(message, 'error')
-              console.error('Failed to create conversation:', err)
-            }
-          },
-        },
-        {
-          key: 'add-commit',
-          label: 'Create Commit',
+          key: 'add-unit',
+          label: 'Create Unit',
           icon: <GitCommit size={14} />,
           onClick: () => addPendingCommitFromCommit(modalNode.id),
         },
@@ -128,11 +103,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
     return undefined
   }, [
     modalNode,
-    addPendingCommitFromConversation,
-    canSeedPendingCommitFromConversation,
-    addConversationFromCommit,
     addPendingCommitFromCommit,
-    notify,
   ])
 
   useEffect(() => {
@@ -162,7 +133,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
   const branchNames = useMemo(() => {
     const names = new Set<string>()
     nodes.forEach((node) => {
-      if (node.data.kind === 'commit' && node.data.branchType === 'branch' && node.data.branchName) {
+      if (node.data.kind === 'unit' && node.data.branchType === 'branch' && node.data.branchName) {
         names.add(node.data.branchName)
       }
     })
@@ -208,7 +179,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
   }
 
   const matchesHighlightCommit = (node: Node<CanvasNodeData>, mode: PathHighlight) => {
-    if (!mode || node.data.kind !== 'commit') {
+    if (!mode || node.data.kind !== 'unit') {
       return false
     }
     if (mode.mode === 'main') {
@@ -272,7 +243,7 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         if (!neighborNode) {
           return
         }
-        if (neighborNode.data.kind === 'commit' && !matchesHighlightCommit(neighborNode, highlight)) {
+        if (neighborNode.data.kind === 'unit' && !matchesHighlightCommit(neighborNode, highlight)) {
           return
         }
         visited.add(neighborId)
@@ -370,10 +341,10 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
   }
 
   const hasMainCommits = nodes.some(
-    (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
+    (node) => node.data.kind === 'unit' && node.data.branchType === 'main',
   )
   const hasBranchCommits = nodes.some(
-    (node) => node.data.kind === 'commit' && node.data.branchType === 'branch',
+    (node) => node.data.kind === 'unit' && node.data.branchType === 'branch',
   )
   return (
     <div className="workspace">
@@ -430,8 +401,8 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         <div className="project-topbar__right">
           <button
             className="icon-btn"
-            onClick={() => handleAddNode('conversation')}
-            title="Add Conversation"
+            onClick={() => handleAddNode('unit')}
+            title="Add Unit"
           >
             <MessageSquarePlus size={18} />
           </button>
@@ -491,8 +462,8 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
         {/* Empty state overlay */}
         {nodes.length === 0 && (
           <div className="workspace__empty-state">
-            <p>No conversations or commits yet.</p>
-            <p>Click the + button above to create a conversation.</p>
+            <p>No units yet.</p>
+            <p>Click the + button above to create a unit.</p>
           </div>
         )}
       </div>
@@ -502,33 +473,34 @@ export default function CanvasWorkspace({ projectName, mode, onModeChange }: Can
           onClose={() => setOpenNodeId(undefined)}
           onUpdate={(patch) => updateNode(modalNode.id, patch)}
           onConvertDraft={
-            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending' && pendingCommitBranchMode !== 'blocked'
+            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging' && pendingCommitBranchMode !== 'blocked'
               ? () => {
                   commitPendingCommit(modalNode.id)
                   setOpenNodeId(undefined)
+                  notify?.('Unit committed successfully', 'success')
                 }
               : undefined
           }
           draftBranchMode={pendingCommitBranchMode}
           onBranchChange={
-            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
+            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
               ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
               : undefined
           }
           onBranchNameChange={
-            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
+            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
               ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
               : undefined
           }
           quickActions={modalQuickActions}
           onSaveConstraints={
-            modalNode.data.kind === 'conversation'
+            modalNode.data.kind === 'unit'
               ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
               : undefined
           }
           effectiveConstraints={effectiveConstraints}
           onUpdateConstraintOverrides={
-            modalNode.data.kind === 'commit' && modalNode.data.commitStatus === 'pending'
+            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
               ? (overrides) => updatePendingCommitConstraintOverrides(modalNode.id, overrides)
               : undefined
           }

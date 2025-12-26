@@ -56,6 +56,10 @@ function getApiKey(provider: string): string | undefined {
   return process.env.OPENAI_API_KEY;
 }
 
+function encodeSseEvent(payload: string): Uint8Array {
+  return new TextEncoder().encode(`data: ${payload}\n\n`);
+}
+
 async function callClaudeNonStreaming(
   messages: ChatMessage[],
   model: string,
@@ -176,6 +180,89 @@ chatRoutes.post('/v1/chat', async (c) => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'CHAT_ERROR', message, 500);
   }
+});
+
+/**
+ * POST /v1/chat/stream - Streaming chat (SSE)
+ */
+chatRoutes.post('/v1/chat/stream', async (c) => {
+  let body: {
+    messages?: ChatMessage[];
+    provider?: string;
+    model?: string;
+    temperature?: number;
+    max_tokens?: number;
+  } | null = null;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  if (!body?.messages || body.messages.length === 0) {
+    return jsonError(c, 'INVALID_REQUEST', 'messages array is required', 400);
+  }
+
+  // Determine provider
+  let provider = body.provider ?? 'claude';
+  if (body.model && provider === 'claude') {
+    const inferred = inferProviderFromModel(body.model);
+    if (inferred !== provider) {
+      provider = inferred;
+    }
+  }
+
+  const apiKey = getApiKey(provider);
+  if (!apiKey) {
+    return jsonError(c, 'PROVIDER_ERROR', `API key not configured for provider: ${provider}`, 400);
+  }
+
+  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
+  const temperature = body.temperature ?? 0.7;
+  const maxTokens = body.max_tokens ?? 4096;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        if (provider === 'claude' || provider === 'anthropic') {
+          const result = await callClaudeNonStreaming(
+            body!.messages!,
+            model,
+            apiKey,
+            temperature,
+            maxTokens
+          );
+          controller.enqueue(encodeSseEvent(JSON.stringify({
+            type: 'token',
+            content: result.content,
+            model: result.model,
+          })));
+          controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'done' })));
+          controller.enqueue(encodeSseEvent('[DONE]'));
+        } else {
+          throw new Error(`Provider ${provider} not implemented`);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        controller.enqueue(encodeSseEvent(JSON.stringify({
+          type: 'error',
+          message,
+        })));
+        controller.enqueue(encodeSseEvent('[DONE]'));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 });
 
 /**

@@ -45,6 +45,7 @@ type CanvasState = {
   addPendingCommitFromConversation: (conversationId: string) => Promise<void>
   addConversationFromCommit: (commitId: string) => Promise<void>
   addPendingCommitFromCommit: (commitId: string) => void
+  addUnitFromUnit: (unitId: string) => void
   createMergePendingCommit: (commitId: string) => void
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode
   canCreatePendingCommitFromConversation: (conversationId: string) => boolean
@@ -77,8 +78,7 @@ type CanvasState = {
 }
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
-  conversation: ['commit', 'conversation'],
-  commit: ['conversation', 'commit', 'leaf'],
+  unit: ['unit', 'leaf'],
   leaf: [],
 }
 
@@ -93,10 +93,10 @@ const canConnect = (
     return false
   }
 
-  // Committed commits cannot accept new incoming connections
+  // Committed units cannot accept new incoming connections
   if (
-    target.data.kind === 'commit' &&
-    target.data.commitStatus !== 'pending'
+    target.data.kind === 'unit' &&
+    target.data.commitStatus !== 'staging'
   ) {
     return false
   }
@@ -129,9 +129,11 @@ const snapPosition = (position: { x: number; y: number }) => ({
   y: alignToGrid(position.y),
 })
 
+const unitNodeHeight = reactFlowGridSize * 14  // Unit is taller (conversation + commit)
+
 const getNodeHeightForKind = (kind: NodeKind) => {
-  if (kind === 'commit') {
-    return commitNodeHeight
+  if (kind === 'unit') {
+    return unitNodeHeight
   }
   return conversationNodeHeight
 }
@@ -180,19 +182,19 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
   const incomingMap = buildIncomingMap(edges)
   const locked = new Set<string>()
 
-  // Lock committed commits and ALL their upstream nodes (including conversations)
-  // This prevents deletion of committed commits and any nodes that contributed to them
-  const committedCommits = nodes.filter(
-    (node) => node.data.kind === 'commit' && node.data.commitStatus === 'committed'
+  // Lock committed units and ALL their upstream nodes
+  // This prevents deletion of committed units and any nodes that contributed to them
+  const committedUnits = nodes.filter(
+    (node) => node.data.kind === 'unit' && node.data.commitStatus === 'committed'
   )
 
-  committedCommits.forEach((commit) => {
-    // Lock the committed commit itself
-    locked.add(commit.id)
+  committedUnits.forEach((unit) => {
+    // Lock the committed unit itself
+    locked.add(unit.id)
 
-    // Lock ALL upstream nodes (committed commits, conversations, etc.)
+    // Lock ALL upstream nodes (committed units, etc.)
     const visited = new Set<string>()
-    const stack = [...(incomingMap.get(commit.id) ?? [])]
+    const stack = [...(incomingMap.get(unit.id) ?? [])]
     while (stack.length > 0) {
       const currentId = stack.pop()!
       if (visited.has(currentId)) continue
@@ -201,16 +203,16 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
       const currentNode = nodeMap.get(currentId)
       if (!currentNode) continue
 
-      // Lock this node (regardless of type - commit, conversation, etc.)
-      // Only skip pending commits as they can be modified/deleted
-      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
-        // Pending commits are NOT locked, but still traverse their upstream
+      // Lock this node (regardless of type - unit, etc.)
+      // Only skip staging units as they can be modified/deleted
+      if (currentNode.data.kind === 'unit' && currentNode.data.commitStatus === 'staging') {
+        // Staging units are NOT locked, but still traverse their upstream
         const parents = incomingMap.get(currentId) ?? []
         parents.forEach((parentId) => {
           if (!visited.has(parentId)) stack.push(parentId)
         })
       } else {
-        // Lock committed commits, conversations, and other node types
+        // Lock committed units and other node types
         locked.add(currentId)
         // Continue traversing upstream
         const parents = incomingMap.get(currentId) ?? []
@@ -224,8 +226,8 @@ const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
   return locked
 }
 
-// Check if a node is upstream of any pending commit (needs confirmation on delete)
-const isUpstreamOfPendingCommit = (
+// Check if a node is upstream of any staging unit (needs confirmation on delete)
+const isUpstreamOfStagingUnit = (
   nodeId: string,
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
@@ -244,8 +246,8 @@ const isUpstreamOfPendingCommit = (
     const currentNode = nodeMap.get(currentId)
     if (!currentNode) continue
 
-    // Found a pending commit downstream
-    if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
+    // Found a staging unit downstream
+    if (currentNode.data.kind === 'unit' && currentNode.data.commitStatus === 'staging') {
       return true
     }
 
@@ -260,8 +262,8 @@ const isUpstreamOfPendingCommit = (
 }
 
 // Collect all nodes that would be affected by deleting the given nodes
-// Returns pending commits that would become orphaned
-const collectAffectedPendingCommits = (
+// Returns staging units that would become orphaned
+const collectAffectedStagingUnits = (
   nodeIds: string[],
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
@@ -269,9 +271,9 @@ const collectAffectedPendingCommits = (
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const outgoingMap = buildOutgoingMap(edges)
   const toDelete = new Set(nodeIds)
-  const affectedPendingCommits: string[] = []
+  const affectedStagingUnits: string[] = []
 
-  // For each node being deleted, find downstream pending commits
+  // For each node being deleted, find downstream staging units
   nodeIds.forEach((nodeId) => {
     const visited = new Set<string>()
     const stack = [...(outgoingMap.get(nodeId) ?? [])]
@@ -284,9 +286,9 @@ const collectAffectedPendingCommits = (
       const currentNode = nodeMap.get(currentId)
       if (!currentNode) continue
 
-      if (currentNode.data.kind === 'commit' && currentNode.data.commitStatus === 'pending') {
-        if (!affectedPendingCommits.includes(currentId)) {
-          affectedPendingCommits.push(currentId)
+      if (currentNode.data.kind === 'unit' && currentNode.data.commitStatus === 'staging') {
+        if (!affectedStagingUnits.includes(currentId)) {
+          affectedStagingUnits.push(currentId)
         }
       }
 
@@ -297,18 +299,18 @@ const collectAffectedPendingCommits = (
     }
   })
 
-  return affectedPendingCommits
+  return affectedStagingUnits
 }
 
-const findNearestMainAncestorCommit = (
-  commitId: string,
+const findNearestMainAncestorUnit = (
+  unitId: string,
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
 ): Node<CanvasNodeData> | undefined => {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const incomingMap = buildIncomingMap(edges)
   const visited = new Set<string>()
-  const queue = [...(incomingMap.get(commitId) ?? [])]
+  const queue = [...(incomingMap.get(unitId) ?? [])]
   let latestMain: Node<CanvasNodeData> | undefined
   while (queue.length > 0) {
     const currentId = queue.shift()!
@@ -317,7 +319,7 @@ const findNearestMainAncestorCommit = (
     }
     visited.add(currentId)
     const node = nodeMap.get(currentId)
-    if (node && node.data.kind === 'commit' && node.data.branchType === 'main') {
+    if (node && node.data.kind === 'unit' && node.data.branchType === 'main') {
       if (!latestMain || getNumericId(node.id) > getNumericId(latestMain.id)) {
         latestMain = node
       }
@@ -354,7 +356,7 @@ const isDescendantOf = (
   })
 }
 
-const hasCommitDescendant = (
+const hasUnitDescendant = (
   nodeId: string,
   nodeMap: Map<string, Node<CanvasNodeData>>,
   outgoingMap: Map<string, string[]>,
@@ -370,10 +372,10 @@ const hasCommitDescendant = (
     if (!targetNode) {
       continue
     }
-    if (targetNode.data.kind === 'commit') {
+    if (targetNode.data.kind === 'unit') {
       return true
     }
-    if (hasCommitDescendant(targetId, nodeMap, outgoingMap, visited)) {
+    if (hasUnitDescendant(targetId, nodeMap, outgoingMap, visited)) {
       return true
     }
   }
@@ -387,7 +389,7 @@ const isNewerTimestamp = (a: string | undefined, b: string | undefined): boolean
   return new Date(a).getTime() > new Date(b).getTime()
 }
 
-const resolveLatestMainCommitId = (
+const resolveLatestMainUnitId = (
   nodes: Node<CanvasNodeData>[],
   preferredId?: string,
 ): string | undefined => {
@@ -395,19 +397,19 @@ const resolveLatestMainCommitId = (
     preferredId &&
     nodes.some(
       (node) =>
-        node.id === preferredId && node.data.kind === 'commit' && node.data.branchType === 'main',
+        node.id === preferredId && node.data.kind === 'unit' && node.data.branchType === 'main',
     )
   ) {
     return preferredId
   }
-  const mainCommits = nodes.filter(
-    (node) => node.data.kind === 'commit' && node.data.branchType === 'main',
+  const mainUnits = nodes.filter(
+    (node) => node.data.kind === 'unit' && node.data.branchType === 'main',
   )
-  if (mainCommits.length === 0) {
+  if (mainUnits.length === 0) {
     return undefined
   }
-  // Use timestamp (created_at) to determine latest commit, fallback to numeric ID comparison
-  return mainCommits.reduce((latest, node) => {
+  // Use timestamp (created_at) to determine latest unit, fallback to numeric ID comparison
+  return mainUnits.reduce((latest, node) => {
     // First try comparing by timestamp
     if (isNewerTimestamp(node.data.timestamp, latest.data.timestamp)) {
       return node
@@ -415,41 +417,42 @@ const resolveLatestMainCommitId = (
     if (isNewerTimestamp(latest.data.timestamp, node.data.timestamp)) {
       return latest
     }
-    // Fallback to numeric ID comparison (for pending commits without proper timestamps)
+    // Fallback to numeric ID comparison (for staging units without proper timestamps)
     return getNumericId(node.id) > getNumericId(latest.id) ? node : latest
   }).id
 }
 
-const buildSeedConversationNode = (): Node<CanvasNodeData> => {
+const buildSeedUnitNode = (): Node<CanvasNodeData> => {
   const id = nextNodeId()
   return {
     id,
-    type: 'conversation',
+    type: 'unit',
     position: snapPosition({ x: 120, y: 120 }),
     data: {
-      entryId: `CONV-${getNumericId(id)}`,
-      title: 'Conversation: new workflow seed',
+      entryId: `UNIT-${getNumericId(id)}`,
+      title: 'New Unit',
       summary: 'Start capturing context for this workflow.',
       status: 'raw-input',
       timestamp: 'just now',
-      tags: ['conversation'],
-      kind: 'conversation',
+      tags: ['unit'],
+      kind: 'unit',
+      commitStatus: 'staging',
     },
   }
 }
 
-const computeCommitTone = (
+const computeUnitTone = (
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
-  latestMainCommitId?: string,
-  commitId?: string,
+  latestMainUnitId?: string,
+  unitId?: string,
 ): CommitTone => {
-  if (!commitId) {
+  if (!unitId) {
     return 'branch-history'
   }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
-  const commitNode = nodeMap.get(commitId)
-  if (!commitNode || commitNode.data.kind !== 'commit') {
+  const unitNode = nodeMap.get(unitId)
+  if (!unitNode || unitNode.data.kind !== 'unit') {
     return 'branch-history'
   }
   const outgoingMap = buildOutgoingMap(edges)
@@ -458,27 +461,27 @@ const computeCommitTone = (
     if (descendantCache.has(nodeId)) {
       return descendantCache.get(nodeId)!
     }
-    const result = hasCommitDescendant(nodeId, nodeMap, outgoingMap)
+    const result = hasUnitDescendant(nodeId, nodeMap, outgoingMap)
     descendantCache.set(nodeId, result)
     return result
   }
-  if (commitNode.data.branchType === 'main') {
-    const latest = resolveLatestMainCommitId(nodes, latestMainCommitId)
-    return commitId === latest ? 'main-latest' : 'main-history'
+  if (unitNode.data.branchType === 'main') {
+    const latest = resolveLatestMainUnitId(nodes, latestMainUnitId)
+    return unitId === latest ? 'main-latest' : 'main-history'
   }
-  if (commitNode.data.branchType === 'branch') {
-    const branchKey = commitNode.data.branchName?.toLowerCase() ?? 'branch'
-    const branchCommits = nodes.filter(
+  if (unitNode.data.branchType === 'branch') {
+    const branchKey = unitNode.data.branchName?.toLowerCase() ?? 'branch'
+    const branchUnits = nodes.filter(
       (node) =>
-        node.data.kind === 'commit' &&
+        node.data.kind === 'unit' &&
         node.data.branchType === 'branch' &&
         (node.data.branchName?.toLowerCase() ?? 'branch') === branchKey,
     )
-    const activeCandidates = branchCommits.filter((node) => !ensureHasDescendant(node.id))
-    const activeCommit =
+    const activeCandidates = branchUnits.filter((node) => !ensureHasDescendant(node.id))
+    const activeUnit =
       activeCandidates.length > 0
         ? activeCandidates.reduce((latest, node) => {
-            // Use timestamp to determine latest commit
+            // Use timestamp to determine latest unit
             if (isNewerTimestamp(node.data.timestamp, latest.data.timestamp)) {
               return node
             }
@@ -489,10 +492,10 @@ const computeCommitTone = (
             return getNumericId(node.id) > getNumericId(latest.id) ? node : latest
           })
         : undefined
-    if (!activeCommit) {
+    if (!activeUnit) {
       return 'branch-history'
     }
-    return activeCommit.id === commitId ? 'branch-latest' : 'branch-history'
+    return activeUnit.id === unitId ? 'branch-latest' : 'branch-history'
   }
   return 'branch-history'
 }
@@ -511,7 +514,7 @@ const hasPrimaryAncestor = (
   if (!node) {
     return false
   }
-  if (node.data.kind === 'commit') {
+  if (node.data.kind === 'unit') {
     return node.data.branchType === 'main' || node.data.branchType === 'branch'
   }
   const sources = incomingMap.get(nodeId)
@@ -521,23 +524,24 @@ const hasPrimaryAncestor = (
   return sources.some((sourceId) => hasPrimaryAncestor(sourceId, nodeMap, incomingMap, visited))
 }
 
-const determinePendingCommitBranchMode = (state: CanvasState, commitId: string): DraftBranchMode => {
+const determineStagingUnitBranchMode = (state: CanvasState, unitId: string): DraftBranchMode => {
   if (!state.hasMainCommit) {
     return 'force-main'
   }
   const nodeMap = new Map(state.nodes.map((node) => [node.id, node]))
   const incomingMap = buildIncomingMap(state.edges)
-  const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
+  const latestMainId = resolveLatestMainUnitId(state.nodes, state.latestMainCommitId)
   const attachedToLatestMain =
-    latestMainId !== undefined && isDescendantOf(commitId, latestMainId, incomingMap)
+    latestMainId !== undefined && isDescendantOf(unitId, latestMainId, incomingMap)
   if (attachedToLatestMain) {
     return 'select'
   }
-  return hasPrimaryAncestor(commitId, nodeMap, incomingMap) ? 'branch-only' : 'blocked'
+  return hasPrimaryAncestor(unitId, nodeMap, incomingMap) ? 'branch-only' : 'blocked'
 }
 
-const canConversationSeedPendingCommit = (
-  conversationId: string,
+// Check if a committed unit can create a new staging unit
+const canCreateStagingUnitFromUnit = (
+  sourceUnitId: string,
   nodes: Node<CanvasNodeData>[],
   edges: Edge[],
   hasMainCommit: boolean,
@@ -547,25 +551,7 @@ const canConversationSeedPendingCommit = (
   }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const incomingMap = buildIncomingMap(edges)
-  return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
-}
-
-const canAttachConversationToPendingCommit = (
-  conversationId: string,
-  commitId: string,
-  nodes: Node<CanvasNodeData>[],
-  edges: Edge[],
-  hasMainCommit: boolean,
-): boolean => {
-  if (!hasMainCommit) {
-    return true
-  }
-  const nodeMap = new Map(nodes.map((node) => [node.id, node]))
-  const incomingMap = buildIncomingMap(edges)
-  if (hasPrimaryAncestor(commitId, nodeMap, incomingMap)) {
-    return true
-  }
-  return hasPrimaryAncestor(conversationId, nodeMap, incomingMap)
+  return hasPrimaryAncestor(sourceUnitId, nodeMap, incomingMap)
 }
 
 // Layout constants for API data
@@ -600,93 +586,78 @@ function saveNodePosition(nodeId: string, kind: NodeKind, position: { x: number;
     positionSaveTimers.delete(nodeId)
 
     // Call appropriate API based on node kind
-    if (pending.kind === 'conversation') {
-      api.updateConversation(nodeId, {
-        position_x: pending.position.x,
-        position_y: pending.position.y,
-      }).catch((err) => {
-        console.warn('Failed to save conversation position:', err)
-      })
-    } else if (pending.kind === 'commit') {
-      api.updateCommitPosition(nodeId, {
-        x: pending.position.x,
-        y: pending.position.y,
-      }).catch((err) => {
-        console.warn('Failed to save commit position:', err)
-      })
+    // For unit nodes, determine if staging (conversationId) or committed (commit hash)
+    if (pending.kind === 'unit') {
+      // Staging units have conversationId as nodeId (e.g., conv_xxx)
+      // Committed units have commit hash as nodeId (e.g., sha256:xxx)
+      const isStagingUnit = nodeId.startsWith('conv_')
+
+      if (isStagingUnit) {
+        // Save position to conversation
+        api.updateConversation(nodeId, {
+          position_x: pending.position.x,
+          position_y: pending.position.y,
+        }).catch((err) => {
+          console.warn('Failed to save staging unit position:', err)
+        })
+      }
+      // Note: Committed unit position saving is disabled for now
+      // The commit position API endpoint doesn't exist yet
+      // Position is saved during commit creation instead
     }
   }, 500)
 
   positionSaveTimers.set(nodeId, timer)
 }
 
-// Convert API Conversation to Canvas Node
-const conversationToNode = (
+// Convert API Conversation + Commit pair to Unit Canvas Node
+const unitToNode = (
   conv: api.Conversation,
+  commit: api.Commit | null,  // null for staging units (no commit yet)
   index: number
 ): Node<CanvasNodeData> => {
-  // Use saved position if available, otherwise calculate default position
-  const position = (conv.position_x != null && conv.position_y != null)
-    ? { x: conv.position_x, y: conv.position_y }
-    : {
-        x: LAYOUT.CONVERSATION_START_X,
-        y: LAYOUT.CONVERSATION_START_Y + index * LAYOUT.CONVERSATION_SPACING_Y,
-      }
-  return {
-    id: conv.conversation_id,
-    type: 'conversation',
-    position: snapPosition(position),
-    data: {
-      entryId: conv.conversation_id.slice(0, 8),
-      title: conv.title || 'Untitled Conversation',
-      summary: `${conv.turns_count || 0} turns`,
-      status: 'active',
-      timestamp: conv.created_at,
-      tags: ['conversation'],
-      kind: 'conversation',
-      conversationId: conv.conversation_id, // Full ID for API calls
-    },
-  }
-}
-
-// Convert API Commit to Canvas Node
-const commitToNode = (
-  commit: api.Commit,
-  index: number,
-  baseY: number
-): Node<CanvasNodeData> => {
-  const facetCount = commit.facet_snapshot?.length || 0
-  // Use saved position if available, otherwise calculate default position
-  const position = (commit.position_x != null && commit.position_y != null)
+  // Use saved position from commit if available, otherwise from conversation, otherwise calculate
+  const position = commit?.position_x != null && commit?.position_y != null
     ? { x: commit.position_x, y: commit.position_y }
-    : {
-        x: LAYOUT.CONVERSATION_START_X + LAYOUT.COMMIT_OFFSET_X,
-        y: baseY + index * LAYOUT.COMMIT_SPACING_Y,
-      }
+    : conv.position_x != null && conv.position_y != null
+      ? { x: conv.position_x, y: conv.position_y }
+      : {
+          x: LAYOUT.CONVERSATION_START_X,
+          y: LAYOUT.CONVERSATION_START_Y + index * LAYOUT.CONVERSATION_SPACING_Y,
+        }
+
+  const facetCount = commit?.facet_snapshot?.length || 0
+  const isCommitted = commit !== null
+
   return {
-    id: commit.commit_hash,
-    type: 'commit',
+    id: commit?.commit_hash || conv.conversation_id,  // Use commit hash as ID if committed
+    type: 'unit',
     position: snapPosition(position),
     data: {
-      entryId: commit.commit_hash.slice(0, 12),
-      title: commit.message || 'Commit',
-      summary: facetCount > 0 ? `${facetCount} facets` : 'No facets',
-      status: 'committed',
-      timestamp: commit.created_at,
-      tags: ['commit'],
-      kind: 'commit',
-      branchType: commit.branch === 'main' ? 'main' : 'branch',
-      branchName: commit.branch !== 'main' ? commit.branch : undefined,
-      commitStatus: 'committed',
-      commitHash: commit.commit_hash, // Full hash for API calls
+      entryId: commit ? commit.commit_hash.slice(0, 12) : conv.conversation_id.slice(0, 8),
+      title: conv.title || 'Untitled',
+      summary: isCommitted
+        ? (facetCount > 0 ? `${facetCount} facets` : 'No facets')
+        : `${conv.turns_count || 0} turns`,
+      status: isCommitted ? 'committed' : 'staging',
+      timestamp: commit?.created_at || conv.created_at,
+      tags: ['unit'],
+      kind: 'unit',
+      // Conversation data
+      conversationId: conv.conversation_id,
+      // Commit data
+      commitStatus: isCommitted ? 'committed' : 'staging',
+      commitHash: commit?.commit_hash,
+      branchType: commit ? (commit.branch === 'main' ? 'main' : 'branch') : undefined,
+      branchName: commit && commit.branch !== 'main' ? commit.branch : undefined,
       // User selections from committed commit
-      sourceExcerpt: commit.source_excerpt ?? undefined,
-      mustHave: commit.must_have ?? undefined,
-      mustntHave: commit.mustnt_have ?? undefined,
+      sourceExcerpt: commit?.source_excerpt ?? undefined,
+      mustHave: commit?.must_have ?? undefined,
+      mustntHave: commit?.mustnt_have ?? undefined,
       // Facet snapshot for display
-      facetSnapshot: commit.facet_snapshot ?? undefined,
+      facetSnapshot: commit?.facet_snapshot ?? undefined,
       // Turn window for creating child commits
-      sourceTurnWindow: commit.turn_window ?? undefined,
+      sourceTurnWindow: commit?.turn_window ?? undefined,
     },
   }
 }
@@ -741,11 +712,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const turnToConvMap = new Map<string, string>()
 
       // Collect unique turn hashes we need to look up (both start and end)
+      // Filter out undefined, null, empty strings, and the literal string "undefined"
       const turnHashesToLookup = new Set<string>()
       commits.forEach((commit) => {
-        if (commit.turn_window) {
-          turnHashesToLookup.add(commit.turn_window.start_turn_hash)
-          turnHashesToLookup.add(commit.turn_window.end_turn_hash)
+        const startHash = commit.turn_window?.start_turn_hash
+        const endHash = commit.turn_window?.end_turn_hash
+        if (startHash && typeof startHash === 'string' && startHash !== 'undefined') {
+          turnHashesToLookup.add(startHash)
+        }
+        if (endHash && typeof endHash === 'string' && endHash !== 'undefined') {
+          turnHashesToLookup.add(endHash)
         }
       })
 
@@ -764,70 +740,100 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         )
       }
 
-      // Convert to canvas nodes, preserving existing positions
-      const convNodes = conversations.map((conv, i) => {
-        const node = conversationToNode(conv, i)
-        const existingPos = existingNodePositions.get(node.id)
-        if (existingPos) {
-          node.position = existingPos
-        }
-        return node
-      })
-
-      const commitNodes = commits.map((commit, i) => {
-        const node = commitToNode(commit, i, LAYOUT.CONVERSATION_START_Y)
-        const existingPos = existingNodePositions.get(node.id)
-        if (existingPos) {
-          node.position = existingPos
-        }
-        return node
-      })
-
-      const nodes = [...convNodes, ...commitNodes]
-
-      const edges: Edge[] = []
-      const convIds = new Set(conversations.map(c => c.conversation_id))
-      const commitHashes = new Set(commits.map(c => c.commit_hash))
-
       // Build a map: commit_hash -> conversation_id (if commit was created from a conversation)
       const commitSourceConvMap = new Map<string, string>()
       commits.forEach((commit) => {
+        // Method 1: Use source_refs (most reliable - explicitly stored during commit creation)
+        if (commit.source_refs && commit.source_refs.length > 0) {
+          const convRef = commit.source_refs.find(ref => ref.type === 'conversation')
+          if (convRef && convRef.conversation_id) {
+            commitSourceConvMap.set(commit.commit_hash, convRef.conversation_id)
+            return
+          }
+        }
+        // Method 2: Fallback to turn_window lookup (for older commits without source_refs)
         if (commit.turn_window) {
           const startConvId = turnToConvMap.get(commit.turn_window.start_turn_hash)
           const endConvId = turnToConvMap.get(commit.turn_window.end_turn_hash)
-          if (startConvId && startConvId === endConvId && convIds.has(startConvId)) {
+          if (startConvId && startConvId === endConvId) {
             commitSourceConvMap.set(commit.commit_hash, startConvId)
           }
         }
       })
 
-      // Build a map: conversation_id -> parent_commit_hash
-      const convParentCommitMap = new Map<string, string>()
-      conversations.forEach((conv) => {
-        if (conv.parent_commit_hash) {
-          convParentCommitMap.set(conv.conversation_id, conv.parent_commit_hash)
+      // Build a map: conversation_id -> commit (for pairing into units)
+      const convToCommitMap = new Map<string, api.Commit>()
+      commits.forEach((commit) => {
+        const convId = commitSourceConvMap.get(commit.commit_hash)
+        if (convId) {
+          // Use the latest commit for each conversation
+          const existing = convToCommitMap.get(convId)
+          if (!existing || new Date(commit.created_at) > new Date(existing.created_at)) {
+            convToCommitMap.set(convId, commit)
+          }
         }
       })
 
-      // Build commit→commit edges, but skip if there's an intermediate conversation
-      // i.e., skip edge parentCommit→childCommit if:
-      //   - childCommit was created from a conversation (has source conversation)
-      //   - AND that conversation's parent_commit_hash is parentCommit
+      // Create unit nodes from conversations (paired with commits if available)
+      const convIds = new Set(conversations.map(c => c.conversation_id))
+      const pairedConvIds = new Set(convToCommitMap.keys())
+
+      // Units from conversations with commits (committed units)
+      const commitedUnitNodes: Node<CanvasNodeData>[] = []
+      // Units from conversations without commits (staging units)
+      const stagingUnitNodes: Node<CanvasNodeData>[] = []
+
+      let nodeIndex = 0
+      conversations.forEach((conv) => {
+        const commit = convToCommitMap.get(conv.conversation_id)
+        const node = unitToNode(conv, commit || null, nodeIndex++)
+        const existingPos = existingNodePositions.get(node.id)
+        if (existingPos) {
+          node.position = existingPos
+        }
+        if (commit) {
+          commitedUnitNodes.push(node)
+        } else {
+          stagingUnitNodes.push(node)
+        }
+      })
+
+      // Orphan commits (not linked to any conversation) - create standalone units
+      const orphanCommits = commits.filter(c => !commitSourceConvMap.has(c.commit_hash))
+      orphanCommits.forEach((commit) => {
+        // Create a minimal "virtual" conversation for the orphan commit
+        const virtualConv: api.Conversation = {
+          conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
+          project_id: projectId,
+          title: commit.message || `Commit ${commit.commit_hash.slice(0, 8)}`,
+          parent_commit_hash: commit.parent_hashes[0] ?? undefined,
+          turns_count: 0,
+          position_x: undefined,
+          position_y: undefined,
+          created_at: commit.created_at,
+        }
+        const node = unitToNode(virtualConv, commit, nodeIndex++)
+        const existingPos = existingNodePositions.get(node.id)
+        if (existingPos) {
+          node.position = existingPos
+        }
+        commitedUnitNodes.push(node)
+      })
+
+      const nodes = [...commitedUnitNodes, ...stagingUnitNodes]
+
+      const edges: Edge[] = []
+      const commitHashes = new Set(commits.map(c => c.commit_hash))
+
+      // Build unit→unit edges based on commit parent relationships
+      // In the unit model, edges connect committed units to their children
+      // Edge: parentUnit (commit_hash) → childUnit (commit_hash)
       commits.forEach((commit) => {
         commit.parent_hashes.forEach((parentHash) => {
           if (!commitHashes.has(parentHash)) return
 
-          const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
-          if (sourceConvId) {
-            const convParentHash = convParentCommitMap.get(sourceConvId)
-            // If there's an intermediate conversation connecting parent to child, skip direct edge
-            if (convParentHash === parentHash) {
-              return
-            }
-          }
-
           edges.push({
-            id: `${parentHash}-${commit.commit_hash}`,
+            id: `unit-${parentHash}-${commit.commit_hash}`,
             source: parentHash,
             target: commit.commit_hash,
             type: edgeType,
@@ -837,69 +843,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         })
       })
 
-      // Add source → commit edges
-      // Priority: source_refs (new multi-source) > turn_window (legacy single-source)
-      commits.forEach((commit) => {
-        // New: Use source_refs for multi-source support
-        if (commit.source_refs && commit.source_refs.length > 0) {
-          commit.source_refs.forEach((ref, idx) => {
-            if (ref.type === 'conversation' && ref.conversation_id && convIds.has(ref.conversation_id)) {
-              edges.push({
-                id: `source-ref-conv-${ref.conversation_id}-${commit.commit_hash}-${idx}`,
-                source: ref.conversation_id,
-                target: commit.commit_hash,
-                type: edgeType,
-                animated: false,
-                style: edgeStyle,
-              })
-            } else if (ref.type === 'commit' && ref.commit_hash && commitHashes.has(ref.commit_hash)) {
-              // Source from another commit - only add if not already a parent edge
-              const isParent = commit.parent_hashes.includes(ref.commit_hash)
-              if (!isParent) {
-                edges.push({
-                  id: `source-ref-commit-${ref.commit_hash}-${commit.commit_hash}-${idx}`,
-                  source: ref.commit_hash,
-                  target: commit.commit_hash,
-                  type: edgeType,
-                  animated: false,
-                  style: edgeStyle,
-                })
-              }
-            }
-          })
-        } else {
-          // Legacy: Use turn_window for single conversation source
-          const sourceConvId = commitSourceConvMap.get(commit.commit_hash)
-          if (sourceConvId) {
-            edges.push({
-              id: `conv-${sourceConvId}-${commit.commit_hash}`,
-              source: sourceConvId,
-              target: commit.commit_hash,
-              type: edgeType,
-              animated: false,
-              style: edgeStyle,
-            })
-          }
-        }
-      })
-
-      // Add commit → conversation edges based on parent_commit_hash
-      conversations.forEach((conv) => {
-        if (conv.parent_commit_hash && commitHashes.has(conv.parent_commit_hash)) {
-          edges.push({
-            id: `commit-conv-${conv.parent_commit_hash}-${conv.conversation_id}`,
-            source: conv.parent_commit_hash,
-            target: conv.conversation_id,
-            type: edgeType,
-            animated: false,
-            style: edgeStyle,
-          })
-        }
-      })
-
       // Check for main commits
       const hasMainCommit = commits.some(c => c.branch === 'main')
-      const latestMainCommitId = resolveLatestMainCommitId(nodes)
+      const latestMainCommitId = resolveLatestMainUnitId(nodes)
 
       set({
         nodes,
@@ -941,32 +887,35 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     const snappedPosition = snapPosition(basePosition)
 
-    // For conversations, must create via API - no local fallback (MVP requirement)
-    if (kind === 'conversation') {
+    // For unit nodes, create a staging unit with a new conversation
+    if (kind === 'unit') {
       if (!state.projectId) {
-        throw new Error('Cannot create conversation: no project selected')
+        throw new Error('Cannot create unit: no project selected')
       }
 
       const conversation = await api.createConversation(
         state.projectId,
-        'New Conversation',
+        'New Unit',
         undefined, // no parent commit
         { x: snappedPosition.x, y: snappedPosition.y }
       )
 
       const newNode: Node<CanvasNodeData> = {
         id: conversation.conversation_id,
-        type: 'conversation',
+        type: 'unit',
         position: snappedPosition,
         data: {
-          entryId: conversation.conversation_id.slice(0, 12),
-          title: conversation.title || 'New Conversation',
+          entryId: conversation.conversation_id.slice(0, 8),
+          title: conversation.title || 'New Unit',
           summary: '0 turns',
-          status: 'raw-input',
+          status: 'staging',
           timestamp: conversation.created_at,
-          tags: ['conversation'],
-          kind: 'conversation',
+          tags: ['unit'],
+          kind: 'unit',
           conversationId: conversation.conversation_id,
+          commitStatus: 'staging',
+          // Set sourceConversationId to self for new units (enables commit flow)
+          sourceConversationId: conversation.conversation_id,
         },
       }
 
@@ -974,12 +923,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         nodes: [...s.nodes, newNode],
       }))
       return
-    }
-
-    // For commit nodes: must be created via dedicated flow (from conversation or commit)
-    // Direct creation would create a fake node without backend data
-    if (kind === 'commit') {
-      throw new Error('Cannot create commit directly. Use "Create Commit" from a conversation or existing commit.')
     }
 
     // For leaf nodes: must be created via LeafPanel from a commit
@@ -1000,21 +943,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })),
 
   commitPendingCommit: (id) => {
+    console.log('[canvasStore] commitPendingCommit called with id:', id)
     const state = get()
     const notify = state.notifyCallback
 
-    const pendingNode = state.nodes.find((node) => node.id === id && node.data.kind === 'commit' && node.data.commitStatus === 'pending')
+    const pendingNode = state.nodes.find((node) => node.id === id && node.data.kind === 'unit' && node.data.commitStatus === 'staging')
+    console.log('[canvasStore] Found pending node:', pendingNode?.id, 'kind:', pendingNode?.data.kind, 'status:', pendingNode?.data.commitStatus)
     if (!pendingNode) {
+      console.log('[canvasStore] Pending node not found!')
       notify?.('Pending commit not found', 'error')
       return
     }
 
-    const branchMode = determinePendingCommitBranchMode(state, id)
+    const branchMode = determineStagingUnitBranchMode(state, id)
+    console.log('[canvasStore] branchMode:', branchMode)
     if (branchMode === 'blocked') {
+      console.log('[canvasStore] Commit blocked!')
       notify?.('Cannot commit: blocked by existing commits', 'warning')
       return
     }
 
+    console.log('[canvasStore] Proceeding with commit...')
     set((state) => {
       const isMergeCommit = pendingNode.data.bridgePrompt === '/merge' && !!pendingNode.data.mergeConfig
       let branchType: BranchType = 'branch'
@@ -1030,21 +979,21 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           ? pendingNode.data.pendingBranchName?.trim() || `branch-${getNumericId(id)}`
           : undefined
 
-      const latestMainId = resolveLatestMainCommitId(state.nodes, state.latestMainCommitId)
+      const latestMainId = resolveLatestMainUnitId(state.nodes, state.latestMainCommitId)
 
       const updatedNodes = state.nodes.map<Node<CanvasNodeData>>((node) => {
-        if (node.id !== id || node.data.commitStatus !== 'pending') {
+        if (node.id !== id || node.data.commitStatus !== 'staging') {
           return node
         }
         const nextData: CanvasNodeData = {
           ...node.data,
-          kind: 'commit',
-          entryId: `COMMIT-${getNumericId(id)}`,
+          kind: 'unit',
+          entryId: `UNIT-${getNumericId(id)}`,
           status: 'Committed · awaiting diff',
           tags: Array.from(
             new Set([
               ...node.data.tags,
-              'commit',
+              'unit',
               ...(isMergeCommit ? ['merge'] : []),
             ]),
           ),
@@ -1059,11 +1008,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
         return {
           ...node,
-          type: 'commit',
+          type: 'unit',
           data: nextData,
         }
       })
 
+      console.log('[canvasStore] Commit successful! branchType:', branchType, 'branchName:', branchName)
+      console.log('[canvasStore] Updated node commitStatus:', updatedNodes.find(n => n.id === id)?.data.commitStatus)
       return {
         nodes: updatedNodes,
         hasMainCommit: state.hasMainCommit || branchType === 'main',
@@ -1077,11 +1028,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const notify = state.notifyCallback
 
     const source = state.nodes.find((node) => node.id === conversationId)
-    if (!source || source.data.kind !== 'conversation') {
-      notify?.('Conversation not found', 'error')
+    if (!source || source.data.kind !== 'unit') {
+      notify?.('Unit not found', 'error')
       return
     }
-    const canSeed = canConversationSeedPendingCommit(
+    const canSeed = canCreateStagingUnitFromUnit(
       conversationId,
       state.nodes,
       state.edges,
@@ -1135,8 +1086,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             selections: [],
             keywords: [],
             sourceNodeId: source.data.conversationId,
-            sourceNodeType: 'conversation',
-            sourceNodeTitle: source.data.title || 'Conversation',
+            sourceNodeType: 'unit',
+            sourceNodeTitle: source.data.title || 'Unit',
             turnBoundaries,
           }
 
@@ -1151,21 +1102,21 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     const newNode: Node<CanvasNodeData> = {
       id: nextNodeId(),
-      type: 'commit',
-      position: computeAttachedPosition(source, 'commit', conversationCommitOffset),
+      type: 'unit',
+      position: computeAttachedPosition(source, 'unit', conversationCommitOffset),
       data: {
-        entryId: `COMMIT-${nodeCounter}`,
-        title: `Commit from ${source.data.entryId}`,
+        entryId: `UNIT-${nodeCounter}`,
+        title: `Unit from ${source.data.entryId}`,
         summary: '',
-        status: 'in progress',
+        status: 'staging',
         timestamp: 'just now',
-        tags: ['commit'],
-        kind: 'commit',
+        tags: ['unit'],
+        kind: 'unit',
         bridgePrompt: 'prose',
         // Default to 'main' for first commit, 'branch' for subsequent commits
         pendingBranch: state.hasMainCommit ? 'branch' : 'main',
         pendingBranchName: '',
-        commitStatus: 'pending',
+        commitStatus: 'staging',
         // Pass upstream chat content to pending commit
         baselineSummary,
         sourceConversationId: source.data.conversationId,
@@ -1192,20 +1143,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addConversationFromCommit: async (commitId) => {
     const state = get()
     const source = state.nodes.find(
-      (node) => node.id === commitId && node.data.kind === 'commit',
+      (node) => node.id === commitId && node.data.kind === 'unit',
     )
     if (!source) {
-      throw new Error('Cannot create conversation: source commit not found')
+      throw new Error('Cannot create unit: source unit not found')
     }
     if (!state.projectId) {
-      throw new Error('Cannot create conversation: no project selected')
+      throw new Error('Cannot create unit: no project selected')
     }
 
     // Create conversation via API with parent_commit_hash
-    const title = `Conversation from ${source.data.entryId}`
+    const title = `Unit from ${source.data.entryId}`
     const parentCommitHash = source.data.commitHash || source.id
     // Calculate position before API call so we can save it
-    const position = computeAttachedPosition(source, 'conversation', commitQuickOffset)
+    const position = computeAttachedPosition(source, 'unit', commitQuickOffset)
     const conversation = await api.createConversation(
       state.projectId,
       title,
@@ -1216,17 +1167,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     // Add node using the real conversation ID from API
     const newNode: Node<CanvasNodeData> = {
       id: conversation.conversation_id,
-      type: 'conversation',
+      type: 'unit',
       position,
       data: {
-        entryId: conversation.conversation_id.slice(0, 12),
+        entryId: conversation.conversation_id.slice(0, 8),
         title: conversation.title || title,
         summary: '0 turns',
-        status: 'raw-input',
+        status: 'staging',
         timestamp: conversation.created_at,
-        tags: ['conversation'],
-        kind: 'conversation',
+        tags: ['unit'],
+        kind: 'unit',
         conversationId: conversation.conversation_id, // Full ID for API calls
+        commitStatus: 'staging',
       },
     }
     const newEdge: Edge = {
@@ -1247,7 +1199,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addPendingCommitFromCommit: (commitId) =>
     set((state) => {
       const source = state.nodes.find(
-        (node) => node.id === commitId && node.data.kind === 'commit' && node.data.commitStatus === 'committed',
+        (node) => node.id === commitId && node.data.kind === 'unit' && node.data.commitStatus === 'committed',
       )
       if (!source) {
         return {}
@@ -1259,34 +1211,34 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const sourceExcerptText = sourceExcerptArray.join('\n')
       const tokens = tokenizeText(sourceExcerptText)
       const pendingSourceBlock: SourceTextBlock = {
-        id: 'block-commit-1',
+        id: 'block-unit-1',
         originalText: sourceExcerptText,
         tokens,
         selections: [],
         keywords: [],
         sourceNodeId: source.data.commitHash || source.id,
-        sourceNodeType: 'commit',
-        sourceNodeTitle: source.data.title || `Commit ${source.data.entryId}`,
-        // No turnBoundaries for commit type
+        sourceNodeType: 'unit',
+        sourceNodeTitle: source.data.title || `Unit ${source.data.entryId}`,
+        // No turnBoundaries for unit type
       }
 
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
-        type: 'commit',
-        position: computeAttachedPosition(source, 'commit', commitQuickOffset),
+        type: 'unit',
+        position: computeAttachedPosition(source, 'unit', commitQuickOffset),
         data: {
-          entryId: `COMMIT-${nodeCounter}`,
-          title: `Commit from ${source.data.entryId}`,
+          entryId: `UNIT-${nodeCounter}`,
+          title: `Unit from ${source.data.entryId}`,
           summary: '',
           status: 'in progress',
           timestamp: 'just now',
-          tags: ['commit'],
-          kind: 'commit',
+          tags: ['unit'],
+          kind: 'unit',
           bridgePrompt: 'prose',
           // Default to 'main' for first commit, 'branch' for subsequent commits
           pendingBranch: state.hasMainCommit ? 'branch' : 'main',
           pendingBranchName: '',
-          commitStatus: 'pending',
+          commitStatus: 'staging',
           // Pass upstream content to pending commit (use sourceExcerpt)
           baselineSummary: sourceExcerptText,
           // Inherit source commit info for creating child commits without conversation
@@ -1310,6 +1262,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
+  // Alias for addPendingCommitFromCommit for unit model
+  addUnitFromUnit: (unitId) => get().addPendingCommitFromCommit(unitId),
+
   createMergePendingCommit: (commitId) =>
     set((state) => {
       const nodes = state.nodes
@@ -1318,12 +1273,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const branchCommit = nodeMap.get(commitId)
       if (
         !branchCommit ||
-        branchCommit.data.kind !== 'commit' ||
+        branchCommit.data.kind !== 'unit' ||
         branchCommit.data.branchType !== 'branch'
       ) {
         return {}
       }
-      const latestMainId = resolveLatestMainCommitId(nodes, state.latestMainCommitId)
+      const latestMainId = resolveLatestMainUnitId(nodes, state.latestMainCommitId)
       if (!latestMainId) {
         return {}
       }
@@ -1337,16 +1292,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           .get(commitId)
           ?.some((targetId) => {
             const targetNode = nodeMap.get(targetId)
-            return targetNode?.data.kind === 'commit' && targetNode.data.commitStatus === 'pending' && targetNode.data.bridgePrompt === '/merge'
+            return targetNode?.data.kind === 'unit' && targetNode.data.commitStatus === 'staging' && targetNode.data.bridgePrompt === '/merge'
           }) ?? false
       if (hasPendingMergeCommit) {
         return {}
       }
-      const tone = computeCommitTone(nodes, edges, state.latestMainCommitId, commitId)
+      const tone = computeUnitTone(nodes, edges, state.latestMainCommitId, commitId)
       if (tone !== 'branch-latest') {
         return {}
       }
-      const baseCommit = findNearestMainAncestorCommit(commitId, nodes, edges)
+      const baseCommit = findNearestMainAncestorUnit(commitId, nodes, edges)
       const mergeNodeId = nextNodeId()
       const mergeLabel =
         branchCommit.data.branchName?.trim() || branchCommit.data.title || 'branch'
@@ -1366,20 +1321,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
       const mergePendingCommit: Node<CanvasNodeData> = {
         id: mergeNodeId,
-        type: 'commit',
-        position: computeAttachedPosition(latestMainCommit, 'commit', commitQuickOffset),
+        type: 'unit',
+        position: computeAttachedPosition(latestMainCommit, 'unit', commitQuickOffset),
         data: {
           entryId: `MERGE-${getNumericId(mergeNodeId)}`,
           title: `Merge · ${mergeLabel}`,
           summary: 'Resolve semantic conflicts before committing to main.',
           status: 'merge in progress',
           timestamp: 'just now',
-          tags: ['commit', 'merge'],
-          kind: 'commit',
+          tags: ['unit', 'merge'],
+          kind: 'unit',
           bridgePrompt: '/merge',
           pendingBranch: 'main',
           mergeConfig,
-          commitStatus: 'pending',
+          commitStatus: 'staging',
         },
       }
 
@@ -1408,16 +1363,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  getPendingCommitBranchMode: (commitId) => determinePendingCommitBranchMode(get(), commitId),
-  canCreatePendingCommitFromConversation: (conversationId) => {
+  getPendingCommitBranchMode: (commitId) => determineStagingUnitBranchMode(get(), commitId),
+  canCreatePendingCommitFromConversation: (unitId) => {
     const state = get()
     const node = state.nodes.find(
-      (candidate) => candidate.id === conversationId && candidate.data.kind === 'conversation',
+      (candidate) => candidate.id === unitId && candidate.data.kind === 'unit',
     )
     if (!node) {
       return false
     }
-    return canConversationSeedPendingCommit(conversationId, state.nodes, state.edges, state.hasMainCommit)
+    return canCreateStagingUnitFromUnit(unitId, state.nodes, state.edges, state.hasMainCommit)
   },
 
   onNodesChange: (changes) =>
@@ -1470,14 +1425,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const node = nodeMap.get(nodeId)
         if (!node) return
 
-        // Pending commit needs confirmation
-        if (node.data.kind === 'commit' && node.data.commitStatus === 'pending') {
+        // Staging unit needs confirmation
+        if (node.data.kind === 'unit' && node.data.commitStatus === 'staging') {
           needsConfirmation.push(nodeId)
           return
         }
 
         // Node upstream of pending commit needs confirmation
-        if (isUpstreamOfPendingCommit(nodeId, state.nodes, state.edges)) {
+        if (isUpstreamOfStagingUnit(nodeId, state.nodes, state.edges)) {
           needsConfirmation.push(nodeId)
           return
         }
@@ -1489,16 +1444,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // If there are nodes needing confirmation, show dialog
       if (needsConfirmation.length > 0) {
         // Build confirmation message
-        const pendingCommitsInSelection = needsConfirmation.filter((id) => {
+        const stagingUnitsInSelection = needsConfirmation.filter((id) => {
           const n = nodeMap.get(id)
-          return n?.data.kind === 'commit' && n?.data.commitStatus === 'pending'
+          return n?.data.kind === 'unit' && n?.data.commitStatus === 'staging'
         })
-        const upstreamNodes = needsConfirmation.filter((id) => !pendingCommitsInSelection.includes(id))
-        const affectedDownstream = collectAffectedPendingCommits(needsConfirmation, state.nodes, state.edges)
+        const upstreamNodes = needsConfirmation.filter((id) => !stagingUnitsInSelection.includes(id))
+        const affectedDownstream = collectAffectedStagingUnits(needsConfirmation, state.nodes, state.edges)
 
         let message = ''
-        if (pendingCommitsInSelection.length > 0) {
-          message += `Discard ${pendingCommitsInSelection.length} pending commit(s)?`
+        if (stagingUnitsInSelection.length > 0) {
+          message += `Discard ${stagingUnitsInSelection.length} staging unit(s)?`
         }
         if (upstreamNodes.length > 0) {
           if (message) message += '\n'
@@ -1517,17 +1472,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // Apply direct deletes immediately, but defer confirmation nodes
         const directRemoveChanges = allowedRemoves.filter((c) => directDeletes.includes(c.id))
 
-        // Delete conversations from database for directly deleted nodes
+        // Delete conversations from database for directly deleted unit nodes
         // Note: Commit deletion is local only - backend deleteCommit API not available
         directDeletes.forEach((nodeId) => {
           const node = nodeMap.get(nodeId)
-          if (node?.data.kind === 'conversation' && node.data.conversationId) {
+          if (node?.data.kind === 'unit' && node.data.conversationId) {
             api.deleteConversation(node.data.conversationId).catch((err) => {
               console.warn('Failed to delete conversation from database:', err)
             })
           }
-          if (node?.data.kind === 'commit' && node.data.commitHash) {
-            console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
+          if (node?.data.kind === 'unit' && node.data.commitHash) {
+            console.info('Unit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
           }
         })
 
@@ -1555,17 +1510,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
               const nodesToDelete = new Set(needsConfirmation)
               const edgesToDelete = new Set(edgesToRemove)
 
-              // Delete conversations from database
+              // Delete conversations from database for unit nodes
               // Note: Commit deletion is local only - backend deleteCommit API not available
               needsConfirmation.forEach((nodeId) => {
                 const node = currentState.nodes.find((n) => n.id === nodeId)
-                if (node?.data.kind === 'conversation' && node.data.conversationId) {
+                if (node?.data.kind === 'unit' && node.data.conversationId) {
                   api.deleteConversation(node.data.conversationId).catch((err) => {
                     console.warn('Failed to delete conversation from database:', err)
                   })
                 }
-                if (node?.data.kind === 'commit' && node.data.commitHash) {
-                  console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
+                if (node?.data.kind === 'unit' && node.data.commitHash) {
+                  console.info('Unit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
                 }
               })
 
@@ -1580,17 +1535,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
 
       // No confirmation needed, apply all changes
-      // Delete conversations from database for removed nodes
+      // Delete conversations from database for removed unit nodes
       // Note: Commit deletion is local only - backend deleteCommit API not available
       allowedRemoves.forEach((change) => {
         const node = nodeMap.get(change.id)
-        if (node?.data.kind === 'conversation' && node.data.conversationId) {
+        if (node?.data.kind === 'unit' && node.data.conversationId) {
           api.deleteConversation(node.data.conversationId).catch((err) => {
             console.warn('Failed to delete conversation from database:', err)
           })
         }
-        if (node?.data.kind === 'commit' && node.data.commitHash) {
-          console.info('Commit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
+        if (node?.data.kind === 'unit' && node.data.commitHash) {
+          console.info('Unit node deleted locally. Backend deleteCommit API not available:', node.data.commitHash)
         }
       })
 
@@ -1643,14 +1598,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
         const targetNode = nodeMap.get(edge.target)
 
-        // Edge going INTO a pending commit needs confirmation
-        if (targetNode?.data.kind === 'commit' && targetNode?.data.commitStatus === 'pending') {
+        // Edge going INTO a staging unit needs confirmation
+        if (targetNode?.data.kind === 'unit' && targetNode?.data.commitStatus === 'staging') {
           needsConfirmation.push(c.id)
           return
         }
 
         // Edge from a node that feeds into pending commit downstream
-        if (isUpstreamOfPendingCommit(edge.source, state.nodes, state.edges)) {
+        if (isUpstreamOfStagingUnit(edge.source, state.nodes, state.edges)) {
           needsConfirmation.push(c.id)
           return
         }
@@ -1659,24 +1614,24 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       })
 
       if (needsConfirmation.length > 0) {
-        // Find affected pending commits
-        const affectedPendingCommits = new Set<string>()
+        // Find affected staging units
+        const affectedStagingUnits = new Set<string>()
         needsConfirmation.forEach((edgeId) => {
           const edge = state.edges.find((e) => e.id === edgeId)
           if (!edge) return
 
           const targetNode = nodeMap.get(edge.target)
-          if (targetNode?.data.kind === 'commit' && targetNode?.data.commitStatus === 'pending') {
-            affectedPendingCommits.add(edge.target)
+          if (targetNode?.data.kind === 'unit' && targetNode?.data.commitStatus === 'staging') {
+            affectedStagingUnits.add(edge.target)
           }
 
           // Also check downstream
-          const downstream = collectAffectedPendingCommits([edge.source], state.nodes, state.edges)
-          downstream.forEach((id) => affectedPendingCommits.add(id))
+          const downstream = collectAffectedStagingUnits([edge.source], state.nodes, state.edges)
+          downstream.forEach((id) => affectedStagingUnits.add(id))
         })
 
-        const message = affectedPendingCommits.size > 0
-          ? `This will disconnect ${affectedPendingCommits.size} pending commit(s) from their source. Continue?`
+        const message = affectedStagingUnits.size > 0
+          ? `This will disconnect ${affectedStagingUnits.size} staging unit(s) from their source. Continue?`
           : `Delete ${needsConfirmation.length} connection(s)?`
 
         // Apply direct deletes immediately
@@ -1720,21 +1675,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (!canConnect(source, target)) {
       return
     }
-    // Check if connecting conversation to pending commit
-    if (
-      source?.data.kind === 'conversation' &&
-      target?.data.kind === 'commit' &&
-      target?.data.commitStatus === 'pending' &&
-      !canAttachConversationToPendingCommit(
-        source.id,
-        target.id,
-        nodes,
-        edges,
-        hasMainCommit,
-      )
-    ) {
-      return
-    }
 
     const exists = edges.some(
       (edge) => edge.source === connection.source && edge.target === connection.target,
@@ -1757,44 +1697,44 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
   getCommitTone: (commitId) => {
     const state = get()
-    return computeCommitTone(state.nodes, state.edges, state.latestMainCommitId, commitId)
+    return computeUnitTone(state.nodes, state.edges, state.latestMainCommitId, commitId)
   },
   resetToSingleConversation: () => {
     nodeCounter = 1
     edgeCounter = 1
-    const starter = buildSeedConversationNode()
+    // Don't create seed node with fake ID - user should use addNode to create real units
     set({
-      nodes: [starter],
+      nodes: [],
       edges: [],
       hasMainCommit: false,
       latestMainCommitId: undefined,
     })
   },
 
-  // Save constraints to a conversation node
-  saveConversationConstraints: (conversationId, constraints) =>
+  // Save constraints to a unit node
+  saveConversationConstraints: (unitId, constraints) =>
     set((state) => ({
       nodes: state.nodes.map((node) =>
-        node.id === conversationId && node.data.kind === 'conversation'
+        node.id === unitId && node.data.kind === 'unit'
           ? { ...node, data: { ...node.data, constraints } }
           : node
       ),
     })),
 
-  // Get constraints from a conversation node
-  getConversationConstraints: (conversationId) => {
+  // Get constraints from a unit node
+  getConversationConstraints: (unitId) => {
     const state = get()
     const node = state.nodes.find(
-      (n) => n.id === conversationId && n.data.kind === 'conversation'
+      (n) => n.id === unitId && n.data.kind === 'unit'
     )
     return node?.data.constraints
   },
 
-  // Update pending commit constraint overrides
-  updatePendingCommitConstraintOverrides: (commitId, overrides) =>
+  // Update staging unit constraint overrides
+  updatePendingCommitConstraintOverrides: (unitId, overrides) =>
     set((state) => ({
       nodes: state.nodes.map((node) => {
-        if (node.id !== commitId || node.data.kind !== 'commit' || node.data.commitStatus !== 'pending') {
+        if (node.id !== unitId || node.data.kind !== 'unit' || node.data.commitStatus !== 'staging') {
           return node
         }
         const currentOverrides = node.data.constraintOverrides ?? {
@@ -1814,15 +1754,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }),
     })),
 
-  // Get source conversation for a pending commit (follows edges backward)
-  getSourceConversationForPendingCommit: (commitId) => {
+  // Get source unit for a staging unit (follows edges backward to parent unit)
+  getSourceConversationForPendingCommit: (unitId) => {
     const state = get()
     const incomingMap = buildIncomingMap(state.edges)
     const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
 
-    // BFS to find the first conversation ancestor
+    // BFS to find the first unit ancestor
     const visited = new Set<string>()
-    const queue = [...(incomingMap.get(commitId) ?? [])]
+    const queue = [...(incomingMap.get(unitId) ?? [])]
 
     while (queue.length > 0) {
       const currentId = queue.shift()!
@@ -1830,7 +1770,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       visited.add(currentId)
 
       const node = nodeMap.get(currentId)
-      if (node?.data.kind === 'conversation') {
+      if (node?.data.kind === 'unit') {
         return node
       }
 
@@ -1846,7 +1786,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   getPendingCommitEffectiveConstraints: (commitId) => {
     const state = get()
     const pendingNode = state.nodes.find(
-      (n) => n.id === commitId && n.data.kind === 'commit' && n.data.commitStatus === 'pending'
+      (n) => n.id === commitId && n.data.kind === 'unit' && n.data.commitStatus === 'staging'
     )
     if (!pendingNode) return undefined
 
@@ -1895,7 +1835,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       visited.add(currentId)
 
       const node = nodeMap.get(currentId)
-      if (node?.data.kind === 'commit' && node?.data.commitStatus === 'pending') {
+      if (node?.data.kind === 'unit' && node?.data.commitStatus === 'staging') {
         return true
       }
 
@@ -1921,11 +1861,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return
     }
 
-    const commitNode = state.nodes.find(
-      (node) => node.id === commitId && node.data.kind === 'commit'
+    const unitNode = state.nodes.find(
+      (node) => node.id === commitId && node.data.kind === 'unit'
     )
-    if (!commitNode) {
-      notify?.('Commit not found', 'error')
+    if (!unitNode) {
+      notify?.('Unit not found', 'error')
       return
     }
 
@@ -1950,13 +1890,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         eval: 'Eval',
       }
 
-      // Position leaf above the commit node
+      // Position leaf above the unit node
       const newNode: Node<CanvasNodeData> = {
         id: newNodeId,
         type: 'leaf',
         position: snapPosition({
-          x: commitNode.position.x + commitQuickOffset,
-          y: commitNode.position.y - leafNodeHeight - leafNodeOffset - (existingLeafCount * (leafNodeHeight + 20)),
+          x: unitNode.position.x + commitQuickOffset,
+          y: unitNode.position.y - leafNodeHeight - leafNodeOffset - (existingLeafCount * (leafNodeHeight + 20)),
         }),
         data: {
           entryId: `LEAF-${getNumericId(newNodeId)}`,
@@ -2033,8 +1973,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       }
     }),
 
-  // Get direct upstream source nodes (conversations and committed commits) for a node
-  // Returns nodes that can provide source content for a pending commit
+  // Get direct upstream source nodes (committed units) for a staging unit
+  // Returns nodes that can provide source content for a staging unit
   getUpstreamSourceNodes: (nodeId) => {
     const state = get()
     const incomingMap = buildIncomingMap(state.edges)
@@ -2047,12 +1987,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const node = nodeMap.get(sourceId)
       if (!node) continue
 
-      // Include conversations
-      if (node.data.kind === 'conversation') {
-        sourceNodes.push(node)
-      }
-      // Include committed commits (not pending)
-      else if (node.data.kind === 'commit' && node.data.commitStatus === 'committed') {
+      // Include committed units (not staging)
+      if (node.data.kind === 'unit' && node.data.commitStatus === 'committed') {
         sourceNodes.push(node)
       }
     }
