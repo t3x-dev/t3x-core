@@ -1,7 +1,10 @@
 /**
  * Turn schemas for API validation and OpenAPI spec
+ *
+ * IMPORTANT: Use z from @hono/zod-openapi to ensure compatibility with OpenAPI routes.
+ * Do NOT import from 'zod' directly as it may resolve to a different version.
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Turn role
 export const TurnRoleSchema = z.enum(['user', 'assistant', 'system', 'tool']);
@@ -15,7 +18,7 @@ export const TurnSchema = z.object({
   role: TurnRoleSchema,
   content: z.string(),
   created_at: z.string().datetime(),
-  metadata: z.record(z.unknown()).nullable(),
+  metadata: z.record(z.string(), z.any()).nullable(),
 });
 
 // Create turn request
@@ -25,7 +28,7 @@ export const CreateTurnSchema = z.object({
   role: TurnRoleSchema,
   content: z.string().min(1),
   parent_turn_hash: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // List turns query
