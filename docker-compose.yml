@@ -98,8 +98,12 @@ services:
     environment:
       - DATABASE_ADAPTER=postgres
       - DATABASE_URL=postgresql://t3x:t3x_dev_password@postgres:5432/t3x
-      - NEXT_PUBLIC_API_URL=http://t3x-api:8000
-      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
+      # Note: NEXT_PUBLIC_* env vars are set at BUILD time in Dockerfile
+      # Runtime values here are ignored by client-side code
+      # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
+      - HOSTNAME=0.0.0.0
+      # API keys for chat functionality (chat/stream is handled by WebUI's API route)
+      - ANTHROPIC_API_KEY
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,7 +111,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://0.0.0.0:3000').then(r => r.ok ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3

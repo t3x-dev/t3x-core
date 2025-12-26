@@ -1,7 +1,10 @@
 /**
  * Common Zod schemas for API validation and OpenAPI spec
+ *
+ * IMPORTANT: Use z from @hono/zod-openapi to ensure compatibility with OpenAPI routes.
+ * Do NOT import from 'zod' directly as it may resolve to a different version.
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Pagination
 export const PaginationQuerySchema = z.object({

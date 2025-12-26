@@ -91,7 +91,11 @@
       "Bash(node -e:*)",
       "Bash(pnpm install:*)",
       "Bash(pnpm build:runner:*)",
-      "Bash(pnpm build:api:*)"
+      "Bash(pnpm build:api:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker inspect:*)",
+      "Bash(docker compose:*)"
     ],
     "deny": [],
     "ask": []
