@@ -15,7 +15,7 @@ export const EvalSuiteSchema = z.object({
     id: z.string(),
     name: z.string(),
     input: z.string(),
-    context: z.record(z.unknown()).optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
     assertions: z.array(TestStepSchema),
   })),
 });

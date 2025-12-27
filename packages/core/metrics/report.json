@@ -1,9 +1,0 @@
-{
-  "evidence_at_1": 0.6666666666666666,
-  "evidence_at_3": 1.0,
-  "auto_apply_rate": 0.6666666666666666,
-  "thresholds": {
-    "tau": 0.78,
-    "delta": 0.08
-  }
-}

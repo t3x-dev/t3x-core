@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Agent run request
 export const AgentInputSchema = z.object({
   agent_id: z.string(),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
   config: z.object({
     timeout_ms: z.number().default(30000),
     capture_llm_calls: z.boolean().default(true),
@@ -37,7 +37,7 @@ export const RunTraceSchema = z.object({
   started_at: z.string().datetime(),
   completed_at: z.string().datetime().optional(),
   status: z.enum(['running', 'completed', 'failed', 'timeout']),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
   output: z.unknown().optional(),
   events: z.array(TraceEventSchema),
   metrics: z.object({
@@ -74,7 +74,7 @@ export const TestStepSchema = z.object({
     threshold: z.number().optional(),
     fn: z.string().optional(), // for custom assertions
     // New fields for agent assertions
-    schema: z.record(z.unknown()).optional(),  // JSON schema for json_schema
+    schema: z.record(z.string(), z.unknown()).optional(),  // JSON schema for json_schema
     tool: z.string().optional(),               // Tool name for trace_must_call
     before: z.string().optional(),             // For trace_order
     after: z.string().optional(),              // For trace_order
@@ -141,7 +141,7 @@ export const AgentConfigSchema = z.object({
     token: z.string().optional(),
     header: z.string().optional(),
   }).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
@@ -159,7 +159,7 @@ export const EngineRunRequestSchema = z.object({
     type: z.enum(['deploy', 'eval']),
     content: z.string().optional(),
   }).optional(),
-  inputs: z.record(z.unknown()).optional(),
+  inputs: z.record(z.string(), z.unknown()).optional(),
   callback_url: z.string(),           // Runner's callback URL for n8n
   engine_callback_url: z.string(),    // Engine's ingest URL
   workflow: z.object({
@@ -174,7 +174,7 @@ export type EngineRunRequest = z.infer<typeof EngineRunRequestSchema>;
 export const N8nCallbackSchema = z.object({
   runner_run_id: z.string(),
   run_id: z.string(),
-  output: z.record(z.unknown()).optional(),
+  output: z.record(z.string(), z.unknown()).optional(),
   meta: z.object({
     latency_ms: z.number().optional(),
     tokens: z.number().optional(),
@@ -190,9 +190,9 @@ export const RunIngestSchema = z.object({
   commit_ref: z.string().optional(),
   runner_run_id: z.string(),
   status: z.enum(['completed', 'failed']),
-  run_report: z.record(z.unknown()).optional(),
+  run_report: z.record(z.string(), z.unknown()).optional(),
   assertions: z.array(z.unknown()).optional(),
-  evidence_pack: z.record(z.unknown()).optional(),
+  evidence_pack: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type RunIngest = z.infer<typeof RunIngestSchema>;
