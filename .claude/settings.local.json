@@ -109,7 +109,16 @@
       "Bash(git -C /Users/macethan/Projects/t3x ls-files:*)",
       "Bash(pnpm why:*)",
       "Bash(pnpm build:*)",
-      "Bash(pnpm --filter @t3x/api test)"
+      "Bash(pnpm --filter @t3x/api test)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
+      "WebFetch(domain:reactflow.dev)",
+      "WebFetch(domain:xyflow.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:vercel.com)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm biome check:*)",
+      "Bash(pnpm biome lint:*)"
     ],
     "deny": [],
     "ask": []

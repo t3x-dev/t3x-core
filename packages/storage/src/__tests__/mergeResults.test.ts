@@ -5,35 +5,38 @@
  * Merge results track auto-merged facets and conflicts.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
-import {
-  insertMergeResult,
-  findMergeResultById,
-  findMergeResultByHashes,
-  findMergeResultsByProject,
-  deleteMergeResult,
-} from '../queries/mergeResults';
-import { mergeResults } from '../schema';
-import type { AnyDB } from '../adapters';
 import type { PGlite } from '@electric-sql/pglite';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
+import {
+  deleteMergeResult,
+  findMergeResultByHashes,
+  findMergeResultById,
+  findMergeResultsByProject,
+  insertMergeResult,
+} from '../queries/mergeResults';
+import { insertProject } from '../queries/projects';
+import { mergeResults } from '../schema';
+import { createTestDB, testData } from './setup';
 
 describe('Merge Results Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(db, testData.project({ name: 'Merge Result Test Project' }));
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Merge Result Test Project' })
+    );
     testProjectId = project.projectId;
   });
 
@@ -106,9 +109,7 @@ describe('Merge Results Storage', () => {
     });
 
     it('stores conflicts as JSON', async () => {
-      const conflicts = [
-        { path: 'facet.keyword', source: 'a', target: 'b' },
-      ];
+      const conflicts = [{ path: 'facet.keyword', source: 'a', target: 'b' }];
 
       const result = await insertMergeResult(db, {
         projectId: testProjectId,

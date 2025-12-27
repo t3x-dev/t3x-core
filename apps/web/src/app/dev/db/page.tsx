@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface TableInfo {
   name: string;
@@ -17,10 +17,19 @@ interface QueryResult {
 const EXAMPLE_QUERIES = [
   { label: 'All tables', sql: "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" },
   { label: 'Recent projects', sql: 'SELECT * FROM projects ORDER BY created_at DESC LIMIT 10' },
-  { label: 'Recent turns', sql: 'SELECT turn_hash, role, LEFT(content, 100) as preview, created_at FROM turns_v2 ORDER BY created_at DESC LIMIT 20' },
-  { label: 'Commits', sql: 'SELECT commit_hash, branch, message, created_at FROM commits_v2 ORDER BY created_at DESC LIMIT 10' },
+  {
+    label: 'Recent turns',
+    sql: 'SELECT turn_hash, role, LEFT(content, 100) as preview, created_at FROM turns_v2 ORDER BY created_at DESC LIMIT 20',
+  },
+  {
+    label: 'Commits',
+    sql: 'SELECT commit_hash, branch, message, created_at FROM commits_v2 ORDER BY created_at DESC LIMIT 10',
+  },
   { label: 'Conversations', sql: 'SELECT * FROM conversations ORDER BY created_at DESC LIMIT 10' },
-  { label: 'Drafts', sql: 'SELECT draft_id, bridge_id, status, LEFT(text, 50) as preview FROM drafts_v2 ORDER BY created_at DESC LIMIT 10' },
+  {
+    label: 'Drafts',
+    sql: 'SELECT draft_id, bridge_id, status, LEFT(text, 50) as preview FROM drafts_v2 ORDER BY created_at DESC LIMIT 10',
+  },
 ];
 
 export default function DevDatabasePage() {
@@ -95,11 +104,7 @@ export default function DevDatabasePage() {
 
           <h3 style={{ ...styles.sidebarTitle, marginTop: 24 }}>Quick Queries</h3>
           {EXAMPLE_QUERIES.map((q) => (
-            <button
-              key={q.label}
-              style={styles.queryButton}
-              onClick={() => setSql(q.sql)}
-            >
+            <button key={q.label} style={styles.queryButton} onClick={() => setSql(q.sql)}>
               {q.label}
             </button>
           ))}
@@ -118,11 +123,7 @@ export default function DevDatabasePage() {
             />
             <div style={styles.editorFooter}>
               <span style={styles.hint}>Cmd/Ctrl + Enter to execute</span>
-              <button
-                onClick={executeQuery}
-                disabled={loading}
-                style={styles.runButton}
-              >
+              <button onClick={executeQuery} disabled={loading} style={styles.runButton}>
                 {loading ? 'Running...' : 'Run Query'}
               </button>
             </div>

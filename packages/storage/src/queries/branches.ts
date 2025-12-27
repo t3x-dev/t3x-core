@@ -4,10 +4,10 @@
  * CRUD operations for branches using Drizzle ORM.
  */
 
-import { eq, desc, and, sql } from 'drizzle-orm';
-import { branches, type Branch, type NewBranch } from '../schema';
 import { generateBranchId } from '@t3x/core';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Branch, branches } from '../schema';
 
 export interface CreateBranchInput {
   projectId: string;
@@ -25,10 +25,7 @@ export interface ListBranchesOptions {
 /**
  * Insert a new branch
  */
-export async function insertBranch(
-  db: AnyDB,
-  input: CreateBranchInput
-): Promise<Branch> {
+export async function insertBranch(db: AnyDB, input: CreateBranchInput): Promise<Branch> {
   const branchId = generateBranchId();
   const now = new Date();
 
@@ -47,17 +44,20 @@ export async function insertBranch(
     headCommitHash = parent?.headCommitHash ?? null;
   }
 
-  const [branch] = await db.insert(branches).values({
-    branchId,
-    projectId: input.projectId,
-    name: input.name,
-    parentBranch: input.parentBranch ?? null,
-    headCommitHash,
-    description: input.description ?? null,
-    isCurrent,
-    createdAt: now,
-    updatedAt: now,
-  }).returning();
+  const [branch] = await db
+    .insert(branches)
+    .values({
+      branchId,
+      projectId: input.projectId,
+      name: input.name,
+      parentBranch: input.parentBranch ?? null,
+      headCommitHash,
+      description: input.description ?? null,
+      isCurrent,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
 
   return branch;
 }
@@ -73,10 +73,7 @@ export async function findBranchByName(
   const [branch] = await db
     .select()
     .from(branches)
-    .where(and(
-      eq(branches.projectId, projectId),
-      eq(branches.name, name)
-    ))
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, name)))
     .limit(1);
 
   return branch ?? null;
@@ -85,15 +82,8 @@ export async function findBranchByName(
 /**
  * Find branch by ID
  */
-export async function findBranchById(
-  db: AnyDB,
-  branchId: string
-): Promise<Branch | null> {
-  const [branch] = await db
-    .select()
-    .from(branches)
-    .where(eq(branches.branchId, branchId))
-    .limit(1);
+export async function findBranchById(db: AnyDB, branchId: string): Promise<Branch | null> {
+  const [branch] = await db.select().from(branches).where(eq(branches.branchId, branchId)).limit(1);
 
   return branch ?? null;
 }
@@ -120,17 +110,11 @@ export async function findBranchesByProject(
 /**
  * Find current branch for project
  */
-export async function findCurrentBranch(
-  db: AnyDB,
-  projectId: string
-): Promise<Branch | null> {
+export async function findCurrentBranch(db: AnyDB, projectId: string): Promise<Branch | null> {
   const [branch] = await db
     .select()
     .from(branches)
-    .where(and(
-      eq(branches.projectId, projectId),
-      eq(branches.isCurrent, 1)
-    ))
+    .where(and(eq(branches.projectId, projectId), eq(branches.isCurrent, 1)))
     .limit(1);
 
   return branch ?? null;
@@ -159,10 +143,7 @@ export async function switchBranch(
   const [updated] = await db
     .update(branches)
     .set({ isCurrent: 1, updatedAt: now })
-    .where(and(
-      eq(branches.projectId, projectId),
-      eq(branches.name, branchName)
-    ))
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
     .returning();
 
   return updated ?? null;
@@ -182,10 +163,7 @@ export async function updateBranchHead(
   const [updated] = await db
     .update(branches)
     .set({ headCommitHash: commitHash, updatedAt: now })
-    .where(and(
-      eq(branches.projectId, projectId),
-      eq(branches.name, branchName)
-    ))
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
     .returning();
 
   return updated ?? null;
@@ -205,10 +183,7 @@ export async function deleteBranch(
 
   const result = await db
     .delete(branches)
-    .where(and(
-      eq(branches.projectId, projectId),
-      eq(branches.name, branchName)
-    ))
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
     .returning();
 
   return result.length > 0;
@@ -217,10 +192,7 @@ export async function deleteBranch(
 /**
  * Ensure main branch exists for project
  */
-export async function ensureMainBranch(
-  db: AnyDB,
-  projectId: string
-): Promise<Branch> {
+export async function ensureMainBranch(db: AnyDB, projectId: string): Promise<Branch> {
   const existing = await findBranchByName(db, projectId, 'main');
   if (existing) return existing;
 

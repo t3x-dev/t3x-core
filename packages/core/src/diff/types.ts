@@ -9,15 +9,15 @@
  */
 export enum DiffType {
   /** Same (similarity above threshold) */
-  SAME = "same",
+  SAME = 'same',
   /** Added (only in target version) */
-  ADDED = "added",
+  ADDED = 'added',
   /** Removed (only in source version) */
-  REMOVED = "removed",
+  REMOVED = 'removed',
   /** Modified (has match but content differs) */
-  MODIFIED = "modified",
+  MODIFIED = 'modified',
   /** Conflict (both sides modified in three-way merge) */
-  CONFLICT = "conflict",
+  CONFLICT = 'conflict',
 }
 
 /**

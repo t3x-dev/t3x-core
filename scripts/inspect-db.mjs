@@ -37,11 +37,13 @@ try {
 
   // Projects
   console.log('\n=== Projects ===');
-  const projects = await client.query('SELECT project_id, name, created_at FROM projects ORDER BY created_at DESC LIMIT 5');
+  const projects = await client.query(
+    'SELECT project_id, name, created_at FROM projects ORDER BY created_at DESC LIMIT 5'
+  );
   if (projects.rows.length === 0) {
     console.log('  (empty)');
   } else {
-    projects.rows.forEach(p => {
+    projects.rows.forEach((p) => {
       console.log(`  [${p.project_id}] ${p.name}`);
     });
   }
@@ -57,7 +59,7 @@ try {
   if (convs.rows.length === 0) {
     console.log('  (empty)');
   } else {
-    convs.rows.forEach(c => {
+    convs.rows.forEach((c) => {
       console.log(`  [${c.conversation_id}] ${c.title || '(untitled)'} (${c.project_name})`);
     });
   }
@@ -72,7 +74,7 @@ try {
   if (turns.rows.length === 0) {
     console.log('  (empty)');
   } else {
-    turns.rows.forEach(t => {
+    turns.rows.forEach((t) => {
       const preview = t.content_preview.replace(/\n/g, ' ');
       console.log(`  [${t.role}] ${preview}...`);
       console.log(`       hash: ${t.turn_hash.substring(0, 30)}...`);
@@ -89,7 +91,7 @@ try {
   if (commits.rows.length === 0) {
     console.log('  (empty)');
   } else {
-    commits.rows.forEach(c => {
+    commits.rows.forEach((c) => {
       console.log(`  [${c.branch}] ${c.message || '(no message)'}`);
       console.log(`       hash: ${c.commit_hash.substring(0, 30)}...`);
     });
@@ -106,9 +108,11 @@ try {
   if (branches.rows.length === 0) {
     console.log('  (empty)');
   } else {
-    branches.rows.forEach(b => {
+    branches.rows.forEach((b) => {
       const current = b.is_current ? ' *' : '';
-      const head = b.head_commit_hash ? b.head_commit_hash.substring(0, 20) + '...' : '(no commits)';
+      const head = b.head_commit_hash
+        ? b.head_commit_hash.substring(0, 20) + '...'
+        : '(no commits)';
       console.log(`  ${b.name}${current} → ${head} (${b.project_name})`);
     });
   }
@@ -117,7 +121,6 @@ try {
   console.log('\n========================================');
   console.log(' Done!');
   console.log('========================================');
-
 } catch (err) {
   if (err.code === 'ENOENT' || err.message.includes('does not exist')) {
     console.log('Database not found. Start the webui first:');

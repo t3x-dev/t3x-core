@@ -12,7 +12,7 @@
 /**
  * Dependency edge label (for polarity analysis)
  */
-export type DependencyLabel = "ROOT" | "NSUBJ" | "DOBJ" | "POBJ" | "IOBJ" | "ATTR" | "ACOMP" | "XCOMP" | "CCOMP" | "NEG" | "ADVMOD" | "AUX" | "AUXPASS" | "PREP" | "DET" | "AMOD" | "NN" | "CONJ" | "CC" | "MARK" | "PUNCT" | "P" | "UNKNOWN";
+export type DependencyLabel = 'ROOT' | 'NSUBJ' | 'DOBJ' | 'POBJ' | 'IOBJ' | 'ATTR' | 'ACOMP' | 'XCOMP' | 'CCOMP' | 'NEG' | 'ADVMOD' | 'AUX' | 'AUXPASS' | 'PREP' | 'DET' | 'AMOD' | 'NN' | 'CONJ' | 'CC' | 'MARK' | 'PUNCT' | 'P' | 'UNKNOWN';
 /**
  * Token from NLP analysis with dependency parsing
  */

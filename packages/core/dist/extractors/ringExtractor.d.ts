@@ -8,8 +8,8 @@
  * Ring 2 (轻关系/Facet): intent_seed, time_window, preference_soft, unknown_slot
  * Ring 3 (分句结构): sentence segments
  */
-import type { NLPProvider } from "../providers/nlp";
-import { type RingOutput } from "./types";
+import type { NLPProvider } from '../providers/nlp';
+import { type RingOutput } from './types';
 /**
  * Extractor configuration
  */

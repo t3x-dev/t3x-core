@@ -1,22 +1,13 @@
 /**
  * Branch Commands
  */
-import { Command } from 'commander';
+
 import { createClient } from '@t3x/api-client';
-import {
-  printTable,
-  success,
-  error,
-  createSpinner,
-  formatDate,
-  getApiUrl,
-} from '../utils.js';
+import type { Command } from 'commander';
+import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
 
 export function registerBranchCommands(program: Command): void {
-  const branches = program
-    .command('branches')
-    .alias('b')
-    .description('Manage branches');
+  const branches = program.command('branches').alias('b').description('Manage branches');
 
   // List branches
   branches

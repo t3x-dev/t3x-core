@@ -5,33 +5,33 @@
  * Segment embeddings store vector representations of turn content.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
-import { insertTurn } from '../queries/turns';
+import { insertProject } from '../queries/projects';
 import {
-  insertSegmentEmbedding,
-  insertSegmentEmbeddingsBatch,
+  bufferToFloat32Array,
+  deleteSegmentEmbeddingsByTurn,
+  findEmbeddingsByModel,
   findSegmentEmbeddingById,
   findSegmentEmbeddingsByTurn,
   findSegmentEmbeddingsByTurns,
-  hasEmbeddingsForTurn,
-  deleteSegmentEmbeddingsByTurn,
-  getEmbeddingsCountForTurn,
-  findEmbeddingsByModel,
-  generateSegmentId,
   float32ArrayToBuffer,
-  bufferToFloat32Array,
+  generateSegmentId,
+  getEmbeddingsCountForTurn,
+  hasEmbeddingsForTurn,
+  insertSegmentEmbedding,
+  insertSegmentEmbeddingsBatch,
 } from '../queries/segmentEmbeddings';
+import { insertTurn } from '../queries/turns';
 import { segmentEmbeddings } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, testData } from './setup';
 
 describe('Segment Embeddings Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -40,7 +40,7 @@ describe('Segment Embeddings Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project, conversation, and turn
@@ -50,7 +50,10 @@ describe('Segment Embeddings Storage', () => {
     const conv = await insertConversation(db, testData.conversation(testProjectId));
     testConversationId = conv.conversationId;
 
-    const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Test turn for embeddings' }));
+    const turn = await insertTurn(
+      db,
+      testData.turn(testProjectId, testConversationId, { content: 'Test turn for embeddings' })
+    );
     testTurnHash = turn.turnHash;
   });
 
@@ -111,7 +114,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('stores the embedding in the database', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Embedding DB test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Embedding DB test' })
+      );
 
       const input = {
         turnHash: turn.turnHash,
@@ -136,7 +142,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('stores embedding as binary blob', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Blob test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Blob test' })
+      );
       const embedding = [0.5, -0.5, 1.0, -1.0];
 
       await insertSegmentEmbedding(db, {
@@ -167,7 +176,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('upserts on conflict', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Upsert test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Upsert test' })
+      );
 
       // Insert first
       await insertSegmentEmbedding(db, {
@@ -204,7 +216,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('insertSegmentEmbeddingsBatch', () => {
     it('inserts multiple segments at once', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Batch test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Batch test' })
+      );
 
       const input = {
         turnHash: turn.turnHash,
@@ -228,7 +243,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('findSegmentEmbeddingById', () => {
     it('returns the segment embedding when it exists', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Find by ID test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Find by ID test' })
+      );
 
       const created = await insertSegmentEmbedding(db, {
         turnHash: turn.turnHash,
@@ -255,7 +273,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('findSegmentEmbeddingsByTurn', () => {
     it('returns all segments for a turn in order', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Turn segments test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Turn segments test' })
+      );
 
       await insertSegmentEmbeddingsBatch(db, {
         turnHash: turn.turnHash,
@@ -275,7 +296,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('returns empty array for turn with no embeddings', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'No embeddings' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'No embeddings' })
+      );
 
       const results = await findSegmentEmbeddingsByTurn(db, turn.turnHash);
 
@@ -285,8 +309,14 @@ describe('Segment Embeddings Storage', () => {
 
   describe('findSegmentEmbeddingsByTurns', () => {
     it('returns embeddings grouped by turn hash', async () => {
-      const turn1 = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Multi turn 1' }));
-      const turn2 = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Multi turn 2' }));
+      const turn1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Multi turn 1' })
+      );
+      const turn2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Multi turn 2' })
+      );
 
       await insertSegmentEmbedding(db, {
         turnHash: turn1.turnHash,
@@ -322,7 +352,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('hasEmbeddingsForTurn', () => {
     it('returns true when embeddings exist', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Has embeddings' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Has embeddings' })
+      );
 
       await insertSegmentEmbedding(db, {
         turnHash: turn.turnHash,
@@ -339,7 +372,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('returns false when no embeddings exist', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'No embeddings here' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'No embeddings here' })
+      );
 
       const has = await hasEmbeddingsForTurn(db, turn.turnHash);
 
@@ -349,7 +385,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('getEmbeddingsCountForTurn', () => {
     it('returns correct count', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Count test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Count test' })
+      );
 
       await insertSegmentEmbeddingsBatch(db, {
         turnHash: turn.turnHash,
@@ -368,7 +407,10 @@ describe('Segment Embeddings Storage', () => {
     });
 
     it('returns 0 for turn with no embeddings', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Zero count' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Zero count' })
+      );
 
       const count = await getEmbeddingsCountForTurn(db, turn.turnHash);
 
@@ -378,7 +420,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('deleteSegmentEmbeddingsByTurn', () => {
     it('deletes all embeddings for a turn', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Delete test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Delete test' })
+      );
 
       await insertSegmentEmbeddingsBatch(db, {
         turnHash: turn.turnHash,
@@ -407,7 +452,10 @@ describe('Segment Embeddings Storage', () => {
 
   describe('findEmbeddingsByModel', () => {
     it('returns embeddings for a specific model', async () => {
-      const turn = await insertTurn(db, testData.turn(testProjectId, testConversationId, { content: 'Model filter test' }));
+      const turn = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, { content: 'Model filter test' })
+      );
 
       await insertSegmentEmbedding(db, {
         turnHash: turn.turnHash,

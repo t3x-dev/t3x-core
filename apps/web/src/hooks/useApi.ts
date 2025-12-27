@@ -2,29 +2,29 @@
  * React hooks for Core API data fetching
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import * as api from '@/lib/api'
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
-  Project,
-  ProjectDetail,
-  Conversation,
-  Turn,
-  TurnDetail,
   Branch,
   Commit,
   CommitDetail,
+  Conversation,
   Draft,
-} from '@/lib/api'
+  Project,
+  ProjectDetail,
+  Turn,
+  TurnDetail,
+} from '@/lib/api';
+import * as api from '@/lib/api';
 
 // ============================================================================
 // Generic fetch hook with proper dependency handling
 // ============================================================================
 
 interface UseApiState<T> {
-  data: T | null
-  loading: boolean
-  error: Error | null
-  refetch: () => void
+  data: T | null;
+  loading: boolean;
+  error: Error | null;
+  refetch: () => void;
 }
 
 /**
@@ -35,50 +35,50 @@ function useApiCall<T, D extends unknown[]>(
   fetcherFactory: (...deps: D) => () => Promise<T>,
   deps: D
 ): UseApiState<T> {
-  const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const mountedRef = useRef(true)
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const mountedRef = useRef(true);
 
   // Store the current fetcher in a ref to always have the latest version
-  const fetcherRef = useRef<() => Promise<T>>(null as unknown as () => Promise<T>)
-  fetcherRef.current = fetcherFactory(...deps)
+  const fetcherRef = useRef<() => Promise<T>>(null as unknown as () => Promise<T>);
+  fetcherRef.current = fetcherFactory(...deps);
 
   const doFetch = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const result = await fetcherRef.current!()
+      const result = await fetcherRef.current!();
       if (mountedRef.current) {
-        setData(result)
+        setData(result);
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)))
+        setError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
       if (mountedRef.current) {
-        setLoading(false)
+        setLoading(false);
       }
     }
-  }, [])
+  }, []);
 
   // Refetch when deps change
   useEffect(() => {
-    doFetch()
+    doFetch();
     // deps are passed explicitly here
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, deps);
 
   // Cleanup on unmount
   useEffect(() => {
-    mountedRef.current = true
+    mountedRef.current = true;
     return () => {
-      mountedRef.current = false
-    }
-  }, [])
+      mountedRef.current = false;
+    };
+  }, []);
 
-  return { data, loading, error, refetch: doFetch }
+  return { data, loading, error, refetch: doFetch };
 }
 
 // ============================================================================
@@ -86,17 +86,11 @@ function useApiCall<T, D extends unknown[]>(
 // ============================================================================
 
 export function useHealth() {
-  return useApiCall(
-    () => () => api.checkHealth(),
-    []
-  )
+  return useApiCall(() => () => api.checkHealth(), []);
 }
 
 export function useStatus() {
-  return useApiCall(
-    () => () => api.getStatus(),
-    []
-  )
+  return useApiCall(() => () => api.getStatus(), []);
 }
 
 // ============================================================================
@@ -104,20 +98,17 @@ export function useStatus() {
 // ============================================================================
 
 export function useProjects(limit = 50, offset = 0) {
-  return useApiCall(
-    (l: number, o: number) => () => api.listProjects(l, o),
-    [limit, offset]
-  )
+  return useApiCall((l: number, o: number) => () => api.listProjects(l, o), [limit, offset]);
 }
 
 export function useProject(projectId: string | undefined) {
   return useApiCall(
     (id: string | undefined) => async () => {
-      if (!id) return null
-      return api.getProject(id)
+      if (!id) return null;
+      return api.getProject(id);
     },
     [projectId]
-  )
+  );
 }
 
 // ============================================================================
@@ -127,11 +118,11 @@ export function useProject(projectId: string | undefined) {
 export function useConversations(projectId: string | undefined, limit = 50, offset = 0) {
   return useApiCall(
     (pid: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { conversations: [], limit: l, offset: o }
-      return api.listConversations(pid, l, o)
+      if (!pid) return { conversations: [], limit: l, offset: o };
+      return api.listConversations(pid, l, o);
     },
     [projectId, limit, offset]
-  )
+  );
 }
 
 // ============================================================================
@@ -147,21 +138,21 @@ export function useTurns(
   return useApiCall(
     (pid: string | undefined, cid: string | undefined, l: number, o: number) => async () => {
       // Both projectId and conversationId are required by the API
-      if (!pid || !cid) return { turns: [], limit: l, offset: o }
-      return api.listTurns(pid, cid, l, o)
+      if (!pid || !cid) return { turns: [], limit: l, offset: o };
+      return api.listTurns(pid, cid, l, o);
     },
     [projectId, conversationId, limit, offset]
-  )
+  );
 }
 
 export function useTurn(turnHash: string | undefined) {
   return useApiCall(
     (hash: string | undefined) => async () => {
-      if (!hash) return null
-      return api.getTurn(hash)
+      if (!hash) return null;
+      return api.getTurn(hash);
     },
     [turnHash]
-  )
+  );
 }
 
 // ============================================================================
@@ -171,21 +162,21 @@ export function useTurn(turnHash: string | undefined) {
 export function useBranches(projectId: string | undefined) {
   return useApiCall(
     (pid: string | undefined) => async () => {
-      if (!pid) return { branches: [], limit: 50, offset: 0 }
-      return api.listBranches(pid)
+      if (!pid) return { branches: [], limit: 50, offset: 0 };
+      return api.listBranches(pid);
     },
     [projectId]
-  )
+  );
 }
 
 export function useCurrentBranch(projectId: string | undefined) {
   return useApiCall(
     (pid: string | undefined) => async () => {
-      if (!pid) return null
-      return api.getCurrentBranch(pid)
+      if (!pid) return null;
+      return api.getCurrentBranch(pid);
     },
     [projectId]
-  )
+  );
 }
 
 // ============================================================================
@@ -195,21 +186,21 @@ export function useCurrentBranch(projectId: string | undefined) {
 export function useCommits(projectId: string | undefined, branch?: string, limit = 50, offset = 0) {
   return useApiCall(
     (pid: string | undefined, b: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { commits: [], limit: l, offset: o }
-      return api.listCommits(pid, b, l, o)
+      if (!pid) return { commits: [], limit: l, offset: o };
+      return api.listCommits(pid, b, l, o);
     },
     [projectId, branch, limit, offset]
-  )
+  );
 }
 
 export function useCommit(commitHash: string | undefined) {
   return useApiCall(
     (hash: string | undefined) => async () => {
-      if (!hash) return null
-      return api.getCommit(hash)
+      if (!hash) return null;
+      return api.getCommit(hash);
     },
     [commitHash]
-  )
+  );
 }
 
 // ============================================================================
@@ -219,11 +210,11 @@ export function useCommit(commitHash: string | undefined) {
 export function useDraft(draftId: string | undefined) {
   return useApiCall(
     (id: string | undefined) => async () => {
-      if (!id) return null
-      return api.getDraft(id)
+      if (!id) return null;
+      return api.getDraft(id);
     },
     [draftId]
-  )
+  );
 }
 
 // ============================================================================
@@ -240,4 +231,4 @@ export type {
   Commit,
   CommitDetail,
   Draft,
-}
+};

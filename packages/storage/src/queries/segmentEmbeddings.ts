@@ -5,8 +5,8 @@
  */
 
 import { eq, sql } from 'drizzle-orm';
-import { segmentEmbeddings, type SegmentEmbedding, type NewSegmentEmbedding } from '../schema';
 import type { AnyDB } from '../adapters';
+import { type SegmentEmbedding, segmentEmbeddings } from '../schema';
 
 export interface CreateSegmentEmbeddingInput {
   turnHash: string;
@@ -64,25 +64,29 @@ export async function insertSegmentEmbedding(
   const embeddingBlob = float32ArrayToBuffer(input.embedding);
 
   // Use upsert (INSERT ... ON CONFLICT DO UPDATE)
-  const [result] = await db.insert(segmentEmbeddings).values({
-    segmentId,
-    turnHash: input.turnHash,
-    segmentIndex: input.segmentIndex,
-    segmentText: input.segmentText,
-    embeddingModel: input.embeddingModel,
-    embeddingDim: input.embeddingDim,
-    embedding: embeddingBlob,
-    createdAt,
-  }).onConflictDoUpdate({
-    target: segmentEmbeddings.segmentId,
-    set: {
+  const [result] = await db
+    .insert(segmentEmbeddings)
+    .values({
+      segmentId,
+      turnHash: input.turnHash,
+      segmentIndex: input.segmentIndex,
       segmentText: input.segmentText,
       embeddingModel: input.embeddingModel,
       embeddingDim: input.embeddingDim,
       embedding: embeddingBlob,
       createdAt,
-    },
-  }).returning();
+    })
+    .onConflictDoUpdate({
+      target: segmentEmbeddings.segmentId,
+      set: {
+        segmentText: input.segmentText,
+        embeddingModel: input.embeddingModel,
+        embeddingDim: input.embeddingDim,
+        embedding: embeddingBlob,
+        createdAt,
+      },
+    })
+    .returning();
 
   return result;
 }
@@ -94,7 +98,7 @@ export async function insertSegmentEmbeddingsBatch(
   db: AnyDB,
   input: CreateSegmentEmbeddingsBatchInput
 ): Promise<SegmentEmbedding[]> {
-  const createdAt = new Date();
+  const _createdAt = new Date();
   const results: SegmentEmbedding[] = [];
 
   for (const seg of input.segments) {
@@ -173,10 +177,7 @@ export async function findSegmentEmbeddingsByTurns(
 /**
  * Check if embeddings exist for a turn
  */
-export async function hasEmbeddingsForTurn(
-  db: AnyDB,
-  turnHash: string
-): Promise<boolean> {
+export async function hasEmbeddingsForTurn(db: AnyDB, turnHash: string): Promise<boolean> {
   const [result] = await db
     .select({ count: sql<number>`count(*)` })
     .from(segmentEmbeddings)
@@ -188,10 +189,7 @@ export async function hasEmbeddingsForTurn(
 /**
  * Delete embeddings for a turn
  */
-export async function deleteSegmentEmbeddingsByTurn(
-  db: AnyDB,
-  turnHash: string
-): Promise<number> {
+export async function deleteSegmentEmbeddingsByTurn(db: AnyDB, turnHash: string): Promise<number> {
   const result = await db
     .delete(segmentEmbeddings)
     .where(eq(segmentEmbeddings.turnHash, turnHash))
@@ -203,10 +201,7 @@ export async function deleteSegmentEmbeddingsByTurn(
 /**
  * Get embeddings count for a turn
  */
-export async function getEmbeddingsCountForTurn(
-  db: AnyDB,
-  turnHash: string
-): Promise<number> {
+export async function getEmbeddingsCountForTurn(db: AnyDB, turnHash: string): Promise<number> {
   const [result] = await db
     .select({ count: sql<number>`count(*)` })
     .from(segmentEmbeddings)

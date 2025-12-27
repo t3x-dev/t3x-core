@@ -5,8 +5,8 @@
  * Uses postgres.js with Supabase connection pooling.
  */
 
-import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '../schema';
 
 export type SupabaseDB = PostgresJsDatabase<typeof schema>;

@@ -14,8 +14,8 @@
  *    - target_changed → take target
  *    - neither changed → keep base
  */
-import { type MergeFacet, type MergeResult } from "./types";
-import type { LLMProvider } from "../llm";
+import type { LLMProvider } from '../llm';
+import { type MergeFacet, type MergeResult } from './types';
 /**
  * Merge engine options
  */

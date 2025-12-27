@@ -9,29 +9,29 @@
 
 // PGLite (local)
 export {
-  type PGLiteDB,
-  type PGLiteConfig,
+  closePGLiteStorage,
   createPGLiteStorage,
   getPGLiteDB,
-  closePGLiteStorage,
+  type PGLiteConfig,
+  type PGLiteDB,
 } from './pglite';
 
 // PostgreSQL (Docker)
 export {
-  type PostgresDB,
-  type PostgresConfig,
+  closePostgresStorage,
   createPostgresStorage,
   getPostgresDB,
-  closePostgresStorage,
+  type PostgresConfig,
+  type PostgresDB,
 } from './postgres';
 
 // Supabase (cloud)
 export {
-  type SupabaseDB,
-  type SupabaseConfig,
+  closeSupabaseStorage,
   createSupabaseStorage,
   getSupabaseDB,
-  closeSupabaseStorage,
+  type SupabaseConfig,
+  type SupabaseDB,
 } from './supabase';
 
 // Unified type for any database

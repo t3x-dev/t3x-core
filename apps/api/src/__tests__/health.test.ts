@@ -1,8 +1,9 @@
 /**
  * Health Route Tests
  */
-import { describe, it, expect } from 'vitest';
+
 import { Hono } from 'hono';
+import { describe, expect, it } from 'vitest';
 import { healthRoutes } from '../routes/health';
 
 describe('Health Route', () => {

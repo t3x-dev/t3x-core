@@ -1,19 +1,18 @@
 'use client';
 
+import { redirect, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useParams, redirect } from 'next/navigation';
-import CanvasWorkspace from '@/components/CanvasWorkspace';
-import { useProjectStore } from '@/store/projectStore';
+import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { CanvasWorkspace } from '@/components/canvas';
+import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
-import { LoadingSpinner, ErrorMessage } from '@/components/ApiStatus';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const project = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId),
-  );
+  const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
   const [mode, setMode] = useState<'editor' | 'execution'>('editor');
 
   // Canvas store for loading project data
@@ -35,7 +34,7 @@ export default function ProjectDetailPage() {
   // Show loading state
   if (canvasLoading) {
     return (
-      <div className="project-page">
+      <div className="flex h-full flex-col">
         <LoadingSpinner message="Loading project data..." />
       </div>
     );
@@ -44,7 +43,7 @@ export default function ProjectDetailPage() {
   // Show error state
   if (canvasError) {
     return (
-      <div className="project-page">
+      <div className="flex h-full flex-col">
         <ErrorMessage
           error={canvasError}
           onRetry={() => projectId && useCanvasStore.getState().loadProjectData(projectId)}
@@ -54,33 +53,36 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="project-page">
+    <div className="flex h-full flex-col">
       {mode === 'editor' ? (
         <CanvasWorkspace projectName={project.name} mode={mode} onModeChange={setMode} />
       ) : (
-        <div className="project-page__execution">
-          <header className="project-topbar">
-            <div className="project-topbar__left">
-              <h2 className="project-topbar__title">{project.name}</h2>
-            </div>
-            <div className="project-topbar__right" />
+        <div className="relative flex h-full flex-col">
+          <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
+            <h2 className="text-base font-semibold">{project.name}</h2>
           </header>
 
           {/* Mode Switch - positioned at topbar/canvas boundary */}
-          <div className="mode-switch-container">
-            <div className="mode-switch">
+          <div className="absolute left-1/2 top-12 z-10 -translate-x-1/2 -translate-y-1/2">
+            <div className="relative flex h-8 rounded-full border bg-muted/80 p-0.5 shadow-sm backdrop-blur-sm">
               <div
-                className="mode-switch__slider"
-                style={{ transform: 'translateX(100%)' }}
+                className="absolute inset-y-0.5 w-[calc(50%-2px)] rounded-full bg-background shadow-sm transition-transform duration-200"
+                style={{ transform: 'translateX(calc(100% + 2px))' }}
               />
               <button
-                className="mode-switch__btn"
+                className={cn(
+                  'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
+                  'text-muted-foreground hover:text-foreground'
+                )}
                 onClick={() => setMode('editor')}
               >
                 Editor
               </button>
               <button
-                className="mode-switch__btn mode-switch__btn--active"
+                className={cn(
+                  'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
+                  'text-foreground'
+                )}
                 onClick={() => setMode('execution')}
               >
                 Execution
@@ -88,7 +90,7 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          <div className="execution-panel">
+          <div className="flex flex-1 items-center justify-center bg-muted/30 text-muted-foreground">
             <p>Execution log will surface here once the project runs.</p>
           </div>
         </div>

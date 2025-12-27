@@ -11,9 +11,9 @@
  * 4. Edge cases
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import type { Node } from '@xyflow/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { Node } from 'reactflow';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // Mock the API module
@@ -28,8 +28,6 @@ vi.mock('@/lib/api', () => ({
   getProject: vi.fn(),
   getTurn: vi.fn(),
 }));
-
-import * as api from '@/lib/api';
 
 // Helper to create a mock staging unit node
 const createStagingUnitNode = (
@@ -517,9 +515,7 @@ describe('Canvas Store - Unit Node Model', () => {
       });
 
       // Try to delete the committed unit via node change
-      useCanvasStore.getState().onNodesChange([
-        { id: 'unit-2', type: 'remove' },
-      ]);
+      useCanvasStore.getState().onNodesChange([{ id: 'unit-2', type: 'remove' }]);
 
       const state = useCanvasStore.getState();
       // Committed unit should still exist (protected)
@@ -534,11 +530,9 @@ describe('Canvas Store - Unit Node Model', () => {
       });
 
       // Delete staging unit
-      useCanvasStore.getState().onNodesChange([
-        { id: 'unit-1', type: 'remove' },
-      ]);
+      useCanvasStore.getState().onNodesChange([{ id: 'unit-1', type: 'remove' }]);
 
-      const state = useCanvasStore.getState();
+      const _state = useCanvasStore.getState();
       // May trigger confirmation dialog, but node should be removable
       // The exact behavior depends on isUpstreamOfStagingUnit
     });

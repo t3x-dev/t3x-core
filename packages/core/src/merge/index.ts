@@ -3,17 +3,16 @@
  */
 
 export {
-  ConflictType,
-  type MergeSource,
-  type MergeFacet,
+  createMergeEngine,
+  MergeEngine,
+  type MergeEngineOptions,
+} from './engine';
+export {
   type AutoMergedFacet,
+  ConflictType,
   type MergeConflict,
+  type MergeFacet,
   type MergeResult,
+  type MergeSource,
   type MergeStats,
 } from './types';
-
-export {
-  type MergeEngineOptions,
-  MergeEngine,
-  createMergeEngine,
-} from './engine';

@@ -4,31 +4,32 @@
  * Hono-based REST API for T3X semantic version control.
  * Runs independently of the Next.js WebUI.
  */
-import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
-import { OpenAPIHono } from '@hono/zod-openapi';
-import { apiReference } from '@scalar/hono-api-reference';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { serve } from '@hono/node-server';
+import { OpenAPIHono } from '@hono/zod-openapi';
+import { apiReference } from '@scalar/hono-api-reference';
+import { Hono } from 'hono';
+import { closeDB, getDB } from './lib/db';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware } from './middleware/logger';
 import {
-  healthRoutes,
-  statusRoutes,
-  conversationRoutes,
-  turnRoutes,
-  commitRoutes,
-  branchRoutes,
-  draftRoutes,
   agentDraftRoutes,
+  branchRoutes,
   chatRoutes,
+  commitRoutes,
+  conversationRoutes,
   diffRoutes,
+  draftRoutes,
   exportRoutes,
+  healthRoutes,
   mergeRoutes,
   runnerRoutes,
+  statusRoutes,
+  turnRoutes,
 } from './routes';
 import { projectRoutes } from './routes/projects';
-import { getDB, closeDB } from './lib/db';
 
 function loadEnvLocal(): void {
   const candidates = [
@@ -47,7 +48,10 @@ function loadEnvLocal(): void {
     if (equalsIndex === -1) continue;
     const key = trimmed.slice(0, equalsIndex).trim();
     let value = trimmed.slice(equalsIndex + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     if (!key || process.env[key] !== undefined) continue;
@@ -64,25 +68,25 @@ app.use('*', corsMiddleware);
 app.use('*', loggerMiddleware);
 
 // Health check at root (not under /api)
-app.route('/', healthRoutes);  // /health
+app.route('/', healthRoutes); // /health
 
 // Create OpenAPI-enabled API router for all v1 routes
 const api = new OpenAPIHono();
 
 // Mount routes
-api.route('/', statusRoutes);       // /v1/status
-api.route('/', projectRoutes);      // /v1/projects (OpenAPI)
+api.route('/', statusRoutes); // /v1/status
+api.route('/', projectRoutes); // /v1/projects (OpenAPI)
 api.route('/', conversationRoutes); // /v1/conversations
-api.route('/', turnRoutes);         // /v1/turns
-api.route('/', commitRoutes);       // /v1/commits
-api.route('/', branchRoutes);       // /v1/branches
-api.route('/', draftRoutes);        // /v1/drafts
-api.route('/', agentDraftRoutes);   // /v1/agent/drafts
-api.route('/', chatRoutes);         // /v1/chat
-api.route('/', diffRoutes);         // /v1/diff
-api.route('/', exportRoutes);       // /v1/export
-api.route('/', mergeRoutes);        // /v1/merge
-api.route('/', runnerRoutes);       // /v1/runner/*
+api.route('/', turnRoutes); // /v1/turns
+api.route('/', commitRoutes); // /v1/commits
+api.route('/', branchRoutes); // /v1/branches
+api.route('/', draftRoutes); // /v1/drafts
+api.route('/', agentDraftRoutes); // /v1/agent/drafts
+api.route('/', chatRoutes); // /v1/chat
+api.route('/', diffRoutes); // /v1/diff
+api.route('/', exportRoutes); // /v1/export
+api.route('/', mergeRoutes); // /v1/merge
+api.route('/', runnerRoutes); // /v1/runner/*
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -96,9 +100,7 @@ api.doc('/openapi.json', {
       url: 'https://opensource.org/licenses/MIT',
     },
   },
-  servers: [
-    { url: 'http://localhost:8000/api', description: 'Local development' },
-  ],
+  servers: [{ url: 'http://localhost:8000/api', description: 'Local development' }],
   tags: [
     { name: 'Health', description: 'Health check endpoints' },
     { name: 'Projects', description: 'Project management' },
@@ -116,11 +118,14 @@ api.doc('/openapi.json', {
 });
 
 // Scalar API Reference UI
-api.get('/docs', apiReference({
-  theme: 'kepler',
-  url: '/api/openapi.json',
-  pageTitle: 'T3X API Reference',
-}));
+api.get(
+  '/docs',
+  apiReference({
+    theme: 'kepler',
+    url: '/api/openapi.json',
+    pageTitle: 'T3X API Reference',
+  })
+);
 
 // Mount API routes under /api prefix (e.g., /api/v1/projects)
 app.route('/api', api);

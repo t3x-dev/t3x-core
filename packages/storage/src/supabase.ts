@@ -15,20 +15,18 @@
  * ```
  */
 
-// Schema (table definitions and types)
-export * from './schema';
-
 // Supabase adapter only
 export {
-  type SupabaseDB,
-  type SupabaseConfig,
+  closeSupabaseStorage,
   createSupabaseStorage,
   getSupabaseDB,
-  closeSupabaseStorage,
+  type SupabaseConfig,
+  type SupabaseDB,
 } from './adapters/supabase';
-
 // Query functions
 export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';
 
 // Type alias for Supabase database
 import type { SupabaseDB } from './adapters/supabase';

@@ -2,35 +2,33 @@
  * Extractors exports
  */
 
+// Polarity Rules
+export {
+  createPolarityRuleEngine,
+  type PolarityRule,
+  PolarityRuleEngine,
+  type PreferenceRelation,
+} from './polarityRules';
+// Ring Extractor
+export {
+  createRingExtractor,
+  type ExtractorConfig,
+  RingExtractor,
+} from './ringExtractor';
 // Types
 export {
-  type PosTag,
-  type Polarity,
-  type FacetType,
-  type Keyword,
-  type Ring1Output,
-  type Facet,
-  type Ring2Output,
-  type Segment,
-  type Ring3Output,
-  type RingOutput,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
   createEmptyRingOutput,
+  type Facet,
+  type FacetType,
+  type Keyword,
+  type Polarity,
+  type PosTag,
+  type Ring1Output,
+  type Ring2Output,
+  type Ring3Output,
+  type RingOutput,
+  type Segment,
 } from './types';
-
-// Polarity Rules
-export {
-  type PolarityRule,
-  type PreferenceRelation,
-  PolarityRuleEngine,
-  createPolarityRuleEngine,
-} from './polarityRules';
-
-// Ring Extractor
-export {
-  type ExtractorConfig,
-  RingExtractor,
-  createRingExtractor,
-} from './ringExtractor';

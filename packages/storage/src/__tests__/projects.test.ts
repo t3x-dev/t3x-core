@@ -4,35 +4,35 @@
  * Tests all project CRUD operations and verifies database effects.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
+import { insertBranch } from '../queries/branches';
+import { insertCommit } from '../queries/commits';
+import { insertConversation } from '../queries/conversations';
+import { insertDraft } from '../queries/drafts';
 import {
-  insertProject,
+  deleteProject,
   findProjectById,
   findProjects,
-  updateProject,
-  deleteProject,
   findProjectWithStats,
+  insertProject,
+  updateProject,
 } from '../queries/projects';
-import { insertConversation } from '../queries/conversations';
 import { insertTurn } from '../queries/turns';
-import { insertBranch } from '../queries/branches';
-import { insertDraft } from '../queries/drafts';
-import { insertCommit } from '../queries/commits';
 import { projects } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, testData } from './setup';
 
 describe('Projects Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
   });
 
@@ -59,10 +59,7 @@ describe('Projects Storage', () => {
       const result = await insertProject(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(projects)
-        .where(eq(projects.projectId, result.projectId));
+      const rows = await db.select().from(projects).where(eq(projects.projectId, result.projectId));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].name).toBe('DB Test Project');
@@ -78,10 +75,7 @@ describe('Projects Storage', () => {
       const result = await insertProject(db, input);
 
       // Verify metadata stored as JSON
-      const rows = await db
-        .select()
-        .from(projects)
-        .where(eq(projects.projectId, result.projectId));
+      const rows = await db.select().from(projects).where(eq(projects.projectId, result.projectId));
 
       expect(rows[0].metadataJson).toBeDefined();
       const metadata = JSON.parse(rows[0].metadataJson!);
@@ -212,9 +206,24 @@ describe('Projects Storage', () => {
       const conv2 = await insertConversation(db, { projectId, title: 'Conv 2' });
 
       // Create 3 turns
-      await insertTurn(db, { projectId, conversationId: conv1.conversationId, role: 'user', content: 'Hello 1' });
-      await insertTurn(db, { projectId, conversationId: conv1.conversationId, role: 'assistant', content: 'Hi 1' });
-      await insertTurn(db, { projectId, conversationId: conv2.conversationId, role: 'user', content: 'Hello 2' });
+      await insertTurn(db, {
+        projectId,
+        conversationId: conv1.conversationId,
+        role: 'user',
+        content: 'Hello 1',
+      });
+      await insertTurn(db, {
+        projectId,
+        conversationId: conv1.conversationId,
+        role: 'assistant',
+        content: 'Hi 1',
+      });
+      await insertTurn(db, {
+        projectId,
+        conversationId: conv2.conversationId,
+        role: 'user',
+        content: 'Hello 2',
+      });
 
       // Create 1 branch
       await insertBranch(db, { projectId, name: 'main' });

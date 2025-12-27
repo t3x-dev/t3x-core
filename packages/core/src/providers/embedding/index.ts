@@ -3,19 +3,17 @@
  */
 
 export {
+  cosineSimilarity,
   type EmbeddingProvider,
   EmbeddingProviderError,
-  cosineSimilarity,
 } from './base';
-
 export {
-  GoogleAIEmbeddingProvider,
-  createGoogleAIEmbeddingProvider,
-  type GoogleAIEmbeddingConfig,
-} from './google-ai';
-
-export {
+  type CachedEmbeddingConfig,
   CachedEmbeddingProvider,
   createCachedEmbeddingProvider,
-  type CachedEmbeddingConfig,
 } from './cached';
+export {
+  createGoogleAIEmbeddingProvider,
+  type GoogleAIEmbeddingConfig,
+  GoogleAIEmbeddingProvider,
+} from './google-ai';
