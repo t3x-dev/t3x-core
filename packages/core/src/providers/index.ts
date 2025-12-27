@@ -2,37 +2,35 @@
  * Provider exports
  */
 
-// NLP Provider
-export {
-  type DependencyLabel,
-  type NLPToken,
-  type NLPEntity,
-  type NLPSentence,
-  type NLPAnalysis,
-  type NLPProvider,
-  NLPProviderError,
-  POS_TAG_MAPPING,
-  normalizePosTag,
-  normalizeDependencyLabel,
-} from './nlp';
-
 // Embedding Provider
 export {
+  type CachedEmbeddingConfig,
+  CachedEmbeddingProvider,
+  cosineSimilarity,
+  createCachedEmbeddingProvider,
+  createGoogleAIEmbeddingProvider,
   type EmbeddingProvider,
   EmbeddingProviderError,
-  cosineSimilarity,
+  type GoogleAIEmbeddingConfig,
   // Implementations
   GoogleAIEmbeddingProvider,
-  createGoogleAIEmbeddingProvider,
-  type GoogleAIEmbeddingConfig,
-  CachedEmbeddingProvider,
-  createCachedEmbeddingProvider,
-  type CachedEmbeddingConfig,
 } from './embedding';
-
 // LLM Provider
 export {
   ClaudeProvider,
-  createClaudeProvider,
   type ClaudeProviderConfig,
+  createClaudeProvider,
 } from './llm';
+// NLP Provider
+export {
+  type DependencyLabel,
+  type NLPAnalysis,
+  type NLPEntity,
+  type NLPProvider,
+  NLPProviderError,
+  type NLPSentence,
+  type NLPToken,
+  normalizeDependencyLabel,
+  normalizePosTag,
+  POS_TAG_MAPPING,
+} from './nlp';

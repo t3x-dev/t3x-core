@@ -5,24 +5,22 @@
  * Ported from Python tests/test_ring_extractor.py polarity tests.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  type PolarityRuleEngine,
-  createPolarityRuleEngine,
-  PolarityRule,
-} from '../../extractors/polarityRules';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createPolarityRuleEngine, type PolarityRuleEngine } from '../../extractors/polarityRules';
 import type { NLPToken } from '../../providers/nlp';
 
 /**
  * Helper to create mock tokens with dependency info
  */
-function createTokens(specs: Array<{
-  text: string;
-  lemma?: string;
-  pos?: string;
-  dep?: string;
-  head?: number;
-}>): NLPToken[] {
+function createTokens(
+  specs: Array<{
+    text: string;
+    lemma?: string;
+    pos?: string;
+    dep?: string;
+    head?: number;
+  }>
+): NLPToken[] {
   return specs.map((spec, i) => ({
     index: i,
     text: spec.text,
@@ -257,7 +255,7 @@ describe('PolarityRuleEngine', () => {
       const relations = engine.extractPreferenceRelations(tokens);
 
       expect(relations).toHaveLength(2);
-      expect(relations[0].polarity).toBe(1);  // like tea
+      expect(relations[0].polarity).toBe(1); // like tea
       expect(relations[1].polarity).toBe(-1); // hate coffee
     });
 

@@ -6,17 +6,18 @@
  * GET  /v1/branches/current - Get current branch
  * POST /v1/branches/switch - Switch current branch
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
+
 import {
-  insertBranch,
-  findBranchesByProject,
   findBranchByName,
+  findBranchesByProject,
   findCurrentBranch,
   findProjectById,
+  insertBranch,
   switchBranch,
 } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 export const branchRoutes = new Hono();
 

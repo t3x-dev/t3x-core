@@ -1,10 +1,4 @@
-import type {
-  RunTrace,
-  TestStep,
-  TestResult,
-  EvalRequest,
-  EvalResponse
-} from './types.js';
+import type { EvalRequest, EvalResponse, RunTrace, TestResult, TestStep } from './types.js';
 
 // Graybox trace event from agent (different from internal TraceEvent)
 interface GrayboxTraceEvent {
@@ -54,8 +48,8 @@ export class EvalEngine {
       }
     }
 
-    const passedSteps = results.filter(r => r.passed).length;
-    const failedSteps = results.filter(r => !r.passed && r.severity === 'error').length;
+    const passedSteps = results.filter((r) => r.passed).length;
+    const failedSteps = results.filter((r) => !r.passed && r.severity === 'error').length;
 
     const response: EvalResponse = {
       run_id: trace.run_id,
@@ -99,10 +93,20 @@ export class EvalEngine {
           return this.assertRegex(baseResult, targetValue, step.assertion.pattern!);
 
         case 'json_path':
-          return this.assertJsonPath(baseResult, targetValue, step.assertion.path!, step.assertion.value);
+          return this.assertJsonPath(
+            baseResult,
+            targetValue,
+            step.assertion.path!,
+            step.assertion.value
+          );
 
         case 'semantic':
-          return await this.assertSemantic(baseResult, targetValue, step.assertion.value!, step.assertion.threshold ?? 0.8);
+          return await this.assertSemantic(
+            baseResult,
+            targetValue,
+            step.assertion.value!,
+            step.assertion.threshold ?? 0.8
+          );
 
         case 'custom':
           return await this.assertCustom(baseResult, targetValue, step.assertion.fn!, trace);
@@ -114,7 +118,12 @@ export class EvalEngine {
           return this.assertTraceMustCall(baseResult, trace, step.assertion.tool!);
 
         case 'trace_order':
-          return this.assertTraceOrder(baseResult, trace, step.assertion.before!, step.assertion.after!);
+          return this.assertTraceOrder(
+            baseResult,
+            trace,
+            step.assertion.before!,
+            step.assertion.after!
+          );
 
         default:
           return {
@@ -140,9 +149,9 @@ export class EvalEngine {
       case 'output':
         return trace.output;
       case 'llm_call':
-        return trace.events.filter(e => e.type === 'llm_call');
+        return trace.events.filter((e) => e.type === 'llm_call');
       case 'tool_call':
-        return trace.events.filter(e => e.type === 'tool_call');
+        return trace.events.filter((e) => e.type === 'tool_call');
       case 'trace':
         return trace;
       default:
@@ -168,18 +177,16 @@ export class EvalEngine {
       passed,
       expected: negate ? `not contain "${expected}"` : `contain "${expected}"`,
       actual: contains ? 'contains' : 'does not contain',
-      message: passed ? undefined : `Expected output to ${negate ? 'not ' : ''}contain "${expected}"`,
+      message: passed
+        ? undefined
+        : `Expected output to ${negate ? 'not ' : ''}contain "${expected}"`,
     };
   }
 
   /**
    * Assert regex match
    */
-  private assertRegex(
-    result: TestResult,
-    value: unknown,
-    pattern: string
-  ): TestResult {
+  private assertRegex(result: TestResult, value: unknown, pattern: string): TestResult {
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
     const regex = new RegExp(pattern);
     const passed = regex.test(stringValue);
@@ -275,7 +282,9 @@ export class EvalEngine {
       passed,
       expected: `semantic similarity >= ${threshold}`,
       actual: `similarity = ${similarity.toFixed(3)}`,
-      message: passed ? undefined : `Semantic similarity ${similarity.toFixed(3)} below threshold ${threshold}`,
+      message: passed
+        ? undefined
+        : `Semantic similarity ${similarity.toFixed(3)} below threshold ${threshold}`,
       suggestion: passed ? undefined : `Consider adjusting prompt to better match: "${expected}"`,
     };
   }
@@ -286,7 +295,7 @@ export class EvalEngine {
   private simpleSimilarity(a: string, b: string): number {
     const wordsA = new Set(a.toLowerCase().split(/\s+/));
     const wordsB = new Set(b.toLowerCase().split(/\s+/));
-    const intersection = new Set([...wordsA].filter(x => wordsB.has(x)));
+    const intersection = new Set([...wordsA].filter((x) => wordsB.has(x)));
     const union = new Set([...wordsA, ...wordsB]);
     return intersection.size / union.size;
   }
@@ -377,7 +386,12 @@ export class EvalEngine {
       errors.push(`${path || 'root'}: expected const "${schema.const}", got "${obj}"`);
     }
 
-    if (schema.required && Array.isArray(schema.required) && typeof obj === 'object' && obj !== null) {
+    if (
+      schema.required &&
+      Array.isArray(schema.required) &&
+      typeof obj === 'object' &&
+      obj !== null
+    ) {
       for (const key of schema.required as string[]) {
         if (!(key in obj)) {
           errors.push(`${path || 'root'}: missing required property "${key}"`);
@@ -409,14 +423,10 @@ export class EvalEngine {
   /**
    * Assert that a tool was called in the trace
    */
-  private assertTraceMustCall(
-    result: TestResult,
-    trace: RunTrace,
-    toolName: string
-  ): TestResult {
+  private assertTraceMustCall(result: TestResult, trace: RunTrace, toolName: string): TestResult {
     // Check internal trace events
     const internalCalls = trace.events.filter(
-      e => e.type === 'tool_call' && e.data.tool_name === toolName
+      (e) => e.type === 'tool_call' && e.data.tool_name === toolName
     );
 
     // Check graybox trace_events in output (from agent response)
@@ -455,7 +465,11 @@ export class EvalEngine {
     let afterIndex = -1;
 
     events.forEach((e: GrayboxTraceEvent, i: number) => {
-      if ((e.type === 'tool_call' || e.type === 'step') && e.name === before && beforeIndex === -1) {
+      if (
+        (e.type === 'tool_call' || e.type === 'step') &&
+        e.name === before &&
+        beforeIndex === -1
+      ) {
         beforeIndex = i;
       }
       if ((e.type === 'tool_call' || e.type === 'step') && e.name === after && afterIndex === -1) {
@@ -502,8 +516,12 @@ export class EvalEngine {
       passed,
       expected: `"${before}" before "${after}"`,
       actual: passed ? 'correct order' : `"${after}" came first`,
-      message: passed ? undefined : `Expected "${before}" before "${after}", but order was reversed`,
-      suggestion: passed ? undefined : `Reorder agent steps: ${before} should happen before ${after}`,
+      message: passed
+        ? undefined
+        : `Expected "${before}" before "${after}", but order was reversed`,
+      suggestion: passed
+        ? undefined
+        : `Reorder agent steps: ${before} should happen before ${after}`,
     };
   }
 
@@ -512,10 +530,10 @@ export class EvalEngine {
    */
   private generateSuggestions(
     results: TestResult[],
-    trace: RunTrace
+    _trace: RunTrace
   ): EvalResponse['suggestions'] {
     const suggestions: NonNullable<EvalResponse['suggestions']> = [];
-    const failedResults = results.filter(r => !r.passed);
+    const failedResults = results.filter((r) => !r.passed);
 
     for (const result of failedResults) {
       if (result.suggestion) {

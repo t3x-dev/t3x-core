@@ -3,6 +3,6 @@
  */
 export {
   ClaudeProvider,
-  createClaudeProvider,
   type ClaudeProviderConfig,
+  createClaudeProvider,
 } from './claude';

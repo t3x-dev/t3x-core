@@ -1,19 +1,19 @@
-import express, { type Express } from 'express';
 import cors from 'cors';
-import pino from 'pino';
-import { observer } from './observer.js';
-import { evalEngine } from './eval.js';
 import { randomUUID } from 'crypto';
+import express, { type Express } from 'express';
+import pino from 'pino';
+import { evalEngine } from './eval.js';
+import { triggerN8nWorkflow } from './n8n.js';
+import { observer } from './observer.js';
 import {
-  AgentInputSchema,
   AgentConfigSchema,
-  EvalRequestSchema,
-  TestStepSchema,
+  AgentInputSchema,
   EngineRunRequestSchema,
+  EvalRequestSchema,
   N8nCallbackSchema,
   type PendingRun,
+  TestStepSchema,
 } from './types.js';
-import { triggerN8nWorkflow } from './n8n.js';
 
 const logger = pino({
   transport: {
@@ -26,7 +26,7 @@ const app: Express = express();
 
 // CORS - whitelist origins (extend via CORS_ORIGINS env var if needed)
 const allowedOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
   : ['http://localhost:3000'];
 
 app.use(cors({ origin: allowedOrigins }));
@@ -37,7 +37,7 @@ app.use(express.json({ limit: '10mb' }));
 const pendingRuns = new Map<string, PendingRun>();
 
 // Engine callback URL
-const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
+const _T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
 
 // Root route - service info
 app.get('/', (_req, res) => {
@@ -170,21 +170,9 @@ app.post('/run/:id/event', (req, res) => {
     const { type, data } = req.body;
 
     if (type === 'llm_call') {
-      observer.recordLLMCall(
-        runId,
-        data.input,
-        data.output,
-        data.model,
-        data.latency_ms
-      );
+      observer.recordLLMCall(runId, data.input, data.output, data.model, data.latency_ms);
     } else if (type === 'tool_call') {
-      observer.recordToolCall(
-        runId,
-        data.tool_name,
-        data.input,
-        data.output,
-        data.latency_ms
-      );
+      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
     } else if (type === 'error') {
       observer.recordError(runId, data.error);
     }
@@ -243,7 +231,7 @@ app.post('/runs', async (req, res) => {
 
     // Trigger n8n workflow (async, fire-and-forget)
     if (data.workflow?.webhook_id) {
-      triggerN8nWorkflow(data, runner_run_id).catch(err => {
+      triggerN8nWorkflow(data, runner_run_id).catch((err) => {
         logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
       });
     }
@@ -270,7 +258,10 @@ app.post('/callbacks/n8n', async (req, res) => {
       return res.status(404).json({ error: 'Pending run not found' });
     }
 
-    logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
+    logger.info(
+      { run_id: data.run_id, runner_run_id: data.runner_run_id },
+      'n8n callback received'
+    );
 
     // Prepare result for Engine
     const status = data.error ? 'failed' : 'completed';
@@ -282,7 +273,7 @@ app.post('/callbacks/n8n', async (req, res) => {
         output: data.output,
         meta: data.meta,
       },
-      assertions: [],  // TODO: Run eval if test steps provided
+      assertions: [], // TODO: Run eval if test steps provided
       evidence_pack: {
         n8n_output: data.output,
         n8n_meta: data.meta,
@@ -345,12 +336,15 @@ app.post('/eval', async (req, res) => {
     }
 
     const result = await evalEngine.evaluate(request);
-    logger.info({
-      run_id: result.run_id,
-      passed: result.passed,
-      passed_steps: result.passed_steps,
-      failed_steps: result.failed_steps,
-    }, 'Eval completed');
+    logger.info(
+      {
+        run_id: result.run_id,
+        passed: result.passed,
+        passed_steps: result.passed_steps,
+        failed_steps: result.failed_steps,
+      },
+      'Eval completed'
+    );
 
     res.json(result);
   } catch (error) {
@@ -402,7 +396,7 @@ app.post('/commit', async (req, res) => {
     // Convert trace to t3x conversation format
     const conversation = {
       id: run_id,
-      messages: trace.events.map(event => ({
+      messages: trace.events.map((event) => ({
         id: event.id,
         role: event.type === 'agent_input' ? 'user' : 'assistant',
         content: JSON.stringify(event.data),

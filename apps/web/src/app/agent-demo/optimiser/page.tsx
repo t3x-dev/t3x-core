@@ -1,20 +1,29 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   Bot,
-  Star,
-  GitCommit,
-  Rocket,
-  MessageSquare,
-  Sparkles,
   Check,
   Copy,
-  RefreshCw,
-  ArrowRight,
+  GitCommit,
+  Loader2,
+  MessageSquare,
+  Rocket,
+  Sparkles,
+  Star,
+  X,
 } from 'lucide-react';
-import { useAgentDemoStore, type SandboxCommit, type DeploymentRecord } from '@/store/agentDemoStore';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import {
+  type DeploymentRecord,
+  type SandboxCommit,
+  useAgentDemoStore,
+} from '@/store/agentDemoStore';
 
 // Commit detail modal
 function CommitDetailModal({
@@ -37,52 +46,75 @@ function CommitDetailModal({
   };
 
   return (
-    <div className="commit-modal-overlay" onClick={onClose}>
-      <div className="commit-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="commit-modal__header">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-2xl max-h-[85vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
           <div>
-            <h3>v{commit.version}-sandbox</h3>
-            <span className="commit-modal__hash">commit {commit.commitHash}</span>
+            <CardTitle className="text-lg">v{commit.version}-sandbox</CardTitle>
+            <code className="text-xs text-muted-foreground">commit {commit.commitHash}</code>
           </div>
-          <button className="commit-modal__close" onClick={onClose}>×</button>
-        </header>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
 
-        <div className="commit-modal__meta">
-          <span>{commit.createdAt}</span>
-          {commit.feedbackBatchId > 0 && (
-            <span className="commit-modal__batch">Feedback batch #{commit.feedbackBatchId}</span>
-          )}
-        </div>
-
-        <p className="commit-modal__description">{commit.description}</p>
-
-        <div className="commit-modal__prompt">
-          <div className="commit-modal__prompt-header">
-            <h4>Prompt Content</h4>
-            <button onClick={handleCopy} className="commit-modal__copy-btn">
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+        <CardContent className="space-y-4 overflow-auto">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span>{commit.createdAt}</span>
+            {commit.feedbackBatchId > 0 && (
+              <Badge variant="secondary">Feedback batch #{commit.feedbackBatchId}</Badge>
+            )}
           </div>
-          <pre>{commit.content}</pre>
-        </div>
 
-        <footer className="commit-modal__footer">
-          {isDeployed ? (
-            <span className="commit-modal__deployed-badge">
-              <Check size={14} /> Currently Deployed
-            </span>
-          ) : (
-            <button className="commit-modal__deploy-btn" onClick={onDeploy}>
-              <Rocket size={16} />
-              Deploy commit to Chat Demo
-            </button>
-          )}
-        </footer>
-      </div>
+          <p className="text-sm leading-relaxed">{commit.description}</p>
+
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-medium">Prompt Content</h4>
+              <Button variant="outline" size="sm" onClick={handleCopy} className="h-7 gap-1.5">
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
+              {commit.content}
+            </pre>
+          </div>
+
+          <div className="flex justify-end border-t pt-4">
+            {isDeployed ? (
+              <Badge
+                variant="outline"
+                className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Currently Deployed
+              </Badge>
+            ) : (
+              <Button onClick={onDeploy} className="gap-2">
+                <Rocket className="h-4 w-4" />
+                Deploy commit to Chat Demo
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+// Status badge colors for deployments
+const deploymentStatusColors = {
+  succeeded: 'border-green-500/30 bg-green-500/10 text-green-600',
+  failed: 'border-destructive/30 bg-destructive/10 text-destructive',
+  pending: 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+} as const;
 
 export default function AgentDemoOptimiserPage() {
   const router = useRouter();
@@ -118,141 +150,163 @@ export default function AgentDemoOptimiserPage() {
   ];
 
   return (
-    <div className="agent-optimiser-page">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="agent-optimiser-page__header">
-        <div className="agent-optimiser-page__header-left">
-          <Bot size={20} />
-          <h2>{agentName}</h2>
+      <header className="flex shrink-0 items-center gap-5 border-b bg-background px-6 py-4">
+        <div className="flex items-center gap-3">
+          <Bot className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">{agentName}</h2>
         </div>
-        <div className="agent-optimiser-page__header-meta">
-          <span className="agent-optimiser-page__meta-item">
-            <GitCommit size={14} />
+        <div className="flex items-center gap-5 border-l pl-5 text-sm text-muted-foreground">
+          <span className="flex items-center gap-2">
+            <GitCommit className="h-3.5 w-3.5" />
             Branch: {sandboxBranch}
           </span>
-          <span className="agent-optimiser-page__meta-item">
+          <span>
             Head: v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})
           </span>
-          <span className="agent-optimiser-page__meta-item agent-optimiser-page__meta-item--deployed">
-            <Rocket size={14} />
+          <span className="flex items-center gap-2 font-medium text-green-600">
+            <Rocket className="h-3.5 w-3.5" />
             Deployed: v{deployedVersion} ({deployedCommitHash})
           </span>
         </div>
-        <button
-          className="agent-optimiser-page__chat-btn"
-          onClick={() => router.push('/agent-demo/chat')}
-        >
-          <MessageSquare size={16} />
+        <Button className="ml-auto gap-2" onClick={() => router.push('/agent-demo/chat')}>
+          <MessageSquare className="h-4 w-4" />
           Open Chat
-        </button>
+        </Button>
       </header>
 
       {/* Main Content - Three Columns */}
-      <div className="agent-optimiser-page__body">
+      <div className="grid flex-1 grid-cols-3 gap-px overflow-hidden bg-border">
         {/* Left: Feedback + Optimisation */}
-        <section className="agent-optimiser-page__section">
-          <div className="agent-optimiser-page__section-header">
-            <h3>Feedback Summary</h3>
-          </div>
-          <div className="agent-optimiser-page__section-content">
-            <div className="feedback-stats">
-              <div className="feedback-stats__item">
-                <span className="feedback-stats__value">{feedbackSummary.conversationCount}</span>
-                <span className="feedback-stats__label">Conversations</span>
-              </div>
-              <div className="feedback-stats__item">
-                <span className="feedback-stats__value">
-                  {feedbackSummary.totalRatings > 0 ? (
-                    <>
-                      <Star size={14} fill="currentColor" />
-                      {feedbackSummary.averageRating.toFixed(1)}
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
-                <span className="feedback-stats__label">Avg Rating</span>
-              </div>
-              <div className="feedback-stats__item">
-                <span className="feedback-stats__value feedback-stats__value--low">
-                  {feedbackSummary.lowRatingCount}
-                </span>
-                <span className="feedback-stats__label">Low (1-2★)</span>
-              </div>
-            </div>
-            <p className="feedback-stats__hint">
-              Feedback from Chat page is used for prompt optimisation.
-            </p>
-          </div>
-
-          <div className="agent-optimiser-page__section-header">
-            <h3>Optimisation Loop</h3>
-          </div>
-          <div className="agent-optimiser-page__section-content">
-            <div className="optimisation-steps">
-              {optimisationSteps.map((step, index) => (
-                <div key={step.id} className="optimisation-steps__item">
-                  <div className="optimisation-steps__icon">
-                    <step.icon size={14} />
-                  </div>
-                  <span>{step.label}</span>
-                  {index < optimisationSteps.length - 1 && (
-                    <ArrowRight size={12} className="optimisation-steps__arrow" />
-                  )}
+        <section className="flex flex-col overflow-hidden bg-background">
+          <Card className="m-4 mb-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Feedback Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <span className="block text-2xl font-semibold">
+                    {feedbackSummary.conversationCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Conversations</span>
                 </div>
-              ))}
-            </div>
-            <button
-              className="optimisation-run-btn"
-              onClick={() => runOptimisation()}
-              disabled={isOptimizing || feedbackSummary.totalRatings < 1}
-            >
-              {isOptimizing ? (
-                <>
-                  <RefreshCw size={16} className="spinning" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Run Optimisation
-                </>
-              )}
-            </button>
-            {feedbackSummary.totalRatings < 1 && !isOptimizing && (
-              <p className="optimisation-hint">
-                Rate at least one response in Chat to enable
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <span className="flex items-center justify-center gap-1 text-2xl font-semibold">
+                    {feedbackSummary.totalRatings > 0 ? (
+                      <>
+                        <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                        {feedbackSummary.averageRating.toFixed(1)}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Avg Rating</span>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <span className="block text-2xl font-semibold text-destructive">
+                    {feedbackSummary.lowRatingCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Low (1-2★)</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Feedback from Chat page is used for prompt optimisation.
               </p>
-            )}
-          </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mx-4 mt-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Optimisation Loop</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {optimisationSteps.map((step, index) => (
+                  <div key={step.id} className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs">
+                      <step.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{step.label}</span>
+                    </div>
+                    {index < optimisationSteps.length - 1 && (
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <Button
+                className="w-full gap-2"
+                onClick={() => runOptimisation()}
+                disabled={isOptimizing || feedbackSummary.totalRatings < 1}
+              >
+                {isOptimizing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Run Optimisation
+                  </>
+                )}
+              </Button>
+              {feedbackSummary.totalRatings < 1 && !isOptimizing && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Rate at least one response in Chat to enable
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         {/* Center: Sandbox Commits */}
-        <section className="agent-optimiser-page__section">
-          <div className="agent-optimiser-page__section-header">
-            <h3>Sandbox Commits</h3>
-            <span className="agent-optimiser-page__section-subtitle">
-              {sandboxCommits.length} commits
-            </span>
+        <section className="flex flex-col overflow-hidden bg-background">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h3 className="font-medium">Sandbox Commits</h3>
+            <Badge variant="secondary">{sandboxCommits.length} commits</Badge>
           </div>
-          <div className="agent-optimiser-page__section-content agent-optimiser-page__section-content--scroll">
+          <div className="flex-1 overflow-auto p-4 space-y-2">
             {sortedCommits.map((commit) => {
               const isDeployed = commit.commitHash === deployedCommitHash;
               return (
                 <button
                   key={commit.id}
-                  className={`commit-row ${isDeployed ? 'commit-row--deployed' : ''}`}
+                  className={cn(
+                    'w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted/50',
+                    isDeployed && 'border-green-500/30 bg-green-500/5'
+                  )}
                   onClick={() => setSelectedCommit(commit)}
                 >
-                  <GitCommit size={14} className="commit-row__icon" />
-                  <div className="commit-row__info">
-                    <div className="commit-row__header">
-                      <span className="commit-row__version">v{commit.version}-sandbox</span>
-                      <code className="commit-row__hash">{commit.commitHash}</code>
-                      {isDeployed && <span className="commit-row__badge">deployed</span>}
+                  <div className="flex items-start gap-3">
+                    <GitCommit
+                      className={cn(
+                        'mt-0.5 h-4 w-4 shrink-0',
+                        isDeployed ? 'text-green-600' : 'text-muted-foreground'
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">v{commit.version}-sandbox</span>
+                        <code className="text-xs text-muted-foreground">{commit.commitHash}</code>
+                        {isDeployed && (
+                          <Badge
+                            variant="outline"
+                            className="border-green-500/30 bg-green-500/10 text-green-600 text-[10px]"
+                          >
+                            deployed
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                        {commit.description}
+                      </p>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {commit.createdAt}
+                      </span>
                     </div>
-                    <p className="commit-row__desc">{commit.description}</p>
-                    <span className="commit-row__time">{commit.createdAt}</span>
                   </div>
                 </button>
               );
@@ -261,28 +315,36 @@ export default function AgentDemoOptimiserPage() {
         </section>
 
         {/* Right: Deployment History */}
-        <section className="agent-optimiser-page__section">
-          <div className="agent-optimiser-page__section-header">
-            <h3>Deployments</h3>
-            <span className="agent-optimiser-page__section-subtitle">
-              {deploymentHistory.length} records
-            </span>
+        <section className="flex flex-col overflow-hidden bg-background">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h3 className="font-medium">Deployments</h3>
+            <Badge variant="secondary">{deploymentHistory.length} records</Badge>
           </div>
-          <div className="agent-optimiser-page__section-content agent-optimiser-page__section-content--scroll">
+          <div className="flex-1 overflow-auto p-4 space-y-2">
             {deploymentHistory.map((deployment: DeploymentRecord) => (
-              <div key={deployment.id} className="deployment-row">
-                <div className="deployment-row__header">
-                  <span className="deployment-row__version">v{deployment.version}</span>
-                  <code className="deployment-row__hash">{deployment.commitHash}</code>
-                  <span className={`deployment-row__status deployment-row__status--${deployment.status}`}>
+              <div key={deployment.id} className="rounded-lg border p-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">v{deployment.version}</span>
+                  <code className="text-xs text-muted-foreground">{deployment.commitHash}</code>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'ml-auto text-[10px]',
+                      deploymentStatusColors[
+                        deployment.status as keyof typeof deploymentStatusColors
+                      ]
+                    )}
+                  >
                     {deployment.status}
-                  </span>
+                  </Badge>
                 </div>
-                <div className="deployment-row__meta">
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                   <span>{deployment.timestamp}</span>
                   <span>→ {deployment.environment}</span>
                 </div>
-                <span className="deployment-row__trigger">{deployment.triggerSource}</span>
+                <Badge variant="secondary" className="mt-2 text-[10px]">
+                  {deployment.triggerSource}
+                </Badge>
               </div>
             ))}
           </div>

@@ -4,7 +4,7 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
-import { type LLMProvider, type LLMGenerateOptions, LLMProviderError } from '../../llm/types';
+import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
 
 /**
  * Get proxy URL from environment variables
@@ -21,10 +21,7 @@ function getProxyUrl(): string | undefined {
 /**
  * Fetch with proxy support - uses undici when proxy is configured
  */
-async function fetchWithProxy(
-  url: string,
-  options: RequestInit
-): Promise<Response> {
+async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
   if (proxyUrl) {
     // Dynamic import to avoid build-time issues with undici

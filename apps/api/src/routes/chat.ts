@@ -5,7 +5,7 @@
  * GET  /v1/chat/providers - List available providers
  */
 import { Hono } from 'hono';
-import { jsonSuccess, jsonError } from '../lib/response';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
 // Types
@@ -42,7 +42,11 @@ function inferProviderFromModel(model: string): string {
   if (modelLower.startsWith('claude') || modelLower.includes('anthropic')) {
     return 'claude';
   }
-  if (modelLower.startsWith('gpt') || modelLower.startsWith('o1') || modelLower.includes('openai')) {
+  if (
+    modelLower.startsWith('gpt') ||
+    modelLower.startsWith('o1') ||
+    modelLower.includes('openai')
+  ) {
     return 'openai';
   }
   return 'claude';
@@ -233,11 +237,15 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             temperature,
             maxTokens
           );
-          controller.enqueue(encodeSseEvent(JSON.stringify({
-            type: 'token',
-            content: result.content,
-            model: result.model,
-          })));
+          controller.enqueue(
+            encodeSseEvent(
+              JSON.stringify({
+                type: 'token',
+                content: result.content,
+                model: result.model,
+              })
+            )
+          );
           controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'done' })));
           controller.enqueue(encodeSseEvent('[DONE]'));
         } else {
@@ -245,10 +253,14 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(encodeSseEvent(JSON.stringify({
-          type: 'error',
-          message,
-        })));
+        controller.enqueue(
+          encodeSseEvent(
+            JSON.stringify({
+              type: 'error',
+              message,
+            })
+          )
+        );
         controller.enqueue(encodeSseEvent('[DONE]'));
       } finally {
         controller.close();

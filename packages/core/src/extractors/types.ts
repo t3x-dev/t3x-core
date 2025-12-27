@@ -11,20 +11,20 @@
  * Part-of-speech tags (Universal Dependencies)
  */
 export type PosTag =
-  | "NOUN"
-  | "VERB"
-  | "ADJ"
-  | "ADV"
-  | "PROPN"
-  | "ADP"
-  | "DET"
-  | "PRON"
-  | "NUM"
-  | "PUNCT"
-  | "SYM"
-  | "CCONJ"
-  | "PART"
-  | "X";
+  | 'NOUN'
+  | 'VERB'
+  | 'ADJ'
+  | 'ADV'
+  | 'PROPN'
+  | 'ADP'
+  | 'DET'
+  | 'PRON'
+  | 'NUM'
+  | 'PUNCT'
+  | 'SYM'
+  | 'CCONJ'
+  | 'PART'
+  | 'X';
 
 /**
  * Polarity values
@@ -34,11 +34,7 @@ export type Polarity = -1 | 0 | 1;
 /**
  * Facet types for Ring 2
  */
-export type FacetType =
-  | "intent_seed"
-  | "time_window"
-  | "preference_soft"
-  | "unknown_slot";
+export type FacetType = 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
 
 /**
  * Keyword extracted in Ring 1

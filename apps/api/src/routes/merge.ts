@@ -4,17 +4,18 @@
  * POST /v1/merge - Execute three-way merge
  * POST /v1/merge/resolve - Apply conflict resolutions
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
-import { findTurnByHash, findCommitByHash } from '@t3x/storage/pglite';
+
 import {
-  createMergeEngine,
   createClaudeProvider,
+  createMergeEngine,
   type MergeFacet,
   type MergeResult,
   type RingOutput,
 } from '@t3x/core';
+import { findCommitByHash, findTurnByHash } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
 // Types
@@ -37,10 +38,7 @@ type ExtractResult =
 /**
  * Extract facets from a commit's turn
  */
-async function extractFacetsFromCommit(
-  db: DBType,
-  commitHash: string
-): Promise<ExtractResult> {
+async function extractFacetsFromCommit(db: DBType, commitHash: string): Promise<ExtractResult> {
   const commit = await findCommitByHash(db, commitHash);
   if (!commit) {
     return { ok: false, error: 'commit_not_found', message: `Commit ${commitHash} not found` };

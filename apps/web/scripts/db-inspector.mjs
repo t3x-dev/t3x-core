@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Database Inspector
  *
@@ -10,18 +11,16 @@
  *   node scripts/db-inspector.mjs "SELECT * FROM projects"  # Run single query
  */
 
-import { createInterface } from 'readline';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { createInterface } from 'readline';
 
 // Find the database directory
-const dbPaths = [
-  './t3x-webui/.t3x/database',
-  './.t3x/database',
-  process.env.T3X_DATA_DIR,
-].filter(Boolean);
+const dbPaths = ['./t3x-webui/.t3x/database', './.t3x/database', process.env.T3X_DATA_DIR].filter(
+  Boolean
+);
 
-let dbPath = dbPaths.find(p => existsSync(resolve(p)));
+let dbPath = dbPaths.find((p) => existsSync(resolve(p)));
 
 if (!dbPath) {
   console.log('No existing database found. Will create new one at: .t3x/database');
@@ -42,11 +41,11 @@ function formatTable(rows, fields) {
     return '  (no rows)';
   }
 
-  const headers = fields?.map(f => f.name) || Object.keys(rows[0]);
-  const colWidths = headers.map(h => h.length);
+  const headers = fields?.map((f) => f.name) || Object.keys(rows[0]);
+  const colWidths = headers.map((h) => h.length);
 
   // Calculate column widths
-  rows.forEach(row => {
+  rows.forEach((row) => {
     headers.forEach((h, i) => {
       const val = String(row[h] ?? '');
       const truncated = val.length > 50 ? val.slice(0, 47) + '...' : val;
@@ -57,17 +56,19 @@ function formatTable(rows, fields) {
   // Build table
   const lines = [];
   const headerLine = headers.map((h, i) => h.padEnd(colWidths[i])).join(' | ');
-  const separator = colWidths.map(w => '─'.repeat(w)).join('─┼─');
+  const separator = colWidths.map((w) => '─'.repeat(w)).join('─┼─');
 
   lines.push('  ' + headerLine);
   lines.push('  ' + separator);
 
-  rows.forEach(row => {
-    const rowLine = headers.map((h, i) => {
-      let val = String(row[h] ?? '');
-      if (val.length > 50) val = val.slice(0, 47) + '...';
-      return val.padEnd(colWidths[i]);
-    }).join(' | ');
+  rows.forEach((row) => {
+    const rowLine = headers
+      .map((h, i) => {
+        let val = String(row[h] ?? '');
+        if (val.length > 50) val = val.slice(0, 47) + '...';
+        return val.padEnd(colWidths[i]);
+      })
+      .join(' | ');
     lines.push('  ' + rowLine);
   });
 
@@ -123,7 +124,7 @@ console.log();
 const rl = createInterface({
   input: process.stdin,
   output: process.stdout,
-  prompt: '  sql> '
+  prompt: '  sql> ',
 });
 
 rl.prompt();

@@ -5,28 +5,28 @@
  * Turns are immutable and form hash chains.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData, sleep } from './setup';
-import { insertProject } from '../queries/projects';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
+import { insertProject } from '../queries/projects';
 import {
-  insertTurn,
+  findLastTurnInConversation,
   findTurnByHash,
+  findTurnChain,
   findTurnsByConversation,
   findTurnsByProject,
-  findLastTurnInConversation,
-  findTurnChain,
   findTurnsInWindow,
+  insertTurn,
   TurnWindowError,
 } from '../queries/turns';
 import { turns } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, sleep, testData } from './setup';
 
 describe('Turns Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -34,14 +34,17 @@ describe('Turns Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create test project and conversation
     const project = await insertProject(db, testData.project({ name: 'Turn Test Project' }));
     testProjectId = project.projectId;
 
-    const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Turn Test Chat' }));
+    const conv = await insertConversation(
+      db,
+      testData.conversation(testProjectId, { title: 'Turn Test Chat' })
+    );
     testConversationId = conv.conversationId;
   });
 
@@ -73,10 +76,7 @@ describe('Turns Storage', () => {
       const result = await insertTurn(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(turns)
-        .where(eq(turns.turnHash, result.turnHash));
+      const rows = await db.select().from(turns).where(eq(turns.turnHash, result.turnHash));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].content).toBe('Stored in DB');
@@ -86,28 +86,43 @@ describe('Turns Storage', () => {
 
     it('first turn has null parent hash', async () => {
       // Create a new conversation for this test
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'First Turn Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'First Turn Test' })
+      );
 
-      const result = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
-        content: 'I am the first',
-      }));
+      const result = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, {
+          content: 'I am the first',
+        })
+      );
 
       expect(result.parentTurnHash).toBeNull();
     });
 
     it('subsequent turns have parent hash pointing to previous turn', async () => {
       // Create a new conversation for this test
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Chain Test' })
+      );
 
-      const turn1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
-        content: 'First message',
-      }));
+      const turn1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, {
+          content: 'First message',
+        })
+      );
 
       await sleep(2); // Ensure unique timestamp for correct parent chain
 
-      const turn2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
-        content: 'Second message',
-      }));
+      const turn2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, {
+          content: 'Second message',
+        })
+      );
 
       expect(turn2.parentTurnHash).toBe(turn1.turnHash);
     });
@@ -124,10 +139,7 @@ describe('Turns Storage', () => {
       });
 
       // Verify JSON stored
-      const rows = await db
-        .select()
-        .from(turns)
-        .where(eq(turns.turnHash, result.turnHash));
+      const rows = await db.select().from(turns).where(eq(turns.turnHash, result.turnHash));
 
       expect(rows[0].ringsJson).toBeDefined();
       const storedRings = JSON.parse(rows[0].ringsJson!);
@@ -136,8 +148,14 @@ describe('Turns Storage', () => {
 
     it('generates deterministic hash for same content', async () => {
       // Create two separate conversations
-      const conv1 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Hash Test 1' }));
-      const conv2 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Hash Test 2' }));
+      const conv1 = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Hash Test 1' })
+      );
+      const conv2 = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Hash Test 2' })
+      );
 
       const turn1 = await insertTurn(db, {
         projectId: testProjectId,
@@ -162,9 +180,12 @@ describe('Turns Storage', () => {
 
   describe('findTurnByHash', () => {
     it('returns the turn when it exists', async () => {
-      const created = await insertTurn(db, testData.turn(testProjectId, testConversationId, {
-        content: 'Find me by hash',
-      }));
+      const created = await insertTurn(
+        db,
+        testData.turn(testProjectId, testConversationId, {
+          content: 'Find me by hash',
+        })
+      );
 
       const found = await findTurnByHash(db, created.turnHash);
 
@@ -182,11 +203,20 @@ describe('Turns Storage', () => {
 
   describe('findTurnsByConversation', () => {
     it('returns turns for a conversation', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'List Turns' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'List Turns' })
+      );
 
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' }));
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' })
+      );
       await sleep(2);
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' }));
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' })
+      );
 
       const results = await findTurnsByConversation(db, { conversationId: conv.conversationId });
 
@@ -195,7 +225,10 @@ describe('Turns Storage', () => {
     });
 
     it('returns empty array for conversation with no turns', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Empty' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Empty' })
+      );
 
       const results = await findTurnsByConversation(db, { conversationId: conv.conversationId });
 
@@ -203,7 +236,10 @@ describe('Turns Storage', () => {
     });
 
     it('respects limit option', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Limit Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Limit Test' })
+      );
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'A' }));
       await sleep(2);
@@ -211,20 +247,35 @@ describe('Turns Storage', () => {
       await sleep(2);
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'C' }));
 
-      const results = await findTurnsByConversation(db, { conversationId: conv.conversationId, limit: 2 });
+      const results = await findTurnsByConversation(db, {
+        conversationId: conv.conversationId,
+        limit: 2,
+      });
 
       expect(results).toHaveLength(2);
     });
 
     it('can order ascending or descending', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Order Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Order Test' })
+      );
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
       await sleep(2);
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Second' })
+      );
 
-      const asc = await findTurnsByConversation(db, { conversationId: conv.conversationId, order: 'asc' });
-      const desc = await findTurnsByConversation(db, { conversationId: conv.conversationId, order: 'desc' });
+      const asc = await findTurnsByConversation(db, {
+        conversationId: conv.conversationId,
+        order: 'asc',
+      });
+      const desc = await findTurnsByConversation(db, {
+        conversationId: conv.conversationId,
+        order: 'desc',
+      });
 
       expect(asc[0].content).toBe('First');
       expect(desc[0].content).toBe('Second');
@@ -248,13 +299,22 @@ describe('Turns Storage', () => {
 
   describe('findLastTurnInConversation', () => {
     it('returns the last turn', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Last Turn' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Last Turn' })
+      );
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
       await sleep(2); // Ensure unique timestamp
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Middle' })
+      );
       await sleep(2); // Ensure unique timestamp
-      const last = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Last' }));
+      const last = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Last' })
+      );
 
       const found = await findLastTurnInConversation(db, conv.conversationId);
 
@@ -264,7 +324,10 @@ describe('Turns Storage', () => {
     });
 
     it('returns null for conversation with no turns', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'No Turns' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'No Turns' })
+      );
 
       const found = await findLastTurnInConversation(db, conv.conversationId);
 
@@ -274,13 +337,25 @@ describe('Turns Storage', () => {
 
   describe('findTurnChain', () => {
     it('returns the chain of turns from root to given turn (chronological order)', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Chain' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Root' })
+      );
       await sleep(2); // Ensure unique timestamp for parent chain
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Child' }));
+      const t2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Child' })
+      );
       await sleep(2); // Ensure unique timestamp for parent chain
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Grandchild' }));
+      const t3 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Grandchild' })
+      );
 
       const chain = await findTurnChain(db, t3.turnHash);
 
@@ -291,9 +366,15 @@ describe('Turns Storage', () => {
     });
 
     it('returns single turn for root turn', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Single' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Single' })
+      );
 
-      const root = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Only' }));
+      const root = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Only' })
+      );
 
       const chain = await findTurnChain(db, root.turnHash);
 
@@ -304,15 +385,30 @@ describe('Turns Storage', () => {
 
   describe('findTurnsInWindow', () => {
     it('returns turns between start and end hash (inclusive)', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Window Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Window Test' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
+      const _t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'First' })
+      );
       await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
+      const t2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Second' })
+      );
       await sleep(2);
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Third' }));
+      const t3 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Third' })
+      );
       await sleep(2);
-      const t4 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' }));
+      const t4 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' })
+      );
 
       // Get window from t2 to t4
       const window = await findTurnsInWindow(db, t2.turnHash, t4.turnHash);
@@ -324,9 +420,15 @@ describe('Turns Storage', () => {
     });
 
     it('returns single turn when start equals end', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Single Window' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Single Window' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Only' }));
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Only' })
+      );
 
       const window = await findTurnsInWindow(db, t1.turnHash, t1.turnHash);
 
@@ -335,13 +437,25 @@ describe('Turns Storage', () => {
     });
 
     it('returns full chain when start is root', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Full Window' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Full Window' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Root' })
+      );
       await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
+      const _t2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Middle' })
+      );
       await sleep(2);
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'End' }));
+      const t3 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'End' })
+      );
 
       const window = await findTurnsInWindow(db, t1.turnHash, t3.turnHash);
 
@@ -351,12 +465,18 @@ describe('Turns Storage', () => {
     });
 
     it('throws END_NOT_FOUND when end turn does not exist', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Error Test 1' }));
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Start' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Error Test 1' })
+      );
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Start' })
+      );
 
-      await expect(
-        findTurnsInWindow(db, t1.turnHash, 'sha256:nonexistent')
-      ).rejects.toThrow(TurnWindowError);
+      await expect(findTurnsInWindow(db, t1.turnHash, 'sha256:nonexistent')).rejects.toThrow(
+        TurnWindowError
+      );
 
       try {
         await findTurnsInWindow(db, t1.turnHash, 'sha256:nonexistent');
@@ -368,16 +488,28 @@ describe('Turns Storage', () => {
 
     it('throws START_NOT_IN_CHAIN when start is not ancestor of end', async () => {
       // Create two separate conversations (parallel chains)
-      const conv1 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain A' }));
-      const conv2 = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain B' }));
+      const conv1 = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Chain A' })
+      );
+      const conv2 = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Chain B' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv1.conversationId, { content: 'Chain A' }));
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv2.conversationId, { content: 'Chain B' }));
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv1.conversationId, { content: 'Chain A' })
+      );
+      const t2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv2.conversationId, { content: 'Chain B' })
+      );
 
       // t1 is not an ancestor of t2 (different chains)
-      await expect(
-        findTurnsInWindow(db, t1.turnHash, t2.turnHash)
-      ).rejects.toThrow(TurnWindowError);
+      await expect(findTurnsInWindow(db, t1.turnHash, t2.turnHash)).rejects.toThrow(
+        TurnWindowError
+      );
 
       try {
         await findTurnsInWindow(db, t1.turnHash, t2.turnHash);
@@ -388,16 +520,25 @@ describe('Turns Storage', () => {
     });
 
     it('throws START_NOT_IN_CHAIN when start comes after end in chain', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Reverse Test' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Reverse Test' })
+      );
 
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Earlier' }));
+      const t1 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Earlier' })
+      );
       await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Later' }));
+      const t2 = await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Later' })
+      );
 
       // t2 comes after t1, so t2 is not an ancestor of t1
-      await expect(
-        findTurnsInWindow(db, t2.turnHash, t1.turnHash)
-      ).rejects.toThrow(TurnWindowError);
+      await expect(findTurnsInWindow(db, t2.turnHash, t1.turnHash)).rejects.toThrow(
+        TurnWindowError
+      );
     });
   });
 });

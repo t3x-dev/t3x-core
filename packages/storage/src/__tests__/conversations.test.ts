@@ -4,37 +4,40 @@
  * Tests all conversation CRUD operations and verifies database effects.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
 import {
-  insertConversation,
+  deleteConversation,
   findConversationById,
   findConversationsByProject,
-  updateConversation,
-  deleteConversation,
   getConversationTurnCount,
+  insertConversation,
+  updateConversation,
 } from '../queries/conversations';
+import { insertProject } from '../queries/projects';
 import { insertTurn } from '../queries/turns';
 import { conversations } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, testData } from './setup';
 
 describe('Conversations Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project for all conversation tests
-    const project = await insertProject(db, testData.project({ name: 'Conversation Test Project' }));
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Conversation Test Project' })
+    );
     testProjectId = project.projectId;
   });
 
@@ -80,7 +83,10 @@ describe('Conversations Storage', () => {
 
   describe('findConversationById', () => {
     it('returns the conversation when it exists', async () => {
-      const created = await insertConversation(db, testData.conversation(testProjectId, { title: 'Find Me' }));
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Find Me' })
+      );
 
       const found = await findConversationById(db, created.conversationId);
 
@@ -126,7 +132,10 @@ describe('Conversations Storage', () => {
 
   describe('updateConversation', () => {
     it('updates conversation title', async () => {
-      const created = await insertConversation(db, testData.conversation(testProjectId, { title: 'Old Title' }));
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Old Title' })
+      );
 
       const updated = await updateConversation(db, created.conversationId, { title: 'New Title' });
 
@@ -151,7 +160,10 @@ describe('Conversations Storage', () => {
 
   describe('deleteConversation', () => {
     it('deletes the conversation from database', async () => {
-      const created = await insertConversation(db, testData.conversation(testProjectId, { title: 'To Delete' }));
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'To Delete' })
+      );
 
       const deleted = await deleteConversation(db, created.conversationId);
 
@@ -171,7 +183,10 @@ describe('Conversations Storage', () => {
 
   describe('getConversationTurnCount', () => {
     it('returns 0 for conversation with no turns', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Empty Conv' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Empty Conv' })
+      );
 
       const count = await getConversationTurnCount(db, conv.conversationId);
 
@@ -179,12 +194,24 @@ describe('Conversations Storage', () => {
     });
 
     it('returns correct count after adding turns', async () => {
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'With Turns' }));
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'With Turns' })
+      );
 
       // Add turns
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' }));
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' }));
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 3' }));
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' })
+      );
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' })
+      );
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conv.conversationId, { content: 'Turn 3' })
+      );
 
       const count = await getConversationTurnCount(db, conv.conversationId);
 

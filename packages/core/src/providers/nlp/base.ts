@@ -14,29 +14,29 @@
  * Dependency edge label (for polarity analysis)
  */
 export type DependencyLabel =
-  | "ROOT"      // Root of the tree
-  | "NSUBJ"     // Nominal subject
-  | "DOBJ"      // Direct object
-  | "POBJ"      // Object of preposition
-  | "IOBJ"      // Indirect object
-  | "ATTR"      // Attribute
-  | "ACOMP"     // Adjectival complement
-  | "XCOMP"     // Open clausal complement
-  | "CCOMP"     // Clausal complement
-  | "NEG"       // Negation modifier
-  | "ADVMOD"    // Adverbial modifier
-  | "AUX"       // Auxiliary
-  | "AUXPASS"   // Passive auxiliary
-  | "PREP"      // Prepositional modifier
-  | "DET"       // Determiner
-  | "AMOD"      // Adjectival modifier
-  | "NN"        // Noun compound modifier
-  | "CONJ"      // Conjunct
-  | "CC"        // Coordinating conjunction
-  | "MARK"      // Marker
-  | "PUNCT"     // Punctuation
-  | "P"         // Punctuation (alternative)
-  | "UNKNOWN";  // Unknown
+  | 'ROOT' // Root of the tree
+  | 'NSUBJ' // Nominal subject
+  | 'DOBJ' // Direct object
+  | 'POBJ' // Object of preposition
+  | 'IOBJ' // Indirect object
+  | 'ATTR' // Attribute
+  | 'ACOMP' // Adjectival complement
+  | 'XCOMP' // Open clausal complement
+  | 'CCOMP' // Clausal complement
+  | 'NEG' // Negation modifier
+  | 'ADVMOD' // Adverbial modifier
+  | 'AUX' // Auxiliary
+  | 'AUXPASS' // Passive auxiliary
+  | 'PREP' // Prepositional modifier
+  | 'DET' // Determiner
+  | 'AMOD' // Adjectival modifier
+  | 'NN' // Noun compound modifier
+  | 'CONJ' // Conjunct
+  | 'CC' // Coordinating conjunction
+  | 'MARK' // Marker
+  | 'PUNCT' // Punctuation
+  | 'P' // Punctuation (alternative)
+  | 'UNKNOWN'; // Unknown
 
 /**
  * Token from NLP analysis with dependency parsing
@@ -149,7 +149,7 @@ export class NLPProviderError extends Error {
     message?: string
   ) {
     super(message ?? `NLP provider "${providerId}" is unavailable`);
-    this.name = "NLPProviderError";
+    this.name = 'NLPProviderError';
   }
 }
 
@@ -158,20 +158,20 @@ export class NLPProviderError extends Error {
  */
 export const POS_TAG_MAPPING: Record<string, string> = {
   // Google Cloud NLP tags
-  NOUN: "NOUN",
-  VERB: "VERB",
-  ADJ: "ADJ",
-  ADV: "ADV",
-  PRON: "PRON",
-  DET: "DET",
-  ADP: "ADP",
-  NUM: "NUM",
-  CONJ: "CCONJ",
-  PRT: "PART",
-  PUNCT: "PUNCT",
-  X: "X",
-  AFFIX: "X",
-  UNKNOWN: "X",
+  NOUN: 'NOUN',
+  VERB: 'VERB',
+  ADJ: 'ADJ',
+  ADV: 'ADV',
+  PRON: 'PRON',
+  DET: 'DET',
+  ADP: 'ADP',
+  NUM: 'NUM',
+  CONJ: 'CCONJ',
+  PRT: 'PART',
+  PUNCT: 'PUNCT',
+  X: 'X',
+  AFFIX: 'X',
+  UNKNOWN: 'X',
 };
 
 /**
@@ -188,31 +188,31 @@ export function normalizeDependencyLabel(label: string): DependencyLabel | strin
   const normalized = label.toUpperCase();
   // Map common variations
   const mapping: Record<string, DependencyLabel> = {
-    ROOT: "ROOT",
-    NSUBJ: "NSUBJ",
-    NSUBJPASS: "NSUBJ",
-    DOBJ: "DOBJ",
-    OBJ: "DOBJ",
-    POBJ: "POBJ",
-    IOBJ: "IOBJ",
-    ATTR: "ATTR",
-    ACOMP: "ACOMP",
-    XCOMP: "XCOMP",
-    CCOMP: "CCOMP",
-    NEG: "NEG",
-    ADVMOD: "ADVMOD",
-    AUX: "AUX",
-    AUXPASS: "AUXPASS",
-    PREP: "PREP",
-    DET: "DET",
-    AMOD: "AMOD",
-    NN: "NN",
-    COMPOUND: "NN",
-    CONJ: "CONJ",
-    CC: "CC",
-    MARK: "MARK",
-    PUNCT: "PUNCT",
-    P: "P",
+    ROOT: 'ROOT',
+    NSUBJ: 'NSUBJ',
+    NSUBJPASS: 'NSUBJ',
+    DOBJ: 'DOBJ',
+    OBJ: 'DOBJ',
+    POBJ: 'POBJ',
+    IOBJ: 'IOBJ',
+    ATTR: 'ATTR',
+    ACOMP: 'ACOMP',
+    XCOMP: 'XCOMP',
+    CCOMP: 'CCOMP',
+    NEG: 'NEG',
+    ADVMOD: 'ADVMOD',
+    AUX: 'AUX',
+    AUXPASS: 'AUXPASS',
+    PREP: 'PREP',
+    DET: 'DET',
+    AMOD: 'AMOD',
+    NN: 'NN',
+    COMPOUND: 'NN',
+    CONJ: 'CONJ',
+    CC: 'CC',
+    MARK: 'MARK',
+    PUNCT: 'PUNCT',
+    P: 'P',
   };
   return mapping[normalized] ?? normalized;
 }

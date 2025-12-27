@@ -116,7 +116,7 @@
     },
     "must_have_facets": {
       "type": "array",
-      "items": {"type": "string", "format": "uuid"},
+      "items": { "type": "string", "format": "uuid" },
       "description": "Array of facet IDs that MUST be present and valid in this commit (F_must = F_keep ∪ F_new). See docs/POLICY_DRAFTING.md."
     },
     "suggestions": {
@@ -305,7 +305,13 @@
         },
         "reason": {
           "type": "string",
-          "enum": ["drift_budget_exceeded", "new_idea_budget_exceeded", "locked_facet", "validation_failed", "threshold_not_met"],
+          "enum": [
+            "drift_budget_exceeded",
+            "new_idea_budget_exceeded",
+            "locked_facet",
+            "validation_failed",
+            "threshold_not_met"
+          ],
           "description": "Reason why this suggestion was not applied"
         },
         "evidence": {
@@ -314,9 +320,9 @@
             "type": "object",
             "required": ["turn_id", "score"],
             "properties": {
-              "turn_id": {"type": "string", "format": "uuid"},
-              "score": {"type": "number"},
-              "excerpt": {"type": "string"}
+              "turn_id": { "type": "string", "format": "uuid" },
+              "score": { "type": "number" },
+              "excerpt": { "type": "string" }
             }
           },
           "description": "Supporting evidence for this suggestion"
@@ -344,12 +350,12 @@
       "policy": {
         "mode": "balanced",
         "thresholds": {
-          "τ_keep": 0.70,
-          "τ_remove": 0.50,
+          "τ_keep": 0.7,
+          "τ_remove": 0.5,
           "τ_delta": 0.12,
           "τ_add": 0.75,
           "τ_parse": 0.65,
-          "τ_override": 0.90,
+          "τ_override": 0.9,
           "τ_protect": 0.85,
           "τ_stale": 30
         },
@@ -395,15 +401,15 @@
           "old": {
             "id": "facet-660e8400-e29b-41d4-a716-446655440001",
             "key": "budget",
-            "value": {"value": 4000, "currency": "USD"},
+            "value": { "value": 4000, "currency": "USD" },
             "value_type": "currency",
-            "confidence": 0.80,
+            "confidence": 0.8,
             "locks": []
           },
           "new": {
             "id": "facet-660e8400-e29b-41d4-a716-446655440001",
             "key": "budget",
-            "value": {"value": 5000, "currency": "USD"},
+            "value": { "value": 5000, "currency": "USD" },
             "value_type": "currency",
             "confidence": 0.88,
             "locks": []
@@ -421,9 +427,9 @@
             }
           ],
           "scores": {
-            "support": 0.80,
+            "support": 0.8,
             "update": 0.88,
-            "contradict": 0.10,
+            "contradict": 0.1,
             "delta": 0.15
           },
           "explain": {

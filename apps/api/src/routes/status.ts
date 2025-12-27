@@ -3,10 +3,11 @@
  *
  * GET /v1/status - Detailed status with DB check
  */
+
+import { findProjects } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
-import { findProjects } from '@t3x/storage/pglite';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 const startTime = Date.now();
 

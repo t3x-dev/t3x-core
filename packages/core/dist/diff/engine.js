@@ -14,7 +14,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DiffEngine = void 0;
 exports.createDiffEngine = createDiffEngine;
 const types_1 = require("./types");
-const DEFAULT_THRESHOLD = 0.70;
+const DEFAULT_THRESHOLD = 0.7;
 /**
  * Semantic Diff Engine
  *
@@ -64,14 +64,12 @@ class DiffEngine {
         // Check each segment in base
         for (const baseSeg of baseSegments) {
             const bestMatch = matches.get(baseSeg.segmentId);
-            if (bestMatch && bestMatch.matched) {
+            if (bestMatch?.matched) {
                 // Found match
                 targetMatchedIds.add(bestMatch.targetSegmentId);
                 // Get matched target text
                 const matchedSeg = targetSegments.find((s) => s.segmentId === bestMatch.targetSegmentId);
-                const diffType = bestMatch.similarity >= this.threshold
-                    ? types_1.DiffType.SAME
-                    : types_1.DiffType.MODIFIED;
+                const diffType = bestMatch.similarity >= this.threshold ? types_1.DiffType.SAME : types_1.DiffType.MODIFIED;
                 segmentDiffs.push({
                     segmentId: baseSeg.segmentId,
                     text: baseSeg.text,
@@ -283,7 +281,7 @@ class DiffEngine {
      */
     getSegmentText(segmentId, segments) {
         const seg = segments.find((s) => s.segmentId === segmentId);
-        return seg?.text ?? "";
+        return seg?.text ?? '';
     }
     /**
      * Create empty diff result

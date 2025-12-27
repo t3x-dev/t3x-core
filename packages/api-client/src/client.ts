@@ -7,39 +7,39 @@
 import type {
   ApiResponse,
   ApiSuccessResponse,
-  PaginationParams,
-  Project,
-  ProjectWithStats,
-  CreateProjectInput,
-  UpdateProjectInput,
-  ListProjectsResponse,
-  Conversation,
-  CreateConversationInput,
-  ListConversationsResponse,
-  Turn,
-  CreateTurnInput,
-  ListTurnsResponse,
-  Commit,
-  CreateCommitInput,
-  ListCommitsResponse,
   Branch,
+  ChatInput,
+  ChatProvider,
+  ChatResponse,
+  Commit,
+  Conversation,
   CreateBranchInput,
-  ListBranchesResponse,
-  Draft,
+  CreateCommitInput,
+  CreateConversationInput,
   CreateDraftInput,
-  ListDraftsResponse,
+  CreateProjectInput,
+  CreateTurnInput,
   DiffResult,
-  TwoWayDiffInput,
-  ThreeWayDiffInput,
-  MergeResult,
-  MergeInput,
+  Draft,
   ExportCfpackInput,
   ExportLedgerInput,
   HealthResponse,
+  ListBranchesResponse,
+  ListCommitsResponse,
+  ListConversationsResponse,
+  ListDraftsResponse,
+  ListProjectsResponse,
+  ListTurnsResponse,
+  MergeInput,
+  MergeResult,
+  PaginationParams,
+  Project,
+  ProjectWithStats,
   StatusResponse,
-  ChatInput,
-  ChatResponse,
-  ChatProvider,
+  ThreeWayDiffInput,
+  Turn,
+  TwoWayDiffInput,
+  UpdateProjectInput,
 } from './types.js';
 
 export interface T3xClientConfig {
@@ -98,9 +98,7 @@ export class T3xClient {
     const data = (await response.json()) as ApiResponse<T>;
 
     if (!response.ok || !data.success) {
-      const error = !data.success
-        ? data.error
-        : { code: 'UNKNOWN', message: 'Unknown error' };
+      const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
       throw new T3xApiError(error.code, error.message, response.status);
     }
 
@@ -127,7 +125,12 @@ export class T3xClient {
   // ============================================
 
   async listProjects(params?: PaginationParams): Promise<ListProjectsResponse> {
-    return this.request<ListProjectsResponse>('GET', '/v1/projects', undefined, params as Record<string, string | number | undefined>);
+    return this.request<ListProjectsResponse>(
+      'GET',
+      '/v1/projects',
+      undefined,
+      params as Record<string, string | number | undefined>
+    );
   }
 
   async getProject(id: string): Promise<ProjectWithStats> {
@@ -154,12 +157,10 @@ export class T3xClient {
     projectId: string,
     params?: PaginationParams
   ): Promise<ListConversationsResponse> {
-    return this.request<ListConversationsResponse>(
-      'GET',
-      '/v1/conversations',
-      undefined,
-      { project_id: projectId, ...params }
-    );
+    return this.request<ListConversationsResponse>('GET', '/v1/conversations', undefined, {
+      project_id: projectId,
+      ...params,
+    });
   }
 
   async getConversation(id: string): Promise<Conversation> {
@@ -178,16 +179,11 @@ export class T3xClient {
   // Turns
   // ============================================
 
-  async listTurns(
-    conversationId: string,
-    params?: PaginationParams
-  ): Promise<ListTurnsResponse> {
-    return this.request<ListTurnsResponse>(
-      'GET',
-      '/v1/turns',
-      undefined,
-      { conversation_id: conversationId, ...params }
-    );
+  async listTurns(conversationId: string, params?: PaginationParams): Promise<ListTurnsResponse> {
+    return this.request<ListTurnsResponse>('GET', '/v1/turns', undefined, {
+      conversation_id: conversationId,
+      ...params,
+    });
   }
 
   async getTurn(hash: string): Promise<Turn> {
@@ -211,12 +207,11 @@ export class T3xClient {
     branch?: string,
     params?: PaginationParams
   ): Promise<ListCommitsResponse> {
-    return this.request<ListCommitsResponse>(
-      'GET',
-      '/v1/commits',
-      undefined,
-      { project_id: projectId, branch, ...params }
-    );
+    return this.request<ListCommitsResponse>('GET', '/v1/commits', undefined, {
+      project_id: projectId,
+      branch,
+      ...params,
+    });
   }
 
   async getCommit(hash: string): Promise<Commit> {
@@ -231,25 +226,17 @@ export class T3xClient {
   // Branches
   // ============================================
 
-  async listBranches(
-    projectId: string,
-    params?: PaginationParams
-  ): Promise<ListBranchesResponse> {
-    return this.request<ListBranchesResponse>(
-      'GET',
-      '/v1/branches',
-      undefined,
-      { project_id: projectId, ...params }
-    );
+  async listBranches(projectId: string, params?: PaginationParams): Promise<ListBranchesResponse> {
+    return this.request<ListBranchesResponse>('GET', '/v1/branches', undefined, {
+      project_id: projectId,
+      ...params,
+    });
   }
 
   async getCurrentBranch(projectId: string): Promise<Branch> {
-    return this.request<Branch>(
-      'GET',
-      '/v1/branches/current',
-      undefined,
-      { project_id: projectId }
-    );
+    return this.request<Branch>('GET', '/v1/branches/current', undefined, {
+      project_id: projectId,
+    });
   }
 
   async createBranch(input: CreateBranchInput): Promise<Branch> {
@@ -267,16 +254,11 @@ export class T3xClient {
   // Drafts
   // ============================================
 
-  async listDrafts(
-    projectId: string,
-    params?: PaginationParams
-  ): Promise<ListDraftsResponse> {
-    return this.request<ListDraftsResponse>(
-      'GET',
-      '/v1/drafts',
-      undefined,
-      { project_id: projectId, ...params }
-    );
+  async listDrafts(projectId: string, params?: PaginationParams): Promise<ListDraftsResponse> {
+    return this.request<ListDraftsResponse>('GET', '/v1/drafts', undefined, {
+      project_id: projectId,
+      ...params,
+    });
   }
 
   async getDraft(id: string): Promise<Draft> {
@@ -295,16 +277,11 @@ export class T3xClient {
   // Agent Drafts
   // ============================================
 
-  async listAgentDrafts(
-    projectId: string,
-    params?: PaginationParams
-  ): Promise<ListDraftsResponse> {
-    return this.request<ListDraftsResponse>(
-      'GET',
-      '/v1/agent/drafts',
-      undefined,
-      { project_id: projectId, ...params }
-    );
+  async listAgentDrafts(projectId: string, params?: PaginationParams): Promise<ListDraftsResponse> {
+    return this.request<ListDraftsResponse>('GET', '/v1/agent/drafts', undefined, {
+      project_id: projectId,
+      ...params,
+    });
   }
 
   async getAgentDraft(id: string): Promise<Draft> {
@@ -335,10 +312,7 @@ export class T3xClient {
     return this.request<MergeResult>('POST', '/v1/merge', input);
   }
 
-  async resolveMerge(
-    projectId: string,
-    resolution: Record<string, unknown>
-  ): Promise<MergeResult> {
+  async resolveMerge(projectId: string, resolution: Record<string, unknown>): Promise<MergeResult> {
     return this.request<MergeResult>('POST', '/v1/merge/resolve', {
       project_id: projectId,
       resolution,

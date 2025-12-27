@@ -4,10 +4,10 @@
  * CRUD operations for turns using Drizzle ORM.
  */
 
-import { eq, desc, asc } from 'drizzle-orm';
-import { turns, type Turn, type NewTurn } from '../schema';
 import { computeTurnHash } from '@t3x/core';
+import { asc, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Turn, turns } from '../schema';
 
 export interface CreateTurnInput {
   projectId: string;
@@ -34,10 +34,7 @@ export interface ListTurnsByProjectOptions {
 /**
  * Insert a new turn
  */
-export async function insertTurn(
-  db: AnyDB,
-  input: CreateTurnInput
-): Promise<Turn> {
+export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Turn> {
   const createdAt = new Date();
 
   // Get parent turn hash (last turn in conversation)
@@ -58,17 +55,20 @@ export async function insertTurn(
     created_at: createdAt.toISOString(),
   });
 
-  const [turn] = await db.insert(turns).values({
-    turnHash,
-    parentTurnHash,
-    projectId: input.projectId,
-    conversationId: input.conversationId,
-    role: input.role,
-    content: input.content,
-    language: input.language ?? null,
-    ringsJson,
-    createdAt,
-  }).returning();
+  const [turn] = await db
+    .insert(turns)
+    .values({
+      turnHash,
+      parentTurnHash,
+      projectId: input.projectId,
+      conversationId: input.conversationId,
+      role: input.role,
+      content: input.content,
+      language: input.language ?? null,
+      ringsJson,
+      createdAt,
+    })
+    .returning();
 
   return turn;
 }
@@ -76,15 +76,8 @@ export async function insertTurn(
 /**
  * Find turn by hash
  */
-export async function findTurnByHash(
-  db: AnyDB,
-  turnHash: string
-): Promise<Turn | null> {
-  const [turn] = await db
-    .select()
-    .from(turns)
-    .where(eq(turns.turnHash, turnHash))
-    .limit(1);
+export async function findTurnByHash(db: AnyDB, turnHash: string): Promise<Turn | null> {
+  const [turn] = await db.select().from(turns).where(eq(turns.turnHash, turnHash)).limit(1);
 
   return turn ?? null;
 }
@@ -148,11 +141,7 @@ export async function findLastTurnInConversation(
 /**
  * Get turn chain (walk back through parent hashes)
  */
-export async function findTurnChain(
-  db: AnyDB,
-  endTurnHash: string,
-  limit = 50
-): Promise<Turn[]> {
+export async function findTurnChain(db: AnyDB, endTurnHash: string, limit = 50): Promise<Turn[]> {
   const chain: Turn[] = [];
   let currentHash: string | null = endTurnHash;
 
@@ -190,10 +179,7 @@ export async function findTurnsInWindow(
   // Verify end turn exists
   const endTurn = await findTurnByHash(db, endTurnHash);
   if (!endTurn) {
-    throw new TurnWindowError(
-      `End turn ${endTurnHash} not found`,
-      'END_NOT_FOUND'
-    );
+    throw new TurnWindowError(`End turn ${endTurnHash} not found`, 'END_NOT_FOUND');
   }
 
   // Get the chain ending at end_turn_hash

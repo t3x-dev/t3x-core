@@ -4,9 +4,9 @@
  * Provides stub providers for testing core algorithms without external dependencies.
  */
 
+import type { LLMGenerateOptions, LLMProvider } from '../llm';
 import type { EmbeddingProvider } from '../providers/embedding';
-import type { NLPProvider, NLPAnalysis, NLPToken, NLPEntity, NLPSentence } from '../providers/nlp';
-import type { LLMProvider, LLMGenerateOptions } from '../llm';
+import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from '../providers/nlp';
 
 /**
  * Stub Embedding Provider for testing
@@ -67,7 +67,7 @@ export class WordOverlapEmbeddingProvider implements EmbeddingProvider {
     return texts.map((_, i) => [i]);
   }
 
-  similarity(vecA: number[], vecB: number[]): number {
+  similarity(_vecA: number[], _vecB: number[]): number {
     // This is a bit of a hack - we need to store texts somewhere
     // For simplicity, use Jaccard similarity on stored words
     return 0.5; // Default fallback
@@ -182,7 +182,7 @@ export class StubNLPProvider implements NLPProvider {
     const entities: NLPEntity[] = this.extractEntities(tokens, text);
 
     // Build sentences
-    const nlpSentences: NLPSentence[] = sentences.map((s, idx) => {
+    const nlpSentences: NLPSentence[] = sentences.map((s, _idx) => {
       const beginOffset = text.indexOf(s);
       return {
         text: s.trim(),
@@ -243,7 +243,12 @@ export class StubNLPProvider implements NLPProvider {
     // Find the main verb
     for (let i = 0; i < words.length; i++) {
       const w = words[i].replace(/[.,!?;:'"]+/g, '').toLowerCase();
-      if (this.positiveVerbs.has(w) || this.negativeVerbs.has(w) || w.endsWith('ing') || w.endsWith('ed')) {
+      if (
+        this.positiveVerbs.has(w) ||
+        this.negativeVerbs.has(w) ||
+        w.endsWith('ing') ||
+        w.endsWith('ed')
+      ) {
         return i;
       }
     }
@@ -260,7 +265,7 @@ export class StubNLPProvider implements NLPProvider {
     return word;
   }
 
-  private extractEntities(tokens: NLPToken[], text: string): NLPEntity[] {
+  private extractEntities(tokens: NLPToken[], _text: string): NLPEntity[] {
     const entities: NLPEntity[] = [];
 
     for (const token of tokens) {
@@ -282,7 +287,12 @@ export class StubNLPProvider implements NLPProvider {
       }
 
       // Detect date patterns
-      if (/^\d{4}$/.test(token.text) || /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(token.text)) {
+      if (
+        /^\d{4}$/.test(token.text) ||
+        /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(
+          token.text
+        )
+      ) {
         entities.push({
           text: token.text,
           type: 'DATE',
@@ -303,7 +313,7 @@ export class StubNLPProvider implements NLPProvider {
 export class StubLLMProvider implements LLMProvider {
   readonly id = 'stub-llm';
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<string> {
+  async generate(prompt: string, _options?: LLMGenerateOptions): Promise<string> {
     return `LLM response to: ${prompt.slice(0, 50)}...`;
   }
 
