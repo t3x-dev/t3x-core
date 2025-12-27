@@ -94,7 +94,22 @@
       "Bash(pnpm build:api:*)",
       "Bash(pnpm --filter t3x-webui test -- src/__tests__/api/chat.test.ts)",
       "Bash(git merge-base:*)",
-      "Bash(pnpm build:core:*)"
+      "Bash(pnpm build:core:*)",
+      "Bash(pnpm build:storage:*)",
+      "Bash(pnpm test:core:*)",
+      "Bash(pnpm test:storage:*)",
+      "Bash(pnpm build:webui:*)",
+      "Bash(pnpm test:webui:*)",
+      "Bash(git -C /Users/macethan/Projects/t3x log --oneline apps/api/src)",
+      "Bash(git -C /Users/macethan/Projects/t3x log --oneline apps/web)",
+      "Bash(du:*)",
+      "Bash(git -C /Users/macethan/Projects/t3x log --all --oneline --name-status)",
+      "Bash(file:*)",
+      "Bash(git -C /Users/macethan/Projects/t3x log --oneline packages/core/examples/*.py)",
+      "Bash(git -C /Users/macethan/Projects/t3x ls-files:*)",
+      "Bash(pnpm why:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm --filter @t3x/api test)"
     ],
     "deny": [],
     "ask": []

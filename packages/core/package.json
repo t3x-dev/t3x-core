@@ -24,7 +24,7 @@
     "@types/node": "^20.12.7",
     "@vitest/coverage-v8": "^2.1.9",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -40,6 +40,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/anthropics/t3x.git",
-    "directory": "t3x-core"
+    "directory": "packages/core"
   }
 }
