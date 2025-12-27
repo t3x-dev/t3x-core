@@ -25,9 +25,6 @@ build/
 # Claude Code local settings
 .claude/settings.local.json
 
-# Claude Code local settings
-.claude/settings.local.json
-
 # OS files
 .DS_Store
 Thumbs.db
@@ -41,12 +38,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Python
+# Python (legacy)
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
 
 # Test coverage
 coverage/
@@ -55,9 +53,6 @@ htmlcov/
 .coverage
 *.lcov
 coverage.xml
-
-# Python
-.pytest_cache/
 
 # T3X local data (ignore in all directories)
 **/.t3x/
@@ -71,6 +66,4 @@ coverage.xml
 
 # Next.js
 .next/
-
-# Turborepo
-.turbo/
+next-env.d.ts
