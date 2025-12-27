@@ -1,6 +1,10 @@
 import { useState, useCallback } from 'react'
 import { Check, X, ChevronDown, ChevronRight, Plus, Eye, EyeOff } from 'lucide-react'
-import type { Clause, ConversationConstraints, DraftConstraintOverrides } from '../types/nodes'
+import type { Clause, ConversationConstraints, DraftConstraintOverrides } from '@/types/nodes'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 interface ConstraintsPanelProps {
   constraints: {
@@ -159,26 +163,26 @@ export default function ConstraintsPanel({
   ]
 
   return (
-    <div className="constraints-panel">
-      <div className="constraints-panel__header">
-        <strong>Constraints</strong>
-        <span>From Conversation</span>
+    <div className="mt-5 border-t pt-5">
+      <div className="mb-4">
+        <strong className="mb-1 block text-base text-foreground">Constraints</strong>
+        <span className="text-sm text-muted-foreground">From Conversation</span>
       </div>
 
       {/* Clauses Section */}
-      <div className="constraints-panel__section">
+      <div className="mb-4">
         <button
-          className="constraints-panel__section-header"
+          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('clauses')}
         >
-          {expandedSections.clauses ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {expandedSections.clauses ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           <span>Sentence Candidates</span>
-          <span className="constraints-panel__count">
+          <Badge variant="secondary" className="ml-auto">
             {activeClauses.length}/{totalKeepClauses}
-          </span>
+          </Badge>
         </button>
         {expandedSections.clauses && (
-          <div className="constraints-panel__content">
+          <div className="pt-3 space-y-2">
             {constraints.clauses
               .filter((c) => c.status === 'keep')
               .map((clause) => (
@@ -191,28 +195,28 @@ export default function ConstraintsPanel({
                 />
               ))}
             {totalKeepClauses === 0 && (
-              <div className="constraints-panel__empty">
+              <p className="py-3 text-center text-xs text-muted-foreground">
                 No sentences marked as "keep" in Conversation.
-              </div>
+              </p>
             )}
           </div>
         )}
       </div>
 
       {/* Must-Have Section */}
-      <div className="constraints-panel__section">
+      <div className="mb-4">
         <button
-          className="constraints-panel__section-header constraints-panel__section-header--must-have"
+          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('mustHave')}
         >
-          {expandedSections.mustHave ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <Check size={12} className="constraints-panel__icon--must-have" />
+          {expandedSections.mustHave ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          <Check className="h-3 w-3 text-green-600" />
           <span>Must-Have Keywords</span>
-          <span className="constraints-panel__count">{activeMustHave.length}</span>
+          <Badge variant="secondary" className="ml-auto">{activeMustHave.length}</Badge>
         </button>
         {expandedSections.mustHave && (
-          <div className="constraints-panel__content">
-            <div className="constraints-panel__keywords">
+          <div className="pt-3">
+            <div className="mb-2.5 flex flex-wrap gap-2">
               {constraints.must_have.map((kw) => (
                 <KeywordTag
                   key={kw}
@@ -235,40 +239,40 @@ export default function ConstraintsPanel({
               ))}
             </div>
             {onUpdateOverrides && (
-              <div className="constraints-panel__add-keyword">
-                <input
-                  type="text"
+              <div className="mt-2.5 flex gap-2">
+                <Input
                   placeholder="Add keyword..."
                   value={newMustHave}
                   onChange={(e) => setNewMustHave(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addMustHave()}
+                  className="h-9"
                 />
-                <button onClick={addMustHave} disabled={!newMustHave.trim()}>
-                  <Plus size={12} />
-                </button>
+                <Button size="sm" onClick={addMustHave} disabled={!newMustHave.trim()} className="h-9 w-9 p-0">
+                  <Plus className="h-3 w-3" />
+                </Button>
               </div>
             )}
             {activeMustHave.length === 0 && !onUpdateOverrides && (
-              <div className="constraints-panel__empty">No must-have keywords defined.</div>
+              <p className="py-3 text-center text-xs text-muted-foreground">No must-have keywords defined.</p>
             )}
           </div>
         )}
       </div>
 
       {/* Mustn't-Have Section */}
-      <div className="constraints-panel__section">
+      <div className="mb-4">
         <button
-          className="constraints-panel__section-header constraints-panel__section-header--mustnt-have"
+          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('mustntHave')}
         >
-          {expandedSections.mustntHave ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <X size={12} className="constraints-panel__icon--mustnt-have" />
+          {expandedSections.mustntHave ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          <X className="h-3 w-3 text-destructive" />
           <span>Mustn't-Have Keywords</span>
-          <span className="constraints-panel__count">{activeMustntHave.length}</span>
+          <Badge variant="secondary" className="ml-auto">{activeMustntHave.length}</Badge>
         </button>
         {expandedSections.mustntHave && (
-          <div className="constraints-panel__content">
-            <div className="constraints-panel__keywords">
+          <div className="pt-3">
+            <div className="mb-2.5 flex flex-wrap gap-2">
               {constraints.mustnt_have.map((kw) => (
                 <KeywordTag
                   key={kw}
@@ -291,21 +295,21 @@ export default function ConstraintsPanel({
               ))}
             </div>
             {onUpdateOverrides && (
-              <div className="constraints-panel__add-keyword">
-                <input
-                  type="text"
+              <div className="mt-2.5 flex gap-2">
+                <Input
                   placeholder="Add keyword..."
                   value={newMustntHave}
                   onChange={(e) => setNewMustntHave(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addMustntHave()}
+                  className="h-9"
                 />
-                <button onClick={addMustntHave} disabled={!newMustntHave.trim()}>
-                  <Plus size={12} />
-                </button>
+                <Button size="sm" onClick={addMustntHave} disabled={!newMustntHave.trim()} className="h-9 w-9 p-0">
+                  <Plus className="h-3 w-3" />
+                </Button>
               </div>
             )}
             {activeMustntHave.length === 0 && !onUpdateOverrides && (
-              <div className="constraints-panel__empty">No mustn't-have keywords defined.</div>
+              <p className="py-3 text-center text-xs text-muted-foreground">No mustn't-have keywords defined.</p>
             )}
           </div>
         )}
@@ -325,17 +329,22 @@ interface ClauseItemProps {
 function ClauseItem({ clause, isDisabled, onToggle, canToggle }: ClauseItemProps) {
   return (
     <div
-      className={`constraints-panel__clause ${isDisabled ? 'constraints-panel__clause--disabled' : ''}`}
+      className={cn(
+        'flex items-start gap-2.5 rounded-lg border bg-background p-3 text-sm leading-relaxed',
+        isDisabled && 'bg-muted/50 opacity-50'
+      )}
     >
-      <span className="constraints-panel__clause-text">{clause.text}</span>
+      <span className="flex-1 text-muted-foreground">{clause.text}</span>
       {canToggle && (
-        <button
-          className="constraints-panel__clause-toggle"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0"
           onClick={onToggle}
           title={isDisabled ? 'Enable this clause' : 'Disable this clause'}
         >
-          {isDisabled ? <EyeOff size={12} /> : <Eye size={12} />}
-        </button>
+          {isDisabled ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        </Button>
       )}
     </div>
   )
@@ -361,20 +370,34 @@ function KeywordTag({
   onRemove,
   canToggle,
 }: KeywordTagProps) {
-  const baseClass = `constraints-panel__keyword constraints-panel__keyword--${type === 'must_have' ? 'must-have' : 'mustnt-have'}`
-  const classes = `${baseClass} ${isRemoved ? 'constraints-panel__keyword--removed' : ''} ${isAdditional ? 'constraints-panel__keyword--additional' : ''}`
+  const isMustHave = type === 'must_have'
 
   return (
-    <span className={classes}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm',
+        isMustHave ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700',
+        isRemoved && 'line-through opacity-40',
+        isAdditional && 'border border-dashed border-current bg-transparent'
+      )}
+    >
       <span>{keyword}</span>
       {canToggle && !isAdditional && onToggle && (
-        <button onClick={onToggle} title={isRemoved ? 'Restore' : 'Remove'}>
-          {isRemoved ? <Plus size={10} /> : <X size={10} />}
+        <button
+          onClick={onToggle}
+          title={isRemoved ? 'Restore' : 'Remove'}
+          className="inline-flex h-5 w-5 items-center justify-center rounded opacity-70 transition-opacity hover:bg-black/10 hover:opacity-100"
+        >
+          {isRemoved ? <Plus className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
         </button>
       )}
       {isAdditional && onRemove && (
-        <button onClick={onRemove} title="Remove">
-          <X size={10} />
+        <button
+          onClick={onRemove}
+          title="Remove"
+          className="inline-flex h-5 w-5 items-center justify-center rounded opacity-70 transition-opacity hover:bg-black/10 hover:opacity-100"
+        >
+          <X className="h-2.5 w-2.5" />
         </button>
       )}
     </span>

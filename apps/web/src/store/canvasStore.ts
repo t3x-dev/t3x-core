@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { applyEdgeChanges, applyNodeChanges, MarkerType } from 'reactflow'
-import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
+import { applyEdgeChanges, applyNodeChanges, MarkerType } from '@xyflow/react'
+import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { BranchType, CanvasNodeData, NodeKind, ConversationConstraints, DraftConstraintOverrides, LeafType, SourceTextBlock, TurnBoundary } from '../types/nodes'
 import * as api from '@/lib/api'
 import { tokenizeText } from '../utils/tokenizer'
@@ -110,7 +110,7 @@ let edgeCounter = 3
 const nextNodeId = () => `node-${nodeCounter++}`
 const nextEdgeId = () => `edge-${edgeCounter++}`
 const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 }
-const edgeType: Edge['type'] = 'default'
+const edgeType: Edge['type'] = 'smoothstep'
 const conversationCommitOffset = 300
 const commitQuickOffset = conversationCommitOffset + 40
 const reactFlowGridSize = 16
@@ -1409,7 +1409,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // No removes, just apply other changes
         if (otherChanges.length === 0) return {}
         return {
-          nodes: applyNodeChanges(otherChanges, state.nodes).map((node) => ({
+          nodes: (applyNodeChanges(otherChanges, state.nodes) as Node<CanvasNodeData>[]).map((node) => ({
             ...node,
             position: snapPosition(node.position),
           })),
@@ -1487,12 +1487,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         })
 
         const newNodes = directRemoveChanges.length > 0
-          ? applyNodeChanges([...otherChanges, ...directRemoveChanges], state.nodes).map((node) => ({
+          ? (applyNodeChanges([...otherChanges, ...directRemoveChanges], state.nodes) as Node<CanvasNodeData>[]).map((node) => ({
               ...node,
               position: snapPosition(node.position),
             }))
           : otherChanges.length > 0
-            ? applyNodeChanges(otherChanges, state.nodes).map((node) => ({
+            ? (applyNodeChanges(otherChanges, state.nodes) as Node<CanvasNodeData>[]).map((node) => ({
                 ...node,
                 position: snapPosition(node.position),
               }))
@@ -1550,7 +1550,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       })
 
       return {
-        nodes: applyNodeChanges([...otherChanges, ...allowedRemoves], state.nodes).map((node) => ({
+        nodes: (applyNodeChanges([...otherChanges, ...allowedRemoves], state.nodes) as Node<CanvasNodeData>[]).map((node) => ({
           ...node,
           position: snapPosition(node.position),
         })),

@@ -8,17 +8,22 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, GitCompare, GitMerge, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
-import type { Node } from 'reactflow'
-import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock, TurnBoundary } from '../types/nodes'
-import { useCanvasStore } from '../store/canvasStore'
+import type { Node } from '@xyflow/react'
+import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock, TurnBoundary } from '@/types/nodes'
+import { useCanvasStore } from '@/store/canvasStore'
 import * as api from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
 import { PendingSourceEditor } from './SelectableTextBlock'
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
   getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
   getSelectedText,
   tokenizeText,
-} from '../utils/tokenizer'
+} from '@/utils/tokenizer'
 
 const bridgeTemplates = [
   { id: 'prose', name: 'prose', description: 'General prose extraction' },
@@ -1640,79 +1645,88 @@ export function NodeModal({
   // ============================================
   if (isConversation) {
     return (
-      <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="modal-v2 modal-v2--conversation">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+        <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
-          <header className="modal-v2__topbar">
-            <div className="modal-v2__topbar-left">
-              <h2 className="modal-v2__title">
+          <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+            <div className="flex items-center gap-3">
+              <h2 className="text-[0.95rem] font-semibold text-gray-800">
                 {isStagingUnit ? 'Unit (Staging)' : 'Unit'}: {data.title || 'Untitled'}
               </h2>
-              <span className="modal-v2__id">{data.entryId}</span>
-              {isStagingUnit && <span className="modal-v2__pending-badge">staging</span>}
+              <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
+              {isStagingUnit && (
+                <Badge variant="outline" className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15">
+                  staging
+                </Badge>
+              )}
             </div>
-            <div className="modal-v2__topbar-right">
-              <button
-                className="modal-v2__icon-btn"
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={() => setShowSettings(!showSettings)}
                 title="Edit Meta"
+                className="h-9 w-9"
               >
                 <Settings size={18} />
-              </button>
+              </Button>
               {/* For staging units: show Commit button to enter commit config view */}
               {isStagingUnit && (
-                <button
-                  className="modal-v2__primary-btn modal-v2__commit-btn"
+                <Button
                   onClick={() => {
                     console.log('[NodeModal] Commit button clicked - switching to commit config view')
                     setShowCommitConfig(true)
                   }}
                   title="Configure and commit this unit"
+                  className="gap-1.5"
                 >
                   <Check size={16} />
                   <span>Commit</span>
-                </button>
+                </Button>
               )}
               {/* For committed units: show Create Unit button */}
               {addCommitAction && !isStagingUnit && (
-                <button
-                  className="modal-v2__primary-btn"
+                <Button
                   onClick={() => {
                     addCommitAction.onClick()
                     onClose()
                   }}
                   disabled={addCommitAction.disabled}
                   title="Create a new unit from this one"
+                  className="gap-1.5"
                 >
                   <GitCommit size={16} />
                   <span>Create Unit</span>
-                </button>
+                </Button>
               )}
-              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
                 <X size={20} />
-              </button>
+              </Button>
             </div>
           </header>
 
-          <div className="modal-v2__body" ref={containerRef}>
+          <div className="flex flex-1 overflow-hidden min-h-0" ref={containerRef}>
             {/* Left Sidebar - Metadata */}
             <aside
-              className={`modal-v2__sidebar modal-v2__sidebar--left ${showSettings ? 'modal-v2__sidebar--open' : ''}`}
+              className={cn(
+                'min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50',
+                showSettings ? 'block' : 'hidden md:block'
+              )}
               style={{ width: sidebarWidth }}
             >
-              <div className="modal-v2__sidebar-section">
-                <h4>Metadata</h4>
-                <div className="modal-v2__field">
-                  <label>Title</label>
-                  <input
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Metadata</h4>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+                  <Input
                     type="text"
                     value={data.title}
                     onChange={(e) => onUpdate({ title: e.target.value })}
                   />
                 </div>
-                <div className="modal-v2__field">
-                  <label>Tags</label>
-                  <input
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Tags</label>
+                  <Input
                     type="text"
                     value={data.tags.join(', ')}
                     onChange={(e) => onUpdate({
@@ -1723,16 +1737,16 @@ export function NodeModal({
                 </div>
               </div>
 
-              <div className="modal-v2__sidebar-divider" />
+              <div className="h-px bg-gray-200 my-4" />
 
-              <div className="modal-v2__sidebar-section">
-                <h4>Info</h4>
-                <div className="modal-v2__info-row">
-                  <Clock size={14} />
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Info</h4>
+                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                  <Clock size={14} className="text-gray-400 shrink-0" />
                   <span>Created: {data.timestamp}</span>
                 </div>
-                <div className="modal-v2__info-row">
-                  <Link2 size={14} />
+                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                  <Link2 size={14} className="text-gray-400 shrink-0" />
                   <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
                 </div>
               </div>
@@ -1740,72 +1754,82 @@ export function NodeModal({
 
             {/* Draggable Divider */}
             <div
-              className="modal-v2__resize-divider"
+              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors relative group"
               onMouseDown={handleDividerMouseDown}
-            />
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-10 bg-gray-400 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
 
             {/* Main Content - Chat Interface */}
-            <div className="modal-v2__main conversation-v2__chat-container">
+            <div className="flex-1 min-w-0 flex flex-col h-full">
               <div
                 ref={messagesContainerRef}
-                className="conversation-v2__chat-messages"
+                className="flex-1 overflow-y-auto p-6 flex flex-col gap-4"
                 onScroll={handleChatScroll}
               >
                 {isChatLoading ? (
-                  <div className="conversation-v2__chat-empty">
-                    <Loader2 size={48} strokeWidth={1} className="conversation-v2__spinner" />
-                    <p>Loading conversation...</p>
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center gap-2">
+                    <Loader2 size={48} strokeWidth={1} className="animate-spin" />
+                    <p className="text-base font-medium text-gray-500">Loading conversation...</p>
                   </div>
                 ) : chatMessages.length === 0 && !isChatStreaming ? (
-                  <div className="conversation-v2__chat-empty">
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center gap-2">
                     <MessageSquarePlus size={48} strokeWidth={1} />
-                    <p>No messages yet</p>
-                    <span>Type a message below to start the conversation</span>
+                    <p className="text-base font-medium text-gray-500">No messages yet</p>
+                    <span className="text-[0.85rem] text-gray-400">Type a message below to start the conversation</span>
                   </div>
                 ) : (
                   <>
                     {/* Load more indicator at top */}
                     {isLoadingMore && (
-                      <div className="conversation-v2__chat-loading-more">
-                        <Loader2 size={16} className="conversation-v2__spinner" />
+                      <div className="flex items-center justify-center gap-2 py-3 text-gray-500 text-[13px]">
+                        <Loader2 size={16} className="animate-spin" />
                         <span>Loading older messages...</span>
                       </div>
                     )}
                     {chatHasMore && !isLoadingMore && (
-                      <div className="conversation-v2__chat-load-more">
-                        <button onClick={loadMoreMessages} className="conversation-v2__load-more-btn">
+                      <div className="flex items-center justify-center gap-2 py-3 text-gray-500 text-[13px]">
+                        <Button variant="outline" size="sm" onClick={loadMoreMessages}>
                           Load older messages
-                        </button>
+                        </Button>
                       </div>
                     )}
                     {chatMessages.map((msg) => (
-                      <div key={msg.id} className={`conversation-v2__chat-message conversation-v2__chat-message--${msg.role}`}>
-                        <div className="conversation-v2__chat-message-content">
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-200',
+                          msg.role === 'user'
+                            ? 'self-end bg-blue-500 text-white rounded-br-sm'
+                            : 'self-start bg-gray-100 text-gray-800 rounded-bl-sm'
+                        )}
+                      >
+                        <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                           {msg.content}
                         </div>
                       </div>
                     ))}
                     {/* Streaming response */}
                     {isChatStreaming && streamingContent && (
-                      <div className="conversation-v2__chat-message conversation-v2__chat-message--assistant conversation-v2__chat-message--streaming">
-                        <div className="conversation-v2__chat-message-content">
+                      <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-blue-50 text-gray-800">
+                        <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                           {streamingContent}
-                          <span className="conversation-v2__streaming-cursor">▊</span>
+                          <span className="animate-pulse text-blue-500">▊</span>
                         </div>
                       </div>
                     )}
                     {/* Loading indicator when streaming starts */}
                     {isChatStreaming && !streamingContent && (
-                      <div className="conversation-v2__chat-message conversation-v2__chat-message--assistant">
-                        <div className="conversation-v2__chat-message-content conversation-v2__chat-loading">
-                          <Loader2 size={16} className="conversation-v2__spinner" />
+                      <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-gray-100 text-gray-800">
+                        <div className="flex items-center gap-2 text-gray-500">
+                          <Loader2 size={16} className="animate-spin" />
                           <span>Thinking...</span>
                         </div>
                       </div>
                     )}
                     {/* Chat error */}
                     {chatError && (
-                      <div className="conversation-v2__chat-error">
+                      <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[0.85rem]">
                         <AlertCircle size={16} />
                         <span>{chatError}</span>
                       </div>
@@ -1815,23 +1839,24 @@ export function NodeModal({
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="conversation-v2__chat-input-container">
-                <textarea
-                  className="conversation-v2__chat-input"
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3 items-end">
+                <Textarea
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleChatKeyDown}
                   placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
                   rows={3}
                   disabled={isChatStreaming || isChatLoading}
+                  className="flex-1 resize-none"
                 />
-                <button
-                  className="conversation-v2__chat-send-btn"
+                <Button
+                  size="icon"
                   onClick={handleSendMessage}
                   disabled={!chatInput.trim() || isChatStreaming || isChatLoading}
+                  className="h-11 w-11 rounded-xl shrink-0"
                 >
-                  {isChatStreaming || isChatLoading ? <Loader2 size={20} className="conversation-v2__spinner" /> : <Send size={20} />}
-                </button>
+                  {isChatStreaming || isChatLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                </Button>
               </div>
             </div>
           </div>
@@ -1845,49 +1870,62 @@ export function NodeModal({
   // ============================================
   if (isPendingCommit) {
     return (
-      <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="modal-v2 modal-v2--commit modal-v2--commit-pending modal-v2--draft-svtz">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+        <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
-          <header className="modal-v2__topbar">
-            <div className="modal-v2__topbar-left">
-              <div className="draft-svtz__logo">t3x</div>
-              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
-              <span className="modal-v2__id">{data.entryId}</span>
-              <span className="modal-v2__pending-badge">pending</span>
+          <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="text-[0.85rem] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-md">t3x</div>
+              <h2 className="text-[0.95rem] font-semibold text-gray-800">Commit: {data.title || 'Untitled'}</h2>
+              <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
+              <Badge variant="outline" className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15">
+                pending
+              </Badge>
             </div>
-            <div className="modal-v2__topbar-right">
-              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
                 <X size={20} />
-              </button>
+              </Button>
             </div>
           </header>
 
-          <div className="modal-v2__body draft-svtz__body" ref={draftBodyRef}>
+          <div className="flex flex-1 min-h-0 overflow-hidden" ref={draftBodyRef}>
             {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
-            <aside className="draft-svtz__sidebar" style={{ width: sidebarSourceDividerPos }}>
+            <aside
+              className="min-w-[220px] max-w-[400px] p-5 bg-gray-50 flex flex-col overflow-y-auto shrink-0"
+              style={{ width: sidebarSourceDividerPos }}
+            >
               {/* STEP 1: Configure (or Merge for merge drafts) */}
-              <div className={`draft-svtz__step ${(configLocked || isMergeDraft) ? 'draft-svtz__step--locked' : ''}`}>
-                <div className="draft-svtz__step-header">
-                  <span className="draft-svtz__step-number">{isMergeDraft ? 'MERGE' : 'STEP 1'}</span>
-                  <span className="draft-svtz__step-label">
-                    <span className={`draft-svtz__step-dot ${(!configLocked && !isMergeDraft) ? 'draft-svtz__step-dot--active' : 'draft-svtz__step-dot--completed'}`} />
+              <div className={cn(
+                'flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto',
+                (configLocked || isMergeDraft) && 'opacity-95'
+              )}>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[0.7rem] font-bold text-gray-500 uppercase tracking-widest">
+                    {isMergeDraft ? 'MERGE' : 'STEP 1'}
+                  </span>
+                  <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800">
+                    <span className={cn(
+                      'w-2 h-2 rounded-full',
+                      (!configLocked && !isMergeDraft) ? 'bg-emerald-500' : 'bg-gray-500'
+                    )} />
                     {isMergeDraft ? 'Analyze & Resolve' : 'Configure'}
-                    {(configLocked && !isMergeDraft) && <Lock size={12} className="draft-svtz__lock-icon" />}
+                    {(configLocked && !isMergeDraft) && <Lock size={12} className="text-gray-400 ml-1" />}
                   </span>
                 </div>
 
                 {/* Merge Draft: Show merge-specific UI */}
                 {isMergeDraft ? (
-                  <div className="draft-svtz__merge-section">
+                  <div className="flex flex-col gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg flex-1 min-h-0 overflow-y-auto">
                     {/* Merge info header */}
-                    <div className="draft-svtz__merge-header">
+                    <div className="flex items-center gap-2 font-semibold text-slate-700">
                       <GitCompare size={16} />
                       <span>Merge: {data?.mergeConfig?.sourceCommitTitle} → {data?.mergeConfig?.targetCommitTitle}</span>
                     </div>
 
                     {/* Merge error */}
                     {mergeError && (
-                      <div className="draft-svtz__merge-error">
+                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
                         <AlertCircle size={14} />
                         <span>{mergeError}</span>
                       </div>
@@ -1895,14 +1933,14 @@ export function NodeModal({
 
                     {/* Analyze button - only show if not analyzed yet */}
                     {!mergeResult && (
-                      <button
-                        className="draft-svtz__generate-btn"
+                      <Button
                         onClick={handleMergeAnalysis}
                         disabled={isMergeAnalyzing}
+                        className="w-full gap-2"
                       >
                         {isMergeAnalyzing ? (
                           <>
-                            <Loader2 size={16} className="draft-svtz__spinner" />
+                            <Loader2 size={16} className="animate-spin" />
                             <span>Analyzing...</span>
                           </>
                         ) : (
@@ -1911,14 +1949,19 @@ export function NodeModal({
                             <span>Analyze Merge</span>
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
 
                     {/* Merge result */}
                     {mergeResult && (
-                      <div className="draft-svtz__merge-result">
+                      <div className="flex flex-col gap-3">
                         {/* Status badge */}
-                        <div className={`draft-svtz__merge-status draft-svtz__merge-status--${mergeResult.status}`}>
+                        <div className={cn(
+                          'flex items-center gap-2 py-2 px-3 rounded-md text-[0.85rem] font-medium',
+                          mergeResult.status === 'clean'
+                            ? 'bg-green-50 border border-green-200 text-green-700'
+                            : 'bg-yellow-50 border border-yellow-300 text-amber-700'
+                        )}>
                           {mergeResult.status === 'clean' ? (
                             <>
                               <Check size={14} />
@@ -1934,20 +1977,20 @@ export function NodeModal({
 
                         {/* Auto-merged facets summary */}
                         {mergeResult.auto_merged_facets.length > 0 && (
-                          <div className="draft-svtz__merge-auto">
+                          <div className="text-sm text-slate-500">
                             <span>{mergeResult.auto_merged_facets.length} facet(s) auto-merged</span>
                           </div>
                         )}
 
                         {/* Conflicts list */}
                         {mergeResult.conflicts.length > 0 && (
-                          <div className="draft-svtz__conflicts">
-                            <div className="draft-svtz__conflicts-header">Resolve Conflicts:</div>
+                          <div className="flex flex-col gap-3">
+                            <div className="font-semibold text-[0.85rem] text-slate-600">Resolve Conflicts:</div>
                             {mergeResult.conflicts.map(conflict => (
-                              <div key={conflict.facet} className="draft-svtz__conflict-item">
-                                <div className="draft-svtz__conflict-facet">{conflict.facet}</div>
-                                <div className="draft-svtz__conflict-options">
-                                  <label className="draft-svtz__conflict-option">
+                              <div key={conflict.facet} className="p-3 bg-white border border-slate-200 rounded-md">
+                                <div className="font-semibold text-[0.85rem] text-slate-800 mb-2">{conflict.facet}</div>
+                                <div className="flex flex-col gap-2">
+                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
@@ -1956,13 +1999,14 @@ export function NodeModal({
                                         ...prev,
                                         [conflict.facet]: { choice: 'source' }
                                       }))}
+                                      className="mt-0.5"
                                     />
-                                    <span className="draft-svtz__conflict-label">Source</span>
-                                    <span className="draft-svtz__conflict-preview">
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Source</span>
+                                    <span className="text-xs text-slate-400 truncate flex-1">
                                       {conflict.source_text ? `${conflict.source_text.slice(0, 50)}...` : '(deleted)'}
                                     </span>
                                   </label>
-                                  <label className="draft-svtz__conflict-option">
+                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
@@ -1971,13 +2015,14 @@ export function NodeModal({
                                         ...prev,
                                         [conflict.facet]: { choice: 'target' }
                                       }))}
+                                      className="mt-0.5"
                                     />
-                                    <span className="draft-svtz__conflict-label">Target</span>
-                                    <span className="draft-svtz__conflict-preview">
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Target</span>
+                                    <span className="text-xs text-slate-400 truncate flex-1">
                                       {conflict.target_text ? `${conflict.target_text.slice(0, 50)}...` : '(deleted)'}
                                     </span>
                                   </label>
-                                  <label className="draft-svtz__conflict-option">
+                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
@@ -1986,18 +2031,19 @@ export function NodeModal({
                                         ...prev,
                                         [conflict.facet]: { choice: 'custom', customText: prev[conflict.facet]?.customText || '' }
                                       }))}
+                                      className="mt-0.5"
                                     />
-                                    <span className="draft-svtz__conflict-label">Custom</span>
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Custom</span>
                                   </label>
                                   {conflictResolutions[conflict.facet]?.choice === 'custom' && (
-                                    <textarea
-                                      className="draft-svtz__conflict-custom"
+                                    <Textarea
                                       placeholder="Enter custom resolution..."
                                       value={conflictResolutions[conflict.facet]?.customText || ''}
                                       onChange={(e) => setConflictResolutions(prev => ({
                                         ...prev,
                                         [conflict.facet]: { choice: 'custom', customText: e.target.value }
                                       }))}
+                                      className="min-h-[60px] text-sm mt-1"
                                     />
                                   )}
                                 </div>
@@ -2007,28 +2053,29 @@ export function NodeModal({
                         )}
 
                         {/* Re-analyze button */}
-                        <button
-                          className="draft-svtz__generate-btn draft-svtz__generate-btn--secondary"
+                        <Button
+                          variant="secondary"
                           onClick={handleMergeAnalysis}
                           disabled={isMergeAnalyzing}
+                          className="w-full gap-2"
                         >
                           <RotateCcw size={14} />
                           <span>Re-analyze</span>
-                        </button>
+                        </Button>
                       </div>
                     )}
 
                     {/* Commit button for merge */}
-                    <div className="draft-svtz__action-buttons" style={{ marginTop: '16px' }}>
-                      <button
-                        className="draft-svtz__commit-btn"
+                    <div className="flex gap-2 mt-4">
+                      <Button
                         onClick={handleCommit}
                         disabled={!mergeResult || !allConflictsResolved || isCommitting}
                         title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                        className="flex-1 gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                       >
                         {isCommitting ? (
                           <>
-                            <Loader2 size={16} className="draft-svtz__spinner" />
+                            <Loader2 size={16} className="animate-spin" />
                             <span>Committing...</span>
                           </>
                         ) : (
@@ -2037,21 +2084,21 @@ export function NodeModal({
                             <span>Commit Merge</span>
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : !configLocked ? (
                   /* Unlocked state: Show editable controls */
-                  <div className="draft-svtz__config-controls">
+                  <div className="flex flex-col gap-4">
                     {/* Branch Selection - from real API data */}
                     {shouldShowBranchSelect && (
-                      <div className="draft-svtz__control-group">
-                        <label className="draft-svtz__control-label">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center">
                           Branch
-                          {branchesLoading && <Loader2 size={12} className="draft-svtz__spinner" style={{ marginLeft: 4 }} />}
+                          {branchesLoading && <Loader2 size={12} className="animate-spin ml-1" />}
                         </label>
                         <select
-                          className="draft-svtz__select draft-svtz__select--full"
+                          className="w-full py-2 px-3 border border-gray-300 rounded-md text-[0.85rem] bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                           value={
                             // Map the value to a valid option
                             data.pendingBranch === 'main' ? 'main' :
@@ -2087,11 +2134,10 @@ export function NodeModal({
 
                     {/* Branch Name - only shown when creating new branch */}
                     {requireBranchName && data.pendingBranch === 'branch' && !branches.some(b => b.name === data.pendingBranchName) && (
-                      <div className="draft-svtz__control-group">
-                        <label className="draft-svtz__control-label">New Branch Name</label>
-                        <input
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">New Branch Name</label>
+                        <Input
                           type="text"
-                          className="draft-svtz__input draft-svtz__input--full"
                           value={data.pendingBranchName || ''}
                           onChange={(e) => onBranchNameChange?.(e.target.value)}
                           placeholder="Enter new branch name"
@@ -2100,10 +2146,10 @@ export function NodeModal({
                     )}
 
                     {/* Template */}
-                    <div className="draft-svtz__control-group">
-                      <label className="draft-svtz__control-label">Template</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Template</label>
                       <select
-                        className="draft-svtz__select draft-svtz__select--full"
+                        className="w-full py-2 px-3 border border-gray-300 rounded-md text-[0.85rem] bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                         value={template}
                         onChange={(e) => setTemplate(e.target.value)}
                       >
@@ -2114,127 +2160,128 @@ export function NodeModal({
                     </div>
 
                     {/* Cosine Threshold */}
-                    <div className="draft-svtz__control-group">
-                      <label className="draft-svtz__control-label">Cosine</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cosine</label>
                       <input
                         type="range"
-                        className="draft-svtz__slider"
+                        className="w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500 cursor-pointer"
                         min="0"
                         max="1"
                         step="0.05"
                         value={cosineThreshold}
                         onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
                       />
-                      <span className="draft-svtz__slider-value">{cosineThreshold.toFixed(2)}</span>
+                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">{cosineThreshold.toFixed(2)}</span>
                     </div>
 
                     {/* Keywords Threshold */}
-                    <div className="draft-svtz__control-group">
-                      <label className="draft-svtz__control-label">Keywords</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Keywords</label>
                       <input
                         type="range"
-                        className="draft-svtz__slider"
+                        className="w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500 cursor-pointer"
                         min="0"
                         max="1"
                         step="0.05"
                         value={keywordsThreshold}
                         onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
                       />
-                      <span className="draft-svtz__slider-value">{keywordsThreshold.toFixed(2)}</span>
+                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">{keywordsThreshold.toFixed(2)}</span>
                     </div>
 
                     {/* Proceed Button */}
-                    <div className="draft-svtz__step-actions">
-                      <button
-                        className="draft-svtz__proceed-btn"
+                    <div className="flex gap-2 mt-2">
+                      <Button
                         onClick={handleProceed}
                         disabled={textBlocks.length === 0 && sourceBoxes.length === 0}
                         title="Lock configuration and proceed to curation"
+                        className="flex-1 gap-1.5 bg-emerald-500 hover:bg-emerald-600"
                       >
                         <Check size={16} />
                         <span>Proceed</span>
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
                   /* Locked state: Show read-only summary */
-                  <div className="draft-svtz__config-locked">
-                    <div className="draft-svtz__config-summary">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       {shouldShowBranchSelect && (
-                        <div className="draft-svtz__config-item">
-                          <span className="draft-svtz__config-item-label">Branch:</span>
-                          <span className="draft-svtz__config-item-value">{data.pendingBranch || 'branch'}</span>
+                        <div className="flex items-center gap-2 text-[0.85rem]">
+                          <span className="text-gray-500 min-w-[70px]">Branch:</span>
+                          <span className="text-gray-800 font-medium">{data.pendingBranch || 'branch'}</span>
                         </div>
                       )}
                       {requireBranchName && (
-                        <div className="draft-svtz__config-item">
-                          <span className="draft-svtz__config-item-label">Name:</span>
-                          <span className="draft-svtz__config-item-value">{data.pendingBranchName || '-'}</span>
+                        <div className="flex items-center gap-2 text-[0.85rem]">
+                          <span className="text-gray-500 min-w-[70px]">Name:</span>
+                          <span className="text-gray-800 font-medium">{data.pendingBranchName || '-'}</span>
                         </div>
                       )}
-                      <div className="draft-svtz__config-item">
-                        <span className="draft-svtz__config-item-label">Template:</span>
-                        <span className="draft-svtz__config-item-value">{template}</span>
+                      <div className="flex items-center gap-2 text-[0.85rem]">
+                        <span className="text-gray-500 min-w-[70px]">Template:</span>
+                        <span className="text-gray-800 font-medium">{template}</span>
                       </div>
-                      <div className="draft-svtz__config-item">
-                        <span className="draft-svtz__config-item-label">Cosine:</span>
-                        <span className="draft-svtz__config-item-value">{cosineThreshold.toFixed(2)}</span>
+                      <div className="flex items-center gap-2 text-[0.85rem]">
+                        <span className="text-gray-500 min-w-[70px]">Cosine:</span>
+                        <span className="text-gray-800 font-medium">{cosineThreshold.toFixed(2)}</span>
                       </div>
-                      <div className="draft-svtz__config-item">
-                        <span className="draft-svtz__config-item-label">Keywords:</span>
-                        <span className="draft-svtz__config-item-value">{keywordsThreshold.toFixed(2)}</span>
+                      <div className="flex items-center gap-2 text-[0.85rem]">
+                        <span className="text-gray-500 min-w-[70px]">Keywords:</span>
+                        <span className="text-gray-800 font-medium">{keywordsThreshold.toFixed(2)}</span>
                       </div>
                     </div>
-                    <button
-                      className="draft-svtz__reset-btn"
+                    <Button
+                      variant="outline"
                       onClick={handleReset}
                       title="Unlock configuration (will reset Step 2 changes)"
+                      className="gap-2"
                     >
                       <RotateCcw size={16} />
                       <span>Reset</span>
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
 
-              <div className="draft-svtz__step-divider" />
+              <div className="h-px bg-gray-200 my-5" />
 
               {/* STEP 2: Curate */}
-              <div className={`draft-svtz__step ${!configLocked ? 'draft-svtz__step--disabled' : ''}`}>
-                <div className="draft-svtz__step-header">
-                  <span className="draft-svtz__step-number">STEP 2</span>
-                  <span className="draft-svtz__step-label">
-                    <span className={`draft-svtz__step-dot ${configLocked ? 'draft-svtz__step-dot--active' : ''}`} />
+              <div className={cn('flex flex-col gap-4', !configLocked && 'opacity-50 pointer-events-none')}>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[0.7rem] font-bold text-gray-500 uppercase tracking-widest">STEP 2</span>
+                  <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800">
+                    <span className={cn('w-2 h-2 rounded-full', configLocked ? 'bg-emerald-500' : 'bg-gray-300')} />
                     Curate
                   </span>
                 </div>
 
                 {!configLocked ? (
                   /* Disabled state: Show hint */
-                  <div className="draft-svtz__step-disabled-hint">
+                  <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-lg text-gray-400 text-[0.85rem]">
                     <Lock size={16} />
                     <span>Complete Step 1 first</span>
                   </div>
                 ) : (
                   /* Enabled state: Show stats and commit button */
                   <>
-                    <div className="draft-svtz__stats">
+                    <div className="flex gap-4">
                       {hasNewSourceData ? (
                         <>
-                          <span className="draft-svtz__stat">{selectionsCount} selections</span>
-                          <span className="draft-svtz__stat">{mustHaveKeywordsNew.length} must</span>
-                          <span className="draft-svtz__stat">{mustntHaveKeywordsNew.length} mustnt</span>
+                          <span className="text-[0.85rem] text-gray-600">{selectionsCount} selections</span>
+                          <span className="text-[0.85rem] text-gray-600">{mustHaveKeywordsNew.length} must</span>
+                          <span className="text-[0.85rem] text-gray-600">{mustntHaveKeywordsNew.length} mustnt</span>
                         </>
                       ) : (
                         <>
-                          <span className="draft-svtz__stat">{includedPhrasesCount} phrases</span>
-                          <span className="draft-svtz__stat">{mustHaveKeywordsLegacy.length} must</span>
-                          <span className="draft-svtz__stat">{mustntHaveKeywordsLegacy.length} mustnt</span>
+                          <span className="text-[0.85rem] text-gray-600">{includedPhrasesCount} phrases</span>
+                          <span className="text-[0.85rem] text-gray-600">{mustHaveKeywordsLegacy.length} must</span>
+                          <span className="text-[0.85rem] text-gray-600">{mustntHaveKeywordsLegacy.length} mustnt</span>
                         </>
                       )}
                     </div>
 
-                    <p className="draft-svtz__step-hint">
+                    <p className="text-sm text-gray-400">
                       {hasNewSourceData
                         ? 'Drag to select text · Click to mark keywords'
                         : 'Click phrases in SOURCE to toggle inclusion'}
@@ -2242,7 +2289,7 @@ export function NodeModal({
 
                     {/* Draft error */}
                     {draftError && (
-                      <div className="draft-svtz__commit-error">
+                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
                         <AlertCircle size={14} />
                         <span>{draftError}</span>
                       </div>
@@ -2250,26 +2297,27 @@ export function NodeModal({
 
                     {/* Validation result */}
                     {currentDraft && (
-                      <div className={`draft-svtz__validation-result ${validationPassed ? 'draft-svtz__validation-result--passed' : 'draft-svtz__validation-result--failed'}`}>
+                      <div className={cn(
+                        'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
+                        validationPassed
+                          ? 'bg-green-50 border border-green-200 text-green-700'
+                          : 'bg-red-50 border border-red-200 text-red-700'
+                      )}>
                         {validationPassed ? (
                           <>
-                            <Check size={14} />
+                            <Check size={14} className="mt-0.5" />
                             <span>Validation passed</span>
                           </>
                         ) : (
                           <>
-                            <AlertCircle size={14} />
-                            <div className="draft-svtz__validation-error-content">
-                              <span className="draft-svtz__validation-error-title">Validation Failed</span>
+                            <AlertCircle size={14} className="mt-0.5" />
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">Validation Failed</span>
                               {validationErrors?.missing && validationErrors.missing.length > 0 && (
-                                <div className="draft-svtz__validation-error-list">
-                                  <span>Missing: {validationErrors.missing.join(', ')}</span>
-                                </div>
+                                <span className="text-xs text-red-600">Missing: {validationErrors.missing.join(', ')}</span>
                               )}
                               {validationErrors?.forbidden && validationErrors.forbidden.length > 0 && (
-                                <div className="draft-svtz__validation-error-list">
-                                  <span>Forbidden: {validationErrors.forbidden.join(', ')}</span>
-                                </div>
+                                <span className="text-xs text-red-600">Forbidden: {validationErrors.forbidden.join(', ')}</span>
                               )}
                             </div>
                           </>
@@ -2279,26 +2327,26 @@ export function NodeModal({
 
                     {/* Commit error */}
                     {commitError && (
-                      <div className="draft-svtz__commit-error">
+                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
                         <AlertCircle size={14} />
                         <span>{commitError}</span>
                       </div>
                     )}
 
                     {/* Action Buttons */}
-                    <div className="draft-svtz__action-buttons">
+                    <div className="flex flex-col gap-2 mt-2">
                       {/* Show different buttons based on source type */}
                       {isMergeDraft ? (
                         /* Merge draft - analyze and commit */
-                        <button
-                          className="draft-svtz__commit-btn"
+                        <Button
                           onClick={handleCommit}
                           disabled={!mergeResult || !allConflictsResolved || isCommitting}
                           title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                          className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                         >
                           {isCommitting ? (
                             <>
-                              <Loader2 size={16} className="draft-svtz__spinner" />
+                              <Loader2 size={16} className="animate-spin" />
                               <span>Creating merge commit...</span>
                             </>
                           ) : (
@@ -2307,18 +2355,19 @@ export function NodeModal({
                               <span>Create Merge Commit</span>
                             </>
                           )}
-                        </button>
+                        </Button>
                       ) : hasSourceConversation ? (
                         <>
                           {/* Generate Draft Button - only for conversation-derived pending commits */}
-                          <button
-                            className="draft-svtz__generate-btn"
+                          <Button
+                            variant="secondary"
                             onClick={handleValidatePendingCommit}
                             disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) || isGeneratingDraft}
+                            className="w-full gap-2"
                           >
                             {isGeneratingDraft ? (
                               <>
-                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <Loader2 size={16} className="animate-spin" />
                                 <span>Validating...</span>
                               </>
                             ) : (
@@ -2327,21 +2376,21 @@ export function NodeModal({
                                 <span>{currentDraft ? 'Re-validate' : 'Validate'}</span>
                               </>
                             )}
-                          </button>
+                          </Button>
 
                           {/* Commit Button - only enabled after validation passed */}
                           {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
-                          <button
-                            className="draft-svtz__commit-btn"
+                          <Button
                             onClick={handleCommit}
                             disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (!validationPassed || isCommitting)}
                             title={isMergeDraft
                               ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
                               : (!currentDraft ? 'Run validation first' : !validationPassed ? 'Validation must pass before committing' : '')}
+                            className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                           >
                             {isCommitting ? (
                               <>
-                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <Loader2 size={16} className="animate-spin" />
                                 <span>Creating...</span>
                               </>
                             ) : (
@@ -2350,43 +2399,47 @@ export function NodeModal({
                                 <span>Commit</span>
                               </>
                             )}
-                          </button>
+                          </Button>
                         </>
                       ) : hasSourceTurnWindow ? (
                         /* Commit-derived pending commits with inherited turn_window - local validation */
                         <>
                           {/* Local Validate Button */}
-                          <button
-                            className="draft-svtz__generate-btn"
+                          <Button
+                            variant="secondary"
                             onClick={handleLocalValidation}
                             disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0)}
+                            className="w-full gap-2"
                           >
                             <GitBranch size={16} />
                             <span>{localValidationPassed !== null ? 'Re-validate' : 'Validate'}</span>
-                          </button>
+                          </Button>
 
                           {/* Local Validation Result */}
                           {localValidationPassed !== null && (
-                            <div className={`draft-svtz__validation-result ${localValidationPassed ? 'draft-svtz__validation-result--passed' : 'draft-svtz__validation-result--failed'}`}>
+                            <div className={cn(
+                              'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
+                              localValidationPassed
+                                ? 'bg-green-50 border border-green-200 text-green-700'
+                                : 'bg-red-50 border border-red-200 text-red-700'
+                            )}>
                               {localValidationPassed ? (
                                 <>
-                                  <Check size={14} />
+                                  <Check size={14} className="mt-0.5" />
                                   <span>Local validation passed</span>
                                 </>
                               ) : (
                                 <>
-                                  <AlertCircle size={14} />
-                                  <span>Local validation failed</span>
-                                  {localValidationErrors?.missing && localValidationErrors.missing.length > 0 && (
-                                    <div className="draft-svtz__validation-error-list">
-                                      <span>Missing: {localValidationErrors.missing.join(', ')}</span>
-                                    </div>
-                                  )}
-                                  {localValidationErrors?.forbidden && localValidationErrors.forbidden.length > 0 && (
-                                    <div className="draft-svtz__validation-error-list">
-                                      <span>Forbidden: {localValidationErrors.forbidden.join(', ')}</span>
-                                    </div>
-                                  )}
+                                  <AlertCircle size={14} className="mt-0.5" />
+                                  <div className="flex flex-col gap-1">
+                                    <span>Local validation failed</span>
+                                    {localValidationErrors?.missing && localValidationErrors.missing.length > 0 && (
+                                      <span className="text-xs">Missing: {localValidationErrors.missing.join(', ')}</span>
+                                    )}
+                                    {localValidationErrors?.forbidden && localValidationErrors.forbidden.length > 0 && (
+                                      <span className="text-xs">Forbidden: {localValidationErrors.forbidden.join(', ')}</span>
+                                    )}
+                                  </div>
                                 </>
                               )}
                             </div>
@@ -2394,17 +2447,17 @@ export function NodeModal({
 
                           {/* Commit Button - enabled after local validation passed */}
                           {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
-                          <button
-                            className="draft-svtz__commit-btn"
+                          <Button
                             onClick={handleCommit}
                             disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (localValidationPassed !== true || isCommitting)}
                             title={isMergeDraft
                               ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
                               : (localValidationPassed === null ? 'Run validation first' : localValidationPassed ? '' : 'Validation must pass before committing')}
+                            className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                           >
                             {isCommitting ? (
                               <>
-                                <Loader2 size={16} className="draft-svtz__spinner" />
+                                <Loader2 size={16} className="animate-spin" />
                                 <span>Creating...</span>
                               </>
                             ) : (
@@ -2413,15 +2466,15 @@ export function NodeModal({
                                 <span>Commit</span>
                               </>
                             )}
-                          </button>
+                          </Button>
                         </>
                       ) : (
                         /* No valid source - cannot commit */
-                        <div className="draft-svtz__no-source-warning">
-                          <AlertCircle size={14} />
-                          <div className="draft-svtz__no-source-details">
-                            <span className="draft-svtz__no-source-title">Cannot commit</span>
-                            <span className="draft-svtz__no-source-reason">
+                        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-700">
+                          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium text-sm">Cannot commit</span>
+                            <span className="text-xs text-amber-600">
                               {!data.sourceConversationId && !data.sourceTurnWindow
                                 ? 'Source commit is missing turn window data (legacy commit). Please create a new conversation from this commit first, then create a commit from that conversation.'
                                 : 'No source conversation or turn window available.'}
@@ -2437,61 +2490,66 @@ export function NodeModal({
 
             {/* Sidebar | SOURCE Divider */}
             <div
-              className="draft-svtz__divider"
+              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors relative group"
               onMouseDown={handleSidebarSourceDivider}
             >
               <div className="draft-svtz__divider-handle" />
             </div>
 
             {/* ========== MAIN CONTENT: SOURCE ========== */}
-            <div className="draft-svtz__main draft-svtz__main--full" ref={mainContentRef}>
+            <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden" ref={mainContentRef}>
               {/* SOURCE Column - Full Width */}
-              <div className="draft-svtz__source draft-svtz__source--full">
-                <div className="draft-svtz__column-header">
-                  <h3>{isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}</h3>
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="px-4 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}
+                  </h3>
                 </div>
-                <div className="draft-svtz__source-content">
+                <div className="flex-1 overflow-y-auto p-4">
                   {/* Merge draft - show merge analysis results */}
                   {isMergeDraft ? (
-                    <div className="draft-svtz__merge-source">
+                    <div>
                       {!mergeResult ? (
                         /* Before analysis - show prompt */
-                        <div className="draft-svtz__merge-pending">
-                          <GitCompare size={48} strokeWidth={1} />
-                          <h4>Merge Analysis Required</h4>
-                          <p>Click "Analyze Merge" in the sidebar to compare semantic content between commits.</p>
-                          <div className="draft-svtz__merge-pending-info">
-                            <div className="draft-svtz__merge-pending-item">
-                              <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--source">SOURCE</span>
-                              <span>{data?.mergeConfig?.sourceCommitTitle}</span>
+                        <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
+                          <GitCompare size={48} strokeWidth={1} className="text-gray-300 mb-4" />
+                          <h4 className="font-semibold text-gray-700 mb-2">Merge Analysis Required</h4>
+                          <p className="text-sm text-gray-500 mb-6">Click &quot;Analyze Merge&quot; in the sidebar to compare semantic content between commits.</p>
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-blue-100 text-blue-700">SOURCE</Badge>
+                              <span className="text-gray-600">{data?.mergeConfig?.sourceCommitTitle}</span>
                             </div>
-                            <div className="draft-svtz__merge-pending-arrow">→</div>
-                            <div className="draft-svtz__merge-pending-item">
-                              <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--target">TARGET</span>
-                              <span>{data?.mergeConfig?.targetCommitTitle}</span>
+                            <span className="text-gray-400">→</span>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-orange-100 text-orange-700">TARGET</Badge>
+                              <span className="text-gray-600">{data?.mergeConfig?.targetCommitTitle}</span>
                             </div>
                           </div>
                         </div>
                       ) : (
                         /* After analysis - show merge results */
-                        <div className="draft-svtz__merge-results">
+                        <div className="flex flex-col gap-4">
                           {/* Auto-merged facets */}
                           {mergeResult.auto_merged_facets.length > 0 && (
-                            <div className="draft-svtz__merge-facets-section">
-                              <div className="draft-svtz__merge-facets-header">
+                            <div className="border border-green-200 rounded-lg overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-b border-green-200 text-green-700 font-medium text-sm">
                                 <Check size={16} />
                                 <span>Auto-merged ({mergeResult.auto_merged_facets.length})</span>
                               </div>
-                              <div className="draft-svtz__merge-facets-list">
+                              <div className="flex flex-col divide-y divide-gray-100">
                                 {mergeResult.auto_merged_facets.map((facet, idx) => (
-                                  <div key={idx} className="draft-svtz__merge-facet-item draft-svtz__merge-facet-item--resolved">
-                                    <div className="draft-svtz__merge-facet-header">
-                                      <span className="draft-svtz__merge-facet-id">{facet.facet}</span>
-                                      <span className={`draft-svtz__merge-facet-source draft-svtz__merge-facet-source--${facet.source}`}>
+                                  <div key={idx} className="p-3 bg-white">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-medium text-sm text-gray-800">{facet.facet}</span>
+                                      <Badge variant="outline" className={cn(
+                                        'text-[0.65rem]',
+                                        facet.source === 'source' ? 'text-blue-600 border-blue-300' : 'text-orange-600 border-orange-300'
+                                      )}>
                                         from {facet.source}
-                                      </span>
+                                      </Badge>
                                     </div>
-                                    <div className="draft-svtz__merge-facet-text">
+                                    <div className="text-sm text-gray-600">
                                       {facet.merged_text || '(deleted)'}
                                     </div>
                                   </div>
@@ -2502,28 +2560,30 @@ export function NodeModal({
 
                           {/* Conflicts */}
                           {mergeResult.conflicts.length > 0 && (
-                            <div className="draft-svtz__merge-facets-section draft-svtz__merge-facets-section--conflicts">
-                              <div className="draft-svtz__merge-facets-header draft-svtz__merge-facets-header--conflicts">
+                            <div className="border border-amber-300 rounded-lg overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-300 text-amber-700 font-medium text-sm">
                                 <AlertCircle size={16} />
                                 <span>Conflicts ({mergeResult.conflicts.length})</span>
                               </div>
-                              <div className="draft-svtz__merge-facets-list">
+                              <div className="flex flex-col divide-y divide-gray-100">
                                 {mergeResult.conflicts.map((conflict, idx) => (
-                                  <div key={idx} className="draft-svtz__merge-facet-item draft-svtz__merge-facet-item--conflict">
-                                    <div className="draft-svtz__merge-facet-header">
-                                      <span className="draft-svtz__merge-facet-id">{conflict.facet}</span>
-                                      <span className="draft-svtz__merge-facet-type">{conflict.conflict_type}</span>
+                                  <div key={idx} className="p-3 bg-white">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="font-medium text-sm text-gray-800">{conflict.facet}</span>
+                                      <Badge variant="outline" className="text-[0.65rem] text-amber-600 border-amber-300">
+                                        {conflict.conflict_type}
+                                      </Badge>
                                     </div>
-                                    <div className="draft-svtz__merge-conflict-compare">
-                                      <div className="draft-svtz__merge-conflict-side">
-                                        <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--source">SOURCE</span>
-                                        <div className="draft-svtz__merge-conflict-text">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="p-2 bg-blue-50/50 rounded border border-blue-100">
+                                        <Badge className="bg-blue-100 text-blue-700 text-[0.6rem] mb-1.5">SOURCE</Badge>
+                                        <div className="text-sm text-gray-600">
                                           {conflict.source_text || '(deleted)'}
                                         </div>
                                       </div>
-                                      <div className="draft-svtz__merge-conflict-side">
-                                        <span className="draft-svtz__merge-source-label draft-svtz__merge-source-label--target">TARGET</span>
-                                        <div className="draft-svtz__merge-conflict-text">
+                                      <div className="p-2 bg-orange-50/50 rounded border border-orange-100">
+                                        <Badge className="bg-orange-100 text-orange-700 text-[0.6rem] mb-1.5">TARGET</Badge>
+                                        <div className="text-sm text-gray-600">
                                           {conflict.target_text || '(deleted)'}
                                         </div>
                                       </div>
@@ -2536,10 +2596,10 @@ export function NodeModal({
 
                           {/* Clean merge message */}
                           {mergeResult.status === 'clean' && mergeResult.auto_merged_facets.length === 0 && (
-                            <div className="draft-svtz__merge-pending">
-                              <Check size={48} strokeWidth={1} />
-                              <h4>No Changes Detected</h4>
-                              <p>The source and target commits have identical semantic content.</p>
+                            <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
+                              <Check size={48} strokeWidth={1} className="text-green-300 mb-4" />
+                              <h4 className="font-semibold text-gray-700 mb-2">No Changes Detected</h4>
+                              <p className="text-sm text-gray-500">The source and target commits have identical semantic content.</p>
                             </div>
                           )}
                         </div>
@@ -2553,37 +2613,43 @@ export function NodeModal({
                       readOnly={!configLocked}
                     />
                   ) : sourceBoxes.length === 0 ? (
-                    <div className="draft-svtz__source-empty">
-                      <MessageSquarePlus size={32} strokeWidth={1} />
-                      <p>No source content</p>
-                      <span>Connect upstream conversation or commit</span>
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                      <MessageSquarePlus size={32} strokeWidth={1} className="mb-2" />
+                      <p className="font-medium text-gray-500">No source content</p>
+                      <span className="text-sm">Connect upstream conversation or commit</span>
                     </div>
                   ) : (
                     /* Legacy phrase-based UI */
                     sourceBoxes.map((box) => (
-                      <div key={box.id} className="draft-svtz__source-box">
+                      <div key={box.id} className="bg-white border border-gray-200 rounded-lg mb-3 overflow-hidden">
                         {/* Source Box Header */}
                         <div
-                          className="draft-svtz__source-box-header"
+                          className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => toggleSourceBoxExpand(box.id)}
                         >
-                          <span className="draft-svtz__source-box-toggle">
+                          <span className="text-gray-500">
                             {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </span>
-                          <span className="draft-svtz__source-box-title">{box.title}</span>
-                          <span className={`draft-svtz__source-box-badge draft-svtz__source-box-badge--${box.type}`}>
+                          <span className="flex-1 text-[0.85rem] font-medium text-gray-700">{box.title}</span>
+                          <Badge variant="outline" className="text-[0.65rem] text-blue-600 border-blue-300 bg-blue-50">
                             {box.type}
-                          </span>
+                          </Badge>
                         </div>
                         {/* Source Box Body with Phrases and Keyword Highlighting */}
                         {box.expanded && (
-                          <div className="draft-svtz__source-box-body">
+                          <div className="p-3 text-[0.9rem] leading-[1.8] text-gray-700">
                             {box.phrases.map((phrase) => {
                               const canToggle = configLocked // Only allow toggling when Step 1 is locked
                               return (
                                 <div
                                   key={phrase.id}
-                                  className={`draft-svtz__phrase ${phrase.included ? 'draft-svtz__phrase--included' : 'draft-svtz__phrase--excluded'} ${!canToggle ? 'draft-svtz__phrase--disabled' : ''}`}
+                                  className={cn(
+                                    'inline-block py-1.5 px-2.5 m-1 rounded-md transition-colors cursor-pointer leading-[1.6] max-w-full',
+                                    phrase.included
+                                      ? 'bg-green-100 border border-green-300 hover:bg-green-200'
+                                      : 'bg-red-100 border border-red-300 hover:bg-red-200',
+                                    !canToggle && 'opacity-70 cursor-default'
+                                  )}
                                   onClick={(e) => {
                                     // Only toggle if clicking the phrase background (not a keyword)
                                     if (canToggle && e.target === e.currentTarget) {
@@ -2615,21 +2681,21 @@ export function NodeModal({
           </div>
 
           {/* Bottom Legend */}
-          <footer className="draft-svtz__legend">
-            <span className="draft-svtz__legend-item">
-              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--included" />
+          <footer className="flex items-center justify-center gap-6 px-6 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 shrink-0">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded bg-green-100 border border-green-300" />
               green bg = included phrase
             </span>
-            <span className="draft-svtz__legend-item">
-              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--excluded" />
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded bg-red-100 border border-red-300" />
               red bg = excluded phrase
             </span>
-            <span className="draft-svtz__legend-item">
-              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-must" />
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded bg-green-600" />
               green text = must-have keyword
             </span>
-            <span className="draft-svtz__legend-item">
-              <span className="draft-svtz__legend-swatch draft-svtz__legend-swatch--keyword-mustnt" />
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded bg-red-600" />
               red text = mustnt-have keyword
             </span>
           </footer>
@@ -2660,71 +2726,77 @@ export function NodeModal({
     }, {} as Record<string, typeof commitFacets>)
 
     return (
-      <div className="node-modal__overlay" role="dialog" aria-modal="true">
-        <div className="modal-v2 modal-v2--commit">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+        <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
-          <header className="modal-v2__topbar">
-            <div className="modal-v2__topbar-left">
-              <h2 className="modal-v2__title">Commit: {data.title || 'Untitled'}</h2>
-              <span className="modal-v2__id">{data.entryId}</span>
-              <span className={`modal-v2__branch-badge modal-v2__branch-badge--${branchLabel === 'main' ? 'main' : 'branch'}`}>
+          <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+            <div className="flex items-center gap-3">
+              <h2 className="text-[0.95rem] font-semibold text-gray-800">Commit: {data.title || 'Untitled'}</h2>
+              <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
+              <Badge className={cn(
+                'text-[0.65rem] gap-1',
+                branchLabel === 'main'
+                  ? 'bg-green-100 text-green-700 border-green-300'
+                  : 'bg-purple-100 text-purple-700 border-purple-300'
+              )}>
                 <GitBranch size={12} />
                 {branchLabel}
-              </span>
+              </Badge>
             </div>
-            <div className="modal-v2__topbar-right">
+            <div className="flex items-center gap-2">
               {quickActions?.map((action) => (
-                <button
+                <Button
                   key={action.key}
-                  className="modal-v2__secondary-btn"
+                  variant="outline"
                   onClick={() => {
                     action.onClick()
                     onClose()
                   }}
                   disabled={action.disabled}
+                  className="gap-1.5 h-9"
                 >
                   {action.icon}
                   <span>{action.label}</span>
-                </button>
+                </Button>
               ))}
-              <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
                 <X size={20} />
-              </button>
+              </Button>
             </div>
           </header>
 
-          <div className="modal-v2__body" ref={commitContainerRef}>
+          <div className="flex flex-1 overflow-hidden min-h-0" ref={commitContainerRef}>
             {/* Left Sidebar - Meta & Lineage */}
-            <aside className="modal-v2__sidebar modal-v2__sidebar--left" style={{ width: commitLeftWidth }}>
-              <div className="modal-v2__sidebar-section">
-                <h4>Version Info</h4>
-                <div className="modal-v2__info-row">
-                  <GitBranch size={14} />
+            <aside className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50" style={{ width: commitLeftWidth }}>
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Version Info</h4>
+                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                  <GitBranch size={14} className="text-gray-400 shrink-0" />
                   <span>Branch: <strong>{branchLabel}</strong></span>
                 </div>
-                <div className="modal-v2__info-row">
-                  <Clock size={14} />
+                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                  <Clock size={14} className="text-gray-400 shrink-0" />
                   <span>{data.timestamp}</span>
                 </div>
-                <div className="modal-v2__info-row">
-                  <Tag size={14} />
+                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                  <Tag size={14} className="text-gray-400 shrink-0" />
                   <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
                 </div>
               </div>
 
-              <div className="modal-v2__sidebar-divider" />
+              <div className="h-px bg-gray-200 my-4" />
 
-              <div className="modal-v2__sidebar-section">
-                <h4>Lineage</h4>
-                <div className="commit-v2__lineage">
-                  <div className="commit-v2__lineage-item">
-                    <span className="commit-v2__lineage-label">From Draft:</span>
-                    <span className="commit-v2__lineage-value">{data.entryId}</span>
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Lineage</h4>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-[0.85rem]">
+                    <span className="text-gray-500">From Draft:</span>
+                    <span className="text-gray-700 font-mono text-xs">{data.entryId}</span>
                   </div>
                   {data.baselineSummary && (
-                    <div className="commit-v2__lineage-item">
-                      <span className="commit-v2__lineage-label">Upstream:</span>
-                      <span className="commit-v2__lineage-value">Connected</span>
+                    <div className="flex items-center gap-2 text-[0.85rem]">
+                      <span className="text-gray-500">Upstream:</span>
+                      <span className="text-gray-700">Connected</span>
                     </div>
                   )}
                 </div>
@@ -2733,30 +2805,30 @@ export function NodeModal({
 
             {/* Left Divider */}
             <div
-              className="modal-v2__resize-divider"
+              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
               onMouseDown={handleCommitLeftDivider}
             />
 
             {/* Main Content - Source Excerpt & Generated Output */}
-            <div className="modal-v2__main">
+            <div className="flex-1 min-w-0 overflow-y-auto p-6 flex flex-col gap-6">
               {/* Source Excerpt - User's semantic selections */}
-              <div className="commit-v2__section">
-                <div className="commit-v2__section-header">
-                  <h3>Source Excerpt</h3>
-                  <span className="commit-v2__readonly-badge">Read-only</span>
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-sm text-gray-700">Source Excerpt</h3>
+                  <Badge variant="outline" className="text-[0.65rem] text-gray-400">Read-only</Badge>
                 </div>
-                <div className="commit-v2__source-excerpt">
+                <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
                   {commitSourceExcerpt.length > 0 ? (
-                    <div className="commit-v2__source-list">
+                    <div className="flex flex-col gap-2">
                       {commitSourceExcerpt.map((excerpt, idx) => (
-                        <div key={idx} className="commit-v2__source-item">
-                          <span className="commit-v2__source-marker">•</span>
-                          <span className="commit-v2__source-text">{excerpt}</span>
+                        <div key={idx} className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100">
+                          <span className="text-gray-400 font-bold shrink-0">•</span>
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">{excerpt}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="commit-v2__empty-state">
+                    <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
                       <span>No source excerpt recorded</span>
                     </div>
                   )}
@@ -2764,58 +2836,58 @@ export function NodeModal({
               </div>
 
               {/* Generated Output - LLM generated content */}
-              <div className="commit-v2__section">
-                <div className="commit-v2__section-header">
-                  <h3>Generated Output</h3>
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
                 </div>
-                <div className="commit-v2__generated-output">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-[0.9rem] leading-relaxed text-gray-700">
                   {data.summary || 'No generated content.'}
                 </div>
               </div>
 
               {data.status && (
-                <div className="commit-v2__section">
-                  <div className="commit-v2__section-header">
-                    <h3>Intent</h3>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-sm text-gray-700">Intent</h3>
                   </div>
-                  <div className="commit-v2__intent">
+                  <div className="p-3 bg-white border border-gray-200 rounded-md text-[0.9rem] text-gray-700">
                     {data.status}
                   </div>
                 </div>
               )}
 
               {/* Facets - Extracted semantic data */}
-              <div className="commit-v2__section">
-                <div className="commit-v2__section-header">
-                  <h3>Facets</h3>
-                  <span className="commit-v2__facet-count">{commitFacets.length} extracted</span>
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-sm text-gray-700">Facets</h3>
+                  <span className="text-xs text-gray-400">{commitFacets.length} extracted</span>
                 </div>
-                <div className="commit-v2__facets">
+                <div>
                   {commitFacets.length > 0 ? (
-                    <div className="commit-v2__facets-list">
+                    <div className="flex flex-col gap-3">
                       {Object.entries(facetsByType).map(([type, facets]) => (
-                        <div key={type} className="commit-v2__facet-group">
-                          <h5 className={`commit-v2__facet-type commit-v2__facet-type--${type}`}>
+                        <div key={type} className="bg-white border border-gray-200 rounded-md overflow-hidden">
+                          <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-700">
                             {type}
-                            <span className="commit-v2__facet-type-count">({facets.length})</span>
+                            <span className="text-xs text-gray-400">({facets.length})</span>
                           </h5>
-                          <div className="commit-v2__facet-items">
+                          <div className="p-2 flex flex-wrap gap-2">
                             {facets.map((facet, idx) => (
-                              <div key={idx} className="commit-v2__facet-item">
+                              <div key={idx} className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded text-sm">
                                 {facet.text && (
-                                  <span className="commit-v2__facet-text">{facet.text}</span>
+                                  <span className="text-gray-700">{facet.text}</span>
                                 )}
                                 {facet.key && facet.value !== undefined && (
-                                  <span className="commit-v2__facet-kv">
-                                    <span className="commit-v2__facet-key">{facet.key}:</span>
-                                    <span className="commit-v2__facet-value">{String(facet.value)}</span>
+                                  <span className="text-gray-600">
+                                    <span className="text-gray-400">{facet.key}:</span>
+                                    <span className="ml-0.5">{String(facet.value)}</span>
                                   </span>
                                 )}
                                 {facet.entity_type && (
-                                  <span className="commit-v2__facet-entity">[{facet.entity_type}]</span>
+                                  <span className="text-xs text-purple-600">[{facet.entity_type}]</span>
                                 )}
                                 {facet.confidence !== undefined && (
-                                  <span className="commit-v2__facet-confidence">
+                                  <span className="text-xs text-emerald-600 font-medium">
                                     {Math.round(facet.confidence * 100)}%
                                   </span>
                                 )}
@@ -2826,7 +2898,7 @@ export function NodeModal({
                       ))}
                     </div>
                   ) : (
-                    <div className="commit-v2__empty-state">
+                    <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
                       <span>No facets extracted</span>
                     </div>
                   )}
@@ -2836,75 +2908,72 @@ export function NodeModal({
 
             {/* Right Divider */}
             <div
-              className="modal-v2__resize-divider"
+              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
               onMouseDown={handleCommitRightDivider}
             />
 
             {/* Right Sidebar - Constraints Summary */}
-            <aside className="modal-v2__sidebar modal-v2__sidebar--right" style={{ width: commitRightWidth }}>
-              <div className="modal-v2__sidebar-section">
-                <h4>Constraints</h4>
+            <aside className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50" style={{ width: commitRightWidth }}>
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Constraints</h4>
 
-                <div className="commit-v2__constraints-group">
-                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--must">
-                    Must-have
-                  </h5>
+                <div className="mb-4">
+                  <h5 className="text-xs font-medium text-green-600 mb-2">Must-have</h5>
                   {commitMustHave.length > 0 ? (
-                    <div className="commit-v2__constraints-tags">
+                    <div className="flex flex-wrap gap-1.5">
                       {commitMustHave.map((w, i) => (
-                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--must">
+                        <Badge key={i} className="text-[0.7rem] bg-green-100 text-green-700 border-green-300">
                           {w}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   ) : (
-                    <span className="commit-v2__constraints-empty">None</span>
+                    <span className="text-sm text-gray-400">None</span>
                   )}
                 </div>
 
-                <div className="commit-v2__constraints-group">
-                  <h5 className="commit-v2__constraints-label commit-v2__constraints-label--mustnt">
-                    Mustn't-have
-                  </h5>
+                <div className="mb-4">
+                  <h5 className="text-xs font-medium text-red-600 mb-2">Mustn&apos;t-have</h5>
                   {commitMustntHave.length > 0 ? (
-                    <div className="commit-v2__constraints-tags">
+                    <div className="flex flex-wrap gap-1.5">
                       {commitMustntHave.map((w, i) => (
-                        <span key={i} className="commit-v2__constraint-tag commit-v2__constraint-tag--mustnt">
+                        <Badge key={i} className="text-[0.7rem] bg-red-100 text-red-700 border-red-300">
                           {w}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   ) : (
-                    <span className="commit-v2__constraints-empty">None</span>
+                    <span className="text-sm text-gray-400">None</span>
                   )}
                 </div>
               </div>
 
-              <div className="modal-v2__sidebar-divider" />
+              <div className="h-px bg-gray-200 my-4" />
 
               {/* Diff Section */}
-              <div className="modal-v2__sidebar-section">
-                <h4>
-                  <GitCompare size={14} style={{ marginRight: 6 }} />
+              <div className="mb-5">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <GitCompare size={14} />
                   Compare
                 </h4>
 
                 {!showDiffPanel ? (
-                  <button
-                    className="commit-v2__diff-btn"
+                  <Button
+                    variant="outline"
                     onClick={() => setShowDiffPanel(true)}
                     disabled={allCommittedCommits.length <= 1}
                     title={allCommittedCommits.length <= 1 ? 'Need at least 2 commits to compare' : 'Compare with another commit'}
+                    className="w-full gap-2"
                   >
                     <GitCompare size={14} />
                     <span>Compare with...</span>
-                  </button>
+                  </Button>
                 ) : (
-                  <div className="commit-v2__diff-panel">
-                    <div className="commit-v2__diff-select-group">
-                      <label className="commit-v2__diff-label">Compare with:</label>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs text-gray-500">Compare with:</label>
                       <select
-                        className="commit-v2__diff-select"
+                        className="w-full py-2 px-3 border border-gray-300 rounded-md text-sm bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-blue-500"
                         value={diffTargetCommit}
                         onChange={(e) => {
                           setDiffTargetCommit(e.target.value)
@@ -2923,15 +2992,15 @@ export function NodeModal({
                       </select>
                     </div>
 
-                    <div className="commit-v2__diff-actions">
-                      <button
-                        className="commit-v2__diff-run-btn"
+                    <div className="flex gap-2">
+                      <Button
                         onClick={handleDiff}
                         disabled={!diffTargetCommit || isDiffLoading}
+                        className="flex-1 gap-1.5"
                       >
                         {isDiffLoading ? (
                           <>
-                            <Loader2 size={14} className="draft-svtz__spinner" />
+                            <Loader2 size={14} className="animate-spin" />
                             <span>Comparing...</span>
                           </>
                         ) : (
@@ -2940,9 +3009,9 @@ export function NodeModal({
                             <span>Run Diff</span>
                           </>
                         )}
-                      </button>
-                      <button
-                        className="commit-v2__diff-cancel-btn"
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={() => {
                           setShowDiffPanel(false)
                           setDiffTargetCommit('')
@@ -2951,58 +3020,68 @@ export function NodeModal({
                         }}
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
 
                     {diffError && (
-                      <div className="commit-v2__diff-error">
+                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm mt-2">
                         <AlertCircle size={14} />
                         <span>{diffError}</span>
                       </div>
                     )}
 
                     {diffResult && (
-                      <div className="commit-v2__diff-result">
-                        <div className="commit-v2__diff-summary">
-                          <span className="commit-v2__diff-summary-label">Facet Changes:</span>
-                          <span className="commit-v2__diff-summary-count">
+                      <div className="mt-3 p-3 bg-white border border-gray-200 rounded-md">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-600">Facet Changes:</span>
+                          <Badge variant="outline" className="text-xs">
                             {diffResult.diff.facet_changes.length}
-                          </span>
+                          </Badge>
                         </div>
 
                         {diffResult.diff.facet_changes.length > 0 && (
-                          <div className="commit-v2__diff-changes">
+                          <div className="flex flex-col gap-2">
                             {diffResult.diff.facet_changes.map((change, idx) => (
-                              <div key={idx} className={`commit-v2__diff-change commit-v2__diff-change--${change.change_type}`}>
-                                <div className="commit-v2__diff-change-header">
-                                  <span className={`commit-v2__diff-change-type commit-v2__diff-change-type--${change.change_type}`}>
+                              <div key={idx} className={cn(
+                                'p-2 rounded border text-sm',
+                                change.change_type === 'added' && 'bg-green-50 border-green-200',
+                                change.change_type === 'removed' && 'bg-red-50 border-red-200',
+                                change.change_type === 'modified' && 'bg-amber-50 border-amber-200'
+                              )}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className={cn(
+                                    'text-[0.6rem]',
+                                    change.change_type === 'added' && 'text-green-600 border-green-300',
+                                    change.change_type === 'removed' && 'text-red-600 border-red-300',
+                                    change.change_type === 'modified' && 'text-amber-600 border-amber-300'
+                                  )}>
                                     {change.change_type}
-                                  </span>
-                                  <span className="commit-v2__diff-change-facet">{change.facet}</span>
+                                  </Badge>
+                                  <span className="font-medium text-gray-700">{change.facet}</span>
                                 </div>
                                 {change.base_text && (
-                                  <div className="commit-v2__diff-change-text commit-v2__diff-change-text--removed">
+                                  <div className="text-red-600 text-xs font-mono bg-red-100/50 px-2 py-1 rounded">
                                     - {change.base_text}
                                   </div>
                                 )}
                                 {change.target_text && (
-                                  <div className="commit-v2__diff-change-text commit-v2__diff-change-text--added">
+                                  <div className="text-green-600 text-xs font-mono bg-green-100/50 px-2 py-1 rounded mt-1">
                                     + {change.target_text}
                                   </div>
                                 )}
                                 {change.added_keywords.length > 0 && (
-                                  <div className="commit-v2__diff-keywords">
-                                    <span className="commit-v2__diff-keywords-label">Added:</span>
+                                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                                    <span className="text-xs text-gray-500">Added:</span>
                                     {change.added_keywords.map((kw, i) => (
-                                      <span key={i} className="commit-v2__diff-keyword commit-v2__diff-keyword--added">{kw}</span>
+                                      <Badge key={i} className="text-[0.6rem] bg-green-100 text-green-700">{kw}</Badge>
                                     ))}
                                   </div>
                                 )}
                                 {change.removed_keywords.length > 0 && (
-                                  <div className="commit-v2__diff-keywords">
-                                    <span className="commit-v2__diff-keywords-label">Removed:</span>
+                                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                                    <span className="text-xs text-gray-500">Removed:</span>
                                     {change.removed_keywords.map((kw, i) => (
-                                      <span key={i} className="commit-v2__diff-keyword commit-v2__diff-keyword--removed">{kw}</span>
+                                      <Badge key={i} className="text-[0.6rem] bg-red-100 text-red-700">{kw}</Badge>
                                     ))}
                                   </div>
                                 )}
@@ -3012,7 +3091,7 @@ export function NodeModal({
                         )}
 
                         {diffResult.diff.facet_changes.length === 0 && (
-                          <div className="commit-v2__diff-empty">
+                          <div className="text-center py-4 text-sm text-gray-400">
                             No facet changes detected
                           </div>
                         )}
@@ -3030,19 +3109,19 @@ export function NodeModal({
 
   // Fallback for unknown node types
   return (
-    <div className="node-modal__overlay" role="dialog" aria-modal="true">
-      <div className="modal-v2">
-        <header className="modal-v2__topbar">
-          <div className="modal-v2__topbar-left">
-            <h2 className="modal-v2__title">{data?.title || 'Node'}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+      <div className="flex flex-col w-[80vw] max-w-[800px] max-h-[60vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-[0.95rem] font-semibold text-gray-800">{data?.title || 'Node'}</h2>
           </div>
-          <div className="modal-v2__topbar-right">
-            <button className="modal-v2__close-btn" onClick={onClose} aria-label="Close">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
               <X size={20} />
-            </button>
+            </Button>
           </div>
         </header>
-        <div className="modal-v2__body">
+        <div className="flex-1 p-6 flex items-center justify-center text-gray-500">
           <p>Unknown node type</p>
         </div>
       </div>

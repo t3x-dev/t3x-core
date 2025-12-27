@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, MessageSquare, GitCommit } from 'lucide-react'
-import type { SourceTextBlock, TextSelection, KeywordMarker, TextToken } from '../types/nodes'
+import type { SourceTextBlock, TextSelection, KeywordMarker, TextToken } from '@/types/nodes'
 import {
   isTokenInSelection,
   isTokenInIncludeSelection,
@@ -8,7 +8,8 @@ import {
   addSelection,
   toggleKeyword,
   cleanupKeywords,
-} from '../utils/tokenizer'
+} from '@/utils/tokenizer'
+import { cn } from '@/lib/utils'
 
 interface SelectableTextBlockProps {
   block: SourceTextBlock
@@ -245,10 +246,26 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
     return tokenIndex >= start && tokenIndex <= end
   }
 
+  // Token style helper
+  const getTokenClasses = (state: TokenState, isDragging: boolean, isSeparator = false) => {
+    if (isSeparator) {
+      return 'inline py-0.5 rounded transition-colors mx-0.5 text-slate-400'
+    }
+    return cn(
+      'inline py-0.5 rounded transition-colors cursor-pointer',
+      state === 'normal' && 'hover:bg-slate-100',
+      state === 'selected' && 'bg-green-100 hover:bg-green-200',
+      state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
+      state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
+      state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
+      isDragging && state === 'normal' && 'bg-blue-100',
+    )
+  }
+
   return (
     <div
       ref={containerRef}
-      className="selectable-text-block"
+      className="p-4 bg-slate-50 rounded-lg border border-slate-200"
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onMouseLeave={() => {
@@ -260,21 +277,12 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
         }
       }}
     >
-      <div className="selectable-text-block__tokens">
+      <div className="text-[0.95rem] leading-8 select-none">
         {block.tokens.map((token, idx) => {
           const state = getTokenState(token, block.selections, block.keywords)
           const isDragging = isInDragSelection(token.index)
           const nextToken = block.tokens[idx + 1]
           const addSpace = needsSpaceAfter(token, nextToken)
-
-          const classes = ['selectable-token']
-          if (state === 'selected') classes.push('selectable-token--selected')
-          if (state === 'excluded') classes.push('selectable-token--excluded')
-          if (state === 'keyword-must') classes.push('selectable-token--keyword-must')
-          if (state === 'keyword-mustnt') classes.push('selectable-token--keyword-mustnt')
-          if (isDragging && !isTokenInSelection(token.index, block.selections)) {
-            classes.push(isRightDragging ? 'selectable-token--dragging-exclude' : 'selectable-token--dragging')
-          }
 
           // Skip interaction for pure punctuation (including | and │ separators)
           const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>|│\s]+$/.test(token.text)
@@ -287,7 +295,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
           // Render separator │ with special styling
           if (token.text === '│') {
             return (
-              <span key={token.id} className="selectable-token selectable-token--separator">
+              <span key={token.id} className={getTokenClasses(state, isDragging, true)}>
                 {token.text}
               </span>
             )
@@ -296,7 +304,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
           return (
             <span
               key={token.id}
-              className={classes.join(' ')}
+              className={getTokenClasses(state, isDragging)}
               onMouseDown={(e) => !isPunctuation && handleTokenMouseDown(token.index, e)}
               onMouseEnter={() => handleTokenMouseEnter(token.index)}
               onContextMenu={(e) => {
@@ -313,7 +321,7 @@ export function SelectableTextBlock({ block, onChange, readOnly = false }: Selec
       </div>
 
       {!readOnly && (
-        <div className="selectable-text-block__hint">
+        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -346,25 +354,34 @@ function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false 
   const title = block.sourceNodeTitle || 'Unit'
 
   return (
-    <div className={`source-box ${isExpanded ? 'source-box--expanded' : ''}`}>
+    <div
+      className={cn(
+        'border border-slate-200 rounded-lg overflow-hidden',
+        isExpanded && 'shadow-sm'
+      )}
+    >
       {/* Box Header */}
       <div
-        className="source-box__header"
+        className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <span className="source-box__toggle">
+        <span className="text-slate-400">
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <span className={`source-box__icon source-box__icon--unit`}>
+        <span className="w-6 h-6 rounded flex items-center justify-center bg-blue-100 text-blue-600">
           {icon}
         </span>
-        <span className="source-box__type-label">{typeLabel}:</span>
-        <span className="source-box__title">{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {typeLabel}:
+        </span>
+        <span className="text-sm font-medium text-slate-800 truncate">
+          {title}
+        </span>
       </div>
 
       {/* Box Content */}
       {isExpanded && (
-        <div className="source-box__content">
+        <div className="p-4 bg-white">
           {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
             // Unit with turns: Render with turn groups
             <ConversationTurnRenderer
@@ -544,20 +561,24 @@ function ConversationTurnRenderer({ block, onChange, readOnly = false }: Convers
     return tokenIndex >= start && tokenIndex <= end
   }
 
+  // Token style helper
+  const getTokenClasses = (state: TokenState, isDragging: boolean) => {
+    return cn(
+      'inline py-0.5 rounded transition-colors cursor-pointer',
+      state === 'normal' && 'hover:bg-slate-100',
+      state === 'selected' && 'bg-green-100 hover:bg-green-200',
+      state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
+      state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
+      state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
+      isDragging && state === 'normal' && 'bg-blue-100',
+    )
+  }
+
   // Render a single token
   const renderToken = (token: TextToken, nextToken: TextToken | undefined) => {
     const state = getTokenState(token, block.selections, block.keywords)
     const isDragging = isInDragSelection(token.index)
     const addSpace = needsSpaceAfter(token, nextToken)
-
-    const classes = ['selectable-token']
-    if (state === 'selected') classes.push('selectable-token--selected')
-    if (state === 'excluded') classes.push('selectable-token--excluded')
-    if (state === 'keyword-must') classes.push('selectable-token--keyword-must')
-    if (state === 'keyword-mustnt') classes.push('selectable-token--keyword-mustnt')
-    if (isDragging && !isTokenInSelection(token.index, block.selections)) {
-      classes.push(isRightDragging ? 'selectable-token--dragging-exclude' : 'selectable-token--dragging')
-    }
 
     const isPunctuation = /^[，。！？、；：""''（）《》【】.,!?;:'"()[\]{}<>|│\s]+$/.test(token.text)
 
@@ -568,7 +589,7 @@ function ConversationTurnRenderer({ block, onChange, readOnly = false }: Convers
     return (
       <span
         key={token.id}
-        className={classes.join(' ')}
+        className={getTokenClasses(state, isDragging)}
         onMouseDown={(e) => !isPunctuation && handleTokenMouseDown(token.index, e)}
         onMouseEnter={() => handleTokenMouseEnter(token.index)}
         onContextMenu={(e) => {
@@ -586,7 +607,7 @@ function ConversationTurnRenderer({ block, onChange, readOnly = false }: Convers
   return (
     <div
       ref={containerRef}
-      className="conversation-turn-renderer"
+      className="space-y-3"
       onMouseUp={handleMouseUp}
       onContextMenu={(e) => e.preventDefault()}
       onMouseLeave={() => {
@@ -601,21 +622,32 @@ function ConversationTurnRenderer({ block, onChange, readOnly = false }: Convers
       {turnGroups.map((group, groupIdx) => (
         <div
           key={group.turn ? `turn-${group.turn.startTokenIndex}` : `ungrouped-${groupIdx}`}
-          className={`turn-group ${group.turn ? `turn-group--${group.turn.role}` : ''}`}
+          className={cn(
+            'rounded-lg border p-3',
+            group.turn?.role === 'user' && 'border-blue-200 bg-blue-50/50',
+            group.turn?.role === 'assistant' && 'border-emerald-200 bg-emerald-50/50',
+            !group.turn && 'border-slate-200 bg-slate-50'
+          )}
         >
           {group.turn && (
-            <div className={`turn-group__label turn-group__label--${group.turn.role}`}>
+            <div
+              className={cn(
+                'text-[0.6rem] font-bold uppercase tracking-wider mb-2 pb-1 border-b',
+                group.turn.role === 'user' && 'text-blue-600 border-blue-200',
+                group.turn.role === 'assistant' && 'text-emerald-600 border-emerald-200'
+              )}
+            >
               {group.turn.role === 'user' ? 'USER' : 'ASSISTANT'}
             </div>
           )}
-          <div className="turn-group__content">
+          <div className="text-[0.95rem] leading-7 select-none">
             {group.tokens.map((token, idx) => renderToken(token, group.tokens[idx + 1]))}
           </div>
         </div>
       ))}
 
       {!readOnly && (
-        <div className="selectable-text-block__hint">
+        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -636,7 +668,7 @@ export function PendingSourceEditor({ blocks, onChange, readOnly = false }: Pend
   const defaultExpanded = blocks.length === 1
 
   return (
-    <div className="pending-source-editor">
+    <div className="space-y-3">
       {blocks.map((block) => (
         <SourceBox
           key={block.id}
@@ -659,7 +691,7 @@ interface SourceExcerptViewerProps {
 export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
   if (!blocks || blocks.length === 0) {
     return (
-      <div className="source-excerpt-viewer source-excerpt-viewer--empty">
+      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center text-sm text-slate-500 italic">
         <span>No source excerpt recorded</span>
       </div>
     )
@@ -691,15 +723,15 @@ export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
 
   if (!excerptText.trim()) {
     return (
-      <div className="source-excerpt-viewer source-excerpt-viewer--empty">
+      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center text-sm text-slate-500 italic">
         <span>No semantic content selected</span>
       </div>
     )
   }
 
   return (
-    <div className="source-excerpt-viewer">
-      <div className="source-excerpt-viewer__text">
+    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+      <div className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
         {excerptText}
       </div>
     </div>

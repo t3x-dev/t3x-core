@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo } from 'react'
 import { Check, X, Save, Trash2, Bookmark } from 'lucide-react'
-import type { Clause, Keyword, ClauseStatus, KeywordConstraintType, ConversationConstraints } from '../types/nodes'
+import type { Clause, Keyword, ClauseStatus, KeywordConstraintType, ConversationConstraints } from '@/types/nodes'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 interface ManageModeProps {
   text: string
@@ -237,7 +239,7 @@ export default function ManageMode({ text, initialConstraints, onSave, onExit, i
     const { tokens } = tokenizeSentence(clause.text, clause.keywords)
 
     return (
-      <span className="manage-mode__sentence">
+      <span className="text-sm leading-relaxed">
         {tokens.map((token, idx) => {
           if (!token.isKeyword || !token.keywordId) {
             return <span key={idx}>{token.text}</span>
@@ -251,40 +253,46 @@ export default function ManageMode({ text, initialConstraints, onSave, onExit, i
           return (
             <span
               key={idx}
-              className={`manage-mode__inline-keyword ${
-                keyword.constraint === 'must_have'
-                  ? 'manage-mode__inline-keyword--must-have'
-                  : keyword.constraint === 'mustnt_have'
-                    ? 'manage-mode__inline-keyword--mustnt-have'
-                    : ''
-              } ${isLocked ? 'manage-mode__inline-keyword--locked' : ''}`}
+              className={cn(
+                'relative inline-flex items-center px-1 py-0.5 rounded cursor-pointer transition-colors group',
+                keyword.constraint === 'must_have' && 'bg-green-100 hover:bg-green-200',
+                keyword.constraint === 'mustnt_have' && 'bg-red-100 hover:bg-red-200',
+                keyword.constraint === 'neutral' && 'bg-slate-100 hover:bg-slate-200',
+                isLocked && 'cursor-default'
+              )}
             >
-              <span className="manage-mode__inline-keyword-text">{token.text}</span>
+              <span className="font-medium">{token.text}</span>
               {!isLocked && (
-                <span className="manage-mode__inline-keyword-actions">
+                <span className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5 bg-white rounded shadow-sm border p-0.5">
                   <button
-                    className={`manage-mode__inline-keyword-btn manage-mode__inline-keyword-btn--check ${
-                      keyword.constraint === 'must_have' ? 'active' : ''
-                    }`}
+                    className={cn(
+                      'w-4 h-4 rounded flex items-center justify-center transition-colors',
+                      keyword.constraint === 'must_have'
+                        ? 'bg-green-500 text-white'
+                        : 'hover:bg-green-100 text-slate-500 hover:text-green-600'
+                    )}
                     onClick={(e) => {
                       e.stopPropagation()
                       toggleKeywordConstraint(clause.id, keyword.id, 'must_have')
                     }}
                     title="Must-have"
                   >
-                    <Check size={12} />
+                    <Check size={10} />
                   </button>
                   <button
-                    className={`manage-mode__inline-keyword-btn manage-mode__inline-keyword-btn--x ${
-                      keyword.constraint === 'mustnt_have' ? 'active' : ''
-                    }`}
+                    className={cn(
+                      'w-4 h-4 rounded flex items-center justify-center transition-colors',
+                      keyword.constraint === 'mustnt_have'
+                        ? 'bg-red-500 text-white'
+                        : 'hover:bg-red-100 text-slate-500 hover:text-red-600'
+                    )}
                     onClick={(e) => {
                       e.stopPropagation()
                       toggleKeywordConstraint(clause.id, keyword.id, 'mustnt_have')
                     }}
                     title="Mustn't-have"
                   >
-                    <X size={12} />
+                    <X size={10} />
                   </button>
                 </span>
               )}
@@ -296,118 +304,126 @@ export default function ManageMode({ text, initialConstraints, onSave, onExit, i
   }
 
   return (
-    <div className="manage-mode">
+    <div className="flex flex-col h-full">
       {/* Locked banner */}
       {isLocked && (
-        <div className="manage-mode__locked-banner">
+        <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm">
           <span>This conversation has been used in drafts. Editing is locked. You can only adjust in the Draft view.</span>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="manage-mode__toolbar">
-        <div className="manage-mode__toolbar-left">
-          <label className={`manage-mode__select-all ${isLocked ? 'disabled' : ''}`}>
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+        <div className="flex items-center gap-3">
+          <label className={cn(
+            'flex items-center gap-2 text-sm cursor-pointer',
+            isLocked && 'opacity-50 cursor-not-allowed'
+          )}>
             <input
               type="checkbox"
               checked={selectedClauseIds.size === clauses.length && clauses.length > 0}
               onChange={toggleSelectAll}
               disabled={isLocked}
+              className="w-4 h-4 rounded border-slate-300"
             />
             <span>Select All</span>
           </label>
-          <span className="manage-mode__selected-count">
+          <span className="text-sm text-slate-500">
             {selectedClauseIds.size > 0 && `${selectedClauseIds.size} selected`}
           </span>
         </div>
-        <div className="manage-mode__toolbar-actions">
-          <button
-            className="manage-mode__btn manage-mode__btn--keep"
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={markSelectedAsKeep}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            title="Mark as Keep"
+            className="text-green-600 hover:text-green-700 hover:bg-green-50"
           >
             <Bookmark size={14} />
             <span>Keep</span>
-          </button>
-          <button
-            className="manage-mode__btn manage-mode__btn--discard"
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={markSelectedAsDiscard}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            title="Mark as Discard"
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
             <Trash2 size={14} />
             <span>Discard</span>
-          </button>
-          <div className="manage-mode__toolbar-divider" />
-          <button
-            className="manage-mode__btn manage-mode__btn--save"
+          </Button>
+          <div className="w-px h-6 bg-slate-200 mx-1" />
+          <Button
+            variant="default"
+            size="sm"
             onClick={handleSave}
             disabled={isLocked}
-            title="Save constraints"
           >
             <Save size={14} />
             <span>Save</span>
-          </button>
-          <button
-            className="manage-mode__btn manage-mode__btn--exit"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleExit}
-            title="Exit Manage mode"
           >
             <X size={14} />
             <span>Exit</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Stats bar */}
-      <div className="manage-mode__stats">
-        <span className="manage-mode__stat manage-mode__stat--keep">
+      <div className="flex items-center gap-4 px-4 py-2 bg-white border-b text-xs">
+        <span className="inline-flex items-center gap-1 text-green-600">
           <Bookmark size={12} /> {stats.keepCount} kept
         </span>
-        <span className="manage-mode__stat manage-mode__stat--discard">
+        <span className="inline-flex items-center gap-1 text-red-600">
           <Trash2 size={12} /> {stats.discardCount} discarded
         </span>
-        <span className="manage-mode__stat manage-mode__stat--must-have">
+        <span className="inline-flex items-center gap-1 text-emerald-600">
           <Check size={12} /> {stats.mustHaveCount} must-have
         </span>
-        <span className="manage-mode__stat manage-mode__stat--mustnt-have">
+        <span className="inline-flex items-center gap-1 text-rose-600">
           <X size={12} /> {stats.mustntHaveCount} mustn't-have
         </span>
       </div>
 
       {/* Clause list */}
-      <div className="manage-mode__clauses">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {clauses.map((clause) => (
           <div
             key={clause.id}
-            className={`manage-mode__clause ${
-              clause.status === 'keep'
-                ? 'manage-mode__clause--keep'
-                : clause.status === 'discard'
-                  ? 'manage-mode__clause--discard'
-                  : ''
-            } ${selectedClauseIds.has(clause.id) ? 'manage-mode__clause--selected' : ''} ${isLocked ? 'manage-mode__clause--locked' : ''}`}
+            className={cn(
+              'rounded-lg border p-3 transition-colors',
+              clause.status === 'keep' && 'bg-green-50 border-green-200',
+              clause.status === 'discard' && 'bg-red-50 border-red-200',
+              clause.status === 'neutral' && 'bg-white border-slate-200',
+              selectedClauseIds.has(clause.id) && 'ring-2 ring-blue-500',
+              isLocked && 'opacity-70'
+            )}
           >
-            <div className="manage-mode__clause-header">
-              <label className="manage-mode__clause-checkbox">
+            <div className="flex items-start gap-3">
+              <label className="pt-0.5">
                 <input
                   type="checkbox"
                   checked={selectedClauseIds.has(clause.id)}
                   onChange={() => toggleClauseSelection(clause.id)}
                   disabled={isLocked}
+                  className="w-4 h-4 rounded border-slate-300"
                 />
               </label>
-              <div className="manage-mode__clause-content">
+              <div className="flex-1 min-w-0">
                 {renderSentenceWithKeywords(clause)}
               </div>
               {clause.status !== 'neutral' && (
                 <span
-                  className={`manage-mode__clause-badge ${
-                    clause.status === 'keep'
-                      ? 'manage-mode__clause-badge--keep'
-                      : 'manage-mode__clause-badge--discard'
-                  }`}
+                  className={cn(
+                    'shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase',
+                    clause.status === 'keep' && 'bg-green-100 text-green-700',
+                    clause.status === 'discard' && 'bg-red-100 text-red-700'
+                  )}
                 >
                   {clause.status}
                 </span>
@@ -418,7 +434,7 @@ export default function ManageMode({ text, initialConstraints, onSave, onExit, i
       </div>
 
       {clauses.length === 0 && (
-        <div className="manage-mode__empty">
+        <div className="flex-1 flex items-center justify-center text-slate-500 p-10 text-center">
           No sentences found. Add some content to the conversation first.
         </div>
       )}

@@ -3,9 +3,14 @@
 import { useEffect, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Plus, Trash2 } from 'lucide-react';
 import { LoadingSpinner, ErrorMessage } from '@/components/ApiStatus';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 export default function SemanticLedgerPage() {
   const router = useRouter();
@@ -51,7 +56,7 @@ export default function SemanticLedgerPage() {
 
   if (loading && !initialized) {
     return (
-      <div className="projects-page">
+      <div className="flex h-full items-center justify-center p-8">
         <LoadingSpinner message="Loading projects..." />
       </div>
     );
@@ -59,50 +64,70 @@ export default function SemanticLedgerPage() {
 
   if (error) {
     return (
-      <div className="projects-page">
+      <div className="flex h-full items-center justify-center p-8">
         <ErrorMessage error={error} onRetry={fetchProjects} />
       </div>
     );
   }
 
   return (
-    <div className="projects-page">
-      <header className="projects-page__header">
-        <h1>Projects</h1>
-        <button className="primary-btn" onClick={handleCreateProject}>
-          + New Project
-        </button>
+    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+        <Button onClick={handleCreateProject}>
+          <Plus className="h-4 w-4" />
+          New Project
+        </Button>
       </header>
 
-      <div className="projects-list">
+      <div className="flex flex-col gap-3">
         {projects.length === 0 && (
-          <div className="projects-list__empty">
-            <p>No projects yet.</p>
-            <p>Create one to start mapping conversations and drafts.</p>
-          </div>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-lg font-medium text-muted-foreground">No projects yet.</p>
+              <p className="text-sm text-muted-foreground">
+                Create one to start mapping conversations and drafts.
+              </p>
+            </CardContent>
+          </Card>
         )}
         {projects.map((project) => (
-          <Link key={project.id} href={`/project/${project.id}`} className="project-row">
-            <div className="project-row__main">
-              <strong className="project-row__name">{project.name}</strong>
-              <p className="project-row__desc">{project.description}</p>
-            </div>
-            <div className="project-row__meta">
-              <span className="project-row__stats">
-                {project.nodes} turns · {project.drafts} conversations
-              </span>
-              <span className={`project-row__status project-row__status--${project.status}`}>
-                {project.status}
-              </span>
-              <span className="project-row__time">{project.updatedAt}</span>
-            </div>
-            <button
-              className="project-row__delete"
-              onClick={(event) => handleDeleteProject(event, project.id)}
-              aria-label={`Delete ${project.name}`}
-            >
-              ×
-            </button>
+          <Link key={project.id} href={`/project/${project.id}`} className="group">
+            <Card className="transition-all hover:border-primary/50 hover:shadow-md">
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                  <p className="text-sm text-muted-foreground truncate">{project.description}</p>
+                </div>
+
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span className="hidden sm:inline">
+                    {project.nodes} turns · {project.drafts} conversations
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      project.status === 'active' && 'border-green-500/30 bg-green-500/10 text-green-600',
+                      project.status === 'draft' && 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+                      project.status === 'paused' && 'border-gray-500/30 bg-gray-500/10 text-gray-600'
+                    )}
+                  >
+                    {project.status}
+                  </Badge>
+                  <span className="hidden md:inline text-xs">{project.updatedAt}</span>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                  onClick={(event) => handleDeleteProject(event, project.id)}
+                  aria-label={`Delete ${project.name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
           </Link>
         ))}
       </div>

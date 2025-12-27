@@ -27,6 +27,18 @@ import {
   type TestResult,
   type EvalResponse,
 } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 // Default test steps for demonstration
 const DEFAULT_TEST_STEPS: TestStep[] = [
@@ -208,162 +220,177 @@ export default function EvalPage() {
       error: 'Error',
     };
     const colors: Record<string, string> = {
-      llm_call: 'eval-page__badge--info',
-      tool_call: 'eval-page__badge--warning',
-      agent_input: 'eval-page__badge--default',
-      agent_output: 'eval-page__badge--success',
-      error: 'eval-page__badge--error',
+      llm_call: 'bg-blue-100 text-blue-700 border-blue-200',
+      tool_call: 'bg-amber-100 text-amber-700 border-amber-200',
+      agent_input: 'bg-gray-100 text-gray-700 border-gray-200',
+      agent_output: 'bg-green-100 text-green-700 border-green-200',
+      error: 'bg-red-100 text-red-700 border-red-200',
     };
     return (
-      <span className={`eval-page__badge ${colors[type] || ''}`}>
+      <Badge variant="outline" className={cn('text-xs', colors[type] || '')}>
         {labels[type] || type}
-      </span>
+      </Badge>
     );
   };
 
   if (loading) {
     return (
-      <div className="eval-page">
-        <div className="eval-page__loading">
-          <Loader2 size={24} className="eval-page__icon--spin" />
-          <span>Loading run...</span>
-        </div>
+      <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span>Loading run...</span>
       </div>
     );
   }
 
   if (!trace) {
     return (
-      <div className="eval-page">
-        <header className="eval-page__header">
-          <div className="eval-page__header-left">
-            <FlaskConical size={20} />
-            <h1>Eval</h1>
-          </div>
+      <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+        <header className="flex items-center gap-3">
+          <FlaskConical className="h-5 w-5" />
+          <h1 className="text-2xl font-bold tracking-tight">Eval</h1>
         </header>
-        <div className="eval-page__not-found">
-          <XCircle size={48} style={{ color: '#dc2626' }} />
-          <h2>Run not found</h2>
-          <p>The run ID "<code>{runId}</code>" could not be found.</p>
-          <p className="eval-page__not-found-hint">
-            This usually means the n8n workflow hasn't been set up or activated yet.
-          </p>
-          <button className="eval-page__btn eval-page__btn--secondary" onClick={() => router.push('/deploy')}>
-            <ArrowLeft size={16} /> Back to Deploy
-          </button>
-        </div>
+        <Card className="mx-auto max-w-md">
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <XCircle className="h-12 w-12 text-destructive" />
+            <h2 className="text-lg font-semibold">Run not found</h2>
+            <p className="text-muted-foreground">
+              The run ID &quot;<code className="bg-muted px-1 rounded text-xs">{runId}</code>&quot; could not be found.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This usually means the n8n workflow hasn&apos;t been set up or activated yet.
+            </p>
+            <Button variant="outline" onClick={() => router.push('/deploy')}>
+              <ArrowLeft className="h-4 w-4" /> Back to Deploy
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  const statusColors = {
+    completed: 'border-green-500/30 bg-green-500/10 text-green-600',
+    failed: 'border-destructive/30 bg-destructive/10 text-destructive',
+    running: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
+  };
+
+  const severityColors = {
+    error: 'bg-red-100 text-red-700 border-red-200',
+    warning: 'bg-amber-100 text-amber-700 border-amber-200',
+    info: 'bg-blue-100 text-blue-700 border-blue-200',
+  };
+
   return (
-    <div className="eval-page">
+    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
       {/* Header */}
-      <header className="eval-page__header">
-        <div className="eval-page__header-left">
-          <button className="eval-page__btn eval-page__btn--link" onClick={() => router.push('/deploy')}>
-            <ArrowLeft size={16} />
-          </button>
-          <FlaskConical size={20} />
-          <h1>Eval</h1>
-          <code className="eval-page__run-id">{runId}</code>
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/deploy')} className="h-8 w-8">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <FlaskConical className="h-5 w-5" />
+          <h1 className="text-2xl font-bold tracking-tight">Eval</h1>
+          <code className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">{runId}</code>
         </div>
-        <div className="eval-page__header-right">
-          <span className={`eval-page__status eval-page__status--${trace.status}`}>
-            {trace.status === 'completed' ? <CheckCircle size={14} /> :
-             trace.status === 'failed' ? <XCircle size={14} /> :
-             <Loader2 size={14} className="eval-page__icon--spin" />}
-            {trace.status}
-          </span>
-        </div>
+        <Badge
+          variant="outline"
+          className={cn('gap-1.5', statusColors[trace.status as keyof typeof statusColors])}
+        >
+          {trace.status === 'completed' ? <CheckCircle className="h-3 w-3" /> :
+           trace.status === 'failed' ? <XCircle className="h-3 w-3" /> :
+           <Loader2 className="h-3 w-3 animate-spin" />}
+          {trace.status}
+        </Badge>
       </header>
 
       {/* Run Info Section */}
-      <section className="eval-page__section">
-        <div className="eval-page__section-header">
-          <h2>Run Info</h2>
-          <div className="eval-page__meta">
-            <span><Clock size={14} /> {trace.metrics?.total_latency_ms || 0}ms</span>
-            <span>LLM: {trace.metrics?.llm_calls || 0}</span>
-            <span>Tools: {trace.metrics?.tool_calls || 0}</span>
-          </div>
-        </div>
-        <div className="eval-page__content">
-          <div className="eval-page__info-grid">
-            <div className="eval-page__info-item">
-              <label>Agent</label>
-              <code>{trace.agent_id}</code>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Run Info</CardTitle>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {trace.metrics?.total_latency_ms || 0}ms</span>
+              <span>LLM: {trace.metrics?.llm_calls || 0}</span>
+              <span>Tools: {trace.metrics?.tool_calls || 0}</span>
             </div>
-            <div className="eval-page__info-item">
-              <label>Started</label>
-              <span>{new Date(trace.started_at).toLocaleString()}</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Agent</p>
+              <code className="text-sm">{trace.agent_id}</code>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Started</p>
+              <p className="text-sm">{new Date(trace.started_at).toLocaleString()}</p>
             </div>
             {trace.completed_at && (
-              <div className="eval-page__info-item">
-                <label>Completed</label>
-                <span>{new Date(trace.completed_at).toLocaleString()}</span>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Completed</p>
+                <p className="text-sm">{new Date(trace.completed_at).toLocaleString()}</p>
               </div>
             )}
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Trace Events Section */}
-      <section className="eval-page__section">
-        <div className="eval-page__section-header">
-          <h2>Trace Events</h2>
-          <span className="eval-page__count">{trace.events.length} events</span>
-        </div>
-        <div className="eval-page__content">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Trace Events</CardTitle>
+            <Badge variant="secondary" className="text-xs">{trace.events.length} events</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
           {trace.events.length === 0 ? (
-            <div className="eval-page__empty">
-              <p>No trace events recorded.</p>
-            </div>
+            <p className="py-8 text-center text-muted-foreground">No trace events recorded.</p>
           ) : (
-            <div className="eval-page__events">
+            <div className="space-y-2">
               {trace.events.map((event) => (
-                <div key={event.id} className="eval-page__event">
-                  <div
-                    className="eval-page__event-header"
+                <div key={event.id} className="rounded-lg border">
+                  <button
+                    className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50"
                     onClick={() => toggleEventExpand(event.id)}
                   >
                     {expandedEvents.has(event.id) ? (
-                      <ChevronDown size={14} />
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     ) : (
-                      <ChevronRight size={14} />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     )}
                     {getEventTypeBadge(event.type)}
-                    <span className="eval-page__event-time">
+                    <span className="text-xs text-muted-foreground">
                       {new Date(event.timestamp).toLocaleTimeString()}
                     </span>
                     {event.data.latency_ms && (
-                      <span className="eval-page__event-latency">{event.data.latency_ms}ms</span>
+                      <span className="text-xs text-muted-foreground">{event.data.latency_ms}ms</span>
                     )}
                     {event.data.model && (
-                      <span className="eval-page__event-model">{event.data.model}</span>
+                      <Badge variant="outline" className="text-xs">{event.data.model}</Badge>
                     )}
                     {event.data.tool_name && (
-                      <span className="eval-page__event-tool">{event.data.tool_name}</span>
+                      <Badge variant="outline" className="text-xs">{event.data.tool_name}</Badge>
                     )}
-                  </div>
+                  </button>
                   {expandedEvents.has(event.id) && (
-                    <div className="eval-page__event-body">
+                    <div className="border-t bg-muted/30 p-3 space-y-3">
                       {event.data.input != null && (
-                        <div className="eval-page__event-data">
-                          <strong>Input:</strong>
-                          <pre>{JSON.stringify(event.data.input, null, 2)}</pre>
+                        <div>
+                          <p className="mb-1 text-xs font-medium">Input:</p>
+                          <pre className="overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(event.data.input, null, 2)}</pre>
                         </div>
                       )}
                       {event.data.output != null && (
-                        <div className="eval-page__event-data">
-                          <strong>Output:</strong>
-                          <pre>{JSON.stringify(event.data.output, null, 2)}</pre>
+                        <div>
+                          <p className="mb-1 text-xs font-medium">Output:</p>
+                          <pre className="overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(event.data.output, null, 2)}</pre>
                         </div>
                       )}
                       {event.data.error && (
-                        <div className="eval-page__event-data eval-page__event-data--error">
-                          <strong>Error:</strong>
-                          <pre>{String(event.data.error)}</pre>
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-destructive">Error:</p>
+                          <pre className="overflow-auto rounded bg-destructive/10 p-2 text-xs text-destructive">{String(event.data.error)}</pre>
                         </div>
                       )}
                     </div>
@@ -372,117 +399,118 @@ export default function EvalPage() {
               ))}
             </div>
           )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Evaluation Section */}
-      <section className="eval-page__section">
-        <div className="eval-page__section-header">
-          <h2>Evaluation</h2>
-          <div className="eval-page__actions">
-            <button
-              className="eval-page__btn eval-page__btn--primary"
-              onClick={handleRunEval}
-              disabled={evaluating}
-            >
-              {evaluating ? (
-                <><Loader2 size={14} className="eval-page__icon--spin" /> Running...</>
-              ) : (
-                <><Play size={14} /> Run Eval</>
-              )}
-            </button>
-            {evalResult && (
-              <button
-                className="eval-page__btn eval-page__btn--secondary"
-                onClick={handleCreateCommit}
-                disabled={committing}
-              >
-                {committing ? (
-                  <><Loader2 size={14} className="eval-page__icon--spin" /> Creating...</>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Evaluation</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleRunEval} disabled={evaluating}>
+                {evaluating ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
                 ) : (
-                  <><GitCommit size={14} /> Create Commit</>
+                  <><Play className="h-4 w-4" /> Run Eval</>
                 )}
-              </button>
-            )}
-            <button className="eval-page__btn eval-page__btn--secondary" onClick={() => window.location.reload()}>
-              <RefreshCw size={14} />
-            </button>
+              </Button>
+              {evalResult && (
+                <Button variant="outline" onClick={handleCreateCommit} disabled={committing}>
+                  {committing ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Creating...</>
+                  ) : (
+                    <><GitCommit className="h-4 w-4" /> Create Commit</>
+                  )}
+                </Button>
+              )}
+              <Button variant="outline" size="icon" onClick={() => window.location.reload()}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="eval-page__content">
+        </CardHeader>
+        <CardContent>
           {evalResult ? (
-            <>
+            <div className="space-y-4">
               {/* Summary */}
-              <div className={`eval-page__summary ${evalResult.passed ? 'eval-page__summary--passed' : 'eval-page__summary--failed'}`}>
-                {evalResult.passed ? <CheckCircle size={20} /> : <XCircle size={20} />}
-                <span>{evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}</span>
-                <span className="eval-page__summary-counts">
+              <div className={cn(
+                'flex items-center gap-3 rounded-lg border p-4',
+                evalResult.passed
+                  ? 'border-green-500/30 bg-green-500/10 text-green-700'
+                  : 'border-destructive/30 bg-destructive/10 text-destructive'
+              )}>
+                {evalResult.passed ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                <span className="font-medium">{evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}</span>
+                <span className="ml-auto text-sm">
                   {evalResult.passed_steps}/{evalResult.total_steps} passed
                 </span>
               </div>
 
               {/* Test Results Table */}
-              <table className="eval-page__table">
-                <thead>
-                  <tr>
-                    <th>Test</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                    <th>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Test</TableHead>
+                    <TableHead>Severity</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {evalResult.results.map((result) => (
-                    <tr key={result.step_id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <TableRow key={result.step_id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
                           {getResultIcon(result)}
                           {result.step_name}
                         </div>
-                      </td>
-                      <td>
-                        <span className={`eval-page__badge eval-page__badge--${result.severity}`}>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-xs', severityColors[result.severity as keyof typeof severityColors])}>
                           {result.severity}
-                        </span>
-                      </td>
-                      <td>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         {result.passed ? (
-                          <span className="eval-page__badge eval-page__badge--success">passed</span>
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-xs">passed</Badge>
                         ) : (
-                          <span className="eval-page__badge eval-page__badge--error">failed</span>
+                          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 text-xs">failed</Badge>
                         )}
-                      </td>
-                      <td>{result.message || '-'}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{result.message || '-'}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
 
               {/* Suggestions */}
               {evalResult.suggestions && evalResult.suggestions.length > 0 && (
-                <div className="eval-page__suggestions">
-                  <h3><Lightbulb size={16} /> Suggestions</h3>
+                <div className="space-y-3 rounded-lg border p-4">
+                  <h3 className="flex items-center gap-2 font-medium">
+                    <Lightbulb className="h-4 w-4 text-amber-500" /> Suggestions
+                  </h3>
                   {evalResult.suggestions.map((suggestion, i) => (
-                    <div key={i} className="eval-page__suggestion">
-                      <div className="eval-page__suggestion-header">
-                        <span className="eval-page__badge">{suggestion.type.replace('_', ' ')}</span>
-                        <span>{Math.round(suggestion.confidence * 100)}% confidence</span>
+                    <div key={i} className="rounded-md border bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="text-xs">{suggestion.type.replace('_', ' ')}</Badge>
+                        <span className="text-xs text-muted-foreground">{Math.round(suggestion.confidence * 100)}% confidence</span>
                       </div>
-                      <p>{suggestion.description}</p>
-                      {suggestion.diff && <pre>{suggestion.diff}</pre>}
+                      <p className="text-sm">{suggestion.description}</p>
+                      {suggestion.diff && <pre className="overflow-auto rounded bg-background p-2 text-xs">{suggestion.diff}</pre>}
                     </div>
                   ))}
                 </div>
               )}
-            </>
+            </div>
           ) : (
-            <div className="eval-page__empty">
-              <FlaskConical size={32} style={{ color: '#9ca3af' }} />
-              <p>No evaluation yet. Click "Run Eval" to evaluate this trace.</p>
+            <div className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
+              <FlaskConical className="h-8 w-8" />
+              <p>No evaluation yet. Click &quot;Run Eval&quot; to evaluate this trace.</p>
             </div>
           )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }

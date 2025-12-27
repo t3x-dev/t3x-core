@@ -13,6 +13,19 @@ import {
   type RunTrace,
   type EngineRun,
 } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Agent extends AgentConfig {
   status: 'idle' | 'running' | 'error';
@@ -163,230 +176,242 @@ export default function DeployPage() {
   const getStatusIcon = (status: Agent['status']) => {
     switch (status) {
       case 'running':
-        return <Loader2 size={14} className="animate-spin text-blue-500" />;
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
       case 'error':
-        return <XCircle size={14} className="text-red-500" />;
+        return <XCircle className="h-4 w-4 text-destructive" />;
       default:
-        return <CheckCircle size={14} className="text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
     }
   };
 
   const getRunStatusBadge = (status: EngineRun['status'] | RunTrace['status']) => {
-    const statusStyles: Record<string, string> = {
-      queued: 'bg-gray-100 text-gray-800',
-      running: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      failed: 'bg-red-100 text-red-800',
-      timeout: 'bg-yellow-100 text-yellow-800',
+    const variants: Record<string, string> = {
+      queued: 'bg-gray-100 text-gray-700 border-gray-200',
+      running: 'bg-blue-100 text-blue-700 border-blue-200',
+      completed: 'bg-green-100 text-green-700 border-green-200',
+      failed: 'bg-red-100 text-red-700 border-red-200',
+      timeout: 'bg-amber-100 text-amber-700 border-amber-200',
     };
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${statusStyles[status] || 'bg-gray-100'}`}>
+      <Badge variant="outline" className={cn('text-xs', variants[status])}>
         {status}
-      </span>
+      </Badge>
     );
   };
 
   if (loading) {
     return (
-      <div className="deploy-page">
-        <div className="deploy-page__loading">
-          <Loader2 size={24} className="animate-spin" />
-          <span>Connecting to runner...</span>
-        </div>
+      <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span>Connecting to runner...</span>
       </div>
     );
   }
 
   return (
-    <div className="deploy-page">
+    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
       {/* Header */}
-      <header className="deploy-page__header">
-        <div className="deploy-page__header-left">
-          <Rocket size={20} />
-          <h1>Deploy</h1>
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Rocket className="h-5 w-5" />
+          <h1 className="text-2xl font-bold tracking-tight">Deploy</h1>
         </div>
-        <div className="deploy-page__header-right">
-          {runnerHealthy ? (
-            <span className="deploy-page__status deploy-page__status--healthy">
-              <CheckCircle size={14} /> Runner Connected
-            </span>
-          ) : (
-            <span className="deploy-page__status deploy-page__status--error">
-              <AlertCircle size={14} /> Runner Offline
-            </span>
+        <Badge
+          variant="outline"
+          className={cn(
+            'gap-1.5',
+            runnerHealthy
+              ? 'border-green-500/30 bg-green-500/10 text-green-600'
+              : 'border-destructive/30 bg-destructive/10 text-destructive'
           )}
-        </div>
+        >
+          {runnerHealthy ? (
+            <><CheckCircle className="h-3 w-3" /> Runner Connected</>
+          ) : (
+            <><AlertCircle className="h-3 w-3" /> Runner Offline</>
+          )}
+        </Badge>
       </header>
 
       {/* Alert */}
       {!runnerHealthy && (
-        <div className="deploy-page__alert">
-          <AlertCircle size={18} />
-          <div>
-            <strong>Runner not available</strong>
-            <p>Start the runner with: <code>pnpm docker:up:runner</code> or <code>pnpm dev:runner</code></p>
-          </div>
-        </div>
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="flex items-start gap-3 p-4">
+            <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div>
+              <p className="font-medium text-foreground">Runner not available</p>
+              <p className="text-sm text-muted-foreground">
+                Start the runner with: <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm docker:up:runner</code> or <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm dev:runner</code>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Agents Section */}
-      <section className="deploy-page__section">
-        <div className="deploy-page__section-header">
-          <h2>Agents</h2>
-          <button
-            className="deploy-page__btn deploy-page__btn--primary"
-            onClick={() => setShowAddAgent(true)}
-            disabled={!runnerHealthy}
-          >
-            <Plus size={16} /> Add Agent
-          </button>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Agents</h2>
+          <Button onClick={() => setShowAddAgent(true)} disabled={!runnerHealthy}>
+            <Plus className="h-4 w-4" /> Add Agent
+          </Button>
         </div>
 
         {showAddAgent && (
-          <div className="deploy-page__form">
-            <input
-              type="text"
-              placeholder="Agent ID (e.g., my-agent)"
-              value={newAgent.id}
-              onChange={(e) => setNewAgent({ ...newAgent, id: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Agent Name"
-              value={newAgent.name}
-              onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Endpoint URL (e.g., http://localhost:3000/agent)"
-              value={newAgent.endpoint}
-              onChange={(e) => setNewAgent({ ...newAgent, endpoint: e.target.value })}
-            />
-            <div className="deploy-page__form-actions">
-              <button className="deploy-page__btn deploy-page__btn--secondary" onClick={() => setShowAddAgent(false)}>
-                Cancel
-              </button>
-              <button className="deploy-page__btn deploy-page__btn--primary" onClick={handleAddAgent}>
-                Register
-              </button>
-            </div>
-          </div>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Input
+                placeholder="Agent ID (e.g., my-agent)"
+                value={newAgent.id}
+                onChange={(e) => setNewAgent({ ...newAgent, id: e.target.value })}
+              />
+              <Input
+                placeholder="Agent Name"
+                value={newAgent.name}
+                onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+              />
+              <Input
+                placeholder="Endpoint URL (e.g., http://localhost:3000/agent)"
+                value={newAgent.endpoint}
+                onChange={(e) => setNewAgent({ ...newAgent, endpoint: e.target.value })}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAddAgent(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddAgent}>
+                  Register
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="deploy-page__content">
-          {agents.length === 0 ? (
-            <div className="deploy-page__empty">
-              <p>No agents registered yet. Add an agent to get started.</p>
-            </div>
-          ) : (
-            <div className="deploy-page__grid">
-              {agents.map((agent) => (
-                <div key={agent.id} className="deploy-page__card">
-                  <div className="deploy-page__card-header">
+        {agents.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              No agents registered yet. Add an agent to get started.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent) => (
+              <Card key={agent.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
                     {getStatusIcon(agent.status)}
-                    <div className="deploy-page__card-info">
-                      <h3>{agent.name}</h3>
-                      <span>{agent.id}</span>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-base truncate">{agent.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground">{agent.id}</p>
                     </div>
                   </div>
-                  <div className="deploy-page__card-endpoint">
-                    <code>{agent.endpoint}</code>
-                    <a href={agent.endpoint} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink size={14} />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <code className="flex-1 truncate bg-muted px-2 py-1 rounded">{agent.endpoint}</code>
+                    <a href={agent.endpoint} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
-                  <div className="deploy-page__card-actions">
-                    <button
-                      className="deploy-page__btn deploy-page__btn--primary"
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
                       onClick={() => handleRunAgent(agent)}
                       disabled={agent.status === 'running' || !runnerHealthy}
                     >
                       {agent.status === 'running' ? (
-                        <><Loader2 size={14} className="animate-spin" /> Running</>
+                        <><Loader2 className="h-3 w-3 animate-spin" /> Running</>
                       ) : (
-                        <><Play size={14} /> Run</>
+                        <><Play className="h-3 w-3" /> Run</>
                       )}
-                    </button>
-                    <button className="deploy-page__btn deploy-page__btn--secondary" disabled={agent.status !== 'running'}>
-                      <Square size={14} /> Stop
-                    </button>
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={agent.status !== 'running'}>
+                      <Square className="h-3 w-3" /> Stop
+                    </Button>
                   </div>
                   {agent.lastRunId && (
-                    <div className="deploy-page__card-meta">
-                      Last run: <a href={`/eval/${agent.lastRunId}`}>{agent.lastRunId}</a>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Last run: <a href={`/eval/${agent.lastRunId}`} className="text-primary hover:underline">{agent.lastRunId}</a>
+                    </p>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Recent Runs Section */}
-      <section className="deploy-page__section">
-        <div className="deploy-page__section-header">
-          <h2>Recent Runs</h2>
-          <button className="deploy-page__btn deploy-page__btn--secondary" onClick={() => window.location.reload()}>
-            <RefreshCw size={16} /> Refresh
-          </button>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Recent Runs</h2>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
         </div>
 
-        <div className="deploy-page__content">
-          {runs.length === 0 && legacyRuns.length === 0 ? (
-            <div className="deploy-page__empty">
-              <p>No runs yet. Run an agent to see results here.</p>
-            </div>
-          ) : (
-            <table className="deploy-page__table">
-              <thead>
-                <tr>
-                  <th>Run ID</th>
-                  <th>Source</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+        {runs.length === 0 && legacyRuns.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              No runs yet. Run an agent to see results here.
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Run ID</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="w-20">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {/* Engine runs (new flow) */}
                 {runs.slice(0, 10).map((run) => (
-                  <tr key={run.run_id}>
-                    <td><code>{run.run_id}</code></td>
-                    <td>Engine</td>
-                    <td>{getRunStatusBadge(run.status)}</td>
-                    <td>{new Date(run.created_at).toLocaleString()}</td>
-                    <td>
-                      <button
-                        className="text-blue-600 hover:underline text-sm"
+                  <TableRow key={run.run_id}>
+                    <TableCell><code className="text-xs">{run.run_id}</code></TableCell>
+                    <TableCell>Engine</TableCell>
+                    <TableCell>{getRunStatusBadge(run.status)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{new Date(run.created_at).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0"
                         onClick={() => router.push(`/eval/${run.run_id}`)}
                       >
                         View
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 {/* Legacy Runner runs */}
                 {legacyRuns.slice(0, 5).map((run) => (
-                  <tr key={run.run_id} style={{ opacity: 0.7 }}>
-                    <td><code>{run.run_id}</code></td>
-                    <td>Runner</td>
-                    <td>{getRunStatusBadge(run.status)}</td>
-                    <td>{new Date(run.started_at).toLocaleString()}</td>
-                    <td>
-                      <button
-                        className="text-blue-600 hover:underline text-sm"
+                  <TableRow key={run.run_id} className="opacity-60">
+                    <TableCell><code className="text-xs">{run.run_id}</code></TableCell>
+                    <TableCell>Runner</TableCell>
+                    <TableCell>{getRunStatusBadge(run.status)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{new Date(run.started_at).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0"
                         onClick={() => router.push(`/eval/${run.run_id}?legacy=1`)}
                       >
                         View
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </TableBody>
+            </Table>
+          </Card>
+        )}
       </section>
     </div>
   );

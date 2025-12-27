@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { Node } from 'reactflow';
+import type { Node } from '@xyflow/react';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // Mock the API module

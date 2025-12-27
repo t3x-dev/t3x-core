@@ -3,6 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, BarChart3, FileText, Github, Rocket } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // T3X Logo - Two obtuse angles facing each other (bowtie shape)
 function LogoIcon() {
@@ -92,6 +99,68 @@ function AgentIcon({ className }: { className?: string }) {
   );
 }
 
+const navItemClass = cn(
+  'flex h-10 w-10 items-center justify-center rounded-xl',
+  'text-muted-foreground transition-all duration-200',
+  'hover:bg-accent hover:text-accent-foreground hover:scale-105',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+  'active:scale-95'
+);
+
+const navItemActiveClass = cn(
+  navItemClass,
+  'bg-gradient-to-br from-primary/15 to-primary/5 text-primary',
+  'shadow-[0_0_0_1px_rgba(79,70,229,0.1),0_2px_8px_rgba(79,70,229,0.08)]',
+  'hover:from-primary/20 hover:to-primary/10 hover:text-primary'
+);
+
+interface NavItemProps {
+  href: string;
+  label: string;
+  isActive: boolean;
+  children: React.ReactNode;
+  external?: boolean;
+  disabled?: boolean;
+}
+
+function NavItem({ href, label, isActive, children, external, disabled }: NavItemProps) {
+  const content = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {external ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={isActive ? navItemActiveClass : navItemClass}
+          >
+            {children}
+          </a>
+        ) : disabled ? (
+          <button
+            className={cn(navItemClass, 'cursor-not-allowed opacity-50')}
+            disabled
+          >
+            {children}
+          </button>
+        ) : (
+          <Link
+            href={href}
+            className={isActive ? navItemActiveClass : navItemClass}
+          >
+            {children}
+          </Link>
+        )}
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+
+  return content;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const isAgentDemo = pathname.startsWith('/agent-demo');
@@ -100,67 +169,43 @@ export function Sidebar() {
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
   return (
-    <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar__logo">
-        <LogoIcon />
-      </div>
+    <TooltipProvider delayDuration={0}>
+      <aside className="flex h-screen w-16 flex-col items-center border-r border-border/50 bg-gradient-to-b from-background to-muted/30 py-4 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">
+        {/* Logo */}
+        <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-background to-muted/50 shadow-sm ring-1 ring-border/50">
+          <LogoIcon />
+        </div>
 
-      {/* Main Navigation */}
-      <nav className="sidebar__nav">
-        <Link
-          href="/"
-          className={`sidebar__nav-item ${isHome ? 'sidebar__nav-item--active' : ''}`}
-          title="Projects"
-        >
-          <Home size={20} />
-        </Link>
+        {/* Main Navigation */}
+        <nav className="flex flex-1 flex-col items-center gap-1.5">
+          <NavItem href="/" label="Projects" isActive={isHome}>
+            <Home className="h-5 w-5" />
+          </NavItem>
 
-        <Link
-          href="/agent-demo/chat"
-          className={`sidebar__nav-item ${isAgentDemo ? 'sidebar__nav-item--active' : ''}`}
-          title="Agent Demo"
-        >
-          <AgentIcon />
-        </Link>
+          <NavItem href="/agent-demo/chat" label="Agent Demo" isActive={isAgentDemo}>
+            <AgentIcon />
+          </NavItem>
 
-        <Link
-          href="/deploy"
-          className={`sidebar__nav-item ${isDeploy ? 'sidebar__nav-item--active' : ''}`}
-          title="Deploy & Eval"
-        >
-          <Rocket size={20} />
-        </Link>
-      </nav>
+          <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy}>
+            <Rocket className="h-5 w-5" />
+          </NavItem>
+        </nav>
 
-      {/* Bottom Navigation */}
-      <nav className="sidebar__nav sidebar__nav--bottom">
-        <Link
-          href="/insights"
-          className={`sidebar__nav-item ${isInsights ? 'sidebar__nav-item--active' : ''}`}
-          title="Insights"
-        >
-          <BarChart3 size={20} />
-        </Link>
+        {/* Bottom Navigation */}
+        <nav className="flex flex-col items-center gap-1.5">
+          <NavItem href="/insights" label="Insights" isActive={isInsights}>
+            <BarChart3 className="h-5 w-5" />
+          </NavItem>
 
-        <button
-          className="sidebar__nav-item"
-          title="Docs (Coming Soon)"
-          disabled
-        >
-          <FileText size={20} />
-        </button>
+          <NavItem href="#" label="Docs (Coming Soon)" isActive={false} disabled>
+            <FileText className="h-5 w-5" />
+          </NavItem>
 
-        <a
-          href="https://github.com/anthropics/t3x"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="sidebar__nav-item"
-          title="GitHub"
-        >
-          <Github size={20} />
-        </a>
-      </nav>
-    </aside>
+          <NavItem href="https://github.com/anthropics/t3x" label="GitHub" isActive={false} external>
+            <Github className="h-5 w-5" />
+          </NavItem>
+        </nav>
+      </aside>
+    </TooltipProvider>
   );
 }

@@ -161,6 +161,9 @@ export interface DraftConstraintOverrides {
 }
 
 export interface CanvasNodeData {
+  // Index signature for React Flow v12 compatibility
+  [key: string]: unknown
+
   // ============================================
   // Common fields
   // ============================================
