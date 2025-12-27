@@ -4,10 +4,10 @@
  * CRUD operations for merge results using Drizzle ORM.
  */
 
-import { eq, desc, and } from 'drizzle-orm';
-import { mergeResults, type MergeResult, type NewMergeResult } from '../schema';
 import { generateMergeResultId } from '@t3x/core';
+import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type MergeResult, mergeResults } from '../schema';
 
 export type MergeStatus = 'clean' | 'conflicts';
 
@@ -34,17 +34,20 @@ export async function insertMergeResult(
   const autoMergedJson = JSON.stringify(input.autoMerged);
   const conflictsJson = JSON.stringify(input.conflicts);
 
-  const [result] = await db.insert(mergeResults).values({
-    mergeResultId,
-    projectId: input.projectId,
-    baseCommitHash: input.baseCommitHash,
-    sourceCommitHash: input.sourceCommitHash,
-    targetCommitHash: input.targetCommitHash,
-    status: input.status,
-    autoMergedJson,
-    conflictsJson,
-    createdAt,
-  }).returning();
+  const [result] = await db
+    .insert(mergeResults)
+    .values({
+      mergeResultId,
+      projectId: input.projectId,
+      baseCommitHash: input.baseCommitHash,
+      sourceCommitHash: input.sourceCommitHash,
+      targetCommitHash: input.targetCommitHash,
+      status: input.status,
+      autoMergedJson,
+      conflictsJson,
+      createdAt,
+    })
+    .returning();
 
   return result;
 }
@@ -78,11 +81,13 @@ export async function findMergeResultByHashes(
   const [result] = await db
     .select()
     .from(mergeResults)
-    .where(and(
-      eq(mergeResults.baseCommitHash, baseCommitHash),
-      eq(mergeResults.sourceCommitHash, sourceCommitHash),
-      eq(mergeResults.targetCommitHash, targetCommitHash)
-    ))
+    .where(
+      and(
+        eq(mergeResults.baseCommitHash, baseCommitHash),
+        eq(mergeResults.sourceCommitHash, sourceCommitHash),
+        eq(mergeResults.targetCommitHash, targetCommitHash)
+      )
+    )
     // Sort by createdAt desc, then by mergeResultId desc for deterministic ordering
     // when timestamps are equal (e.g., in fast test execution)
     .orderBy(desc(mergeResults.createdAt), desc(mergeResults.mergeResultId))
@@ -112,10 +117,7 @@ export async function findMergeResultsByProject(
 /**
  * Delete a merge result
  */
-export async function deleteMergeResult(
-  db: AnyDB,
-  mergeResultId: string
-): Promise<boolean> {
+export async function deleteMergeResult(db: AnyDB, mergeResultId: string): Promise<boolean> {
   const result = await db
     .delete(mergeResults)
     .where(eq(mergeResults.mergeResultId, mergeResultId))

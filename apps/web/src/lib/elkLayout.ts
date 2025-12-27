@@ -1,16 +1,16 @@
-import ELK from 'elkjs/lib/elk.bundled.js'
-import type { Node, Edge } from '@xyflow/react'
+import type { Edge, Node } from '@xyflow/react';
+import ELK from 'elkjs/lib/elk.bundled.js';
 
-const elk = new ELK()
+const elk = new ELK();
 
 // Default node dimensions
-const DEFAULT_NODE_WIDTH = 280
-const DEFAULT_NODE_HEIGHT = 160
+const DEFAULT_NODE_WIDTH = 280;
+const DEFAULT_NODE_HEIGHT = 160;
 
 interface LayoutOptions {
-  direction?: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT'
-  nodeSpacing?: number
-  rankSpacing?: number
+  direction?: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
+  nodeSpacing?: number;
+  rankSpacing?: number;
 }
 
 /**
@@ -22,14 +22,10 @@ export async function getLayoutedElements(
   edges: Edge[],
   options: LayoutOptions = {}
 ): Promise<Node[]> {
-  const {
-    direction = 'DOWN',
-    nodeSpacing = 80,
-    rankSpacing = 120,
-  } = options
+  const { direction = 'DOWN', nodeSpacing = 80, rankSpacing = 120 } = options;
 
   if (nodes.length === 0) {
-    return nodes
+    return nodes;
   }
 
   const graph = {
@@ -54,27 +50,27 @@ export async function getLayoutedElements(
       sources: [edge.source],
       targets: [edge.target],
     })),
-  }
+  };
 
-  const layoutedGraph = await elk.layout(graph)
+  const layoutedGraph = await elk.layout(graph);
 
   // Create a map of node positions from ELK layout
-  const positionMap = new Map<string, { x: number; y: number }>()
+  const positionMap = new Map<string, { x: number; y: number }>();
   layoutedGraph.children?.forEach((child) => {
     if (child.x !== undefined && child.y !== undefined) {
-      positionMap.set(child.id, { x: child.x, y: child.y })
+      positionMap.set(child.id, { x: child.x, y: child.y });
     }
-  })
+  });
 
   // Apply new positions to nodes
   return nodes.map((node) => {
-    const position = positionMap.get(node.id)
+    const position = positionMap.get(node.id);
     if (position) {
       return {
         ...node,
         position,
-      }
+      };
     }
-    return node
-  })
+    return node;
+  });
 }

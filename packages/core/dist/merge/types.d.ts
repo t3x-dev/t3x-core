@@ -17,7 +17,7 @@ export declare enum ConflictType {
 /**
  * Source of merged content
  */
-export type MergeSource = "base" | "source" | "target" | "llm" | "manual";
+export type MergeSource = 'base' | 'source' | 'target' | 'llm' | 'manual';
 /**
  * Input facet for merge operation
  */
@@ -72,7 +72,7 @@ export interface MergeResult {
     /** Conflicts requiring manual resolution */
     conflicts: MergeConflict[];
     /** Merge status */
-    status: "clean" | "conflicts";
+    status: 'clean' | 'conflicts';
     /** Statistics */
     stats: MergeStats;
 }

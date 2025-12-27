@@ -1,29 +1,54 @@
+import type { Node } from '@xyflow/react';
 import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  GitBranch,
+  GitCommit,
+  GitCompare,
+  GitMerge,
+  Link2,
+  Loader2,
+  Lock,
+  MessageSquarePlus,
+  RotateCcw,
+  Send,
+  Settings,
+  Tag,
+  X,
+} from 'lucide-react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from 'react'
-import { X, Settings, MessageSquarePlus, Check, GitBranch, GitCommit, GitCompare, GitMerge, Clock, Tag, Link2, Send, ChevronDown, ChevronRight, Lock, RotateCcw, AlertCircle, Loader2 } from 'lucide-react'
-import type { Node } from '@xyflow/react'
-import type { CanvasNodeData, ConversationConstraints, DraftConstraintOverrides, SourceTextBlock, TurnBoundary } from '@/types/nodes'
-import { useCanvasStore } from '@/store/canvasStore'
-import * as api from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { PendingSourceEditor } from './SelectableTextBlock'
+} from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import * as api from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/store/canvasStore';
+import type {
+  CanvasNodeData,
+  ConversationConstraints,
+  DraftConstraintOverrides,
+  SourceTextBlock,
+  TurnBoundary,
+} from '@/types/nodes';
 import {
   getMustHaveKeywords as getMustHaveKeywordsFromBlocks,
   getMustntHaveKeywords as getMustntHaveKeywordsFromBlocks,
   getSelectedText,
   tokenizeText,
-} from '@/utils/tokenizer'
+} from '@/utils/tokenizer';
+import { PendingSourceEditor } from './SelectableTextBlock';
 
 const bridgeTemplates = [
   { id: 'prose', name: 'prose', description: 'General prose extraction' },
@@ -31,65 +56,126 @@ const bridgeTemplates = [
   { id: 'story', name: 'story', description: 'Narrative extraction with flow preservation' },
   { id: 'summary', name: 'summary', description: 'Concise summary of key points' },
   { id: 'refine', name: 'refine', description: 'Polish and tighten existing content' },
-]
+];
 
 // Phrase type for extraction results
 // Two states: included (浅绿) or excluded (浅红)
 interface Phrase {
-  id: string
-  text: string
-  included: boolean  // true = include (浅绿), false = exclude (浅红)
-  sourceBoxId: string
-  keywords: PhraseKeyword[]  // Keywords within this phrase
+  id: string;
+  text: string;
+  included: boolean; // true = include (浅绿), false = exclude (浅红)
+  sourceBoxId: string;
+  keywords: PhraseKeyword[]; // Keywords within this phrase
 }
 
 // Keyword within a phrase
 // Two states: must (深绿) or mustnt (深红)
 // Only editable when parent phrase is included
 interface PhraseKeyword {
-  id: string
-  text: string
-  originalWord: string  // Original word with punctuation
-  startIndex: number    // Position in phrase text
-  isMustnt: boolean     // false = must_have (深绿), true = mustnt_have (深红)
+  id: string;
+  text: string;
+  originalWord: string; // Original word with punctuation
+  startIndex: number; // Position in phrase text
+  isMustnt: boolean; // false = must_have (深绿), true = mustnt_have (深红)
 }
 
 // Source box type for SOURCE column
 interface SourceBox {
-  id: string
-  title: string
-  type: 'unit'
-  content: string
-  expanded: boolean
-  phrases: Phrase[]
+  id: string;
+  title: string;
+  type: 'unit';
+  content: string;
+  expanded: boolean;
+  phrases: Phrase[];
 }
-
 
 export type NodeQuickAction = {
-  key: string
-  label: string
-  icon: ReactNode
-  onClick: () => void
-  disabled?: boolean
-}
+  key: string;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+};
 
 interface NodeModalProps {
-  node?: Node<CanvasNodeData>
-  onClose: () => void
-  onUpdate: (patch: Partial<CanvasNodeData>) => void
-  onConvertDraft?: () => void
-  draftBranchMode?: 'force-main' | 'select' | 'branch-only' | 'blocked'
-  onBranchChange?: (branch: 'main' | 'branch') => void
-  onBranchNameChange?: (name: string) => void
-  quickActions?: NodeQuickAction[]
-  onSaveConstraints?: (constraints: ConversationConstraints) => void
-  effectiveConstraints?: { clauses: ConversationConstraints['clauses'], must_have: string[], mustnt_have: string[] }
-  onUpdateConstraintOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void
-  isConversationLocked?: boolean
+  node?: Node<CanvasNodeData>;
+  onClose: () => void;
+  onUpdate: (patch: Partial<CanvasNodeData>) => void;
+  onConvertDraft?: () => void;
+  draftBranchMode?: 'force-main' | 'select' | 'branch-only' | 'blocked';
+  onBranchChange?: (branch: 'main' | 'branch') => void;
+  onBranchNameChange?: (name: string) => void;
+  quickActions?: NodeQuickAction[];
+  onSaveConstraints?: (constraints: ConversationConstraints) => void;
+  effectiveConstraints?: {
+    clauses: ConversationConstraints['clauses'];
+    must_have: string[];
+    mustnt_have: string[];
+  };
+  onUpdateConstraintOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void;
+  isConversationLocked?: boolean;
 }
 
 // Stop words for keyword extraction
-const STOP_WORDS = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'been', 'will', 'would', 'could', 'should', 'about', 'which', 'their', 'there', 'where', 'when', 'what', 'were', 'they', 'into', 'also', 'more', 'some', 'than', 'very', 'just', 'only', 'over', 'such', 'like', 'then', 'most', 'your', 'other', 'first', 'can', 'are', 'was', 'has', 'had', 'but', 'not', 'you', 'all', 'any', 'its', 'may', 'how', 'out', 'who', 'get', 'our', 'one', 'two'])
+const STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'that',
+  'this',
+  'with',
+  'from',
+  'have',
+  'been',
+  'will',
+  'would',
+  'could',
+  'should',
+  'about',
+  'which',
+  'their',
+  'there',
+  'where',
+  'when',
+  'what',
+  'were',
+  'they',
+  'into',
+  'also',
+  'more',
+  'some',
+  'than',
+  'very',
+  'just',
+  'only',
+  'over',
+  'such',
+  'like',
+  'then',
+  'most',
+  'your',
+  'other',
+  'first',
+  'can',
+  'are',
+  'was',
+  'has',
+  'had',
+  'but',
+  'not',
+  'you',
+  'all',
+  'any',
+  'its',
+  'may',
+  'how',
+  'out',
+  'who',
+  'get',
+  'our',
+  'one',
+  'two',
+]);
 
 // Extract keywords from a single phrase
 function extractKeywordsFromPhrase(
@@ -97,34 +183,34 @@ function extractKeywordsFromPhrase(
   phraseId: string,
   minWordLength: number = 4
 ): PhraseKeyword[] {
-  const keywords: PhraseKeyword[] = []
-  const seenWords = new Set<string>()
+  const keywords: PhraseKeyword[] = [];
+  const seenWords = new Set<string>();
 
   // Match words with their positions
-  const wordRegex = /\b\w+\b/g
-  let match
+  const wordRegex = /\b\w+\b/g;
+  let match;
 
   while ((match = wordRegex.exec(phraseText)) !== null) {
-    const word = match[0]
-    const cleanWord = word.toLowerCase()
+    const word = match[0];
+    const cleanWord = word.toLowerCase();
 
     if (
       cleanWord.length >= minWordLength &&
       !STOP_WORDS.has(cleanWord) &&
       !seenWords.has(cleanWord)
     ) {
-      seenWords.add(cleanWord)
+      seenWords.add(cleanWord);
       keywords.push({
         id: `kw-${phraseId}-${match.index}`,
         text: cleanWord,
         originalWord: word,
         startIndex: match.index,
-        isMustnt: false,  // Default to must_have (深绿)
-      })
+        isMustnt: false, // Default to must_have (深绿)
+      });
     }
   }
 
-  return keywords
+  return keywords;
 }
 
 // Mock phrase extraction from text (in real app this would come from backend)
@@ -133,46 +219,42 @@ function extractPhrasesFromText(
   sourceBoxId: string,
   keywordsThreshold: number = 0.6
 ): Phrase[] {
-  if (!text) return []
+  if (!text) return [];
 
   // Minimum word length based on threshold (higher threshold = longer words)
-  const minWordLength = Math.floor(3 + keywordsThreshold * 3) // 3-6 chars
+  const minWordLength = Math.floor(3 + keywordsThreshold * 3); // 3-6 chars
 
   // Split into sentences and create phrases
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 10);
   return sentences.slice(0, 8).map((sentence, idx) => {
-    const phraseId = `phrase-${sourceBoxId}-${idx}`
-    const trimmedText = sentence.trim()
+    const phraseId = `phrase-${sourceBoxId}-${idx}`;
+    const trimmedText = sentence.trim();
     return {
       id: phraseId,
       text: trimmedText,
       included: true, // default to included (浅绿)
       sourceBoxId,
       keywords: extractKeywordsFromPhrase(trimmedText, phraseId, minWordLength),
-    }
-  })
+    };
+  });
 }
 
 // Generate result text from included phrases (excludes mustnt keywords)
 function generateResultText(phrases: Phrase[]): string {
-  const includedPhrases = phrases.filter(p => p.included)
-  if (includedPhrases.length === 0) return ''
+  const includedPhrases = phrases.filter((p) => p.included);
+  if (includedPhrases.length === 0) return '';
 
-  return includedPhrases.map(p => p.text).join('. ') + '.'
+  return includedPhrases.map((p) => p.text).join('. ') + '.';
 }
 
 // Get all must_have keywords from included phrases (legacy phrase-based system)
 function getMustHaveKeywordsLegacy(phrases: Phrase[]): PhraseKeyword[] {
-  return phrases
-    .filter(p => p.included)
-    .flatMap(p => p.keywords.filter(kw => !kw.isMustnt))
+  return phrases.filter((p) => p.included).flatMap((p) => p.keywords.filter((kw) => !kw.isMustnt));
 }
 
 // Get all mustnt_have keywords from included phrases (legacy phrase-based system)
 function getMustntHaveKeywordsLegacy(phrases: Phrase[]): PhraseKeyword[] {
-  return phrases
-    .filter(p => p.included)
-    .flatMap(p => p.keywords.filter(kw => kw.isMustnt))
+  return phrases.filter((p) => p.included).flatMap((p) => p.keywords.filter((kw) => kw.isMustnt));
 }
 
 // Helper to render phrase text with clickable keywords
@@ -186,7 +268,7 @@ function renderPhraseWithKeywords(
   hoveredKeywordText: string | null,
   onKeywordHover: (text: string | null) => void
 ): React.ReactNode[] {
-  const { text, keywords, included } = phrase
+  const { text, keywords, included } = phrase;
 
   if (keywords.length === 0) {
     // No keywords, entire phrase is clickable
@@ -195,66 +277,82 @@ function renderPhraseWithKeywords(
         key="text"
         className="draft-svtz__phrase-text"
         onClick={(e) => {
-          e.stopPropagation()
-          if (canToggle) onPhraseClick()
+          e.stopPropagation();
+          if (canToggle) onPhraseClick();
         }}
-        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+        title={
+          !canToggle
+            ? 'Complete Step 1 to edit'
+            : included
+              ? 'Click to exclude phrase'
+              : 'Click to include phrase'
+        }
       >
         {text}
-      </span>
-    ]
+      </span>,
+    ];
   }
 
   // Sort keywords by position
-  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex)
+  const sortedKeywords = [...keywords].sort((a, b) => a.startIndex - b.startIndex);
 
-  const parts: React.ReactNode[] = []
-  let lastIndex = 0
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
 
   sortedKeywords.forEach((kw, idx) => {
     // Add text before this keyword (clickable to toggle phrase)
     if (kw.startIndex > lastIndex) {
-      const beforeText = text.slice(lastIndex, kw.startIndex)
+      const beforeText = text.slice(lastIndex, kw.startIndex);
       parts.push(
         <span
           key={`text-${idx}`}
           className="draft-svtz__phrase-text"
           onClick={(e) => {
-            e.stopPropagation()
-            if (canToggle) onPhraseClick()
+            e.stopPropagation();
+            if (canToggle) onPhraseClick();
           }}
-          title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+          title={
+            !canToggle
+              ? 'Complete Step 1 to edit'
+              : included
+                ? 'Click to exclude phrase'
+                : 'Click to include phrase'
+          }
         >
           {beforeText}
         </span>
-      )
+      );
     }
 
     // Add keyword (clickable to toggle must/mustnt, only when phrase is included)
-    const keywordEndIndex = kw.startIndex + kw.originalWord.length
-    const isHovered = hoveredKeywordText === kw.text.toLowerCase()
+    const keywordEndIndex = kw.startIndex + kw.originalWord.length;
+    const isHovered = hoveredKeywordText === kw.text.toLowerCase();
     parts.push(
       <span
         key={`kw-${kw.id}`}
         className={`draft-svtz__keyword ${kw.isMustnt ? 'draft-svtz__keyword--mustnt' : 'draft-svtz__keyword--must'} ${!included ? 'draft-svtz__keyword--disabled' : ''} ${isHovered ? 'draft-svtz__keyword--hovered' : ''}`}
         onClick={(e) => {
-          e.stopPropagation()
-          if (canToggle && included) onKeywordClick(kw.id)
+          e.stopPropagation();
+          if (canToggle && included) onKeywordClick(kw.id);
         }}
         onMouseEnter={() => onKeywordHover(kw.text.toLowerCase())}
         onMouseLeave={() => onKeywordHover(null)}
         title={
-          !canToggle ? 'Complete Step 1 to edit' :
-          !included ? 'Include phrase first to edit keywords' :
-          (kw.isMustnt ? 'Click to change to must-have' : 'Click to change to mustnt-have')
+          !canToggle
+            ? 'Complete Step 1 to edit'
+            : !included
+              ? 'Include phrase first to edit keywords'
+              : kw.isMustnt
+                ? 'Click to change to must-have'
+                : 'Click to change to mustnt-have'
         }
       >
         {text.slice(kw.startIndex, keywordEndIndex)}
       </span>
-    )
+    );
 
-    lastIndex = keywordEndIndex
-  })
+    lastIndex = keywordEndIndex;
+  });
 
   // Add remaining text after last keyword
   if (lastIndex < text.length) {
@@ -263,17 +361,23 @@ function renderPhraseWithKeywords(
         key="text-end"
         className="draft-svtz__phrase-text"
         onClick={(e) => {
-          e.stopPropagation()
-          if (canToggle) onPhraseClick()
+          e.stopPropagation();
+          if (canToggle) onPhraseClick();
         }}
-        title={!canToggle ? 'Complete Step 1 to edit' : (included ? 'Click to exclude phrase' : 'Click to include phrase')}
+        title={
+          !canToggle
+            ? 'Complete Step 1 to edit'
+            : included
+              ? 'Click to exclude phrase'
+              : 'Click to include phrase'
+        }
       >
         {text.slice(lastIndex)}
       </span>
-    )
+    );
   }
 
-  return parts
+  return parts;
 }
 
 export function NodeModal({
@@ -281,7 +385,7 @@ export function NodeModal({
   onClose,
   onUpdate,
   onConvertDraft,
-  draftBranchMode,
+  draftBranchMode: _draftBranchMode,
   onBranchChange,
   onBranchNameChange,
   quickActions,
@@ -290,221 +394,237 @@ export function NodeModal({
 
   // ========== Single View Two Zones State ==========
   // Config state (STEP 1)
-  const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose')
-  const [cosineThreshold, setCosineThreshold] = useState(0.75)
-  const [keywordsThreshold, setKeywordsThreshold] = useState(0.60)
+  const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose');
+  const [cosineThreshold, setCosineThreshold] = useState(0.75);
+  const [keywordsThreshold, setKeywordsThreshold] = useState(0.6);
 
   // Step 1 locked state - when true, config is frozen and Step 2 becomes editable
-  const [configLocked, setConfigLocked] = useState(false)
+  const [configLocked, setConfigLocked] = useState(false);
 
   // Source boxes with phrases (SOURCE column) - baseline from Step 1
-  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([])
+  const [sourceBoxes, setSourceBoxes] = useState<SourceBox[]>([]);
 
   // New: Text blocks for free-form selection (from pendingSource)
   const [textBlocks, setTextBlocks] = useState<SourceTextBlock[]>(
     node?.data.pendingSource?.textBlocks || []
-  )
+  );
 
   // Draft validation state
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
-  const [currentDraft, setCurrentDraft] = useState<api.Draft | null>(null)
-  const [draftError, setDraftError] = useState<string | null>(null)
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [currentDraft, setCurrentDraft] = useState<api.Draft | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   // Commit state
-  const [isCommitting, setIsCommitting] = useState(false)
+  const [isCommitting, setIsCommitting] = useState(false);
 
   // For staging units: toggle between conversation view and commit config view
-  const [showCommitConfig, setShowCommitConfig] = useState(false)
-  const [commitError, setCommitError] = useState<string | null>(null)
+  const [showCommitConfig, setShowCommitConfig] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<{
-    missing: string[]
-    forbidden: string[]
-  } | null>(null)
+    missing: string[];
+    forbidden: string[];
+  } | null>(null);
 
   // Validation derived from draft
-  const validationPassed = currentDraft?.validation?.passed ?? false
+  const validationPassed = currentDraft?.validation?.passed ?? false;
 
   // Get projectId and edges from canvasStore
-  const projectId = useCanvasStore((state) => state.projectId)
-  const edges = useCanvasStore((state) => state.edges)
-  const getUpstreamSourceNodes = useCanvasStore((state) => state.getUpstreamSourceNodes)
+  const projectId = useCanvasStore((state) => state.projectId);
+  const _edges = useCanvasStore((state) => state.edges);
+  const _getUpstreamSourceNodes = useCanvasStore((state) => state.getUpstreamSourceNodes);
 
   // Branches state for Step 1 dropdown
-  const [branches, setBranches] = useState<api.Branch[]>([])
-  const [branchesLoading, setBranchesLoading] = useState(false)
+  const [branches, setBranches] = useState<api.Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
 
   // Diff state for committed commit comparison
-  const [showDiffPanel, setShowDiffPanel] = useState(false)
-  const [diffTargetCommit, setDiffTargetCommit] = useState<string>('')
-  const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null)
-  const [isDiffLoading, setIsDiffLoading] = useState(false)
-  const [diffError, setDiffError] = useState<string | null>(null)
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [diffTargetCommit, setDiffTargetCommit] = useState<string>('');
+  const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null);
+  const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
 
   // Merge state for merge drafts
-  const [mergeResult, setMergeResult] = useState<api.MergeResult | null>(null)
-  const [isMergeAnalyzing, setIsMergeAnalyzing] = useState(false)
-  const [mergeError, setMergeError] = useState<string | null>(null)
+  const [mergeResult, setMergeResult] = useState<api.MergeResult | null>(null);
+  const [isMergeAnalyzing, setIsMergeAnalyzing] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
   // Conflict resolutions: facet -> 'source' | 'target' | 'custom'
-  const [conflictResolutions, setConflictResolutions] = useState<Record<string, {
-    choice: 'source' | 'target' | 'custom'
-    customText?: string
-  }>>({})
+  const [conflictResolutions, setConflictResolutions] = useState<
+    Record<
+      string,
+      {
+        choice: 'source' | 'target' | 'custom';
+        customText?: string;
+      }
+    >
+  >({});
 
   // Check if all conflicts are resolved (needed before handleCommit)
   const allConflictsResolved = useMemo(() => {
-    if (!mergeResult || mergeResult.status !== 'conflicts') return true
-    return mergeResult.conflicts.every(conflict => {
-      const resolution = conflictResolutions[conflict.facet]
-      if (!resolution) return false
+    if (!mergeResult || mergeResult.status !== 'conflicts') return true;
+    return mergeResult.conflicts.every((conflict) => {
+      const resolution = conflictResolutions[conflict.facet];
+      if (!resolution) return false;
       // For delete_modify / modify_delete conflicts, one side may legitimately be null/empty
       // Only require non-empty text for 'custom' choice
-      if (resolution.choice === 'custom' && !resolution.customText?.trim()) return false
+      if (resolution.choice === 'custom' && !resolution.customText?.trim()) return false;
       // For source/target choices, just require a choice was made (empty text is valid for deletions)
-      return true
-    })
-  }, [mergeResult, conflictResolutions])
+      return true;
+    });
+  }, [mergeResult, conflictResolutions]);
 
   // Get all committed commits for diff target selection
   // Use nodes directly and filter in useMemo to avoid infinite loop from .filter() creating new arrays
-  const nodes = useCanvasStore((state) => state.nodes)
+  const nodes = useCanvasStore((state) => state.nodes);
   const allCommittedCommits = useMemo(
-    () => nodes.filter(n => n.data.kind === 'unit' && n.data.commitStatus === 'committed'),
+    () => nodes.filter((n) => n.data.kind === 'unit' && n.data.commitStatus === 'committed'),
     [nodes]
-  )
+  );
 
   // Divider positions
-  const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240) // pixels for sidebar width
+  const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240); // pixels for sidebar width
 
   // Hovered keyword (for cross-area highlighting)
-  const [hoveredKeywordText, setHoveredKeywordText] = useState<string | null>(null)
+  const [hoveredKeywordText, setHoveredKeywordText] = useState<string | null>(null);
 
   // Sidebar state for conversation
-  const [showSettings, setShowSettings] = useState(false)
+  const [showSettings, setShowSettings] = useState(false);
 
   // Chat state for conversation
-  const [chatMessages, setChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const [chatMessages, setChatMessages] = useState<
+    { id: string; role: 'user' | 'assistant'; content: string }[]
+  >([]);
+  const [chatInput, setChatInput] = useState('');
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Chat pagination state
-  const CHAT_PAGE_SIZE = 100
-  const [chatOffset, setChatOffset] = useState(0)
-  const [chatHasMore, setChatHasMore] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const loadMoreAbortRef = useRef<AbortController | null>(null)
+  const CHAT_PAGE_SIZE = 100;
+  const [chatOffset, setChatOffset] = useState(0);
+  const [chatHasMore, setChatHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
 
   // Resizable sidebar state (conversation)
-  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const [sidebarWidth, setSidebarWidth] = useState(280);
 
   // Commit resizable state
-  const [commitLeftWidth, setCommitLeftWidth] = useState(280)
-  const [commitRightWidth, setCommitRightWidth] = useState(280)
+  const [commitLeftWidth, setCommitLeftWidth] = useState(280);
+  const [commitRightWidth, setCommitRightWidth] = useState(280);
 
   // Refs
-  const mainContentRef = useRef<HTMLDivElement>(null)
-  const draftBodyRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const isDraggingRef = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const commitContainerRef = useRef<HTMLDivElement>(null)
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  const draftBodyRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const commitContainerRef = useRef<HTMLDivElement>(null);
 
   // Handler for keyword hover
   const handleKeywordHover = useCallback((text: string | null) => {
-    setHoveredKeywordText(text)
-  }, [])
+    setHoveredKeywordText(text);
+  }, []);
 
   // Computed: all phrases from all source boxes (legacy system)
-  const allPhrases = useMemo(() => sourceBoxes.flatMap(sb => sb.phrases), [sourceBoxes])
+  const allPhrases = useMemo(() => sourceBoxes.flatMap((sb) => sb.phrases), [sourceBoxes]);
 
   // Computed: included phrases count (legacy)
-  const includedPhrasesCount = useMemo(() => allPhrases.filter(p => p.included).length, [allPhrases])
+  const includedPhrasesCount = useMemo(
+    () => allPhrases.filter((p) => p.included).length,
+    [allPhrases]
+  );
 
   // Computed: must_have and mustnt_have keywords (legacy)
-  const mustHaveKeywordsLegacy = useMemo(() => getMustHaveKeywordsLegacy(allPhrases), [allPhrases])
-  const mustntHaveKeywordsLegacy = useMemo(() => getMustntHaveKeywordsLegacy(allPhrases), [allPhrases])
+  const mustHaveKeywordsLegacy = useMemo(() => getMustHaveKeywordsLegacy(allPhrases), [allPhrases]);
+  const mustntHaveKeywordsLegacy = useMemo(
+    () => getMustntHaveKeywordsLegacy(allPhrases),
+    [allPhrases]
+  );
 
   // Computed: result text from included phrases (legacy)
-  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases])
+  const resultText = useMemo(() => generateResultText(allPhrases), [allPhrases]);
 
   // ========== New free-form selection computed values ==========
   // Check if we have new-style pendingSource data
-  const hasNewSourceData = textBlocks.length > 0
+  const hasNewSourceData = textBlocks.length > 0;
 
   // Computed: must_have keywords from all blocks
   const mustHaveKeywordsNew = useMemo(() => {
-    return textBlocks.flatMap(block => getMustHaveKeywordsFromBlocks(block.tokens, block.keywords))
-  }, [textBlocks])
+    return textBlocks.flatMap((block) =>
+      getMustHaveKeywordsFromBlocks(block.tokens, block.keywords)
+    );
+  }, [textBlocks]);
 
   // Computed: mustnt_have keywords from all blocks
   const mustntHaveKeywordsNew = useMemo(() => {
-    return textBlocks.flatMap(block => getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords))
-  }, [textBlocks])
+    return textBlocks.flatMap((block) =>
+      getMustntHaveKeywordsFromBlocks(block.tokens, block.keywords)
+    );
+  }, [textBlocks]);
 
   // Computed: total selections count
   const selectionsCount = useMemo(() => {
-    return textBlocks.reduce((acc, block) => acc + block.selections.length, 0)
-  }, [textBlocks])
+    return textBlocks.reduce((acc, block) => acc + block.selections.length, 0);
+  }, [textBlocks]);
 
   // Persist text block edits (selections/keywords) back to canvas store
   const handleTextBlocksChange = useCallback(
     (updatedBlocks: SourceTextBlock[]) => {
-      setTextBlocks(updatedBlocks)
+      setTextBlocks(updatedBlocks);
       onUpdate({
         pendingSource: {
           textBlocks: updatedBlocks,
         },
-      })
+      });
     },
     [onUpdate]
-  )
+  );
 
   // Derive node-dependent values
-  const data = node?.data
-  const isUnit = data?.kind === 'unit'
-  const isStagingUnit = isUnit && data?.commitStatus === 'staging'
-  const isCommittedUnit = isUnit && data?.commitStatus === 'committed'
+  const data = node?.data;
+  const isUnit = data?.kind === 'unit';
+  const isStagingUnit = isUnit && data?.commitStatus === 'staging';
+  const isCommittedUnit = isUnit && data?.commitStatus === 'committed';
   // In Unit model:
   // - Staging units show conversation view by default, can switch to commit config view
   // - Committed units show committed commit view (facets, source excerpts, etc.)
-  const isCommit = isUnit
+  const _isCommit = isUnit;
   // Show conversation view only for staging units not in commit config mode
-  const isConversation = isStagingUnit && !showCommitConfig
-  const isPendingCommit = isStagingUnit && showCommitConfig
-  const isCommittedCommit = isCommittedUnit
-  const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig
+  const isConversation = isStagingUnit && !showCommitConfig;
+  const isPendingCommit = isStagingUnit && showCommitConfig;
+  const isCommittedCommit = isCommittedUnit;
+  const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig;
   // Always show branch select for pending commits (except merge drafts)
   // Previously only shown for 'select' or 'branch-only' modes, but users want control
-  const shouldShowBranchSelect = isPendingCommit && !isMergeDraft
+  const shouldShowBranchSelect = isPendingCommit && !isMergeDraft;
   // Show branch name input when user selects "+ New branch..." (pendingBranch === 'branch')
-  const requireBranchName =
-    !isMergeDraft && isPendingCommit && data?.pendingBranch === 'branch'
+  const requireBranchName = !isMergeDraft && isPendingCommit && data?.pendingBranch === 'branch';
 
   // Load branches from API when opening pending commit modal
   useEffect(() => {
-    if (!isPendingCommit || !projectId) return
+    if (!isPendingCommit || !projectId) return;
 
     const loadBranches = async () => {
-      setBranchesLoading(true)
+      setBranchesLoading(true);
       try {
-        const response = await api.listBranches(projectId)
-        setBranches(response.branches)
+        const response = await api.listBranches(projectId);
+        setBranches(response.branches);
       } catch (err) {
-        console.error('Failed to load branches:', err)
+        console.error('Failed to load branches:', err);
         // Fallback to empty - user can still type branch name manually
-        setBranches([])
+        setBranches([]);
       } finally {
-        setBranchesLoading(false)
+        setBranchesLoading(false);
       }
-    }
+    };
 
-    loadBranches()
-  }, [isPendingCommit, projectId])
+    loadBranches();
+  }, [isPendingCommit, projectId]);
 
   // Initialize source boxes (legacy) and textBlocks from baseline summary
   // Note: setState in effect is intentional here for initialization based on props
   useEffect(() => {
     if (isPendingCommit && data?.baselineSummary) {
-      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`;
 
       const initialBox: SourceBox = {
         id: 'source-1',
@@ -513,226 +633,245 @@ export function NodeModal({
         content: data.baselineSummary,
         expanded: true,
         phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
-      }
+      };
 
-      setSourceBoxes([initialBox])
+      setSourceBoxes([initialBox]);
     }
-  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, keywordsThreshold])
+  }, [
+    isPendingCommit,
+    data?.baselineSummary,
+    data?.title,
+    data?.sourceConversationId,
+    keywordsThreshold,
+  ]);
 
   // Build textBlocks from own conversation
   // Commit config view always loads source content from its own conversation
   useEffect(() => {
-    if (!isPendingCommit || !node?.id || !projectId) return
+    if (!isPendingCommit || !node?.id || !projectId) return;
 
     const buildTextBlocks = async () => {
-      const ownConversationId = data?.conversationId || data?.sourceConversationId
+      const ownConversationId = data?.conversationId || data?.sourceConversationId;
       if (!ownConversationId) {
-        setTextBlocks([])
-        return
+        setTextBlocks([]);
+        return;
       }
 
       try {
-        const turnsData = await api.listTurns(projectId, ownConversationId)
+        const turnsData = await api.listTurns(projectId, ownConversationId);
         if (turnsData.turns && turnsData.turns.length > 0) {
-          const fullText = turnsData.turns.map((turn) => turn.content).join('\n')
-          const tokens = tokenizeText(fullText)
+          const fullText = turnsData.turns.map((turn) => turn.content).join('\n');
+          const tokens = tokenizeText(fullText);
 
           // Build turn boundaries
-          const turnBoundaries: TurnBoundary[] = []
-          let currentTokenIndex = 0
+          const turnBoundaries: TurnBoundary[] = [];
+          let currentTokenIndex = 0;
 
           for (const turn of turnsData.turns) {
-            const turnTokens = tokenizeText(turn.content)
-            const turnTokenCount = turnTokens.length
+            const turnTokens = tokenizeText(turn.content);
+            const turnTokenCount = turnTokens.length;
 
             if (turnTokenCount > 0) {
               turnBoundaries.push({
                 role: turn.role as 'user' | 'assistant',
                 startTokenIndex: currentTokenIndex,
                 endTokenIndex: currentTokenIndex + turnTokenCount - 1,
-              })
+              });
             }
-            currentTokenIndex += turnTokenCount + 1
+            currentTokenIndex += turnTokenCount + 1;
           }
 
           // Try to preserve existing selections for this block
-          const existingBlock = textBlocks.find(b => b.sourceNodeId === ownConversationId)
+          const existingBlock = textBlocks.find((b) => b.sourceNodeId === ownConversationId);
 
-          setTextBlocks([{
-            id: `block-self-${ownConversationId}`,
-            originalText: fullText,
-            tokens,
-            selections: existingBlock?.selections || [],
-            keywords: existingBlock?.keywords || [],
-            sourceNodeId: ownConversationId,
-            sourceNodeType: 'unit',
-            sourceNodeTitle: data?.title || 'Current Conversation',
-            turnBoundaries,
-          }])
+          setTextBlocks([
+            {
+              id: `block-self-${ownConversationId}`,
+              originalText: fullText,
+              tokens,
+              selections: existingBlock?.selections || [],
+              keywords: existingBlock?.keywords || [],
+              sourceNodeId: ownConversationId,
+              sourceNodeType: 'unit',
+              sourceNodeTitle: data?.title || 'Current Conversation',
+              turnBoundaries,
+            },
+          ]);
         } else {
-          setTextBlocks([])
+          setTextBlocks([]);
         }
       } catch (err) {
-        console.warn('Failed to fetch conversation turns:', err)
-        setTextBlocks([])
+        console.warn('Failed to fetch conversation turns:', err);
+        setTextBlocks([]);
       }
-    }
+    };
 
-    buildTextBlocks()
+    buildTextBlocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPendingCommit, node?.id, projectId, data?.conversationId, data?.sourceConversationId])
+  }, [isPendingCommit, node?.id, projectId, data?.conversationId, data?.sourceConversationId]);
 
   // Scroll to bottom when new messages added
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
-  const addCommitAction = useMemo(() => quickActions?.find(a => a.key === 'add-commit'), [quickActions])
+  const addCommitAction = useMemo(
+    () => quickActions?.find((a) => a.key === 'add-commit'),
+    [quickActions]
+  );
 
   const handleDividerMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault()
-    isDraggingRef.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    e.preventDefault();
+    isDraggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDraggingRef.current || !containerRef.current) return
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const newWidth = moveEvent.clientX - containerRect.left
+      if (!isDraggingRef.current || !containerRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = moveEvent.clientX - containerRect.left;
       // Clamp between 200 and 500px
-      setSidebarWidth(Math.max(200, Math.min(500, newWidth)))
-    }
+      setSidebarWidth(Math.max(200, Math.min(500, newWidth)));
+    };
 
     const handleMouseUp = () => {
-      isDraggingRef.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Commit left divider handler
   const handleCommitLeftDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!commitContainerRef.current) return
-      const rect = commitContainerRef.current.getBoundingClientRect()
-      const newWidth = moveEvent.clientX - rect.left
-      setCommitLeftWidth(Math.max(200, Math.min(400, newWidth)))
-    }
+      if (!commitContainerRef.current) return;
+      const rect = commitContainerRef.current.getBoundingClientRect();
+      const newWidth = moveEvent.clientX - rect.left;
+      setCommitLeftWidth(Math.max(200, Math.min(400, newWidth)));
+    };
 
     const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Commit right divider handler
   const handleCommitRightDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!commitContainerRef.current) return
-      const rect = commitContainerRef.current.getBoundingClientRect()
-      const newWidth = rect.right - moveEvent.clientX
-      setCommitRightWidth(Math.max(200, Math.min(400, newWidth)))
-    }
+      if (!commitContainerRef.current) return;
+      const rect = commitContainerRef.current.getBoundingClientRect();
+      const newWidth = rect.right - moveEvent.clientX;
+      setCommitRightWidth(Math.max(200, Math.min(400, newWidth)));
+    };
 
     const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // ========== Single View Two Zones Handlers ==========
 
   // Sidebar | SOURCE divider handler
   const handleSidebarSourceDivider = (e: React.MouseEvent) => {
-    e.preventDefault()
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!draftBodyRef.current) return
-      const rect = draftBodyRef.current.getBoundingClientRect()
-      const newWidth = moveEvent.clientX - rect.left
+      if (!draftBodyRef.current) return;
+      const rect = draftBodyRef.current.getBoundingClientRect();
+      const newWidth = moveEvent.clientX - rect.left;
       // Min 220px to ensure Branch Name input is fully visible
-      setSidebarSourceDividerPos(Math.max(220, Math.min(400, newWidth)))
-    }
+      setSidebarSourceDividerPos(Math.max(220, Math.min(400, newWidth)));
+    };
 
     const handleMouseUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Toggle source box expansion
   const toggleSourceBoxExpand = useCallback((boxId: string) => {
-    setSourceBoxes(prev => prev.map(sb =>
-      sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb
-    ))
-  }, [])
+    setSourceBoxes((prev) =>
+      prev.map((sb) => (sb.id === boxId ? { ...sb, expanded: !sb.expanded } : sb))
+    );
+  }, []);
 
   // Toggle phrase include/exclude (only in Step 2 when configLocked)
   // Phrase: include (浅绿) ↔ exclude (浅红)
-  const togglePhraseInclude = useCallback((phraseId: string) => {
-    if (!configLocked) return // Only allow in Step 2
+  const togglePhraseInclude = useCallback(
+    (phraseId: string) => {
+      if (!configLocked) return; // Only allow in Step 2
 
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: sb.phrases.map(p =>
-        p.id === phraseId ? { ...p, included: !p.included } : p
-      )
-    })))
-  }, [configLocked])
+      setSourceBoxes((prev) =>
+        prev.map((sb) => ({
+          ...sb,
+          phrases: sb.phrases.map((p) => (p.id === phraseId ? { ...p, included: !p.included } : p)),
+        }))
+      );
+    },
+    [configLocked]
+  );
 
   // Toggle keyword must/mustnt (only when parent phrase is included)
   // Keyword: must_have (深绿) ↔ mustnt_have (深红)
-  const toggleKeywordMustnt = useCallback((phraseId: string, keywordId: string) => {
-    if (!configLocked) return // Only allow in Step 2
+  const toggleKeywordMustnt = useCallback(
+    (phraseId: string, keywordId: string) => {
+      if (!configLocked) return; // Only allow in Step 2
 
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: sb.phrases.map(p => {
-        if (p.id !== phraseId || !p.included) return p // Only toggle if phrase is included
-        return {
-          ...p,
-          keywords: p.keywords.map(kw =>
-            kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
-          )
-        }
-      })
-    })))
-  }, [configLocked])
+      setSourceBoxes((prev) =>
+        prev.map((sb) => ({
+          ...sb,
+          phrases: sb.phrases.map((p) => {
+            if (p.id !== phraseId || !p.included) return p; // Only toggle if phrase is included
+            return {
+              ...p,
+              keywords: p.keywords.map((kw) =>
+                kw.id === keywordId ? { ...kw, isMustnt: !kw.isMustnt } : kw
+              ),
+            };
+          }),
+        }))
+      );
+    },
+    [configLocked]
+  );
 
   // Initialize source boxes from baseline summary
   useEffect(() => {
     if (isPendingCommit && data.baselineSummary) {
-      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`
+      const sourceTitle = `Unit – ${data.title?.replace('Draft from ', '') || 'Source'}`;
 
       const initialBox: SourceBox = {
         id: 'source-1',
@@ -741,51 +880,67 @@ export function NodeModal({
         content: data.baselineSummary,
         expanded: true,
         phrases: extractPhrasesFromText(data.baselineSummary, 'source-1', keywordsThreshold),
-      }
-      setSourceBoxes([initialBox])
+      };
+      setSourceBoxes([initialBox]);
     }
-  }, [isPendingCommit, data?.baselineSummary, data?.title, data?.sourceConversationId, keywordsThreshold])
+  }, [
+    isPendingCommit,
+    data?.baselineSummary,
+    data?.title,
+    data?.sourceConversationId,
+    keywordsThreshold,
+  ]);
 
   // Handle Proceed - lock Step 1 config and enable Step 2 editing
   const handleProceed = useCallback(() => {
     // Allow proceeding if either textBlocks or sourceBoxes has content
-    if (textBlocks.length === 0 && sourceBoxes.length === 0) return
-    setConfigLocked(true)
-  }, [textBlocks, sourceBoxes])
+    if (textBlocks.length === 0 && sourceBoxes.length === 0) return;
+    setConfigLocked(true);
+  }, [textBlocks, sourceBoxes]);
 
   // Handle Reset - unlock Step 1 config and reset phrases to default
   const handleReset = useCallback(() => {
-    setConfigLocked(false)
+    setConfigLocked(false);
     // Re-extract to reset all phrase/keyword states
-    setSourceBoxes(prev => prev.map(sb => ({
-      ...sb,
-      phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
-    })))
-  }, [keywordsThreshold])
+    setSourceBoxes((prev) =>
+      prev.map((sb) => ({
+        ...sb,
+        phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
+      }))
+    );
+  }, [keywordsThreshold]);
 
   // Check if this pending commit has a source conversation (from conversation) or not (from commit)
-  const hasSourceConversation = !!data?.sourceConversationId || !!data?.conversationId
+  const hasSourceConversation = !!data?.sourceConversationId || !!data?.conversationId;
   if (isPendingCommit) {
-    console.log('[NodeModal] hasSourceConversation:', hasSourceConversation,
-      'sourceConversationId:', data?.sourceConversationId,
-      'conversationId:', data?.conversationId)
+    console.log(
+      '[NodeModal] hasSourceConversation:',
+      hasSourceConversation,
+      'sourceConversationId:',
+      data?.sourceConversationId,
+      'conversationId:',
+      data?.conversationId
+    );
   }
   // Check if this commit-derived pending has inherited turn_window for direct commit
-  const hasSourceTurnWindow = !!data?.sourceTurnWindow
+  const hasSourceTurnWindow = !!data?.sourceTurnWindow;
 
   // Local validation state for commit-derived pending commits
-  const [localValidationPassed, setLocalValidationPassed] = useState<boolean | null>(null)
-  const [localValidationErrors, setLocalValidationErrors] = useState<{ missing: string[], forbidden: string[] } | null>(null)
+  const [localValidationPassed, setLocalValidationPassed] = useState<boolean | null>(null);
+  const [localValidationErrors, setLocalValidationErrors] = useState<{
+    missing: string[];
+    forbidden: string[];
+  } | null>(null);
 
   // Reset local validation when selections or keywords change
   // This ensures user must re-validate after modifying source selection
   useEffect(() => {
     if (localValidationPassed !== null) {
-      setLocalValidationPassed(null)
-      setLocalValidationErrors(null)
+      setLocalValidationPassed(null);
+      setLocalValidationErrors(null);
     }
-  // Only reset when actual content changes, not on initial render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only reset when actual content changes, not on initial render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     // Track selection changes via these derived values
     selectionsCount,
@@ -794,198 +949,214 @@ export function NodeModal({
     includedPhrasesCount,
     mustHaveKeywordsLegacy.length,
     mustntHaveKeywordsLegacy.length,
-  ])
+  ]);
 
   // Helper: normalize keyword for comparison (lowercase, trim, remove punctuation)
   // Use Unicode-aware regex to preserve CJK characters
-  const normalizeKeyword = (kw: string) => kw.toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, '')
+  const normalizeKeyword = (kw: string) =>
+    kw
+      .toLowerCase()
+      .trim()
+      .replace(/[^\p{L}\p{N}\s]/gu, '');
 
   // Handle local validation for commit-derived pending commits
   // This validates must_have/mustnt_have keywords against selected source text
   const handleLocalValidation = useCallback(() => {
     // Get selected source text and normalize
-    let selectedText = ''
+    let selectedText = '';
     if (textBlocks.length > 0) {
       selectedText = textBlocks
-        .map(block => getSelectedText(block.tokens, block.selections))
-        .filter(text => text.length > 0)
-        .join(' ')
+        .map((block) => getSelectedText(block.tokens, block.selections))
+        .filter((text) => text.length > 0)
+        .join(' ');
     } else {
       selectedText = allPhrases
-        .filter(p => p.included)
-        .map(p => p.text)
-        .join(' ')
+        .filter((p) => p.included)
+        .map((p) => p.text)
+        .join(' ');
     }
 
     // Normalize selected text (lowercase, remove punctuation for matching)
     // Use Unicode-aware regex to preserve CJK characters
-    const normalizedText = selectedText.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '')
+    const normalizedText = selectedText.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '');
 
     if (!normalizedText.trim()) {
-      setLocalValidationPassed(false)
-      setLocalValidationErrors({ missing: ['No source text selected'], forbidden: [] })
-      return
+      setLocalValidationPassed(false);
+      setLocalValidationErrors({ missing: ['No source text selected'], forbidden: [] });
+      return;
     }
 
     // Get must_have and mustnt_have keywords, normalized
-    const mustHave = textBlocks.length > 0 ? mustHaveKeywordsNew : mustHaveKeywordsLegacy.map(kw => kw.text)
-    const mustntHave = textBlocks.length > 0 ? mustntHaveKeywordsNew : mustntHaveKeywordsLegacy.map(kw => kw.text)
+    const mustHave =
+      textBlocks.length > 0 ? mustHaveKeywordsNew : mustHaveKeywordsLegacy.map((kw) => kw.text);
+    const mustntHave =
+      textBlocks.length > 0 ? mustntHaveKeywordsNew : mustntHaveKeywordsLegacy.map((kw) => kw.text);
 
     // Validate must_have: all keywords must be present in selected text
-    const missingKeywords = mustHave.filter(kw => {
-      const normalized = normalizeKeyword(kw)
-      return normalized.length > 0 && !normalizedText.includes(normalized)
-    })
+    const missingKeywords = mustHave.filter((kw) => {
+      const normalized = normalizeKeyword(kw);
+      return normalized.length > 0 && !normalizedText.includes(normalized);
+    });
 
     // Validate mustnt_have: none of these keywords should be present
-    const forbiddenKeywords = mustntHave.filter(kw => {
-      const normalized = normalizeKeyword(kw)
-      return normalized.length > 0 && normalizedText.includes(normalized)
-    })
+    const forbiddenKeywords = mustntHave.filter((kw) => {
+      const normalized = normalizeKeyword(kw);
+      return normalized.length > 0 && normalizedText.includes(normalized);
+    });
 
-    const passed = missingKeywords.length === 0 && forbiddenKeywords.length === 0
-    setLocalValidationPassed(passed)
+    const passed = missingKeywords.length === 0 && forbiddenKeywords.length === 0;
+    setLocalValidationPassed(passed);
     setLocalValidationErrors(
       passed ? null : { missing: missingKeywords, forbidden: forbiddenKeywords }
-    )
-  }, [textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy])
+    );
+  }, [
+    textBlocks,
+    allPhrases,
+    mustHaveKeywordsNew,
+    mustntHaveKeywordsNew,
+    mustHaveKeywordsLegacy,
+    mustntHaveKeywordsLegacy,
+  ]);
 
   // Handle Generate Draft - call Draft API for validation
   // Only available for pending commits created from conversations
   // Validate pending commit - generate LLM draft and check keyword constraints
   const handleValidatePendingCommit = useCallback(async () => {
     if (!projectId || !data) {
-      setDraftError('No project selected')
-      return
+      setDraftError('No project selected');
+      return;
     }
 
     // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
     // This allows commits created from other commits to work when a unit is later connected
-    const sourceUnitBlock = textBlocks.find(block => block.sourceNodeType === 'unit')
-    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId
+    const sourceUnitBlock = textBlocks.find((block) => block.sourceNodeType === 'unit');
+    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId;
     if (!sourceConversationId) {
       // This shouldn't happen - button should be hidden for commit-derived pending commits
-      setDraftError('No source conversation - validation not available')
-      return
+      setDraftError('No source conversation - validation not available');
+      return;
     }
 
-    setIsGeneratingDraft(true)
-    setDraftError(null)
-    setCurrentDraft(null)
-    setValidationErrors(null)
+    setIsGeneratingDraft(true);
+    setDraftError(null);
+    setCurrentDraft(null);
+    setValidationErrors(null);
 
     try {
       // Get intent from source selection
-      let intent = ''
+      let intent = '';
       if (textBlocks.length > 0) {
         intent = textBlocks
-          .map(block => getSelectedText(block.tokens, block.selections))
-          .filter(text => text.length > 0)
-          .join('\n')
+          .map((block) => getSelectedText(block.tokens, block.selections))
+          .filter((text) => text.length > 0)
+          .join('\n');
       } else {
-        intent = allPhrases.filter(p => p.included).map(p => p.text).join('\n')
+        intent = allPhrases
+          .filter((p) => p.included)
+          .map((p) => p.text)
+          .join('\n');
       }
 
       if (!intent.trim()) {
-        setDraftError('Please select some source text first')
-        setIsGeneratingDraft(false)
-        return
+        setDraftError('Please select some source text first');
+        setIsGeneratingDraft(false);
+        return;
       }
 
       // Map template to bridge_id
-      const bridgeId = (template === 'prose' || template === 'plan' || template === 'summary' || template === 'explain' || template === 'clarify')
-        ? template as 'plan' | 'summary' | 'explain' | 'clarify'
-        : 'summary'
+      const bridgeId =
+        template === 'prose' ||
+        template === 'plan' ||
+        template === 'summary' ||
+        template === 'explain' ||
+        template === 'clarify'
+          ? (template as 'plan' | 'summary' | 'explain' | 'clarify')
+          : 'summary';
 
-      const draft = await api.createDraft(
-        projectId,
-        sourceConversationId,
-        bridgeId,
-        intent
-      )
+      const draft = await api.createDraft(projectId, sourceConversationId, bridgeId, intent);
 
-      setCurrentDraft(draft)
+      setCurrentDraft(draft);
 
       // Set validation errors if validation failed
       if (draft.validation && !draft.validation.passed) {
         setValidationErrors({
           missing: draft.validation.missing_keywords,
           forbidden: draft.validation.forbidden_keywords,
-        })
+        });
       }
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      setDraftError(error.message)
+      const error = err instanceof Error ? err : new Error(String(err));
+      setDraftError(error.message);
     } finally {
-      setIsGeneratingDraft(false)
+      setIsGeneratingDraft(false);
     }
-  }, [projectId, data, template, textBlocks, allPhrases])
+  }, [projectId, data, template, textBlocks, allPhrases]);
 
   // Handle Commit - create commit via API (or merge for merge drafts)
   const handleCommit = useCallback(async () => {
     if (!projectId || !data) {
-      setCommitError('No project selected')
-      return
+      setCommitError('No project selected');
+      return;
     }
 
     // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
     // This allows commits created from other commits to work when a unit is later connected
-    const sourceUnitBlock = textBlocks.find(block => block.sourceNodeType === 'unit')
-    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId
+    const sourceUnitBlock = textBlocks.find((block) => block.sourceNodeType === 'unit');
+    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId;
     if (!sourceConversationId) {
-      setCommitError('No source conversation found. Please connect a conversation to this commit.')
-      return
+      setCommitError('No source conversation found. Please connect a conversation to this commit.');
+      return;
     }
 
-    setIsCommitting(true)
-    setCommitError(null)
-    setValidationErrors(null)
+    setIsCommitting(true);
+    setCommitError(null);
+    setValidationErrors(null);
 
     try {
       // Check if this is a merge draft
-      const isMerge = data.bridgePrompt === '/merge' && !!data.mergeConfig
+      const isMerge = data.bridgePrompt === '/merge' && !!data.mergeConfig;
 
       if (isMerge) {
         // Merge commit flow
         if (!mergeResult) {
-          setCommitError('Please analyze the merge first')
-          setIsCommitting(false)
-          return
+          setCommitError('Please analyze the merge first');
+          setIsCommitting(false);
+          return;
         }
         if (!allConflictsResolved) {
-          setCommitError('Please resolve all conflicts first')
-          setIsCommitting(false)
-          return
+          setCommitError('Please resolve all conflicts first');
+          setIsCommitting(false);
+          return;
         }
 
-        const { sourceCommitHash, targetCommitHash } = data.mergeConfig!
+        const { sourceCommitHash, targetCommitHash } = data.mergeConfig!;
 
         // Build resolved facets from auto-merged + conflict resolutions
-        const resolvedFacets: api.ResolvedFacet[] = []
+        const resolvedFacets: api.ResolvedFacet[] = [];
 
         // Add auto-merged facets
         for (const auto of mergeResult.auto_merged_facets) {
           resolvedFacets.push({
             facet: auto.facet,
             text: auto.merged_text,
-            source: auto.source,  // backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
+            source: auto.source, // backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
             keywords: auto.keywords || [],
-          })
+          });
         }
 
         // Add resolved conflicts
         for (const conflict of mergeResult.conflicts) {
-          const resolution = conflictResolutions[conflict.facet]
-          if (!resolution) continue
+          const resolution = conflictResolutions[conflict.facet];
+          if (!resolution) continue;
 
           // For delete_modify / modify_delete conflicts, one side may be null
-          let text: string | null
+          let text: string | null;
           if (resolution.choice === 'source') {
-            text = conflict.source_text
+            text = conflict.source_text;
           } else if (resolution.choice === 'target') {
-            text = conflict.target_text
+            text = conflict.target_text;
           } else {
-            text = resolution.customText || ''
+            text = resolution.customText || '';
           }
 
           resolvedFacets.push({
@@ -993,192 +1164,202 @@ export function NodeModal({
             text,
             source: resolution.choice,
             keywords: [],
-          })
+          });
         }
 
         // Determine branch
         // If user selected 'branch' mode, use their branch name or generate one
-        const branch = data.pendingBranch === 'branch'
-          ? (data.pendingBranchName?.trim() || `branch-${Date.now()}`)
-          : 'main'
+        const branch =
+          data.pendingBranch === 'branch'
+            ? data.pendingBranchName?.trim() || `branch-${Date.now()}`
+            : 'main';
 
         console.log('[handleCommit:merge] Branch decision:', {
           pendingBranch: data.pendingBranch,
           pendingBranchName: data.pendingBranchName,
           computedBranch: branch,
-          existingBranches: branches.map(b => b.name),
-          branchExists: branches.some(b => b.name === branch),
-        })
+          existingBranches: branches.map((b) => b.name),
+          branchExists: branches.some((b) => b.name === branch),
+        });
 
         // Create branch if needed (new branch that doesn't exist yet)
-        if (branch !== 'main' && !branches.some(b => b.name === branch)) {
-          console.log('[handleCommit:merge] Creating new branch:', branch)
+        if (branch !== 'main' && !branches.some((b) => b.name === branch)) {
+          console.log('[handleCommit:merge] Creating new branch:', branch);
           try {
-            await api.createBranch(projectId, branch, 'main', undefined, false)
-            console.log('[handleCommit:merge] Branch created successfully:', branch)
+            await api.createBranch(projectId, branch, 'main', undefined, false);
+            console.log('[handleCommit:merge] Branch created successfully:', branch);
           } catch (branchErr) {
             // Ignore if branch already exists (race condition)
-            const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr)
-            console.log('[handleCommit:merge] Branch creation error:', errMsg)
+            const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr);
+            console.log('[handleCommit:merge] Branch creation error:', errMsg);
             if (!errMsg.includes('already exists')) {
-              throw branchErr
+              throw branchErr;
             }
           }
         } else {
-          console.log('[handleCommit:merge] Skipping branch creation:', { branch, isMain: branch === 'main', exists: branches.some(b => b.name === branch) })
+          console.log('[handleCommit:merge] Skipping branch creation:', {
+            branch,
+            isMain: branch === 'main',
+            exists: branches.some((b) => b.name === branch),
+          });
         }
 
         // Create merge commit
-        const currentPosition = node?.position
+        const currentPosition = node?.position;
         const commit = await api.createMergeCommit(
           projectId,
           sourceCommitHash!,
           targetCommitHash!,
           branch,
-          data.title || `Merge ${data.mergeConfig?.sourceCommitTitle} into ${data.mergeConfig?.targetCommitTitle}`,
+          data.title ||
+            `Merge ${data.mergeConfig?.sourceCommitTitle} into ${data.mergeConfig?.targetCommitTitle}`,
           resolvedFacets,
           currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined
-        )
+        );
 
         // Trigger convert to committed state BEFORE updating node ID
         // (onConvertDraft closure captures the old node.id, so must be called first)
-        onConvertDraft?.()
+        onConvertDraft?.();
 
         // Update local node ID to match API commit_hash
         if (node && commit.commit_hash) {
-          useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
+          useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash);
         }
 
         // Update local state with final values
         onUpdate({
           commitHash: commit.commit_hash,
           isMergeCommit: true,
-        })
+        });
 
         // Refresh canvas data
-        useCanvasStore.getState().loadProjectData(projectId)
+        useCanvasStore.getState().loadProjectData(projectId);
 
-        setIsCommitting(false)
-        return
+        setIsCommitting(false);
+        return;
       }
 
       // Regular commit flow
-      let startTurnHash: string
-      let endTurnHash: string
+      let startTurnHash: string;
+      let endTurnHash: string;
 
       // Determine turn_window: from source conversation or inherited from parent commit
       // For staging units, use conversationId if sourceConversationId is not set
-      const sourceConversationId = data.sourceConversationId || data.conversationId
+      const sourceConversationId = data.sourceConversationId || data.conversationId;
       if (sourceConversationId) {
         // Case 1: Pending commit from conversation - fetch turns
-        const turnsResponse = await api.listTurns(projectId, sourceConversationId)
-        const turns = turnsResponse.turns
+        const turnsResponse = await api.listTurns(projectId, sourceConversationId);
+        const turns = turnsResponse.turns;
 
         if (turns.length === 0) {
-          setCommitError('Conversation has no turns')
-          setIsCommitting(false)
-          return
+          setCommitError('Conversation has no turns');
+          setIsCommitting(false);
+          return;
         }
 
-        startTurnHash = turns[0].turn_hash
-        endTurnHash = turns[turns.length - 1].turn_hash
+        startTurnHash = turns[0].turn_hash;
+        endTurnHash = turns[turns.length - 1].turn_hash;
       } else if (data.sourceTurnWindow) {
         // Case 2: Pending commit from commit - use inherited turn_window
-        startTurnHash = data.sourceTurnWindow.start_turn_hash
-        endTurnHash = data.sourceTurnWindow.end_turn_hash
+        startTurnHash = data.sourceTurnWindow.start_turn_hash;
+        endTurnHash = data.sourceTurnWindow.end_turn_hash;
       } else {
         // Case 3: No valid source - cannot commit
-        setCommitError('Cannot commit: no source conversation or turn window available.')
-        setIsCommitting(false)
-        return
+        setCommitError('Cannot commit: no source conversation or turn window available.');
+        setIsCommitting(false);
+        return;
       }
 
       // 2. Determine branch
       // User's explicit choice (pendingBranch) takes priority
-      let branch: string
+      let branch: string;
       if (data.pendingBranch === 'branch') {
-        branch = data.pendingBranchName?.trim() || `branch-${Date.now()}`
+        branch = data.pendingBranchName?.trim() || `branch-${Date.now()}`;
       } else {
-        branch = 'main'
+        branch = 'main';
       }
 
       console.log('[handleCommit] Branch decision:', {
         pendingBranch: data.pendingBranch,
         pendingBranchName: data.pendingBranchName,
         computedBranch: branch,
-        existingBranches: branches.map(b => b.name),
-        branchExists: branches.some(b => b.name === branch),
-      })
+        existingBranches: branches.map((b) => b.name),
+        branchExists: branches.some((b) => b.name === branch),
+      });
 
       // 3. Collect user selections
       // Get source excerpts (included phrases) from textBlocks or legacy allPhrases
-      let sourceExcerpt: string[] = []
-      let mustHave: string[] = []
-      let mustntHave: string[] = []
+      let sourceExcerpt: string[] = [];
+      let mustHave: string[] = [];
+      let mustntHave: string[] = [];
 
       if (textBlocks.length > 0) {
         // New system: get selected text from each block
         sourceExcerpt = textBlocks
-          .map(block => getSelectedText(block.tokens, block.selections))
-          .filter(text => text.length > 0)
-        mustHave = [...mustHaveKeywordsNew]
-        mustntHave = [...mustntHaveKeywordsNew]
+          .map((block) => getSelectedText(block.tokens, block.selections))
+          .filter((text) => text.length > 0);
+        mustHave = [...mustHaveKeywordsNew];
+        mustntHave = [...mustntHaveKeywordsNew];
       } else {
         // Legacy system: get included phrases
-        sourceExcerpt = allPhrases.filter(p => p.included).map(p => p.text)
-        mustHave = mustHaveKeywordsLegacy.map(kw => kw.text)
-        mustntHave = mustntHaveKeywordsLegacy.map(kw => kw.text)
+        sourceExcerpt = allPhrases.filter((p) => p.included).map((p) => p.text);
+        mustHave = mustHaveKeywordsLegacy.map((kw) => kw.text);
+        mustntHave = mustntHaveKeywordsLegacy.map((kw) => kw.text);
       }
 
       // 4. Create branch if needed (new branch that doesn't exist yet)
-      if (branch !== 'main' && !branches.some(b => b.name === branch)) {
-        console.log('[handleCommit] Creating new branch:', branch)
+      if (branch !== 'main' && !branches.some((b) => b.name === branch)) {
+        console.log('[handleCommit] Creating new branch:', branch);
         try {
-          await api.createBranch(projectId, branch, 'main', undefined, false)
-          console.log('[handleCommit] Branch created successfully:', branch)
+          await api.createBranch(projectId, branch, 'main', undefined, false);
+          console.log('[handleCommit] Branch created successfully:', branch);
         } catch (branchErr) {
           // Ignore if branch already exists (race condition)
-          const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr)
-          console.log('[handleCommit] Branch creation error:', errMsg)
+          const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr);
+          console.log('[handleCommit] Branch creation error:', errMsg);
           if (!errMsg.includes('already exists')) {
-            throw branchErr
+            throw branchErr;
           }
         }
       } else {
-        console.log('[handleCommit] Skipping branch creation:', { branch, isMain: branch === 'main', exists: branches.some(b => b.name === branch) })
+        console.log('[handleCommit] Skipping branch creation:', {
+          branch,
+          isMain: branch === 'main',
+          exists: branches.some((b) => b.name === branch),
+        });
       }
 
       // 5. Build source_refs from all upstream source nodes
-      const sourceRefs: api.SourceRef[] = []
+      const sourceRefs: api.SourceRef[] = [];
 
       // Primary source: the conversation with turn_window
       sourceRefs.push({
         type: 'conversation',
         conversation_id: sourceConversationId,
         turn_window: { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
-      })
+      });
 
       // Debug: Log textBlocks info
       console.log('[handleCommit] Building sourceRefs:', {
         sourceConversationId,
         textBlocksCount: textBlocks.length,
-        textBlocks: textBlocks.map(b => ({
+        textBlocks: textBlocks.map((b) => ({
           id: b.id,
           sourceNodeId: b.sourceNodeId,
           sourceNodeType: b.sourceNodeType,
           sourceNodeTitle: b.sourceNodeTitle,
         })),
-      })
+      });
 
       // Additional sources from textBlocks (for multi-source commits)
       if (textBlocks.length > 0) {
-        textBlocks.forEach(block => {
+        textBlocks.forEach((block) => {
           console.log('[handleCommit] Checking block:', {
             blockSourceNodeId: block.sourceNodeId,
             sourceConversationId,
             isMatch: block.sourceNodeId === sourceConversationId,
             willAdd: block.sourceNodeId && block.sourceNodeId !== sourceConversationId,
-          })
+          });
           if (block.sourceNodeId && block.sourceNodeId !== sourceConversationId) {
             // In the unit model, source blocks come from units
             // Determine if it's a conversation ID or commit hash based on format
@@ -1186,22 +1367,22 @@ export function NodeModal({
               sourceRefs.push({
                 type: 'conversation',
                 conversation_id: block.sourceNodeId,
-              })
+              });
             } else if (block.sourceNodeId.startsWith('sha256:')) {
               sourceRefs.push({
                 type: 'commit',
                 commit_hash: block.sourceNodeId,
-              })
+              });
             }
           }
-        })
+        });
       }
 
-      console.log('[handleCommit] Final sourceRefs:', sourceRefs)
+      console.log('[handleCommit] Final sourceRefs:', sourceRefs);
 
       // 6. Create Commit directly (Ring data already extracted during turn creation)
       // Get the current node position to save with the commit
-      const currentPosition = node?.position
+      const currentPosition = node?.position;
       const commit = await api.createCommit(
         projectId,
         { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
@@ -1214,16 +1395,16 @@ export function NodeModal({
           position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
           sourceRefs,
         }
-      )
+      );
 
       // 7. Trigger convert to committed state BEFORE updating node ID
       // (onConvertDraft closure captures the old node.id, so must be called first)
-      onConvertDraft?.()
+      onConvertDraft?.();
 
       // 8. Update local node ID to match API commit_hash (before refresh)
       // This ensures edges are preserved when loadProjectData rebuilds the canvas
       if (node && commit.commit_hash) {
-        useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash)
+        useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash);
       }
 
       // 9. Update local state with final values
@@ -1232,420 +1413,465 @@ export function NodeModal({
         bridgePrompt: template,
         isGenerated: true,
         commitHash: commit.commit_hash,
-      })
+      });
 
       // 9. Refresh canvas data
-      useCanvasStore.getState().loadProjectData(projectId)
-
+      useCanvasStore.getState().loadProjectData(projectId);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      setCommitError(error.message)
-      console.error('Failed to create commit:', error)
+      const error = err instanceof Error ? err : new Error(String(err));
+      setCommitError(error.message);
+      console.error('Failed to create commit:', error);
     } finally {
-      setIsCommitting(false)
+      setIsCommitting(false);
     }
-  }, [projectId, node, data, template, resultText, onUpdate, onConvertDraft, textBlocks, allPhrases, mustHaveKeywordsNew, mustntHaveKeywordsNew, mustHaveKeywordsLegacy, mustntHaveKeywordsLegacy, mergeResult, conflictResolutions, allConflictsResolved, branches])
+  }, [
+    projectId,
+    node,
+    data,
+    template,
+    resultText,
+    onUpdate,
+    onConvertDraft,
+    textBlocks,
+    allPhrases,
+    mustHaveKeywordsNew,
+    mustntHaveKeywordsNew,
+    mustHaveKeywordsLegacy,
+    mustntHaveKeywordsLegacy,
+    mergeResult,
+    conflictResolutions,
+    allConflictsResolved,
+    branches,
+  ]);
 
   // Handle Diff - compare two commits
   const handleDiff = useCallback(async () => {
     if (!data?.commitHash || !diffTargetCommit) {
-      setDiffError('Please select a commit to compare with')
-      return
+      setDiffError('Please select a commit to compare with');
+      return;
     }
 
     if (data.commitHash === diffTargetCommit) {
-      setDiffError('Cannot compare a commit with itself')
-      return
+      setDiffError('Cannot compare a commit with itself');
+      return;
     }
 
-    setIsDiffLoading(true)
-    setDiffError(null)
-    setDiffResult(null)
+    setIsDiffLoading(true);
+    setDiffError(null);
+    setDiffResult(null);
 
     try {
-      const result = await api.diff(data.commitHash, diffTargetCommit)
-      setDiffResult(result)
+      const result = await api.diff(data.commitHash, diffTargetCommit);
+      setDiffResult(result);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      setDiffError(error.message)
+      const error = err instanceof Error ? err : new Error(String(err));
+      setDiffError(error.message);
     } finally {
-      setIsDiffLoading(false)
+      setIsDiffLoading(false);
     }
-  }, [data?.commitHash, diffTargetCommit])
+  }, [data?.commitHash, diffTargetCommit]);
 
   // Handle Merge Analysis - analyze merge conflicts
   const handleMergeAnalysis = useCallback(async () => {
     if (!projectId || !data?.mergeConfig) {
-      setMergeError('No merge configuration available')
-      return
+      setMergeError('No merge configuration available');
+      return;
     }
 
-    const { baseCommitHash, sourceCommitHash, targetCommitHash } = data.mergeConfig
+    const { baseCommitHash, sourceCommitHash, targetCommitHash } = data.mergeConfig;
     if (!baseCommitHash || !sourceCommitHash || !targetCommitHash) {
-      setMergeError('Missing commit hashes for merge analysis')
-      return
+      setMergeError('Missing commit hashes for merge analysis');
+      return;
     }
 
-    setIsMergeAnalyzing(true)
-    setMergeError(null)
-    setMergeResult(null)
-    setConflictResolutions({})
+    setIsMergeAnalyzing(true);
+    setMergeError(null);
+    setMergeResult(null);
+    setConflictResolutions({});
 
     try {
-      const result = await api.merge(projectId, baseCommitHash, sourceCommitHash, targetCommitHash)
-      setMergeResult(result)
+      const result = await api.merge(projectId, baseCommitHash, sourceCommitHash, targetCommitHash);
+      setMergeResult(result);
 
       // Auto-resolve clean merges (no user action needed)
       // For conflicts, user must choose
       if (result.status === 'conflicts') {
         // Initialize conflict resolutions with 'target' as default
-        const initialResolutions: Record<string, { choice: 'source' | 'target' | 'custom'; customText?: string }> = {}
-        result.conflicts.forEach(conflict => {
-          initialResolutions[conflict.facet] = { choice: 'target' }
-        })
-        setConflictResolutions(initialResolutions)
+        const initialResolutions: Record<
+          string,
+          { choice: 'source' | 'target' | 'custom'; customText?: string }
+        > = {};
+        result.conflicts.forEach((conflict) => {
+          initialResolutions[conflict.facet] = { choice: 'target' };
+        });
+        setConflictResolutions(initialResolutions);
       }
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      setMergeError(error.message)
+      const error = err instanceof Error ? err : new Error(String(err));
+      setMergeError(error.message);
     } finally {
-      setIsMergeAnalyzing(false)
+      setIsMergeAnalyzing(false);
     }
-  }, [projectId, data?.mergeConfig])
+  }, [projectId, data?.mergeConfig]);
 
   // Scroll to bottom when new messages added
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   // Chat loading state - disable send while loading history
-  const [isChatLoading, setIsChatLoading] = useState(false)
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Track previous conversationId to detect first-time assignment
-  const prevConversationIdRef = useRef<string | undefined>(undefined)
+  const prevConversationIdRef = useRef<string | undefined>(undefined);
 
   // Load chat history from backend when modal opens for conversation
   useEffect(() => {
-    const abortController = new AbortController()
-    const currentConversationId = data?.conversationId
-    const prevConversationId = prevConversationIdRef.current
-    prevConversationIdRef.current = currentConversationId
+    const abortController = new AbortController();
+    const currentConversationId = data?.conversationId;
+    const prevConversationId = prevConversationIdRef.current;
+    prevConversationIdRef.current = currentConversationId;
 
     const loadChatHistory = async () => {
-      if (!data || data.kind !== 'unit' || !projectId || !currentConversationId) return
+      if (!data || data.kind !== 'unit' || !projectId || !currentConversationId) return;
 
       // If conversationId just changed from undefined to a value and we already have messages,
       // this means we just created the conversation during an active chat session.
       // Don't reload - the messages are already in state.
       if (prevConversationId === undefined && chatMessagesRef.current.length > 0) {
-        console.log('[loadChatHistory] Skipping reload - conversation just created during active chat')
-        return
+        console.log(
+          '[loadChatHistory] Skipping reload - conversation just created during active chat'
+        );
+        return;
       }
 
       // Cancel any pending loadMore request when switching conversations
-      loadMoreAbortRef.current?.abort()
-      loadMoreAbortRef.current = null
+      loadMoreAbortRef.current?.abort();
+      loadMoreAbortRef.current = null;
 
       // Clear old messages and reset pagination state
-      setChatMessages([])
-      setChatOffset(0)
-      setChatHasMore(false)
-      setIsChatLoading(true)
+      setChatMessages([]);
+      setChatOffset(0);
+      setChatHasMore(false);
+      setIsChatLoading(true);
       try {
         // Fetch newest CHAT_PAGE_SIZE messages first (order=desc), then reverse for display
         const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, 0, {
           signal: abortController.signal,
           order: 'desc',
-        })
+        });
 
         // Check if conversation changed during request (race condition fix)
         if (abortController.signal.aborted || data?.conversationId !== currentConversationId) {
-          return
+          return;
         }
 
         // Reverse the array since we fetched newest first (order=desc)
         // but need to display oldest first in the chat UI
         const messages = response.turns
-          .filter(turn => turn.role === 'user' || turn.role === 'assistant')
-          .map(turn => ({
+          .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
+          .map((turn) => ({
             id: turn.turn_hash,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
           }))
-          .reverse()
-        setChatMessages(messages)
+          .reverse();
+        setChatMessages(messages);
 
         // Check if there are more messages to load
         // If we got exactly CHAT_PAGE_SIZE turns, there might be more
-        setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE)
-        setChatOffset(response.turns.length)
+        setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE);
+        setChatOffset(response.turns.length);
       } catch (err) {
         // Only log non-abort errors (ABORTED is expected when switching conversations)
-        const isAbortError = abortController.signal.aborted ||
-          (err instanceof api.ApiError && err.code === 'ABORTED')
+        const isAbortError =
+          abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
         if (!isAbortError) {
-          console.error('Failed to load chat history:', err)
+          console.error('Failed to load chat history:', err);
         }
       } finally {
         if (!abortController.signal.aborted) {
-          setIsChatLoading(false)
+          setIsChatLoading(false);
         }
       }
-    }
+    };
 
-    loadChatHistory()
+    loadChatHistory();
 
     return () => {
-      abortController.abort()
-      loadMoreAbortRef.current?.abort()
-    }
-  }, [data?.kind, data?.conversationId, projectId])
+      abortController.abort();
+      loadMoreAbortRef.current?.abort();
+    };
+  }, [data?.kind, data?.conversationId, projectId]);
 
   // Load more (older) messages when scrolling to top
   const loadMoreMessages = useCallback(async () => {
-    if (!projectId || !data?.conversationId || isLoadingMore || !chatHasMore) return
+    if (!projectId || !data?.conversationId || isLoadingMore || !chatHasMore) return;
 
     // Cancel any pending load more request
-    loadMoreAbortRef.current?.abort()
-    const abortController = new AbortController()
-    loadMoreAbortRef.current = abortController
+    loadMoreAbortRef.current?.abort();
+    const abortController = new AbortController();
+    loadMoreAbortRef.current = abortController;
 
-    const currentConversationId = data?.conversationId
-    const container = messagesContainerRef.current
+    const currentConversationId = data?.conversationId;
+    const container = messagesContainerRef.current;
 
     // Capture scroll position before loading
-    const scrollHeightBefore = container?.scrollHeight ?? 0
+    const scrollHeightBefore = container?.scrollHeight ?? 0;
 
-    setIsLoadingMore(true)
+    setIsLoadingMore(true);
     try {
-      const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, chatOffset, {
-        order: 'desc',
-        signal: abortController.signal,
-      })
+      const response = await api.listTurns(
+        projectId,
+        currentConversationId,
+        CHAT_PAGE_SIZE,
+        chatOffset,
+        {
+          order: 'desc',
+          signal: abortController.signal,
+        }
+      );
 
       // Check for race condition: conversation changed or request aborted
       if (abortController.signal.aborted || data?.conversationId !== currentConversationId) {
-        return
+        return;
       }
 
       if (response.turns.length === 0) {
-        setChatHasMore(false)
-        return
+        setChatHasMore(false);
+        return;
       }
 
       // Older messages (fetched in desc order, need to reverse)
       const olderMessages = response.turns
-        .filter(turn => turn.role === 'user' || turn.role === 'assistant')
-        .map(turn => ({
+        .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
+        .map((turn) => ({
           id: turn.turn_hash,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
         }))
-        .reverse()
+        .reverse();
 
       // Prepend older messages to the beginning
-      setChatMessages(prev => [...olderMessages, ...prev])
-      setChatOffset(prev => prev + response.turns.length)
-      setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE)
+      setChatMessages((prev) => [...olderMessages, ...prev]);
+      setChatOffset((prev) => prev + response.turns.length);
+      setChatHasMore(response.turns.length >= CHAT_PAGE_SIZE);
 
       // Preserve scroll position after prepending
       // Use requestAnimationFrame to wait for DOM update
       requestAnimationFrame(() => {
         if (container && data?.conversationId === currentConversationId) {
-          const scrollHeightAfter = container.scrollHeight
-          const heightDiff = scrollHeightAfter - scrollHeightBefore
-          container.scrollTop = container.scrollTop + heightDiff
+          const scrollHeightAfter = container.scrollHeight;
+          const heightDiff = scrollHeightAfter - scrollHeightBefore;
+          container.scrollTop = container.scrollTop + heightDiff;
         }
-      })
+      });
     } catch (err) {
       // Ignore abort errors
-      const isAbortError = abortController.signal.aborted ||
-        (err instanceof api.ApiError && err.code === 'ABORTED')
+      const isAbortError =
+        abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
       if (!isAbortError) {
-        console.error('Failed to load more messages:', err)
+        console.error('Failed to load more messages:', err);
       }
     } finally {
       if (!abortController.signal.aborted) {
-        setIsLoadingMore(false)
+        setIsLoadingMore(false);
       }
     }
-  }, [projectId, data?.conversationId, chatOffset, chatHasMore, isLoadingMore])
+  }, [projectId, data?.conversationId, chatOffset, chatHasMore, isLoadingMore]);
 
   // Handle scroll to detect when user reaches top
-  const handleChatScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLDivElement
-    // Load more when scrolled near the top (within 50px)
-    if (target.scrollTop < 50 && chatHasMore && !isLoadingMore && !isChatLoading) {
-      loadMoreMessages()
-    }
-  }, [chatHasMore, isLoadingMore, isChatLoading, loadMoreMessages])
+  const handleChatScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLDivElement;
+      // Load more when scrolled near the top (within 50px)
+      if (target.scrollTop < 50 && chatHasMore && !isLoadingMore && !isChatLoading) {
+        loadMoreMessages();
+      }
+    },
+    [chatHasMore, isLoadingMore, isChatLoading, loadMoreMessages]
+  );
 
   // Chat streaming state
-  const [isChatStreaming, setIsChatStreaming] = useState(false)
-  const [streamingContent, setStreamingContent] = useState('')
-  const [chatError, setChatError] = useState<string | null>(null)
+  const [isChatStreaming, setIsChatStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // Capture current values for use in async callback (avoid stale closures)
-  const conversationIdRef = useRef(data?.conversationId)
-  const nodeKindRef = useRef(data?.kind)
-  const chatMessagesRef = useRef(chatMessages)
+  const conversationIdRef = useRef(data?.conversationId);
+  const nodeKindRef = useRef(data?.kind);
+  const chatMessagesRef = useRef(chatMessages);
   useEffect(() => {
-    conversationIdRef.current = data?.conversationId
-    nodeKindRef.current = data?.kind
-  }, [data?.conversationId, data?.kind])
+    conversationIdRef.current = data?.conversationId;
+    nodeKindRef.current = data?.kind;
+  }, [data?.conversationId, data?.kind]);
   useEffect(() => {
-    chatMessagesRef.current = chatMessages
-  }, [chatMessages])
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!chatInput.trim() || isChatStreaming || isChatLoading) return
+    if (!chatInput.trim() || isChatStreaming || isChatLoading) return;
 
-    const userMessage = chatInput.trim()
-    setChatInput('')
-    setChatError(null)
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatError(null);
 
     // Add user message to chat
     const newUserMessage = {
       id: `msg-${Date.now()}`,
       role: 'user' as const,
       content: userMessage,
-    }
-    setChatMessages(prev => [...prev, newUserMessage])
+    };
+    setChatMessages((prev) => [...prev, newUserMessage]);
 
     // If no projectId, we can still chat (just won't save turns)
     // For now, we'll use the chat API directly
 
-    setIsChatStreaming(true)
-    setStreamingContent('')
+    setIsChatStreaming(true);
+    setStreamingContent('');
 
     try {
       // Build messages array from chat history (use ref to get latest)
-      const currentMessages = chatMessagesRef.current
+      const currentMessages = chatMessagesRef.current;
       const messages: api.ChatMessage[] = [
-        ...currentMessages.map(msg => ({
+        ...currentMessages.map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
         { role: 'user' as const, content: userMessage },
-      ]
+      ];
 
       // Use streaming chat
-      let fullResponse = ''
-      let addedFinalMessage = false
+      let fullResponse = '';
+      let addedFinalMessage = false;
 
       for await (const event of api.chatStream({ messages })) {
         if (event.type === 'token' && event.content) {
-          fullResponse += event.content
-          setStreamingContent(fullResponse)
+          fullResponse += event.content;
+          setStreamingContent(fullResponse);
         } else if (event.type === 'done') {
           // Update fullResponse with done event content if available (ensures we have complete response)
           if (event.content) {
-            fullResponse = event.content
+            fullResponse = event.content;
           }
           // Add assistant message to chat (only once)
           if (!addedFinalMessage) {
-            setChatMessages(prev => [...prev, {
-              id: `msg-${Date.now()}`,
-              role: 'assistant' as const,
-              content: fullResponse,
-            }])
-            setStreamingContent('')
-            addedFinalMessage = true
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now()}`,
+                role: 'assistant' as const,
+                content: fullResponse,
+              },
+            ]);
+            setStreamingContent('');
+            addedFinalMessage = true;
           }
         } else if (event.type === 'error') {
-          setChatError(event.message || 'Unknown error')
+          setChatError(event.message || 'Unknown error');
         }
       }
 
       // If we didn't get a done event but have content, add it
       if (fullResponse && !addedFinalMessage) {
-        setChatMessages(prev => [...prev, {
-          id: `msg-${Date.now()}`,
-          role: 'assistant' as const,
-          content: fullResponse,
-        }])
-        setStreamingContent('')
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            role: 'assistant' as const,
+            content: fullResponse,
+          },
+        ]);
+        setStreamingContent('');
       }
 
       // If projectId is available and this is a conversation node, save the turns
       // Use refs to get current values (avoiding stale closure)
-      let currentConversationId = conversationIdRef.current
-      const currentKind = nodeKindRef.current
+      let currentConversationId = conversationIdRef.current;
+      const currentKind = nodeKindRef.current;
       console.log('[handleSendMessage] Save turns check:', {
         projectId,
         currentKind,
         currentConversationId,
         fullResponseLength: fullResponse.length,
         fullResponsePreview: fullResponse.slice(0, 100),
-        addedFinalMessage
-      })
+        addedFinalMessage,
+      });
       if (projectId && currentKind === 'unit') {
         try {
           // If no conversationId yet, create one first
           if (!currentConversationId) {
-            console.log('[handleSendMessage] Creating new conversation...')
-            const newConv = await api.createConversation(projectId, data?.title || 'Untitled Conversation')
-            currentConversationId = newConv.conversation_id
+            console.log('[handleSendMessage] Creating new conversation...');
+            const newConv = await api.createConversation(
+              projectId,
+              data?.title || 'Untitled Conversation'
+            );
+            currentConversationId = newConv.conversation_id;
             // Update the node with the new conversationId and sourceConversationId
             onUpdate({
               conversationId: currentConversationId,
               sourceConversationId: currentConversationId,
-            })
-            conversationIdRef.current = currentConversationId
+            });
+            conversationIdRef.current = currentConversationId;
             // Also update the node ID in the store to match conversation ID
             if (node?.id && node.id !== currentConversationId) {
-              useCanvasStore.getState().updateNodeId(node.id, currentConversationId)
+              useCanvasStore.getState().updateNodeId(node.id, currentConversationId);
             }
-            console.log('[handleSendMessage] Created conversation:', currentConversationId)
+            console.log('[handleSendMessage] Created conversation:', currentConversationId);
           }
 
           // Save user turn
-          console.log('[handleSendMessage] Saving user turn...')
-          await api.createTurn(projectId, currentConversationId, 'user', userMessage)
-          console.log('[handleSendMessage] User turn saved')
+          console.log('[handleSendMessage] Saving user turn...');
+          await api.createTurn(projectId, currentConversationId, 'user', userMessage);
+          console.log('[handleSendMessage] User turn saved');
           // Save assistant turn
           if (fullResponse) {
-            console.log('[handleSendMessage] Saving assistant turn...', { length: fullResponse.length })
+            console.log('[handleSendMessage] Saving assistant turn...', {
+              length: fullResponse.length,
+            });
             try {
-              await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse)
-              console.log('[handleSendMessage] Assistant turn saved successfully')
+              await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse);
+              console.log('[handleSendMessage] Assistant turn saved successfully');
             } catch (assistantErr) {
-              console.error('[handleSendMessage] Failed to save assistant turn:', assistantErr)
+              console.error('[handleSendMessage] Failed to save assistant turn:', assistantErr);
             }
           } else {
-            console.warn('[handleSendMessage] No fullResponse to save as assistant turn')
+            console.warn('[handleSendMessage] No fullResponse to save as assistant turn');
           }
         } catch (err) {
-          console.error('[handleSendMessage] Failed to save turns:', err)
+          console.error('[handleSendMessage] Failed to save turns:', err);
           // Don't show error to user - chat still worked
         }
       } else {
-        console.log('[handleSendMessage] Skipping turn save - conditions not met')
+        console.log('[handleSendMessage] Skipping turn save - conditions not met');
       }
-
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      setChatError(error.message)
-      console.error('Chat error:', error)
+      const error = err instanceof Error ? err : new Error(String(err));
+      setChatError(error.message);
+      console.error('Chat error:', error);
     } finally {
-      setIsChatStreaming(false)
-      setStreamingContent('') // Clear any residual streaming content
+      setIsChatStreaming(false);
+      setStreamingContent(''); // Clear any residual streaming content
     }
-  }, [chatInput, isChatStreaming, isChatLoading, projectId, data?.title, onUpdate]) // chatMessages accessed via ref to avoid frequent rebuilds
+  }, [chatInput, isChatStreaming, isChatLoading, projectId, data?.title, onUpdate]); // chatMessages accessed via ref to avoid frequent rebuilds
 
   const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
+      e.preventDefault();
+      handleSendMessage();
     }
-  }
+  };
 
   // ============================================
   // CONVERSATION NODE - Sidebar left, Chat interface right
   // ============================================
   if (isConversation) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
           <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
@@ -1655,7 +1881,10 @@ export function NodeModal({
               </h2>
               <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
               {isStagingUnit && (
-                <Badge variant="outline" className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15">
+                <Badge
+                  variant="outline"
+                  className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15"
+                >
                   staging
                 </Badge>
               )}
@@ -1674,8 +1903,10 @@ export function NodeModal({
               {isStagingUnit && (
                 <Button
                   onClick={() => {
-                    console.log('[NodeModal] Commit button clicked - switching to commit config view')
-                    setShowCommitConfig(true)
+                    console.log(
+                      '[NodeModal] Commit button clicked - switching to commit config view'
+                    );
+                    setShowCommitConfig(true);
                   }}
                   title="Configure and commit this unit"
                   className="gap-1.5"
@@ -1688,8 +1919,8 @@ export function NodeModal({
               {addCommitAction && !isStagingUnit && (
                 <Button
                   onClick={() => {
-                    addCommitAction.onClick()
-                    onClose()
+                    addCommitAction.onClick();
+                    onClose();
                   }}
                   disabled={addCommitAction.disabled}
                   title="Create a new unit from this one"
@@ -1699,7 +1930,13 @@ export function NodeModal({
                   <span>Create Unit</span>
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                aria-label="Close"
+                className="h-9 w-9 text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </Button>
             </div>
@@ -1715,7 +1952,9 @@ export function NodeModal({
               style={{ width: sidebarWidth }}
             >
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Metadata</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Metadata
+                </h4>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
                   <Input
@@ -1729,9 +1968,14 @@ export function NodeModal({
                   <Input
                     type="text"
                     value={data.tags.join(', ')}
-                    onChange={(e) => onUpdate({
-                      tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
-                    })}
+                    onChange={(e) =>
+                      onUpdate({
+                        tags: e.target.value
+                          .split(',')
+                          .map((t) => t.trim())
+                          .filter(Boolean),
+                      })
+                    }
                     placeholder="tag1, tag2, ..."
                   />
                 </div>
@@ -1740,7 +1984,9 @@ export function NodeModal({
               <div className="h-px bg-gray-200 my-4" />
 
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Info</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Info
+                </h4>
                 <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
                   <Clock size={14} className="text-gray-400 shrink-0" />
                   <span>Created: {data.timestamp}</span>
@@ -1776,7 +2022,9 @@ export function NodeModal({
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center gap-2">
                     <MessageSquarePlus size={48} strokeWidth={1} />
                     <p className="text-base font-medium text-gray-500">No messages yet</p>
-                    <span className="text-[0.85rem] text-gray-400">Type a message below to start the conversation</span>
+                    <span className="text-[0.85rem] text-gray-400">
+                      Type a message below to start the conversation
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -1855,14 +2103,18 @@ export function NodeModal({
                   disabled={!chatInput.trim() || isChatStreaming || isChatLoading}
                   className="h-11 w-11 rounded-xl shrink-0"
                 >
-                  {isChatStreaming || isChatLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                  {isChatStreaming || isChatLoading ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    <Send size={20} />
+                  )}
                 </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // ============================================
@@ -1870,20 +2122,37 @@ export function NodeModal({
   // ============================================
   if (isPendingCommit) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
           <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="text-[0.85rem] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-md">t3x</div>
-              <h2 className="text-[0.95rem] font-semibold text-gray-800">Commit: {data.title || 'Untitled'}</h2>
+              <div className="text-[0.85rem] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-md">
+                t3x
+              </div>
+              <h2 className="text-[0.95rem] font-semibold text-gray-800">
+                Commit: {data.title || 'Untitled'}
+              </h2>
               <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
-              <Badge variant="outline" className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15">
+              <Badge
+                variant="outline"
+                className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15"
+              >
                 pending
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                aria-label="Close"
+                className="h-9 w-9 text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </Button>
             </div>
@@ -1896,21 +2165,27 @@ export function NodeModal({
               style={{ width: sidebarSourceDividerPos }}
             >
               {/* STEP 1: Configure (or Merge for merge drafts) */}
-              <div className={cn(
-                'flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto',
-                (configLocked || isMergeDraft) && 'opacity-95'
-              )}>
+              <div
+                className={cn(
+                  'flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto',
+                  (configLocked || isMergeDraft) && 'opacity-95'
+                )}
+              >
                 <div className="flex flex-col gap-1">
                   <span className="text-[0.7rem] font-bold text-gray-500 uppercase tracking-widest">
                     {isMergeDraft ? 'MERGE' : 'STEP 1'}
                   </span>
                   <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800">
-                    <span className={cn(
-                      'w-2 h-2 rounded-full',
-                      (!configLocked && !isMergeDraft) ? 'bg-emerald-500' : 'bg-gray-500'
-                    )} />
+                    <span
+                      className={cn(
+                        'w-2 h-2 rounded-full',
+                        !configLocked && !isMergeDraft ? 'bg-emerald-500' : 'bg-gray-500'
+                      )}
+                    />
                     {isMergeDraft ? 'Analyze & Resolve' : 'Configure'}
-                    {(configLocked && !isMergeDraft) && <Lock size={12} className="text-gray-400 ml-1" />}
+                    {configLocked && !isMergeDraft && (
+                      <Lock size={12} className="text-gray-400 ml-1" />
+                    )}
                   </span>
                 </div>
 
@@ -1920,7 +2195,10 @@ export function NodeModal({
                     {/* Merge info header */}
                     <div className="flex items-center gap-2 font-semibold text-slate-700">
                       <GitCompare size={16} />
-                      <span>Merge: {data?.mergeConfig?.sourceCommitTitle} → {data?.mergeConfig?.targetCommitTitle}</span>
+                      <span>
+                        Merge: {data?.mergeConfig?.sourceCommitTitle} →{' '}
+                        {data?.mergeConfig?.targetCommitTitle}
+                      </span>
                     </div>
 
                     {/* Merge error */}
@@ -1956,12 +2234,14 @@ export function NodeModal({
                     {mergeResult && (
                       <div className="flex flex-col gap-3">
                         {/* Status badge */}
-                        <div className={cn(
-                          'flex items-center gap-2 py-2 px-3 rounded-md text-[0.85rem] font-medium',
-                          mergeResult.status === 'clean'
-                            ? 'bg-green-50 border border-green-200 text-green-700'
-                            : 'bg-yellow-50 border border-yellow-300 text-amber-700'
-                        )}>
+                        <div
+                          className={cn(
+                            'flex items-center gap-2 py-2 px-3 rounded-md text-[0.85rem] font-medium',
+                            mergeResult.status === 'clean'
+                              ? 'bg-green-50 border border-green-200 text-green-700'
+                              : 'bg-yellow-50 border border-yellow-300 text-amber-700'
+                          )}
+                        >
                           {mergeResult.status === 'clean' ? (
                             <>
                               <Check size={14} />
@@ -1970,7 +2250,9 @@ export function NodeModal({
                           ) : (
                             <>
                               <AlertCircle size={14} />
-                              <span>{mergeResult.conflicts.length} conflict(s) need resolution</span>
+                              <span>
+                                {mergeResult.conflicts.length} conflict(s) need resolution
+                              </span>
                             </>
                           )}
                         </div>
@@ -1978,71 +2260,110 @@ export function NodeModal({
                         {/* Auto-merged facets summary */}
                         {mergeResult.auto_merged_facets.length > 0 && (
                           <div className="text-sm text-slate-500">
-                            <span>{mergeResult.auto_merged_facets.length} facet(s) auto-merged</span>
+                            <span>
+                              {mergeResult.auto_merged_facets.length} facet(s) auto-merged
+                            </span>
                           </div>
                         )}
 
                         {/* Conflicts list */}
                         {mergeResult.conflicts.length > 0 && (
                           <div className="flex flex-col gap-3">
-                            <div className="font-semibold text-[0.85rem] text-slate-600">Resolve Conflicts:</div>
-                            {mergeResult.conflicts.map(conflict => (
-                              <div key={conflict.facet} className="p-3 bg-white border border-slate-200 rounded-md">
-                                <div className="font-semibold text-[0.85rem] text-slate-800 mb-2">{conflict.facet}</div>
+                            <div className="font-semibold text-[0.85rem] text-slate-600">
+                              Resolve Conflicts:
+                            </div>
+                            {mergeResult.conflicts.map((conflict) => (
+                              <div
+                                key={conflict.facet}
+                                className="p-3 bg-white border border-slate-200 rounded-md"
+                              >
+                                <div className="font-semibold text-[0.85rem] text-slate-800 mb-2">
+                                  {conflict.facet}
+                                </div>
                                 <div className="flex flex-col gap-2">
                                   <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
-                                      checked={conflictResolutions[conflict.facet]?.choice === 'source'}
-                                      onChange={() => setConflictResolutions(prev => ({
-                                        ...prev,
-                                        [conflict.facet]: { choice: 'source' }
-                                      }))}
+                                      checked={
+                                        conflictResolutions[conflict.facet]?.choice === 'source'
+                                      }
+                                      onChange={() =>
+                                        setConflictResolutions((prev) => ({
+                                          ...prev,
+                                          [conflict.facet]: { choice: 'source' },
+                                        }))
+                                      }
                                       className="mt-0.5"
                                     />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Source</span>
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
+                                      Source
+                                    </span>
                                     <span className="text-xs text-slate-400 truncate flex-1">
-                                      {conflict.source_text ? `${conflict.source_text.slice(0, 50)}...` : '(deleted)'}
+                                      {conflict.source_text
+                                        ? `${conflict.source_text.slice(0, 50)}...`
+                                        : '(deleted)'}
                                     </span>
                                   </label>
                                   <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
-                                      checked={conflictResolutions[conflict.facet]?.choice === 'target'}
-                                      onChange={() => setConflictResolutions(prev => ({
-                                        ...prev,
-                                        [conflict.facet]: { choice: 'target' }
-                                      }))}
+                                      checked={
+                                        conflictResolutions[conflict.facet]?.choice === 'target'
+                                      }
+                                      onChange={() =>
+                                        setConflictResolutions((prev) => ({
+                                          ...prev,
+                                          [conflict.facet]: { choice: 'target' },
+                                        }))
+                                      }
                                       className="mt-0.5"
                                     />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Target</span>
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
+                                      Target
+                                    </span>
                                     <span className="text-xs text-slate-400 truncate flex-1">
-                                      {conflict.target_text ? `${conflict.target_text.slice(0, 50)}...` : '(deleted)'}
+                                      {conflict.target_text
+                                        ? `${conflict.target_text.slice(0, 50)}...`
+                                        : '(deleted)'}
                                     </span>
                                   </label>
                                   <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
                                     <input
                                       type="radio"
                                       name={`conflict-${conflict.facet}`}
-                                      checked={conflictResolutions[conflict.facet]?.choice === 'custom'}
-                                      onChange={() => setConflictResolutions(prev => ({
-                                        ...prev,
-                                        [conflict.facet]: { choice: 'custom', customText: prev[conflict.facet]?.customText || '' }
-                                      }))}
+                                      checked={
+                                        conflictResolutions[conflict.facet]?.choice === 'custom'
+                                      }
+                                      onChange={() =>
+                                        setConflictResolutions((prev) => ({
+                                          ...prev,
+                                          [conflict.facet]: {
+                                            choice: 'custom',
+                                            customText: prev[conflict.facet]?.customText || '',
+                                          },
+                                        }))
+                                      }
                                       className="mt-0.5"
                                     />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">Custom</span>
+                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
+                                      Custom
+                                    </span>
                                   </label>
                                   {conflictResolutions[conflict.facet]?.choice === 'custom' && (
                                     <Textarea
                                       placeholder="Enter custom resolution..."
                                       value={conflictResolutions[conflict.facet]?.customText || ''}
-                                      onChange={(e) => setConflictResolutions(prev => ({
-                                        ...prev,
-                                        [conflict.facet]: { choice: 'custom', customText: e.target.value }
-                                      }))}
+                                      onChange={(e) =>
+                                        setConflictResolutions((prev) => ({
+                                          ...prev,
+                                          [conflict.facet]: {
+                                            choice: 'custom',
+                                            customText: e.target.value,
+                                          },
+                                        }))
+                                      }
                                       className="min-h-[60px] text-sm mt-1"
                                     />
                                   )}
@@ -2070,7 +2391,13 @@ export function NodeModal({
                       <Button
                         onClick={handleCommit}
                         disabled={!mergeResult || !allConflictsResolved || isCommitting}
-                        title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                        title={
+                          !mergeResult
+                            ? 'Analyze merge first'
+                            : !allConflictsResolved
+                              ? 'Resolve all conflicts first'
+                              : ''
+                        }
                         className="flex-1 gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                       >
                         {isCommitting ? (
@@ -2101,67 +2428,85 @@ export function NodeModal({
                           className="w-full py-2 px-3 border border-gray-300 rounded-md text-[0.85rem] bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                           value={
                             // Map the value to a valid option
-                            data.pendingBranch === 'main' ? 'main' :
-                            data.pendingBranchName && branches.some(b => b.name === data.pendingBranchName) ? data.pendingBranchName :
-                            data.pendingBranchName ? '__new__' : // Has custom name, show as new branch
-                            '__new__' // Default: new branch mode
+                            data.pendingBranch === 'main'
+                              ? 'main'
+                              : data.pendingBranchName &&
+                                  branches.some((b) => b.name === data.pendingBranchName)
+                                ? data.pendingBranchName
+                                : data.pendingBranchName
+                                  ? '__new__'
+                                  : // Has custom name, show as new branch
+                                    '__new__' // Default: new branch mode
                           }
                           onChange={(e) => {
-                            const value = e.target.value
+                            const value = e.target.value;
                             if (value === 'main') {
-                              onBranchChange?.('main')
-                              onBranchNameChange?.('')
+                              onBranchChange?.('main');
+                              onBranchNameChange?.('');
                             } else if (value === '__new__') {
-                              onBranchChange?.('branch')
-                              onBranchNameChange?.('')
+                              onBranchChange?.('branch');
+                              onBranchNameChange?.('');
                             } else {
-                              onBranchChange?.('branch')
-                              onBranchNameChange?.(value)
+                              onBranchChange?.('branch');
+                              onBranchNameChange?.(value);
                             }
                           }}
                           disabled={branchesLoading}
                         >
                           <option value="main">main</option>
-                          {branches.filter(b => b.name !== 'main').map((branch) => (
-                            <option key={branch.branch_id} value={branch.name}>
-                              {branch.name}{branch.is_current ? ' (current)' : ''}
-                            </option>
-                          ))}
+                          {branches
+                            .filter((b) => b.name !== 'main')
+                            .map((branch) => (
+                              <option key={branch.branch_id} value={branch.name}>
+                                {branch.name}
+                                {branch.is_current ? ' (current)' : ''}
+                              </option>
+                            ))}
                           <option value="__new__">+ New branch...</option>
                         </select>
                       </div>
                     )}
 
                     {/* Branch Name - only shown when creating new branch */}
-                    {requireBranchName && data.pendingBranch === 'branch' && !branches.some(b => b.name === data.pendingBranchName) && (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">New Branch Name</label>
-                        <Input
-                          type="text"
-                          value={data.pendingBranchName || ''}
-                          onChange={(e) => onBranchNameChange?.(e.target.value)}
-                          placeholder="Enter new branch name"
-                        />
-                      </div>
-                    )}
+                    {requireBranchName &&
+                      data.pendingBranch === 'branch' &&
+                      !branches.some((b) => b.name === data.pendingBranchName) && (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            New Branch Name
+                          </label>
+                          <Input
+                            type="text"
+                            value={data.pendingBranchName || ''}
+                            onChange={(e) => onBranchNameChange?.(e.target.value)}
+                            placeholder="Enter new branch name"
+                          />
+                        </div>
+                      )}
 
                     {/* Template */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Template</label>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Template
+                      </label>
                       <select
                         className="w-full py-2 px-3 border border-gray-300 rounded-md text-[0.85rem] bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                         value={template}
                         onChange={(e) => setTemplate(e.target.value)}
                       >
-                        {bridgeTemplates.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
+                        {bridgeTemplates.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
                         ))}
                       </select>
                     </div>
 
                     {/* Cosine Threshold */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cosine</label>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Cosine
+                      </label>
                       <input
                         type="range"
                         className="w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500 cursor-pointer"
@@ -2171,12 +2516,16 @@ export function NodeModal({
                         value={cosineThreshold}
                         onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
                       />
-                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">{cosineThreshold.toFixed(2)}</span>
+                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">
+                        {cosineThreshold.toFixed(2)}
+                      </span>
                     </div>
 
                     {/* Keywords Threshold */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Keywords</label>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Keywords
+                      </label>
                       <input
                         type="range"
                         className="w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500 cursor-pointer"
@@ -2186,7 +2535,9 @@ export function NodeModal({
                         value={keywordsThreshold}
                         onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
                       />
-                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">{keywordsThreshold.toFixed(2)}</span>
+                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">
+                        {keywordsThreshold.toFixed(2)}
+                      </span>
                     </div>
 
                     {/* Proceed Button */}
@@ -2209,13 +2560,17 @@ export function NodeModal({
                       {shouldShowBranchSelect && (
                         <div className="flex items-center gap-2 text-[0.85rem]">
                           <span className="text-gray-500 min-w-[70px]">Branch:</span>
-                          <span className="text-gray-800 font-medium">{data.pendingBranch || 'branch'}</span>
+                          <span className="text-gray-800 font-medium">
+                            {data.pendingBranch || 'branch'}
+                          </span>
                         </div>
                       )}
                       {requireBranchName && (
                         <div className="flex items-center gap-2 text-[0.85rem]">
                           <span className="text-gray-500 min-w-[70px]">Name:</span>
-                          <span className="text-gray-800 font-medium">{data.pendingBranchName || '-'}</span>
+                          <span className="text-gray-800 font-medium">
+                            {data.pendingBranchName || '-'}
+                          </span>
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-[0.85rem]">
@@ -2224,11 +2579,15 @@ export function NodeModal({
                       </div>
                       <div className="flex items-center gap-2 text-[0.85rem]">
                         <span className="text-gray-500 min-w-[70px]">Cosine:</span>
-                        <span className="text-gray-800 font-medium">{cosineThreshold.toFixed(2)}</span>
+                        <span className="text-gray-800 font-medium">
+                          {cosineThreshold.toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 text-[0.85rem]">
                         <span className="text-gray-500 min-w-[70px]">Keywords:</span>
-                        <span className="text-gray-800 font-medium">{keywordsThreshold.toFixed(2)}</span>
+                        <span className="text-gray-800 font-medium">
+                          {keywordsThreshold.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                     <Button
@@ -2247,11 +2606,23 @@ export function NodeModal({
               <div className="h-px bg-gray-200 my-5" />
 
               {/* STEP 2: Curate */}
-              <div className={cn('flex flex-col gap-4', !configLocked && 'opacity-50 pointer-events-none')}>
+              <div
+                className={cn(
+                  'flex flex-col gap-4',
+                  !configLocked && 'opacity-50 pointer-events-none'
+                )}
+              >
                 <div className="flex flex-col gap-1">
-                  <span className="text-[0.7rem] font-bold text-gray-500 uppercase tracking-widest">STEP 2</span>
+                  <span className="text-[0.7rem] font-bold text-gray-500 uppercase tracking-widest">
+                    STEP 2
+                  </span>
                   <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800">
-                    <span className={cn('w-2 h-2 rounded-full', configLocked ? 'bg-emerald-500' : 'bg-gray-300')} />
+                    <span
+                      className={cn(
+                        'w-2 h-2 rounded-full',
+                        configLocked ? 'bg-emerald-500' : 'bg-gray-300'
+                      )}
+                    />
                     Curate
                   </span>
                 </div>
@@ -2268,15 +2639,27 @@ export function NodeModal({
                     <div className="flex gap-4">
                       {hasNewSourceData ? (
                         <>
-                          <span className="text-[0.85rem] text-gray-600">{selectionsCount} selections</span>
-                          <span className="text-[0.85rem] text-gray-600">{mustHaveKeywordsNew.length} must</span>
-                          <span className="text-[0.85rem] text-gray-600">{mustntHaveKeywordsNew.length} mustnt</span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {selectionsCount} selections
+                          </span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {mustHaveKeywordsNew.length} must
+                          </span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {mustntHaveKeywordsNew.length} mustnt
+                          </span>
                         </>
                       ) : (
                         <>
-                          <span className="text-[0.85rem] text-gray-600">{includedPhrasesCount} phrases</span>
-                          <span className="text-[0.85rem] text-gray-600">{mustHaveKeywordsLegacy.length} must</span>
-                          <span className="text-[0.85rem] text-gray-600">{mustntHaveKeywordsLegacy.length} mustnt</span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {includedPhrasesCount} phrases
+                          </span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {mustHaveKeywordsLegacy.length} must
+                          </span>
+                          <span className="text-[0.85rem] text-gray-600">
+                            {mustntHaveKeywordsLegacy.length} mustnt
+                          </span>
                         </>
                       )}
                     </div>
@@ -2297,12 +2680,14 @@ export function NodeModal({
 
                     {/* Validation result */}
                     {currentDraft && (
-                      <div className={cn(
-                        'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
-                        validationPassed
-                          ? 'bg-green-50 border border-green-200 text-green-700'
-                          : 'bg-red-50 border border-red-200 text-red-700'
-                      )}>
+                      <div
+                        className={cn(
+                          'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
+                          validationPassed
+                            ? 'bg-green-50 border border-green-200 text-green-700'
+                            : 'bg-red-50 border border-red-200 text-red-700'
+                        )}
+                      >
                         {validationPassed ? (
                           <>
                             <Check size={14} className="mt-0.5" />
@@ -2314,11 +2699,16 @@ export function NodeModal({
                             <div className="flex flex-col gap-1">
                               <span className="font-medium">Validation Failed</span>
                               {validationErrors?.missing && validationErrors.missing.length > 0 && (
-                                <span className="text-xs text-red-600">Missing: {validationErrors.missing.join(', ')}</span>
+                                <span className="text-xs text-red-600">
+                                  Missing: {validationErrors.missing.join(', ')}
+                                </span>
                               )}
-                              {validationErrors?.forbidden && validationErrors.forbidden.length > 0 && (
-                                <span className="text-xs text-red-600">Forbidden: {validationErrors.forbidden.join(', ')}</span>
-                              )}
+                              {validationErrors?.forbidden &&
+                                validationErrors.forbidden.length > 0 && (
+                                  <span className="text-xs text-red-600">
+                                    Forbidden: {validationErrors.forbidden.join(', ')}
+                                  </span>
+                                )}
                             </div>
                           </>
                         )}
@@ -2341,7 +2731,13 @@ export function NodeModal({
                         <Button
                           onClick={handleCommit}
                           disabled={!mergeResult || !allConflictsResolved || isCommitting}
-                          title={!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : ''}
+                          title={
+                            !mergeResult
+                              ? 'Analyze merge first'
+                              : !allConflictsResolved
+                                ? 'Resolve all conflicts first'
+                                : ''
+                          }
                           className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                         >
                           {isCommitting ? (
@@ -2362,7 +2758,11 @@ export function NodeModal({
                           <Button
                             variant="secondary"
                             onClick={handleValidatePendingCommit}
-                            disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) || isGeneratingDraft}
+                            disabled={
+                              (hasNewSourceData
+                                ? selectionsCount === 0
+                                : includedPhrasesCount === 0) || isGeneratingDraft
+                            }
                             className="w-full gap-2"
                           >
                             {isGeneratingDraft ? (
@@ -2382,10 +2782,24 @@ export function NodeModal({
                           {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
                           <Button
                             onClick={handleCommit}
-                            disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (!validationPassed || isCommitting)}
-                            title={isMergeDraft
-                              ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
-                              : (!currentDraft ? 'Run validation first' : !validationPassed ? 'Validation must pass before committing' : '')}
+                            disabled={
+                              isMergeDraft
+                                ? !mergeResult || !allConflictsResolved || isCommitting
+                                : !validationPassed || isCommitting
+                            }
+                            title={
+                              isMergeDraft
+                                ? !mergeResult
+                                  ? 'Analyze merge first'
+                                  : !allConflictsResolved
+                                    ? 'Resolve all conflicts first'
+                                    : ''
+                                : !currentDraft
+                                  ? 'Run validation first'
+                                  : !validationPassed
+                                    ? 'Validation must pass before committing'
+                                    : ''
+                            }
                             className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                           >
                             {isCommitting ? (
@@ -2408,21 +2822,27 @@ export function NodeModal({
                           <Button
                             variant="secondary"
                             onClick={handleLocalValidation}
-                            disabled={(hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0)}
+                            disabled={
+                              hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0
+                            }
                             className="w-full gap-2"
                           >
                             <GitBranch size={16} />
-                            <span>{localValidationPassed !== null ? 'Re-validate' : 'Validate'}</span>
+                            <span>
+                              {localValidationPassed !== null ? 'Re-validate' : 'Validate'}
+                            </span>
                           </Button>
 
                           {/* Local Validation Result */}
                           {localValidationPassed !== null && (
-                            <div className={cn(
-                              'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
-                              localValidationPassed
-                                ? 'bg-green-50 border border-green-200 text-green-700'
-                                : 'bg-red-50 border border-red-200 text-red-700'
-                            )}>
+                            <div
+                              className={cn(
+                                'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
+                                localValidationPassed
+                                  ? 'bg-green-50 border border-green-200 text-green-700'
+                                  : 'bg-red-50 border border-red-200 text-red-700'
+                              )}
+                            >
                               {localValidationPassed ? (
                                 <>
                                   <Check size={14} className="mt-0.5" />
@@ -2433,12 +2853,18 @@ export function NodeModal({
                                   <AlertCircle size={14} className="mt-0.5" />
                                   <div className="flex flex-col gap-1">
                                     <span>Local validation failed</span>
-                                    {localValidationErrors?.missing && localValidationErrors.missing.length > 0 && (
-                                      <span className="text-xs">Missing: {localValidationErrors.missing.join(', ')}</span>
-                                    )}
-                                    {localValidationErrors?.forbidden && localValidationErrors.forbidden.length > 0 && (
-                                      <span className="text-xs">Forbidden: {localValidationErrors.forbidden.join(', ')}</span>
-                                    )}
+                                    {localValidationErrors?.missing &&
+                                      localValidationErrors.missing.length > 0 && (
+                                        <span className="text-xs">
+                                          Missing: {localValidationErrors.missing.join(', ')}
+                                        </span>
+                                      )}
+                                    {localValidationErrors?.forbidden &&
+                                      localValidationErrors.forbidden.length > 0 && (
+                                        <span className="text-xs">
+                                          Forbidden: {localValidationErrors.forbidden.join(', ')}
+                                        </span>
+                                      )}
                                   </div>
                                 </>
                               )}
@@ -2449,10 +2875,24 @@ export function NodeModal({
                           {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
                           <Button
                             onClick={handleCommit}
-                            disabled={isMergeDraft ? (!mergeResult || !allConflictsResolved || isCommitting) : (localValidationPassed !== true || isCommitting)}
-                            title={isMergeDraft
-                              ? (!mergeResult ? 'Analyze merge first' : !allConflictsResolved ? 'Resolve all conflicts first' : '')
-                              : (localValidationPassed === null ? 'Run validation first' : localValidationPassed ? '' : 'Validation must pass before committing')}
+                            disabled={
+                              isMergeDraft
+                                ? !mergeResult || !allConflictsResolved || isCommitting
+                                : localValidationPassed !== true || isCommitting
+                            }
+                            title={
+                              isMergeDraft
+                                ? !mergeResult
+                                  ? 'Analyze merge first'
+                                  : !allConflictsResolved
+                                    ? 'Resolve all conflicts first'
+                                    : ''
+                                : localValidationPassed === null
+                                  ? 'Run validation first'
+                                  : localValidationPassed
+                                    ? ''
+                                    : 'Validation must pass before committing'
+                            }
                             className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                           >
                             {isCommitting ? (
@@ -2497,7 +2937,10 @@ export function NodeModal({
             </div>
 
             {/* ========== MAIN CONTENT: SOURCE ========== */}
-            <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden" ref={mainContentRef}>
+            <div
+              className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden"
+              ref={mainContentRef}
+            >
               {/* SOURCE Column - Full Width */}
               <div className="flex-1 flex flex-col min-h-0">
                 <div className="px-4 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
@@ -2513,17 +2956,26 @@ export function NodeModal({
                         /* Before analysis - show prompt */
                         <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
                           <GitCompare size={48} strokeWidth={1} className="text-gray-300 mb-4" />
-                          <h4 className="font-semibold text-gray-700 mb-2">Merge Analysis Required</h4>
-                          <p className="text-sm text-gray-500 mb-6">Click &quot;Analyze Merge&quot; in the sidebar to compare semantic content between commits.</p>
+                          <h4 className="font-semibold text-gray-700 mb-2">
+                            Merge Analysis Required
+                          </h4>
+                          <p className="text-sm text-gray-500 mb-6">
+                            Click &quot;Analyze Merge&quot; in the sidebar to compare semantic
+                            content between commits.
+                          </p>
                           <div className="flex items-center gap-4 text-sm">
                             <div className="flex items-center gap-2">
                               <Badge className="bg-blue-100 text-blue-700">SOURCE</Badge>
-                              <span className="text-gray-600">{data?.mergeConfig?.sourceCommitTitle}</span>
+                              <span className="text-gray-600">
+                                {data?.mergeConfig?.sourceCommitTitle}
+                              </span>
                             </div>
                             <span className="text-gray-400">→</span>
                             <div className="flex items-center gap-2">
                               <Badge className="bg-orange-100 text-orange-700">TARGET</Badge>
-                              <span className="text-gray-600">{data?.mergeConfig?.targetCommitTitle}</span>
+                              <span className="text-gray-600">
+                                {data?.mergeConfig?.targetCommitTitle}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -2541,11 +2993,18 @@ export function NodeModal({
                                 {mergeResult.auto_merged_facets.map((facet, idx) => (
                                   <div key={idx} className="p-3 bg-white">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-medium text-sm text-gray-800">{facet.facet}</span>
-                                      <Badge variant="outline" className={cn(
-                                        'text-[0.65rem]',
-                                        facet.source === 'source' ? 'text-blue-600 border-blue-300' : 'text-orange-600 border-orange-300'
-                                      )}>
+                                      <span className="font-medium text-sm text-gray-800">
+                                        {facet.facet}
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          'text-[0.65rem]',
+                                          facet.source === 'source'
+                                            ? 'text-blue-600 border-blue-300'
+                                            : 'text-orange-600 border-orange-300'
+                                        )}
+                                      >
                                         from {facet.source}
                                       </Badge>
                                     </div>
@@ -2569,20 +3028,29 @@ export function NodeModal({
                                 {mergeResult.conflicts.map((conflict, idx) => (
                                   <div key={idx} className="p-3 bg-white">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <span className="font-medium text-sm text-gray-800">{conflict.facet}</span>
-                                      <Badge variant="outline" className="text-[0.65rem] text-amber-600 border-amber-300">
+                                      <span className="font-medium text-sm text-gray-800">
+                                        {conflict.facet}
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[0.65rem] text-amber-600 border-amber-300"
+                                      >
                                         {conflict.conflict_type}
                                       </Badge>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                       <div className="p-2 bg-blue-50/50 rounded border border-blue-100">
-                                        <Badge className="bg-blue-100 text-blue-700 text-[0.6rem] mb-1.5">SOURCE</Badge>
+                                        <Badge className="bg-blue-100 text-blue-700 text-[0.6rem] mb-1.5">
+                                          SOURCE
+                                        </Badge>
                                         <div className="text-sm text-gray-600">
                                           {conflict.source_text || '(deleted)'}
                                         </div>
                                       </div>
                                       <div className="p-2 bg-orange-50/50 rounded border border-orange-100">
-                                        <Badge className="bg-orange-100 text-orange-700 text-[0.6rem] mb-1.5">TARGET</Badge>
+                                        <Badge className="bg-orange-100 text-orange-700 text-[0.6rem] mb-1.5">
+                                          TARGET
+                                        </Badge>
                                         <div className="text-sm text-gray-600">
                                           {conflict.target_text || '(deleted)'}
                                         </div>
@@ -2595,13 +3063,18 @@ export function NodeModal({
                           )}
 
                           {/* Clean merge message */}
-                          {mergeResult.status === 'clean' && mergeResult.auto_merged_facets.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
-                              <Check size={48} strokeWidth={1} className="text-green-300 mb-4" />
-                              <h4 className="font-semibold text-gray-700 mb-2">No Changes Detected</h4>
-                              <p className="text-sm text-gray-500">The source and target commits have identical semantic content.</p>
-                            </div>
-                          )}
+                          {mergeResult.status === 'clean' &&
+                            mergeResult.auto_merged_facets.length === 0 && (
+                              <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
+                                <Check size={48} strokeWidth={1} className="text-green-300 mb-4" />
+                                <h4 className="font-semibold text-gray-700 mb-2">
+                                  No Changes Detected
+                                </h4>
+                                <p className="text-sm text-gray-500">
+                                  The source and target commits have identical semantic content.
+                                </p>
+                              </div>
+                            )}
                         </div>
                       )}
                     </div>
@@ -2621,7 +3094,10 @@ export function NodeModal({
                   ) : (
                     /* Legacy phrase-based UI */
                     sourceBoxes.map((box) => (
-                      <div key={box.id} className="bg-white border border-gray-200 rounded-lg mb-3 overflow-hidden">
+                      <div
+                        key={box.id}
+                        className="bg-white border border-gray-200 rounded-lg mb-3 overflow-hidden"
+                      >
                         {/* Source Box Header */}
                         <div
                           className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
@@ -2630,8 +3106,13 @@ export function NodeModal({
                           <span className="text-gray-500">
                             {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </span>
-                          <span className="flex-1 text-[0.85rem] font-medium text-gray-700">{box.title}</span>
-                          <Badge variant="outline" className="text-[0.65rem] text-blue-600 border-blue-300 bg-blue-50">
+                          <span className="flex-1 text-[0.85rem] font-medium text-gray-700">
+                            {box.title}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[0.65rem] text-blue-600 border-blue-300 bg-blue-50"
+                          >
                             {box.type}
                           </Badge>
                         </div>
@@ -2639,7 +3120,7 @@ export function NodeModal({
                         {box.expanded && (
                           <div className="p-3 text-[0.9rem] leading-[1.8] text-gray-700">
                             {box.phrases.map((phrase) => {
-                              const canToggle = configLocked // Only allow toggling when Step 1 is locked
+                              const canToggle = configLocked; // Only allow toggling when Step 1 is locked
                               return (
                                 <div
                                   key={phrase.id}
@@ -2653,10 +3134,16 @@ export function NodeModal({
                                   onClick={(e) => {
                                     // Only toggle if clicking the phrase background (not a keyword)
                                     if (canToggle && e.target === e.currentTarget) {
-                                      togglePhraseInclude(phrase.id)
+                                      togglePhraseInclude(phrase.id);
                                     }
                                   }}
-                                  title={!canToggle ? 'Complete Step 1 to edit' : (phrase.included ? 'Click to exclude phrase' : 'Click to include phrase')}
+                                  title={
+                                    !canToggle
+                                      ? 'Complete Step 1 to edit'
+                                      : phrase.included
+                                        ? 'Click to exclude phrase'
+                                        : 'Click to include phrase'
+                                  }
                                 >
                                   {/* Render phrase text with clickable keywords */}
                                   {renderPhraseWithKeywords(
@@ -2668,7 +3155,7 @@ export function NodeModal({
                                     handleKeywordHover
                                   )}
                                 </div>
-                              )
+                              );
                             })}
                           </div>
                         )}
@@ -2701,44 +3188,55 @@ export function NodeModal({
           </footer>
         </div>
       </div>
-    )
+    );
   }
 
   // ============================================
   // COMMITTED COMMIT - Read-only frozen version
   // ============================================
   if (isCommittedCommit) {
-    const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main'
+    const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main';
 
     // Get keywords and source excerpt from committed data (stored in database)
     // These come from data.mustHave, data.mustntHave, data.sourceExcerpt fields
-    const commitMustHave = data.mustHave || []
-    const commitMustntHave = data.mustntHave || []
-    const commitSourceExcerpt = data.sourceExcerpt || []
-    const commitFacets = data.facetSnapshot || []
+    const commitMustHave = data.mustHave || [];
+    const commitMustntHave = data.mustntHave || [];
+    const commitSourceExcerpt = data.sourceExcerpt || [];
+    const commitFacets = data.facetSnapshot || [];
 
     // Group facets by type for display
-    const facetsByType = commitFacets.reduce((acc, facet) => {
-      const type = facet.facet || 'unknown'
-      if (!acc[type]) acc[type] = []
-      acc[type].push(facet)
-      return acc
-    }, {} as Record<string, typeof commitFacets>)
+    const facetsByType = commitFacets.reduce(
+      (acc, facet) => {
+        const type = facet.facet || 'unknown';
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(facet);
+        return acc;
+      },
+      {} as Record<string, typeof commitFacets>
+    );
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Top Bar */}
           <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
             <div className="flex items-center gap-3">
-              <h2 className="text-[0.95rem] font-semibold text-gray-800">Commit: {data.title || 'Untitled'}</h2>
+              <h2 className="text-[0.95rem] font-semibold text-gray-800">
+                Commit: {data.title || 'Untitled'}
+              </h2>
               <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
-              <Badge className={cn(
-                'text-[0.65rem] gap-1',
-                branchLabel === 'main'
-                  ? 'bg-green-100 text-green-700 border-green-300'
-                  : 'bg-purple-100 text-purple-700 border-purple-300'
-              )}>
+              <Badge
+                className={cn(
+                  'text-[0.65rem] gap-1',
+                  branchLabel === 'main'
+                    ? 'bg-green-100 text-green-700 border-green-300'
+                    : 'bg-purple-100 text-purple-700 border-purple-300'
+                )}
+              >
                 <GitBranch size={12} />
                 {branchLabel}
               </Badge>
@@ -2749,8 +3247,8 @@ export function NodeModal({
                   key={action.key}
                   variant="outline"
                   onClick={() => {
-                    action.onClick()
-                    onClose()
+                    action.onClick();
+                    onClose();
                   }}
                   disabled={action.disabled}
                   className="gap-1.5 h-9"
@@ -2759,7 +3257,13 @@ export function NodeModal({
                   <span>{action.label}</span>
                 </Button>
               ))}
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                aria-label="Close"
+                className="h-9 w-9 text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </Button>
             </div>
@@ -2767,12 +3271,19 @@ export function NodeModal({
 
           <div className="flex flex-1 overflow-hidden min-h-0" ref={commitContainerRef}>
             {/* Left Sidebar - Meta & Lineage */}
-            <aside className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50" style={{ width: commitLeftWidth }}>
+            <aside
+              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
+              style={{ width: commitLeftWidth }}
+            >
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Version Info</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Version Info
+                </h4>
                 <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
                   <GitBranch size={14} className="text-gray-400 shrink-0" />
-                  <span>Branch: <strong>{branchLabel}</strong></span>
+                  <span>
+                    Branch: <strong>{branchLabel}</strong>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
                   <Clock size={14} className="text-gray-400 shrink-0" />
@@ -2787,7 +3298,9 @@ export function NodeModal({
               <div className="h-px bg-gray-200 my-4" />
 
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Lineage</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Lineage
+                </h4>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[0.85rem]">
                     <span className="text-gray-500">From Draft:</span>
@@ -2815,15 +3328,22 @@ export function NodeModal({
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-gray-700">Source Excerpt</h3>
-                  <Badge variant="outline" className="text-[0.65rem] text-gray-400">Read-only</Badge>
+                  <Badge variant="outline" className="text-[0.65rem] text-gray-400">
+                    Read-only
+                  </Badge>
                 </div>
                 <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
                   {commitSourceExcerpt.length > 0 ? (
                     <div className="flex flex-col gap-2">
                       {commitSourceExcerpt.map((excerpt, idx) => (
-                        <div key={idx} className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100">
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100"
+                        >
                           <span className="text-gray-400 font-bold shrink-0">•</span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">{excerpt}</span>
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                            {excerpt}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2866,17 +3386,21 @@ export function NodeModal({
                   {commitFacets.length > 0 ? (
                     <div className="flex flex-col gap-3">
                       {Object.entries(facetsByType).map(([type, facets]) => (
-                        <div key={type} className="bg-white border border-gray-200 rounded-md overflow-hidden">
+                        <div
+                          key={type}
+                          className="bg-white border border-gray-200 rounded-md overflow-hidden"
+                        >
                           <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-700">
                             {type}
                             <span className="text-xs text-gray-400">({facets.length})</span>
                           </h5>
                           <div className="p-2 flex flex-wrap gap-2">
                             {facets.map((facet, idx) => (
-                              <div key={idx} className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded text-sm">
-                                {facet.text && (
-                                  <span className="text-gray-700">{facet.text}</span>
-                                )}
+                              <div
+                                key={idx}
+                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded text-sm"
+                              >
+                                {facet.text && <span className="text-gray-700">{facet.text}</span>}
                                 {facet.key && facet.value !== undefined && (
                                   <span className="text-gray-600">
                                     <span className="text-gray-400">{facet.key}:</span>
@@ -2884,7 +3408,9 @@ export function NodeModal({
                                   </span>
                                 )}
                                 {facet.entity_type && (
-                                  <span className="text-xs text-purple-600">[{facet.entity_type}]</span>
+                                  <span className="text-xs text-purple-600">
+                                    [{facet.entity_type}]
+                                  </span>
                                 )}
                                 {facet.confidence !== undefined && (
                                   <span className="text-xs text-emerald-600 font-medium">
@@ -2913,16 +3439,24 @@ export function NodeModal({
             />
 
             {/* Right Sidebar - Constraints Summary */}
-            <aside className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50" style={{ width: commitRightWidth }}>
+            <aside
+              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
+              style={{ width: commitRightWidth }}
+            >
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Constraints</h4>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Constraints
+                </h4>
 
                 <div className="mb-4">
                   <h5 className="text-xs font-medium text-green-600 mb-2">Must-have</h5>
                   {commitMustHave.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {commitMustHave.map((w, i) => (
-                        <Badge key={i} className="text-[0.7rem] bg-green-100 text-green-700 border-green-300">
+                        <Badge
+                          key={i}
+                          className="text-[0.7rem] bg-green-100 text-green-700 border-green-300"
+                        >
                           {w}
                         </Badge>
                       ))}
@@ -2937,7 +3471,10 @@ export function NodeModal({
                   {commitMustntHave.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {commitMustntHave.map((w, i) => (
-                        <Badge key={i} className="text-[0.7rem] bg-red-100 text-red-700 border-red-300">
+                        <Badge
+                          key={i}
+                          className="text-[0.7rem] bg-red-100 text-red-700 border-red-300"
+                        >
                           {w}
                         </Badge>
                       ))}
@@ -2962,7 +3499,11 @@ export function NodeModal({
                     variant="outline"
                     onClick={() => setShowDiffPanel(true)}
                     disabled={allCommittedCommits.length <= 1}
-                    title={allCommittedCommits.length <= 1 ? 'Need at least 2 commits to compare' : 'Compare with another commit'}
+                    title={
+                      allCommittedCommits.length <= 1
+                        ? 'Need at least 2 commits to compare'
+                        : 'Compare with another commit'
+                    }
                     className="w-full gap-2"
                   >
                     <GitCompare size={14} />
@@ -2976,14 +3517,14 @@ export function NodeModal({
                         className="w-full py-2 px-3 border border-gray-300 rounded-md text-sm bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-blue-500"
                         value={diffTargetCommit}
                         onChange={(e) => {
-                          setDiffTargetCommit(e.target.value)
-                          setDiffResult(null)
-                          setDiffError(null)
+                          setDiffTargetCommit(e.target.value);
+                          setDiffResult(null);
+                          setDiffError(null);
                         }}
                       >
                         <option value="">Select a commit...</option>
                         {allCommittedCommits
-                          .filter(c => c.data.commitHash !== data.commitHash)
+                          .filter((c) => c.data.commitHash !== data.commitHash)
                           .map((c) => (
                             <option key={c.id} value={c.data.commitHash}>
                               {c.data.title || c.data.entryId} ({c.data.commitHash?.slice(0, 8)})
@@ -3013,10 +3554,10 @@ export function NodeModal({
                       <Button
                         variant="outline"
                         onClick={() => {
-                          setShowDiffPanel(false)
-                          setDiffTargetCommit('')
-                          setDiffResult(null)
-                          setDiffError(null)
+                          setShowDiffPanel(false);
+                          setDiffTargetCommit('');
+                          setDiffResult(null);
+                          setDiffError(null);
                         }}
                       >
                         Cancel
@@ -3042,19 +3583,29 @@ export function NodeModal({
                         {diffResult.diff.facet_changes.length > 0 && (
                           <div className="flex flex-col gap-2">
                             {diffResult.diff.facet_changes.map((change, idx) => (
-                              <div key={idx} className={cn(
-                                'p-2 rounded border text-sm',
-                                change.change_type === 'added' && 'bg-green-50 border-green-200',
-                                change.change_type === 'removed' && 'bg-red-50 border-red-200',
-                                change.change_type === 'modified' && 'bg-amber-50 border-amber-200'
-                              )}>
+                              <div
+                                key={idx}
+                                className={cn(
+                                  'p-2 rounded border text-sm',
+                                  change.change_type === 'added' && 'bg-green-50 border-green-200',
+                                  change.change_type === 'removed' && 'bg-red-50 border-red-200',
+                                  change.change_type === 'modified' &&
+                                    'bg-amber-50 border-amber-200'
+                                )}
+                              >
                                 <div className="flex items-center gap-2 mb-1">
-                                  <Badge variant="outline" className={cn(
-                                    'text-[0.6rem]',
-                                    change.change_type === 'added' && 'text-green-600 border-green-300',
-                                    change.change_type === 'removed' && 'text-red-600 border-red-300',
-                                    change.change_type === 'modified' && 'text-amber-600 border-amber-300'
-                                  )}>
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-[0.6rem]',
+                                      change.change_type === 'added' &&
+                                        'text-green-600 border-green-300',
+                                      change.change_type === 'removed' &&
+                                        'text-red-600 border-red-300',
+                                      change.change_type === 'modified' &&
+                                        'text-amber-600 border-amber-300'
+                                    )}
+                                  >
                                     {change.change_type}
                                   </Badge>
                                   <span className="font-medium text-gray-700">{change.facet}</span>
@@ -3073,7 +3624,12 @@ export function NodeModal({
                                   <div className="flex flex-wrap items-center gap-1 mt-2">
                                     <span className="text-xs text-gray-500">Added:</span>
                                     {change.added_keywords.map((kw, i) => (
-                                      <Badge key={i} className="text-[0.6rem] bg-green-100 text-green-700">{kw}</Badge>
+                                      <Badge
+                                        key={i}
+                                        className="text-[0.6rem] bg-green-100 text-green-700"
+                                      >
+                                        {kw}
+                                      </Badge>
                                     ))}
                                   </div>
                                 )}
@@ -3081,7 +3637,12 @@ export function NodeModal({
                                   <div className="flex flex-wrap items-center gap-1 mt-2">
                                     <span className="text-xs text-gray-500">Removed:</span>
                                     {change.removed_keywords.map((kw, i) => (
-                                      <Badge key={i} className="text-[0.6rem] bg-red-100 text-red-700">{kw}</Badge>
+                                      <Badge
+                                        key={i}
+                                        className="text-[0.6rem] bg-red-100 text-red-700"
+                                      >
+                                        {kw}
+                                      </Badge>
                                     ))}
                                   </div>
                                 )}
@@ -3104,19 +3665,29 @@ export function NodeModal({
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // Fallback for unknown node types
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="flex flex-col w-[80vw] max-w-[800px] max-h-[60vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
         <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="text-[0.95rem] font-semibold text-gray-800">{data?.title || 'Node'}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="h-9 w-9 text-gray-400 hover:text-gray-600">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close"
+              className="h-9 w-9 text-gray-400 hover:text-gray-600"
+            >
               <X size={20} />
             </Button>
           </div>
@@ -3126,5 +3697,5 @@ export function NodeModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

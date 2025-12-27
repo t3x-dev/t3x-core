@@ -1,34 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
 import {
-  FlaskConical,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
-  Lightbulb,
-  Play,
-  GitCommit,
+  ArrowLeft,
+  CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
+  FlaskConical,
+  GitCommit,
+  Lightbulb,
   Loader2,
-  ArrowLeft,
+  Play,
   RefreshCw,
+  XCircle,
 } from 'lucide-react';
-import {
-  getRunTrace,
-  getEngineRun,
-  runEval,
-  createCommitFromEval,
-  type RunTrace,
-  type TestStep,
-  type TestResult,
-  type EvalResponse,
-} from '@/lib/api';
-import { Button } from '@/components/ui/button';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -38,6 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  createCommitFromEval,
+  type EvalResponse,
+  getEngineRun,
+  getRunTrace,
+  type RunTrace,
+  runEval,
+  type TestResult,
+  type TestStep,
+} from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 // Default test steps for demonstration
@@ -108,7 +108,12 @@ export default function EvalPage() {
             agent_id: 'n8n-workflow',
             started_at: run.created_at,
             completed_at: run.updated_at,
-            status: run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : 'running',
+            status:
+              run.status === 'completed'
+                ? 'completed'
+                : run.status === 'failed'
+                  ? 'failed'
+                  : 'running',
             input: run.inputs || {},
             output: run.result.run_report?.output || run.result.evidence_pack?.n8n_output,
             events: [
@@ -124,14 +129,20 @@ export default function EvalPage() {
                 type: 'agent_output',
                 data: {
                   output: run.result.run_report?.output || run.result.evidence_pack?.n8n_output,
-                  latency_ms: (run.result.run_report?.meta as { latency_ms?: number } | undefined)?.latency_ms ||
-                              (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)?.latency_ms,
+                  latency_ms:
+                    (run.result.run_report?.meta as { latency_ms?: number } | undefined)
+                      ?.latency_ms ||
+                    (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)
+                      ?.latency_ms,
                 },
               },
             ],
             metrics: {
-              total_latency_ms: (run.result.run_report?.meta as { latency_ms?: number } | undefined)?.latency_ms ||
-                               (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)?.latency_ms || 0,
+              total_latency_ms:
+                (run.result.run_report?.meta as { latency_ms?: number } | undefined)?.latency_ms ||
+                (run.result.evidence_pack?.n8n_meta as { latency_ms?: number } | undefined)
+                  ?.latency_ms ||
+                0,
               llm_calls: 0,
               tool_calls: 0,
             },
@@ -254,7 +265,8 @@ export default function EvalPage() {
             <XCircle className="h-12 w-12 text-destructive" />
             <h2 className="text-lg font-semibold">Run not found</h2>
             <p className="text-muted-foreground">
-              The run ID &quot;<code className="bg-muted px-1 rounded text-xs">{runId}</code>&quot; could not be found.
+              The run ID &quot;<code className="bg-muted px-1 rounded text-xs">{runId}</code>&quot;
+              could not be found.
             </p>
             <p className="text-sm text-muted-foreground">
               This usually means the n8n workflow hasn&apos;t been set up or activated yet.
@@ -285,20 +297,31 @@ export default function EvalPage() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/deploy')} className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/deploy')}
+            className="h-8 w-8"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <FlaskConical className="h-5 w-5" />
           <h1 className="text-2xl font-bold tracking-tight">Eval</h1>
-          <code className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">{runId}</code>
+          <code className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {runId}
+          </code>
         </div>
         <Badge
           variant="outline"
           className={cn('gap-1.5', statusColors[trace.status as keyof typeof statusColors])}
         >
-          {trace.status === 'completed' ? <CheckCircle className="h-3 w-3" /> :
-           trace.status === 'failed' ? <XCircle className="h-3 w-3" /> :
-           <Loader2 className="h-3 w-3 animate-spin" />}
+          {trace.status === 'completed' ? (
+            <CheckCircle className="h-3 w-3" />
+          ) : trace.status === 'failed' ? (
+            <XCircle className="h-3 w-3" />
+          ) : (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          )}
           {trace.status}
         </Badge>
       </header>
@@ -309,7 +332,9 @@ export default function EvalPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Run Info</CardTitle>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {trace.metrics?.total_latency_ms || 0}ms</span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" /> {trace.metrics?.total_latency_ms || 0}ms
+              </span>
               <span>LLM: {trace.metrics?.llm_calls || 0}</span>
               <span>Tools: {trace.metrics?.tool_calls || 0}</span>
             </div>
@@ -340,7 +365,9 @@ export default function EvalPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Trace Events</CardTitle>
-            <Badge variant="secondary" className="text-xs">{trace.events.length} events</Badge>
+            <Badge variant="secondary" className="text-xs">
+              {trace.events.length} events
+            </Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -364,13 +391,19 @@ export default function EvalPage() {
                       {new Date(event.timestamp).toLocaleTimeString()}
                     </span>
                     {event.data.latency_ms && (
-                      <span className="text-xs text-muted-foreground">{event.data.latency_ms}ms</span>
+                      <span className="text-xs text-muted-foreground">
+                        {event.data.latency_ms}ms
+                      </span>
                     )}
                     {event.data.model && (
-                      <Badge variant="outline" className="text-xs">{event.data.model}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {event.data.model}
+                      </Badge>
                     )}
                     {event.data.tool_name && (
-                      <Badge variant="outline" className="text-xs">{event.data.tool_name}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {event.data.tool_name}
+                      </Badge>
                     )}
                   </button>
                   {expandedEvents.has(event.id) && (
@@ -378,19 +411,25 @@ export default function EvalPage() {
                       {event.data.input != null && (
                         <div>
                           <p className="mb-1 text-xs font-medium">Input:</p>
-                          <pre className="overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(event.data.input, null, 2)}</pre>
+                          <pre className="overflow-auto rounded bg-background p-2 text-xs">
+                            {JSON.stringify(event.data.input, null, 2)}
+                          </pre>
                         </div>
                       )}
                       {event.data.output != null && (
                         <div>
                           <p className="mb-1 text-xs font-medium">Output:</p>
-                          <pre className="overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(event.data.output, null, 2)}</pre>
+                          <pre className="overflow-auto rounded bg-background p-2 text-xs">
+                            {JSON.stringify(event.data.output, null, 2)}
+                          </pre>
                         </div>
                       )}
                       {event.data.error && (
                         <div>
                           <p className="mb-1 text-xs font-medium text-destructive">Error:</p>
-                          <pre className="overflow-auto rounded bg-destructive/10 p-2 text-xs text-destructive">{String(event.data.error)}</pre>
+                          <pre className="overflow-auto rounded bg-destructive/10 p-2 text-xs text-destructive">
+                            {String(event.data.error)}
+                          </pre>
                         </div>
                       )}
                     </div>
@@ -410,17 +449,25 @@ export default function EvalPage() {
             <div className="flex items-center gap-2">
               <Button onClick={handleRunEval} disabled={evaluating}>
                 {evaluating ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Running...
+                  </>
                 ) : (
-                  <><Play className="h-4 w-4" /> Run Eval</>
+                  <>
+                    <Play className="h-4 w-4" /> Run Eval
+                  </>
                 )}
               </Button>
               {evalResult && (
                 <Button variant="outline" onClick={handleCreateCommit} disabled={committing}>
                   {committing ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Creating...</>
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Creating...
+                    </>
                   ) : (
-                    <><GitCommit className="h-4 w-4" /> Create Commit</>
+                    <>
+                      <GitCommit className="h-4 w-4" /> Create Commit
+                    </>
                   )}
                 </Button>
               )}
@@ -434,14 +481,22 @@ export default function EvalPage() {
           {evalResult ? (
             <div className="space-y-4">
               {/* Summary */}
-              <div className={cn(
-                'flex items-center gap-3 rounded-lg border p-4',
-                evalResult.passed
-                  ? 'border-green-500/30 bg-green-500/10 text-green-700'
-                  : 'border-destructive/30 bg-destructive/10 text-destructive'
-              )}>
-                {evalResult.passed ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
-                <span className="font-medium">{evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}</span>
+              <div
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border p-4',
+                  evalResult.passed
+                    ? 'border-green-500/30 bg-green-500/10 text-green-700'
+                    : 'border-destructive/30 bg-destructive/10 text-destructive'
+                )}
+              >
+                {evalResult.passed ? (
+                  <CheckCircle className="h-5 w-5" />
+                ) : (
+                  <XCircle className="h-5 w-5" />
+                )}
+                <span className="font-medium">
+                  {evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}
+                </span>
                 <span className="ml-auto text-sm">
                   {evalResult.passed_steps}/{evalResult.total_steps} passed
                 </span>
@@ -467,18 +522,36 @@ export default function EvalPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn('text-xs', severityColors[result.severity as keyof typeof severityColors])}>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            severityColors[result.severity as keyof typeof severityColors]
+                          )}
+                        >
                           {result.severity}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {result.passed ? (
-                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-xs">passed</Badge>
+                          <Badge
+                            variant="outline"
+                            className="bg-green-100 text-green-700 border-green-200 text-xs"
+                          >
+                            passed
+                          </Badge>
                         ) : (
-                          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 text-xs">failed</Badge>
+                          <Badge
+                            variant="outline"
+                            className="bg-red-100 text-red-700 border-red-200 text-xs"
+                          >
+                            failed
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{result.message || '-'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {result.message || '-'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -493,11 +566,19 @@ export default function EvalPage() {
                   {evalResult.suggestions.map((suggestion, i) => (
                     <div key={i} className="rounded-md border bg-muted/30 p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="text-xs">{suggestion.type.replace('_', ' ')}</Badge>
-                        <span className="text-xs text-muted-foreground">{Math.round(suggestion.confidence * 100)}% confidence</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {suggestion.type.replace('_', ' ')}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(suggestion.confidence * 100)}% confidence
+                        </span>
                       </div>
                       <p className="text-sm">{suggestion.description}</p>
-                      {suggestion.diff && <pre className="overflow-auto rounded bg-background p-2 text-xs">{suggestion.diff}</pre>}
+                      {suggestion.diff && (
+                        <pre className="overflow-auto rounded bg-background p-2 text-xs">
+                          {suggestion.diff}
+                        </pre>
+                      )}
                     </div>
                   ))}
                 </div>

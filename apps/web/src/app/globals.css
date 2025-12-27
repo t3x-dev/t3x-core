@@ -303,10 +303,10 @@ button {
 
 /* MiniMap - refined styling */
 .react-flow__minimap {
-  background: var(--color-bg-white) !important;
-  border: 1px solid var(--color-border) !important;
-  border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-md) !important;
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 /* Modal overlay - glassmorphism effect */
@@ -377,24 +377,24 @@ button {
 
 /* Keyword hovered state - must: deep green, mustnt: deep red */
 .draft-svtz__keyword--must.draft-svtz__keyword--hovered {
-  background: #15803d !important;
-  color: #fff !important;
-  border-color: #15803d !important;
+  background: #15803d;
+  color: #fff;
+  border-color: #15803d;
 }
 
 .draft-svtz__keyword--mustnt.draft-svtz__keyword--hovered {
-  background: #dc2626 !important;
-  color: #fff !important;
-  border-color: #dc2626 !important;
-  text-decoration: none !important;
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+  text-decoration: none;
 }
 
 /* Keyword disabled (when phrase is excluded) */
 .draft-svtz__keyword--disabled {
-  color: #9ca3af !important;
-  background: rgba(0, 0, 0, 0.05) !important;
+  color: #9ca3af;
+  background: rgba(0, 0, 0, 0.05);
   cursor: not-allowed;
-  text-decoration: none !important;
+  text-decoration: none;
 }
 
 /* ============================================

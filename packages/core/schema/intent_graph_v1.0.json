@@ -10,14 +10,7 @@
       "minItems": 0,
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "turn_id",
-          "slot_type",
-          "value",
-          "confidence",
-          "source"
-        ],
+        "required": ["id", "turn_id", "slot_type", "value", "confidence", "source"],
         "properties": {
           "id": {
             "type": "string",

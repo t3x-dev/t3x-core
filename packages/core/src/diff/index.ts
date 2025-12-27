@@ -3,17 +3,16 @@
  */
 
 export {
-  DiffType,
-  type SegmentMatch,
-  type SegmentDiff,
-  type DiffSegment,
-  type DiffResult,
-  type DiffStats,
-  calculateDiffStats,
-} from './types';
-
-export {
-  type DiffEngineConfig,
-  DiffEngine,
   createDiffEngine,
+  DiffEngine,
+  type DiffEngineConfig,
 } from './engine';
+export {
+  calculateDiffStats,
+  type DiffResult,
+  type DiffSegment,
+  type DiffStats,
+  DiffType,
+  type SegmentDiff,
+  type SegmentMatch,
+} from './types';

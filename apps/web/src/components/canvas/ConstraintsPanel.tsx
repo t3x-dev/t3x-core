@@ -1,19 +1,19 @@
-import { useState, useCallback } from 'react'
-import { Check, X, ChevronDown, ChevronRight, Plus, Eye, EyeOff } from 'lucide-react'
-import type { Clause, ConversationConstraints, DraftConstraintOverrides } from '@/types/nodes'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import type { Clause, ConversationConstraints, DraftConstraintOverrides } from '@/types/nodes';
 
 interface ConstraintsPanelProps {
   constraints: {
-    clauses: ConversationConstraints['clauses']
-    must_have: string[]
-    mustnt_have: string[]
-  }
-  overrides?: DraftConstraintOverrides
-  onUpdateOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void
+    clauses: ConversationConstraints['clauses'];
+    must_have: string[];
+    mustnt_have: string[];
+  };
+  overrides?: DraftConstraintOverrides;
+  onUpdateOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void;
 }
 
 export default function ConstraintsPanel({
@@ -25,142 +25,142 @@ export default function ConstraintsPanel({
     clauses: true,
     mustHave: true,
     mustntHave: true,
-  })
-  const [newMustHave, setNewMustHave] = useState('')
-  const [newMustntHave, setNewMustntHave] = useState('')
+  });
+  const [newMustHave, setNewMustHave] = useState('');
+  const [newMustntHave, setNewMustntHave] = useState('');
 
   const toggleSection = (section: 'clauses' | 'mustHave' | 'mustntHave') => {
     setExpandedSections((prev) => ({
       ...prev,
       [section]: !prev[section],
-    }))
-  }
+    }));
+  };
 
   // Check if a clause is disabled
   const isClauseDisabled = useCallback(
     (clauseId: string) => {
-      return overrides?.disabledClauseIds?.includes(clauseId) ?? false
+      return overrides?.disabledClauseIds?.includes(clauseId) ?? false;
     },
     [overrides]
-  )
+  );
 
   // Toggle clause enabled/disabled
   const toggleClause = useCallback(
     (clauseId: string) => {
-      if (!onUpdateOverrides) return
-      const currentDisabled = overrides?.disabledClauseIds ?? []
-      const isDisabled = currentDisabled.includes(clauseId)
+      if (!onUpdateOverrides) return;
+      const currentDisabled = overrides?.disabledClauseIds ?? [];
+      const isDisabled = currentDisabled.includes(clauseId);
       const newDisabled = isDisabled
         ? currentDisabled.filter((id) => id !== clauseId)
-        : [...currentDisabled, clauseId]
-      onUpdateOverrides({ disabledClauseIds: newDisabled })
+        : [...currentDisabled, clauseId];
+      onUpdateOverrides({ disabledClauseIds: newDisabled });
     },
     [overrides, onUpdateOverrides]
-  )
+  );
 
   // Check if a must-have keyword is removed
   const isMustHaveRemoved = useCallback(
     (keyword: string) => {
-      return overrides?.removedMustHave?.includes(keyword) ?? false
+      return overrides?.removedMustHave?.includes(keyword) ?? false;
     },
     [overrides]
-  )
+  );
 
   // Toggle must-have keyword
   const toggleMustHave = useCallback(
     (keyword: string) => {
-      if (!onUpdateOverrides) return
-      const currentRemoved = overrides?.removedMustHave ?? []
-      const isRemoved = currentRemoved.includes(keyword)
+      if (!onUpdateOverrides) return;
+      const currentRemoved = overrides?.removedMustHave ?? [];
+      const isRemoved = currentRemoved.includes(keyword);
       const newRemoved = isRemoved
         ? currentRemoved.filter((k) => k !== keyword)
-        : [...currentRemoved, keyword]
-      onUpdateOverrides({ removedMustHave: newRemoved })
+        : [...currentRemoved, keyword];
+      onUpdateOverrides({ removedMustHave: newRemoved });
     },
     [overrides, onUpdateOverrides]
-  )
+  );
 
   // Check if a mustn't-have keyword is removed
   const isMustntHaveRemoved = useCallback(
     (keyword: string) => {
-      return overrides?.removedMustntHave?.includes(keyword) ?? false
+      return overrides?.removedMustntHave?.includes(keyword) ?? false;
     },
     [overrides]
-  )
+  );
 
   // Toggle mustn't-have keyword
   const toggleMustntHave = useCallback(
     (keyword: string) => {
-      if (!onUpdateOverrides) return
-      const currentRemoved = overrides?.removedMustntHave ?? []
-      const isRemoved = currentRemoved.includes(keyword)
+      if (!onUpdateOverrides) return;
+      const currentRemoved = overrides?.removedMustntHave ?? [];
+      const isRemoved = currentRemoved.includes(keyword);
       const newRemoved = isRemoved
         ? currentRemoved.filter((k) => k !== keyword)
-        : [...currentRemoved, keyword]
-      onUpdateOverrides({ removedMustntHave: newRemoved })
+        : [...currentRemoved, keyword];
+      onUpdateOverrides({ removedMustntHave: newRemoved });
     },
     [overrides, onUpdateOverrides]
-  )
+  );
 
   // Add new must-have keyword
   const addMustHave = useCallback(() => {
-    const trimmed = newMustHave.trim()
-    if (!trimmed || !onUpdateOverrides) return
-    const current = overrides?.additionalMustHave ?? []
+    const trimmed = newMustHave.trim();
+    if (!trimmed || !onUpdateOverrides) return;
+    const current = overrides?.additionalMustHave ?? [];
     if (!current.includes(trimmed) && !constraints.must_have.includes(trimmed)) {
-      onUpdateOverrides({ additionalMustHave: [...current, trimmed] })
+      onUpdateOverrides({ additionalMustHave: [...current, trimmed] });
     }
-    setNewMustHave('')
-  }, [newMustHave, overrides, constraints.must_have, onUpdateOverrides])
+    setNewMustHave('');
+  }, [newMustHave, overrides, constraints.must_have, onUpdateOverrides]);
 
   // Remove additional must-have keyword
   const removeAdditionalMustHave = useCallback(
     (keyword: string) => {
-      if (!onUpdateOverrides) return
-      const current = overrides?.additionalMustHave ?? []
-      onUpdateOverrides({ additionalMustHave: current.filter((k) => k !== keyword) })
+      if (!onUpdateOverrides) return;
+      const current = overrides?.additionalMustHave ?? [];
+      onUpdateOverrides({ additionalMustHave: current.filter((k) => k !== keyword) });
     },
     [overrides, onUpdateOverrides]
-  )
+  );
 
   // Add new mustn't-have keyword
   const addMustntHave = useCallback(() => {
-    const trimmed = newMustntHave.trim()
-    if (!trimmed || !onUpdateOverrides) return
-    const current = overrides?.additionalMustntHave ?? []
+    const trimmed = newMustntHave.trim();
+    if (!trimmed || !onUpdateOverrides) return;
+    const current = overrides?.additionalMustntHave ?? [];
     if (!current.includes(trimmed) && !constraints.mustnt_have.includes(trimmed)) {
-      onUpdateOverrides({ additionalMustntHave: [...current, trimmed] })
+      onUpdateOverrides({ additionalMustntHave: [...current, trimmed] });
     }
-    setNewMustntHave('')
-  }, [newMustntHave, overrides, constraints.mustnt_have, onUpdateOverrides])
+    setNewMustntHave('');
+  }, [newMustntHave, overrides, constraints.mustnt_have, onUpdateOverrides]);
 
   // Remove additional mustn't-have keyword
   const removeAdditionalMustntHave = useCallback(
     (keyword: string) => {
-      if (!onUpdateOverrides) return
-      const current = overrides?.additionalMustntHave ?? []
-      onUpdateOverrides({ additionalMustntHave: current.filter((k) => k !== keyword) })
+      if (!onUpdateOverrides) return;
+      const current = overrides?.additionalMustntHave ?? [];
+      onUpdateOverrides({ additionalMustntHave: current.filter((k) => k !== keyword) });
     },
     [overrides, onUpdateOverrides]
-  )
+  );
 
   // Get active clauses (keep status only, not disabled)
   const activeClauses = constraints.clauses.filter(
     (c) => c.status === 'keep' && !isClauseDisabled(c.id)
-  )
-  const totalKeepClauses = constraints.clauses.filter((c) => c.status === 'keep').length
+  );
+  const totalKeepClauses = constraints.clauses.filter((c) => c.status === 'keep').length;
 
   // Get active must-have keywords
   const activeMustHave = [
     ...constraints.must_have.filter((kw) => !isMustHaveRemoved(kw)),
     ...(overrides?.additionalMustHave ?? []),
-  ]
+  ];
 
   // Get active mustn't-have keywords
   const activeMustntHave = [
     ...constraints.mustnt_have.filter((kw) => !isMustntHaveRemoved(kw)),
     ...(overrides?.additionalMustntHave ?? []),
-  ]
+  ];
 
   return (
     <div className="mt-5 border-t pt-5">
@@ -175,7 +175,11 @@ export default function ConstraintsPanel({
           className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('clauses')}
         >
-          {expandedSections.clauses ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {expandedSections.clauses ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
           <span>Sentence Candidates</span>
           <Badge variant="secondary" className="ml-auto">
             {activeClauses.length}/{totalKeepClauses}
@@ -209,10 +213,16 @@ export default function ConstraintsPanel({
           className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('mustHave')}
         >
-          {expandedSections.mustHave ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {expandedSections.mustHave ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
           <Check className="h-3 w-3 text-green-600" />
           <span>Must-Have Keywords</span>
-          <Badge variant="secondary" className="ml-auto">{activeMustHave.length}</Badge>
+          <Badge variant="secondary" className="ml-auto">
+            {activeMustHave.length}
+          </Badge>
         </button>
         {expandedSections.mustHave && (
           <div className="pt-3">
@@ -247,13 +257,20 @@ export default function ConstraintsPanel({
                   onKeyDown={(e) => e.key === 'Enter' && addMustHave()}
                   className="h-9"
                 />
-                <Button size="sm" onClick={addMustHave} disabled={!newMustHave.trim()} className="h-9 w-9 p-0">
+                <Button
+                  size="sm"
+                  onClick={addMustHave}
+                  disabled={!newMustHave.trim()}
+                  className="h-9 w-9 p-0"
+                >
                   <Plus className="h-3 w-3" />
                 </Button>
               </div>
             )}
             {activeMustHave.length === 0 && !onUpdateOverrides && (
-              <p className="py-3 text-center text-xs text-muted-foreground">No must-have keywords defined.</p>
+              <p className="py-3 text-center text-xs text-muted-foreground">
+                No must-have keywords defined.
+              </p>
             )}
           </div>
         )}
@@ -265,10 +282,16 @@ export default function ConstraintsPanel({
           className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => toggleSection('mustntHave')}
         >
-          {expandedSections.mustntHave ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {expandedSections.mustntHave ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
           <X className="h-3 w-3 text-destructive" />
           <span>Mustn't-Have Keywords</span>
-          <Badge variant="secondary" className="ml-auto">{activeMustntHave.length}</Badge>
+          <Badge variant="secondary" className="ml-auto">
+            {activeMustntHave.length}
+          </Badge>
         </button>
         {expandedSections.mustntHave && (
           <div className="pt-3">
@@ -303,27 +326,34 @@ export default function ConstraintsPanel({
                   onKeyDown={(e) => e.key === 'Enter' && addMustntHave()}
                   className="h-9"
                 />
-                <Button size="sm" onClick={addMustntHave} disabled={!newMustntHave.trim()} className="h-9 w-9 p-0">
+                <Button
+                  size="sm"
+                  onClick={addMustntHave}
+                  disabled={!newMustntHave.trim()}
+                  className="h-9 w-9 p-0"
+                >
                   <Plus className="h-3 w-3" />
                 </Button>
               </div>
             )}
             {activeMustntHave.length === 0 && !onUpdateOverrides && (
-              <p className="py-3 text-center text-xs text-muted-foreground">No mustn't-have keywords defined.</p>
+              <p className="py-3 text-center text-xs text-muted-foreground">
+                No mustn't-have keywords defined.
+              </p>
             )}
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // Clause item component
 interface ClauseItemProps {
-  clause: Clause
-  isDisabled: boolean
-  onToggle: () => void
-  canToggle: boolean
+  clause: Clause;
+  isDisabled: boolean;
+  onToggle: () => void;
+  canToggle: boolean;
 }
 
 function ClauseItem({ clause, isDisabled, onToggle, canToggle }: ClauseItemProps) {
@@ -347,18 +377,18 @@ function ClauseItem({ clause, isDisabled, onToggle, canToggle }: ClauseItemProps
         </Button>
       )}
     </div>
-  )
+  );
 }
 
 // Keyword tag component
 interface KeywordTagProps {
-  keyword: string
-  type: 'must_have' | 'mustnt_have'
-  isRemoved?: boolean
-  isAdditional?: boolean
-  onToggle?: () => void
-  onRemove?: () => void
-  canToggle: boolean
+  keyword: string;
+  type: 'must_have' | 'mustnt_have';
+  isRemoved?: boolean;
+  isAdditional?: boolean;
+  onToggle?: () => void;
+  onRemove?: () => void;
+  canToggle: boolean;
 }
 
 function KeywordTag({
@@ -370,7 +400,7 @@ function KeywordTag({
   onRemove,
   canToggle,
 }: KeywordTagProps) {
-  const isMustHave = type === 'must_have'
+  const isMustHave = type === 'must_have';
 
   return (
     <span
@@ -401,5 +431,5 @@ function KeywordTag({
         </button>
       )}
     </span>
-  )
+  );
 }

@@ -2,16 +2,12 @@
 
 import { useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
-import { Toaster } from '@/components/ui/sonner';
 import { showToast } from '@/components/Toast';
-import { useProjectStore } from '@/store/projectStore';
+import { Toaster } from '@/components/ui/sonner';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useProjectStore } from '@/store/projectStore';
 
-export default function ClientLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
 

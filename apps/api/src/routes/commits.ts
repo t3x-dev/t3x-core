@@ -5,17 +5,18 @@
  * POST /v1/commits - Create commit
  * GET  /v1/commits/:hash - Get commit by hash
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
+
 import {
-  insertCommit,
-  findCommitsByProject,
+  CommitError,
   findCommitByHash,
+  findCommitsByProject,
   findProjectById,
   findTurnsInWindow,
-  CommitError,
+  insertCommit,
 } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 export const commitRoutes = new Hono();
 
@@ -109,7 +110,12 @@ commitRoutes.post('/v1/commits', async (c) => {
   }
 
   if (hasMergeParents && hasTurnWindow) {
-    return jsonError(c, 'INVALID_REQUEST', 'Cannot specify both merge_parents and turn_window', 400);
+    return jsonError(
+      c,
+      'INVALID_REQUEST',
+      'Cannot specify both merge_parents and turn_window',
+      400
+    );
   }
 
   try {
@@ -216,7 +222,11 @@ commitRoutes.post('/v1/commits', async (c) => {
                   });
                 }
               } catch (parseErr) {
-                console.warn('[commits] Failed to parse rings JSON for turn:', turn.turnHash, parseErr);
+                console.warn(
+                  '[commits] Failed to parse rings JSON for turn:',
+                  turn.turnHash,
+                  parseErr
+                );
               }
             }
           }
@@ -232,10 +242,12 @@ commitRoutes.post('/v1/commits', async (c) => {
       projectId: body.project_id,
       branch: body.branch,
       message: body.message,
-      turnWindow: body.turn_window ? {
-        startTurnHash: body.turn_window.start_turn_hash,
-        endTurnHash: body.turn_window.end_turn_hash,
-      } : undefined,
+      turnWindow: body.turn_window
+        ? {
+            startTurnHash: body.turn_window.start_turn_hash,
+            endTurnHash: body.turn_window.end_turn_hash,
+          }
+        : undefined,
       facetSnapshot,
       mergeParents: body.merge_parents,
       pipelineConfig: body.pipeline_config,

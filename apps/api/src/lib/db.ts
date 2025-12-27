@@ -3,7 +3,12 @@
  *
  * Uses PGLite for local development, can be swapped for PostgreSQL in production
  */
-import { createPGLiteStorage, getPGLiteDB, closePGLiteStorage, type PGLiteDB } from '@t3x/storage/pglite';
+import {
+  closePGLiteStorage,
+  createPGLiteStorage,
+  getPGLiteDB,
+  type PGLiteDB,
+} from '@t3x/storage/pglite';
 
 let initPromise: Promise<PGLiteDB> | null = null;
 

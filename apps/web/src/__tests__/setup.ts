@@ -6,21 +6,20 @@
  */
 
 import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
 import type { AnyDB } from '@t3x/storage';
-import { vi } from 'vitest';
-
 // Import schema tables for drizzle
 import {
-  projects,
-  conversations,
-  turns,
   branches,
   commits,
+  conversations,
   drafts,
   mergeResults,
+  projects,
   segmentEmbeddings,
+  turns,
 } from '@t3x/storage';
+import { drizzle } from 'drizzle-orm/pglite';
+import { vi } from 'vitest';
 
 // Import shared SQL from @t3x/storage test utilities
 import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';
@@ -38,7 +37,7 @@ const schema = {
 
 // Shared test database instance
 let testDB: AnyDB | null = null;
-let testClient: PGlite | null = null;
+let _testClient: PGlite | null = null;
 
 /**
  * Create a fresh test database
@@ -75,7 +74,7 @@ export async function setupTestDB(): Promise<{
 }> {
   const { db, client, cleanup } = await createTestDB();
   testDB = db;
-  testClient = client;
+  _testClient = client;
 
   return { db, cleanup };
 }

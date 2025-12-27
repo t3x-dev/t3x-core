@@ -5,9 +5,9 @@
  * Ported from Python tests/test_diff_engine.py
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { DiffEngine, DiffType, createDiffEngine } from '../../diff';
-import { StubEmbeddingProvider, testSegments } from '../setup';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createDiffEngine, DiffEngine, DiffType } from '../../diff';
+import { StubEmbeddingProvider } from '../setup';
 
 describe('DiffEngine', () => {
   let diffEngine: DiffEngine;
@@ -15,17 +15,13 @@ describe('DiffEngine', () => {
 
   beforeEach(() => {
     embeddingProvider = new StubEmbeddingProvider();
-    diffEngine = createDiffEngine(embeddingProvider, { threshold: 0.70 });
+    diffEngine = createDiffEngine(embeddingProvider, { threshold: 0.7 });
   });
 
   describe('Two-Way Diff', () => {
     it('recognizes identical segments as SAME', async () => {
-      const baseSegments = [
-        { segmentId: 'base-s1', text: 'User wants login feature.' },
-      ];
-      const targetSegments = [
-        { segmentId: 'target-s1', text: 'User wants login feature.' },
-      ];
+      const baseSegments = [{ segmentId: 'base-s1', text: 'User wants login feature.' }];
+      const targetSegments = [{ segmentId: 'target-s1', text: 'User wants login feature.' }];
 
       const result = await diffEngine.diffTwoWay(
         'commit-1',
@@ -58,9 +54,7 @@ describe('DiffEngine', () => {
     });
 
     it('detects added segments', async () => {
-      const baseSegments = [
-        { segmentId: 'base-s1', text: 'User wants login feature.' },
-      ];
+      const baseSegments = [{ segmentId: 'base-s1', text: 'User wants login feature.' }];
       const targetSegments = [
         { segmentId: 'target-s1', text: 'User wants login feature.' },
         { segmentId: 'target-s2', text: 'Add remember me option.' },
@@ -75,9 +69,7 @@ describe('DiffEngine', () => {
 
       expect(result.stats.addedCount).toBe(1);
 
-      const addedDiffs = result.segmentDiffs.filter(
-        (d) => d.diffType === DiffType.ADDED
-      );
+      const addedDiffs = result.segmentDiffs.filter((d) => d.diffType === DiffType.ADDED);
       expect(addedDiffs).toHaveLength(1);
       expect(addedDiffs[0].segmentId).toBe('target-s2');
       expect(addedDiffs[0].text).toContain('remember me');
@@ -88,9 +80,7 @@ describe('DiffEngine', () => {
         { segmentId: 'base-s1', text: 'User wants login feature.' },
         { segmentId: 'base-s2', text: 'System needs PDF export functionality.' },
       ];
-      const targetSegments = [
-        { segmentId: 'target-s1', text: 'User wants login feature.' },
-      ];
+      const targetSegments = [{ segmentId: 'target-s1', text: 'User wants login feature.' }];
 
       const result = await diffEngine.diffTwoWay(
         'commit-3',
@@ -101,9 +91,7 @@ describe('DiffEngine', () => {
 
       expect(result.stats.removedCount).toBe(1);
 
-      const removedDiffs = result.segmentDiffs.filter(
-        (d) => d.diffType === DiffType.REMOVED
-      );
+      const removedDiffs = result.segmentDiffs.filter((d) => d.diffType === DiffType.REMOVED);
       expect(removedDiffs).toHaveLength(1);
       expect(removedDiffs[0].segmentId).toBe('base-s2');
     });
@@ -140,9 +128,7 @@ describe('DiffEngine', () => {
 
   describe('Three-Way Diff', () => {
     it('merges non-conflicting additions', async () => {
-      const baseSegments = [
-        { segmentId: 'base-s1', text: 'User wants login feature.' },
-      ];
+      const baseSegments = [{ segmentId: 'base-s1', text: 'User wants login feature.' }];
       const sourceSegments = [
         { segmentId: 'source-s1', text: 'User wants login feature.' },
         { segmentId: 'source-s2', text: 'Add remember me option.' },
@@ -165,24 +151,18 @@ describe('DiffEngine', () => {
       expect(result.stats.addedCount).toBe(2);
       expect(result.stats.sameCount).toBe(1);
 
-      const addedDiffs = result.segmentDiffs.filter(
-        (d) => d.diffType === DiffType.ADDED
-      );
+      const addedDiffs = result.segmentDiffs.filter((d) => d.diffType === DiffType.ADDED);
       const addedIds = new Set(addedDiffs.map((d) => d.segmentId));
       expect(addedIds).toContain('source-s2');
       expect(addedIds).toContain('target-s3');
     });
 
     it('detects conflicts when both sides modify differently', async () => {
-      const baseSegments = [
-        { segmentId: 'base-s1', text: 'Support email and password login.' },
-      ];
+      const baseSegments = [{ segmentId: 'base-s1', text: 'Support email and password login.' }];
       const sourceSegments = [
         { segmentId: 'source-s1', text: 'Support email, phone, and password login.' },
       ];
-      const targetSegments = [
-        { segmentId: 'target-s1', text: 'Support email and WeChat login.' },
-      ];
+      const targetSegments = [{ segmentId: 'target-s1', text: 'Support email and WeChat login.' }];
 
       const result = await diffEngine.diffThreeWay(
         'base',
@@ -195,9 +175,7 @@ describe('DiffEngine', () => {
 
       expect(result.stats.conflictCount).toBe(1);
 
-      const conflicts = result.segmentDiffs.filter(
-        (d) => d.diffType === DiffType.CONFLICT
-      );
+      const conflicts = result.segmentDiffs.filter((d) => d.diffType === DiffType.CONFLICT);
       expect(conflicts).toHaveLength(1);
       expect(conflicts[0].segmentId).toBe('base-s1');
       expect(conflicts[0].matchedSegmentId).toContain('|');
@@ -208,14 +186,13 @@ describe('DiffEngine', () => {
       // (StubEmbeddingProvider uses text length for similarity)
       const baseSegments = [
         { segmentId: 'base-s1', text: 'User wants login feature.' },
-        { segmentId: 'base-s2', text: 'The system absolutely requires comprehensive PDF document export functionality with multiple format options.' },
+        {
+          segmentId: 'base-s2',
+          text: 'The system absolutely requires comprehensive PDF document export functionality with multiple format options.',
+        },
       ];
-      const sourceSegments = [
-        { segmentId: 'source-s1', text: 'User wants login feature.' },
-      ];
-      const targetSegments = [
-        { segmentId: 'target-s1', text: 'User wants login feature.' },
-      ];
+      const sourceSegments = [{ segmentId: 'source-s1', text: 'User wants login feature.' }];
+      const targetSegments = [{ segmentId: 'target-s1', text: 'User wants login feature.' }];
 
       const result = await diffEngine.diffThreeWay(
         'base',
@@ -229,9 +206,7 @@ describe('DiffEngine', () => {
       expect(result.stats.removedCount).toBe(1);
       expect(result.stats.conflictCount).toBe(0);
 
-      const removedDiffs = result.segmentDiffs.filter(
-        (d) => d.diffType === DiffType.REMOVED
-      );
+      const removedDiffs = result.segmentDiffs.filter((d) => d.diffType === DiffType.REMOVED);
       expect(removedDiffs).toHaveLength(1);
       expect(removedDiffs[0].segmentId).toBe('base-s2');
     });
@@ -284,7 +259,7 @@ describe('DiffEngine', () => {
     it('includes threshold in result', async () => {
       const result = await diffEngine.diffTwoWay('a', [], 'b', []);
 
-      expect(result.threshold).toBe(0.70);
+      expect(result.threshold).toBe(0.7);
     });
   });
 
@@ -299,7 +274,7 @@ describe('DiffEngine', () => {
       const engine = createDiffEngine(embeddingProvider);
       const result = await engine.diffTwoWay('a', [], 'b', []);
 
-      expect(result.threshold).toBe(0.70); // Default
+      expect(result.threshold).toBe(0.7); // Default
     });
   });
 });

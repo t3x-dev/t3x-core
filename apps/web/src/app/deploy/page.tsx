@@ -1,20 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Rocket, Plus, Play, Square, RefreshCw, ExternalLink, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import {
-  checkRunnerHealth,
-  registerAgent,
-  listRuns,
-  createEngineRun,
-  listEngineRuns,
-  type AgentConfig,
-  type RunTrace,
-  type EngineRun,
-} from '@/lib/api';
-import { Button } from '@/components/ui/button';
+  AlertCircle,
+  CheckCircle,
+  ExternalLink,
+  Loader2,
+  Play,
+  Plus,
+  RefreshCw,
+  Rocket,
+  Square,
+  XCircle,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,6 +26,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  type AgentConfig,
+  checkRunnerHealth,
+  createEngineRun,
+  type EngineRun,
+  listEngineRuns,
+  listRuns,
+  type RunTrace,
+  registerAgent,
+} from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface Agent extends AgentConfig {
@@ -34,27 +45,27 @@ interface Agent extends AgentConfig {
 }
 
 // LocalStorage key for persisting agents
-const AGENTS_STORAGE_KEY = 't3x-agents'
+const AGENTS_STORAGE_KEY = 't3x-agents';
 
 // Load agents from localStorage (only call in useEffect)
 function loadAgentsFromStorage(): Agent[] {
   try {
-    const stored = localStorage.getItem(AGENTS_STORAGE_KEY)
+    const stored = localStorage.getItem(AGENTS_STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored)
+      return JSON.parse(stored);
     }
   } catch (err) {
-    console.warn('Failed to load agents from storage:', err)
+    console.warn('Failed to load agents from storage:', err);
   }
-  return []
+  return [];
 }
 
 // Save agents to localStorage
 function saveAgentsToStorage(agents: Agent[]) {
   try {
-    localStorage.setItem(AGENTS_STORAGE_KEY, JSON.stringify(agents))
+    localStorage.setItem(AGENTS_STORAGE_KEY, JSON.stringify(agents));
   } catch (err) {
-    console.warn('Failed to save agents to storage:', err)
+    console.warn('Failed to save agents to storage:', err);
   }
 }
 
@@ -147,9 +158,7 @@ export default function DeployPage() {
 
   const handleRunAgent = async (agent: Agent) => {
     try {
-      setAgents(agents.map(a =>
-        a.id === agent.id ? { ...a, status: 'running' as const } : a
-      ));
+      setAgents(agents.map((a) => (a.id === agent.id ? { ...a, status: 'running' as const } : a)));
 
       // Use Engine API to create run (triggers Runner -> n8n flow)
       const result = await createEngineRun({
@@ -157,19 +166,24 @@ export default function DeployPage() {
         workflow: { type: 'n8n', webhook_id: 'agent-run' },
       });
 
-      setAgents(agents.map(a =>
-        a.id === agent.id
-          ? { ...a, status: 'idle' as const, lastRunId: result.run_id, lastRunAt: new Date().toISOString() }
-          : a
-      ));
+      setAgents(
+        agents.map((a) =>
+          a.id === agent.id
+            ? {
+                ...a,
+                status: 'idle' as const,
+                lastRunId: result.run_id,
+                lastRunAt: new Date().toISOString(),
+              }
+            : a
+        )
+      );
 
       // Navigate to eval page with run
       router.push(`/eval/${result.run_id}`);
     } catch (err) {
       console.error('Failed to run agent:', err);
-      setAgents(agents.map(a =>
-        a.id === agent.id ? { ...a, status: 'error' as const } : a
-      ));
+      setAgents(agents.map((a) => (a.id === agent.id ? { ...a, status: 'error' as const } : a)));
     }
   };
 
@@ -226,9 +240,13 @@ export default function DeployPage() {
           )}
         >
           {runnerHealthy ? (
-            <><CheckCircle className="h-3 w-3" /> Runner Connected</>
+            <>
+              <CheckCircle className="h-3 w-3" /> Runner Connected
+            </>
           ) : (
-            <><AlertCircle className="h-3 w-3" /> Runner Offline</>
+            <>
+              <AlertCircle className="h-3 w-3" /> Runner Offline
+            </>
           )}
         </Badge>
       </header>
@@ -241,7 +259,9 @@ export default function DeployPage() {
             <div>
               <p className="font-medium text-foreground">Runner not available</p>
               <p className="text-sm text-muted-foreground">
-                Start the runner with: <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm docker:up:runner</code> or <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm dev:runner</code>
+                Start the runner with:{' '}
+                <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm docker:up:runner</code>{' '}
+                or <code className="bg-muted px-1 py-0.5 rounded text-xs">pnpm dev:runner</code>
               </p>
             </div>
           </CardContent>
@@ -279,9 +299,7 @@ export default function DeployPage() {
                 <Button variant="outline" onClick={() => setShowAddAgent(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddAgent}>
-                  Register
-                </Button>
+                <Button onClick={handleAddAgent}>Register</Button>
               </div>
             </CardContent>
           </Card>
@@ -308,8 +326,15 @@ export default function DeployPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2 text-xs">
-                    <code className="flex-1 truncate bg-muted px-2 py-1 rounded">{agent.endpoint}</code>
-                    <a href={agent.endpoint} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                    <code className="flex-1 truncate bg-muted px-2 py-1 rounded">
+                      {agent.endpoint}
+                    </code>
+                    <a
+                      href={agent.endpoint}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
@@ -321,9 +346,13 @@ export default function DeployPage() {
                       disabled={agent.status === 'running' || !runnerHealthy}
                     >
                       {agent.status === 'running' ? (
-                        <><Loader2 className="h-3 w-3 animate-spin" /> Running</>
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" /> Running
+                        </>
                       ) : (
-                        <><Play className="h-3 w-3" /> Run</>
+                        <>
+                          <Play className="h-3 w-3" /> Run
+                        </>
                       )}
                     </Button>
                     <Button variant="outline" size="sm" disabled={agent.status !== 'running'}>
@@ -332,7 +361,10 @@ export default function DeployPage() {
                   </div>
                   {agent.lastRunId && (
                     <p className="text-xs text-muted-foreground">
-                      Last run: <a href={`/eval/${agent.lastRunId}`} className="text-primary hover:underline">{agent.lastRunId}</a>
+                      Last run:{' '}
+                      <a href={`/eval/${agent.lastRunId}`} className="text-primary hover:underline">
+                        {agent.lastRunId}
+                      </a>
                     </p>
                   )}
                 </CardContent>
@@ -373,10 +405,14 @@ export default function DeployPage() {
                 {/* Engine runs (new flow) */}
                 {runs.slice(0, 10).map((run) => (
                   <TableRow key={run.run_id}>
-                    <TableCell><code className="text-xs">{run.run_id}</code></TableCell>
+                    <TableCell>
+                      <code className="text-xs">{run.run_id}</code>
+                    </TableCell>
                     <TableCell>Engine</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(run.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(run.created_at).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="link"
@@ -392,10 +428,14 @@ export default function DeployPage() {
                 {/* Legacy Runner runs */}
                 {legacyRuns.slice(0, 5).map((run) => (
                   <TableRow key={run.run_id} className="opacity-60">
-                    <TableCell><code className="text-xs">{run.run_id}</code></TableCell>
+                    <TableCell>
+                      <code className="text-xs">{run.run_id}</code>
+                    </TableCell>
                     <TableCell>Runner</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(run.started_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(run.started_at).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="link"

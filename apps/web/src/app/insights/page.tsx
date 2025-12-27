@@ -2,10 +2,10 @@
 
 import { Clock3, Lightbulb } from 'lucide-react';
 import { SemanticCard } from '@/components/SemanticCard';
-import { boardColumns, semanticFeed, timeline } from '@/data/sampleLedger';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { boardColumns, semanticFeed, timeline } from '@/data/sampleLedger';
 import { cn } from '@/lib/utils';
 
 const stageColors = {

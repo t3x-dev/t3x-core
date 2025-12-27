@@ -1,4 +1,4 @@
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react'
+import { BaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
 
 /**
  * AnimatedEdge - A smooth step edge with subtle flow animation
@@ -13,7 +13,7 @@ export function AnimatedEdge({
   sourcePosition,
   targetPosition,
   style,
-  markerEnd,
+  markerEnd: _markerEnd,
 }: EdgeProps) {
   const [edgePath] = getSmoothStepPath({
     sourceX,
@@ -23,7 +23,7 @@ export function AnimatedEdge({
     targetY,
     targetPosition,
     borderRadius: 12,
-  })
+  });
 
   return (
     <>
@@ -58,7 +58,7 @@ export function AnimatedEdge({
         </linearGradient>
       </defs>
     </>
-  )
+  );
 }
 
-export default AnimatedEdge
+export default AnimatedEdge;

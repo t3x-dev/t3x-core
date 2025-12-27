@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { AlertTriangle } from 'lucide-react'
-import { useCanvasStore } from '@/store/canvasStore'
+import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -9,25 +9,25 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+} from '@/components/ui/dialog';
+import { useCanvasStore } from '@/store/canvasStore';
 
 export function DeletionConfirmDialog() {
-  const deletionConfirmation = useCanvasStore((state) => state.deletionConfirmation)
-  const confirmDeletion = useCanvasStore((state) => state.confirmDeletion)
-  const cancelDeletion = useCanvasStore((state) => state.cancelDeletion)
+  const deletionConfirmation = useCanvasStore((state) => state.deletionConfirmation);
+  const confirmDeletion = useCanvasStore((state) => state.confirmDeletion);
+  const cancelDeletion = useCanvasStore((state) => state.cancelDeletion);
 
   if (!deletionConfirmation) {
-    return null
+    return null;
   }
 
-  const { message, nodeIds, edgeIds } = deletionConfirmation
-  const itemCount = nodeIds.length + edgeIds.length
+  const { message, nodeIds, edgeIds } = deletionConfirmation;
+  const itemCount = nodeIds.length + edgeIds.length;
 
-  const summaryParts: string[] = []
-  if (nodeIds.length > 0) summaryParts.push(`${nodeIds.length} node(s)`)
-  if (edgeIds.length > 0) summaryParts.push(`${edgeIds.length} connection(s)`)
-  const summary = summaryParts.join(' and ') + ' will be removed.'
+  const summaryParts: string[] = [];
+  if (nodeIds.length > 0) summaryParts.push(`${nodeIds.length} node(s)`);
+  if (edgeIds.length > 0) summaryParts.push(`${edgeIds.length} connection(s)`);
+  const summary = summaryParts.join(' and ') + ' will be removed.';
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && cancelDeletion()}>
@@ -44,7 +44,9 @@ export function DeletionConfirmDialog() {
         <DialogDescription asChild>
           <div className="space-y-2">
             {message.split('\n').map((line, idx) => (
-              <p key={idx} className="text-sm text-muted-foreground">{line}</p>
+              <p key={idx} className="text-sm text-muted-foreground">
+                {line}
+              </p>
             ))}
             <p className="text-sm font-medium text-foreground">{summary}</p>
           </div>
@@ -60,5 +62,5 @@ export function DeletionConfirmDialog() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -1,35 +1,33 @@
-'use client'
+'use client';
 
-import { useCanvasStore } from '@/store/canvasStore'
-import { LEAF_TYPES } from './CanvasNodes'
-import type { LeafType } from '@/types/nodes'
+import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
+} from '@/components/ui/sheet';
+import { useCanvasStore } from '@/store/canvasStore';
+import type { LeafType } from '@/types/nodes';
+import { LEAF_TYPES } from './CanvasNodes';
 
 export function LeafPanel() {
-  const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen)
-  const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel)
-  const addLeafNode = useCanvasStore((state) => state.addLeafNode)
+  const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
+  const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
+  const addLeafNode = useCanvasStore((state) => state.addLeafNode);
 
   const handleSelectLeaf = (leafType: LeafType) => {
-    addLeafNode(leafType)
-    closeLeafPanel()
-  }
+    addLeafNode(leafType);
+    closeLeafPanel();
+  };
 
   return (
     <Sheet open={leafPanelOpen} onOpenChange={(open) => !open && closeLeafPanel()}>
       <SheetContent side="right" className="w-80 sm:max-w-80">
         <SheetHeader>
           <SheetTitle>Output Destinations</SheetTitle>
-          <SheetDescription>
-            Select where to publish your content
-          </SheetDescription>
+          <SheetDescription>Select where to publish your content</SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-2 p-4">
@@ -49,5 +47,5 @@ export function LeafPanel() {
         </div>
       </SheetContent>
     </Sheet>
-  )
+  );
 }

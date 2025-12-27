@@ -22,10 +22,7 @@ export async function POST(request: NextRequest) {
     const { sql } = await request.json();
 
     if (!sql || typeof sql !== 'string') {
-      return NextResponse.json(
-        { error: 'SQL query is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'SQL query is required' }, { status: 400 });
     }
 
     // Ensure DB is initialized and get raw client
@@ -75,9 +72,7 @@ export async function GET() {
     const tableRows = tables.rows as { name: string }[];
     const tableInfo = await Promise.all(
       tableRows.map(async (t) => {
-        const countResult = await client.query(
-          `SELECT COUNT(*) as count FROM "${t.name}"`
-        );
+        const countResult = await client.query(`SELECT COUNT(*) as count FROM "${t.name}"`);
         const countRow = countResult.rows[0] as { count: number } | undefined;
         return {
           name: t.name,

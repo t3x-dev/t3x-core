@@ -53,7 +53,7 @@ export class EmbeddingProviderError extends Error {
     message?: string
   ) {
     super(message ?? `Embedding provider "${providerId}" is unavailable`);
-    this.name = "EmbeddingProviderError";
+    this.name = 'EmbeddingProviderError';
   }
 }
 
@@ -63,9 +63,7 @@ export class EmbeddingProviderError extends Error {
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length !== vecB.length) {
-    throw new Error(
-      `Vector dimensions mismatch: ${vecA.length} vs ${vecB.length}`
-    );
+    throw new Error(`Vector dimensions mismatch: ${vecA.length} vs ${vecB.length}`);
   }
 
   let dotProduct = 0;

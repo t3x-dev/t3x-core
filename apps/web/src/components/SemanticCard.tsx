@@ -1,8 +1,8 @@
-import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react'
-import type { SemanticEntry } from '../types/semantic'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import type { SemanticEntry } from '../types/semantic';
 
 const stageConfig = {
   commit: {
@@ -23,15 +23,15 @@ const stageConfig = {
     variant: 'secondary' as const,
     className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/15',
   },
-} as const
+} as const;
 
 interface SemanticCardProps {
-  entry: SemanticEntry
+  entry: SemanticEntry;
 }
 
 export function SemanticCard({ entry }: SemanticCardProps) {
-  const config = stageConfig[entry.stage]
-  const Icon = config.Icon
+  const config = stageConfig[entry.stage];
+  const Icon = config.Icon;
 
   return (
     <Card className="transition-shadow hover:shadow-md">
@@ -82,5 +82,5 @@ export function SemanticCard({ entry }: SemanticCardProps) {
         </div>
       </CardFooter>
     </Card>
-  )
+  );
 }

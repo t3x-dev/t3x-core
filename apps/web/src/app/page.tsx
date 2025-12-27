@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, type MouseEvent } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
-import { LoadingSpinner, ErrorMessage } from '@/components/ApiStatus';
-import { useCanvasStore } from '@/store/canvasStore';
-import { useProjectStore } from '@/store/projectStore';
-import { Button } from '@/components/ui/button';
+import { type MouseEvent, useEffect } from 'react';
+import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/store/canvasStore';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function SemanticLedgerPage() {
   const router = useRouter();
@@ -107,9 +107,12 @@ export default function SemanticLedgerPage() {
                   <Badge
                     variant="outline"
                     className={cn(
-                      project.status === 'active' && 'border-green-500/30 bg-green-500/10 text-green-600',
-                      project.status === 'draft' && 'border-amber-500/30 bg-amber-500/10 text-amber-600',
-                      project.status === 'paused' && 'border-gray-500/30 bg-gray-500/10 text-gray-600'
+                      project.status === 'active' &&
+                        'border-green-500/30 bg-green-500/10 text-green-600',
+                      project.status === 'draft' &&
+                        'border-amber-500/30 bg-amber-500/10 text-amber-600',
+                      project.status === 'paused' &&
+                        'border-gray-500/30 bg-gray-500/10 text-gray-600'
                     )}
                   >
                     {project.status}

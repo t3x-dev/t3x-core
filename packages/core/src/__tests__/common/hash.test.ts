@@ -5,7 +5,7 @@
  * Verifies deterministic hash generation.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { canonText, hashText, sha256 } from '../../common';
 
 describe('canonText', () => {

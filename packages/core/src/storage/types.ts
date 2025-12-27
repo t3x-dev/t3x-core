@@ -111,13 +111,13 @@ export interface MergeResultRecord {
 }
 
 export interface SegmentEmbeddingRecord {
-  segment_id: string;           // "turn_hash:s-0"
+  segment_id: string; // "turn_hash:s-0"
   turn_hash: string;
   segment_index: number;
   segment_text: string;
-  embedding_model: string;      // "google-ai:text-embedding-004"
-  embedding_dim: number;        // 768
-  embedding: Buffer;            // Float32Array as binary
+  embedding_model: string; // "google-ai:text-embedding-004"
+  embedding_dim: number; // 768
+  embedding: Buffer; // Float32Array as binary
   created_at: string;
 }
 
@@ -163,7 +163,7 @@ export interface CreateCommitV2Input {
     end_turn_hash: string;
   };
   // For merge commits: explicit parent hashes and resolved facets
-  merge_parents?: string[];  // [source_hash, target_hash]
+  merge_parents?: string[]; // [source_hash, target_hash]
   facet_snapshot: unknown[];
   pipeline_config?: unknown;
   draft_id?: string;
@@ -197,7 +197,7 @@ export interface CreateSegmentEmbeddingInput {
   segment_text: string;
   embedding_model: string;
   embedding_dim: number;
-  embedding: number[];          // Float array from embedding provider
+  embedding: number[]; // Float array from embedding provider
 }
 
 export interface CreateSegmentEmbeddingsBatchInput {

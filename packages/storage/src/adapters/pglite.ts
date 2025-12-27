@@ -26,7 +26,7 @@ let db: PGLiteDB | null = null;
  */
 export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PGLiteDB> {
   // Determine data directory
-  const dataDir = config.inMemory ? undefined : (config.dataDir || '.t3x/database');
+  const dataDir = config.inMemory ? undefined : config.dataDir || '.t3x/database';
 
   // Create PGLite client
   client = new PGlite(dataDir);

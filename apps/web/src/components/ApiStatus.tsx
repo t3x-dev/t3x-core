@@ -2,14 +2,14 @@
  * API connection status indicator
  */
 
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { useHealth } from '../hooks/useApi'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useHealth } from '../hooks/useApi';
 
 export function ApiStatus() {
-  const { data, loading, error } = useHealth()
+  const { data, loading, error } = useHealth();
 
   if (loading) {
     return (
@@ -17,7 +17,7 @@ export function ApiStatus() {
         <Loader2 className="h-4 w-4 animate-spin" />
         <span>Connecting to Core API...</span>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -31,27 +31,38 @@ export function ApiStatus() {
           Start with: uvicorn core_api.app:app --port 8000
         </span>
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <Badge variant="outline" className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600">
+      <Badge
+        variant="outline"
+        className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600"
+      >
         <CheckCircle2 className="h-3 w-3" />
         Connected
       </Badge>
       {data && <span className="text-xs text-muted-foreground">v{data.version}</span>}
     </div>
-  )
+  );
 }
 
-export function LoadingSpinner({ message = 'Loading...', className }: { message?: string; className?: string }) {
+export function LoadingSpinner({
+  message = 'Loading...',
+  className,
+}: {
+  message?: string;
+  className?: string;
+}) {
   return (
-    <div className={cn('flex items-center justify-center gap-3 p-8 text-muted-foreground', className)}>
+    <div
+      className={cn('flex items-center justify-center gap-3 p-8 text-muted-foreground', className)}
+    >
       <Loader2 className="h-5 w-5 animate-spin" />
       <span className="text-sm">{message}</span>
     </div>
-  )
+  );
 }
 
 export function ErrorMessage({ error, onRetry }: { error: Error; onRetry?: () => void }) {
@@ -68,5 +79,5 @@ export function ErrorMessage({ error, onRetry }: { error: Error; onRetry?: () =>
         </Button>
       )}
     </div>
-  )
+  );
 }

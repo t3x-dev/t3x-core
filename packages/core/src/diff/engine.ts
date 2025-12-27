@@ -10,15 +10,15 @@
  * 3. Calculate cosine(emb(sA_i), Emb(B)), if above threshold → "same", otherwise → "different/added"
  */
 
-import type { EmbeddingProvider } from "../providers/embedding";
+import type { EmbeddingProvider } from '../providers/embedding';
 import {
-  DiffType,
+  calculateDiffStats,
   type DiffResult,
   type DiffSegment,
+  DiffType,
   type SegmentDiff,
   type SegmentMatch,
-  calculateDiffStats,
-} from "./types";
+} from './types';
 
 /**
  * Diff engine configuration
@@ -31,7 +31,7 @@ export interface DiffEngineConfig {
   threshold?: number;
 }
 
-const DEFAULT_THRESHOLD = 0.70;
+const DEFAULT_THRESHOLD = 0.7;
 
 /**
  * Semantic Diff Engine
@@ -44,10 +44,7 @@ export class DiffEngine {
   private readonly embeddingProvider: EmbeddingProvider;
   private readonly threshold: number;
 
-  constructor(
-    embeddingProvider: EmbeddingProvider,
-    config?: DiffEngineConfig
-  ) {
+  constructor(embeddingProvider: EmbeddingProvider, config?: DiffEngineConfig) {
     this.embeddingProvider = embeddingProvider;
     this.threshold = config?.threshold ?? DEFAULT_THRESHOLD;
   }
@@ -91,12 +88,7 @@ export class DiffEngine {
     ]);
 
     // 2. Calculate similarity matrix and find best matches
-    const matches = this.computeMatches(
-      baseSegments,
-      baseVecs,
-      targetSegments,
-      targetVecs
-    );
+    const matches = this.computeMatches(baseSegments, baseVecs, targetSegments, targetVecs);
 
     // 3. Generate diff result
     const segmentDiffs: SegmentDiff[] = [];
@@ -106,19 +98,14 @@ export class DiffEngine {
     for (const baseSeg of baseSegments) {
       const bestMatch = matches.get(baseSeg.segmentId);
 
-      if (bestMatch && bestMatch.matched) {
+      if (bestMatch?.matched) {
         // Found match
         targetMatchedIds.add(bestMatch.targetSegmentId);
 
         // Get matched target text
-        const matchedSeg = targetSegments.find(
-          (s) => s.segmentId === bestMatch.targetSegmentId
-        );
+        const matchedSeg = targetSegments.find((s) => s.segmentId === bestMatch.targetSegmentId);
 
-        const diffType =
-          bestMatch.similarity >= this.threshold
-            ? DiffType.SAME
-            : DiffType.MODIFIED;
+        const diffType = bestMatch.similarity >= this.threshold ? DiffType.SAME : DiffType.MODIFIED;
 
         segmentDiffs.push({
           segmentId: baseSeg.segmentId,
@@ -204,18 +191,8 @@ export class DiffEngine {
     ]);
 
     // 2. Calculate similarity matrices
-    const baseToSource = this.computeMatches(
-      baseSegments,
-      baseVecs,
-      sourceSegments,
-      sourceVecs
-    );
-    const baseToTarget = this.computeMatches(
-      baseSegments,
-      baseVecs,
-      targetSegments,
-      targetVecs
-    );
+    const baseToSource = this.computeMatches(baseSegments, baseVecs, sourceSegments, sourceVecs);
+    const baseToTarget = this.computeMatches(baseSegments, baseVecs, targetSegments, targetVecs);
 
     // 3. Generate three-way diff result
     const segmentDiffs: SegmentDiff[] = [];
@@ -235,14 +212,8 @@ export class DiffEngine {
         targetMatchedIds.add(targetMatch!.targetSegmentId);
 
         // Check for conflict
-        const sourceText = this.getSegmentText(
-          sourceMatch!.targetSegmentId,
-          sourceSegments
-        );
-        const targetText = this.getSegmentText(
-          targetMatch!.targetSegmentId,
-          targetSegments
-        );
+        const sourceText = this.getSegmentText(sourceMatch!.targetSegmentId, sourceSegments);
+        const targetText = this.getSegmentText(targetMatch!.targetSegmentId, targetSegments);
 
         if (sourceText === targetText) {
           // Same content → SAME
@@ -250,10 +221,7 @@ export class DiffEngine {
             segmentId: baseSeg.segmentId,
             text: baseSeg.text,
             diffType: DiffType.SAME,
-            similarity: Math.max(
-              sourceMatch!.similarity,
-              targetMatch!.similarity
-            ),
+            similarity: Math.max(sourceMatch!.similarity, targetMatch!.similarity),
             matchedSegmentId: sourceMatch!.targetSegmentId,
             matchedText: sourceText,
           });
@@ -263,8 +231,7 @@ export class DiffEngine {
             segmentId: baseSeg.segmentId,
             text: baseSeg.text,
             diffType: DiffType.CONFLICT,
-            similarity:
-              (sourceMatch!.similarity + targetMatch!.similarity) / 2,
+            similarity: (sourceMatch!.similarity + targetMatch!.similarity) / 2,
             matchedSegmentId: `${sourceMatch!.targetSegmentId}|${targetMatch!.targetSegmentId}`,
             matchedText: `SOURCE: ${sourceText}\nTARGET: ${targetText}`,
           });
@@ -278,10 +245,7 @@ export class DiffEngine {
           diffType: DiffType.MODIFIED,
           similarity: sourceMatch!.similarity,
           matchedSegmentId: sourceMatch!.targetSegmentId,
-          matchedText: this.getSegmentText(
-            sourceMatch!.targetSegmentId,
-            sourceSegments
-          ),
+          matchedText: this.getSegmentText(sourceMatch!.targetSegmentId, sourceSegments),
         });
       } else if (!sourceMatched && targetMatched) {
         // Source deleted, Target kept → take target
@@ -292,10 +256,7 @@ export class DiffEngine {
           diffType: DiffType.MODIFIED,
           similarity: targetMatch!.similarity,
           matchedSegmentId: targetMatch!.targetSegmentId,
-          matchedText: this.getSegmentText(
-            targetMatch!.targetSegmentId,
-            targetSegments
-          ),
+          matchedText: this.getSegmentText(targetMatch!.targetSegmentId, targetSegments),
         });
       } else {
         // Both deleted → REMOVED
@@ -386,7 +347,7 @@ export class DiffEngine {
    */
   private getSegmentText(segmentId: string, segments: DiffSegment[]): string {
     const seg = segments.find((s) => s.segmentId === segmentId);
-    return seg?.text ?? "";
+    return seg?.text ?? '';
   }
 
   /**

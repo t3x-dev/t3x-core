@@ -4,11 +4,11 @@
  * CRUD operations for commits using Drizzle ORM.
  */
 
-import { eq, desc, and } from 'drizzle-orm';
-import { commits, type Commit, type NewCommit } from '../schema';
 import { computeCommitHash } from '@t3x/core';
-import { findBranchByName, updateBranchHead, ensureMainBranch } from './branches';
+import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Commit, commits, type NewCommit } from '../schema';
+import { ensureMainBranch, findBranchByName, updateBranchHead } from './branches';
 
 export interface TurnWindow {
   startTurnHash: string;
@@ -57,10 +57,7 @@ export class CommitError extends Error {
 /**
  * Insert a new commit
  */
-export async function insertCommit(
-  db: AnyDB,
-  input: CreateCommitInput
-): Promise<Commit> {
+export async function insertCommit(db: AnyDB, input: CreateCommitInput): Promise<Commit> {
   const createdAt = new Date();
   const targetBranch = input.branch ?? 'main';
 
@@ -111,26 +108,29 @@ export async function insertCommit(
     created_at: createdAt.toISOString(),
   });
 
-  const [commit] = await db.insert(commits).values({
-    commitHash,
-    projectId: input.projectId,
-    branch: targetBranch,
-    message: input.message ?? null,
-    parentsJson,
-    turnWindowJson,
-    facetSnapshotJson,
-    pipelineConfigJson,
-    draftId: input.draftId ?? null,
-    draftTextHash: input.draftTextHash ?? null,
-    signatureJson,
-    sourceExcerptJson,
-    mustHaveJson,
-    mustntHaveJson,
-    positionX: input.positionX ?? null,
-    positionY: input.positionY ?? null,
-    sourceRefsJson,
-    createdAt,
-  }).returning();
+  const [commit] = await db
+    .insert(commits)
+    .values({
+      commitHash,
+      projectId: input.projectId,
+      branch: targetBranch,
+      message: input.message ?? null,
+      parentsJson,
+      turnWindowJson,
+      facetSnapshotJson,
+      pipelineConfigJson,
+      draftId: input.draftId ?? null,
+      draftTextHash: input.draftTextHash ?? null,
+      signatureJson,
+      sourceExcerptJson,
+      mustHaveJson,
+      mustntHaveJson,
+      positionX: input.positionX ?? null,
+      positionY: input.positionY ?? null,
+      sourceRefsJson,
+      createdAt,
+    })
+    .returning();
 
   // Update branch head
   await updateBranchHead(db, input.projectId, targetBranch, commitHash);
@@ -141,10 +141,7 @@ export async function insertCommit(
 /**
  * Find commit by hash
  */
-export async function findCommitByHash(
-  db: AnyDB,
-  commitHash: string
-): Promise<Commit | null> {
+export async function findCommitByHash(db: AnyDB, commitHash: string): Promise<Commit | null> {
   const [commit] = await db
     .select()
     .from(commits)
@@ -168,10 +165,7 @@ export async function findCommitsByProject(
     return db
       .select()
       .from(commits)
-      .where(and(
-        eq(commits.projectId, options.projectId),
-        eq(commits.branch, options.branch)
-      ))
+      .where(and(eq(commits.projectId, options.projectId), eq(commits.branch, options.branch)))
       .orderBy(desc(commits.createdAt))
       .limit(limit)
       .offset(offset);
@@ -189,10 +183,7 @@ export async function findCommitsByProject(
 /**
  * Get commit parents
  */
-export async function findCommitParents(
-  db: AnyDB,
-  commitHash: string
-): Promise<Commit[]> {
+export async function findCommitParents(db: AnyDB, commitHash: string): Promise<Commit[]> {
   const commit = await findCommitByHash(db, commitHash);
   if (!commit) return [];
 

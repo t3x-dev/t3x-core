@@ -1,15 +1,10 @@
 'use client';
 
+import { BarChart3, FileText, Github, Home, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BarChart3, FileText, Github, Rocket } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 // T3X Logo - Two obtuse angles facing each other (bowtie shape)
 function LogoIcon() {
@@ -70,31 +65,16 @@ function AgentIcon({ className }: { className?: string }) {
         fill="none"
       />
       {/* Antenna */}
-      <path
-        d="M12 6V3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M12 6V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <circle cx="12" cy="2" r="1.5" fill="currentColor" />
       {/* Left eye */}
       <circle cx="9" cy="11" r="1.5" fill="currentColor" />
       {/* Right eye */}
       <circle cx="15" cy="11" r="1.5" fill="currentColor" />
       {/* Mouth */}
-      <path
-        d="M9 15h6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M9 15h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       {/* Ears */}
-      <path
-        d="M4 10H2M22 10h-2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M4 10H2M22 10h-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -137,17 +117,11 @@ function NavItem({ href, label, isActive, children, external, disabled }: NavIte
             {children}
           </a>
         ) : disabled ? (
-          <button
-            className={cn(navItemClass, 'cursor-not-allowed opacity-50')}
-            disabled
-          >
+          <button className={cn(navItemClass, 'cursor-not-allowed opacity-50')} disabled>
             {children}
           </button>
         ) : (
-          <Link
-            href={href}
-            className={isActive ? navItemActiveClass : navItemClass}
-          >
+          <Link href={href} className={isActive ? navItemActiveClass : navItemClass}>
             {children}
           </Link>
         )}
@@ -201,7 +175,12 @@ export function Sidebar() {
             <FileText className="h-5 w-5" />
           </NavItem>
 
-          <NavItem href="https://github.com/anthropics/t3x" label="GitHub" isActive={false} external>
+          <NavItem
+            href="https://github.com/anthropics/t3x"
+            label="GitHub"
+            isActive={false}
+            external
+          >
             <Github className="h-5 w-5" />
           </NavItem>
         </nav>

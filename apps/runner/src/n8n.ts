@@ -45,7 +45,10 @@ export async function triggerN8nWorkflow(
     callback_url: data.callback_url,
   };
 
-  logger.info({ run_id: data.run_id, runner_run_id, webhook_url: webhookUrl }, 'Triggering n8n workflow');
+  logger.info(
+    { run_id: data.run_id, runner_run_id, webhook_url: webhookUrl },
+    'Triggering n8n workflow'
+  );
 
   try {
     const response = await fetch(webhookUrl, {

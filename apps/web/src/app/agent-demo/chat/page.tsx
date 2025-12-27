@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { Bot, Send, Settings2, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Bot, Star, Send, Settings2 } from 'lucide-react';
-import { useAgentDemoStore, type ChatMessage } from '@/store/agentDemoStore';
+import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { type ChatMessage, useAgentDemoStore } from '@/store/agentDemoStore';
 
 // Star rating component
 function StarRating({
@@ -38,7 +37,10 @@ function StarRating({
           type="button"
           aria-label={`Rate ${star} stars`}
         >
-          <Star className="h-4 w-4" fill={(hoverRating || rating || 0) >= star ? 'currentColor' : 'none'} />
+          <Star
+            className="h-4 w-4"
+            fill={(hoverRating || rating || 0) >= star ? 'currentColor' : 'none'}
+          />
         </button>
       ))}
       {rating && <span className="ml-2 text-xs text-green-600">Feedback recorded</span>}
@@ -57,16 +59,10 @@ function ChatMessageRow({
   const isUser = message.role === 'user';
 
   return (
-    <div className={cn(
-      'border-b py-4',
-      isUser ? 'bg-muted/30' : 'bg-background'
-    )}>
+    <div className={cn('border-b py-4', isUser ? 'bg-muted/30' : 'bg-background')}>
       <div className="mx-auto max-w-3xl px-4">
         <div className="mb-2 flex items-center justify-between">
-          <span className={cn(
-            'text-sm font-medium',
-            isUser ? 'text-foreground' : 'text-primary'
-          )}>
+          <span className={cn('text-sm font-medium', isUser ? 'text-foreground' : 'text-primary')}>
             {isUser ? 'You' : 'Bot'}
           </span>
           <span className="text-xs text-muted-foreground">{message.timestamp}</span>
@@ -128,11 +124,7 @@ export default function AgentDemoChatPage() {
         <Badge variant="secondary" className="text-xs">
           Deployed: v{deployedVersion} ({deployedCommitHash})
         </Badge>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push('/agent-demo/optimiser')}
-        >
+        <Button variant="outline" size="sm" onClick={() => router.push('/agent-demo/optimiser')}>
           <Settings2 className="h-4 w-4" />
           Agent Optimiser
         </Button>
@@ -145,7 +137,9 @@ export default function AgentDemoChatPage() {
             <Bot className="h-10 w-10" />
             <div>
               <h3 className="font-medium text-foreground">Start a conversation</h3>
-              <p className="text-sm">Test the agent&apos;s responses. Your ratings help improve it.</p>
+              <p className="text-sm">
+                Test the agent&apos;s responses. Your ratings help improve it.
+              </p>
             </div>
           </div>
         ) : (

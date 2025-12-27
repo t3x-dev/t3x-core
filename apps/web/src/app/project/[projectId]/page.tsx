@@ -1,20 +1,18 @@
 'use client';
 
+import { redirect, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useParams, redirect } from 'next/navigation';
+import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
-import { useProjectStore } from '@/store/projectStore';
-import { useCanvasStore } from '@/store/canvasStore';
-import { LoadingSpinner, ErrorMessage } from '@/components/ApiStatus';
 import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/store/canvasStore';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const project = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId),
-  );
+  const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
   const [mode, setMode] = useState<'editor' | 'execution'>('editor');
 
   // Canvas store for loading project data

@@ -12,10 +12,10 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 export { canonText, hashText, sha256 } from './common';
-export { type DependencyLabel, type NLPToken, type NLPEntity, type NLPSentence, type NLPAnalysis, type NLPProvider, NLPProviderError, POS_TAG_MAPPING, normalizePosTag, normalizeDependencyLabel, type EmbeddingProvider, EmbeddingProviderError, cosineSimilarity, GoogleAIEmbeddingProvider, createGoogleAIEmbeddingProvider, type GoogleAIEmbeddingConfig, CachedEmbeddingProvider, createCachedEmbeddingProvider, type CachedEmbeddingConfig, ClaudeProvider, createClaudeProvider, type ClaudeProviderConfig, } from './providers';
+export { calculateDiffStats, createDiffEngine, DiffEngine, type DiffEngineConfig, type DiffResult, type DiffSegment, type DiffStats, DiffType, type SegmentDiff, type SegmentMatch, } from './diff';
+export { createEmptyRing1, createEmptyRing2, createEmptyRing3, createEmptyRingOutput, createPolarityRuleEngine, createRingExtractor, type ExtractorConfig, type Facet, type FacetType, type Keyword, type Polarity, type PolarityRule, PolarityRuleEngine, type PosTag, type PreferenceRelation, type Ring1Output, type Ring2Output, type Ring3Output, RingExtractor, type RingOutput, type Segment, } from './extractors';
 export { type LLMGenerateOptions, type LLMProvider, LLMProviderError, } from './llm';
-export { type PosTag, type Polarity, type FacetType, type Keyword, type Ring1Output, type Facet, type Ring2Output, type Segment, type Ring3Output, type RingOutput, createEmptyRing1, createEmptyRing2, createEmptyRing3, createEmptyRingOutput, type PolarityRule, type PreferenceRelation, PolarityRuleEngine, createPolarityRuleEngine, type ExtractorConfig, RingExtractor, createRingExtractor, } from './extractors';
-export { DiffType, type SegmentMatch, type SegmentDiff, type DiffSegment, type DiffResult, type DiffStats, calculateDiffStats, type DiffEngineConfig, DiffEngine, createDiffEngine, } from './diff';
-export { ConflictType, type MergeSource, type MergeFacet, type AutoMergedFacet, type MergeConflict, type MergeResult, type MergeStats, type MergeEngineOptions, MergeEngine, createMergeEngine, } from './merge';
+export { type AutoMergedFacet, ConflictType, createMergeEngine, type MergeConflict, MergeEngine, type MergeEngineOptions, type MergeFacet, type MergeResult, type MergeSource, type MergeStats, } from './merge';
+export { type CachedEmbeddingConfig, CachedEmbeddingProvider, ClaudeProvider, type ClaudeProviderConfig, cosineSimilarity, createCachedEmbeddingProvider, createClaudeProvider, createGoogleAIEmbeddingProvider, type DependencyLabel, type EmbeddingProvider, EmbeddingProviderError, type GoogleAIEmbeddingConfig, GoogleAIEmbeddingProvider, type NLPAnalysis, type NLPEntity, type NLPProvider, NLPProviderError, type NLPSentence, type NLPToken, normalizeDependencyLabel, normalizePosTag, POS_TAG_MAPPING, } from './providers';
 export * from './storage';
 //# sourceMappingURL=index.d.ts.map

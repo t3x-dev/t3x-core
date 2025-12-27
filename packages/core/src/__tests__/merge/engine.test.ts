@@ -5,8 +5,8 @@
  * Ported from Python tests/test_merge_agent.py
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { type MergeEngine, ConflictType, createMergeEngine } from '../../merge';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { ConflictType, createMergeEngine, type MergeEngine } from '../../merge';
 import { StubLLMProvider, testFacets } from '../setup';
 
 describe('MergeEngine', () => {
@@ -154,7 +154,9 @@ describe('MergeEngine', () => {
 
       expect(resolved.status).toBe('clean');
       expect(resolved.conflicts).toHaveLength(0);
-      expect(resolved.autoMerged.find((m) => m.facet === 'budget')?.mergedText).toBe('Budget: $1750');
+      expect(resolved.autoMerged.find((m) => m.facet === 'budget')?.mergedText).toBe(
+        'Budget: $1750'
+      );
       expect(resolved.autoMerged.find((m) => m.facet === 'budget')?.source).toBe('manual');
     });
 
@@ -206,19 +208,13 @@ describe('MergeEngine', () => {
 
   describe('Statistics', () => {
     it('calculates correct merge statistics', async () => {
-      const baseFacets = [
-        testFacets.goal('Goal 1'),
-        testFacets.goal('Goal 2'),
-      ];
+      const baseFacets = [testFacets.goal('Goal 1'), testFacets.goal('Goal 2')];
       const sourceFacets = [
         testFacets.goal('Goal 1'),
         testFacets.goal('Goal 2 modified'),
         testFacets.preference('New preference'),
       ];
-      const targetFacets = [
-        testFacets.goal('Goal 1'),
-        testFacets.goal('Goal 2'),
-      ];
+      const targetFacets = [testFacets.goal('Goal 1'), testFacets.goal('Goal 2')];
 
       const result = await mergeEngine.merge(baseFacets, sourceFacets, targetFacets);
 
@@ -229,10 +225,7 @@ describe('MergeEngine', () => {
 
     it('tracks source counts correctly', async () => {
       const baseFacets = [testFacets.goal('Base goal')];
-      const sourceFacets = [
-        testFacets.goal('Base goal'),
-        testFacets.preference('Source pref'),
-      ];
+      const sourceFacets = [testFacets.goal('Base goal'), testFacets.preference('Source pref')];
       const targetFacets = [
         testFacets.goal('Base goal'),
         { ...testFacets.goal('Target goal'), facet: 'target-goal' },

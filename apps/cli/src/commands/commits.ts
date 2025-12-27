@@ -1,23 +1,13 @@
 /**
  * Commit Commands
  */
-import { Command } from 'commander';
+
 import { createClient } from '@t3x/api-client';
-import {
-  printTable,
-  success,
-  error,
-  createSpinner,
-  formatDate,
-  truncate,
-  getApiUrl,
-} from '../utils.js';
+import type { Command } from 'commander';
+import { createSpinner, error, formatDate, getApiUrl, printTable, truncate } from '../utils.js';
 
 export function registerCommitCommands(program: Command): void {
-  const commits = program
-    .command('commits')
-    .alias('c')
-    .description('Manage commits');
+  const commits = program.command('commits').alias('c').description('Manage commits');
 
   // List commits
   commits
@@ -34,14 +24,10 @@ export function registerCommitCommands(program: Command): void {
 
       try {
         const client = createClient({ baseUrl: getApiUrl() });
-        const result = await client.listCommits(
-          options.project,
-          options.branch,
-          {
-            limit: parseInt(options.limit, 10),
-            offset: parseInt(options.offset, 10),
-          }
-        );
+        const result = await client.listCommits(options.project, options.branch, {
+          limit: parseInt(options.limit, 10),
+          offset: parseInt(options.offset, 10),
+        });
 
         spinner.stop();
 

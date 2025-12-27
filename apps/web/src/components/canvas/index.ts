@@ -12,27 +12,23 @@
  * - DeletionConfirmDialog: Confirmation dialog for deletions
  */
 
-// Main workspace
-export { default as CanvasWorkspace } from './CanvasWorkspace'
-
 // Node definitions
-export { canvasNodeTypes, LEAF_TYPES } from './CanvasNodes'
-
-// Modal
-export { NodeModal } from './NodeModal'
-export type { NodeQuickAction } from './NodeModal'
+export { canvasNodeTypes, LEAF_TYPES } from './CanvasNodes';
+// Main workspace
+export { default as CanvasWorkspace } from './CanvasWorkspace';
+export { default as ConstraintsPanel } from './ConstraintsPanel';
+// Dialogs
+export { DeletionConfirmDialog } from './DeletionConfirmDialog';
 
 // Panels
-export { LeafPanel } from './LeafPanel'
-export { default as ConstraintsPanel } from './ConstraintsPanel'
-
+export { LeafPanel } from './LeafPanel';
+export { default as ManageMode } from './ManageMode';
+export type { NodeQuickAction } from './NodeModal';
+// Modal
+export { NodeModal } from './NodeModal';
 // Shared components
 export {
-  SelectableTextBlock,
   PendingSourceEditor,
-  SourceExcerptViewer
-} from './SelectableTextBlock'
-export { default as ManageMode } from './ManageMode'
-
-// Dialogs
-export { DeletionConfirmDialog } from './DeletionConfirmDialog'
+  SelectableTextBlock,
+  SourceExcerptViewer,
+} from './SelectableTextBlock';

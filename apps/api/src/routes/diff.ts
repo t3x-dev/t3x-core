@@ -4,22 +4,19 @@
  * POST /v1/diff/two-way - Calculate two-way semantic diff
  * POST /v1/diff/three-way - Calculate three-way semantic diff
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
+
 import {
-  findTurnByHash,
-  findCommitByHash,
-  findSegmentEmbeddingsByTurn,
-} from '@t3x/storage/pglite';
-import {
+  createCachedEmbeddingProvider,
   createDiffEngine,
   createGoogleAIEmbeddingProvider,
-  createCachedEmbeddingProvider,
-  EmbeddingProviderError,
   type DiffSegment,
+  EmbeddingProviderError,
   type RingOutput,
 } from '@t3x/core';
+import { findCommitByHash, findSegmentEmbeddingsByTurn, findTurnByHash } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
 // Types
@@ -38,10 +35,7 @@ type ExtractResult =
 /**
  * Extract segments from turn's Ring 3
  */
-async function extractSegmentsFromTurn(
-  db: DBType,
-  turnHash: string
-): Promise<ExtractResult> {
+async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<ExtractResult> {
   const turn = await findTurnByHash(db, turnHash);
   if (!turn) {
     return { ok: false, error: 'not_found', message: `Turn ${turnHash} not found` };
@@ -184,10 +178,20 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const targetResult = await extractSegmentsFromTurn(db, targetTurnHash);
 
     if (!baseResult.ok) {
-      return jsonError(c, getErrorCode(baseResult.error), baseResult.message, getErrorStatus(baseResult.error));
+      return jsonError(
+        c,
+        getErrorCode(baseResult.error),
+        baseResult.message,
+        getErrorStatus(baseResult.error)
+      );
     }
     if (!targetResult.ok) {
-      return jsonError(c, getErrorCode(targetResult.error), targetResult.message, getErrorStatus(targetResult.error));
+      return jsonError(
+        c,
+        getErrorCode(targetResult.error),
+        targetResult.message,
+        getErrorStatus(targetResult.error)
+      );
     }
 
     baseId = baseResult.id;
@@ -204,10 +208,20 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const targetResult = await extractSegmentsFromTurn(db, body.targetTurnHash);
 
     if (!baseResult.ok) {
-      return jsonError(c, getErrorCode(baseResult.error), baseResult.message, getErrorStatus(baseResult.error));
+      return jsonError(
+        c,
+        getErrorCode(baseResult.error),
+        baseResult.message,
+        getErrorStatus(baseResult.error)
+      );
     }
     if (!targetResult.ok) {
-      return jsonError(c, getErrorCode(targetResult.error), targetResult.message, getErrorStatus(targetResult.error));
+      return jsonError(
+        c,
+        getErrorCode(targetResult.error),
+        targetResult.message,
+        getErrorStatus(targetResult.error)
+      );
     }
 
     baseId = baseResult.id;
@@ -334,7 +348,12 @@ diffRoutes.post('/v1/diff/three-way', async (c) => {
       ['target', targetResult],
     ] as const) {
       if (!result.ok) {
-        return jsonError(c, getErrorCode(result.error), `${name}: ${result.message}`, getErrorStatus(result.error));
+        return jsonError(
+          c,
+          getErrorCode(result.error),
+          `${name}: ${result.message}`,
+          getErrorStatus(result.error)
+        );
       }
     }
 

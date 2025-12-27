@@ -1,15 +1,15 @@
-'use client'
+'use client';
 
-import { type DragEvent } from 'react'
-import { MessageSquare } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { NodeKind } from '@/types/nodes'
+import { MessageSquare } from 'lucide-react';
+import type { DragEvent } from 'react';
+import { cn } from '@/lib/utils';
+import type { NodeKind } from '@/types/nodes';
 
 interface PaletteItem {
-  kind: NodeKind
-  label: string
-  description: string
-  icon: React.ReactNode
+  kind: NodeKind;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
 }
 
 const paletteItems: PaletteItem[] = [
@@ -19,13 +19,13 @@ const paletteItems: PaletteItem[] = [
     description: 'Conversation unit',
     icon: <MessageSquare className="h-4 w-4" />,
   },
-]
+];
 
 function PaletteNode({ item }: { item: PaletteItem }) {
   const onDragStart = (event: DragEvent<HTMLDivElement>) => {
-    event.dataTransfer.setData('application/reactflow', item.kind)
-    event.dataTransfer.effectAllowed = 'move'
-  }
+    event.dataTransfer.setData('application/reactflow', item.kind);
+    event.dataTransfer.effectAllowed = 'move';
+  };
 
   return (
     <div
@@ -40,10 +40,12 @@ function PaletteNode({ item }: { item: PaletteItem }) {
         'select-none'
       )}
     >
-      <div className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-md',
-        'bg-primary/10 text-primary'
-      )}>
+      <div
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-md',
+          'bg-primary/10 text-primary'
+        )}
+      >
         {item.icon}
       </div>
       <div className="flex-1 min-w-0">
@@ -51,17 +53,19 @@ function PaletteNode({ item }: { item: PaletteItem }) {
         <div className="text-xs text-muted-foreground truncate">{item.description}</div>
       </div>
     </div>
-  )
+  );
 }
 
 export function NodePalette() {
   return (
-    <div className={cn(
-      'absolute left-4 top-20 z-10 w-48',
-      'flex flex-col gap-2 p-3',
-      'bg-background/95 backdrop-blur-sm',
-      'border border-border/50 rounded-xl shadow-lg'
-    )}>
+    <div
+      className={cn(
+        'absolute left-4 top-20 z-10 w-48',
+        'flex flex-col gap-2 p-3',
+        'bg-background/95 backdrop-blur-sm',
+        'border border-border/50 rounded-xl shadow-lg'
+      )}
+    >
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
         Nodes
       </div>
@@ -69,5 +73,5 @@ export function NodePalette() {
         <PaletteNode key={item.kind} item={item} />
       ))}
     </div>
-  )
+  );
 }

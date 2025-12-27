@@ -1,26 +1,29 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   Bot,
-  Star,
-  GitCommit,
-  Rocket,
-  MessageSquare,
-  Sparkles,
   Check,
   Copy,
-  RefreshCw,
-  ArrowRight,
-  X,
+  GitCommit,
   Loader2,
+  MessageSquare,
+  Rocket,
+  Sparkles,
+  Star,
+  X,
 } from 'lucide-react';
-import { useAgentDemoStore, type SandboxCommit, type DeploymentRecord } from '@/store/agentDemoStore';
-import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import {
+  type DeploymentRecord,
+  type SandboxCommit,
+  useAgentDemoStore,
+} from '@/store/agentDemoStore';
 
 // Commit detail modal
 function CommitDetailModal({
@@ -86,7 +89,10 @@ function CommitDetailModal({
 
           <div className="flex justify-end border-t pt-4">
             {isDeployed ? (
-              <Badge variant="outline" className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600">
+              <Badge
+                variant="outline"
+                className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600"
+              >
                 <Check className="h-3.5 w-3.5" />
                 Currently Deployed
               </Badge>
@@ -156,16 +162,15 @@ export default function AgentDemoOptimiserPage() {
             <GitCommit className="h-3.5 w-3.5" />
             Branch: {sandboxBranch}
           </span>
-          <span>Head: v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})</span>
+          <span>
+            Head: v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})
+          </span>
           <span className="flex items-center gap-2 font-medium text-green-600">
             <Rocket className="h-3.5 w-3.5" />
             Deployed: v{deployedVersion} ({deployedCommitHash})
           </span>
         </div>
-        <Button
-          className="ml-auto gap-2"
-          onClick={() => router.push('/agent-demo/chat')}
-        >
+        <Button className="ml-auto gap-2" onClick={() => router.push('/agent-demo/chat')}>
           <MessageSquare className="h-4 w-4" />
           Open Chat
         </Button>
@@ -182,7 +187,9 @@ export default function AgentDemoOptimiserPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <span className="block text-2xl font-semibold">{feedbackSummary.conversationCount}</span>
+                  <span className="block text-2xl font-semibold">
+                    {feedbackSummary.conversationCount}
+                  </span>
                   <span className="text-xs text-muted-foreground">Conversations</span>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
@@ -274,22 +281,31 @@ export default function AgentDemoOptimiserPage() {
                   onClick={() => setSelectedCommit(commit)}
                 >
                   <div className="flex items-start gap-3">
-                    <GitCommit className={cn(
-                      'mt-0.5 h-4 w-4 shrink-0',
-                      isDeployed ? 'text-green-600' : 'text-muted-foreground'
-                    )} />
+                    <GitCommit
+                      className={cn(
+                        'mt-0.5 h-4 w-4 shrink-0',
+                        isDeployed ? 'text-green-600' : 'text-muted-foreground'
+                      )}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">v{commit.version}-sandbox</span>
                         <code className="text-xs text-muted-foreground">{commit.commitHash}</code>
                         {isDeployed && (
-                          <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600 text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className="border-green-500/30 bg-green-500/10 text-green-600 text-[10px]"
+                          >
                             deployed
                           </Badge>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-muted-foreground line-clamp-1">{commit.description}</p>
-                      <span className="mt-1 block text-xs text-muted-foreground">{commit.createdAt}</span>
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                        {commit.description}
+                      </p>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {commit.createdAt}
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -314,7 +330,9 @@ export default function AgentDemoOptimiserPage() {
                     variant="outline"
                     className={cn(
                       'ml-auto text-[10px]',
-                      deploymentStatusColors[deployment.status as keyof typeof deploymentStatusColors]
+                      deploymentStatusColors[
+                        deployment.status as keyof typeof deploymentStatusColors
+                      ]
                     )}
                   >
                     {deployment.status}
