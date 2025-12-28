@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { Sidebar } from '@/components/Sidebar';
 import { showToast } from '@/components/Toast';
 import { Toaster } from '@/components/ui/sonner';
@@ -26,6 +27,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
       <Toaster position="bottom-right" richColors closeButton />
+      <CommandPalette />
     </div>
   );
 }

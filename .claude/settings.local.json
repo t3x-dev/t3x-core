@@ -118,7 +118,9 @@
       "WebFetch(domain:vercel.com)",
       "Bash(pnpm lint:*)",
       "Bash(pnpm biome check:*)",
-      "Bash(pnpm biome lint:*)"
+      "Bash(pnpm biome lint:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm --filter t3x-webui build:*)"
     ],
     "deny": [],
     "ask": []

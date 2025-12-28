@@ -1,8 +1,9 @@
 'use client';
 
-import { BarChart3, FileText, Github, Home, Rocket } from 'lucide-react';
+import { BarChart3, Command, FileText, Github, Home, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -149,6 +150,29 @@ export function Sidebar() {
         <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-background to-muted/50 shadow-sm ring-1 ring-border/50">
           <LogoIcon />
         </div>
+
+        {/* Command Palette Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => {
+                // Simulate Cmd+K keypress to open command palette
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+              }}
+              className={cn(
+                navItemClass,
+                'mb-4 bg-muted/50 ring-1 ring-border/50'
+              )}
+              aria-label="Open command palette"
+            >
+              <Command className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
+            <span>Command Palette</span>
+            <Kbd>⌘K</Kbd>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Main Navigation */}
         <nav className="flex flex-1 flex-col items-center gap-1.5">
