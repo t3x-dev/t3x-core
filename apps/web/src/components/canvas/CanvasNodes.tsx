@@ -1,5 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Handle, NodeToolbar, Position } from '@xyflow/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle,
   ChevronDown,
@@ -23,6 +24,7 @@ import type { ComponentType } from 'react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { nodeEnter, springConfig } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, LeafType } from '@/types/nodes';
@@ -223,11 +225,15 @@ function UnitNode(props: Props) {
       )}
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
-      <div
+      <motion.div
+        variants={nodeEnter}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        whileHover={{ scale: 1.015, transition: springConfig.smooth }}
+        whileTap={{ scale: 0.995 }}
         className={cn(
           'group w-72 rounded-2xl border-2 overflow-visible text-slate-900',
-          'transition-all duration-200 ease-out',
-          'hover:scale-[1.01] hover:shadow-lg',
           styles.bg,
           styles.border,
           styles.shadow,
@@ -237,6 +243,7 @@ function UnitNode(props: Props) {
           data.highlightMode === 'branch' && 'ring-2 ring-amber-500/50 ring-offset-2',
           expanded && 'cursor-text'
         )}
+        style={{ willChange: 'transform' }}
       >
         {/* Conversation Section (Top) */}
         <div className="px-4 pt-4 pb-3 bg-white/70 backdrop-blur-sm rounded-t-[14px]">
@@ -344,14 +351,22 @@ function UnitNode(props: Props) {
         </div>
 
         {/* Expanded Dropdown */}
-        {expanded && (
-          <div className="mt-2 pt-2 border-t border-black/5 px-4 pb-3 nodrag">
-            <p className="text-[0.82rem] text-slate-600 leading-relaxed max-h-20 overflow-y-auto m-0">
-              {data.summary || (isStaging ? 'Staging - click to edit' : 'No summary recorded.')}
-            </p>
-          </div>
-        )}
-      </div>
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="mt-2 pt-2 border-t border-black/5 px-4 pb-3 nodrag overflow-hidden"
+            >
+              <p className="text-[0.82rem] text-slate-600 leading-relaxed max-h-20 overflow-y-auto m-0">
+                {data.summary || (isStaging ? 'Staging - click to edit' : 'No summary recorded.')}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
 
@@ -450,15 +465,23 @@ function LeafNode(props: Props) {
   return (
     <>
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
-      <div
+      <motion.div
+        variants={nodeEnter}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        whileHover={{
+          scale: 1.03,
+          boxShadow: '0 4px 16px -4px rgba(99,102,241,0.2), 0 0 0 1px rgba(99,102,241,0.1)',
+          transition: springConfig.smooth
+        }}
+        whileTap={{ scale: 0.98 }}
         className={cn(
           'w-40 bg-white border border-slate-200 rounded-xl',
           'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)]',
-          'transition-all duration-200 ease-out',
-          'hover:scale-[1.02] hover:shadow-[0_4px_16px_-4px_rgba(99,102,241,0.2),0_0_0_1px_rgba(99,102,241,0.1)]',
-          'hover:border-indigo-300',
           selected && 'border-indigo-400 ring-2 ring-indigo-500/20 ring-offset-2'
         )}
+        style={{ willChange: 'transform' }}
       >
         <div className="flex items-center gap-2.5 px-3 py-3">
           <div
@@ -486,7 +509,7 @@ function LeafNode(props: Props) {
             {isRunnerLeaf && <LeafStatusIndicator leafType={data.leafType!} data={data} />}
           </div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
