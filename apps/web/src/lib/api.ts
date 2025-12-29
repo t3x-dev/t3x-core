@@ -1582,13 +1582,47 @@ export async function createEngineRun(input: CreateEngineRunInput): Promise<{
   return data.data!;
 }
 
+// Raw run from Engine API (camelCase with JSON strings)
+interface EngineRunRaw {
+  runId: string;
+  projectId: string | null;
+  runnerRunId: string | null;
+  commitRef: string | null;
+  leafJson: string | null;
+  inputsJson: string | null;
+  workflowJson: string | null;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  resultJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Parse raw Engine run (camelCase + JSON strings) to frontend format (snake_case + parsed)
+ */
+function parseEngineRun(raw: EngineRunRaw): EngineRun {
+  return {
+    run_id: raw.runId,
+    project_id: raw.projectId,
+    runner_run_id: raw.runnerRunId,
+    commit_ref: raw.commitRef,
+    leaf: safeJsonParse(raw.leafJson, null),
+    inputs: safeJsonParse(raw.inputsJson, null),
+    workflow: safeJsonParse(raw.workflowJson, null),
+    status: raw.status,
+    result: safeJsonParse(raw.resultJson, null),
+    created_at: raw.createdAt,
+    updated_at: raw.updatedAt,
+  };
+}
+
 /**
  * Get a run by ID from Engine
  */
 export async function getEngineRun(runId: string): Promise<EngineRun> {
   const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`);
-  const data = await handleResponse<ApiResponse<EngineRun>>(res);
-  return data.data!;
+  const data = await handleResponse<EngineRunRaw>(res);
+  return parseEngineRun(data);
 }
 
 /**
@@ -1607,8 +1641,12 @@ export async function listEngineRuns(options?: {
     offset: options?.offset ?? 0,
   });
   const res = await fetchWithTimeout(`${API_V1}/runs?${query}`);
-  const data = await handleResponse<ApiResponse<EngineRunListData>>(res);
-  return data.data!;
+  const data = await handleResponse<{ runs: EngineRunRaw[]; limit: number; offset: number }>(res);
+  return {
+    runs: data.runs.map(parseEngineRun),
+    limit: data.limit,
+    offset: data.offset,
+  };
 }
 
 export async function* chatStream(

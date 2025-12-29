@@ -14,8 +14,8 @@ const logger = pino({
   },
 });
 
-// n8n webhook base URL
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook';
+// n8n webhook base URL (used when webhook_id is not a full URL)
+const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_URL || 'http://n8n:5678/webhook';
 
 /**
  * Trigger an n8n workflow via webhook
@@ -34,7 +34,15 @@ export async function triggerN8nWorkflow(
     return;
   }
 
-  const webhookUrl = `${N8N_WEBHOOK_URL}/${webhookId}`;
+  // If webhook_id is a full URL, use it directly (with Docker host replacement)
+  // Otherwise, append it to the base URL
+  let webhookUrl: string;
+  if (webhookId.startsWith('http://') || webhookId.startsWith('https://')) {
+    // Replace localhost with Docker service name for container networking
+    webhookUrl = webhookId.replace('localhost:5678', 'n8n:5678').replace('127.0.0.1:5678', 'n8n:5678');
+  } else {
+    webhookUrl = `${N8N_WEBHOOK_BASE}/${webhookId}`;
+  }
 
   const payload = {
     run_id: data.run_id,
