@@ -12,8 +12,8 @@
  *
  * Does not use sentiment dictionaries (VADER/SentiWordNet), ensuring determinism.
  */
-import type { NLPToken } from "../providers/nlp";
-import type { Polarity } from "./types";
+import type { NLPToken } from '../providers/nlp';
+import type { Polarity } from './types';
 /**
  * Polarity rule entry
  */
@@ -56,7 +56,7 @@ export declare class PolarityRuleEngine {
      * @param tokens - All tokens in the document (for negation lookup)
      * @returns Polarity value (-1, 0, or 1)
      */
-    getPolarity(objectToken: NLPToken, verbToken: NLPToken, tokens: NLPToken[]): Polarity;
+    getPolarity(_objectToken: NLPToken, verbToken: NLPToken, tokens: NLPToken[]): Polarity;
     /**
      * Check if a verb token has a negation modifier
      *

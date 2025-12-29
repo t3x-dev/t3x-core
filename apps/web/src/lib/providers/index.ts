@@ -7,17 +7,17 @@
 
 // Re-export from @t3x/core
 export {
-  // Embedding providers
-  GoogleAIEmbeddingProvider,
-  createGoogleAIEmbeddingProvider,
-  type GoogleAIEmbeddingConfig,
-  CachedEmbeddingProvider,
-  createCachedEmbeddingProvider,
   type CachedEmbeddingConfig,
-  EmbeddingProviderError,
-  cosineSimilarity,
+  CachedEmbeddingProvider,
   // LLM providers
   ClaudeProvider,
-  createClaudeProvider,
   type ClaudeProviderConfig,
+  cosineSimilarity,
+  createCachedEmbeddingProvider,
+  createClaudeProvider,
+  createGoogleAIEmbeddingProvider,
+  EmbeddingProviderError,
+  type GoogleAIEmbeddingConfig,
+  // Embedding providers
+  GoogleAIEmbeddingProvider,
 } from '@t3x/core';

@@ -1,70 +1,86 @@
-import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react'
-import type { SemanticEntry } from '../types/semantic'
+import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import type { SemanticEntry } from '../types/semantic';
 
 const stageConfig = {
   commit: {
     label: 'Commit',
     Icon: GitCommit,
-    pillClass: 'pill pill-commit',
+    variant: 'default' as const,
+    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/15',
   },
   draft: {
     label: 'Draft',
     Icon: GitBranch,
-    pillClass: 'pill pill-draft',
+    variant: 'outline' as const,
+    className: 'bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/15',
   },
   turn: {
     label: 'Conversation',
     Icon: MessageSquare,
-    pillClass: 'pill pill-turn',
+    variant: 'secondary' as const,
+    className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/15',
   },
-} as const
+} as const;
 
 interface SemanticCardProps {
-  entry: SemanticEntry
+  entry: SemanticEntry;
 }
 
 export function SemanticCard({ entry }: SemanticCardProps) {
-  const config = stageConfig[entry.stage]
-  const Icon = config.Icon
+  const config = stageConfig[entry.stage];
+  const Icon = config.Icon;
 
   return (
-    <article className="semantic-card">
-      <header className="semantic-card__header">
-        <div>
-          <div className="semantic-card__id">
-            <span>{entry.id}</span>
-            <span className={config.pillClass}>
-              <Icon size={14} />
-              {config.label}
-            </span>
+    <Card className="transition-shadow hover:shadow-md">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-muted-foreground">{entry.id}</code>
+              <Badge variant="outline" className={cn('gap-1', config.className)}>
+                <Icon className="h-3 w-3" />
+                {config.label}
+              </Badge>
+            </div>
+            <h3 className="font-semibold leading-tight">{entry.title}</h3>
           </div>
-          <h3>{entry.title}</h3>
+          <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
+            <span>{entry.updatedAt}</span>
+            <span className="text-right">{entry.bridgePrompt}</span>
+          </div>
         </div>
-        <div className="semantic-card__meta">
-          <span>{entry.updatedAt}</span>
-          <span>{entry.bridgePrompt}</span>
-        </div>
-      </header>
+      </CardHeader>
 
-      <p className="semantic-card__summary">{entry.summary}</p>
+      <CardContent className="pb-3">
+        <p className="text-sm text-muted-foreground line-clamp-2">{entry.summary}</p>
 
-      <div className="semantic-card__facets">
-        {entry.facets.map((facet) => (
-          <span key={facet}>{facet}</span>
-        ))}
-      </div>
+        {entry.facets.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {entry.facets.map((facet) => (
+              <Badge key={facet} variant="secondary" className="text-xs">
+                {facet}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
 
-      <footer className="semantic-card__footer">
-        <div className="semantic-card__tags">
+      <CardFooter className="justify-between pt-0">
+        <div className="flex flex-wrap gap-1">
           {entry.tags.map((tag) => (
-            <span key={tag}>{tag}</span>
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
           ))}
         </div>
-        <div className="semantic-card__evidence">
-          <Sparkles size={14} />
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5" />
           <span>{entry.evidenceCount} evidence</span>
         </div>
-      </footer>
-    </article>
-  )
+      </CardFooter>
+    </Card>
+  );
 }

@@ -1,6 +1,6 @@
 /**
  * Merge exports
  */
-export { ConflictType, type MergeSource, type MergeFacet, type AutoMergedFacet, type MergeConflict, type MergeResult, type MergeStats, } from './types';
-export { type MergeEngineOptions, MergeEngine, createMergeEngine, } from './engine';
+export { createMergeEngine, MergeEngine, type MergeEngineOptions, } from './engine';
+export { type AutoMergedFacet, ConflictType, type MergeConflict, type MergeFacet, type MergeResult, type MergeSource, type MergeStats, } from './types';
 //# sourceMappingURL=index.d.ts.map

@@ -4,10 +4,19 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
-import { eq, desc, sql } from 'drizzle-orm';
-import { projects, conversations, turns, commits, branches, drafts, type Project, type NewProject } from '../schema';
-import { generateProjectId, isoNow } from '@t3x/core';
+import { generateProjectId } from '@t3x/core';
+import { desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import {
+  branches,
+  commits,
+  conversations,
+  drafts,
+  type NewProject,
+  type Project,
+  projects,
+  turns,
+} from '../schema';
 
 export interface CreateProjectInput {
   name: string;
@@ -34,20 +43,20 @@ export interface ProjectWithStats extends Project {
 /**
  * Insert a new project
  */
-export async function insertProject(
-  db: AnyDB,
-  input: CreateProjectInput
-): Promise<Project> {
+export async function insertProject(db: AnyDB, input: CreateProjectInput): Promise<Project> {
   const projectId = generateProjectId();
   const createdAt = new Date();
   const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 
-  const [project] = await db.insert(projects).values({
-    projectId,
-    name: input.name,
-    createdAt,
-    metadataJson,
-  }).returning();
+  const [project] = await db
+    .insert(projects)
+    .values({
+      projectId,
+      name: input.name,
+      createdAt,
+      metadataJson,
+    })
+    .returning();
 
   return project;
 }
@@ -55,10 +64,7 @@ export async function insertProject(
 /**
  * Find project by ID
  */
-export async function findProjectById(
-  db: AnyDB,
-  projectId: string
-): Promise<Project | null> {
+export async function findProjectById(db: AnyDB, projectId: string): Promise<Project | null> {
   const [project] = await db
     .select()
     .from(projects)
@@ -78,12 +84,7 @@ export async function findProjects(
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
-  return db
-    .select()
-    .from(projects)
-    .orderBy(desc(projects.createdAt))
-    .limit(limit)
-    .offset(offset);
+  return db.select().from(projects).orderBy(desc(projects.createdAt)).limit(limit).offset(offset);
 }
 
 /**
@@ -117,14 +118,8 @@ export async function updateProject(
 /**
  * Delete a project
  */
-export async function deleteProject(
-  db: AnyDB,
-  projectId: string
-): Promise<boolean> {
-  const result = await db
-    .delete(projects)
-    .where(eq(projects.projectId, projectId))
-    .returning();
+export async function deleteProject(db: AnyDB, projectId: string): Promise<boolean> {
+  const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();
 
   return result.length > 0;
 }

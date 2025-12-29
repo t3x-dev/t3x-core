@@ -4,21 +4,20 @@
  * Grey-box agent evaluation endpoints.
  * Uses @t3x/runner for evaluation logic.
  */
-import { Hono } from 'hono';
+
 import {
-  observer,
-  evalEngine,
-  AgentInputSchema,
   AgentConfigSchema,
-  EvalRequestSchema,
-  TestStepSchema,
-  loadSuite,
-  loadSuites,
-  getDefaultSuitesPath,
+  AgentInputSchema,
   caseToTestSteps,
-  type EvalSuite,
+  EvalRequestSchema,
+  evalEngine,
+  getDefaultSuitesPath,
+  loadSuites,
+  observer,
   type SuiteRunResult,
+  TestStepSchema,
 } from '@t3x/runner';
+import { Hono } from 'hono';
 
 export const runnerRoutes = new Hono();
 
@@ -114,11 +113,14 @@ runnerRoutes.post('/runner/run', async (c) => {
       const trace = observer.completeRun(runId, null, 'failed');
 
       console.error(`[runner] Run failed: ${runId}`, errorMsg);
-      return c.json({
-        success: false,
-        error: errorMsg,
-        data: { run_id: runId, trace },
-      }, 500);
+      return c.json(
+        {
+          success: false,
+          error: errorMsg,
+          data: { run_id: runId, trace },
+        },
+        500
+      );
     }
   } catch (error) {
     return c.json({ success: false, error: String(error) }, 400);
@@ -136,21 +138,9 @@ runnerRoutes.post('/runner/run/:id/event', async (c) => {
     const { type, data } = await c.req.json();
 
     if (type === 'llm_call') {
-      observer.recordLLMCall(
-        runId,
-        data.input,
-        data.output,
-        data.model,
-        data.latency_ms
-      );
+      observer.recordLLMCall(runId, data.input, data.output, data.model, data.latency_ms);
     } else if (type === 'tool_call') {
-      observer.recordToolCall(
-        runId,
-        data.tool_name,
-        data.input,
-        data.output,
-        data.latency_ms
-      );
+      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
     } else if (type === 'error') {
       observer.recordError(runId, data.error);
     }
@@ -203,7 +193,9 @@ runnerRoutes.post('/runner/eval', async (c) => {
     }
 
     const result = await evalEngine.evaluate(request);
-    console.log(`[runner] Eval completed: ${result.run_id}, passed=${result.passed}, ${result.passed_steps}/${result.total_steps} steps`);
+    console.log(
+      `[runner] Eval completed: ${result.run_id}, passed=${result.passed}, ${result.passed_steps}/${result.total_steps} steps`
+    );
 
     return c.json({ success: true, data: result });
   } catch (error) {
@@ -298,7 +290,7 @@ runnerRoutes.get('/runner/suites', (c) => {
     const suites = loadSuites(suitesPath);
     return c.json({
       success: true,
-      data: suites.map(s => ({
+      data: suites.map((s) => ({
         id: s.id,
         name: s.name,
         description: s.description,
@@ -319,7 +311,7 @@ runnerRoutes.get('/runner/suites/:id', (c) => {
     const suiteId = c.req.param('id');
     const suitesPath = c.req.query('path') || getDefaultSuitesPath();
     const suites = loadSuites(suitesPath);
-    const suite = suites.find(s => s.id === suiteId);
+    const suite = suites.find((s) => s.id === suiteId);
 
     if (!suite) {
       return c.json({ success: false, error: `Suite not found: ${suiteId}` }, 404);
@@ -339,7 +331,7 @@ runnerRoutes.post('/runner/suites/:id/run', async (c) => {
     const suiteId = c.req.param('id');
     const suitesPath = getDefaultSuitesPath();
     const suites = loadSuites(suitesPath);
-    const suite = suites.find(s => s.id === suiteId);
+    const suite = suites.find((s) => s.id === suiteId);
 
     if (!suite) {
       return c.json({ success: false, error: `Suite not found: ${suiteId}` }, 404);
@@ -395,7 +387,7 @@ runnerRoutes.post('/runner/suites/:id/run', async (c) => {
           case_name: evalCase.name,
           passed: evalResult.passed,
           run_id: runId,
-          assertions: evalResult.results.map(r => ({
+          assertions: evalResult.results.map((r) => ({
             id: r.step_id,
             name: r.step_name,
             passed: r.passed,
@@ -421,7 +413,9 @@ runnerRoutes.post('/runner/suites/:id/run', async (c) => {
       }
     }
 
-    console.log(`[runner] Suite ${suiteId} completed: ${result.passed_cases}/${result.total_cases} passed`);
+    console.log(
+      `[runner] Suite ${suiteId} completed: ${result.passed_cases}/${result.total_cases} passed`
+    );
     return c.json({ success: true, data: result });
   } catch (error) {
     return c.json({ success: false, error: String(error) }, 500);

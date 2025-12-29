@@ -27,52 +27,52 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createMergeEngine = exports.MergeEngine = exports.ConflictType = exports.createDiffEngine = exports.DiffEngine = exports.calculateDiffStats = exports.DiffType = exports.createRingExtractor = exports.RingExtractor = exports.createPolarityRuleEngine = exports.PolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.LLMProviderError = exports.createClaudeProvider = exports.ClaudeProvider = exports.createCachedEmbeddingProvider = exports.CachedEmbeddingProvider = exports.createGoogleAIEmbeddingProvider = exports.GoogleAIEmbeddingProvider = exports.cosineSimilarity = exports.EmbeddingProviderError = exports.normalizeDependencyLabel = exports.normalizePosTag = exports.POS_TAG_MAPPING = exports.NLPProviderError = exports.sha256 = exports.hashText = exports.canonText = void 0;
+exports.POS_TAG_MAPPING = exports.normalizePosTag = exports.normalizeDependencyLabel = exports.NLPProviderError = exports.GoogleAIEmbeddingProvider = exports.EmbeddingProviderError = exports.createGoogleAIEmbeddingProvider = exports.createClaudeProvider = exports.createCachedEmbeddingProvider = exports.cosineSimilarity = exports.ClaudeProvider = exports.CachedEmbeddingProvider = exports.MergeEngine = exports.createMergeEngine = exports.ConflictType = exports.LLMProviderError = exports.RingExtractor = exports.PolarityRuleEngine = exports.createRingExtractor = exports.createPolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.DiffType = exports.DiffEngine = exports.createDiffEngine = exports.calculateDiffStats = exports.sha256 = exports.hashText = exports.canonText = void 0;
 // Common utilities
 var common_1 = require("./common");
 Object.defineProperty(exports, "canonText", { enumerable: true, get: function () { return common_1.canonText; } });
 Object.defineProperty(exports, "hashText", { enumerable: true, get: function () { return common_1.hashText; } });
 Object.defineProperty(exports, "sha256", { enumerable: true, get: function () { return common_1.sha256; } });
-// Provider interfaces and implementations
-var providers_1 = require("./providers");
-Object.defineProperty(exports, "NLPProviderError", { enumerable: true, get: function () { return providers_1.NLPProviderError; } });
-Object.defineProperty(exports, "POS_TAG_MAPPING", { enumerable: true, get: function () { return providers_1.POS_TAG_MAPPING; } });
-Object.defineProperty(exports, "normalizePosTag", { enumerable: true, get: function () { return providers_1.normalizePosTag; } });
-Object.defineProperty(exports, "normalizeDependencyLabel", { enumerable: true, get: function () { return providers_1.normalizeDependencyLabel; } });
-Object.defineProperty(exports, "EmbeddingProviderError", { enumerable: true, get: function () { return providers_1.EmbeddingProviderError; } });
-Object.defineProperty(exports, "cosineSimilarity", { enumerable: true, get: function () { return providers_1.cosineSimilarity; } });
-// Embedding Provider (implementations)
-Object.defineProperty(exports, "GoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.GoogleAIEmbeddingProvider; } });
-Object.defineProperty(exports, "createGoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createGoogleAIEmbeddingProvider; } });
-Object.defineProperty(exports, "CachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.CachedEmbeddingProvider; } });
-Object.defineProperty(exports, "createCachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createCachedEmbeddingProvider; } });
-// LLM Provider (implementations)
-Object.defineProperty(exports, "ClaudeProvider", { enumerable: true, get: function () { return providers_1.ClaudeProvider; } });
-Object.defineProperty(exports, "createClaudeProvider", { enumerable: true, get: function () { return providers_1.createClaudeProvider; } });
-// LLM Provider (interface)
-var llm_1 = require("./llm");
-Object.defineProperty(exports, "LLMProviderError", { enumerable: true, get: function () { return llm_1.LLMProviderError; } });
+// Diff Engine
+var diff_1 = require("./diff");
+Object.defineProperty(exports, "calculateDiffStats", { enumerable: true, get: function () { return diff_1.calculateDiffStats; } });
+Object.defineProperty(exports, "createDiffEngine", { enumerable: true, get: function () { return diff_1.createDiffEngine; } });
+Object.defineProperty(exports, "DiffEngine", { enumerable: true, get: function () { return diff_1.DiffEngine; } });
+Object.defineProperty(exports, "DiffType", { enumerable: true, get: function () { return diff_1.DiffType; } });
 // Extractors (Ring 1/2/3)
 var extractors_1 = require("./extractors");
 Object.defineProperty(exports, "createEmptyRing1", { enumerable: true, get: function () { return extractors_1.createEmptyRing1; } });
 Object.defineProperty(exports, "createEmptyRing2", { enumerable: true, get: function () { return extractors_1.createEmptyRing2; } });
 Object.defineProperty(exports, "createEmptyRing3", { enumerable: true, get: function () { return extractors_1.createEmptyRing3; } });
 Object.defineProperty(exports, "createEmptyRingOutput", { enumerable: true, get: function () { return extractors_1.createEmptyRingOutput; } });
-Object.defineProperty(exports, "PolarityRuleEngine", { enumerable: true, get: function () { return extractors_1.PolarityRuleEngine; } });
 Object.defineProperty(exports, "createPolarityRuleEngine", { enumerable: true, get: function () { return extractors_1.createPolarityRuleEngine; } });
-Object.defineProperty(exports, "RingExtractor", { enumerable: true, get: function () { return extractors_1.RingExtractor; } });
 Object.defineProperty(exports, "createRingExtractor", { enumerable: true, get: function () { return extractors_1.createRingExtractor; } });
-// Diff Engine
-var diff_1 = require("./diff");
-Object.defineProperty(exports, "DiffType", { enumerable: true, get: function () { return diff_1.DiffType; } });
-Object.defineProperty(exports, "calculateDiffStats", { enumerable: true, get: function () { return diff_1.calculateDiffStats; } });
-Object.defineProperty(exports, "DiffEngine", { enumerable: true, get: function () { return diff_1.DiffEngine; } });
-Object.defineProperty(exports, "createDiffEngine", { enumerable: true, get: function () { return diff_1.createDiffEngine; } });
+Object.defineProperty(exports, "PolarityRuleEngine", { enumerable: true, get: function () { return extractors_1.PolarityRuleEngine; } });
+Object.defineProperty(exports, "RingExtractor", { enumerable: true, get: function () { return extractors_1.RingExtractor; } });
+// LLM Provider (interface)
+var llm_1 = require("./llm");
+Object.defineProperty(exports, "LLMProviderError", { enumerable: true, get: function () { return llm_1.LLMProviderError; } });
 // Merge Engine
 var merge_1 = require("./merge");
 Object.defineProperty(exports, "ConflictType", { enumerable: true, get: function () { return merge_1.ConflictType; } });
-Object.defineProperty(exports, "MergeEngine", { enumerable: true, get: function () { return merge_1.MergeEngine; } });
 Object.defineProperty(exports, "createMergeEngine", { enumerable: true, get: function () { return merge_1.createMergeEngine; } });
+Object.defineProperty(exports, "MergeEngine", { enumerable: true, get: function () { return merge_1.MergeEngine; } });
+// Provider interfaces and implementations
+var providers_1 = require("./providers");
+Object.defineProperty(exports, "CachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.CachedEmbeddingProvider; } });
+// LLM Provider (implementations)
+Object.defineProperty(exports, "ClaudeProvider", { enumerable: true, get: function () { return providers_1.ClaudeProvider; } });
+Object.defineProperty(exports, "cosineSimilarity", { enumerable: true, get: function () { return providers_1.cosineSimilarity; } });
+Object.defineProperty(exports, "createCachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createCachedEmbeddingProvider; } });
+Object.defineProperty(exports, "createClaudeProvider", { enumerable: true, get: function () { return providers_1.createClaudeProvider; } });
+Object.defineProperty(exports, "createGoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createGoogleAIEmbeddingProvider; } });
+Object.defineProperty(exports, "EmbeddingProviderError", { enumerable: true, get: function () { return providers_1.EmbeddingProviderError; } });
+// Embedding Provider (implementations)
+Object.defineProperty(exports, "GoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.GoogleAIEmbeddingProvider; } });
+Object.defineProperty(exports, "NLPProviderError", { enumerable: true, get: function () { return providers_1.NLPProviderError; } });
+Object.defineProperty(exports, "normalizeDependencyLabel", { enumerable: true, get: function () { return providers_1.normalizeDependencyLabel; } });
+Object.defineProperty(exports, "normalizePosTag", { enumerable: true, get: function () { return providers_1.normalizePosTag; } });
+Object.defineProperty(exports, "POS_TAG_MAPPING", { enumerable: true, get: function () { return providers_1.POS_TAG_MAPPING; } });
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 __exportStar(require("./storage"), exports);

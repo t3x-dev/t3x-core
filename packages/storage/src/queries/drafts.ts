@@ -4,10 +4,10 @@
  * CRUD operations for drafts using Drizzle ORM.
  */
 
-import { eq, desc, and } from 'drizzle-orm';
-import { drafts, type Draft, type NewDraft } from '../schema';
-import { generateDraftId, computeTextHash } from '@t3x/core';
+import { computeTextHash, generateDraftId } from '@t3x/core';
+import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Draft, drafts, type NewDraft } from '../schema';
 
 export type DraftStatus = 'ephemeral' | 'adopted' | 'superseded';
 
@@ -34,10 +34,7 @@ export interface ListDraftsOptions {
 /**
  * Insert a new draft
  */
-export async function insertDraft(
-  db: AnyDB,
-  input: CreateDraftInput
-): Promise<Draft> {
+export async function insertDraft(db: AnyDB, input: CreateDraftInput): Promise<Draft> {
   const draftId = generateDraftId();
   const createdAt = new Date();
 
@@ -46,22 +43,25 @@ export async function insertDraft(
   const mustntHaveJson = input.mustntHave ? JSON.stringify(input.mustntHave) : null;
   const llmConfigJson = JSON.stringify(input.llmConfig);
 
-  const [draft] = await db.insert(drafts).values({
-    draftId,
-    projectId: input.projectId,
-    conversationId: input.conversationId,
-    baseCommitHash: input.baseCommitHash ?? null,
-    turnAnchorHash: input.turnAnchorHash ?? null,
-    bridgeId: input.bridgeId,
-    bridgePayloadJson,
-    mustHaveJson,
-    mustntHaveJson,
-    llmConfigJson,
-    text: input.text,
-    status: 'ephemeral',
-    createdAt,
-    completedAt: null,
-  }).returning();
+  const [draft] = await db
+    .insert(drafts)
+    .values({
+      draftId,
+      projectId: input.projectId,
+      conversationId: input.conversationId,
+      baseCommitHash: input.baseCommitHash ?? null,
+      turnAnchorHash: input.turnAnchorHash ?? null,
+      bridgeId: input.bridgeId,
+      bridgePayloadJson,
+      mustHaveJson,
+      mustntHaveJson,
+      llmConfigJson,
+      text: input.text,
+      status: 'ephemeral',
+      createdAt,
+      completedAt: null,
+    })
+    .returning();
 
   return draft;
 }
@@ -69,15 +69,8 @@ export async function insertDraft(
 /**
  * Find draft by ID
  */
-export async function findDraftById(
-  db: AnyDB,
-  draftId: string
-): Promise<Draft | null> {
-  const [draft] = await db
-    .select()
-    .from(drafts)
-    .where(eq(drafts.draftId, draftId))
-    .limit(1);
+export async function findDraftById(db: AnyDB, draftId: string): Promise<Draft | null> {
+  const [draft] = await db.select().from(drafts).where(eq(drafts.draftId, draftId)).limit(1);
 
   return draft ?? null;
 }
@@ -85,10 +78,7 @@ export async function findDraftById(
 /**
  * Find drafts by project
  */
-export async function findDraftsByProject(
-  db: AnyDB,
-  options: ListDraftsOptions
-): Promise<Draft[]> {
+export async function findDraftsByProject(db: AnyDB, options: ListDraftsOptions): Promise<Draft[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
@@ -96,10 +86,7 @@ export async function findDraftsByProject(
     return db
       .select()
       .from(drafts)
-      .where(and(
-        eq(drafts.projectId, options.projectId),
-        eq(drafts.status, options.status)
-      ))
+      .where(and(eq(drafts.projectId, options.projectId), eq(drafts.status, options.status)))
       .orderBy(desc(drafts.createdAt))
       .limit(limit)
       .offset(offset);
@@ -135,7 +122,8 @@ export async function updateDraft(
   const updates: Partial<NewDraft> = {};
   if (input.text !== undefined) updates.text = input.text;
   if (input.mustHave !== undefined) updates.mustHaveJson = JSON.stringify(input.mustHave);
-  if (input.bridgePayload !== undefined) updates.bridgePayloadJson = JSON.stringify(input.bridgePayload);
+  if (input.bridgePayload !== undefined)
+    updates.bridgePayloadJson = JSON.stringify(input.bridgePayload);
   if (input.completedAt !== undefined) updates.completedAt = input.completedAt;
 
   const [updated] = await db
@@ -173,30 +161,21 @@ export async function updateDraftStatus(
 /**
  * Adopt a draft
  */
-export async function adoptDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<Draft | null> {
+export async function adoptDraft(db: AnyDB, draftId: string): Promise<Draft | null> {
   return updateDraftStatus(db, draftId, 'adopted');
 }
 
 /**
  * Supersede a draft
  */
-export async function supersedeDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<Draft | null> {
+export async function supersedeDraft(db: AnyDB, draftId: string): Promise<Draft | null> {
   return updateDraftStatus(db, draftId, 'superseded');
 }
 
 /**
  * Get draft text hash
  */
-export async function getDraftTextHash(
-  db: AnyDB,
-  draftId: string
-): Promise<string | null> {
+export async function getDraftTextHash(db: AnyDB, draftId: string): Promise<string | null> {
   const draft = await findDraftById(db, draftId);
   if (!draft) return null;
   return computeTextHash(draft.text);
@@ -205,14 +184,8 @@ export async function getDraftTextHash(
 /**
  * Delete a draft
  */
-export async function deleteDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<boolean> {
-  const result = await db
-    .delete(drafts)
-    .where(eq(drafts.draftId, draftId))
-    .returning();
+export async function deleteDraft(db: AnyDB, draftId: string): Promise<boolean> {
+  const result = await db.delete(drafts).where(eq(drafts.draftId, draftId)).returning();
 
   return result.length > 0;
 }

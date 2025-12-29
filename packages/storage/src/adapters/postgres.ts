@@ -5,8 +5,8 @@
  * Uses postgres.js for best performance.
  */
 
-import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '../schema';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;

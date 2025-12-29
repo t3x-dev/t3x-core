@@ -4,10 +4,10 @@
  * CRUD operations for conversations using Drizzle ORM.
  */
 
-import { eq, desc, sql } from 'drizzle-orm';
-import { conversations, turns, type Conversation, type NewConversation } from '../schema';
 import { generateConversationId } from '@t3x/core';
+import { desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Conversation, conversations, type NewConversation, turns } from '../schema';
 
 export interface CreateConversationInput {
   projectId: string;
@@ -42,16 +42,19 @@ export async function insertConversation(
   const createdAt = new Date();
   const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 
-  const [conversation] = await db.insert(conversations).values({
-    conversationId,
-    projectId: input.projectId,
-    title: input.title ?? null,
-    parentCommitHash: input.parentCommitHash ?? null,
-    positionX: input.positionX ?? null,
-    positionY: input.positionY ?? null,
-    createdAt,
-    metadataJson,
-  }).returning();
+  const [conversation] = await db
+    .insert(conversations)
+    .values({
+      conversationId,
+      projectId: input.projectId,
+      title: input.title ?? null,
+      parentCommitHash: input.parentCommitHash ?? null,
+      positionX: input.positionX ?? null,
+      positionY: input.positionY ?? null,
+      createdAt,
+      metadataJson,
+    })
+    .returning();
 
   return conversation;
 }
@@ -128,10 +131,7 @@ export async function updateConversation(
 /**
  * Delete a conversation
  */
-export async function deleteConversation(
-  db: AnyDB,
-  conversationId: string
-): Promise<boolean> {
+export async function deleteConversation(db: AnyDB, conversationId: string): Promise<boolean> {
   const result = await db
     .delete(conversations)
     .where(eq(conversations.conversationId, conversationId))
@@ -143,10 +143,7 @@ export async function deleteConversation(
 /**
  * Get turn count for a conversation
  */
-export async function getConversationTurnCount(
-  db: AnyDB,
-  conversationId: string
-): Promise<number> {
+export async function getConversationTurnCount(db: AnyDB, conversationId: string): Promise<number> {
   const [result] = await db
     .select({ count: sql<number>`count(*)` })
     .from(turns)

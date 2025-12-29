@@ -14,99 +14,94 @@
 
 // Common utilities
 export { canonText, hashText, sha256 } from './common';
-
-// Provider interfaces and implementations
+// Diff Engine
 export {
-  // NLP Provider
-  type DependencyLabel,
-  type NLPToken,
-  type NLPEntity,
-  type NLPSentence,
-  type NLPAnalysis,
-  type NLPProvider,
-  NLPProviderError,
-  POS_TAG_MAPPING,
-  normalizePosTag,
-  normalizeDependencyLabel,
-  // Embedding Provider (interface)
-  type EmbeddingProvider,
-  EmbeddingProviderError,
-  cosineSimilarity,
-  // Embedding Provider (implementations)
-  GoogleAIEmbeddingProvider,
-  createGoogleAIEmbeddingProvider,
-  type GoogleAIEmbeddingConfig,
-  CachedEmbeddingProvider,
-  createCachedEmbeddingProvider,
-  type CachedEmbeddingConfig,
-  // LLM Provider (implementations)
-  ClaudeProvider,
-  createClaudeProvider,
-  type ClaudeProviderConfig,
-} from './providers';
-
+  calculateDiffStats,
+  createDiffEngine,
+  DiffEngine,
+  type DiffEngineConfig,
+  type DiffResult,
+  type DiffSegment,
+  type DiffStats,
+  DiffType,
+  type SegmentDiff,
+  type SegmentMatch,
+} from './diff';
+// Extractors (Ring 1/2/3)
+export {
+  createEmptyRing1,
+  createEmptyRing2,
+  createEmptyRing3,
+  createEmptyRingOutput,
+  createPolarityRuleEngine,
+  createRingExtractor,
+  // Ring Extractor
+  type ExtractorConfig,
+  type Facet,
+  type FacetType,
+  type Keyword,
+  type Polarity,
+  // Polarity Rules
+  type PolarityRule,
+  PolarityRuleEngine,
+  // Types
+  type PosTag,
+  type PreferenceRelation,
+  type Ring1Output,
+  type Ring2Output,
+  type Ring3Output,
+  RingExtractor,
+  type RingOutput,
+  type Segment,
+} from './extractors';
 // LLM Provider (interface)
 export {
   type LLMGenerateOptions,
   type LLMProvider,
   LLMProviderError,
 } from './llm';
-
-// Extractors (Ring 1/2/3)
-export {
-  // Types
-  type PosTag,
-  type Polarity,
-  type FacetType,
-  type Keyword,
-  type Ring1Output,
-  type Facet,
-  type Ring2Output,
-  type Segment,
-  type Ring3Output,
-  type RingOutput,
-  createEmptyRing1,
-  createEmptyRing2,
-  createEmptyRing3,
-  createEmptyRingOutput,
-  // Polarity Rules
-  type PolarityRule,
-  type PreferenceRelation,
-  PolarityRuleEngine,
-  createPolarityRuleEngine,
-  // Ring Extractor
-  type ExtractorConfig,
-  RingExtractor,
-  createRingExtractor,
-} from './extractors';
-
-// Diff Engine
-export {
-  DiffType,
-  type SegmentMatch,
-  type SegmentDiff,
-  type DiffSegment,
-  type DiffResult,
-  type DiffStats,
-  calculateDiffStats,
-  type DiffEngineConfig,
-  DiffEngine,
-  createDiffEngine,
-} from './diff';
-
 // Merge Engine
 export {
-  ConflictType,
-  type MergeSource,
-  type MergeFacet,
   type AutoMergedFacet,
-  type MergeConflict,
-  type MergeResult,
-  type MergeStats,
-  type MergeEngineOptions,
-  MergeEngine,
+  ConflictType,
   createMergeEngine,
+  type MergeConflict,
+  MergeEngine,
+  type MergeEngineOptions,
+  type MergeFacet,
+  type MergeResult,
+  type MergeSource,
+  type MergeStats,
 } from './merge';
+// Provider interfaces and implementations
+export {
+  type CachedEmbeddingConfig,
+  CachedEmbeddingProvider,
+  // LLM Provider (implementations)
+  ClaudeProvider,
+  type ClaudeProviderConfig,
+  cosineSimilarity,
+  createCachedEmbeddingProvider,
+  createClaudeProvider,
+  createGoogleAIEmbeddingProvider,
+  // NLP Provider
+  type DependencyLabel,
+  // Embedding Provider (interface)
+  type EmbeddingProvider,
+  EmbeddingProviderError,
+  type GoogleAIEmbeddingConfig,
+  // Embedding Provider (implementations)
+  GoogleAIEmbeddingProvider,
+  type NLPAnalysis,
+  type NLPEntity,
+  type NLPProvider,
+  NLPProviderError,
+  type NLPSentence,
+  type NLPToken,
+  normalizeDependencyLabel,
+  normalizePosTag,
+  POS_TAG_MAPPING,
+} from './providers';
 
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package

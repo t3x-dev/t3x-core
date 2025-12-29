@@ -16,7 +16,7 @@ class EmbeddingProviderError extends Error {
         super(message ?? `Embedding provider "${providerId}" is unavailable`);
         this.providerId = providerId;
         this.cause = cause;
-        this.name = "EmbeddingProviderError";
+        this.name = 'EmbeddingProviderError';
     }
 }
 exports.EmbeddingProviderError = EmbeddingProviderError;

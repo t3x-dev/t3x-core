@@ -6,16 +6,17 @@
  * GET  /v1/turns/:hash - Get turn by hash
  * GET  /v1/turns/:hash/chain - Get turn chain (history)
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
+
 import {
-  insertTurn,
-  findTurnsByConversation,
   findConversationById,
   findTurnByHash,
   findTurnChain,
+  findTurnsByConversation,
+  insertTurn,
 } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 export const turnRoutes = new Hono();
 
@@ -83,7 +84,12 @@ turnRoutes.post('/v1/turns', async (c) => {
   }
 
   if (!body?.project_id || !body?.conversation_id || !body?.role || !body?.content) {
-    return jsonError(c, 'INVALID_REQUEST', 'project_id, conversation_id, role, and content are required', 400);
+    return jsonError(
+      c,
+      'INVALID_REQUEST',
+      'project_id, conversation_id, role, and content are required',
+      400
+    );
   }
 
   const validRoles = ['user', 'assistant', 'system', 'tool'];
@@ -102,7 +108,12 @@ turnRoutes.post('/v1/turns', async (c) => {
 
     // Verify project matches
     if (conversation.projectId !== body.project_id) {
-      return jsonError(c, 'INVALID_REQUEST', 'conversation does not belong to the specified project', 400);
+      return jsonError(
+        c,
+        'INVALID_REQUEST',
+        'conversation does not belong to the specified project',
+        400
+      );
     }
 
     const turn = await insertTurn(db, {

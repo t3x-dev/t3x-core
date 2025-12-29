@@ -1,22 +1,13 @@
 /**
  * Project Commands
  */
-import { Command } from 'commander';
+
 import { createClient } from '@t3x/api-client';
-import {
-  printTable,
-  success,
-  error,
-  createSpinner,
-  formatDate,
-  getApiUrl,
-} from '../utils.js';
+import type { Command } from 'commander';
+import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
 
 export function registerProjectCommands(program: Command): void {
-  const projects = program
-    .command('projects')
-    .alias('p')
-    .description('Manage projects');
+  const projects = program.command('projects').alias('p').description('Manage projects');
 
   // List projects
   projects
@@ -45,11 +36,7 @@ export function registerProjectCommands(program: Command): void {
 
         printTable({
           columns: ['ID', 'Name', 'Created'],
-          rows: result.projects.map((p) => [
-            p.project_id,
-            p.name,
-            formatDate(p.created_at),
-          ]),
+          rows: result.projects.map((p) => [p.project_id, p.name, formatDate(p.created_at)]),
         });
       } catch (err) {
         spinner.stop();

@@ -1,36 +1,33 @@
 'use client';
 
 import { useEffect } from 'react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { Sidebar } from '@/components/Sidebar';
-import { Toast, useToast } from '@/components/Toast';
-import { useProjectStore } from '@/store/projectStore';
+import { showToast } from '@/components/Toast';
+import { Toaster } from '@/components/ui/sonner';
 import { useCanvasStore } from '@/store/canvasStore';
-import './App.css';
+import { useProjectStore } from '@/store/projectStore';
 
-export default function ClientLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { messages, addToast, dismissToast } = useToast();
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
 
   // Register toast callback with stores
   useEffect(() => {
-    setProjectNotify(addToast);
-    setCanvasNotify(addToast);
+    setProjectNotify(showToast);
+    setCanvasNotify(showToast);
     return () => {
       setProjectNotify(null);
       setCanvasNotify(null);
     };
-  }, [setProjectNotify, setCanvasNotify, addToast]);
+  }, [setProjectNotify, setCanvasNotify]);
 
   return (
-    <div className="app-layout">
+    <div className="flex min-h-screen bg-muted/30">
       <Sidebar />
-      <main className="app-content">{children}</main>
-      <Toast messages={messages} onDismiss={dismissToast} />
+      <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+      <Toaster position="bottom-right" richColors closeButton />
+      <CommandPalette />
     </div>
   );
 }

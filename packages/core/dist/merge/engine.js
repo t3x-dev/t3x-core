@@ -45,11 +45,7 @@ class MergeEngine {
         const sourceMap = this.buildFacetMap(sourceFacets);
         const targetMap = this.buildFacetMap(targetFacets);
         // Get all unique facet keys
-        const allFacetKeys = new Set([
-            ...baseMap.keys(),
-            ...sourceMap.keys(),
-            ...targetMap.keys(),
-        ]);
+        const allFacetKeys = new Set([...baseMap.keys(), ...sourceMap.keys(), ...targetMap.keys()]);
         const autoMerged = [];
         const conflicts = [];
         // Process each facet by key
@@ -69,7 +65,7 @@ class MergeEngine {
                 // Both sides modified differently
                 // For constraint types (like budget), this is a real conflict
                 // For additive types (like menu_item), both can be kept
-                if (facetType === "constraint") {
+                if (facetType === 'constraint') {
                     // Real conflict for constraints - prefer higher confidence
                     const sourceConf = sourceFacet?.confidence ?? 0.5;
                     const targetConf = targetFacet?.confidence ?? 0.5;
@@ -78,7 +74,7 @@ class MergeEngine {
                         autoMerged.push({
                             facet: facetKey,
                             mergedText: sourceText,
-                            source: "source",
+                            source: 'source',
                             keywords: sourceFacet?.keywords ?? [],
                         });
                     }
@@ -87,7 +83,7 @@ class MergeEngine {
                         autoMerged.push({
                             facet: facetKey,
                             mergedText: targetText,
-                            source: "target",
+                            source: 'target',
                             keywords: targetFacet?.keywords ?? [],
                         });
                     }
@@ -106,8 +102,8 @@ class MergeEngine {
                     // For non-constraint types, merge both versions
                     autoMerged.push({
                         facet: facetKey,
-                        mergedText: [sourceText, targetText].filter(Boolean).join("\n"),
-                        source: "target",
+                        mergedText: [sourceText, targetText].filter(Boolean).join('\n'),
+                        source: 'target',
                         keywords: [...(sourceFacet?.keywords ?? []), ...(targetFacet?.keywords ?? [])],
                     });
                 }
@@ -117,7 +113,7 @@ class MergeEngine {
                 autoMerged.push({
                     facet: facetKey,
                     mergedText: sourceText,
-                    source: "source",
+                    source: 'source',
                     keywords: sourceFacet?.keywords ?? [],
                 });
             }
@@ -126,7 +122,7 @@ class MergeEngine {
                 autoMerged.push({
                     facet: facetKey,
                     mergedText: targetText,
-                    source: "target",
+                    source: 'target',
                     keywords: targetFacet?.keywords ?? [],
                 });
             }
@@ -136,7 +132,7 @@ class MergeEngine {
                     autoMerged.push({
                         facet: facetKey,
                         mergedText: baseText,
-                        source: "base",
+                        source: 'base',
                         keywords: baseFacet?.keywords ?? [],
                     });
                 }
@@ -152,7 +148,7 @@ class MergeEngine {
                     autoMerged.push({
                         facet: conflict.facet,
                         mergedText: resolved,
-                        source: "llm",
+                        source: 'llm',
                         keywords: [],
                     });
                     llmResolvedCount++;
@@ -171,7 +167,7 @@ class MergeEngine {
         return {
             autoMerged,
             conflicts: remainingConflicts,
-            status: remainingConflicts.length > 0 ? "conflicts" : "clean",
+            status: remainingConflicts.length > 0 ? 'conflicts' : 'clean',
             stats,
         };
     }
@@ -192,7 +188,7 @@ class MergeEngine {
                 additionalMerged.push({
                     facet: conflict.facet,
                     mergedText: resolvedText,
-                    source: "manual",
+                    source: 'manual',
                     keywords: [],
                 });
             }
@@ -206,7 +202,7 @@ class MergeEngine {
         return {
             autoMerged: allMerged,
             conflicts: remainingConflicts,
-            status: remainingConflicts.length > 0 ? "conflicts" : "clean",
+            status: remainingConflicts.length > 0 ? 'conflicts' : 'clean',
             stats,
         };
     }
@@ -220,8 +216,8 @@ class MergeEngine {
         if (facet.id)
             return facet.id;
         // Fallback: use type and first few words of text
-        const textKey = facet.text?.toLowerCase().split(/\s+/).slice(0, 3).join("_") ?? "empty";
-        return `${facet.type ?? "unknown"}:${textKey}`;
+        const textKey = facet.text?.toLowerCase().split(/\s+/).slice(0, 3).join('_') ?? 'empty';
+        return `${facet.type ?? 'unknown'}:${textKey}`;
     }
     /**
      * Build facet lookup map
@@ -242,7 +238,7 @@ class MergeEngine {
     /**
      * Determine the type of conflict
      */
-    determineConflictType(baseText, sourceText, targetText) {
+    determineConflictType(_baseText, sourceText, targetText) {
         if (sourceText === null && targetText !== null) {
             return types_1.ConflictType.DELETE_MODIFY;
         }

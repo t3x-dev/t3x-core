@@ -15,20 +15,18 @@
  * ```
  */
 
-// Schema (table definitions and types)
-export * from './schema';
-
 // PostgreSQL adapter only
 export {
-  type PostgresDB,
-  type PostgresConfig,
+  closePostgresStorage,
   createPostgresStorage,
   getPostgresDB,
-  closePostgresStorage,
+  type PostgresConfig,
+  type PostgresDB,
 } from './adapters/postgres';
-
 // Query functions
 export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';
 
 // Type alias for PostgreSQL database
 import type { PostgresDB } from './adapters/postgres';

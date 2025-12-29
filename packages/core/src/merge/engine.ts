@@ -15,15 +15,15 @@
  *    - neither changed → keep base
  */
 
+import type { LLMProvider } from '../llm';
 import {
+  type AutoMergedFacet,
+  ConflictType,
+  type MergeConflict,
   type MergeFacet,
   type MergeResult,
-  type AutoMergedFacet,
-  type MergeConflict,
-  ConflictType,
   type MergeStats,
-} from "./types";
-import type { LLMProvider } from "../llm";
+} from './types';
 
 /**
  * Merge engine options
@@ -70,11 +70,7 @@ export class MergeEngine {
     const targetMap = this.buildFacetMap(targetFacets);
 
     // Get all unique facet keys
-    const allFacetKeys = new Set([
-      ...baseMap.keys(),
-      ...sourceMap.keys(),
-      ...targetMap.keys(),
-    ]);
+    const allFacetKeys = new Set([...baseMap.keys(), ...sourceMap.keys(), ...targetMap.keys()]);
 
     const autoMerged: AutoMergedFacet[] = [];
     const conflicts: MergeConflict[] = [];
@@ -100,7 +96,7 @@ export class MergeEngine {
         // Both sides modified differently
         // For constraint types (like budget), this is a real conflict
         // For additive types (like menu_item), both can be kept
-        if (facetType === "constraint") {
+        if (facetType === 'constraint') {
           // Real conflict for constraints - prefer higher confidence
           const sourceConf = sourceFacet?.confidence ?? 0.5;
           const targetConf = targetFacet?.confidence ?? 0.5;
@@ -110,7 +106,7 @@ export class MergeEngine {
             autoMerged.push({
               facet: facetKey,
               mergedText: sourceText,
-              source: "source",
+              source: 'source',
               keywords: sourceFacet?.keywords ?? [],
             });
           } else if (targetConf > sourceConf + 0.1) {
@@ -118,7 +114,7 @@ export class MergeEngine {
             autoMerged.push({
               facet: facetKey,
               mergedText: targetText,
-              source: "target",
+              source: 'target',
               keywords: targetFacet?.keywords ?? [],
             });
           } else {
@@ -135,8 +131,8 @@ export class MergeEngine {
           // For non-constraint types, merge both versions
           autoMerged.push({
             facet: facetKey,
-            mergedText: [sourceText, targetText].filter(Boolean).join("\n"),
-            source: "target",
+            mergedText: [sourceText, targetText].filter(Boolean).join('\n'),
+            source: 'target',
             keywords: [...(sourceFacet?.keywords ?? []), ...(targetFacet?.keywords ?? [])],
           });
         }
@@ -145,7 +141,7 @@ export class MergeEngine {
         autoMerged.push({
           facet: facetKey,
           mergedText: sourceText,
-          source: "source",
+          source: 'source',
           keywords: sourceFacet?.keywords ?? [],
         });
       } else if (targetChanged) {
@@ -153,7 +149,7 @@ export class MergeEngine {
         autoMerged.push({
           facet: facetKey,
           mergedText: targetText,
-          source: "target",
+          source: 'target',
           keywords: targetFacet?.keywords ?? [],
         });
       } else {
@@ -162,7 +158,7 @@ export class MergeEngine {
           autoMerged.push({
             facet: facetKey,
             mergedText: baseText,
-            source: "base",
+            source: 'base',
             keywords: baseFacet?.keywords ?? [],
           });
         }
@@ -184,7 +180,7 @@ export class MergeEngine {
           autoMerged.push({
             facet: conflict.facet,
             mergedText: resolved,
-            source: "llm",
+            source: 'llm',
             keywords: [],
           });
           llmResolvedCount++;
@@ -198,12 +194,17 @@ export class MergeEngine {
     }
 
     // Calculate statistics
-    const stats = this.calculateStats(autoMerged, remainingConflicts, allFacetKeys.size, llmResolvedCount);
+    const stats = this.calculateStats(
+      autoMerged,
+      remainingConflicts,
+      allFacetKeys.size,
+      llmResolvedCount
+    );
 
     return {
       autoMerged,
       conflicts: remainingConflicts,
-      status: remainingConflicts.length > 0 ? "conflicts" : "clean",
+      status: remainingConflicts.length > 0 ? 'conflicts' : 'clean',
       stats,
     };
   }
@@ -215,10 +216,7 @@ export class MergeEngine {
    * @param resolutions - Map of facet name to resolved text
    * @returns Updated merge result with resolved conflicts
    */
-  applyResolutions(
-    mergeResult: MergeResult,
-    resolutions: Map<string, string>
-  ): MergeResult {
+  applyResolutions(mergeResult: MergeResult, resolutions: Map<string, string>): MergeResult {
     const remainingConflicts: MergeConflict[] = [];
     const additionalMerged: AutoMergedFacet[] = [];
 
@@ -229,7 +227,7 @@ export class MergeEngine {
         additionalMerged.push({
           facet: conflict.facet,
           mergedText: resolvedText,
-          source: "manual",
+          source: 'manual',
           keywords: [],
         });
       } else {
@@ -249,7 +247,7 @@ export class MergeEngine {
     return {
       autoMerged: allMerged,
       conflicts: remainingConflicts,
-      status: remainingConflicts.length > 0 ? "conflicts" : "clean",
+      status: remainingConflicts.length > 0 ? 'conflicts' : 'clean',
       stats,
     };
   }
@@ -262,8 +260,8 @@ export class MergeEngine {
     if (facet.facet) return facet.facet;
     if (facet.id) return facet.id;
     // Fallback: use type and first few words of text
-    const textKey = facet.text?.toLowerCase().split(/\s+/).slice(0, 3).join("_") ?? "empty";
-    return `${facet.type ?? "unknown"}:${textKey}`;
+    const textKey = facet.text?.toLowerCase().split(/\s+/).slice(0, 3).join('_') ?? 'empty';
+    return `${facet.type ?? 'unknown'}:${textKey}`;
   }
 
   /**
@@ -287,7 +285,7 @@ export class MergeEngine {
    * Determine the type of conflict
    */
   private determineConflictType(
-    baseText: string | null,
+    _baseText: string | null,
     sourceText: string | null,
     targetText: string | null
   ): ConflictType {

@@ -4,11 +4,8 @@
  * Tests for embedding provider base utilities.
  */
 
-import { describe, it, expect } from 'vitest';
-import {
-  cosineSimilarity,
-  EmbeddingProviderError,
-} from '../../providers/embedding/base';
+import { describe, expect, it } from 'vitest';
+import { cosineSimilarity, EmbeddingProviderError } from '../../providers/embedding/base';
 
 describe('Embedding Provider', () => {
   describe('cosineSimilarity', () => {

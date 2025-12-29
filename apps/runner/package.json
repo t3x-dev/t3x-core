@@ -35,7 +35,7 @@
     "@t3x/core": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.0",
-    "zod": "^3.23.0",
+    "zod": "^4.2.1",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "node-fetch": "^3.3.0"
@@ -48,7 +48,7 @@
     "ajv-formats": "^3.0.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18.0.0"

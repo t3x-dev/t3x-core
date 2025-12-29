@@ -153,11 +153,11 @@
                       "type": "object",
                       "description": "Model parameters used",
                       "properties": {
-                        "temperature": {"type": "number"},
-                        "max_tokens": {"type": "integer"},
-                        "top_p": {"type": "number"},
-                        "frequency_penalty": {"type": "number"},
-                        "presence_penalty": {"type": "number"}
+                        "temperature": { "type": "number" },
+                        "max_tokens": { "type": "integer" },
+                        "top_p": { "type": "number" },
+                        "frequency_penalty": { "type": "number" },
+                        "presence_penalty": { "type": "number" }
                       },
                       "additionalProperties": true
                     },
@@ -165,19 +165,19 @@
                       "type": "object",
                       "description": "Token usage statistics",
                       "properties": {
-                        "prompt_tokens": {"type": "integer"},
-                        "completion_tokens": {"type": "integer"},
-                        "total_tokens": {"type": "integer"}
+                        "prompt_tokens": { "type": "integer" },
+                        "completion_tokens": { "type": "integer" },
+                        "total_tokens": { "type": "integer" }
                       }
                     },
                     "cost": {
                       "type": "object",
                       "description": "Cost breakdown (optional, calculated by tools)",
                       "properties": {
-                        "input_cost": {"type": "number"},
-                        "output_cost": {"type": "number"},
-                        "total_cost": {"type": "number"},
-                        "currency": {"type": "string", "default": "USD"}
+                        "input_cost": { "type": "number" },
+                        "output_cost": { "type": "number" },
+                        "total_cost": { "type": "number" },
+                        "currency": { "type": "string", "default": "USD" }
                       }
                     },
                     "latency_ms": {
@@ -422,11 +422,11 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "file_id": {"type": "string"},
-                  "context_type": {"type": "string"},
+                  "file_id": { "type": "string" },
+                  "context_type": { "type": "string" },
                   "fields_used": {
                     "type": "array",
-                    "items": {"type": "string"}
+                    "items": { "type": "string" }
                   }
                 }
               }
@@ -434,11 +434,11 @@
             "transformation": {
               "type": "object",
               "properties": {
-                "type": {"type": "string"},
-                "tool": {"type": "string"},
-                "timestamp": {"type": "string", "format": "date-time"},
-                "provider": {"type": "string"},
-                "config": {"type": "object"}
+                "type": { "type": "string" },
+                "tool": { "type": "string" },
+                "timestamp": { "type": "string", "format": "date-time" },
+                "provider": { "type": "string" },
+                "config": { "type": "object" }
               }
             },
             "current_branch": {
@@ -512,7 +512,7 @@
                   },
                   "conflicts": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": { "type": "string" },
                     "description": "List of conflicting aspect identifiers or files."
                   },
                   "notes": {
@@ -530,9 +530,9 @@
           "type": "object",
           "description": "Snapshot-specific metadata",
           "properties": {
-            "snapshot_of": {"type": "string"},
-            "snapshot_timestamp": {"type": "string", "format": "date-time"},
-            "message": {"type": "string"}
+            "snapshot_of": { "type": "string" },
+            "snapshot_timestamp": { "type": "string", "format": "date-time" },
+            "message": { "type": "string" }
           }
         },
         "semantic": {
@@ -625,18 +625,18 @@
       "type": "object",
       "description": "Aggregated usage analytics (optional, auto-computed by tools)",
       "properties": {
-        "total_conversations": {"type": "integer"},
-        "total_messages": {"type": "integer"},
-        "total_cost": {"type": "number"},
-        "currency": {"type": "string", "default": "USD"},
+        "total_conversations": { "type": "integer" },
+        "total_messages": { "type": "integer" },
+        "total_cost": { "type": "number" },
+        "currency": { "type": "string", "default": "USD" },
         "by_provider": {
           "type": "object",
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "conversations": {"type": "integer"},
-              "total_tokens": {"type": "integer"},
-              "total_cost": {"type": "number"}
+              "conversations": { "type": "integer" },
+              "total_tokens": { "type": "integer" },
+              "total_cost": { "type": "number" }
             }
           }
         },
@@ -645,9 +645,9 @@
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "calls": {"type": "integer"},
-              "avg_latency_ms": {"type": "number"},
-              "total_cost": {"type": "number"}
+              "calls": { "type": "integer" },
+              "avg_latency_ms": { "type": "number" },
+              "total_cost": { "type": "number" }
             }
           }
         },
@@ -655,12 +655,12 @@
           "type": "object",
           "description": "Metadata about the most recent diff operation.",
           "properties": {
-            "from_commit": {"type": "string"},
-            "to_commit": {"type": "string"},
-            "generated_at": {"type": "string", "format": "date-time"},
-            "summary": {"type": "string"},
-            "aspect_changes": {"type": "integer"},
-            "stats": {"type": "object"}
+            "from_commit": { "type": "string" },
+            "to_commit": { "type": "string" },
+            "generated_at": { "type": "string", "format": "date-time" },
+            "summary": { "type": "string" },
+            "aspect_changes": { "type": "integer" },
+            "stats": { "type": "object" }
           },
           "additionalProperties": true
         },

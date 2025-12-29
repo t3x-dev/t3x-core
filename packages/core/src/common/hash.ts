@@ -2,8 +2,8 @@
  * Hash utilities
  */
 
-import { canonicalize } from 'json-canonicalize';
 import crypto from 'node:crypto';
+import { canonicalize } from 'json-canonicalize';
 
 import { canonText } from './canon';
 

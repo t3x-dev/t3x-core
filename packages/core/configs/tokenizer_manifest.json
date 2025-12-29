@@ -48,10 +48,7 @@
     {
       "version": "1.0.0",
       "date": "2025-10-29",
-      "changes": [
-        "Initial deterministic tokenizer",
-        "Frozen English stopwords from NLTK"
-      ]
+      "changes": ["Initial deterministic tokenizer", "Frozen English stopwords from NLTK"]
     }
   ]
 }

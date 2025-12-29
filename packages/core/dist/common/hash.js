@@ -8,8 +8,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.hashText = hashText;
 exports.sha256 = sha256;
-const json_canonicalize_1 = require("json-canonicalize");
 const node_crypto_1 = __importDefault(require("node:crypto"));
+const json_canonicalize_1 = require("json-canonicalize");
 const canon_1 = require("./canon");
 function hashText(input) {
     return sha256((0, canon_1.canonText)(input));

@@ -6,17 +6,18 @@
  * GET    /v1/drafts/:id - Get draft
  * DELETE /v1/drafts/:id - Delete draft
  */
+
+import {
+  type DraftStatus,
+  deleteDraft,
+  findDraftById,
+  findDraftsByProject,
+  findProjectById,
+  insertDraft,
+} from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
-import {
-  insertDraft,
-  findDraftsByProject,
-  findDraftById,
-  findProjectById,
-  deleteDraft,
-  type DraftStatus,
-} from '@t3x/storage/pglite';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 export const draftRoutes = new Hono();
 
@@ -86,7 +87,12 @@ draftRoutes.post('/v1/drafts', async (c) => {
   }
 
   if (!body?.project_id || !body?.conversation_id || !body?.bridge_id || !body?.text) {
-    return jsonError(c, 'INVALID_REQUEST', 'project_id, conversation_id, bridge_id, and text are required', 400);
+    return jsonError(
+      c,
+      'INVALID_REQUEST',
+      'project_id, conversation_id, bridge_id, and text are required',
+      400
+    );
   }
 
   try {

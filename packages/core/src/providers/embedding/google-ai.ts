@@ -4,7 +4,7 @@
  * Uses the text-embedding-004 model by default (768 dimensions).
  */
 
-import { type EmbeddingProvider, EmbeddingProviderError, cosineSimilarity } from './base';
+import { cosineSimilarity, type EmbeddingProvider, EmbeddingProviderError } from './base';
 
 const GOOGLE_AI_EMBEDDING_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 

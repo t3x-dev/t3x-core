@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { RunTrace, TraceEvent, AgentConfig, AgentInput } from './types.js';
+import type { AgentConfig, AgentInput, RunTrace, TraceEvent } from './types.js';
 
 /**
  * Observer - Captures agent I/O in grey-box mode
@@ -190,7 +190,7 @@ export class Observer {
   listTraces(agentId?: string): RunTrace[] {
     const traces = Array.from(this.traces.values());
     if (agentId) {
-      return traces.filter(t => t.agent_id === agentId);
+      return traces.filter((t) => t.agent_id === agentId);
     }
     return traces;
   }

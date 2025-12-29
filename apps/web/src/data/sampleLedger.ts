@@ -1,4 +1,4 @@
-import type { SemanticEntry } from '../types/semantic'
+import type { SemanticEntry } from '../types/semantic';
 
 export const semanticFeed: SemanticEntry[] = [
   {
@@ -58,7 +58,7 @@ export const semanticFeed: SemanticEntry[] = [
     evidenceCount: 4,
     facets: ['transport: Kansai pass'],
   },
-]
+];
 
 export const timeline = [
   {
@@ -82,7 +82,7 @@ export const timeline = [
     time: '2h ago',
     stage: 'commit',
   },
-]
+];
 
 export const boardColumns: Record<
   string,
@@ -122,4 +122,4 @@ export const boardColumns: Record<
       status: 'validated',
     },
   ],
-}
+};
