@@ -1,7 +1,7 @@
 /**
  * Turn schemas for API validation and OpenAPI spec
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Turn role
 export const TurnRoleSchema = z.enum(['user', 'assistant', 'system', 'tool']);

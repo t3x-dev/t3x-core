@@ -32,8 +32,10 @@ export async function getDB(): Promise<PGLiteDB> {
 
 async function initializeDB(): Promise<PGLiteDB> {
   // Use file-based PGLite for persistence
+  // Note: File mode may have issues with Node 23, use Node 20 LTS if problems occur
+  const inMemory = process.env.T3X_IN_MEMORY === 'true';
   const dataDir = process.env.T3X_DATA_DIR || './.t3x/data';
-  const db = await createPGLiteStorage({ dataDir });
+  const db = await createPGLiteStorage({ dataDir, inMemory });
   return db;
 }
 

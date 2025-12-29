@@ -1,7 +1,7 @@
 /**
  * Project schemas for API validation and OpenAPI spec
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Project entity
 export const ProjectSchema = z.object({
