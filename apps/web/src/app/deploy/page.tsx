@@ -6,18 +6,16 @@ import {
   Rocket,
   Plus,
   Play,
-  Square,
   RefreshCw,
   ExternalLink,
   AlertCircle,
   CheckCircle,
-  XCircle,
   Loader2,
   Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,21 +28,21 @@ import {
 } from '@/components/ui/table';
 import {
   checkRunnerHealth,
-  listRuns,
+  listEngineRuns,
   listDeployAgents,
   createDeployAgent,
   updateDeployAgent,
   deleteDeployAgent,
   createEngineRun,
   type DeployAgent,
-  type RunTrace,
+  type EngineRun,
 } from '@/lib/api';
 
 export default function DeployPage() {
   const router = useRouter();
   const [runnerHealthy, setRunnerHealthy] = useState<boolean | null>(null);
   const [deployAgents, setDeployAgents] = useState<DeployAgent[]>([]);
-  const [runs, setRuns] = useState<RunTrace[]>([]);
+  const [runs, setRuns] = useState<EngineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [newAgent, setNewAgent] = useState({
@@ -75,9 +73,9 @@ export default function DeployPage() {
         // Load deploy agents from database
         await loadDeployAgents();
 
-        // Load Runner runs
+        // Load Engine runs from database
         try {
-          const runsData = await listRuns();
+          const runsData = await listEngineRuns();
           setRuns(runsData.runs);
         } catch (err) {
           console.warn('Failed to load runs:', err);
@@ -161,9 +159,9 @@ export default function DeployPage() {
         )
       );
 
-      // Refresh runs list
+      // Refresh runs list from Engine
       try {
-        const runsData = await listRuns();
+        const runsData = await listEngineRuns();
         setRuns(runsData.runs);
       } catch (err) {
         console.warn('Failed to refresh runs:', err);
@@ -207,18 +205,7 @@ export default function DeployPage() {
     }
   };
 
-  const getStatusIcon = (status: DeployAgent['status']) => {
-    switch (status) {
-      case 'running':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
-      case 'error':
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-    }
-  };
-
-  const getRunStatusBadge = (status: RunTrace['status']) => {
+  const getRunStatusBadge = (status: EngineRun['status']) => {
     const variants: Record<string, string> = {
       queued: 'border-gray-500/30 bg-gray-500/10 text-gray-600',
       running: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
@@ -286,14 +273,16 @@ export default function DeployPage() {
 
       {/* Deploy Agents Section */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between border-b pb-4">
+        <CardHeader className="border-b py-2">
           <CardTitle>Deploy Agents</CardTitle>
-          <Button size="sm" onClick={() => setShowAddAgent(true)}>
-            <Plus className="h-4 w-4" />
-            Add Agent
-          </Button>
+          <CardAction>
+            <Button variant="outline" size="sm" onClick={() => setShowAddAgent(true)}>
+              <Plus className="h-4 w-4" />
+              Add Agent
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="pt-3 pb-3">
           {showAddAgent && (
             <div className="mb-6 rounded-lg border bg-muted/30 p-4">
               <div className="grid gap-3 sm:grid-cols-3">
@@ -338,21 +327,18 @@ export default function DeployPage() {
               }}
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {deployAgents.map((agent) => (
-                <Card key={agent.deploy_agent_id} className="py-4">
-                  <CardContent className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      {getStatusIcon(agent.status)}
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate font-semibold">{agent.name}</h3>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {agent.deploy_agent_id}
-                        </p>
-                      </div>
+                <Card key={agent.deploy_agent_id} className="py-3">
+                  <CardContent className="space-y-2">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold">{agent.name}</h3>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {agent.deploy_agent_id}
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1.5">
+                    <div className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1">
                       <code className="flex-1 truncate text-xs">{agent.endpoint}</code>
                       <a
                         href={agent.endpoint}
@@ -366,9 +352,13 @@ export default function DeployPage() {
 
                     <div className="flex items-center gap-2">
                       <Button
+                        variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => handleRunAgent(agent)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRunAgent(agent);
+                        }}
                         disabled={agent.status === 'running' || !runnerHealthy}
                       >
                         {agent.status === 'running' ? (
@@ -386,15 +376,11 @@ export default function DeployPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={agent.status !== 'running'}
-                      >
-                        <Square className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         className="text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteAgent(agent)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAgent(agent);
+                        }}
                         disabled={agent.status === 'running'}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -453,19 +439,19 @@ export default function DeployPage() {
                     <TableCell>
                       <code className="text-xs">{run.run_id}</code>
                     </TableCell>
-                    <TableCell>{run.agent_id}</TableCell>
+                    <TableCell>{run.leaf?.id || '-'}</TableCell>
                     <TableCell>{getRunStatusBadge(run.status)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(run.started_at).toLocaleString()}
+                      {new Date(run.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
                       <Button
-                        variant="link"
+                        variant="outline"
                         size="sm"
-                        className="h-auto p-0"
+                        className="h-auto"
                         onClick={() => router.push(`/eval/${run.run_id}`)}
                       >
-                        View
+                        View Eval
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -17,13 +17,13 @@ import {
 } from '@t3x/storage';
 
 // Runner URL (t3x-runner service)
-const RUNNER_URL = process.env.RUNNER_URL || 'http://localhost:8080';
+const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
 
 // This Engine's callback URL for Runner to call back
-const ENGINE_CALLBACK_URL = process.env.ENGINE_CALLBACK_URL || 'http://localhost:8000/api/v1/runs/ingest';
+const ENGINE_CALLBACK_URL = process.env.ENGINE_CALLBACK_URL || 'http://t3x-api:8000/api/v1/runs/ingest';
 
 // Runner's callback URL for n8n to call back
-const RUNNER_CALLBACK_URL = process.env.RUNNER_CALLBACK_URL || 'http://localhost:8080/callbacks/n8n';
+const RUNNER_CALLBACK_URL = process.env.RUNNER_CALLBACK_URL || 'http://t3x-runner:8080/callbacks/n8n';
 
 export const runsRoutes = new Hono();
 
@@ -36,7 +36,7 @@ const CreateRunSchema = z.object({
     type: z.enum(['deploy', 'eval']),
     content: z.string().optional(),
   }).optional(),
-  inputs: z.record(z.unknown()).optional(),
+  inputs: z.record(z.string(), z.unknown()).optional(),
   workflow: z.object({
     type: z.string(),
     webhook_id: z.string().optional(),
@@ -48,9 +48,9 @@ const IngestSchema = z.object({
   run_id: z.string(),
   runner_run_id: z.string(),
   status: z.enum(['completed', 'failed']),
-  run_report: z.record(z.unknown()).optional(),
+  run_report: z.record(z.string(), z.unknown()).optional(),
   assertions: z.array(z.unknown()).optional(),
-  evidence_pack: z.record(z.unknown()).optional(),
+  evidence_pack: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -58,7 +58,7 @@ const IngestSchema = z.object({
  *
  * Flow: WebUI → Engine → Runner → n8n
  */
-runsRoutes.post('/runs', async (c) => {
+runsRoutes.post('/v1/runs', async (c) => {
   try {
     const body = await c.req.json();
     const input = CreateRunSchema.parse(body);
@@ -156,7 +156,7 @@ runsRoutes.post('/runs', async (c) => {
  *
  * Flow: n8n → Runner → Engine (this endpoint)
  */
-runsRoutes.post('/runs/ingest', async (c) => {
+runsRoutes.post('/v1/runs/ingest', async (c) => {
   try {
     const body = await c.req.json();
     const data = IngestSchema.parse(body);
@@ -195,7 +195,7 @@ runsRoutes.post('/runs/ingest', async (c) => {
 /**
  * GET /runs - List runs
  */
-runsRoutes.get('/runs', async (c) => {
+runsRoutes.get('/v1/runs', async (c) => {
   try {
     const projectId = c.req.query('project_id');
     const status = c.req.query('status') as 'queued' | 'running' | 'completed' | 'failed' | undefined;
@@ -231,7 +231,7 @@ runsRoutes.get('/runs', async (c) => {
 /**
  * GET /runs/:id - Get a specific run
  */
-runsRoutes.get('/runs/:id', async (c) => {
+runsRoutes.get('/v1/runs/:id', async (c) => {
   try {
     const runId = c.req.param('id');
     const db = await getDB();
