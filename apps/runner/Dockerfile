@@ -13,7 +13,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/core/package.json ./packages/core/
-COPY packages/types/package.json ./packages/types/
 COPY apps/runner/package.json ./apps/runner/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
@@ -21,12 +20,10 @@ RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source files
 COPY packages/core/ ./packages/core/
-COPY packages/types/ ./packages/types/
 COPY apps/runner/ ./apps/runner/
 
 # Build all packages
-RUN pnpm --filter @t3x/types build && \
-    pnpm --filter @t3x/core build && \
+RUN pnpm --filter @t3x/core build && \
     pnpm --filter @t3x/runner build
 
 # Production stage

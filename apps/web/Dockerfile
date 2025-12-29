@@ -14,7 +14,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/storage/package.json ./packages/storage/
-COPY packages/types/package.json ./packages/types/
 COPY apps/web/package.json ./apps/web/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
@@ -23,12 +22,10 @@ RUN pnpm install --frozen-lockfile --shamefully-hoist
 # Copy source files
 COPY packages/core/ ./packages/core/
 COPY packages/storage/ ./packages/storage/
-COPY packages/types/ ./packages/types/
 COPY apps/web/ ./apps/web/
 
 # Build dependencies first
-RUN pnpm --filter @t3x/types build && \
-    pnpm --filter @t3x/core build && \
+RUN pnpm --filter @t3x/core build && \
     pnpm --filter @t3x/storage build
 
 # Build webui
