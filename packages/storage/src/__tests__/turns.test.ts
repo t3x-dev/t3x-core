@@ -103,19 +103,6 @@ describe('Turns Storage', () => {
 
     it('subsequent turns have parent hash pointing to previous turn', async () => {
       // Create a new conversation for this test
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain Test' }));
-
-      const turn1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
-        content: 'First message',
-      }));
-
-      await sleep(2); // Ensure unique timestamp for correct parent chain
-
-      const turn2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, {
-        content: 'Second message',
-      }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Chain Test' })
@@ -136,7 +123,6 @@ describe('Turns Storage', () => {
           content: 'Second message',
         })
       );
->>>>>>> theirs
 
       expect(turn2.parentTurnHash).toBe(turn1.turnHash);
     });
@@ -217,13 +203,6 @@ describe('Turns Storage', () => {
 
   describe('findTurnsByConversation', () => {
     it('returns turns for a conversation', async () => {
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'List Turns' }));
-
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 1' }));
-      await sleep(2);
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'List Turns' })
@@ -238,7 +217,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Turn 2' })
       );
->>>>>>> theirs
 
       const results = await findTurnsByConversation(db, { conversationId: conv.conversationId });
 
@@ -285,12 +263,6 @@ describe('Turns Storage', () => {
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
       await sleep(2);
-<<<<<<< ours
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
-
-      const asc = await findTurnsByConversation(db, { conversationId: conv.conversationId, order: 'asc' });
-      const desc = await findTurnsByConversation(db, { conversationId: conv.conversationId, order: 'desc' });
-=======
       await insertTurn(
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Second' })
@@ -304,7 +276,6 @@ describe('Turns Storage', () => {
         conversationId: conv.conversationId,
         order: 'desc',
       });
->>>>>>> theirs
 
       expect(asc[0].content).toBe('First');
       expect(desc[0].content).toBe('Second');
@@ -335,11 +306,6 @@ describe('Turns Storage', () => {
 
       await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
       await sleep(2); // Ensure unique timestamp
-<<<<<<< ours
-      await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
-      await sleep(2); // Ensure unique timestamp
-      const last = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Last' }));
-=======
       await insertTurn(
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Middle' })
@@ -349,7 +315,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Last' })
       );
->>>>>>> theirs
 
       const found = await findLastTurnInConversation(db, conv.conversationId);
 
@@ -372,15 +337,6 @@ describe('Turns Storage', () => {
 
   describe('findTurnChain', () => {
     it('returns the chain of turns from root to given turn (chronological order)', async () => {
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Chain' }));
-
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
-      await sleep(2); // Ensure unique timestamp for parent chain
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Child' }));
-      await sleep(2); // Ensure unique timestamp for parent chain
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Grandchild' }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Chain' })
@@ -400,7 +356,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Grandchild' })
       );
->>>>>>> theirs
 
       const chain = await findTurnChain(db, t3.turnHash);
 
@@ -430,17 +385,6 @@ describe('Turns Storage', () => {
 
   describe('findTurnsInWindow', () => {
     it('returns turns between start and end hash (inclusive)', async () => {
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Window Test' }));
-
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'First' }));
-      await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Second' }));
-      await sleep(2);
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Third' }));
-      await sleep(2);
-      const t4 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Window Test' })
@@ -465,7 +409,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Fourth' })
       );
->>>>>>> theirs
 
       // Get window from t2 to t4
       const window = await findTurnsInWindow(db, t2.turnHash, t4.turnHash);
@@ -494,15 +437,6 @@ describe('Turns Storage', () => {
     });
 
     it('returns full chain when start is root', async () => {
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Full Window' }));
-
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Root' }));
-      await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Middle' }));
-      await sleep(2);
-      const t3 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'End' }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Full Window' })
@@ -522,7 +456,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'End' })
       );
->>>>>>> theirs
 
       const window = await findTurnsInWindow(db, t1.turnHash, t3.turnHash);
 
@@ -587,13 +520,6 @@ describe('Turns Storage', () => {
     });
 
     it('throws START_NOT_IN_CHAIN when start comes after end in chain', async () => {
-<<<<<<< ours
-      const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Reverse Test' }));
-
-      const t1 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Earlier' }));
-      await sleep(2);
-      const t2 = await insertTurn(db, testData.turn(testProjectId, conv.conversationId, { content: 'Later' }));
-=======
       const conv = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Reverse Test' })
@@ -608,7 +534,6 @@ describe('Turns Storage', () => {
         db,
         testData.turn(testProjectId, conv.conversationId, { content: 'Later' })
       );
->>>>>>> theirs
 
       // t2 comes after t1, so t2 is not an ancestor of t1
       await expect(findTurnsInWindow(db, t2.turnHash, t1.turnHash)).rejects.toThrow(
