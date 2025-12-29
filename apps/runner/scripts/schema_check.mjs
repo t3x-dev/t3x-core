@@ -1,9 +1,8 @@
-import Ajv2020 from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
-
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const runnerRoot = path.resolve(scriptDir, '..');
@@ -87,4 +86,3 @@ if (failed) {
 }
 
 console.log(`[schema:check] OK (${files.length} file(s))`);
-

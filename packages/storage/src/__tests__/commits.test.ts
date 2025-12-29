@@ -5,35 +5,35 @@
  * Commits form DAGs with parent references and are branch-specific.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
-import { insertBranch, findBranchByName } from '../queries/branches';
-import {
-  insertCommit,
-  findCommitByHash,
-  findCommitsByProject,
-  findCommitParents,
-  findCommitHistory,
-  updateCommitPosition,
-  findCommonAncestor,
-  CommitError,
-} from '../queries/commits';
-import { commits } from '../schema';
-import type { AnyDB } from '../adapters';
 import type { PGlite } from '@electric-sql/pglite';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
+import { findBranchByName, insertBranch } from '../queries/branches';
+import {
+  CommitError,
+  findCommitByHash,
+  findCommitHistory,
+  findCommitParents,
+  findCommitsByProject,
+  findCommonAncestor,
+  insertCommit,
+  updateCommitPosition,
+} from '../queries/commits';
+import { insertProject } from '../queries/projects';
+import { commits } from '../schema';
+import { createTestDB, testData } from './setup';
 
 describe('Commits Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project
@@ -72,10 +72,7 @@ describe('Commits Storage', () => {
       const result = await insertCommit(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(commits)
-        .where(eq(commits.commitHash, result.commitHash));
+      const rows = await db.select().from(commits).where(eq(commits.commitHash, result.commitHash));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].message).toBe('Stored commit');
@@ -110,7 +107,10 @@ describe('Commits Storage', () => {
     });
 
     it('first commit has empty parent array', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'First Commit Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'First Commit Project' })
+      );
 
       const commit = await insertCommit(db, {
         projectId: newProject.projectId,
@@ -122,7 +122,10 @@ describe('Commits Storage', () => {
     });
 
     it('subsequent commits reference parent', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Chain Commit Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Chain Commit Project' })
+      );
 
       const c1 = await insertCommit(db, {
         projectId: newProject.projectId,
@@ -180,7 +183,10 @@ describe('Commits Storage', () => {
     });
 
     it('supports merge parents', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Merge Parents Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Merge Parents Project' })
+      );
       await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
       await insertBranch(db, { projectId: newProject.projectId, name: 'feature' });
 
@@ -237,7 +243,10 @@ describe('Commits Storage', () => {
 
   describe('findCommitsByProject', () => {
     it('returns commits for a project', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'List Commits Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'List Commits Project' })
+      );
 
       await insertCommit(db, { projectId: newProject.projectId, facetSnapshot: [] });
       await insertCommit(db, { projectId: newProject.projectId, facetSnapshot: [] });
@@ -249,15 +258,32 @@ describe('Commits Storage', () => {
     });
 
     it('filters by branch', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Filter Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Filter Branch Project' })
+      );
       await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
       await insertBranch(db, { projectId: newProject.projectId, name: 'feature' });
 
-      await insertCommit(db, { projectId: newProject.projectId, branch: 'main', facetSnapshot: [] });
-      await insertCommit(db, { projectId: newProject.projectId, branch: 'feature', facetSnapshot: [] });
+      await insertCommit(db, {
+        projectId: newProject.projectId,
+        branch: 'main',
+        facetSnapshot: [],
+      });
+      await insertCommit(db, {
+        projectId: newProject.projectId,
+        branch: 'feature',
+        facetSnapshot: [],
+      });
 
-      const mainResults = await findCommitsByProject(db, { projectId: newProject.projectId, branch: 'main' });
-      const featureResults = await findCommitsByProject(db, { projectId: newProject.projectId, branch: 'feature' });
+      const mainResults = await findCommitsByProject(db, {
+        projectId: newProject.projectId,
+        branch: 'main',
+      });
+      const featureResults = await findCommitsByProject(db, {
+        projectId: newProject.projectId,
+        branch: 'feature',
+      });
 
       expect(mainResults).toHaveLength(1);
       expect(mainResults[0].branch).toBe('main');
@@ -300,9 +326,21 @@ describe('Commits Storage', () => {
     it('returns commit history via BFS', async () => {
       const newProject = await insertProject(db, testData.project({ name: 'History Project' }));
 
-      const c1 = await insertCommit(db, { projectId: newProject.projectId, message: 'C1', facetSnapshot: [] });
-      const c2 = await insertCommit(db, { projectId: newProject.projectId, message: 'C2', facetSnapshot: [] });
-      const c3 = await insertCommit(db, { projectId: newProject.projectId, message: 'C3', facetSnapshot: [] });
+      const _c1 = await insertCommit(db, {
+        projectId: newProject.projectId,
+        message: 'C1',
+        facetSnapshot: [],
+      });
+      const _c2 = await insertCommit(db, {
+        projectId: newProject.projectId,
+        message: 'C2',
+        facetSnapshot: [],
+      });
+      const c3 = await insertCommit(db, {
+        projectId: newProject.projectId,
+        message: 'C3',
+        facetSnapshot: [],
+      });
 
       const history = await findCommitHistory(db, c3.commitHash);
 
@@ -311,7 +349,10 @@ describe('Commits Storage', () => {
     });
 
     it('respects limit option', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'History Limit Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'History Limit Project' })
+      );
 
       await insertCommit(db, { projectId: newProject.projectId, facetSnapshot: [] });
       await insertCommit(db, { projectId: newProject.projectId, facetSnapshot: [] });
@@ -335,7 +376,12 @@ describe('Commits Storage', () => {
     });
 
     it('updates only x when only x provided', async () => {
-      const commit = await insertCommit(db, { projectId: testProjectId, facetSnapshot: [], positionX: 10, positionY: 20 });
+      const commit = await insertCommit(db, {
+        projectId: testProjectId,
+        facetSnapshot: [],
+        positionX: 10,
+        positionY: 20,
+      });
 
       const updated = await updateCommitPosition(db, commit.commitHash, { x: 100 });
 

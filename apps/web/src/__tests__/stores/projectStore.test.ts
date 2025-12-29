@@ -4,7 +4,7 @@
  * Tests for the Zustand project store that manages project CRUD operations.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '@/store/projectStore';
 
 // Mock the API module
@@ -235,10 +235,7 @@ describe('Project Store', () => {
       expect(result.id).toMatch(/^local-/);
       expect(result.name).toContain('offline');
       expect(result.status).toBe('draft');
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('offline'),
-        'warning'
-      );
+      expect(notifyCallback).toHaveBeenCalledWith(expect.stringContaining('offline'), 'warning');
     });
   });
 
@@ -278,10 +275,7 @@ describe('Project Store', () => {
 
       await useProjectStore.getState().deleteProject('proj_123');
 
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('Deleted'),
-        'success'
-      );
+      expect(notifyCallback).toHaveBeenCalledWith(expect.stringContaining('Deleted'), 'success');
     });
 
     it('restores project on API failure', async () => {

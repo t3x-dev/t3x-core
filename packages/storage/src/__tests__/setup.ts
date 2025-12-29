@@ -7,8 +7,8 @@
 
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import * as schema from '../schema';
 import type { AnyDB } from '../adapters';
+import * as schema from '../schema';
 
 /**
  * SQL to create all tables (matching schema.ts)

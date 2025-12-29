@@ -32,37 +32,37 @@
 //     ],
 //   });
 
-export { Observer, observer } from './observer.js';
 export { EvalEngine, evalEngine } from './eval.js';
+export { Observer, observer } from './observer.js';
 export {
+  caseToTestSteps,
+  type EvalCase,
+  type EvalSuite,
+  EvalSuiteSchema,
+  getDefaultSuitesPath,
   loadSuite,
   loadSuites,
-  getDefaultSuitesPath,
-  caseToTestSteps,
-  EvalSuiteSchema,
-  type EvalSuite,
-  type EvalCase,
   type SuiteRunResult,
 } from './suites.js';
 
 export type {
-  AgentInput,
   AgentConfig,
-  TraceEvent,
-  RunTrace,
-  TestStep,
-  TestResult,
+  AgentInput,
   EvalRequest,
   EvalResponse,
+  RunTrace,
+  TestResult,
+  TestStep,
+  TraceEvent,
 } from './types.js';
 
 export {
-  AgentInputSchema,
   AgentConfigSchema,
-  TraceEventSchema,
-  RunTraceSchema,
-  TestStepSchema,
-  TestResultSchema,
+  AgentInputSchema,
   EvalRequestSchema,
   EvalResponseSchema,
+  RunTraceSchema,
+  TestResultSchema,
+  TestStepSchema,
+  TraceEventSchema,
 } from './types.js';

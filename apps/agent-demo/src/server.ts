@@ -1,5 +1,5 @@
 import express, { type Express } from 'express';
-import { runAgent, type AgentInput } from './agent.js';
+import { type AgentInput, runAgent } from './agent.js';
 import { getOutboxPath } from './outbox.js';
 
 const app: Express = express();
@@ -82,8 +82,8 @@ app.get('/outbox', async (_req, res) => {
     const content = readFileSync(outboxPath, 'utf-8');
     const emails = content
       .split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line));
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
 
     res.json({ emails });
   } catch (error) {

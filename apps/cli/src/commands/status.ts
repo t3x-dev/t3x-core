@@ -1,10 +1,11 @@
 /**
  * Status Commands
  */
-import { Command } from 'commander';
+
 import { createClient } from '@t3x/api-client';
 import chalk from 'chalk';
-import { success, error, createSpinner, getApiUrl } from '../utils.js';
+import type { Command } from 'commander';
+import { createSpinner, error, getApiUrl } from '../utils.js';
 
 export function registerStatusCommands(program: Command): void {
   // Health check
@@ -30,7 +31,9 @@ export function registerStatusCommands(program: Command): void {
         if (health.database) {
           console.log();
           console.log('Database:');
-          console.log(`  Connected: ${health.database.connected ? chalk.green('Yes') : chalk.red('No')}`);
+          console.log(
+            `  Connected: ${health.database.connected ? chalk.green('Yes') : chalk.red('No')}`
+          );
           if (health.database.latency_ms !== undefined) {
             console.log(`  Latency: ${health.database.latency_ms}ms`);
           }
@@ -63,7 +66,9 @@ export function registerStatusCommands(program: Command): void {
         console.log();
         console.log('Database:');
         console.log(`  Type: ${status.database.type}`);
-        console.log(`  Connected: ${status.database.connected ? chalk.green('Yes') : chalk.red('No')}`);
+        console.log(
+          `  Connected: ${status.database.connected ? chalk.green('Yes') : chalk.red('No')}`
+        );
       } catch (err) {
         spinner.stop();
         error(`Status check failed: ${err instanceof Error ? err.message : String(err)}`);

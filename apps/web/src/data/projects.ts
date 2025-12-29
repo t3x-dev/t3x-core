@@ -1,12 +1,12 @@
 export interface ProjectSummary {
-  id: string
-  name: string
-  description: string
-  updatedAt: string
-  owner: string
-  status: 'draft' | 'active' | 'paused'
-  nodes: number
-  drafts: number
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+  owner: string;
+  status: 'draft' | 'active' | 'paused';
+  nodes: number;
+  drafts: number;
 }
 
 export const projectSeed: ProjectSummary[] = [
@@ -40,6 +40,6 @@ export const projectSeed: ProjectSummary[] = [
     nodes: 5,
     drafts: 3,
   },
-]
+];
 
-export const projects = projectSeed
+export const projects = projectSeed;

@@ -4,11 +4,11 @@
  * Tests for NLP provider base utilities.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   NLPProviderError,
-  normalizePosTag,
   normalizeDependencyLabel,
+  normalizePosTag,
   POS_TAG_MAPPING,
 } from '../../providers/nlp/base';
 
@@ -98,11 +98,7 @@ describe('NLP Provider', () => {
     });
 
     it('creates error with custom message', () => {
-      const error = new NLPProviderError(
-        'spacy',
-        undefined,
-        'Model not found: en_core_web_sm'
-      );
+      const error = new NLPProviderError('spacy', undefined, 'Model not found: en_core_web_sm');
 
       expect(error.message).toBe('Model not found: en_core_web_sm');
       expect(error.providerId).toBe('spacy');

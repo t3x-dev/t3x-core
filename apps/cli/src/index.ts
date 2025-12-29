@@ -5,10 +5,10 @@
  * Command-line interface for T3X semantic version control.
  */
 import { Command } from 'commander';
+import { registerBranchCommands } from './commands/branches.js';
+import { registerCommitCommands } from './commands/commits.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerStatusCommands } from './commands/status.js';
-import { registerCommitCommands } from './commands/commits.js';
-import { registerBranchCommands } from './commands/branches.js';
 
 const program = new Command();
 

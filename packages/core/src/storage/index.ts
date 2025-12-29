@@ -10,14 +10,14 @@ export * from './types';
 
 // Utils (pure functions - ID generation, hash computation, timestamps)
 export {
-  generateProjectId,
-  generateConversationId,
+  computeCommitHash,
+  computeJCSHash,
+  computeTextHash,
+  computeTurnHash,
   generateBranchId,
+  generateConversationId,
   generateDraftId,
   generateMergeResultId,
-  computeJCSHash,
-  computeTurnHash,
-  computeCommitHash,
-  computeTextHash,
+  generateProjectId,
   isoNow,
 } from './utils';

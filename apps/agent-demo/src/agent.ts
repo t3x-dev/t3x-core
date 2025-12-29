@@ -1,4 +1,4 @@
-import { sendEmail, type EmailArgs } from './tools/email.js';
+import { type EmailArgs, sendEmail } from './tools/email.js';
 
 export interface TraceEvent {
   type: 'step' | 'tool_call' | 'tool_result' | 'error';
@@ -45,7 +45,7 @@ export interface AgentOutput {
  */
 export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   const traceEvents: TraceEvent[] = [];
-  const startTime = Date.now();
+  const _startTime = Date.now();
 
   // Step 1: Summarize
   const summarizeStart = Date.now();
@@ -126,7 +126,7 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
  */
 function summarize(text: string): string {
   // Extract key points (simple heuristic)
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
 
   if (sentences.length <= 2) {
     return text.trim();
@@ -134,12 +134,10 @@ function summarize(text: string): string {
 
   // Take first sentence + any sentence with key words
   const keyWords = ['timeline', 'deadline', 'risk', 'decision', 'action', 'next', 'important'];
-  const important = sentences.filter(s =>
-    keyWords.some(kw => s.toLowerCase().includes(kw))
-  );
+  const important = sentences.filter((s) => keyWords.some((kw) => s.toLowerCase().includes(kw)));
 
   const summary = [sentences[0], ...important.slice(0, 2)]
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter((s, i, arr) => arr.indexOf(s) === i) // dedupe
     .join('. ');
 

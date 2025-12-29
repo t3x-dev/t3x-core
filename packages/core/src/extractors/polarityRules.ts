@@ -13,8 +13,8 @@
  * Does not use sentiment dictionaries (VADER/SentiWordNet), ensuring determinism.
  */
 
-import type { NLPToken } from "../providers/nlp";
-import type { Polarity } from "./types";
+import type { NLPToken } from '../providers/nlp';
+import type { Polarity } from './types';
 
 /**
  * Polarity rule entry
@@ -46,27 +46,27 @@ export interface PreferenceRelation {
 const DEFAULT_POLARITY_RULES: { positive: PolarityRule[]; negative: PolarityRule[] } = {
   // Positive verbs (with negation check)
   positive: [
-    { verb: "want", polarity: 1, checkNegation: true },
-    { verb: "prefer", polarity: 1, checkNegation: true },
-    { verb: "need", polarity: 1, checkNegation: true },
-    { verb: "like", polarity: 1, checkNegation: true },
-    { verb: "love", polarity: 1, checkNegation: true },
-    { verb: "enjoy", polarity: 1, checkNegation: true },
-    { verb: "should", polarity: 1, checkNegation: true },
-    { verb: "must", polarity: 1, checkNegation: true },
-    { verb: "hope", polarity: 1, checkNegation: true },
-    { verb: "wish", polarity: 1, checkNegation: true },
-    { verb: "plan", polarity: 1, checkNegation: true },
-    { verb: "intend", polarity: 1, checkNegation: true },
+    { verb: 'want', polarity: 1, checkNegation: true },
+    { verb: 'prefer', polarity: 1, checkNegation: true },
+    { verb: 'need', polarity: 1, checkNegation: true },
+    { verb: 'like', polarity: 1, checkNegation: true },
+    { verb: 'love', polarity: 1, checkNegation: true },
+    { verb: 'enjoy', polarity: 1, checkNegation: true },
+    { verb: 'should', polarity: 1, checkNegation: true },
+    { verb: 'must', polarity: 1, checkNegation: true },
+    { verb: 'hope', polarity: 1, checkNegation: true },
+    { verb: 'wish', polarity: 1, checkNegation: true },
+    { verb: 'plan', polarity: 1, checkNegation: true },
+    { verb: 'intend', polarity: 1, checkNegation: true },
   ],
   // Negative verbs (no negation check needed, already negative)
   negative: [
-    { verb: "dislike", polarity: -1, checkNegation: false },
-    { verb: "hate", polarity: -1, checkNegation: false },
-    { verb: "avoid", polarity: -1, checkNegation: false },
-    { verb: "reject", polarity: -1, checkNegation: false },
-    { verb: "refuse", polarity: -1, checkNegation: false },
-    { verb: "cannot", polarity: -1, checkNegation: false },
+    { verb: 'dislike', polarity: -1, checkNegation: false },
+    { verb: 'hate', polarity: -1, checkNegation: false },
+    { verb: 'avoid', polarity: -1, checkNegation: false },
+    { verb: 'reject', polarity: -1, checkNegation: false },
+    { verb: 'refuse', polarity: -1, checkNegation: false },
+    { verb: 'cannot', polarity: -1, checkNegation: false },
     { verb: "can't", polarity: -1, checkNegation: false },
     { verb: "won't", polarity: -1, checkNegation: false },
     { verb: "wouldn't", polarity: -1, checkNegation: false },
@@ -77,15 +77,33 @@ const DEFAULT_POLARITY_RULES: { positive: PolarityRule[]; negative: PolarityRule
  * Negation markers (for dependency tree lookup)
  */
 const NEGATION_MARKERS = new Set([
-  "not", "n't", "never", "no", "none", "nobody", "nothing", "neither",
-  "nor", "nowhere", "hardly", "scarcely", "barely"
+  'not',
+  "n't",
+  'never',
+  'no',
+  'none',
+  'nobody',
+  'nothing',
+  'neither',
+  'nor',
+  'nowhere',
+  'hardly',
+  'scarcely',
+  'barely',
 ]);
 
 /**
  * Object dependency labels (direct/indirect objects)
  */
 const OBJECT_DEP_LABELS = new Set([
-  "DOBJ", "POBJ", "ATTR", "OPRD", "IOBJ", "XCOMP", "CCOMP", "ACOMP"
+  'DOBJ',
+  'POBJ',
+  'ATTR',
+  'OPRD',
+  'IOBJ',
+  'XCOMP',
+  'CCOMP',
+  'ACOMP',
 ]);
 
 /**
@@ -104,12 +122,8 @@ export class PolarityRuleEngine {
     };
 
     // Build fast lookup indexes
-    this.positiveVerbs = new Map(
-      rules.positive.map((rule) => [rule.verb, rule])
-    );
-    this.negativeVerbs = new Map(
-      rules.negative.map((rule) => [rule.verb, rule])
-    );
+    this.positiveVerbs = new Map(rules.positive.map((rule) => [rule.verb, rule]));
+    this.negativeVerbs = new Map(rules.negative.map((rule) => [rule.verb, rule]));
   }
 
   /**
@@ -120,11 +134,7 @@ export class PolarityRuleEngine {
    * @param tokens - All tokens in the document (for negation lookup)
    * @returns Polarity value (-1, 0, or 1)
    */
-  getPolarity(
-    objectToken: NLPToken,
-    verbToken: NLPToken,
-    tokens: NLPToken[]
-  ): Polarity {
+  getPolarity(_objectToken: NLPToken, verbToken: NLPToken, tokens: NLPToken[]): Polarity {
     const verbLemma = verbToken.lemma.toLowerCase();
 
     // Check if it matches positive verbs
@@ -165,12 +175,12 @@ export class PolarityRuleEngine {
       }
 
       // Check for negation dependency label
-      if (token.dependencyLabel === "NEG") {
+      if (token.dependencyLabel === 'NEG') {
         return true;
       }
 
       // Check for negation words with advmod/aux labels
-      if (token.dependencyLabel === "ADVMOD" || token.dependencyLabel === "AUX") {
+      if (token.dependencyLabel === 'ADVMOD' || token.dependencyLabel === 'AUX') {
         const lemma = token.lemma.toLowerCase();
         if (NEGATION_MARKERS.has(lemma)) {
           return true;
@@ -186,7 +196,7 @@ export class PolarityRuleEngine {
     const verbHead = verbToken.headIndex;
     if (verbHead >= 0 && verbHead < tokens.length) {
       for (const token of tokens) {
-        if (token.headIndex === verbHead && token.dependencyLabel === "NEG") {
+        if (token.headIndex === verbHead && token.dependencyLabel === 'NEG') {
           const lemma = token.lemma.toLowerCase();
           if (NEGATION_MARKERS.has(lemma)) {
             return true;
@@ -211,7 +221,7 @@ export class PolarityRuleEngine {
 
     for (const token of tokens) {
       // Only focus on verbs
-      if (token.pos !== "VERB" && token.pos !== "AUX") {
+      if (token.pos !== 'VERB' && token.pos !== 'AUX') {
         continue;
       }
 
@@ -239,10 +249,10 @@ export class PolarityRuleEngine {
         }
 
         // Handle prepositional phrases (e.g., "travel to Japan")
-        if (child.dependencyLabel === "PREP") {
+        if (child.dependencyLabel === 'PREP') {
           // Find pobj under prep
           for (const grandchild of tokens) {
-            if (grandchild.headIndex === child.index && grandchild.dependencyLabel === "POBJ") {
+            if (grandchild.headIndex === child.index && grandchild.dependencyLabel === 'POBJ') {
               const polarity = this.getPolarity(grandchild, token, tokens);
               relations.push({
                 verbToken: token,
@@ -280,8 +290,9 @@ export class PolarityRuleEngine {
 /**
  * Create a new PolarityRuleEngine instance
  */
-export function createPolarityRuleEngine(
-  customRules?: { positive?: PolarityRule[]; negative?: PolarityRule[] }
-): PolarityRuleEngine {
+export function createPolarityRuleEngine(customRules?: {
+  positive?: PolarityRule[];
+  negative?: PolarityRule[];
+}): PolarityRuleEngine {
   return new PolarityRuleEngine(customRules);
 }

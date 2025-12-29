@@ -1,17 +1,28 @@
 /**
  * Projects Routes with OpenAPI
  */
-import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import { getDB } from '../lib/db';
-import { insertProject, findProjects, findProjectById, findProjectWithStats, updateProject, deleteProject } from '@t3x/storage/pglite';
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  deleteProject,
+  findProjects,
+  findProjectWithStats,
+  insertProject,
+  updateProject,
+} from '@t3x/storage/pglite';
+import { getDB } from '../lib/db';
+import {
+  ErrorResponseSchema,
+  IdParamSchema,
+  PaginationQuerySchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
+import {
+  CreateProjectSchema,
+  ListProjectsResponseSchema,
   ProjectSchema,
   ProjectWithStatsSchema,
-  CreateProjectSchema,
   UpdateProjectSchema,
-  ListProjectsResponseSchema,
 } from '../schemas/projects';
-import { PaginationQuerySchema, IdParamSchema, ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const projectRoutes = new OpenAPIHono();
 
@@ -177,7 +188,13 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     const project = await findProjectWithStats(db, id);
 
     if (!project) {
-      return c.json({ success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } }, 404);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
     }
 
     const apiProject = {
@@ -255,7 +272,13 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     });
 
     if (!project) {
-      return c.json({ success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } }, 404);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
     }
 
     const apiProject = {
@@ -286,7 +309,9 @@ const deleteProjectRoute = createRoute({
       description: 'Project deleted',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ deleted: z.literal(true), project_id: z.string() })),
+          schema: SuccessResponseSchema(
+            z.object({ deleted: z.literal(true), project_id: z.string() })
+          ),
         },
       },
     },
@@ -317,10 +342,19 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
     const deleted = await deleteProject(db, id);
 
     if (!deleted) {
-      return c.json({ success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } }, 404);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
     }
 
-    return c.json({ success: true as const, data: { deleted: true as const, project_id: id } }, 200);
+    return c.json(
+      { success: true as const, data: { deleted: true as const, project_id: id } },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);

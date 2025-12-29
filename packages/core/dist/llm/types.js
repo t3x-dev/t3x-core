@@ -14,7 +14,7 @@ class LLMProviderError extends Error {
         super(`[${providerId}] ${message}`);
         this.providerId = providerId;
         this.statusCode = statusCode;
-        this.name = "LLMProviderError";
+        this.name = 'LLMProviderError';
     }
 }
 exports.LLMProviderError = LLMProviderError;

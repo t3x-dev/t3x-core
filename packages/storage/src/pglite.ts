@@ -13,21 +13,19 @@
  * ```
  */
 
-// Schema (table definitions and types)
-export * from './schema';
-
 // PGLite adapter only (no postgres/supabase)
 export {
-  type PGLiteDB,
-  type PGLiteConfig,
-  createPGLiteStorage,
-  getPGLiteDB,
-  getPGLiteClient,
   closePGLiteStorage,
+  createPGLiteStorage,
+  getPGLiteClient,
+  getPGLiteDB,
+  type PGLiteConfig,
+  type PGLiteDB,
 } from './adapters/pglite';
-
 // Query functions
 export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';
 
 // Type alias for PGLite database
 import type { PGLiteDB } from './adapters/pglite';

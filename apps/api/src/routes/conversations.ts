@@ -7,18 +7,19 @@
  * PUT    /v1/conversations/:id - Update conversation
  * DELETE /v1/conversations/:id - Delete conversation
  */
+
+import {
+  deleteConversation,
+  findConversationById,
+  findConversationsByProject,
+  findProjectById,
+  getConversationTurnCount,
+  insertConversation,
+  updateConversation,
+} from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
-import {
-  insertConversation,
-  findConversationsByProject,
-  findConversationById,
-  findProjectById,
-  updateConversation,
-  deleteConversation,
-  getConversationTurnCount,
-} from '@t3x/storage/pglite';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 export const conversationRoutes = new Hono();
 
@@ -50,7 +51,12 @@ conversationRoutes.get('/v1/conversations', async (c) => {
       metadata: conv.metadataJson ? JSON.parse(conv.metadataJson) : null,
     }));
 
-    return jsonSuccess(c, { conversations: apiConversations, project_id: projectId, limit, offset });
+    return jsonSuccess(c, {
+      conversations: apiConversations,
+      project_id: projectId,
+      limit,
+      offset,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'LIST_FAILED', message, 500);

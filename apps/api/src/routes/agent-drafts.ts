@@ -5,18 +5,19 @@
  * GET   /v1/agent/drafts/:id - Get draft
  * PATCH /v1/agent/drafts/:id - Update draft with feedback
  */
-import { Hono } from 'hono';
-import { getDB } from '../lib/db';
-import { jsonSuccess, jsonError } from '../lib/response';
+
+import { createClaudeProvider, LLMProviderError } from '@t3x/core';
 import {
-  findProjectById,
   findConversationById,
-  findTurnsByConversation,
   findDraftById,
+  findProjectById,
+  findTurnsByConversation,
   insertDraft,
   updateDraft,
 } from '@t3x/storage/pglite';
-import { createClaudeProvider, LLMProviderError } from '@t3x/core';
+import { Hono } from 'hono';
+import { getDB } from '../lib/db';
+import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
 // Types
@@ -59,23 +60,127 @@ interface DraftResponse {
 // ============================================================================
 
 const DRAFT_STOP_WORDS = new Set([
-  'be', 'is', 'am', 'are', 'was', 'were', 'been', 'being',
-  'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing',
-  'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can',
-  'want', 'need', 'let', 'try', 'keep', 'seem', 'help', 'show',
-  'come', 'go', 'get', 'make', 'take', 'put', 'give', 'use',
-  'say', 'tell', 'ask', 'think', 'know', 'see', 'look', 'find',
-  'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'she', 'it', 'they',
-  'this', 'that', 'these', 'those', 'a', 'an', 'the',
-  'something', 'anything', 'nothing', 'everything',
-  'someone', 'anyone', 'everyone', 'nobody',
-  'some', 'any', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
-  'good', 'great', 'nice', 'well', 'better', 'best',
-  'new', 'old', 'big', 'small', 'long', 'short',
-  'thing', 'things', 'way', 'ways', 'time', 'times',
-  'lot', 'lots', 'much', 'many', 'little', 'less', 'least',
-  'also', 'just', 'only', 'even', 'still', 'already', 'always', 'never',
-  'very', 'really', 'quite', 'pretty',
+  'be',
+  'is',
+  'am',
+  'are',
+  'was',
+  'were',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'having',
+  'do',
+  'does',
+  'did',
+  'doing',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'must',
+  'shall',
+  'can',
+  'want',
+  'need',
+  'let',
+  'try',
+  'keep',
+  'seem',
+  'help',
+  'show',
+  'come',
+  'go',
+  'get',
+  'make',
+  'take',
+  'put',
+  'give',
+  'use',
+  'say',
+  'tell',
+  'ask',
+  'think',
+  'know',
+  'see',
+  'look',
+  'find',
+  'i',
+  'me',
+  'my',
+  'we',
+  'our',
+  'you',
+  'your',
+  'he',
+  'she',
+  'it',
+  'they',
+  'this',
+  'that',
+  'these',
+  'those',
+  'a',
+  'an',
+  'the',
+  'something',
+  'anything',
+  'nothing',
+  'everything',
+  'someone',
+  'anyone',
+  'everyone',
+  'nobody',
+  'some',
+  'any',
+  'all',
+  'each',
+  'every',
+  'both',
+  'few',
+  'more',
+  'most',
+  'good',
+  'great',
+  'nice',
+  'well',
+  'better',
+  'best',
+  'new',
+  'old',
+  'big',
+  'small',
+  'long',
+  'short',
+  'thing',
+  'things',
+  'way',
+  'ways',
+  'time',
+  'times',
+  'lot',
+  'lots',
+  'much',
+  'many',
+  'little',
+  'less',
+  'least',
+  'also',
+  'just',
+  'only',
+  'even',
+  'still',
+  'already',
+  'always',
+  'never',
+  'very',
+  'really',
+  'quite',
+  'pretty',
 ]);
 
 function isValueableKeyword(keyword: string): boolean {
@@ -89,10 +194,7 @@ function isValueableKeyword(keyword: string): boolean {
 
 type DBType = Awaited<ReturnType<typeof getDB>>;
 
-async function extractMustHave(
-  db: DBType,
-  conversationId: string
-): Promise<string[]> {
+async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
   const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
 
   const keywords: string[] = [];
@@ -105,7 +207,7 @@ async function extractMustHave(
       const ring1 = rings.ring1 ?? {};
 
       for (const kw of ring1.keywords ?? []) {
-        const kwText = typeof kw === 'string' ? kw : kw.text ?? kw.lemma;
+        const kwText = typeof kw === 'string' ? kw : (kw.text ?? kw.lemma);
         const kwLower = kwText?.toLowerCase();
         if (kwText && isValueableKeyword(kwText) && !seenLower.has(kwLower)) {
           seenLower.add(kwLower);
@@ -120,10 +222,7 @@ async function extractMustHave(
   return keywords.slice(0, 15);
 }
 
-async function extractMustntHave(
-  db: DBType,
-  conversationId: string
-): Promise<string[]> {
+async function extractMustntHave(db: DBType, conversationId: string): Promise<string[]> {
   const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
 
   const keywords: string[] = [];
@@ -161,11 +260,7 @@ function hasWholeWord(text: string, keyword: string): boolean {
   return regex.test(text);
 }
 
-function validateDraft(
-  text: string,
-  mustHave: string[],
-  mustntHave: string[]
-): DraftValidation {
+function validateDraft(text: string, mustHave: string[], mustntHave: string[]): DraftValidation {
   const missing = mustHave.filter((kw) => !hasWholeWord(text, kw));
   const forbidden = mustntHave.filter((kw) => hasWholeWord(text, kw));
 
@@ -283,7 +378,10 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     }
 
     // Get conversation turns
-    const turns = await findTurnsByConversation(db, { conversationId: body.conversation_id, limit: 100 });
+    const turns = await findTurnsByConversation(db, {
+      conversationId: body.conversation_id,
+      limit: 100,
+    });
     const turnData = turns.map((t) => ({ role: t.role, content: t.content }));
 
     // Extract constraints
@@ -457,7 +555,10 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
     }
 
     // Get conversation context
-    const turns = await findTurnsByConversation(db, { conversationId: draft.conversationId, limit: 100 });
+    const turns = await findTurnsByConversation(db, {
+      conversationId: draft.conversationId,
+      limit: 100,
+    });
     const turnData = turns.map((t) => ({ role: t.role, content: t.content }));
 
     // Rebuild prompt with feedback

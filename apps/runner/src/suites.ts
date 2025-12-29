@@ -1,7 +1,7 @@
+import { existsSync, readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { z } from 'zod';
-import { TestStepSchema, type TestStep } from './types.js';
-import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join, basename } from 'path';
+import { type TestStep, TestStepSchema } from './types.js';
 
 /**
  * Eval Suite - A collection of test cases for an agent
@@ -11,13 +11,15 @@ export const EvalSuiteSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   agent_id: z.string(),
-  cases: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    input: z.string(),
-    context: z.record(z.unknown()).optional(),
-    assertions: z.array(TestStepSchema),
-  })),
+  cases: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      input: z.string(),
+      context: z.record(z.string(), z.unknown()).optional(),
+      assertions: z.array(TestStepSchema),
+    })
+  ),
 });
 
 export type EvalSuite = z.infer<typeof EvalSuiteSchema>;
@@ -40,7 +42,7 @@ export function loadSuites(dirPath: string): EvalSuite[] {
     return [];
   }
 
-  const files = readdirSync(dirPath).filter(f => f.endsWith('.json'));
+  const files = readdirSync(dirPath).filter((f) => f.endsWith('.json'));
   const suites: EvalSuite[] = [];
 
   for (const file of files) {

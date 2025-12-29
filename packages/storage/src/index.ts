@@ -26,11 +26,9 @@
  * ```
  */
 
-// Schema (table definitions and types)
-export * from './schema';
-
 // Database adapters
 export * from './adapters';
-
 // Query functions
 export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';

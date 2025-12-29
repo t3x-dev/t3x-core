@@ -5,35 +5,35 @@
  * Branches track head commits and support switching.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
 import {
-  insertBranch,
-  findBranchByName,
-  findBranchById,
-  findBranchesByProject,
-  findCurrentBranch,
-  switchBranch,
-  updateBranchHead,
   deleteBranch,
   ensureMainBranch,
+  findBranchById,
+  findBranchByName,
+  findBranchesByProject,
+  findCurrentBranch,
+  insertBranch,
+  switchBranch,
+  updateBranchHead,
 } from '../queries/branches';
+import { insertProject } from '../queries/projects';
 import { branches } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, testData } from './setup';
 
 describe('Branches Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project
@@ -64,10 +64,7 @@ describe('Branches Storage', () => {
       const result = await insertBranch(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(branches)
-        .where(eq(branches.branchId, result.branchId));
+      const rows = await db.select().from(branches).where(eq(branches.branchId, result.branchId));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].name).toBe('db-stored-branch');
@@ -75,7 +72,10 @@ describe('Branches Storage', () => {
     });
 
     it('first branch in project is marked as current', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'First Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'First Branch Project' })
+      );
 
       const result = await insertBranch(db, { projectId: newProject.projectId, name: 'first' });
 
@@ -83,7 +83,10 @@ describe('Branches Storage', () => {
     });
 
     it('subsequent branches are not marked as current', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Second Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Second Branch Project' })
+      );
 
       await insertBranch(db, { projectId: newProject.projectId, name: 'first' });
       const second = await insertBranch(db, { projectId: newProject.projectId, name: 'second' });
@@ -150,7 +153,10 @@ describe('Branches Storage', () => {
 
   describe('findBranchesByProject', () => {
     it('returns branches for a project', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'List Branches Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'List Branches Project' })
+      );
 
       await insertBranch(db, { projectId: newProject.projectId, name: 'branch-a' });
       await insertBranch(db, { projectId: newProject.projectId, name: 'branch-b' });
@@ -178,7 +184,10 @@ describe('Branches Storage', () => {
 
   describe('findCurrentBranch', () => {
     it('returns the current branch', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Current Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Current Branch Project' })
+      );
       const first = await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
 
       const current = await findCurrentBranch(db, newProject.projectId);
@@ -199,7 +208,10 @@ describe('Branches Storage', () => {
 
   describe('switchBranch', () => {
     it('switches current branch to target', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Switch Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Switch Branch Project' })
+      );
       await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
       await insertBranch(db, { projectId: newProject.projectId, name: 'feature' });
 
@@ -242,7 +254,10 @@ describe('Branches Storage', () => {
 
   describe('deleteBranch', () => {
     it('deletes a non-current branch', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Delete Branch Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Delete Branch Project' })
+      );
       await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
       await insertBranch(db, { projectId: newProject.projectId, name: 'to-delete' });
 
@@ -281,7 +296,10 @@ describe('Branches Storage', () => {
     });
 
     it('returns existing main branch if it exists', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Existing Main Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Existing Main Project' })
+      );
       const created = await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
 
       const main = await ensureMainBranch(db, newProject.projectId);

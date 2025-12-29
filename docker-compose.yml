@@ -100,6 +100,8 @@ services:
       - DATABASE_URL=postgresql://t3x:t3x_dev_password@postgres:5432/t3x
       # Note: NEXT_PUBLIC_* env vars are set at BUILD time in Dockerfile
       # Runtime values here are ignored by client-side code
+      - NEXT_PUBLIC_API_URL=http://t3x-api:8000
+      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
       # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
       - HOSTNAME=0.0.0.0
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)

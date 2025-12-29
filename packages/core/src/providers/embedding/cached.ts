@@ -5,7 +5,7 @@
  * Cache can be pre-populated with embeddings from database.
  */
 
-import { type EmbeddingProvider, cosineSimilarity } from './base';
+import { cosineSimilarity, type EmbeddingProvider } from './base';
 
 /**
  * Configuration for cached embedding provider
@@ -169,9 +169,10 @@ export class CachedEmbeddingProvider implements EmbeddingProvider {
    */
   private bufferToFloat32Array(buffer: ArrayBuffer | Buffer): number[] {
     // Handle Node.js Buffer (has buffer property pointing to ArrayBuffer)
-    const arrayBuffer = 'buffer' in buffer && buffer.buffer instanceof ArrayBuffer
-      ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-      : buffer;
+    const arrayBuffer =
+      'buffer' in buffer && buffer.buffer instanceof ArrayBuffer
+        ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+        : buffer;
     const float32Array = new Float32Array(arrayBuffer);
     return Array.from(float32Array);
   }

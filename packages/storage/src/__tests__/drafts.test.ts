@@ -5,29 +5,29 @@
  * Drafts track LLM-generated content with lifecycle states.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { createTestDB, testData } from './setup';
-import { insertProject } from '../queries/projects';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
 import {
-  insertDraft,
+  adoptDraft,
+  deleteDraft,
   findDraftById,
   findDraftsByProject,
+  getDraftTextHash,
+  insertDraft,
+  supersedeDraft,
   updateDraft,
   updateDraftStatus,
-  adoptDraft,
-  supersedeDraft,
-  getDraftTextHash,
-  deleteDraft,
 } from '../queries/drafts';
+import { insertProject } from '../queries/projects';
 import { drafts } from '../schema';
-import type { AnyDB } from '../adapters';
-import type { PGlite } from '@electric-sql/pglite';
+import { createTestDB, testData } from './setup';
 
 describe('Drafts Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -35,14 +35,17 @@ describe('Drafts Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project and conversation
     const project = await insertProject(db, testData.project({ name: 'Draft Test Project' }));
     testProjectId = project.projectId;
 
-    const conv = await insertConversation(db, testData.conversation(testProjectId, { title: 'Draft Test Chat' }));
+    const conv = await insertConversation(
+      db,
+      testData.conversation(testProjectId, { title: 'Draft Test Chat' })
+    );
     testConversationId = conv.conversationId;
   });
 
@@ -84,10 +87,7 @@ describe('Drafts Storage', () => {
       const result = await insertDraft(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(drafts)
-        .where(eq(drafts.draftId, result.draftId));
+      const rows = await db.select().from(drafts).where(eq(drafts.draftId, result.draftId));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].text).toBe('Stored draft');
@@ -213,7 +213,10 @@ describe('Drafts Storage', () => {
     });
 
     it('filters by status', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Status Filter Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Status Filter Project' })
+      );
       const conv = await insertConversation(db, testData.conversation(newProject.projectId));
 
       const ephemeral = await insertDraft(db, {
@@ -274,10 +277,7 @@ describe('Drafts Storage', () => {
       expect(updated!.text).toBe('Updated text');
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(drafts)
-        .where(eq(drafts.draftId, created.draftId));
+      const rows = await db.select().from(drafts).where(eq(drafts.draftId, created.draftId));
 
       expect(rows[0].text).toBe('Updated text');
     });

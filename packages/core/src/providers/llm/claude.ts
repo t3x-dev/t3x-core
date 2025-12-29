@@ -4,7 +4,36 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
-import { type LLMProvider, type LLMGenerateOptions, LLMProviderError } from '../../llm/types';
+import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
+
+/**
+ * Get proxy URL from environment variables
+ */
+function getProxyUrl(): string | undefined {
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  );
+}
+
+/**
+ * Fetch with proxy support - uses undici when proxy is configured
+ */
+async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
+  const proxyUrl = getProxyUrl();
+  if (proxyUrl) {
+    // Dynamic import to avoid build-time issues with undici
+    const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+    const response = await undiciFetch(url, {
+      ...options,
+      dispatcher: new ProxyAgent(proxyUrl),
+    } as Parameters<typeof undiciFetch>[1]);
+    return response as unknown as Response;
+  }
+  return fetch(url, options);
+}
 
 /**
  * Claude provider configuration
@@ -41,7 +70,7 @@ export class ClaudeProvider implements LLMProvider {
     const url = `${this.baseUrl}/v1/messages`;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithProxy(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

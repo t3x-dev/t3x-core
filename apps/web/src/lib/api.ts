@@ -6,357 +6,357 @@
  */
 
 // Use standalone API if configured, otherwise fall back to embedded routes
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
-const API_V1 = `${API_BASE}/api/v1`
-const DEFAULT_TIMEOUT = 10000
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_V1 = `${API_BASE}/api/v1`;
+const DEFAULT_TIMEOUT = 10000;
 
 // ============================================================================
 // Types (aligned with @t3x/storage schema)
 // ============================================================================
 
 export interface Project {
-  project_id: string
-  name: string
-  created_at: string
-  conversations_count?: number
-  turns_count?: number
-  metadata?: Record<string, unknown>
+  project_id: string;
+  name: string;
+  created_at: string;
+  conversations_count?: number;
+  turns_count?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ProjectDetail extends Project {
   stats?: {
-    conversations_count: number
-    turns_count: number
-    commits_count: number
-  }
+    conversations_count: number;
+    turns_count: number;
+    commits_count: number;
+  };
 }
 
 export interface Conversation {
-  conversation_id: string
-  project_id: string
-  title?: string
-  parent_commit_hash?: string
-  position_x?: number
-  position_y?: number
-  created_at: string
-  turns_count?: number
+  conversation_id: string;
+  project_id: string;
+  title?: string;
+  parent_commit_hash?: string;
+  position_x?: number;
+  position_y?: number;
+  created_at: string;
+  turns_count?: number;
 }
 
 export interface Turn {
-  turn_hash: string
-  project_id: string
-  conversation_id: string
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
-  parent_turn_hash?: string
-  language?: string
-  created_at: string
+  turn_hash: string;
+  project_id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  parent_turn_hash?: string;
+  language?: string;
+  created_at: string;
 }
 
 export interface TurnDetail extends Turn {
   rings: {
     ring1: {
-      keywords: string[]
-      entities: Array<{ text: string; type: string }>
-      time_anchor?: string
-      preference_keywords: Array<{ keyword: string; polarity: string; lemma: string }>
-    }
+      keywords: string[];
+      entities: Array<{ text: string; type: string }>;
+      time_anchor?: string;
+      preference_keywords: Array<{ keyword: string; polarity: string; lemma: string }>;
+    };
     ring2: {
-      intent_seed?: string
-      time_window?: string
-      preference_soft: string[]
-      unknown_slot: string[]
-      facets: string[]
-    }
+      intent_seed?: string;
+      time_window?: string;
+      preference_soft: string[];
+      unknown_slot: string[];
+      facets: string[];
+    };
     ring3: {
-      segments: Array<{ id: string; text: string }>
-    }
-  }
+      segments: Array<{ id: string; text: string }>;
+    };
+  };
 }
 
 export interface Branch {
-  branch_id: string
-  name: string
-  project_id?: string
-  parent_branch?: string
-  head_commit_hash?: string
-  description?: string
-  is_current: boolean
-  created_at: string
-  updated_at: string
+  branch_id: string;
+  name: string;
+  project_id?: string;
+  parent_branch?: string;
+  head_commit_hash?: string;
+  description?: string;
+  is_current: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // Raw commit from API - contains JSON strings that need parsing
 export interface CommitRaw {
-  commit_hash: string
-  project_id: string
-  branch: string
-  message: string | null
-  parents_json: string
-  turn_window_json: string | null
-  facet_snapshot_json: string | null
-  draft_ref_json: string | null
-  signature_json: string | null
-  source_excerpt_json: string | null
-  must_have_json: string | null
-  mustnt_have_json: string | null
-  position_x: number | null
-  position_y: number | null
-  source_refs_json: string | null
-  created_at: string
+  commit_hash: string;
+  project_id: string;
+  branch: string;
+  message: string | null;
+  parents_json: string;
+  turn_window_json: string | null;
+  facet_snapshot_json: string | null;
+  draft_ref_json: string | null;
+  signature_json: string | null;
+  source_excerpt_json: string | null;
+  must_have_json: string | null;
+  mustnt_have_json: string | null;
+  position_x: number | null;
+  position_y: number | null;
+  source_refs_json: string | null;
+  created_at: string;
 }
 
 // Facet types from CLI aggregateFacets
 // Base fields that all facets have
 export interface FacetBase {
-  facet: string
-  confidence?: number
-  source_turn?: string
+  facet: string;
+  confidence?: number;
+  source_turn?: string;
   // Additional fields from CLI FacetRecord
-  key?: string
-  value?: unknown
-  text?: string
-  entity_type?: string
+  key?: string;
+  value?: unknown;
+  text?: string;
+  entity_type?: string;
 }
 
 export interface GoalFacet extends FacetBase {
-  facet: 'goal'
-  text: string
+  facet: 'goal';
+  text: string;
 }
 
 export interface PreferenceFacet extends FacetBase {
-  facet: 'preference'
-  key: string
-  value: string
+  facet: 'preference';
+  key: string;
+  value: string;
 }
 
 export interface ContextFacet extends FacetBase {
-  facet: 'context'
-  entity_type: string
-  text: string
+  facet: 'context';
+  entity_type: string;
+  text: string;
 }
 
 // Union type for all facet kinds, plus catch-all for unknown facet types
-export type Facet = GoalFacet | PreferenceFacet | ContextFacet | FacetBase
+export type Facet = GoalFacet | PreferenceFacet | ContextFacet | FacetBase;
 
 // Source reference for multi-source commits
 export interface SourceRef {
-  type: 'conversation' | 'commit'
-  conversation_id?: string
+  type: 'conversation' | 'commit';
+  conversation_id?: string;
   turn_window?: {
-    start_turn_hash: string
-    end_turn_hash: string
-  }
-  commit_hash?: string
+    start_turn_hash: string;
+    end_turn_hash: string;
+  };
+  commit_hash?: string;
 }
 
 // Parsed commit for frontend use
 export interface Commit {
-  commit_hash: string
-  project_id: string
-  branch: string
-  message: string | null
-  parent_hashes: string[]
+  commit_hash: string;
+  project_id: string;
+  branch: string;
+  message: string | null;
+  parent_hashes: string[];
   turn_window: {
-    start_turn_hash: string
-    end_turn_hash: string
-  } | null
-  facet_snapshot: Facet[] | null
+    start_turn_hash: string;
+    end_turn_hash: string;
+  } | null;
+  facet_snapshot: Facet[] | null;
   draft_ref: {
-    draft_id: string
-    text_hash: string
-  } | null
+    draft_id: string;
+    text_hash: string;
+  } | null;
   signature: {
-    algo: string
-    key_id: string
-    value: string
-  } | null
-  source_excerpt: string[] | null
-  must_have: string[] | null
-  mustnt_have: string[] | null
-  position_x: number | null
-  position_y: number | null
-  source_refs: SourceRef[] | null
-  created_at: string
+    algo: string;
+    key_id: string;
+    value: string;
+  } | null;
+  source_excerpt: string[] | null;
+  must_have: string[] | null;
+  mustnt_have: string[] | null;
+  position_x: number | null;
+  position_y: number | null;
+  source_refs: SourceRef[] | null;
+  created_at: string;
 }
 
 // CommitDetail is now same as Commit since we parse all JSON fields
-export type CommitDetail = Commit
+export type CommitDetail = Commit;
 
 export interface Draft {
-  draft_id: string
-  project_id: string
-  conversation_id: string
-  lifecycle_status: 'ephemeral' | 'adopted' | 'superseded'
-  validation_status: 'pending' | 'passed' | 'failed'
-  base_commit_hash: string | null
-  turn_anchor_hash: string | null
-  bridge_id: string
-  intent: string
-  text: string | null
-  must_have: string[]
-  mustnt_have: string[]
+  draft_id: string;
+  project_id: string;
+  conversation_id: string;
+  lifecycle_status: 'ephemeral' | 'adopted' | 'superseded';
+  validation_status: 'pending' | 'passed' | 'failed';
+  base_commit_hash: string | null;
+  turn_anchor_hash: string | null;
+  bridge_id: string;
+  intent: string;
+  text: string | null;
+  must_have: string[];
+  mustnt_have: string[];
   validation: {
-    passed: boolean
-    missing_keywords: string[]
-    forbidden_keywords: string[]
-  } | null
-  llm_config: unknown
-  created_at: string
-  completed_at: string | null
+    passed: boolean;
+    missing_keywords: string[];
+    forbidden_keywords: string[];
+  } | null;
+  llm_config: unknown;
+  created_at: string;
+  completed_at: string | null;
 }
 
 // Raw diff response from backend
 interface DiffResultRaw {
-  baseId: string
-  targetId: string
+  baseId: string;
+  targetId: string;
   segmentDiffs: Array<{
-    segmentId: string
-    text: string
-    diffType: 'same' | 'added' | 'removed' | 'modified'
-    matchedSegmentId?: string
-    similarity?: number
-  }>
-  threshold: number
+    segmentId: string;
+    text: string;
+    diffType: 'same' | 'added' | 'removed' | 'modified';
+    matchedSegmentId?: string;
+    similarity?: number;
+  }>;
+  threshold: number;
   stats: {
-    totalSegments: number
-    sameCount: number
-    addedCount: number
-    removedCount: number
-    modifiedCount: number
-    conflictCount: number
-  }
-  method: string
-  usedCache: boolean
+    totalSegments: number;
+    sameCount: number;
+    addedCount: number;
+    removedCount: number;
+    modifiedCount: number;
+    conflictCount: number;
+  };
+  method: string;
+  usedCache: boolean;
 }
 
 // Transformed diff result for UI
 export interface DiffResult {
-  base_commit_hash: string
-  target_commit_hash: string
+  base_commit_hash: string;
+  target_commit_hash: string;
   diff: {
     facet_changes: Array<{
-      facet: string
-      change_type: 'added' | 'removed' | 'modified'
-      base_text?: string
-      target_text?: string
-      added_keywords: string[]
-      removed_keywords: string[]
-    }>
+      facet: string;
+      change_type: 'added' | 'removed' | 'modified';
+      base_text?: string;
+      target_text?: string;
+      added_keywords: string[];
+      removed_keywords: string[];
+    }>;
     segment_changes: Array<{
-      segment_id: string
-      change_type: 'added' | 'removed' | 'modified' | 'same'
-      text: string
-      similarity_to_base?: number
-    }>
-  }
-  computed_at: string
-  stats?: DiffResultRaw['stats']
+      segment_id: string;
+      change_type: 'added' | 'removed' | 'modified' | 'same';
+      text: string;
+      similarity_to_base?: number;
+    }>;
+  };
+  computed_at: string;
+  stats?: DiffResultRaw['stats'];
 }
 
 // Raw merge result from backend (camelCase)
 interface MergeResultRaw {
   autoMerged: Array<{
-    facet: string
-    mergedText: string | null
-    source: 'base' | 'source' | 'target' | 'llm' | 'manual'
-    keywords: string[]
-  }>
+    facet: string;
+    mergedText: string | null;
+    source: 'base' | 'source' | 'target' | 'llm' | 'manual';
+    keywords: string[];
+  }>;
   conflicts: Array<{
-    facet: string
-    baseText: string | null
-    sourceText: string | null
-    targetText: string | null
-    conflictType: 'divergent_edit' | 'delete_modify' | 'modify_delete'
-  }>
-  status: 'clean' | 'conflicts'
+    facet: string;
+    baseText: string | null;
+    sourceText: string | null;
+    targetText: string | null;
+    conflictType: 'divergent_edit' | 'delete_modify' | 'modify_delete';
+  }>;
+  status: 'clean' | 'conflicts';
   stats: {
-    totalFacets: number
-    autoMergedCount: number
-    conflictCount: number
-    llmResolvedCount: number
+    totalFacets: number;
+    autoMergedCount: number;
+    conflictCount: number;
+    llmResolvedCount: number;
     bySource: {
-      base: number
-      source: number
-      target: number
-      llm: number
-      manual: number
-    }
-  }
+      base: number;
+      source: number;
+      target: number;
+      llm: number;
+      manual: number;
+    };
+  };
 }
 
 // Frontend-friendly merge result (snake_case)
 export interface MergeResult {
-  base_commit_hash: string
-  source_commit_hash: string
-  target_commit_hash: string
-  status: 'clean' | 'conflicts'
+  base_commit_hash: string;
+  source_commit_hash: string;
+  target_commit_hash: string;
+  status: 'clean' | 'conflicts';
   auto_merged_facets: Array<{
-    facet: string
-    merged_text: string | null
-    source: 'base' | 'source' | 'target' | 'llm' | 'manual'
-    keywords: string[]
-  }>
+    facet: string;
+    merged_text: string | null;
+    source: 'base' | 'source' | 'target' | 'llm' | 'manual';
+    keywords: string[];
+  }>;
   conflicts: Array<{
-    facet: string
-    base_text: string | null
-    source_text: string | null
-    target_text: string | null
-    conflict_type: 'divergent_edit' | 'delete_modify' | 'modify_delete'
-  }>
+    facet: string;
+    base_text: string | null;
+    source_text: string | null;
+    target_text: string | null;
+    conflict_type: 'divergent_edit' | 'delete_modify' | 'modify_delete';
+  }>;
   stats: {
-    total_facets: number
-    auto_merged_count: number
-    conflict_count: number
-    llm_resolved_count: number
-  }
+    total_facets: number;
+    auto_merged_count: number;
+    conflict_count: number;
+    llm_resolved_count: number;
+  };
 }
 
 // List response types - CLI returns nested structure: { status, data: { items: [...], limit, offset } }
 export interface ProjectListData {
-  projects: Project[]
-  limit: number
-  offset: number
+  projects: Project[];
+  limit: number;
+  offset: number;
 }
 
 export interface ConversationListData {
-  conversations: Conversation[]
-  limit: number
-  offset: number
+  conversations: Conversation[];
+  limit: number;
+  offset: number;
 }
 
 export interface TurnListData {
-  turns: Turn[]
-  limit: number
-  offset: number
+  turns: Turn[];
+  limit: number;
+  offset: number;
 }
 
 // Internal: API returns raw JSON strings
 interface CommitListDataRaw {
-  commits: CommitRaw[]
-  limit: number
-  offset: number
+  commits: CommitRaw[];
+  limit: number;
+  offset: number;
 }
 
 export interface CommitListData {
-  commits: Commit[]
-  limit: number
-  offset: number
+  commits: Commit[];
+  limit: number;
+  offset: number;
 }
 
 export interface BranchListData {
-  branches: Branch[]
-  limit: number
-  offset: number
+  branches: Branch[];
+  limit: number;
+  offset: number;
 }
 
 export interface ApiResponse<T> {
-  success: boolean
-  data?: T
+  success: boolean;
+  data?: T;
   error?: {
-    code: string
-    message: string
-  }
+    code: string;
+    message: string;
+  };
 }
 
 // ============================================================================
@@ -367,12 +367,12 @@ export interface ApiResponse<T> {
  * Safely parse JSON string, returning fallback on error
  */
 function safeJsonParse<T>(json: string | null, fallback: T): T {
-  if (!json) return fallback
+  if (!json) return fallback;
   try {
-    return JSON.parse(json) as T
+    return JSON.parse(json) as T;
   } catch {
-    console.warn('Failed to parse JSON:', json.slice(0, 100))
-    return fallback
+    console.warn('Failed to parse JSON:', json.slice(0, 100));
+    return fallback;
   }
 }
 
@@ -397,7 +397,7 @@ function parseCommit(raw: CommitRaw): Commit {
     position_y: raw.position_y,
     source_refs: raw.source_refs_json ? JSON.parse(raw.source_refs_json) : null,
     created_at: raw.created_at,
-  }
+  };
 }
 
 // ============================================================================
@@ -405,28 +405,31 @@ function parseCommit(raw: CommitRaw): Commit {
 // ============================================================================
 
 export class ApiError extends Error {
-  code: string
-  details?: Record<string, unknown>
+  code: string;
+  details?: Record<string, unknown>;
 
   constructor(code: string, message: string, details?: Record<string, unknown>) {
-    super(message)
-    this.name = 'ApiError'
-    this.code = code
-    this.details = details
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.details = details;
   }
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
-  const json = await response.json().catch(() => ({ success: false, error: { code: 'PARSE_ERROR', message: 'Failed to parse response' } })) as ApiResponse<T>
+  const json = (await response.json().catch(() => ({
+    success: false,
+    error: { code: 'PARSE_ERROR', message: 'Failed to parse response' },
+  }))) as ApiResponse<T>;
 
   if (!response.ok || !json.success) {
     throw new ApiError(
       json.error?.code || 'UNKNOWN_ERROR',
       json.error?.message || `HTTP ${response.status}`,
       (json.error as { details?: Record<string, unknown> })?.details
-    )
+    );
   }
-  return json.data as T
+  return json.data as T;
 }
 
 // Fetch with timeout wrapper
@@ -437,43 +440,43 @@ async function fetchWithTimeout(
   timeoutMs = DEFAULT_TIMEOUT,
   externalSignal?: AbortSignal
 ): Promise<Response> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   // Link external signal to our controller
-  const abortHandler = () => controller.abort()
-  externalSignal?.addEventListener('abort', abortHandler)
+  const abortHandler = () => controller.abort();
+  externalSignal?.addEventListener('abort', abortHandler);
 
   try {
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
-    })
-    return response
+    });
+    return response;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       // Check if it was external abort vs timeout
       if (externalSignal?.aborted) {
-        throw new ApiError('ABORTED', 'Request was cancelled')
+        throw new ApiError('ABORTED', 'Request was cancelled');
       }
-      throw new ApiError('TIMEOUT', `Request timed out after ${timeoutMs}ms`)
+      throw new ApiError('TIMEOUT', `Request timed out after ${timeoutMs}ms`);
     }
-    throw err
+    throw err;
   } finally {
-    clearTimeout(timeoutId)
-    externalSignal?.removeEventListener('abort', abortHandler)
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', abortHandler);
   }
 }
 
 // Helper to build query string with proper encoding
 function buildQueryString(params: Record<string, string | number | boolean | undefined>): string {
-  const searchParams = new URLSearchParams()
+  const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) {
-      searchParams.set(key, String(value))
+      searchParams.set(key, String(value));
     }
   }
-  return searchParams.toString()
+  return searchParams.toString();
 }
 
 // ============================================================================
@@ -481,23 +484,23 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 // ============================================================================
 
 export async function checkHealth(): Promise<{ status: string; version: string; uptime: number }> {
-  const res = await fetchWithTimeout(`${API_BASE}/health`, undefined, 5000)
-  return handleResponse(res)
+  const res = await fetchWithTimeout(`${API_BASE}/health`, undefined, 5000);
+  return handleResponse(res);
 }
 
 export async function getStatus(): Promise<{
-  projects_count: number
-  conversations_count: number
-  turns_count: number
-  commits_count: number
+  projects_count: number;
+  conversations_count: number;
+  turns_count: number;
+  commits_count: number;
 }> {
-  const res = await fetchWithTimeout(`${API_V1}/status`)
+  const res = await fetchWithTimeout(`${API_V1}/status`);
   return handleResponse<{
-    projects_count: number
-    conversations_count: number
-    turns_count: number
-    commits_count: number
-  }>(res)
+    projects_count: number;
+    conversations_count: number;
+    turns_count: number;
+    commits_count: number;
+  }>(res);
 }
 
 // ============================================================================
@@ -505,35 +508,38 @@ export async function getStatus(): Promise<{
 // ============================================================================
 
 export async function listProjects(limit = 50, offset = 0): Promise<ProjectListData> {
-  const query = buildQueryString({ limit, offset })
-  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`)
-  return handleResponse<ProjectListData>(res)
+  const query = buildQueryString({ limit, offset });
+  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
+  return handleResponse<ProjectListData>(res);
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
-  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`)
-  return handleResponse<ProjectDetail>(res)
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
+  return handleResponse<ProjectDetail>(res);
 }
 
-export async function createProject(name: string, metadata?: Record<string, unknown>): Promise<Project> {
+export async function createProject(
+  name: string,
+  metadata?: Record<string, unknown>
+): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, metadata }),
-  })
-  return handleResponse<Project>(res)
+  });
+  return handleResponse<Project>(res);
 }
 
 export interface DeleteProjectResponse {
-  deleted: boolean
-  project_id: string
+  deleted: boolean;
+  project_id: string;
 }
 
 export async function deleteProject(projectId: string): Promise<DeleteProjectResponse> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
     method: 'DELETE',
-  })
-  return handleResponse<DeleteProjectResponse>(res)
+  });
+  return handleResponse<DeleteProjectResponse>(res);
 }
 
 // ============================================================================
@@ -545,9 +551,9 @@ export async function listConversations(
   limit = 50,
   offset = 0
 ): Promise<ConversationListData> {
-  const query = buildQueryString({ project_id: projectId, limit, offset })
-  const res = await fetchWithTimeout(`${API_V1}/conversations?${query}`)
-  return handleResponse<ConversationListData>(res)
+  const query = buildQueryString({ project_id: projectId, limit, offset });
+  const res = await fetchWithTimeout(`${API_V1}/conversations?${query}`);
+  return handleResponse<ConversationListData>(res);
 }
 
 export async function createConversation(
@@ -566,29 +572,37 @@ export async function createConversation(
       parent_commit_hash: parentCommitHash,
       position_x: position?.x,
       position_y: position?.y,
-      metadata
+      metadata,
     }),
-  })
-  return handleResponse<Conversation>(res)
+  });
+  return handleResponse<Conversation>(res);
 }
 
-export async function deleteConversation(conversationId: string): Promise<{ deleted: boolean; conversation_id: string }> {
-  const res = await fetchWithTimeout(`${API_V1}/conversations/${encodeURIComponent(conversationId)}`, {
-    method: 'DELETE',
-  })
-  return handleResponse<{ deleted: boolean; conversation_id: string }>(res)
+export async function deleteConversation(
+  conversationId: string
+): Promise<{ deleted: boolean; conversation_id: string }> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+  return handleResponse<{ deleted: boolean; conversation_id: string }>(res);
 }
 
 export async function updateConversation(
   conversationId: string,
   updates: { title?: string; position_x?: number; position_y?: number }
 ): Promise<Conversation> {
-  const res = await fetchWithTimeout(`${API_V1}/conversations/${encodeURIComponent(conversationId)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<Conversation>(res)
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+  return handleResponse<Conversation>(res);
 }
 
 export async function updateCommitPosition(
@@ -603,9 +617,9 @@ export async function updateCommitPosition(
       position_x: position.x,
       position_y: position.y,
     }),
-  })
-  const rawData = await handleResponse<CommitRaw>(res)
-  return parseCommit(rawData)
+  });
+  const rawData = await handleResponse<CommitRaw>(res);
+  return parseCommit(rawData);
 }
 
 // ============================================================================
@@ -618,9 +632,9 @@ export async function listTurns(
   limit = 100,
   offset = 0,
   options?: {
-    signal?: AbortSignal
+    signal?: AbortSignal;
     /** Sort order: 'asc' (oldest first) or 'desc' (newest first). Default: 'asc' */
-    order?: 'asc' | 'desc'
+    order?: 'asc' | 'desc';
   }
 ): Promise<TurnListData> {
   const query = buildQueryString({
@@ -629,15 +643,24 @@ export async function listTurns(
     limit,
     offset,
     order: options?.order,
-  })
-  const res = await fetchWithTimeout(`${API_V1}/turns?${query}`, undefined, DEFAULT_TIMEOUT, options?.signal)
-  return handleResponse<TurnListData>(res)
+  });
+  const res = await fetchWithTimeout(
+    `${API_V1}/turns?${query}`,
+    undefined,
+    DEFAULT_TIMEOUT,
+    options?.signal
+  );
+  return handleResponse<TurnListData>(res);
 }
 
 export async function getTurn(turnHash: string): Promise<TurnDetail> {
+  // Validate turnHash to prevent /api/v1/turns/undefined errors
+  if (!turnHash || turnHash === 'undefined') {
+    throw new Error('getTurn: turnHash is required');
+  }
   // Don't encode the colon in sha256:xxx - backend expects raw format
-  const res = await fetchWithTimeout(`${API_V1}/turns/${turnHash}`)
-  return handleResponse<TurnDetail>(res)
+  const res = await fetchWithTimeout(`${API_V1}/turns/${turnHash}`);
+  return handleResponse<TurnDetail>(res);
 }
 
 export async function createTurn(
@@ -657,8 +680,8 @@ export async function createTurn(
       content,
       language,
     }),
-  })
-  return handleResponse<Turn>(res)
+  });
+  return handleResponse<Turn>(res);
 }
 
 // ============================================================================
@@ -666,29 +689,29 @@ export async function createTurn(
 // ============================================================================
 
 export async function listBranches(projectId: string): Promise<BranchListData> {
-  const query = buildQueryString({ project_id: projectId })
-  const res = await fetchWithTimeout(`${API_V1}/branches?${query}`)
-  return handleResponse<BranchListData>(res)
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/branches?${query}`);
+  return handleResponse<BranchListData>(res);
 }
 
 export async function getCurrentBranch(projectId: string): Promise<{
-  project_id: string
-  current_branch: string
-  head_commit_hash?: string
+  project_id: string;
+  current_branch: string;
+  head_commit_hash?: string;
 }> {
-  const query = buildQueryString({ project_id: projectId })
-  const res = await fetchWithTimeout(`${API_V1}/branches/current?${query}`)
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/branches/current?${query}`);
   return handleResponse<{
-    project_id: string
-    current_branch: string
-    head_commit_hash?: string
-  }>(res)
+    project_id: string;
+    current_branch: string;
+    head_commit_hash?: string;
+  }>(res);
 }
 
 export async function createBranch(
   projectId: string,
   name: string,
-  fromBranch?: string,
+  parentBranch?: string,
   description?: string,
   checkout = false
 ): Promise<Branch> {
@@ -698,12 +721,12 @@ export async function createBranch(
     body: JSON.stringify({
       project_id: projectId,
       name,
-      from_branch: fromBranch,
+      parent_branch: parentBranch, // Fixed: was 'from_branch', backend expects 'parent_branch'
       description,
       checkout,
     }),
-  })
-  return handleResponse<Branch>(res)
+  });
+  return handleResponse<Branch>(res);
 }
 
 export async function switchBranch(
@@ -721,8 +744,8 @@ export async function switchBranch(
       create,
       from_branch: fromBranch,
     }),
-  })
-  return handleResponse<Branch>(res)
+  });
+  return handleResponse<Branch>(res);
 }
 
 export async function deleteBranch(projectId: string, name: string, force = false): Promise<void> {
@@ -730,8 +753,8 @@ export async function deleteBranch(projectId: string, name: string, force = fals
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ project_id: projectId, name, force }),
-  })
-  await handleResponse(res)
+  });
+  await handleResponse(res);
 }
 
 // ============================================================================
@@ -744,20 +767,20 @@ export async function listCommits(
   limit = 50,
   offset = 0
 ): Promise<CommitListData> {
-  const query = buildQueryString({ project_id: projectId, branch, limit, offset })
-  const res = await fetchWithTimeout(`${API_V1}/commits?${query}`)
-  const response = await handleResponse<CommitListDataRaw>(res)
+  const query = buildQueryString({ project_id: projectId, branch, limit, offset });
+  const res = await fetchWithTimeout(`${API_V1}/commits?${query}`);
+  const response = await handleResponse<CommitListDataRaw>(res);
   return {
     commits: response.commits.map(parseCommit),
     limit: response.limit,
     offset: response.offset,
-  }
+  };
 }
 
 export async function getCommit(commitHash: string): Promise<Commit> {
-  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`)
-  const data = await handleResponse<CommitRaw>(res)
-  return parseCommit(data)
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
+  const data = await handleResponse<CommitRaw>(res);
+  return parseCommit(data);
 }
 
 export async function createCommit(
@@ -766,12 +789,12 @@ export async function createCommit(
   branch = 'main',
   message?: string,
   options?: {
-    draftId?: string
-    sourceExcerpt?: string[]
-    mustHave?: string[]
-    mustntHave?: string[]
-    position?: { x: number; y: number }
-    sourceRefs?: SourceRef[]
+    draftId?: string;
+    sourceExcerpt?: string[];
+    mustHave?: string[];
+    mustntHave?: string[];
+    position?: { x: number; y: number };
+    sourceRefs?: SourceRef[];
   }
 ): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
@@ -790,19 +813,19 @@ export async function createCommit(
       position_y: options?.position?.y,
       source_refs: options?.sourceRefs,
     }),
-  })
-  const data = await handleResponse<CommitRaw>(res)
-  return parseCommit(data)
+  });
+  const data = await handleResponse<CommitRaw>(res);
+  return parseCommit(data);
 }
 
 // Resolved facet for merge commit
 // source values: backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
 // UI adds 'custom' for user-provided text
 export interface ResolvedFacet {
-  facet: string
-  text: string | null
-  source: 'base' | 'source' | 'target' | 'llm' | 'manual' | 'custom'
-  keywords: string[]
+  facet: string;
+  text: string | null;
+  source: 'base' | 'source' | 'target' | 'llm' | 'manual' | 'custom';
+  keywords: string[];
 }
 
 // Create a merge commit from resolved merge results
@@ -829,9 +852,9 @@ export async function createMergeCommit(
       // Position for canvas display
       ...(position && { position_x: position.x, position_y: position.y }),
     }),
-  })
-  const data = await handleResponse<CommitRaw>(res)
-  return parseCommit(data)
+  });
+  const data = await handleResponse<CommitRaw>(res);
+  return parseCommit(data);
 }
 
 // ============================================================================
@@ -846,24 +869,24 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       base_commit_hash: baseCommitHash,
       target_commit_hash: targetCommitHash,
     }),
-  })
-  const raw = await handleResponse<DiffResultRaw>(res)
+  });
+  const raw = await handleResponse<DiffResultRaw>(res);
 
   // Transform backend response to frontend format
-  const segmentChanges = raw.segmentDiffs.map(seg => ({
+  const segmentChanges = raw.segmentDiffs.map((seg) => ({
     segment_id: seg.segmentId,
     change_type: seg.diffType as 'added' | 'removed' | 'modified' | 'same',
     text: seg.text,
     similarity_to_base: seg.similarity,
-  }))
+  }));
 
   // Group segments by change type to create facet-like changes for display
-  const addedSegments = segmentChanges.filter(s => s.change_type === 'added')
-  const removedSegments = segmentChanges.filter(s => s.change_type === 'removed')
-  const modifiedSegments = segmentChanges.filter(s => s.change_type === 'modified')
+  const addedSegments = segmentChanges.filter((s) => s.change_type === 'added');
+  const removedSegments = segmentChanges.filter((s) => s.change_type === 'removed');
+  const modifiedSegments = segmentChanges.filter((s) => s.change_type === 'modified');
 
   // Create facet_changes from segment diffs for UI display
-  const facetChanges: DiffResult['diff']['facet_changes'] = []
+  const facetChanges: DiffResult['diff']['facet_changes'] = [];
 
   // Add removed segments as facet changes
   removedSegments.forEach((seg, idx) => {
@@ -874,8 +897,8 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       target_text: undefined,
       added_keywords: [],
       removed_keywords: [],
-    })
-  })
+    });
+  });
 
   // Add added segments as facet changes
   addedSegments.forEach((seg, idx) => {
@@ -886,8 +909,8 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       target_text: seg.text,
       added_keywords: [],
       removed_keywords: [],
-    })
-  })
+    });
+  });
 
   // Add modified segments as facet changes
   modifiedSegments.forEach((seg, idx) => {
@@ -898,8 +921,8 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       target_text: seg.text,
       added_keywords: [],
       removed_keywords: [],
-    })
-  })
+    });
+  });
 
   return {
     base_commit_hash: baseCommitHash,
@@ -910,11 +933,11 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
     },
     computed_at: new Date().toISOString(),
     stats: raw.stats,
-  }
+  };
 }
 
 export async function merge(
-  _projectId: string,  // Not used by backend, kept for API compatibility
+  _projectId: string, // Not used by backend, kept for API compatibility
   baseCommitHash: string,
   sourceCommitHash: string,
   targetCommitHash: string
@@ -927,8 +950,8 @@ export async function merge(
       source_commit_hash: sourceCommitHash,
       target_commit_hash: targetCommitHash,
     }),
-  })
-  const raw = await handleResponse<MergeResultRaw>(res)
+  });
+  const raw = await handleResponse<MergeResultRaw>(res);
 
   // Transform backend camelCase to frontend snake_case
   return {
@@ -936,13 +959,13 @@ export async function merge(
     source_commit_hash: sourceCommitHash,
     target_commit_hash: targetCommitHash,
     status: raw.status,
-    auto_merged_facets: raw.autoMerged.map(f => ({
+    auto_merged_facets: raw.autoMerged.map((f) => ({
       facet: f.facet,
       merged_text: f.mergedText,
       source: f.source,
       keywords: f.keywords,
     })),
-    conflicts: raw.conflicts.map(c => ({
+    conflicts: raw.conflicts.map((c) => ({
       facet: c.facet,
       base_text: c.baseText,
       source_text: c.sourceText,
@@ -955,7 +978,7 @@ export async function merge(
       conflict_count: raw.stats.conflictCount,
       llm_resolved_count: raw.stats.llmResolvedCount,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -971,24 +994,28 @@ export async function createDraft(
   turnAnchorHash?: string
 ): Promise<Draft> {
   // LLM draft generation typically takes 10-20 seconds for a single call
-  const res = await fetchWithTimeout(`${API_V1}/agent/drafts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: projectId,
-      conversation_id: conversationId,
-      bridge_id: bridgeId,
-      intent,
-      base_commit_hash: baseCommitHash,
-      turn_anchor_hash: turnAnchorHash,
-    }),
-  }, 30000)
-  return handleResponse<Draft>(res)
+  const res = await fetchWithTimeout(
+    `${API_V1}/agent/drafts`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: projectId,
+        conversation_id: conversationId,
+        bridge_id: bridgeId,
+        intent,
+        base_commit_hash: baseCommitHash,
+        turn_anchor_hash: turnAnchorHash,
+      }),
+    },
+    30000
+  );
+  return handleResponse<Draft>(res);
 }
 
 export async function getDraft(draftId: string): Promise<Draft> {
-  const res = await fetchWithTimeout(`${API_V1}/agent/drafts/${encodeURIComponent(draftId)}`)
-  return handleResponse<Draft>(res)
+  const res = await fetchWithTimeout(`${API_V1}/agent/drafts/${encodeURIComponent(draftId)}`);
+  return handleResponse<Draft>(res);
 }
 
 export async function updateDraft(
@@ -1003,8 +1030,8 @@ export async function updateDraft(
       feedback,
       append_must_have: appendMustHave,
     }),
-  })
-  return handleResponse<Draft>(res)
+  });
+  return handleResponse<Draft>(res);
 }
 
 // ============================================================================
@@ -1012,29 +1039,29 @@ export async function updateDraft(
 // ============================================================================
 
 export async function exportCfpack(projectId: string): Promise<Blob> {
-  const query = buildQueryString({ project_id: projectId })
-  const res = await fetchWithTimeout(`${API_V1}/export/cfpack?${query}`, undefined, 30000)
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/export/cfpack?${query}`, undefined, 30000);
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
+    const errorData = await res.json().catch(() => ({}));
     throw new ApiError(
       errorData.error?.code || 'EXPORT_ERROR',
       errorData.error?.message || `HTTP ${res.status}`
-    )
+    );
   }
-  return res.blob()
+  return res.blob();
 }
 
 export async function exportLedger(projectId: string): Promise<Blob> {
-  const query = buildQueryString({ project_id: projectId })
-  const res = await fetchWithTimeout(`${API_V1}/export/ledger?${query}`, undefined, 30000)
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/export/ledger?${query}`, undefined, 30000);
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
+    const errorData = await res.json().catch(() => ({}));
     throw new ApiError(
       errorData.error?.code || 'EXPORT_ERROR',
       errorData.error?.message || `HTTP ${res.status}`
-    )
+    );
   }
-  return res.blob()
+  return res.blob();
 }
 
 // ============================================================================
@@ -1042,58 +1069,62 @@ export async function exportLedger(projectId: string): Promise<Blob> {
 // ============================================================================
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
 export interface ChatRequest {
-  messages: ChatMessage[]
-  provider?: string
-  model?: string
-  temperature?: number
-  max_tokens?: number
+  messages: ChatMessage[];
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
 }
 
 export interface ChatResponse {
-  content: string
-  model: string
+  content: string;
+  model: string;
   usage?: {
-    input_tokens?: number
-    output_tokens?: number
-  }
-  finish_reason?: string
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  finish_reason?: string;
 }
 
 export interface ChatStreamEvent {
-  type: 'token' | 'done' | 'error'
-  content?: string
-  model?: string
-  message?: string
+  type: 'token' | 'done' | 'error';
+  content?: string;
+  model?: string;
+  message?: string;
 }
 
 export interface ChatProvidersResponse {
-  providers: string[]
-  default: string
+  providers: string[];
+  default: string;
 }
 
 /**
  * Get available chat providers
  */
 export async function getChatProviders(): Promise<ChatProvidersResponse> {
-  const res = await fetchWithTimeout(`${API_V1}/chat/providers`)
-  return handleResponse<ChatProvidersResponse>(res)
+  const res = await fetchWithTimeout(`${API_V1}/chat/providers`);
+  return handleResponse<ChatProvidersResponse>(res);
 }
 
 /**
  * Non-streaming chat
  */
 export async function chat(request: ChatRequest): Promise<ChatResponse> {
-  const res = await fetchWithTimeout(`${API_V1}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  }, 120000) // 2 minute timeout for LLM
-  return handleResponse<ChatResponse>(res)
+  const res = await fetchWithTimeout(
+    `${API_V1}/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    },
+    120000
+  ); // 2 minute timeout for LLM
+  return handleResponse<ChatResponse>(res);
 }
 
 /**
@@ -1218,50 +1249,50 @@ export async function deleteDeployAgent(deployAgentId: string): Promise<{ delete
 // Runner API (t3x-runner)
 // ============================================================================
 
-const RUNNER_URL = process.env.NEXT_PUBLIC_RUNNER_API_URL || 'http://localhost:8080'
+const RUNNER_URL = process.env.NEXT_PUBLIC_RUNNER_API_URL || 'http://localhost:8080';
 
 // Agent configuration
 export interface AgentConfig {
-  id: string
-  name: string
-  endpoint: string
-  type: 'http' | 'websocket' | 'subprocess'
+  id: string;
+  name: string;
+  endpoint: string;
+  type: 'http' | 'websocket' | 'subprocess';
   auth?: {
-    type: 'none' | 'bearer' | 'api_key' | 'basic'
-    token?: string
-    header?: string
-  }
-  metadata?: Record<string, unknown>
+    type: 'none' | 'bearer' | 'api_key' | 'basic';
+    token?: string;
+    header?: string;
+  };
+  metadata?: Record<string, unknown>;
 }
 
 // Run trace
 export interface RunTrace {
-  run_id: string
-  agent_id: string
-  started_at: string
-  completed_at?: string
-  status: 'running' | 'completed' | 'failed' | 'timeout'
-  input: Record<string, unknown>
-  output?: unknown
+  run_id: string;
+  agent_id: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'running' | 'completed' | 'failed' | 'timeout';
+  input: Record<string, unknown>;
+  output?: unknown;
   events: Array<{
-    id: string
-    timestamp: string
-    type: 'llm_call' | 'tool_call' | 'agent_input' | 'agent_output' | 'error'
+    id: string;
+    timestamp: string;
+    type: 'llm_call' | 'tool_call' | 'agent_input' | 'agent_output' | 'error';
     data: {
-      input?: unknown
-      output?: unknown
-      model?: string
-      tool_name?: string
-      latency_ms?: number
-      error?: string
-    }
-  }>
+      input?: unknown;
+      output?: unknown;
+      model?: string;
+      tool_name?: string;
+      latency_ms?: number;
+      error?: string;
+    };
+  }>;
   metrics?: {
-    total_latency_ms?: number
-    llm_calls: number
-    tool_calls: number
-    tokens_used?: number
-  }
+    total_latency_ms?: number;
+    llm_calls: number;
+    tool_calls: number;
+    tokens_used?: number;
+  };
 }
 
 export interface RunAgentResult {
@@ -1276,55 +1307,55 @@ export interface RunAgentResult {
 
 // Test step
 export interface TestStep {
-  id: string
-  name: string
-  type: 'contains' | 'not_contains' | 'regex' | 'json_path' | 'semantic' | 'custom'
-  target: 'input' | 'output' | 'llm_call' | 'tool_call' | 'trace'
+  id: string;
+  name: string;
+  type: 'contains' | 'not_contains' | 'regex' | 'json_path' | 'semantic' | 'custom';
+  target: 'input' | 'output' | 'llm_call' | 'tool_call' | 'trace';
   assertion: {
-    value?: string
-    pattern?: string
-    path?: string
-    threshold?: number
-    fn?: string
-  }
-  severity: 'error' | 'warning' | 'info'
+    value?: string;
+    pattern?: string;
+    path?: string;
+    threshold?: number;
+    fn?: string;
+  };
+  severity: 'error' | 'warning' | 'info';
 }
 
 // Test result
 export interface TestResult {
-  step_id: string
-  step_name: string
-  passed: boolean
-  severity: 'error' | 'warning' | 'info'
-  message?: string
-  expected?: unknown
-  actual?: unknown
-  suggestion?: string
+  step_id: string;
+  step_name: string;
+  passed: boolean;
+  severity: 'error' | 'warning' | 'info';
+  message?: string;
+  expected?: unknown;
+  actual?: unknown;
+  suggestion?: string;
 }
 
 // Eval response
 export interface EvalResponse {
-  run_id: string
-  passed: boolean
-  total_steps: number
-  passed_steps: number
-  failed_steps: number
-  results: TestResult[]
+  run_id: string;
+  passed: boolean;
+  total_steps: number;
+  passed_steps: number;
+  failed_steps: number;
+  results: TestResult[];
   suggestions?: Array<{
-    type: 'prompt_change' | 'config_change' | 'tool_fix' | 'other'
-    description: string
-    confidence: number
-    diff?: string
-  }>
-  t3x_commit_id?: string
+    type: 'prompt_change' | 'config_change' | 'tool_fix' | 'other';
+    description: string;
+    confidence: number;
+    diff?: string;
+  }>;
+  t3x_commit_id?: string;
 }
 
 /**
  * Check runner health
  */
 export async function checkRunnerHealth(): Promise<{ status: string; service: string }> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/health`, undefined, 5000)
-  return handleResponse(res)
+  const res = await fetchWithTimeout(`${RUNNER_URL}/health`, undefined, 5000);
+  return handleResponse(res);
 }
 
 /**
@@ -1335,16 +1366,16 @@ export async function registerAgent(config: AgentConfig): Promise<{ agent_id: st
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
-  })
-  return handleResponse(res)
+  });
+  return handleResponse(res);
 }
 
 /**
  * Get agent configuration
  */
 export async function getAgent(agentId: string): Promise<AgentConfig> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/agents/${encodeURIComponent(agentId)}`)
-  return handleResponse(res)
+  const res = await fetchWithTimeout(`${RUNNER_URL}/agents/${encodeURIComponent(agentId)}`);
+  return handleResponse(res);
 }
 
 /**
@@ -1391,17 +1422,17 @@ export async function runAgent(
  * Get run trace
  */
 export async function getRunTrace(runId: string): Promise<RunTrace> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/run/${encodeURIComponent(runId)}`)
-  return handleResponse(res)
+  const res = await fetchWithTimeout(`${RUNNER_URL}/run/${encodeURIComponent(runId)}`);
+  return handleResponse(res);
 }
 
 /**
  * List runs
  */
 export async function listRuns(agentId?: string): Promise<{ runs: RunTrace[] }> {
-  const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''
-  const res = await fetchWithTimeout(`${RUNNER_URL}/runs${query}`)
-  return handleResponse(res)
+  const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
+  const res = await fetchWithTimeout(`${RUNNER_URL}/runs${query}`);
+  return handleResponse(res);
 }
 
 /**
@@ -1420,8 +1451,8 @@ export async function runEval(
       test_steps: testSteps,
       options,
     }),
-  })
-  return handleResponse(res)
+  });
+  return handleResponse(res);
 }
 
 /**
@@ -1432,22 +1463,26 @@ export async function runAgentWithEval(
   input: Record<string, unknown>,
   testSteps: TestStep[]
 ): Promise<{
-  run_id: string
-  output: unknown
-  trace: RunTrace
-  eval_result: EvalResponse | null
+  run_id: string;
+  output: unknown;
+  trace: RunTrace;
+  eval_result: EvalResponse | null;
 }> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/webhook/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      agent_id: agentId,
-      input,
-      auto_eval: true,
-      test_steps: testSteps,
-    }),
-  }, 120000) // 2 minute timeout for run + eval
-  return handleResponse(res)
+  const res = await fetchWithTimeout(
+    `${RUNNER_URL}/webhook/run`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: agentId,
+        input,
+        auto_eval: true,
+        test_steps: testSteps,
+      }),
+    },
+    120000
+  ); // 2 minute timeout for run + eval
+  return handleResponse(res);
 }
 
 /**
@@ -1466,8 +1501,114 @@ export async function createCommitFromEval(
       eval_result: evalResult,
       message,
     }),
-  })
-  return handleResponse(res)
+  });
+  return handleResponse(res);
+}
+
+// ============================================================================
+// Engine Run API (Engine → Runner → n8n flow)
+// ============================================================================
+
+// Run record from Engine
+export interface EngineRun {
+  run_id: string;
+  project_id: string | null;
+  runner_run_id: string | null;
+  commit_ref: string | null;
+  leaf: {
+    id: string;
+    type: 'deploy' | 'eval';
+    content?: string;
+  } | null;
+  inputs: Record<string, unknown> | null;
+  workflow: {
+    type: string;
+    webhook_id?: string;
+  } | null;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  result: {
+    run_report?: Record<string, unknown>;
+    assertions?: unknown[];
+    evidence_pack?: Record<string, unknown>;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateEngineRunInput {
+  project_id?: string;
+  commit_ref?: string;
+  leaf?: {
+    id: string;
+    type: 'deploy' | 'eval';
+    content?: string;
+  };
+  inputs?: Record<string, unknown>;
+  workflow?: {
+    type: string;
+    webhook_id?: string;
+  };
+}
+
+export interface EngineRunListData {
+  runs: EngineRun[];
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Create a run via Engine (triggers Runner → n8n flow)
+ */
+export async function createEngineRun(input: CreateEngineRunInput): Promise<{
+  run_id: string;
+  status: string;
+  runner_run_id?: string;
+  warning?: string;
+}> {
+  const res = await fetchWithTimeout(`${API_V1}/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const data =
+    await handleResponse<
+      ApiResponse<{
+        run_id: string;
+        status: string;
+        runner_run_id?: string;
+        warning?: string;
+      }>
+    >(res);
+  return data.data!;
+}
+
+/**
+ * Get a run by ID from Engine
+ */
+export async function getEngineRun(runId: string): Promise<EngineRun> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`);
+  const data = await handleResponse<ApiResponse<EngineRun>>(res);
+  return data.data!;
+}
+
+/**
+ * List runs from Engine
+ */
+export async function listEngineRuns(options?: {
+  project_id?: string;
+  status?: 'queued' | 'running' | 'completed' | 'failed';
+  limit?: number;
+  offset?: number;
+}): Promise<EngineRunListData> {
+  const query = buildQueryString({
+    project_id: options?.project_id,
+    status: options?.status,
+    limit: options?.limit ?? 50,
+    offset: options?.offset ?? 0,
+  });
+  const res = await fetchWithTimeout(`${API_V1}/runs?${query}`);
+  const data = await handleResponse<ApiResponse<EngineRunListData>>(res);
+  return data.data!;
 }
 
 // ============================================================================
@@ -1577,51 +1718,51 @@ export async function* chatStream(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
-  })
+  });
 
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
+    const errorData = await res.json().catch(() => ({}));
     throw new ApiError(
       errorData.error?.code || 'CHAT_ERROR',
       errorData.error?.message || `HTTP ${res.status}`
-    )
+    );
   }
 
-  const reader = res.body?.getReader()
+  const reader = res.body?.getReader();
   if (!reader) {
-    throw new ApiError('CHAT_ERROR', 'No response body')
+    throw new ApiError('CHAT_ERROR', 'No response body');
   }
 
-  const decoder = new TextDecoder()
-  let buffer = ''
+  const decoder = new TextDecoder();
+  let buffer = '';
 
   try {
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      buffer += decoder.decode(value, { stream: true })
+      buffer += decoder.decode(value, { stream: true });
 
       // Parse SSE events: data: {...}\n\n
-      const lines = buffer.split('\n\n')
-      buffer = lines.pop() || ''
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || !trimmed.startsWith('data:')) continue
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
 
-        const dataStr = trimmed.slice(5).trim()
-        if (dataStr === '[DONE]') continue
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === '[DONE]') continue;
 
         try {
-          const event = JSON.parse(dataStr) as ChatStreamEvent
-          yield event
+          const event = JSON.parse(dataStr) as ChatStreamEvent;
+          yield event;
         } catch {
           // Ignore parse errors
         }
       }
     }
   } finally {
-    reader.releaseLock()
+    reader.releaseLock();
   }
 }

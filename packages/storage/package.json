@@ -51,7 +51,7 @@
     "@vitest/coverage-v8": "^2.1.9",
     "drizzle-kit": "^0.30.1",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -67,6 +67,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/anthropics/t3x.git",
-    "directory": "t3x-storage"
+    "directory": "packages/storage"
   }
 }

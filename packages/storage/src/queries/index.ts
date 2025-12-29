@@ -5,146 +5,137 @@
  * All functions take a database instance as first parameter.
  */
 
-// Projects
-export {
-  type CreateProjectInput,
-  type ListProjectsOptions,
-  type ProjectStats,
-  type ProjectWithStats,
-  insertProject,
-  findProjectById,
-  findProjects,
-  findProjectWithStats,
-  updateProject,
-  deleteProject,
-} from './projects';
-
-// Conversations
-export {
-  type CreateConversationInput,
-  type ListConversationsOptions,
-  type UpdateConversationInput,
-  insertConversation,
-  findConversationById,
-  findConversationsByProject,
-  updateConversation,
-  deleteConversation,
-  getConversationTurnCount,
-} from './conversations';
-
-// Turns
-export {
-  type CreateTurnInput,
-  type ListTurnsOptions,
-  type ListTurnsByProjectOptions,
-  TurnWindowError,
-  insertTurn,
-  findTurnByHash,
-  findTurnsByConversation,
-  findTurnsByProject,
-  findLastTurnInConversation,
-  findTurnChain,
-  findTurnsInWindow,
-} from './turns';
-
 // Branches
 export {
   type CreateBranchInput,
-  type ListBranchesOptions,
-  insertBranch,
-  findBranchByName,
-  findBranchById,
-  findBranchesByProject,
-  findCurrentBranch,
-  switchBranch,
-  updateBranchHead,
   deleteBranch,
   ensureMainBranch,
+  findBranchById,
+  findBranchByName,
+  findBranchesByProject,
+  findCurrentBranch,
+  insertBranch,
+  type ListBranchesOptions,
+  switchBranch,
+  updateBranchHead,
 } from './branches';
-
 // Commits
 export {
-  type TurnWindow,
-  type CreateCommitInput,
-  type ListCommitsOptions,
   CommitError,
-  insertCommit,
+  type CreateCommitInput,
   findCommitByHash,
-  findCommitsByProject,
-  findCommitParents,
   findCommitHistory,
-  updateCommitPosition,
+  findCommitParents,
+  findCommitsByProject,
   findCommonAncestor,
+  insertCommit,
+  type ListCommitsOptions,
+  type TurnWindow,
+  updateCommitPosition,
 } from './commits';
-
+// Conversations
+export {
+  type CreateConversationInput,
+  deleteConversation,
+  findConversationById,
+  findConversationsByProject,
+  getConversationTurnCount,
+  insertConversation,
+  type ListConversationsOptions,
+  type UpdateConversationInput,
+  updateConversation,
+} from './conversations';
 // Drafts
 export {
-  type DraftStatus,
+  adoptDraft,
   type CreateDraftInput,
-  type ListDraftsOptions,
-  type UpdateDraftInput,
-  insertDraft,
+  type DraftStatus,
+  deleteDraft,
   findDraftById,
   findDraftsByProject,
+  getDraftTextHash,
+  insertDraft,
+  type ListDraftsOptions,
+  supersedeDraft,
+  type UpdateDraftInput,
   updateDraft,
   updateDraftStatus,
-  adoptDraft,
-  supersedeDraft,
-  getDraftTextHash,
-  deleteDraft,
 } from './drafts';
-
 // Merge Results
 export {
-  type MergeStatus,
   type CreateMergeResultInput,
-  insertMergeResult,
-  findMergeResultById,
-  findMergeResultByHashes,
-  findMergeResultsByProject,
   deleteMergeResult,
+  findMergeResultByHashes,
+  findMergeResultById,
+  findMergeResultsByProject,
+  insertMergeResult,
+  type MergeStatus,
 } from './mergeResults';
-
+// Projects
+export {
+  type CreateProjectInput,
+  deleteProject,
+  findProjectById,
+  findProjects,
+  findProjectWithStats,
+  insertProject,
+  type ListProjectsOptions,
+  type ProjectStats,
+  type ProjectWithStats,
+  updateProject,
+} from './projects';
 // Segment Embeddings
 export {
+  bufferToFloat32Array,
   type CreateSegmentEmbeddingInput,
   type CreateSegmentEmbeddingsBatchInput,
-  generateSegmentId,
-  float32ArrayToBuffer,
-  bufferToFloat32Array,
-  insertSegmentEmbedding,
-  insertSegmentEmbeddingsBatch,
+  deleteSegmentEmbeddingsByTurn,
+  findEmbeddingsByModel,
   findSegmentEmbeddingById,
   findSegmentEmbeddingsByTurn,
   findSegmentEmbeddingsByTurns,
-  hasEmbeddingsForTurn,
-  deleteSegmentEmbeddingsByTurn,
+  float32ArrayToBuffer,
+  generateSegmentId,
   getEmbeddingsCountForTurn,
-  findEmbeddingsByModel,
+  hasEmbeddingsForTurn,
+  insertSegmentEmbedding,
+  insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
-
+// Turns
+export {
+  type CreateTurnInput,
+  findLastTurnInConversation,
+  findTurnByHash,
+  findTurnChain,
+  findTurnsByConversation,
+  findTurnsByProject,
+  findTurnsInWindow,
+  insertTurn,
+  type ListTurnsByProjectOptions,
+  type ListTurnsOptions,
+  TurnWindowError,
+} from './turns';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
-  type UpdateDeployAgentInput,
-  type ListDeployAgentsOptions,
-  insertDeployAgent,
+  deleteDeployAgent,
   findDeployAgentById,
   findDeployAgents,
+  insertDeployAgent,
+  type ListDeployAgentsOptions,
+  type UpdateDeployAgentInput,
   updateDeployAgent,
-  deleteDeployAgent,
   updateDeployAgentRunStatus,
 } from './deployAgents';
-
 // Runs (Engine → Runner → n8n flow)
 export {
-  type RunStatus,
   type CreateRunInput,
-  type UpdateRunInput,
-  type ListRunsOptions,
-  insertRun,
-  getRun,
-  listRuns,
-  updateRun,
   deleteRun,
+  getRun,
+  insertRun,
+  listRuns,
+  type ListRunsOptions,
+  type RunStatus,
+  type UpdateRunInput,
+  updateRun,
 } from './runs';

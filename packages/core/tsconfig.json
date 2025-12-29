@@ -14,16 +14,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "docs",
-    "examples",
-    "tests",
-    "schema",
-    "configs"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "docs", "examples", "tests", "schema", "configs"]
 }

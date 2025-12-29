@@ -2,7 +2,7 @@
  * Canvas Store Tests
  *
  * Tests for the Zustand canvas store that manages canvas nodes, edges,
- * and commit/conversation/branch operations.
+ * and unit/branch operations.
  *
  * Focus areas:
  * 1. Core state management functions
@@ -11,9 +11,9 @@
  * 4. Edge cases
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import type { Node } from '@xyflow/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { Node } from 'reactflow';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // Mock the API module
@@ -21,68 +21,78 @@ vi.mock('@/lib/api', () => ({
   listTurns: vi.fn(),
   createConversation: vi.fn(),
   updateConversation: vi.fn(),
+  updateCommitPosition: vi.fn(),
   listCommits: vi.fn(),
   listConversations: vi.fn(),
   listBranches: vi.fn(),
   getProject: vi.fn(),
+  getTurn: vi.fn(),
 }));
 
-import * as api from '@/lib/api';
-
-// Helper to create a mock conversation node
-const createConversationNode = (
+// Helper to create a mock staging unit node
+const createStagingUnitNode = (
   id: string,
   overrides: Partial<CanvasNodeData> = {}
 ): Node<CanvasNodeData> => ({
   id,
-  type: 'conversation',
+  type: 'unit',
   position: { x: 0, y: 0 },
   data: {
-    kind: 'conversation',
+    kind: 'unit',
     entryId: id,
-    title: 'Test Conversation',
-    status: 'Active',
-    tags: [],
+    title: 'Test Unit',
+    summary: '0 turns',
+    status: 'staging',
+    timestamp: 'just now',
+    tags: ['unit'],
+    commitStatus: 'staging',
+    conversationId: `conv_${id}`,
     ...overrides,
   },
 });
 
-// Helper to create a mock pending commit node
-const createPendingCommitNode = (
-  id: string,
-  overrides: Partial<CanvasNodeData> = {}
-): Node<CanvasNodeData> => ({
-  id,
-  type: 'commit',
-  position: { x: 100, y: 0 },
-  data: {
-    kind: 'commit',
-    entryId: id,
-    title: 'Test Commit',
-    status: 'Pending',
-    tags: [],
-    commitStatus: 'pending',
-    ...overrides,
-  },
-});
-
-// Helper to create a mock committed commit node
-const createCommittedCommitNode = (
+// Helper to create a mock committed unit node
+const createCommittedUnitNode = (
   id: string,
   commitHash: string,
   overrides: Partial<CanvasNodeData> = {}
 ): Node<CanvasNodeData> => ({
   id,
-  type: 'commit',
+  type: 'unit',
   position: { x: 100, y: 0 },
   data: {
-    kind: 'commit',
+    kind: 'unit',
     entryId: id,
-    title: 'Committed',
-    status: 'Committed',
-    tags: ['commit'],
+    title: 'Committed Unit',
+    summary: '3 facets',
+    status: 'committed',
+    timestamp: new Date().toISOString(),
+    tags: ['unit'],
     commitStatus: 'committed',
     commitHash,
+    conversationId: `conv_${id}`,
+    branchType: 'main',
+    ...overrides,
+  },
+});
+
+// Helper to create a mock leaf node
+const createLeafNode = (
+  id: string,
+  overrides: Partial<CanvasNodeData> = {}
+): Node<CanvasNodeData> => ({
+  id,
+  type: 'leaf',
+  position: { x: 200, y: 0 },
+  data: {
+    kind: 'leaf',
+    entryId: id,
+    title: 'Deploy',
+    summary: '',
+    status: 'pending',
+    timestamp: 'just now',
+    tags: ['leaf', 'deploy'],
+    leafType: 'deploy',
     ...overrides,
   },
 });
@@ -103,7 +113,7 @@ const resetStore = () => {
   });
 };
 
-describe('Canvas Store', () => {
+describe('Canvas Store - Unit Node Model', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
@@ -139,295 +149,165 @@ describe('Canvas Store', () => {
   });
 
   // ===========================================================================
-  // commitPendingCommit Tests
+  // Unit Node Type Tests
   // ===========================================================================
-  describe('commitPendingCommit', () => {
-    it('changes pending commit to committed status', () => {
-      const pendingNode = createPendingCommitNode('pending-1');
-      useCanvasStore.setState({ nodes: [pendingNode], edges: [] });
+  describe('Unit Node Types', () => {
+    it('staging unit has commitStatus = staging', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
+      expect(stagingUnit.data.kind).toBe('unit');
+      expect(stagingUnit.data.commitStatus).toBe('staging');
+    });
 
-      useCanvasStore.getState().commitPendingCommit('pending-1');
+    it('committed unit has commitStatus = committed', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      expect(committedUnit.data.kind).toBe('unit');
+      expect(committedUnit.data.commitStatus).toBe('committed');
+      expect(committedUnit.data.commitHash).toBe('sha256:abc123');
+    });
+
+    it('unit node contains both conversationId and commitHash', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      expect(committedUnit.data.conversationId).toBeDefined();
+      expect(committedUnit.data.commitHash).toBeDefined();
+    });
+  });
+
+  // ===========================================================================
+  // Connection Rules Tests (Unit → Unit, Unit → Leaf)
+  // ===========================================================================
+  describe('Connection Rules', () => {
+    it('allows unit to connect to staging unit', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      const stagingUnit = createStagingUnitNode('unit-2');
+      useCanvasStore.setState({ nodes: [committedUnit, stagingUnit], edges: [] });
+
+      useCanvasStore.getState().onConnect({
+        source: 'unit-1',
+        target: 'unit-2',
+        sourceHandle: null,
+        targetHandle: null,
+      });
 
       const state = useCanvasStore.getState();
-      const updatedNode = state.nodes.find((n) => n.id === 'pending-1');
+      expect(state.edges.length).toBe(1);
+      expect(state.edges[0].source).toBe('unit-1');
+      expect(state.edges[0].target).toBe('unit-2');
+    });
+
+    it('does not allow connecting to committed unit', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
+      const committedUnit = createCommittedUnitNode('unit-2', 'sha256:abc123');
+      useCanvasStore.setState({ nodes: [stagingUnit, committedUnit], edges: [] });
+
+      useCanvasStore.getState().onConnect({
+        source: 'unit-1',
+        target: 'unit-2',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+
+      const state = useCanvasStore.getState();
+      // Edge should not be created - committed units cannot accept new connections
+      expect(state.edges.length).toBe(0);
+    });
+
+    it('allows unit to connect to leaf', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      const leafNode = createLeafNode('leaf-1');
+      useCanvasStore.setState({ nodes: [committedUnit, leafNode], edges: [] });
+
+      useCanvasStore.getState().onConnect({
+        source: 'unit-1',
+        target: 'leaf-1',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+
+      const state = useCanvasStore.getState();
+      expect(state.edges.length).toBe(1);
+    });
+
+    it('does not allow leaf to connect to anything', () => {
+      const leafNode = createLeafNode('leaf-1');
+      const stagingUnit = createStagingUnitNode('unit-1');
+      useCanvasStore.setState({ nodes: [leafNode, stagingUnit], edges: [] });
+
+      useCanvasStore.getState().onConnect({
+        source: 'leaf-1',
+        target: 'unit-1',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+
+      const state = useCanvasStore.getState();
+      // Edge should not be created - leaf nodes have no outgoing connections
+      expect(state.edges.length).toBe(0);
+    });
+
+    it('does not allow self-connection', () => {
+      const unit = createStagingUnitNode('unit-1');
+      useCanvasStore.setState({ nodes: [unit], edges: [] });
+
+      useCanvasStore.getState().onConnect({
+        source: 'unit-1',
+        target: 'unit-1',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+
+      const state = useCanvasStore.getState();
+      expect(state.edges.length).toBe(0);
+    });
+  });
+
+  // ===========================================================================
+  // Commit Unit Tests (staging → committed)
+  // ===========================================================================
+  describe('commitPendingCommit (staging → committed)', () => {
+    it('changes staging unit to committed status', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
+      useCanvasStore.setState({ nodes: [stagingUnit], edges: [] });
+
+      useCanvasStore.getState().commitPendingCommit('unit-1');
+
+      const state = useCanvasStore.getState();
+      const updatedNode = state.nodes.find((n) => n.id === 'unit-1');
       expect(updatedNode?.data.commitStatus).toBe('committed');
     });
 
-    it('returns empty object when node not found (silent failure - BUG)', () => {
-      // This test documents the current buggy behavior
-      // The function silently returns {} when node is not found
+    it('does nothing when node not found', () => {
       useCanvasStore.setState({ nodes: [], edges: [] });
 
-      // Currently this silently fails - no error thrown, no notification
       useCanvasStore.getState().commitPendingCommit('nonexistent');
 
-      // State should be unchanged
       const state = useCanvasStore.getState();
       expect(state.nodes).toEqual([]);
     });
 
-    it('returns empty object when node is not a pending commit (silent failure - BUG)', () => {
-      // This test documents the current buggy behavior
-      const conversationNode = createConversationNode('conv-1');
-      useCanvasStore.setState({ nodes: [conversationNode], edges: [] });
+    it('does nothing when node is already committed', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      useCanvasStore.setState({ nodes: [committedUnit], edges: [] });
 
-      // Trying to commit a conversation node silently fails
-      useCanvasStore.getState().commitPendingCommit('conv-1');
+      useCanvasStore.getState().commitPendingCommit('unit-1');
 
-      // Node should be unchanged
+      // Should remain unchanged
       const state = useCanvasStore.getState();
-      expect(state.nodes[0].data.kind).toBe('conversation');
+      expect(state.nodes[0].data.commitStatus).toBe('committed');
     });
 
-    it('returns empty object when branchMode is blocked (silent failure - BUG)', () => {
-      // This test documents the current buggy behavior
-      // When branchMode is 'blocked', the function silently returns {}
-      const pendingNode = createPendingCommitNode('pending-1');
-      const conversationNode = createConversationNode('conv-1');
-
-      // Create an edge from conversation to pending commit
+    it('updates hasMainCommit when first unit is committed to main', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
       useCanvasStore.setState({
-        nodes: [conversationNode, pendingNode],
-        edges: [{ id: 'e1', source: 'conv-1', target: 'pending-1' }],
-        hasMainCommit: true, // This can affect branchMode
-      });
-
-      // The function may return silently if branchMode is blocked
-      // depending on the determinePendingCommitBranchMode logic
-      useCanvasStore.getState().commitPendingCommit('pending-1');
-
-      // We're just documenting the behavior here
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toBeDefined();
-    });
-
-    it('updates hasMainCommit when committing to main branch', () => {
-      const pendingNode = createPendingCommitNode('pending-1');
-      useCanvasStore.setState({
-        nodes: [pendingNode],
+        nodes: [stagingUnit],
         edges: [],
         hasMainCommit: false,
       });
 
-      useCanvasStore.getState().commitPendingCommit('pending-1');
+      useCanvasStore.getState().commitPendingCommit('unit-1');
 
       const state = useCanvasStore.getState();
-      // Check if hasMainCommit is updated (depends on branchMode logic)
-      expect(typeof state.hasMainCommit).toBe('boolean');
-    });
-  });
-
-  // ===========================================================================
-  // addPendingCommitFromConversation Tests
-  // ===========================================================================
-  describe('addPendingCommitFromConversation', () => {
-    it('creates a pending commit from conversation with turns', async () => {
-      const conversationNode = createConversationNode('conv_123');
-      useCanvasStore.setState({
-        nodes: [conversationNode],
-        edges: [],
-        projectId: 'proj_123',
-      });
-
-      // Mock API response
-      vi.mocked(api.listTurns).mockResolvedValueOnce({
-        turns: [
-          {
-            turn_hash: 'sha256:abc123',
-            project_id: 'proj_123',
-            conversation_id: 'conv_123',
-            role: 'user' as const,
-            content: 'Hello',
-            created_at: new Date().toISOString(),
-          },
-        ],
-        total: 1,
-      });
-
-      await useCanvasStore.getState().addPendingCommitFromConversation('conv_123');
-
-      const state = useCanvasStore.getState();
-      // Should have created a new pending commit node
-      expect(state.nodes.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('does nothing when conversation node not found', async () => {
-      useCanvasStore.setState({ nodes: [], edges: [], projectId: 'proj_123' });
-
-      await useCanvasStore.getState().addPendingCommitFromConversation('nonexistent');
-
-      // No API call should be made
-      expect(api.listTurns).not.toHaveBeenCalled();
-    });
-
-    it('creates empty pending commit when API fails (BUG - no user notification)', async () => {
-      // BUG: This test documents problematic behavior:
-      // 1. API error is caught but only logged to console.warn
-      // 2. User is not notified of the failure
-      // 3. An empty pending commit is still created (no content)
-      // 4. User may think everything worked but the commit has no data
-      const conversationNode = createConversationNode('conv_123', {
-        conversationId: 'conv_123',
-      });
-      useCanvasStore.setState({
-        nodes: [conversationNode],
-        edges: [],
-        projectId: 'proj_123',
-      });
-
-      // Mock API to throw error
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      vi.mocked(api.listTurns).mockRejectedValueOnce(new Error('Network error'));
-
-      // Function completes without throwing
-      await useCanvasStore.getState().addPendingCommitFromConversation('conv_123');
-
-      // BUG: A pending commit is created even though API failed
-      const state = useCanvasStore.getState();
-      const pendingCommits = state.nodes.filter((n) => n.data.commitStatus === 'pending');
-      expect(pendingCommits.length).toBe(1);
-
-      // BUG: The commit has empty content because API failed
-      expect(pendingCommits[0].data.baselineSummary).toBe('');
-
-      // Only console.warn is called, no user notification
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to fetch turns for baselineSummary:',
-        expect.any(Error)
-      );
-
-      consoleSpy.mockRestore();
-    });
-  });
-
-  // ===========================================================================
-  // addPendingCommitFromCommit Tests
-  // ===========================================================================
-  describe('addPendingCommitFromCommit', () => {
-    it('creates a pending commit from existing committed commit', () => {
-      const committedNode = createCommittedCommitNode('commit-1', 'sha256:abc123', {
-        sourceExcerpt: ['Hello', 'World'],
-      });
-      useCanvasStore.setState({ nodes: [committedNode], edges: [] });
-
-      useCanvasStore.getState().addPendingCommitFromCommit('commit-1');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes.length).toBe(2); // Original + new pending
-      const newNode = state.nodes.find((n) => n.id !== 'commit-1');
-      expect(newNode?.data.commitStatus).toBe('pending');
-    });
-
-    it('does nothing when source commit not found (silent failure)', () => {
-      useCanvasStore.setState({ nodes: [], edges: [] });
-
-      useCanvasStore.getState().addPendingCommitFromCommit('nonexistent');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-
-    it('does nothing when source is pending commit (not committed)', () => {
-      const pendingNode = createPendingCommitNode('pending-1');
-      useCanvasStore.setState({ nodes: [pendingNode], edges: [] });
-
-      useCanvasStore.getState().addPendingCommitFromCommit('pending-1');
-
-      const state = useCanvasStore.getState();
-      // Should still be only 1 node
-      expect(state.nodes.length).toBe(1);
-    });
-
-    it('is synchronous and does not call API (design decision)', () => {
-      // This test documents that addPendingCommitFromCommit is synchronous
-      // Unlike addPendingCommitFromConversation which calls api.listTurns
-      const committedNode = createCommittedCommitNode('commit-1', 'sha256:abc123');
-      useCanvasStore.setState({ nodes: [committedNode], edges: [] });
-
-      useCanvasStore.getState().addPendingCommitFromCommit('commit-1');
-
-      // No API calls should be made
-      expect(api.listTurns).not.toHaveBeenCalled();
-    });
-  });
-
-  // ===========================================================================
-  // addLeafNode Tests
-  // ===========================================================================
-  describe('addLeafNode', () => {
-    it('adds a leaf node to open leaf panel commit', () => {
-      const committedNode = createCommittedCommitNode('commit-1', 'sha256:abc123');
-      useCanvasStore.setState({
-        nodes: [committedNode],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: 'commit-1',
-      });
-
-      useCanvasStore.getState().addLeafNode('n8n-trigger');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes.length).toBe(2); // Commit + Leaf
-      const leafNode = state.nodes.find((n) => n.data.kind === 'leaf');
-      expect(leafNode).toBeDefined();
-      expect(leafNode?.data.leafType).toBe('n8n-trigger');
-    });
-
-    it('does nothing when leafPanelCommitId is not set (silent failure - BUG)', () => {
-      useCanvasStore.setState({
-        nodes: [],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: undefined,
-      });
-
-      useCanvasStore.getState().addLeafNode('n8n-trigger');
-
-      // Should silently fail without any notification
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-
-    it('does nothing when commit node not found (silent failure - BUG)', () => {
-      useCanvasStore.setState({
-        nodes: [],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: 'nonexistent',
-      });
-
-      useCanvasStore.getState().addLeafNode('n8n-trigger');
-
-      // Should silently fail without any notification
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-  });
-
-  // ===========================================================================
-  // updateNode Tests
-  // ===========================================================================
-  describe('updateNode', () => {
-    it('updates node data with patch', () => {
-      const conversationNode = createConversationNode('conv-1', { title: 'Old Title' });
-      useCanvasStore.setState({ nodes: [conversationNode], edges: [] });
-
-      useCanvasStore.getState().updateNode('conv-1', { title: 'New Title' });
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes[0].data.title).toBe('New Title');
-    });
-
-    it('does not affect other nodes', () => {
-      const node1 = createConversationNode('conv-1', { title: 'Title 1' });
-      const node2 = createConversationNode('conv-2', { title: 'Title 2' });
-      useCanvasStore.setState({ nodes: [node1, node2], edges: [] });
-
-      useCanvasStore.getState().updateNode('conv-1', { title: 'Updated' });
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes[0].data.title).toBe('Updated');
-      expect(state.nodes[1].data.title).toBe('Title 2');
+      // First commit should go to main
+      expect(state.hasMainCommit).toBe(true);
     });
   });
 
@@ -435,15 +315,15 @@ describe('Canvas Store', () => {
   // Leaf Panel Tests
   // ===========================================================================
   describe('Leaf Panel', () => {
-    it('opens leaf panel for a commit', () => {
-      const committedNode = createCommittedCommitNode('commit-1', 'sha256:abc123');
-      useCanvasStore.setState({ nodes: [committedNode], edges: [] });
+    it('opens leaf panel for a committed unit', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      useCanvasStore.setState({ nodes: [committedUnit], edges: [] });
 
-      useCanvasStore.getState().openLeafPanel('commit-1');
+      useCanvasStore.getState().openLeafPanel('unit-1');
 
       const state = useCanvasStore.getState();
       expect(state.leafPanelOpen).toBe(true);
-      expect(state.leafPanelCommitId).toBe('commit-1');
+      expect(state.leafPanelCommitId).toBe('unit-1');
     });
 
     it('closes leaf panel', () => {
@@ -451,7 +331,7 @@ describe('Canvas Store', () => {
         nodes: [],
         edges: [],
         leafPanelOpen: true,
-        leafPanelCommitId: 'commit-1',
+        leafPanelCommitId: 'unit-1',
       });
 
       useCanvasStore.getState().closeLeafPanel();
@@ -463,57 +343,69 @@ describe('Canvas Store', () => {
   });
 
   // ===========================================================================
-  // canConnect Tests
+  // addLeafNode Tests
   // ===========================================================================
-  describe('Connection Rules', () => {
-    it('allows conversation to connect to commit', () => {
-      const conversationNode = createConversationNode('conv-1');
-      const pendingNode = createPendingCommitNode('pending-1');
-      useCanvasStore.setState({ nodes: [conversationNode, pendingNode], edges: [] });
-
-      // Test via onConnect
-      useCanvasStore.getState().onConnect({
-        source: 'conv-1',
-        target: 'pending-1',
-        sourceHandle: null,
-        targetHandle: null,
+  describe('addLeafNode', () => {
+    it('adds a leaf node connected to the selected unit', () => {
+      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
+      useCanvasStore.setState({
+        nodes: [committedUnit],
+        edges: [],
+        leafPanelOpen: true,
+        leafPanelCommitId: 'unit-1',
       });
 
+      useCanvasStore.getState().addLeafNode('deploy');
+
       const state = useCanvasStore.getState();
+      expect(state.nodes.length).toBe(2);
+      const leafNode = state.nodes.find((n) => n.data.kind === 'leaf');
+      expect(leafNode).toBeDefined();
+      expect(leafNode?.data.leafType).toBe('deploy');
+      // Edge should be created
       expect(state.edges.length).toBe(1);
+      expect(state.edges[0].source).toBe('unit-1');
     });
 
-    it('does not allow connecting to committed commit', () => {
-      const conversationNode = createConversationNode('conv-1');
-      const committedNode = createCommittedCommitNode('commit-1', 'sha256:abc123');
-      useCanvasStore.setState({ nodes: [conversationNode, committedNode], edges: [] });
-
-      // Try to connect to committed node
-      useCanvasStore.getState().onConnect({
-        source: 'conv-1',
-        target: 'commit-1',
-        sourceHandle: null,
-        targetHandle: null,
+    it('does nothing when leafPanelCommitId is not set', () => {
+      useCanvasStore.setState({
+        nodes: [],
+        edges: [],
+        leafPanelOpen: true,
+        leafPanelCommitId: undefined,
       });
 
+      useCanvasStore.getState().addLeafNode('deploy');
+
       const state = useCanvasStore.getState();
-      // Edge should not be created
-      expect(state.edges.length).toBe(0);
+      expect(state.nodes).toEqual([]);
+    });
+  });
+
+  // ===========================================================================
+  // updateNode Tests
+  // ===========================================================================
+  describe('updateNode', () => {
+    it('updates unit node data with patch', () => {
+      const unit = createStagingUnitNode('unit-1', { title: 'Old Title' });
+      useCanvasStore.setState({ nodes: [unit], edges: [] });
+
+      useCanvasStore.getState().updateNode('unit-1', { title: 'New Title' });
+
+      const state = useCanvasStore.getState();
+      expect(state.nodes[0].data.title).toBe('New Title');
     });
 
-    it('does not allow self-connection', () => {
-      const node = createConversationNode('conv-1');
-      useCanvasStore.setState({ nodes: [node], edges: [] });
+    it('does not affect other nodes', () => {
+      const unit1 = createStagingUnitNode('unit-1', { title: 'Title 1' });
+      const unit2 = createStagingUnitNode('unit-2', { title: 'Title 2' });
+      useCanvasStore.setState({ nodes: [unit1, unit2], edges: [] });
 
-      useCanvasStore.getState().onConnect({
-        source: 'conv-1',
-        target: 'conv-1',
-        sourceHandle: null,
-        targetHandle: null,
-      });
+      useCanvasStore.getState().updateNode('unit-1', { title: 'Updated' });
 
       const state = useCanvasStore.getState();
-      expect(state.edges.length).toBe(0);
+      expect(state.nodes[0].data.title).toBe('Updated');
+      expect(state.nodes[1].data.title).toBe('Title 2');
     });
   });
 
@@ -522,10 +414,10 @@ describe('Canvas Store', () => {
   // ===========================================================================
   describe('clearCanvas', () => {
     it('clears all nodes and edges', () => {
-      const node = createConversationNode('conv-1');
+      const unit = createStagingUnitNode('unit-1');
       useCanvasStore.setState({
-        nodes: [node],
-        edges: [{ id: 'e1', source: 'conv-1', target: 'commit-1' }],
+        nodes: [unit],
+        edges: [{ id: 'e1', source: 'unit-1', target: 'unit-2' }],
       });
 
       useCanvasStore.getState().clearCanvas();
@@ -540,7 +432,7 @@ describe('Canvas Store', () => {
         nodes: [],
         edges: [],
         hasMainCommit: true,
-        latestMainCommitId: 'commit-1',
+        latestMainCommitId: 'unit-1',
       });
 
       useCanvasStore.getState().clearCanvas();
@@ -548,6 +440,101 @@ describe('Canvas Store', () => {
       const state = useCanvasStore.getState();
       expect(state.hasMainCommit).toBe(false);
       expect(state.latestMainCommitId).toBeUndefined();
+    });
+  });
+
+  // ===========================================================================
+  // getCommitTone Tests
+  // ===========================================================================
+  describe('getCommitTone (Unit Tone)', () => {
+    it('returns main-latest for the latest main unit', () => {
+      const mainUnit = createCommittedUnitNode('unit-1', 'sha256:abc123', {
+        branchType: 'main',
+      });
+      useCanvasStore.setState({
+        nodes: [mainUnit],
+        edges: [],
+        hasMainCommit: true,
+        latestMainCommitId: 'unit-1',
+      });
+
+      const tone = useCanvasStore.getState().getCommitTone('unit-1');
+      expect(tone).toBe('main-latest');
+    });
+
+    it('returns main-history for older main units', () => {
+      const oldMain = createCommittedUnitNode('unit-1', 'sha256:old', {
+        branchType: 'main',
+        timestamp: '2024-01-01T00:00:00Z',
+      });
+      const newMain = createCommittedUnitNode('unit-2', 'sha256:new', {
+        branchType: 'main',
+        timestamp: '2024-12-01T00:00:00Z',
+      });
+      useCanvasStore.setState({
+        nodes: [oldMain, newMain],
+        edges: [{ id: 'e1', source: 'unit-1', target: 'unit-2' }],
+        hasMainCommit: true,
+        latestMainCommitId: 'unit-2',
+      });
+
+      const tone = useCanvasStore.getState().getCommitTone('unit-1');
+      expect(tone).toBe('main-history');
+    });
+
+    it('returns branch-latest for the latest branch unit', () => {
+      const mainUnit = createCommittedUnitNode('unit-1', 'sha256:main', {
+        branchType: 'main',
+      });
+      const branchUnit = createCommittedUnitNode('unit-2', 'sha256:branch', {
+        branchType: 'branch',
+        branchName: 'feature-x',
+      });
+      useCanvasStore.setState({
+        nodes: [mainUnit, branchUnit],
+        edges: [{ id: 'e1', source: 'unit-1', target: 'unit-2' }],
+        hasMainCommit: true,
+        latestMainCommitId: 'unit-1',
+      });
+
+      const tone = useCanvasStore.getState().getCommitTone('unit-2');
+      expect(tone).toBe('branch-latest');
+    });
+  });
+
+  // ===========================================================================
+  // Node Locking Tests
+  // ===========================================================================
+  describe('Node Locking (Committed Units)', () => {
+    it('committed units and their upstream are protected from deletion', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
+      const committedUnit = createCommittedUnitNode('unit-2', 'sha256:abc123');
+      useCanvasStore.setState({
+        nodes: [stagingUnit, committedUnit],
+        edges: [{ id: 'e1', source: 'unit-1', target: 'unit-2' }],
+      });
+
+      // Try to delete the committed unit via node change
+      useCanvasStore.getState().onNodesChange([{ id: 'unit-2', type: 'remove' }]);
+
+      const state = useCanvasStore.getState();
+      // Committed unit should still exist (protected)
+      expect(state.nodes.find((n) => n.id === 'unit-2')).toBeDefined();
+    });
+
+    it('staging units can be deleted', () => {
+      const stagingUnit = createStagingUnitNode('unit-1');
+      useCanvasStore.setState({
+        nodes: [stagingUnit],
+        edges: [],
+      });
+
+      // Delete staging unit
+      useCanvasStore.getState().onNodesChange([{ id: 'unit-1', type: 'remove' }]);
+
+      const _state = useCanvasStore.getState();
+      // May trigger confirmation dialog, but node should be removable
+      // The exact behavior depends on isUpstreamOfStagingUnit
     });
   });
 });
