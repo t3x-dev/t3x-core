@@ -1,25 +1,26 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import {
-  AlertTriangle,
-  ArrowLeft,
+  FlaskConical,
   CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Lightbulb,
+  Play,
+  GitCommit,
   ChevronDown,
   ChevronRight,
   Clock,
-  FlaskConical,
-  GitCommit,
-  Lightbulb,
   Loader2,
-  Play,
+  ArrowLeft,
   RefreshCw,
-  XCircle,
 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -28,17 +29,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  createCommitFromEval,
-  type EvalResponse,
-  getEngineRun,
-  getRunTrace,
-  type RunTrace,
-  runEval,
-  type TestResult,
-  type TestStep,
-} from '@/lib/api';
 import { cn } from '@/lib/utils';
+import {
+  getRunTrace,
+  getEngineRun,
+  runEval,
+  createCommitFromEval,
+  type RunTrace,
+  type TestStep,
+  type TestResult,
+  type EvalResponse,
+} from '@/lib/api';
 
 // Default test steps for demonstration
 const DEFAULT_TEST_STEPS: TestStep[] = [
@@ -210,15 +211,15 @@ export default function EvalPage() {
 
   const getResultIcon = (result: TestResult) => {
     if (result.passed) {
-      return <CheckCircle size={14} style={{ color: '#16a34a' }} />;
+      return <CheckCircle className="h-4 w-4 text-green-500" />;
     }
     switch (result.severity) {
       case 'error':
-        return <XCircle size={14} style={{ color: '#dc2626' }} />;
+        return <XCircle className="h-4 w-4 text-red-500" />;
       case 'warning':
-        return <AlertTriangle size={14} style={{ color: '#d97706' }} />;
+        return <AlertTriangle className="h-4 w-4 text-amber-500" />;
       default:
-        return <AlertTriangle size={14} style={{ color: '#6b7280' }} />;
+        return <AlertTriangle className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -230,25 +231,38 @@ export default function EvalPage() {
       agent_output: 'Output',
       error: 'Error',
     };
-    const colors: Record<string, string> = {
-      llm_call: 'bg-blue-100 text-blue-700 border-blue-200',
-      tool_call: 'bg-amber-100 text-amber-700 border-amber-200',
-      agent_input: 'bg-gray-100 text-gray-700 border-gray-200',
-      agent_output: 'bg-green-100 text-green-700 border-green-200',
-      error: 'bg-red-100 text-red-700 border-red-200',
+    const variants: Record<string, string> = {
+      llm_call: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
+      tool_call: 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+      agent_input: 'border-gray-500/30 bg-gray-500/10 text-gray-600',
+      agent_output: 'border-green-500/30 bg-green-500/10 text-green-600',
+      error: 'border-red-500/30 bg-red-500/10 text-red-600',
     };
     return (
-      <Badge variant="outline" className={cn('text-xs', colors[type] || '')}>
+      <Badge variant="outline" className={variants[type] || ''}>
         {labels[type] || type}
+      </Badge>
+    );
+  };
+
+  const getSeverityBadge = (severity: string) => {
+    const variants: Record<string, string> = {
+      error: 'border-red-500/30 bg-red-500/10 text-red-600',
+      warning: 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+      info: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
+    };
+    return (
+      <Badge variant="outline" className={variants[severity] || ''}>
+        {severity}
       </Badge>
     );
   };
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Loading run...</span>
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Loading run...</span>
       </div>
     );
   }
@@ -256,23 +270,23 @@ export default function EvalPage() {
   if (!trace) {
     return (
       <div className="flex h-full flex-col gap-6 overflow-auto p-6">
-        <header className="flex items-center gap-3">
+        <header className="flex items-center gap-2">
           <FlaskConical className="h-5 w-5" />
           <h1 className="text-2xl font-bold tracking-tight">Eval</h1>
         </header>
         <Card className="mx-auto max-w-md">
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <XCircle className="h-12 w-12 text-destructive" />
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <XCircle className="mb-4 h-12 w-12 text-red-500" />
             <h2 className="text-lg font-semibold">Run not found</h2>
-            <p className="text-muted-foreground">
-              The run ID &quot;<code className="bg-muted px-1 rounded text-xs">{runId}</code>&quot;
-              could not be found.
+            <p className="mt-2 text-sm text-muted-foreground">
+              The run ID "<code className="rounded bg-muted px-1">{runId}</code>" could not be found.
             </p>
-            <p className="text-sm text-muted-foreground">
-              This usually means the n8n workflow hasn&apos;t been set up or activated yet.
+            <p className="mt-2 text-sm text-muted-foreground">
+              This usually means the n8n workflow hasn't been set up or activated yet.
             </p>
-            <Button variant="outline" onClick={() => router.push('/deploy')}>
-              <ArrowLeft className="h-4 w-4" /> Back to Deploy
+            <Button variant="outline" className="mt-6" onClick={() => router.push('/deploy')}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to Deploy
             </Button>
           </CardContent>
         </Card>
@@ -280,40 +294,25 @@ export default function EvalPage() {
     );
   }
 
-  const statusColors = {
-    completed: 'border-green-500/30 bg-green-500/10 text-green-600',
-    failed: 'border-destructive/30 bg-destructive/10 text-destructive',
-    running: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
-  };
-
-  const severityColors = {
-    error: 'bg-red-100 text-red-700 border-red-200',
-    warning: 'bg-amber-100 text-amber-700 border-amber-200',
-    info: 'bg-blue-100 text-blue-700 border-blue-200',
-  };
-
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/deploy')}
-            className="h-8 w-8"
-          >
+          <Button variant="ghost" size="icon-sm" onClick={() => router.push('/deploy')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <FlaskConical className="h-5 w-5" />
           <h1 className="text-2xl font-bold tracking-tight">Eval</h1>
-          <code className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            {runId}
-          </code>
+          <code className="rounded bg-muted px-2 py-1 text-sm">{runId}</code>
         </div>
         <Badge
           variant="outline"
-          className={cn('gap-1.5', statusColors[trace.status as keyof typeof statusColors])}
+          className={cn(
+            trace.status === 'completed' && 'border-green-500/30 bg-green-500/10 text-green-600',
+            trace.status === 'failed' && 'border-red-500/30 bg-red-500/10 text-red-600',
+            trace.status === 'running' && 'border-blue-500/30 bg-blue-500/10 text-blue-600'
+          )}
         >
           {trace.status === 'completed' ? (
             <CheckCircle className="h-3 w-3" />
@@ -328,32 +327,31 @@ export default function EvalPage() {
 
       {/* Run Info Section */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Run Info</CardTitle>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" /> {trace.metrics?.total_latency_ms || 0}ms
-              </span>
-              <span>LLM: {trace.metrics?.llm_calls || 0}</span>
-              <span>Tools: {trace.metrics?.tool_calls || 0}</span>
-            </div>
+        <CardHeader className="flex-row items-center justify-between border-b pb-4">
+          <CardTitle>Run Info</CardTitle>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              {trace.metrics?.total_latency_ms || 0}ms
+            </span>
+            <span>LLM: {trace.metrics?.llm_calls || 0}</span>
+            <span>Tools: {trace.metrics?.tool_calls || 0}</span>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1">
+            <div>
               <p className="text-xs font-medium text-muted-foreground">Agent</p>
               <code className="text-sm">{trace.agent_id}</code>
             </div>
-            <div className="space-y-1">
+            <div>
               <p className="text-xs font-medium text-muted-foreground">Started</p>
-              <p className="text-sm">{new Date(trace.started_at).toLocaleString()}</p>
+              <span className="text-sm">{new Date(trace.started_at).toLocaleString()}</span>
             </div>
             {trace.completed_at && (
-              <div className="space-y-1">
+              <div>
                 <p className="text-xs font-medium text-muted-foreground">Completed</p>
-                <p className="text-sm">{new Date(trace.completed_at).toLocaleString()}</p>
+                <span className="text-sm">{new Date(trace.completed_at).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -362,23 +360,21 @@ export default function EvalPage() {
 
       {/* Trace Events Section */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Trace Events</CardTitle>
-            <Badge variant="secondary" className="text-xs">
-              {trace.events.length} events
-            </Badge>
-          </div>
+        <CardHeader className="flex-row items-center justify-between border-b pb-4">
+          <CardTitle>Trace Events</CardTitle>
+          <Badge variant="outline">{trace.events.length} events</Badge>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {trace.events.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">No trace events recorded.</p>
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No trace events recorded.
+            </div>
           ) : (
             <div className="space-y-2">
               {trace.events.map((event) => (
                 <div key={event.id} className="rounded-lg border">
                   <button
-                    className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
                     onClick={() => toggleEventExpand(event.id)}
                   >
                     {expandedEvents.has(event.id) ? (
@@ -391,9 +387,7 @@ export default function EvalPage() {
                       {new Date(event.timestamp).toLocaleTimeString()}
                     </span>
                     {event.data.latency_ms && (
-                      <span className="text-xs text-muted-foreground">
-                        {event.data.latency_ms}ms
-                      </span>
+                      <span className="text-xs text-muted-foreground">{event.data.latency_ms}ms</span>
                     )}
                     {event.data.model && (
                       <Badge variant="outline" className="text-xs">
@@ -407,10 +401,10 @@ export default function EvalPage() {
                     )}
                   </button>
                   {expandedEvents.has(event.id) && (
-                    <div className="border-t bg-muted/30 p-3 space-y-3">
+                    <div className="space-y-3 border-t bg-muted/30 px-4 py-3">
                       {event.data.input != null && (
                         <div>
-                          <p className="mb-1 text-xs font-medium">Input:</p>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">Input</p>
                           <pre className="overflow-auto rounded bg-background p-2 text-xs">
                             {JSON.stringify(event.data.input, null, 2)}
                           </pre>
@@ -418,7 +412,7 @@ export default function EvalPage() {
                       )}
                       {event.data.output != null && (
                         <div>
-                          <p className="mb-1 text-xs font-medium">Output:</p>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">Output</p>
                           <pre className="overflow-auto rounded bg-background p-2 text-xs">
                             {JSON.stringify(event.data.output, null, 2)}
                           </pre>
@@ -426,8 +420,8 @@ export default function EvalPage() {
                       )}
                       {event.data.error && (
                         <div>
-                          <p className="mb-1 text-xs font-medium text-destructive">Error:</p>
-                          <pre className="overflow-auto rounded bg-destructive/10 p-2 text-xs text-destructive">
+                          <p className="mb-1 text-xs font-medium text-red-500">Error</p>
+                          <pre className="overflow-auto rounded bg-red-500/10 p-2 text-xs text-red-600">
                             {String(event.data.error)}
                           </pre>
                         </div>
@@ -443,50 +437,57 @@ export default function EvalPage() {
 
       {/* Evaluation Section */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Evaluation</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button onClick={handleRunEval} disabled={evaluating}>
-                {evaluating ? (
+        <CardHeader className="flex-row items-center justify-between border-b pb-4">
+          <CardTitle>Evaluation</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleRunEval} disabled={evaluating}>
+              {evaluating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Run Eval
+                </>
+              )}
+            </Button>
+            {evalResult && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreateCommit}
+                disabled={committing}
+              >
+                {committing ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Running...
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
                   </>
                 ) : (
                   <>
-                    <Play className="h-4 w-4" /> Run Eval
+                    <GitCommit className="h-4 w-4" />
+                    Create Commit
                   </>
                 )}
               </Button>
-              {evalResult && (
-                <Button variant="outline" onClick={handleCreateCommit} disabled={committing}>
-                  {committing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Creating...
-                    </>
-                  ) : (
-                    <>
-                      <GitCommit className="h-4 w-4" /> Create Commit
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button variant="outline" size="icon" onClick={() => window.location.reload()}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
+            )}
+            <Button variant="outline" size="icon-sm" onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {evalResult ? (
             <div className="space-y-4">
               {/* Summary */}
               <div
                 className={cn(
-                  'flex items-center gap-3 rounded-lg border p-4',
+                  'flex items-center gap-3 rounded-lg px-4 py-3',
                   evalResult.passed
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700'
-                    : 'border-destructive/30 bg-destructive/10 text-destructive'
+                    ? 'bg-green-500/10 text-green-600'
+                    : 'bg-red-500/10 text-red-600'
                 )}
               >
                 {evalResult.passed ? (
@@ -497,7 +498,7 @@ export default function EvalPage() {
                 <span className="font-medium">
                   {evalResult.passed ? 'All Tests Passed' : 'Tests Failed'}
                 </span>
-                <span className="ml-auto text-sm">
+                <span className="text-sm opacity-80">
                   {evalResult.passed_steps}/{evalResult.total_steps} passed
                 </span>
               </div>
@@ -518,32 +519,22 @@ export default function EvalPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {getResultIcon(result)}
-                          {result.step_name}
+                          <span>{result.step_name}</span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            severityColors[result.severity as keyof typeof severityColors]
-                          )}
-                        >
-                          {result.severity}
-                        </Badge>
-                      </TableCell>
+                      <TableCell>{getSeverityBadge(result.severity)}</TableCell>
                       <TableCell>
                         {result.passed ? (
                           <Badge
                             variant="outline"
-                            className="bg-green-100 text-green-700 border-green-200 text-xs"
+                            className="border-green-500/30 bg-green-500/10 text-green-600"
                           >
                             passed
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
-                            className="bg-red-100 text-red-700 border-red-200 text-xs"
+                            className="border-red-500/30 bg-red-500/10 text-red-600"
                           >
                             failed
                           </Badge>
@@ -559,36 +550,42 @@ export default function EvalPage() {
 
               {/* Suggestions */}
               {evalResult.suggestions && evalResult.suggestions.length > 0 && (
-                <div className="space-y-3 rounded-lg border p-4">
-                  <h3 className="flex items-center gap-2 font-medium">
-                    <Lightbulb className="h-4 w-4 text-amber-500" /> Suggestions
+                <div className="rounded-lg border bg-amber-500/5 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 font-semibold text-amber-600">
+                    <Lightbulb className="h-4 w-4" />
+                    Suggestions
                   </h3>
-                  {evalResult.suggestions.map((suggestion, i) => (
-                    <div key={i} className="rounded-md border bg-muted/30 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="text-xs">
-                          {suggestion.type.replace('_', ' ')}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {Math.round(suggestion.confidence * 100)}% confidence
-                        </span>
+                  <div className="space-y-3">
+                    {evalResult.suggestions.map((suggestion, i) => (
+                      <div key={i} className="rounded border bg-background p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Badge variant="outline">{suggestion.type.replace('_', ' ')}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {Math.round(suggestion.confidence * 100)}% confidence
+                          </span>
+                        </div>
+                        <p className="text-sm">{suggestion.description}</p>
+                        {suggestion.diff && (
+                          <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
+                            {suggestion.diff}
+                          </pre>
+                        )}
                       </div>
-                      <p className="text-sm">{suggestion.description}</p>
-                      {suggestion.diff && (
-                        <pre className="overflow-auto rounded bg-background p-2 text-xs">
-                          {suggestion.diff}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
-              <FlaskConical className="h-8 w-8" />
-              <p>No evaluation yet. Click &quot;Run Eval&quot; to evaluate this trace.</p>
-            </div>
+            <EmptyState
+              icon={FlaskConical}
+              title="No evaluation yet"
+              description="Click 'Run Eval' to evaluate this trace."
+              action={{
+                label: 'Run Eval',
+                onClick: handleRunEval,
+              }}
+            />
           )}
         </CardContent>
       </Card>

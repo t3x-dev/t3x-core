@@ -2,26 +2,24 @@
  * Database Singleton
  *
  * Server-side only database connection using @t3x/storage.
- * Uses PGLite for local development.
  *
- * NOTE: We use dynamic imports to avoid bundling postgres.js which has
- * binary data files that webpack cannot handle. Only PGLite is loaded
- * for local development.
+ * Environment detection:
+ * - DATABASE_URL set → PostgreSQL (Docker/production)
+ * - DATABASE_URL not set → PGLite (local development)
  */
 
 import type { PGlite } from '@electric-sql/pglite';
+import type { AnyDB } from '@t3x/storage';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let dbInstance: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let initPromise: Promise<any> | null = null;
+let dbInstance: AnyDB | null = null;
+let initPromise: Promise<AnyDB> | null = null;
 let getPGLiteClientFn: (() => PGlite) | null = null;
+let closeDbFn: (() => Promise<void>) | null = null;
 
 /**
  * Get the database instance (initializes on first call)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getDB(): Promise<any> {
+export async function getDB(): Promise<AnyDB> {
   // Return existing instance
   if (dbInstance) {
     return dbInstance;
@@ -33,29 +31,55 @@ export async function getDB(): Promise<any> {
   }
 
   // Initialize new instance
-  initPromise = (async () => {
-    const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
-    console.log(`[db] Initializing PGLite storage at: ${dataDir}`);
+  initPromise = initializeDB();
+  return initPromise;
+}
 
-    // Dynamic import from pglite-only entry point to avoid bundling postgres.js
-    const { createPGLiteStorage, getPGLiteClient } = await import('@t3x/storage/pglite');
+async function initializeDB(): Promise<AnyDB> {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (databaseUrl) {
+    // Docker/production: Use PostgreSQL
+    console.log('[db] Using PostgreSQL:', databaseUrl.replace(/:[^:@]+@/, ':****@'));
+    const { createPostgresStorage, closePostgresStorage } = await import('@t3x/storage');
+    dbInstance = await createPostgresStorage({ connectionString: databaseUrl });
+    closeDbFn = closePostgresStorage;
+    console.log('[db] PostgreSQL initialized');
+  } else {
+    // Local development: Use PGLite
+    const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
+    console.log('[db] Using PGLite:', dataDir);
+    const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import('@t3x/storage/pglite');
     dbInstance = await createPGLiteStorage({ dataDir });
     getPGLiteClientFn = getPGLiteClient;
-    console.log('[db] Database initialized');
+    closeDbFn = closePGLiteStorage;
+    console.log('[db] PGLite initialized');
+  }
 
-    return dbInstance;
-  })();
-
-  return initPromise;
+  return dbInstance;
 }
 
 /**
  * Get raw PGLite client for direct SQL execution (dev tools only)
+ * Only available when using PGLite (local development).
  * Must call getDB() first to ensure initialization.
  */
 export function getRawClient(): PGlite {
   if (!getPGLiteClientFn) {
-    throw new Error('Database not initialized. Call getDB() first.');
+    throw new Error('PGLite client not available. Either database not initialized or using PostgreSQL.');
   }
   return getPGLiteClientFn();
+}
+
+/**
+ * Close database connection (for graceful shutdown)
+ */
+export async function closeDB(): Promise<void> {
+  if (closeDbFn) {
+    await closeDbFn();
+    closeDbFn = null;
+  }
+  dbInstance = null;
+  initPromise = null;
+  getPGLiteClientFn = null;
 }

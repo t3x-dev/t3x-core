@@ -1,0 +1,264 @@
+/**
+ * Runs Routes
+ *
+ * Engine → Runner → n8n workflow orchestration.
+ * This route receives run requests from WebUI, forwards to Runner,
+ * and handles callbacks from Runner with results.
+ */
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { randomUUID } from 'crypto';
+import { getDB } from '../lib/db';
+import {
+  insertRun,
+  updateRun,
+  getRun,
+  listRuns,
+} from '@t3x/storage';
+
+// Runner URL (t3x-runner service)
+const RUNNER_URL = process.env.RUNNER_URL || 'http://localhost:8080';
+
+// This Engine's callback URL for Runner to call back
+const ENGINE_CALLBACK_URL = process.env.ENGINE_CALLBACK_URL || 'http://localhost:8000/api/v1/runs/ingest';
+
+// Runner's callback URL for n8n to call back
+const RUNNER_CALLBACK_URL = process.env.RUNNER_CALLBACK_URL || 'http://localhost:8080/callbacks/n8n';
+
+export const runsRoutes = new Hono();
+
+// Request schema for creating a run
+const CreateRunSchema = z.object({
+  project_id: z.string().optional(),
+  commit_ref: z.string().optional(),
+  leaf: z.object({
+    id: z.string(),
+    type: z.enum(['deploy', 'eval']),
+    content: z.string().optional(),
+  }).optional(),
+  inputs: z.record(z.unknown()).optional(),
+  workflow: z.object({
+    type: z.string(),
+    webhook_id: z.string().optional(),
+  }).optional(),
+});
+
+// Ingest schema for Runner callback
+const IngestSchema = z.object({
+  run_id: z.string(),
+  runner_run_id: z.string(),
+  status: z.enum(['completed', 'failed']),
+  run_report: z.record(z.unknown()).optional(),
+  assertions: z.array(z.unknown()).optional(),
+  evidence_pack: z.record(z.unknown()).optional(),
+});
+
+/**
+ * POST /runs - Create and trigger a run
+ *
+ * Flow: WebUI → Engine → Runner → n8n
+ */
+runsRoutes.post('/runs', async (c) => {
+  try {
+    const body = await c.req.json();
+    const input = CreateRunSchema.parse(body);
+
+    // Generate run ID
+    const run_id = `run_${randomUUID().slice(0, 8)}`;
+
+    // Store run in database
+    const db = await getDB();
+    await insertRun(db, {
+      run_id,
+      project_id: input.project_id || null,
+      runner_run_id: null,
+      commit_ref: input.commit_ref || null,
+      leaf_json: input.leaf ? JSON.stringify(input.leaf) : null,
+      inputs_json: input.inputs ? JSON.stringify(input.inputs) : null,
+      workflow_json: input.workflow ? JSON.stringify(input.workflow) : null,
+      status: 'queued',
+      result_json: null,
+    });
+
+    console.log(`[runs] Created run ${run_id}, forwarding to Runner`);
+
+    // Forward to Runner
+    const runnerPayload = {
+      run_id,
+      commit_ref: input.commit_ref,
+      leaf: input.leaf,
+      inputs: input.inputs,
+      callback_url: RUNNER_CALLBACK_URL,
+      engine_callback_url: ENGINE_CALLBACK_URL,
+      workflow: input.workflow,
+    };
+
+    let runner_run_id: string | undefined;
+    let warning: string | undefined;
+
+    try {
+      const runnerResponse = await fetch(`${RUNNER_URL}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(runnerPayload),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (runnerResponse.ok) {
+        const runnerData = await runnerResponse.json() as { success: boolean; data?: { runner_run_id: string } };
+        runner_run_id = runnerData.data?.runner_run_id;
+
+        // Update run with runner_run_id
+        if (runner_run_id) {
+          await updateRun(db, run_id, {
+            runner_run_id,
+            status: 'running',
+          });
+        }
+
+        console.log(`[runs] Runner accepted run ${run_id} as ${runner_run_id}`);
+      } else {
+        const errorText = await runnerResponse.text();
+        warning = `Runner returned ${runnerResponse.status}: ${errorText}`;
+        console.warn(`[runs] Runner error for ${run_id}: ${warning}`);
+      }
+    } catch (err) {
+      warning = `Failed to reach Runner: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(`[runs] ${warning}`);
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        run_id,
+        status: runner_run_id ? 'running' : 'queued',
+        runner_run_id,
+        warning,
+      },
+    });
+  } catch (error) {
+    console.error('[runs] Error creating run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400
+    );
+  }
+});
+
+/**
+ * POST /runs/ingest - Receive results from Runner
+ *
+ * Flow: n8n → Runner → Engine (this endpoint)
+ */
+runsRoutes.post('/runs/ingest', async (c) => {
+  try {
+    const body = await c.req.json();
+    const data = IngestSchema.parse(body);
+
+    console.log(`[runs] Received ingest for run ${data.run_id}, status: ${data.status}`);
+
+    // Update run in database
+    const db = await getDB();
+    await updateRun(db, data.run_id, {
+      status: data.status,
+      result_json: JSON.stringify({
+        run_report: data.run_report,
+        assertions: data.assertions,
+        evidence_pack: data.evidence_pack,
+      }),
+    });
+
+    console.log(`[runs] Updated run ${data.run_id} to ${data.status}`);
+
+    return c.json({ success: true, data: { ok: true } });
+  } catch (error) {
+    console.error('[runs] Error ingesting run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400
+    );
+  }
+});
+
+/**
+ * GET /runs - List runs
+ */
+runsRoutes.get('/runs', async (c) => {
+  try {
+    const projectId = c.req.query('project_id');
+    const status = c.req.query('status') as 'queued' | 'running' | 'completed' | 'failed' | undefined;
+    const limit = parseInt(c.req.query('limit') || '50', 10);
+    const offset = parseInt(c.req.query('offset') || '0', 10);
+
+    const db = await getDB();
+    const result = await listRuns(db, { projectId, status, limit, offset });
+
+    return c.json({
+      success: true,
+      data: {
+        runs: result,
+        limit,
+        offset,
+      },
+    });
+  } catch (error) {
+    console.error('[runs] Error listing runs:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /runs/:id - Get a specific run
+ */
+runsRoutes.get('/runs/:id', async (c) => {
+  try {
+    const runId = c.req.param('id');
+    const db = await getDB();
+    const run = await getRun(db, runId);
+
+    if (!run) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: `Run not found: ${runId}` },
+        },
+        404
+      );
+    }
+
+    return c.json({ success: true, data: run });
+  } catch (error) {
+    console.error('[runs] Error getting run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});

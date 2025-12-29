@@ -1131,6 +1131,121 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
  * Streaming chat - returns async generator for SSE events
  */
 // ============================================================================
+// Deploy Agents API (Database-backed)
+// Note: This is different from the "agent" layer (LLM draft generation)
+// ============================================================================
+
+// Deploy Agent stored in database
+export interface DeployAgent {
+  deploy_agent_id: string
+  project_id: string | null
+  name: string
+  endpoint: string
+  type: string
+  auth: {
+    type: 'bearer' | 'api_key'
+    token: string
+    header?: string
+  } | null
+  status: 'idle' | 'running' | 'error'
+  last_run_id: string | null
+  last_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DeployAgentListData {
+  deploy_agents: DeployAgent[]
+  limit: number
+  offset: number
+}
+
+/**
+ * List deploy agents from database
+ */
+export async function listDeployAgents(options?: {
+  project_id?: string
+  limit?: number
+  offset?: number
+}): Promise<DeployAgentListData> {
+  const query = buildQueryString({
+    project_id: options?.project_id,
+    limit: options?.limit ?? 100,
+    offset: options?.offset ?? 0,
+  })
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents?${query}`)
+  return handleResponse<DeployAgentListData>(res)
+}
+
+/**
+ * Get deploy agent by ID from database
+ */
+export async function getDeployAgent(deployAgentId: string): Promise<DeployAgent> {
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`)
+  return handleResponse<DeployAgent>(res)
+}
+
+/**
+ * Create deploy agent in database
+ */
+export async function createDeployAgent(input: {
+  id: string
+  name: string
+  endpoint: string
+  type?: 'http' | 'websocket' | 'grpc'
+  project_id?: string
+  auth?: {
+    type: 'bearer' | 'api_key'
+    token: string
+    header?: string
+  }
+}): Promise<DeployAgent> {
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return handleResponse<DeployAgent>(res)
+}
+
+/**
+ * Update deploy agent in database
+ */
+export async function updateDeployAgent(
+  deployAgentId: string,
+  updates: {
+    name?: string
+    endpoint?: string
+    type?: 'http' | 'websocket' | 'grpc'
+    auth?: {
+      type: 'bearer' | 'api_key'
+      token: string
+      header?: string
+    } | null
+    status?: 'idle' | 'running' | 'error'
+    last_run_id?: string
+    last_run_at?: string
+  }
+): Promise<DeployAgent> {
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  return handleResponse<DeployAgent>(res)
+}
+
+/**
+ * Delete deploy agent from database
+ */
+export async function deleteDeployAgent(deployAgentId: string): Promise<{ deleted: boolean; deploy_agent_id: string }> {
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`, {
+    method: 'DELETE',
+  })
+  return handleResponse<{ deleted: boolean; deploy_agent_id: string }>(res)
+}
+
+// ============================================================================
 // Runner API (t3x-runner)
 // ============================================================================
 
@@ -1178,6 +1293,16 @@ export interface RunTrace {
     tool_calls: number;
     tokens_used?: number;
   };
+}
+
+export interface RunAgentResult {
+  run_id: string
+  output?: unknown
+  trace: RunTrace
+  error?: {
+    code: string
+    message: string
+  }
 }
 
 // Test step
@@ -1236,9 +1361,7 @@ export async function checkRunnerHealth(): Promise<{ status: string; service: st
 /**
  * Register an agent with the runner
  */
-export async function registerAgent(
-  config: AgentConfig
-): Promise<{ success: boolean; agent_id: string }> {
+export async function registerAgent(config: AgentConfig): Promise<{ agent_id: string }> {
   const res = await fetchWithTimeout(`${RUNNER_URL}/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1262,21 +1385,37 @@ export async function runAgent(
   agentId: string,
   input: Record<string, unknown>,
   config?: { timeout_ms?: number }
-): Promise<{ run_id: string; output: unknown; trace: RunTrace }> {
-  const res = await fetchWithTimeout(
-    `${RUNNER_URL}/run`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        agent_id: agentId,
-        input,
-        config,
-      }),
-    },
-    config?.timeout_ms ?? 60000
-  );
-  return handleResponse(res);
+): Promise<RunAgentResult> {
+  const res = await fetchWithTimeout(`${RUNNER_URL}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_id: agentId,
+      input,
+      config,
+    }),
+  }, config?.timeout_ms ?? 60000)
+
+  const json = await res.json().catch(() => ({
+    success: false,
+    error: { code: 'PARSE_ERROR', message: 'Failed to parse response' },
+  })) as ApiResponse<{ run_id: string; output?: unknown; trace: RunTrace }>
+
+  if (res.ok && json.success) {
+    return json.data as RunAgentResult
+  }
+
+  if (json.data?.run_id && json.data?.trace) {
+    return {
+      ...(json.data as { run_id: string; output?: unknown; trace: RunTrace }),
+      error: json.error || { code: 'RUN_FAILED', message: `HTTP ${res.status}` },
+    }
+  }
+
+  throw new ApiError(
+    json.error?.code || 'RUN_FAILED',
+    json.error?.message || `HTTP ${res.status}`
+  )
 }
 
 /**
@@ -1353,7 +1492,7 @@ export async function createCommitFromEval(
   runId: string,
   evalResult: EvalResponse,
   message?: string
-): Promise<{ success: boolean; commit: Commit }> {
+): Promise<{ commit: Commit }> {
   const res = await fetchWithTimeout(`${RUNNER_URL}/commit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1475,7 +1614,9 @@ export async function listEngineRuns(options?: {
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const res = await fetch(`${API_V1}/chat/stream`, {
+  // Use relative path to call WebUI's own API route (not the external API server)
+  // The chat/stream endpoint is implemented in apps/web/src/app/api/v1/chat/stream/route.ts
+  const res = await fetch(`/api/v1/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),

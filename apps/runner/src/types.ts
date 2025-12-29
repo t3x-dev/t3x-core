@@ -4,13 +4,11 @@ import { z } from 'zod';
 export const AgentInputSchema = z.object({
   agent_id: z.string(),
   input: z.record(z.string(), z.unknown()),
-  config: z
-    .object({
-      timeout_ms: z.number().default(30000),
-      capture_llm_calls: z.boolean().default(true),
-      capture_tool_calls: z.boolean().default(true),
-    })
-    .optional(),
+  config: z.object({
+    timeout_ms: z.number().default(30000),
+    capture_llm_calls: z.boolean().default(true),
+    capture_tool_calls: z.boolean().default(true),
+  }).optional(),
 });
 
 export type AgentInput = z.infer<typeof AgentInputSchema>;
@@ -42,14 +40,12 @@ export const RunTraceSchema = z.object({
   input: z.record(z.string(), z.unknown()),
   output: z.unknown().optional(),
   events: z.array(TraceEventSchema),
-  metrics: z
-    .object({
-      total_latency_ms: z.number().optional(),
-      llm_calls: z.number().default(0),
-      tool_calls: z.number().default(0),
-      tokens_used: z.number().optional(),
-    })
-    .optional(),
+  metrics: z.object({
+    total_latency_ms: z.number().optional(),
+    llm_calls: z.number().default(0),
+    tool_calls: z.number().default(0),
+    tokens_used: z.number().optional(),
+  }).optional(),
 });
 
 export type RunTrace = z.infer<typeof RunTraceSchema>;
@@ -66,9 +62,9 @@ export const TestStepSchema = z.object({
     'semantic',
     'custom',
     // New assertion types for agent eval
-    'json_schema', // Validate output structure
-    'trace_must_call', // Tool must be called
-    'trace_order', // Tool A before Tool B
+    'json_schema',      // Validate output structure
+    'trace_must_call',  // Tool must be called
+    'trace_order',      // Tool A before Tool B
   ]),
   target: z.enum(['input', 'output', 'llm_call', 'tool_call', 'trace']),
   assertion: z.object({
@@ -78,10 +74,10 @@ export const TestStepSchema = z.object({
     threshold: z.number().optional(),
     fn: z.string().optional(), // for custom assertions
     // New fields for agent assertions
-    schema: z.record(z.string(), z.unknown()).optional(), // JSON schema for json_schema
-    tool: z.string().optional(), // Tool name for trace_must_call
-    before: z.string().optional(), // For trace_order
-    after: z.string().optional(), // For trace_order
+    schema: z.record(z.string(), z.unknown()).optional(),  // JSON schema for json_schema
+    tool: z.string().optional(),               // Tool name for trace_must_call
+    before: z.string().optional(),             // For trace_order
+    after: z.string().optional(),              // For trace_order
   }),
   severity: z.enum(['error', 'warning', 'info']).default('error'),
 });
@@ -93,12 +89,10 @@ export const EvalRequestSchema = z.object({
   run_id: z.string().optional(),
   trace: RunTraceSchema.optional(),
   test_steps: z.array(TestStepSchema),
-  options: z
-    .object({
-      stop_on_first_failure: z.boolean().default(false),
-      generate_suggestions: z.boolean().default(true),
-    })
-    .optional(),
+  options: z.object({
+    stop_on_first_failure: z.boolean().default(false),
+    generate_suggestions: z.boolean().default(true),
+  }).optional(),
 });
 
 export type EvalRequest = z.infer<typeof EvalRequestSchema>;
@@ -125,16 +119,12 @@ export const EvalResponseSchema = z.object({
   passed_steps: z.number(),
   failed_steps: z.number(),
   results: z.array(TestResultSchema),
-  suggestions: z
-    .array(
-      z.object({
-        type: z.enum(['prompt_change', 'config_change', 'tool_fix', 'other']),
-        description: z.string(),
-        confidence: z.number(),
-        diff: z.string().optional(),
-      })
-    )
-    .optional(),
+  suggestions: z.array(z.object({
+    type: z.enum(['prompt_change', 'config_change', 'tool_fix', 'other']),
+    description: z.string(),
+    confidence: z.number(),
+    diff: z.string().optional(),
+  })).optional(),
   t3x_commit_id: z.string().optional(),
 });
 
@@ -146,13 +136,11 @@ export const AgentConfigSchema = z.object({
   name: z.string(),
   endpoint: z.string().url(),
   type: z.enum(['http', 'websocket', 'subprocess']).default('http'),
-  auth: z
-    .object({
-      type: z.enum(['none', 'bearer', 'api_key', 'basic']).default('none'),
-      token: z.string().optional(),
-      header: z.string().optional(),
-    })
-    .optional(),
+  auth: z.object({
+    type: z.enum(['none', 'bearer', 'api_key', 'basic']).default('none'),
+    token: z.string().optional(),
+    header: z.string().optional(),
+  }).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -166,22 +154,18 @@ export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 export const EngineRunRequestSchema = z.object({
   run_id: z.string(),
   commit_ref: z.string().optional(),
-  leaf: z
-    .object({
-      id: z.string(),
-      type: z.enum(['deploy', 'eval']),
-      content: z.string().optional(),
-    })
-    .optional(),
+  leaf: z.object({
+    id: z.string(),
+    type: z.enum(['deploy', 'eval']),
+    content: z.string().optional(),
+  }).optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),
-  callback_url: z.string(), // Runner's callback URL for n8n
-  engine_callback_url: z.string(), // Engine's ingest URL
-  workflow: z
-    .object({
-      type: z.string(),
-      webhook_id: z.string().optional(),
-    })
-    .optional(),
+  callback_url: z.string(),           // Runner's callback URL for n8n
+  engine_callback_url: z.string(),    // Engine's ingest URL
+  workflow: z.object({
+    type: z.string(),
+    webhook_id: z.string().optional(),
+  }).optional(),
 });
 
 export type EngineRunRequest = z.infer<typeof EngineRunRequestSchema>;
@@ -191,12 +175,10 @@ export const N8nCallbackSchema = z.object({
   runner_run_id: z.string(),
   run_id: z.string(),
   output: z.record(z.string(), z.unknown()).optional(),
-  meta: z
-    .object({
-      latency_ms: z.number().optional(),
-      tokens: z.number().optional(),
-    })
-    .optional(),
+  meta: z.object({
+    latency_ms: z.number().optional(),
+    tokens: z.number().optional(),
+  }).optional(),
   error: z.string().nullable().optional(),
 });
 

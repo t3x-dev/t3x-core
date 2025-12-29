@@ -1,14 +1,20 @@
 /**
  * Project schemas for API validation and OpenAPI spec
+ *
+ * IMPORTANT: Use z from @hono/zod-openapi to ensure compatibility with OpenAPI routes.
+ * Do NOT import from 'zod' directly as it may resolve to a different version.
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
+
+// Metadata schema - use z.any() to avoid Zod v4 compatibility issues with z.record(z.unknown())
+const MetadataSchema = z.record(z.string(), z.any()).nullable();
 
 // Project entity
 export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
   created_at: z.string().datetime(),
-  metadata: z.record(z.unknown()).nullable(),
+  metadata: MetadataSchema,
 });
 
 // Project with stats
@@ -23,13 +29,13 @@ export const ProjectWithStatsSchema = ProjectSchema.extend({
 // Create project request
 export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(255),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // Update project request
 export const UpdateProjectSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // List projects response
