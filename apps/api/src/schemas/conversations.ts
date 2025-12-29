@@ -1,7 +1,7 @@
 /**
  * Conversation schemas for API validation and OpenAPI spec
  */
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Conversation entity
 export const ConversationSchema = z.object({

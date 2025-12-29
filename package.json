@@ -27,6 +27,8 @@
     "dev:webui": "turbo run dev --filter=t3x-webui",
     "dev:api": "turbo run dev --filter=@t3x/api",
     "dev:agent": "turbo run dev --filter=agent-demo",
+    "stop:api": "lsof -ti:8000 | xargs kill -TERM 2>/dev/null || echo 'API not running'",
+    "stop:webui": "lsof -ti:3000 | xargs kill -TERM 2>/dev/null || echo 'WebUI not running'",
     "docker:up": "docker compose up",
     "docker:up:all": "docker compose --profile runner --profile n8n up",
     "docker:up:n8n": "docker compose --profile n8n up",

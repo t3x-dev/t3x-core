@@ -1,12 +1,13 @@
 /**
  * Projects Routes
  *
- * GET  /v1/projects - List projects
- * POST /v1/projects - Create project
- * GET  /v1/projects/:id - Get project by ID
+ * GET    /v1/projects - List projects
+ * POST   /v1/projects - Create project
+ * GET    /v1/projects/:id - Get project by ID
+ * DELETE /v1/projects/:id - Delete project
  */
 
-import { findProjectById, findProjects, insertProject } from '@t3x/storage/pglite';
+import { deleteProject, findProjectById, findProjects, insertProject } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
@@ -100,5 +101,26 @@ projectRoutes.get('/v1/projects/:id', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'GET_FAILED', message, 500);
+  }
+});
+
+/**
+ * DELETE /v1/projects/:id - Delete project
+ */
+projectRoutes.delete('/v1/projects/:id', async (c) => {
+  const id = c.req.param('id');
+
+  try {
+    const db = await getDB();
+    const deleted = await deleteProject(db, id);
+
+    if (!deleted) {
+      return jsonError(c, 'NOT_FOUND', `Project ${id} not found`, 404);
+    }
+
+    return jsonSuccess(c, { deleted: true, project_id: id });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'DELETE_FAILED', message, 500);
   }
 });

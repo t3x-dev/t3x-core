@@ -4,8 +4,20 @@
  * POST /v1/chat - Non-streaming chat
  * GET  /v1/chat/providers - List available providers
  */
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { Hono } from 'hono';
 import { jsonError, jsonSuccess } from '../lib/response';
+
+// Create proxy agent if proxy is configured
+function getProxyFetch() {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (proxyUrl) {
+    const agent = new ProxyAgent(proxyUrl);
+    return (url: string, options?: RequestInit) =>
+      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]);
+  }
+  return fetch;
+}
 
 // ============================================================================
 // Types
@@ -75,7 +87,8 @@ async function callClaudeNonStreaming(
   const systemMessage = messages.find((m) => m.role === 'system');
   const otherMessages = messages.filter((m) => m.role !== 'system');
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const proxyFetch = getProxyFetch();
+  const response = await proxyFetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
