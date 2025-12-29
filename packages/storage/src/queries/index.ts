@@ -115,3 +115,27 @@ export {
   type ListTurnsOptions,
   TurnWindowError,
 } from './turns';
+// Deploy Agents (for Deploy page, different from agent layer)
+export {
+  type CreateDeployAgentInput,
+  deleteDeployAgent,
+  findDeployAgentById,
+  findDeployAgents,
+  insertDeployAgent,
+  type ListDeployAgentsOptions,
+  type UpdateDeployAgentInput,
+  updateDeployAgent,
+  updateDeployAgentRunStatus,
+} from './deployAgents';
+// Runs (Engine → Runner → n8n flow)
+export {
+  type CreateRunInput,
+  deleteRun,
+  getRun,
+  insertRun,
+  listRuns,
+  type ListRunsOptions,
+  type RunStatus,
+  type UpdateRunInput,
+  updateRun,
+} from './runs';

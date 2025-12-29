@@ -16,3 +16,5 @@ export { projectRoutes } from './projects';
 export { runnerRoutes } from './runner';
 export { statusRoutes } from './status';
 export { turnRoutes } from './turns';
+export { deployAgentRoutes } from './deploy-agents';
+export { runsRoutes } from './runs';
