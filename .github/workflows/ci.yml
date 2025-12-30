@@ -31,6 +31,7 @@ jobs:
       storage: ${{ steps.filter.outputs.storage }}
       webui: ${{ steps.filter.outputs.webui }}
       api: ${{ steps.filter.outputs.api }}
+      runner: ${{ steps.filter.outputs.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +61,21 @@ jobs:
               - 'packages/core/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+            runner:
+              - 'apps/runner/**'
+              - 'apps/api/src/routes/runs.ts'
+              - 'apps/api/src/routes/deploy-agents.ts'
+              - 'apps/web/src/lib/api.ts'
+              - 'apps/web/src/app/deploy/**'
+              - 'apps/web/src/app/eval/**'
+              - 'packages/storage/src/queries/runs.ts'
+              - 'packages/storage/src/queries/deployAgents.ts'
+              - 'packages/storage/src/schema/runs.ts'
+              - 'packages/storage/src/schema/deployAgents.ts'
+              - 'docker-compose.yml'
+              - 'apps/api/Dockerfile'
+              - 'apps/runner/Dockerfile'
+              - 'apps/web/Dockerfile'
 
   # ===========================================
   # FAST CHECKS - Run on every push (feature branches)
@@ -226,3 +242,40 @@ jobs:
 
       - name: Run linter
         run: pnpm lint
+
+  # ===========================================
+  # RUNNER CONTRACT TESTS - Protect Runner/n8n integration
+  # Only runs when runner-related files change
+  # ===========================================
+  test-runner-contracts:
+    name: Runner Contract Tests
+    runs-on: ubuntu-latest
+    needs: changes
+    # Run on PR or push to main, only if runner-related files changed
+    if: |
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      needs.changes.outputs.runner == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: pnpm build:core && pnpm build:storage
+
+      - name: Run API contract tests (runs, deploy-agents)
+        run: pnpm --filter @t3x/api test -- src/__tests__/contracts/
+
+      - name: Run WebUI API endpoint tests
+        run: pnpm --filter t3x-webui test -- src/__tests__/contracts/
