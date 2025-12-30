@@ -149,6 +149,43 @@ export default function EvalPage() {
             },
           };
           setTrace(syntheticTrace);
+
+          // Load saved assertions from PG if available
+          if (run.result?.assertions && Array.isArray(run.result.assertions) && run.result.assertions.length > 0) {
+            const savedAssertions = run.result.assertions as Array<{
+              id: string;
+              type: 'pass' | 'fail' | 'warning';
+              category: string;
+              message: string;
+              confidence: number;
+            }>;
+
+            // Convert LLM assertions to EvalResponse format
+            const passCount = savedAssertions.filter(a => a.type === 'pass').length;
+            const failCount = savedAssertions.filter(a => a.type === 'fail').length;
+
+            setEvalResult({
+              run_id: run.run_id,
+              passed: failCount === 0,
+              total_steps: savedAssertions.length,
+              passed_steps: passCount,
+              failed_steps: failCount,
+              results: savedAssertions.map(a => ({
+                step_id: a.id,
+                step_name: a.message.slice(0, 50) + (a.message.length > 50 ? '...' : ''),
+                passed: a.type === 'pass',
+                severity: a.type === 'fail' ? 'error' : a.type === 'warning' ? 'warning' : 'info',
+                message: a.message,
+                expected: a.category,
+                actual: `${a.type} (${Math.round(a.confidence * 100)}% confidence)`,
+              })),
+              suggestions: (run.result as { eval_summary?: string }).eval_summary ? [{
+                type: 'other' as const,
+                description: (run.result as { eval_summary?: string }).eval_summary as string,
+                confidence: 1,
+              }] : undefined,
+            });
+          }
         }
       } catch (err) {
         console.warn('Run not found in Engine, trying Runner:', err);
