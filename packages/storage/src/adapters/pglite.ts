@@ -5,6 +5,7 @@
  * File-based persistence like SQLite, but with full Postgres compatibility.
  */
 
+import fs from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import * as schema from '../schema';
@@ -26,7 +27,24 @@ let db: PGLiteDB | null = null;
  */
 export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PGLiteDB> {
   // Determine data directory
-  const dataDir = config.inMemory ? undefined : config.dataDir || '.t3x/database';
+  let dataDir = config.inMemory ? undefined : config.dataDir || '.t3x/database';
+
+  // For file-based mode, ensure directory exists and path ends with /
+  if (dataDir) {
+    // Ensure path ends with / for PGLite NodeFS
+    if (!dataDir.endsWith('/')) {
+      dataDir = dataDir + '/';
+    }
+    // Create directory recursively if it doesn't exist
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Remove stale postmaster.pid if it exists (from previous unclean shutdown)
+    const pidFile = dataDir + 'postmaster.pid';
+    if (fs.existsSync(pidFile)) {
+      console.log('Removing stale postmaster.pid from previous session');
+      fs.unlinkSync(pidFile);
+    }
+  }
 
   // Create PGLite client
   client = new PGlite(dataDir);
