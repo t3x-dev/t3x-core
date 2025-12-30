@@ -50,6 +50,8 @@ const IngestSchema = z.object({
   status: z.enum(['completed', 'failed']),
   run_report: z.record(z.string(), z.unknown()).optional(),
   assertions: z.array(z.unknown()).optional(),
+  eval_metrics: z.record(z.string(), z.unknown()).optional(),
+  eval_summary: z.string().optional(),
   evidence_pack: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -170,6 +172,8 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
       result_json: JSON.stringify({
         run_report: data.run_report,
         assertions: data.assertions,
+        eval_metrics: data.eval_metrics,
+        eval_summary: data.eval_summary,
         evidence_pack: data.evidence_pack,
       }),
     });
