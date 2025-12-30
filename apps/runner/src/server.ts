@@ -2,6 +2,7 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express } from 'express';
 import pino from 'pino';
+import { llmAsserter } from './asserter.js';
 import { evalEngine } from './eval.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
@@ -262,22 +263,68 @@ app.post('/callbacks/n8n', async (req, res) => {
 
     logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
 
+    // Prepare evidence pack
+    const evidencePack = {
+      n8n_output: data.output,
+      n8n_meta: data.meta,
+      error: data.error,
+    };
+
+    const runReport = {
+      output: data.output,
+      meta: data.meta,
+    };
+
+    // Generate LLM assertions
+    let assertionResult = null;
+    try {
+      logger.info({ run_id: data.run_id }, 'Generating LLM assertions...');
+
+      // Parse eval rules from leaf.content if available
+      let evalRules = undefined;
+      if (pending.leaf?.content) {
+        try {
+          const leafContent = JSON.parse(pending.leaf.content);
+          evalRules = {
+            expected_output: leafContent.expected_output,
+            must_contain: leafContent.must_contain,
+            must_not_contain: leafContent.must_not_contain,
+            custom_checks: leafContent.custom_checks,
+          };
+        } catch {
+          logger.warn({ run_id: data.run_id }, 'Failed to parse leaf.content as JSON');
+        }
+      }
+
+      assertionResult = await llmAsserter.generateAssertions({
+        run_id: data.run_id,
+        leaf: pending.leaf,
+        inputs: pending.inputs,
+        run_report: runReport,
+        evidence_pack: evidencePack,
+        eval_rules: evalRules,
+      });
+
+      logger.info({
+        run_id: data.run_id,
+        assertions_count: assertionResult.assertions.length,
+        summary: assertionResult.summary,
+      }, 'LLM assertions generated');
+    } catch (assertError) {
+      logger.error({ run_id: data.run_id, error: String(assertError) }, 'Failed to generate assertions');
+    }
+
     // Prepare result for Engine
     const status = data.error ? 'failed' : 'completed';
     const ingestPayload = {
       run_id: data.run_id,
       runner_run_id: data.runner_run_id,
       status,
-      run_report: {
-        output: data.output,
-        meta: data.meta,
-      },
-      assertions: [],  // TODO: Run eval if test steps provided
-      evidence_pack: {
-        n8n_output: data.output,
-        n8n_meta: data.meta,
-        error: data.error,
-      },
+      run_report: runReport,
+      assertions: assertionResult?.assertions || [],
+      eval_metrics: assertionResult?.metrics || {},
+      eval_summary: assertionResult?.summary || '',
+      evidence_pack: evidencePack,
     };
 
     // Call back to Engine
