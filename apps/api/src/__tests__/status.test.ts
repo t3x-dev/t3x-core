@@ -8,6 +8,9 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiResponse = any;
+
 // Mock the database module before importing routes
 let mockDB: PGLiteDB;
 
@@ -47,7 +50,7 @@ describe('Status Routes', () => {
       const res = await app.request('/v1/status');
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.status).toBe('ok');
       expect(data.data.database).toBe('connected');
@@ -61,7 +64,7 @@ describe('Status Routes', () => {
       const res = await app.request('/v1/status');
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.data.projects_count).toBe('available');
     });
   });
