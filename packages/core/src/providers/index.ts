@@ -23,7 +23,10 @@ export {
 } from './llm';
 // NLP Provider
 export {
+  createGoogleCloudNLPProvider,
   type DependencyLabel,
+  type GoogleCloudNLPConfig,
+  GoogleCloudNLPProvider,
   type NLPAnalysis,
   type NLPEntity,
   type NLPProvider,

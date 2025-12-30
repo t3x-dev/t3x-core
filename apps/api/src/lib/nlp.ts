@@ -1,11 +1,37 @@
 /**
- * Simple NLP Provider for Ring Extraction
+ * NLP Provider for Ring Extraction
  *
- * A lightweight rule-based NLP provider that works without external services.
- * Suitable for local development and basic semantic extraction.
+ * Provides NLP analysis for Ring 1/2/3 extraction.
+ *
+ * When GOOGLE_CLOUD_NLP_KEY is set:
+ *   Uses Google Cloud Natural Language API for high-quality analysis
+ *
+ * Otherwise:
+ *   Falls back to SimpleNLPProvider (rule-based, for local dev)
  */
 
-import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from '@t3x/core';
+import {
+  createGoogleCloudNLPProvider,
+  type NLPAnalysis,
+  type NLPEntity,
+  type NLPProvider,
+  type NLPSentence,
+  type NLPToken,
+} from '@t3x/core';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
+
+/**
+ * Create a proxy-aware fetch function
+ */
+function getProxyFetch() {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (proxyUrl) {
+    const agent = new ProxyAgent(proxyUrl);
+    return (url: string, options?: RequestInit) =>
+      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]) as Promise<Response>;
+  }
+  return fetch;
+}
 
 /**
  * Words that indicate positive preference
@@ -336,14 +362,28 @@ export class SimpleNLPProvider implements NLPProvider {
 /**
  * Singleton instance
  */
-let nlpProvider: SimpleNLPProvider | null = null;
+let nlpProvider: NLPProvider | null = null;
 
 /**
  * Get the NLP provider instance
+ *
+ * Uses Google Cloud NLP if GOOGLE_CLOUD_NLP_KEY is set,
+ * otherwise falls back to SimpleNLPProvider.
  */
-export function getNLPProvider(): SimpleNLPProvider {
+export function getNLPProvider(): NLPProvider {
   if (!nlpProvider) {
-    nlpProvider = new SimpleNLPProvider();
+    const googleApiKey = process.env.GOOGLE_CLOUD_NLP_KEY;
+
+    if (googleApiKey) {
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+      console.log(`[nlp] Using Google Cloud NLP provider${proxyUrl ? ` (via proxy: ${proxyUrl})` : ''}`);
+      nlpProvider = createGoogleCloudNLPProvider(googleApiKey, {
+        fetch: getProxyFetch(),
+      });
+    } else {
+      console.log('[nlp] Using SimpleNLPProvider (set GOOGLE_CLOUD_NLP_KEY for better quality)');
+      nlpProvider = new SimpleNLPProvider();
+    }
   }
   return nlpProvider;
 }

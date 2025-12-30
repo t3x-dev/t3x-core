@@ -1652,9 +1652,8 @@ export async function listEngineRuns(options?: {
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  // Use relative path to call WebUI's own API route (not the external API server)
-  // The chat/stream endpoint is implemented in apps/web/src/app/api/v1/chat/stream/route.ts
-  const res = await fetch(`/api/v1/chat/stream`, {
+  // Call API server directly
+  const res = await fetch(`${API_V1}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
