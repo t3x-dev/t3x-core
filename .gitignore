@@ -67,3 +67,6 @@ coverage.xml
 # Next.js
 .next/
 next-env.d.ts
+
+# Development planning (personal notes)
+RUNNER_PLAN.md
