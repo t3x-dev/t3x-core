@@ -14,3 +14,10 @@ export {
   normalizePosTag,
   POS_TAG_MAPPING,
 } from './base';
+
+export {
+  createGoogleCloudNLPProvider,
+  type CustomFetch,
+  GoogleCloudNLPProvider,
+  type GoogleCloudNLPConfig,
+} from './google-cloud';
