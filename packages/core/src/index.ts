@@ -84,14 +84,18 @@ export {
   createCachedEmbeddingProvider,
   createClaudeProvider,
   createGoogleAIEmbeddingProvider,
-  // NLP Provider
+  // NLP Provider (Google Cloud)
+  createGoogleCloudNLPProvider,
   type DependencyLabel,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
   type GoogleAIEmbeddingConfig,
+  type GoogleCloudNLPConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
+  // NLP Provider (implementations)
+  GoogleCloudNLPProvider,
   type NLPAnalysis,
   type NLPEntity,
   type NLPProvider,
