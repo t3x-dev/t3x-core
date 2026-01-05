@@ -2,10 +2,14 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express } from 'express';
 import pino from 'pino';
-import { llmAsserter } from './asserter.js';
-import { evalEngine } from './eval.js';
+import { llmAsserter, type GenerateAssertionsResult } from './asserter.js';
+import { evalEngine as legacyEvalEngine } from './eval.js';
+import { evalEngine, parseRulesFromLeaf } from './evaluator/index.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
+import type { EvalResult } from './schemas/eval-result.js';
+import type { RunRecord } from './schemas/run-record.js';
+import { n8nClient, mapN8nExecutionToRunRecord } from './trace/index.js';
 import {
   AgentConfigSchema,
   AgentInputSchema,
@@ -249,7 +253,11 @@ app.post('/runs', async (req, res) => {
  * POST /callbacks/n8n - n8n workflow calls back with results
  *
  * This endpoint is called by n8n when the workflow completes.
- * It processes the result and calls back to the Engine.
+ * Flow:
+ * 1. Collect trace from n8n (if execution_id provided)
+ * 2. Run deterministic evaluation
+ * 3. Generate LLM assertions (for prompt tuning insights)
+ * 4. Call back to Engine with results
  */
 app.post('/callbacks/n8n', async (req, res) => {
   try {
@@ -263,71 +271,118 @@ app.post('/callbacks/n8n', async (req, res) => {
 
     logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
 
-    // Prepare evidence pack
-    const evidencePack = {
-      n8n_output: data.output,
-      n8n_meta: data.meta,
-      error: data.error,
-    };
+    // ═══════════════════════════════════════════════════
+    // Step 1: Collect trace from n8n
+    // ═══════════════════════════════════════════════════
+    let runRecord: RunRecord;
 
-    const runReport = {
-      output: data.output,
-      meta: data.meta,
-    };
-
-    // Generate LLM assertions
-    let assertionResult = null;
-    try {
-      logger.info({ run_id: data.run_id }, 'Generating LLM assertions...');
-
-      // Parse eval rules from leaf.content if available
-      let evalRules = undefined;
-      if (pending.leaf?.content) {
-        try {
-          const leafContent = JSON.parse(pending.leaf.content);
-          evalRules = {
-            expected_output: leafContent.expected_output,
-            must_contain: leafContent.must_contain,
-            must_not_contain: leafContent.must_not_contain,
-            custom_checks: leafContent.custom_checks,
-          };
-        } catch {
-          logger.warn({ run_id: data.run_id }, 'Failed to parse leaf.content as JSON');
-        }
+    if (data.execution_id) {
+      // Full trace from n8n Execution API
+      try {
+        logger.info({ execution_id: data.execution_id }, 'Fetching n8n execution trace...');
+        const execution = await n8nClient.getExecution(data.execution_id);
+        runRecord = mapN8nExecutionToRunRecord(execution, {
+          runId: pending.run_id,
+        });
+        logger.info({
+          run_id: pending.run_id,
+          steps: runRecord.steps.length,
+          status: runRecord.status,
+        }, 'n8n trace collected');
+      } catch (traceError) {
+        logger.warn({ error: String(traceError) }, 'Failed to collect n8n trace, using fallback');
+        // Fallback: build minimal RunRecord from callback data
+        runRecord = buildRunRecordFromCallback(data, pending);
       }
-
-      assertionResult = await llmAsserter.generateAssertions({
-        run_id: data.run_id,
-        leaf: pending.leaf,
-        inputs: pending.inputs,
-        run_report: runReport,
-        evidence_pack: evidencePack,
-        eval_rules: evalRules,
-      });
-
-      logger.info({
-        run_id: data.run_id,
-        assertions_count: assertionResult.assertions.length,
-        summary: assertionResult.summary,
-      }, 'LLM assertions generated');
-    } catch (assertError) {
-      logger.error({ run_id: data.run_id, error: String(assertError) }, 'Failed to generate assertions');
+    } else {
+      // No execution_id: build minimal RunRecord from callback data
+      runRecord = buildRunRecordFromCallback(data, pending);
     }
 
-    // Prepare result for Engine
-    const status = data.error ? 'failed' : 'completed';
+    // ═══════════════════════════════════════════════════
+    // Step 2: Deterministic evaluation
+    // ═══════════════════════════════════════════════════
+    logger.info({ run_id: pending.run_id }, 'Running deterministic evaluation...');
+    const evalResult: EvalResult = evalEngine.evaluateWithLeafRules(
+      runRecord,
+      pending.leaf?.content
+    );
+
+    logger.info({
+      run_id: pending.run_id,
+      passed: evalResult.passed,
+      score: evalResult.score.toFixed(2),
+      violations: evalResult.violations.length,
+    }, 'Evaluation complete');
+
+    // ═══════════════════════════════════════════════════
+    // Step 3: LLM assertions (for prompt tuning insights)
+    // ═══════════════════════════════════════════════════
+    let assertionResult: GenerateAssertionsResult;
+    try {
+      logger.info({ run_id: pending.run_id }, 'Generating LLM assertions...');
+
+      assertionResult = await llmAsserter.generateAssertions({
+        evalResult,
+        runRecord,
+        context: {
+          leaf: pending.leaf,
+          inputs: pending.inputs,
+        },
+      });
+
+      // Log based on assertion status
+      if (assertionResult.status === 'success') {
+        logger.info({
+          run_id: pending.run_id,
+          assertions_count: assertionResult.output?.assertions.length,
+          suggestions_count: assertionResult.output?.suggestions.length,
+        }, 'LLM assertions generated');
+      } else if (assertionResult.status === 'skipped') {
+        logger.info({ run_id: pending.run_id }, 'LLM assertions skipped: all checks passed');
+      } else if (assertionResult.status === 'unavailable') {
+        logger.warn({ run_id: pending.run_id }, 'LLM assertions unavailable: no API key');
+      } else if (assertionResult.status === 'error') {
+        logger.error({
+          run_id: pending.run_id,
+          error: assertionResult.error,
+        }, 'LLM assertion generation failed');
+      }
+    } catch (assertError) {
+      logger.error({ run_id: pending.run_id, error: String(assertError) }, 'Unexpected assertion error');
+      assertionResult = {
+        status: 'error',
+        reason: 'Unexpected error during assertion generation',
+        error: String(assertError),
+      };
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Step 4: Call back to Engine
+    // ═══════════════════════════════════════════════════
+    const status = evalResult.passed ? 'completed' : 'failed';
+
     const ingestPayload = {
-      run_id: data.run_id,
+      run_id: pending.run_id,
       runner_run_id: data.runner_run_id,
       status,
-      run_report: runReport,
-      assertions: assertionResult?.assertions || [],
-      eval_metrics: assertionResult?.metrics || {},
-      eval_summary: assertionResult?.summary || '',
-      evidence_pack: evidencePack,
+      run_report: {
+        trace: runRecord,
+        eval_result: evalResult,
+      },
+      // Assertions (if generated successfully)
+      assertions: assertionResult.output?.assertions || [],
+      assertion_status: assertionResult.status,
+      assertion_error: assertionResult.error,
+      // Suggestions for prompt tuning
+      evidence_pack: {
+        suggestions: assertionResult.output?.suggestions || [],
+        assertion_summary: assertionResult.output?.summary,
+        n8n_output: data.output, // Keep original output for reference
+        n8n_meta: data.meta,
+      },
     };
 
-    // Call back to Engine
     try {
       const engineResponse = await fetch(pending.engine_callback_url, {
         method: 'POST',
@@ -339,15 +394,15 @@ app.post('/callbacks/n8n', async (req, res) => {
       if (!engineResponse.ok) {
         const errorText = await engineResponse.text();
         logger.error(
-          { run_id: data.run_id, status: engineResponse.status, error: errorText },
+          { run_id: pending.run_id, status: engineResponse.status, error: errorText },
           'Engine ingest failed'
         );
       } else {
-        logger.info({ run_id: data.run_id }, 'Engine ingest successful');
+        logger.info({ run_id: pending.run_id }, 'Engine ingest successful');
       }
     } catch (engineError) {
       logger.error(
-        { run_id: data.run_id, error: String(engineError) },
+        { run_id: pending.run_id, error: String(engineError) },
         'Failed to call Engine ingest'
       );
     }
@@ -361,12 +416,58 @@ app.post('/callbacks/n8n', async (req, res) => {
   }
 });
 
+/**
+ * Build minimal RunRecord from callback data (fallback when no execution_id)
+ */
+function buildRunRecordFromCallback(
+  data: { run_id: string; output?: Record<string, unknown>; meta?: { latency_ms?: number }; error?: string | null },
+  pending: PendingRun
+): RunRecord {
+  const now = new Date().toISOString();
+  return {
+    run_id: pending.run_id,
+    status: data.error ? 'failed' : 'completed',
+    inputs: pending.inputs || {},
+    output: data.output || {},
+    steps: [
+      {
+        step_id: 'n8n_workflow',
+        step_index: 0,
+        name: 'n8n Workflow',
+        type: 'workflow',
+        status: data.error ? 'error' : 'ok',
+        latency_ms: data.meta?.latency_ms || 0,
+        input: pending.inputs || {},
+        output: data.output || {},
+        error: data.error || undefined,
+      },
+    ],
+    timing: {
+      started_at: pending.started_at,
+      ended_at: now,
+      total_ms: data.meta?.latency_ms || 0,
+    },
+    error: data.error
+      ? {
+          code: 'N8N_ERROR',
+          message: data.error,
+          step_id: 'n8n_workflow',
+        }
+      : undefined,
+    source: {
+      system: 'n8n',
+    },
+  };
+}
+
 // ============================================
 // Evaluation
 // ============================================
 
 /**
- * POST /eval - Run evaluation against a trace
+ * POST /eval - Run evaluation against a trace (legacy API)
+ *
+ * @deprecated Use the new evaluator via /callbacks/n8n flow
  */
 app.post('/eval', async (req, res) => {
   try {
@@ -381,13 +482,14 @@ app.post('/eval', async (req, res) => {
       request.trace = trace;
     }
 
-    const result = await evalEngine.evaluate(request);
+    // Use legacy eval engine for backward compatibility
+    const result = await legacyEvalEngine.evaluate(request);
     logger.info({
       run_id: result.run_id,
       passed: result.passed,
       passed_steps: result.passed_steps,
       failed_steps: result.failed_steps,
-    }, 'Eval completed');
+    }, 'Legacy eval completed');
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -502,10 +604,10 @@ app.post('/webhook/run', async (req, res) => {
     const output = await response.json();
     const trace = observer.completeRun(runId, output, 'completed');
 
-    // Auto-eval if test steps provided
+    // Auto-eval if test steps provided (using legacy engine)
     let evalResult = null;
     if (auto_eval && test_steps?.length > 0) {
-      evalResult = await evalEngine.evaluate({
+      evalResult = await legacyEvalEngine.evaluate({
         trace,
         test_steps,
         options: { stop_on_first_failure: false, generate_suggestions: true },

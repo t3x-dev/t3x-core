@@ -34,16 +34,16 @@
 
 export { EvalEngine, evalEngine } from './eval.js';
 export { Observer, observer } from './observer.js';
-export {
-  caseToTestSteps,
-  type EvalCase,
-  type EvalSuite,
-  EvalSuiteSchema,
-  getDefaultSuitesPath,
-  loadSuite,
-  loadSuites,
-  type SuiteRunResult,
-} from './suites.js';
+
+// New evaluator (deterministic rule-based)
+export { EvalEngine as RuleEvalEngine, evalEngine as ruleEvalEngine } from './evaluator/index.js';
+export { parseRulesFromLeaf, loadRulesFromFile, DEFAULT_RULES } from './evaluator/index.js';
+
+// Trace collection
+export { n8nClient, mapN8nExecutionToRunRecord } from './trace/index.js';
+
+// LLM Asserter
+export { llmAsserter, type GenerateAssertionsResult, type AssertionStatus } from './asserter.js';
 
 export type {
   AgentConfig,
