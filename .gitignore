@@ -68,5 +68,6 @@ coverage.xml
 .next/
 next-env.d.ts
 
-# Development planning (personal notes)
+# Development planning (wyx personal notes)
 RUNNER_PLAN.md
+RUNNER_PLAN2.md
