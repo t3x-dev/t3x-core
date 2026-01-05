@@ -336,6 +336,12 @@ export interface CanvasNodeData {
     value?: unknown;
     entity_type?: string;
     confidence?: number;
+    polarity?: -1 | 0 | 1;
+    polarity_label?: 'positive' | 'negative' | 'neutral';
+    pos?: string;
+    start_char?: number;
+    end_char?: number;
+    turn_hash?: string;
   }>;
   facets?: string[]; // Legacy facets field
 
