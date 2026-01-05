@@ -32,6 +32,7 @@ export type EngineRunRequest = z.infer<typeof EngineRunRequestSchema>;
 export const N8nCallbackSchema = z.object({
   runner_run_id: z.string(),
   run_id: z.string(),
+  execution_id: z.string().optional(), // n8n execution ID for trace collection
   output: z.record(z.string(), z.unknown()).optional(),
   meta: z
     .object({
