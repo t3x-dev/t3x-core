@@ -1,3 +1,14 @@
+/**
+ * Canvas Node Types
+ *
+ * @see display-spec.ts for visual display rules
+ */
+
+/**
+ * Node kind determines the visual treatment and available fields
+ * - unit: Conversation + Commit combined card (288px wide)
+ * - leaf: Output destination card (160px wide)
+ */
 export type NodeKind = 'unit' | 'leaf';
 
 // Unit commit status: staging (editable) or committed (read-only)
@@ -49,6 +60,44 @@ export interface EvalLeafConfig extends LeafNodeConfig {
     description: string;
     confidence: number;
   }>;
+}
+
+// ============================================
+// Embedded Leaf (inside UnitNode)
+// ============================================
+
+/**
+ * Embedded leaf output within a UnitNode
+ * These are displayed as a collapsible list in the Leaves section
+ */
+export interface EmbeddedLeaf {
+  id: string;
+  type: LeafType;
+  title: string;
+  status?: DeployStatus | EvalStatus;
+  /** For eval leaves: pass/fail counts */
+  passedCount?: number;
+  failedCount?: number;
+  /** When this leaf was created */
+  createdAt?: string;
+}
+
+// ============================================
+// Source Reference (for Sources section)
+// ============================================
+
+/**
+ * Reference to a source that contributed to this commit
+ */
+export type SourceType = 'conversation' | 'meeting' | 'file' | 'evidence';
+
+export interface SourceReference {
+  id: string;
+  type: SourceType;
+  /** Short display label (e.g., "conv#34", "meeting#7") */
+  label: string;
+  /** Full title for tooltip */
+  title?: string;
 }
 export type BranchType = 'main' | 'branch';
 
@@ -168,21 +217,87 @@ export interface DraftConstraintOverrides {
   removedMustntHave: string[];
 }
 
+/**
+ * Canvas Node Data
+ *
+ * This interface defines all data fields for canvas nodes.
+ * Display rules are defined in display-spec.ts.
+ *
+ * @see UnitNodeDisplaySpec for unit node display rules
+ * @see LeafNodeDisplaySpec for leaf node display rules
+ */
 export interface CanvasNodeData {
   // Index signature for React Flow v12 compatibility
   [key: string]: unknown;
 
   // ============================================
-  // Common fields
+  // Common fields (always displayed)
   // ============================================
-  entryId: string; // Display ID (truncated)
-  title: string; // Node title
-  summary: string; // Summary text
-  status: string; // Display status
-  timestamp: string; // Created time
-  tags: string[]; // Tags
-  kind: NodeKind; // 'unit' | 'leaf'
+
+  /**
+   * Display ID - shown in commit badge
+   * @display UnitNode: Commit section badge
+   * @format Truncated, uppercase, monospace-style
+   */
+  entryId: string;
+
+  /**
+   * Node title - primary display text
+   * @display UnitNode: Conversation section, largest text
+   * @display LeafNode: Below type label
+   * @format Truncate at 50 chars
+   */
+  title: string;
+
+  /**
+   * Summary text - shown on expand or in secondary position
+   * @display UnitNode: Expanded state, or secondary info (committed)
+   * @format Max 3 lines before scroll
+   */
+  summary: string;
+
+  /**
+   * Status text - brief current state
+   * @display UnitNode: Conversation section, next to timestamp
+   * @example "Active", "3 turns"
+   */
+  status: string;
+
+  /**
+   * Timestamp - when created
+   * @display UnitNode: Conversation section, pill badge
+   * @format Relative time or date
+   */
+  timestamp: string;
+
+  /**
+   * Tags - not currently displayed on cards
+   * @display Reserved for future use
+   */
+  tags: string[];
+
+  /**
+   * Node kind - determines card layout
+   * @display Implicit (different component renders)
+   */
+  kind: NodeKind;
+
+  /**
+   * Highlight mode - visual emphasis during operations
+   * @display Box shadow color (blue=main, amber=branch)
+   */
   highlightMode?: 'main' | 'branch';
+
+  // ============================================
+  // Unit node: Sources section (top of card)
+  // ============================================
+
+  /**
+   * Source references that contributed to this commit
+   * @display Sources section at top of card
+   * @format Inline badges: "conv#34 · meeting#7 · file#2"
+   */
+  sources?: SourceReference[];
 
   // ============================================
   // Unit node: Conversation part
@@ -221,6 +336,12 @@ export interface CanvasNodeData {
     value?: unknown;
     entity_type?: string;
     confidence?: number;
+    polarity?: -1 | 0 | 1;
+    polarity_label?: 'positive' | 'negative' | 'neutral';
+    pos?: string;
+    start_char?: number;
+    end_char?: number;
+    turn_hash?: string;
   }>;
   facets?: string[]; // Legacy facets field
 
@@ -241,7 +362,18 @@ export interface CanvasNodeData {
   constraintOverrides?: DraftConstraintOverrides;
 
   // ============================================
-  // Leaf node specific
+  // Unit node: Leaves section (bottom of card)
+  // ============================================
+
+  /**
+   * Embedded leaf outputs from this commit
+   * @display Leaves section at bottom of card
+   * @format Expandable list with icons and status
+   */
+  leaves?: EmbeddedLeaf[];
+
+  // ============================================
+  // Leaf node specific (for standalone LeafNode - deprecated)
   // ============================================
   leafType?: LeafType;
   leafConfig?: LeafNodeConfig;

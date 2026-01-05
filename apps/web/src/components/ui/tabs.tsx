@@ -1,6 +1,7 @@
 'use client';
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { cva, type VariantProps } from 'class-variance-authority';
 import type * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -15,27 +16,73 @@ function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive
   );
 }
 
-function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
+const tabsListVariants = cva(
+  'inline-flex w-fit items-center justify-center',
+  {
+    variants: {
+      variant: {
+        default: 'bg-muted text-muted-foreground h-9 rounded-lg p-[3px]',
+        pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 shadow-lg backdrop-blur-md',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+interface TabsListProps
+  extends React.ComponentProps<typeof TabsPrimitive.List>,
+    VariantProps<typeof tabsListVariants> {}
+
+function TabsList({ className, variant, ...props }: TabsListProps) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn(
-        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
-        className
-      )}
+      data-variant={variant}
+      className={cn(tabsListVariants({ variant }), className)}
       {...props}
     />
   );
 }
 
-function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+const tabsTriggerVariants = cva(
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
+  {
+    variants: {
+      variant: {
+        default: cn(
+          'h-[calc(100%-1px)] flex-1 rounded-md border border-transparent px-2 py-1 text-sm',
+          'text-foreground dark:text-muted-foreground',
+          'data-[state=active]:bg-background data-[state=active]:shadow-sm',
+          'dark:data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30',
+          'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring focus-visible:ring-[3px] focus-visible:outline-1'
+        ),
+        pill: cn(
+          'h-full flex-1 rounded-full px-5 text-xs font-semibold leading-none',
+          'text-muted-foreground hover:text-foreground',
+          'data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+          'transition-colors duration-200'
+        ),
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+interface TabsTriggerProps
+  extends React.ComponentProps<typeof TabsPrimitive.Trigger>,
+    VariantProps<typeof tabsTriggerVariants> {}
+
+function TabsTrigger({ className, variant, ...props }: TabsTriggerProps) {
+  // Inherit variant from parent TabsList if not specified
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
-      className={cn(
-        "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn(tabsTriggerVariants({ variant }), className)}
       {...props}
     />
   );

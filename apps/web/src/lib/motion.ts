@@ -231,3 +231,105 @@ export function withDelay(variants: Variants, delay: number): Variants {
 export function createSpring(stiffness: number, damping: number): Transition {
   return { type: 'spring', stiffness, damping }
 }
+
+// ============================================
+// Reduced Motion Support
+// ============================================
+
+/**
+ * Instant transition for reduced motion users
+ * Replaces spring/tween animations with immediate state changes
+ */
+export const instantTransition: Transition = {
+  duration: 0,
+}
+
+/**
+ * Spring config that respects reduced motion preference
+ * Use with useReducedMotion hook:
+ *
+ * const prefersReducedMotion = useReducedMotion()
+ * <motion.div transition={getSpring('gentle', prefersReducedMotion)} />
+ */
+export function getSpring(
+  type: keyof typeof springConfig,
+  prefersReducedMotion: boolean
+): Transition {
+  return prefersReducedMotion ? instantTransition : springConfig[type]
+}
+
+/**
+ * Get animation variants that respect reduced motion
+ * Returns instant transitions when prefersReducedMotion is true
+ */
+export function getVariants(
+  variants: Variants,
+  prefersReducedMotion: boolean
+): Variants {
+  if (!prefersReducedMotion) return variants
+
+  // Create reduced motion versions with instant transitions
+  const reduced: Variants = {}
+
+  for (const key of Object.keys(variants)) {
+    const variant = variants[key]
+    if (typeof variant === 'object' && variant !== null && !Array.isArray(variant)) {
+      reduced[key] = {
+        ...variant,
+        transition: instantTransition,
+      }
+    } else {
+      reduced[key] = variant
+    }
+  }
+
+  return reduced
+}
+
+/**
+ * Reduced motion variants - no animation, instant state changes
+ * Use these directly when you want to completely disable animation
+ */
+export const reducedMotion = {
+  fadeIn: {
+    initial: { opacity: 1 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+  } as Variants,
+
+  scaleIn: {
+    initial: { opacity: 1, scale: 1 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 1 },
+  } as Variants,
+
+  slideUp: {
+    initial: { opacity: 1, y: 0 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: 0 },
+  } as Variants,
+
+  staggerContainer: {
+    initial: {},
+    animate: {},
+    exit: {},
+  } as Variants,
+
+  staggerItem: {
+    initial: { opacity: 1, y: 0 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: 0 },
+  } as Variants,
+}
+
+/** No-op hover state for reduced motion */
+export const noHover = {
+  scale: 1,
+  transition: instantTransition,
+}
+
+/** No-op tap state for reduced motion */
+export const noTap = {
+  scale: 1,
+  transition: instantTransition,
+}
