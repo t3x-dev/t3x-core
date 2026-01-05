@@ -1,7 +1,6 @@
 import type { ColorMode, Node } from '@xyflow/react';
 import {
   Background,
-  Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -21,6 +20,8 @@ const edgeTypes = {
 };
 
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ZoomSlider } from '@/components/ui/zoom-slider';
 import {
   Select,
   SelectContent,
@@ -83,6 +84,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
     getPendingCommitEffectiveConstraints,
     updatePendingCommitConstraintOverrides,
     hasDownstreamPendingCommits,
+    loadDemoData,
   } = useCanvasStore();
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -496,8 +498,9 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
     };
   }, [nodes, edges, highlight]);
 
+  // Semantic highlight colors - Blue for main (committed), Orange for branch (pending)
   const highlightColor =
-    highlight?.mode === 'main' ? '#1f2fb5' : highlight?.mode === 'branch' ? '#f28c1a' : undefined;
+    highlight?.mode === 'main' ? '#2563eb' : highlight?.mode === 'branch' ? '#f97316' : undefined;
 
   const nodesForRender = useMemo(() => {
     if (!highlight) {
@@ -575,21 +578,19 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           <div className="h-5 w-px bg-border/60" />
           <div className="flex items-center gap-1">
             <Button
-              variant={highlight?.mode === 'main' ? 'default' : 'ghost'}
+              variant={highlight?.mode === 'main' ? 'commit' : 'ghost'}
               size="sm"
               onClick={() => toggleHighlight({ mode: 'main' })}
               disabled={!hasMainCommits}
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode === 'main'
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                highlight?.mode !== 'main' && 'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
               Main
             </Button>
             <Button
-              variant={highlight?.mode === 'branch' ? 'default' : 'ghost'}
+              variant={highlight?.mode === 'branch' ? 'pending' : 'ghost'}
               size="sm"
               onClick={() =>
                 hasBranchCommits &&
@@ -601,9 +602,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               disabled={!hasBranchCommits}
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode === 'branch'
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                highlight?.mode !== 'branch' && 'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
               Branch
@@ -656,6 +655,23 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               <LayoutGrid className="h-4 w-4" />
             )}
           </Button>
+          {/* DEV: Load Demo Data button */}
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadDemoData}
+              title="Load Demo Data"
+              className={cn(
+                'h-9 px-3 rounded-xl transition-all text-xs',
+                'text-muted-foreground hover:text-foreground',
+                'hover:bg-amber-500/10 hover:text-amber-600',
+                'border border-dashed border-amber-300'
+              )}
+            >
+              Demo
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -678,38 +694,18 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         </div>
       </header>
 
-      {/* Mode Switch - positioned at topbar/canvas boundary */}
+      {/* Mode Switch - using shadcn Tabs with pill variant */}
       <div className="absolute left-1/2 top-14 z-10 -translate-x-1/2 -translate-y-1/2">
-        <div className="relative flex h-9 rounded-full border border-border/60 bg-background/90 p-1 shadow-lg backdrop-blur-md">
-          <div
-            className="absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-primary shadow-sm transition-all duration-300 ease-out"
-            style={{
-              transform: mode === 'editor' ? 'translateX(4px)' : 'translateX(calc(100% + 4px))',
-            }}
-          />
-          <button
-            className={cn(
-              'relative z-10 rounded-full px-4 text-xs font-medium transition-colors duration-200',
-              mode === 'editor'
-                ? 'text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => onModeChange('editor')}
-          >
-            Editor
-          </button>
-          <button
-            className={cn(
-              'relative z-10 rounded-full px-4 text-xs font-medium transition-colors duration-200',
-              mode === 'execution'
-                ? 'text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => onModeChange('execution')}
-          >
-            Execution
-          </button>
-        </div>
+        <Tabs value={mode} onValueChange={(v) => onModeChange(v as 'editor' | 'execution')}>
+          <TabsList variant="pill">
+            <TabsTrigger value="editor" variant="pill">
+              Editor
+            </TabsTrigger>
+            <TabsTrigger value="execution" variant="pill">
+              Execution
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div
@@ -735,7 +731,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           snapGrid={[GRID_SIZE, GRID_SIZE]}
           proOptions={{ hideAttribution: true }}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
+          fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          minZoom={0.25}
+          maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
           selectNodesOnDrag={false}
           colorMode={colorMode}
@@ -755,7 +754,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             }}
             maskColor={colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
           />
-          <Controls className="!bg-background !border-border !shadow-md" />
+          <ZoomSlider position="bottom-left" />
           <Background
             gap={GRID_SIZE}
             size={1}
@@ -765,9 +764,16 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
 
         {/* Empty state overlay */}
         {nodes.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center text-muted-foreground">
-            <p className="font-medium">No units yet.</p>
-            <p className="text-sm">Click the + button above to create a unit.</p>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <div className="rounded-2xl bg-muted/50 p-8 backdrop-blur-sm">
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                <MessageSquarePlus className="h-6 w-6 text-primary" />
+              </div>
+              <p className="text-base font-medium text-foreground">No units yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Click the <span className="font-medium text-primary">+</span> button above or drag from the palette
+              </p>
+            </div>
           </div>
         )}
       </div>

@@ -308,6 +308,15 @@ class RingExtractor {
             if (token.pos === 'PUNCT' || token.pos === 'X') {
                 continue;
             }
+            // Skip tokens that are only punctuation/symbols (sometimes misclassified as NOUN)
+            // This catches markdown symbols like #, *, -, etc.
+            if (/^[^\w\s]+$/.test(token.text) || /^[\d]+$/.test(token.text)) {
+                continue;
+            }
+            // Skip very short tokens (single char, likely noise)
+            if (token.text.length <= 1) {
+                continue;
+            }
             // Only keep configured POS tags
             if (!this.config.keywordPosTags.includes(token.pos)) {
                 continue;
@@ -322,6 +331,8 @@ class RingExtractor {
                 continue;
             }
             seenLemmas.add(lemmaKey);
+            // Also track original text to prevent entity duplicates
+            seenLemmas.add(token.text.toLowerCase());
             // Get polarity from polarity map
             const polarity = polarityMap.get(token.index) ?? 0;
             // Check if token is an entity
@@ -347,6 +358,14 @@ class RingExtractor {
         // Add entities that weren't captured as tokens
         for (const entity of entities) {
             if (entity.salience < this.config.minEntitySalience) {
+                continue;
+            }
+            // Skip entities that are only punctuation/symbols
+            if (/^[^\w\s]+$/.test(entity.text) || /^[\d]+$/.test(entity.text)) {
+                continue;
+            }
+            // Skip very short entities (single char, likely noise)
+            if (entity.text.length <= 1) {
                 continue;
             }
             const lemmaKey = entity.text.toLowerCase();
