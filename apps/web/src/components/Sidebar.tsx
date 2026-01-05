@@ -3,42 +3,42 @@
 import { BarChart3, Command, FileText, Github, Home, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// T3X Logo - Two obtuse angles facing each other (bowtie shape)
+// T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)
 function LogoIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="logoGradientLeft" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#3b82f6" />
-          <stop offset="100%" stopColor="#6366f1" />
-        </linearGradient>
-        <linearGradient id="logoGradientRight" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#f97316" />
-          <stop offset="100%" stopColor="#ef4444" />
-        </linearGradient>
+        <radialGradient
+          id="logoGradient"
+          cx="32"
+          cy="32"
+          r="28"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0%" stopColor="#2563EB" />
+          <stop offset="12%" stopColor="#2563EB" />
+          <stop offset="40%" stopColor="#FB923C" />
+          <stop offset="100%" stopColor="#FFE2C6" />
+        </radialGradient>
       </defs>
-      {/* Left angle > pointing right */}
-      <path
-        d="M4 6L14 16L4 26"
-        stroke="url(#logoGradientLeft)"
-        strokeWidth="4"
+      {/* Dark rounded background */}
+      <rect width="64" height="64" rx="14" fill="#020617" />
+      {/* Bowtie strokes */}
+      <g
+        fill="none"
+        stroke="url(#logoGradient)"
+        strokeWidth="4.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        fill="none"
-      />
-      {/* Right angle < pointing left */}
-      <path
-        d="M28 6L18 16L28 26"
-        stroke="url(#logoGradientRight)"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
+      >
+        <path d="M16 18 L32 28 L48 18" />
+        <path d="M16 46 L32 36 L48 46" />
+      </g>
     </svg>
   );
 }
@@ -118,9 +118,9 @@ function NavItem({ href, label, isActive, children, external, disabled }: NavIte
             {children}
           </a>
         ) : disabled ? (
-          <button className={cn(navItemClass, 'cursor-not-allowed opacity-50')} disabled>
+          <Button variant="ghost" className={cn(navItemClass, 'cursor-not-allowed opacity-50')} disabled>
             {children}
-          </button>
+          </Button>
         ) : (
           <Link href={href} className={isActive ? navItemActiveClass : navItemClass}>
             {children}
@@ -147,14 +147,15 @@ export function Sidebar() {
     <TooltipProvider delayDuration={0}>
       <aside className="flex h-screen w-16 flex-col items-center border-r border-border/50 bg-gradient-to-b from-background to-muted/30 py-4 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">
         {/* Logo */}
-        <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-background to-muted/50 shadow-sm ring-1 ring-border/50">
+        <div className="mb-6 flex h-10 w-10 items-center justify-center">
           <LogoIcon />
         </div>
 
         {/* Command Palette Button */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => {
                 // Simulate Cmd+K keypress to open command palette
                 document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
@@ -166,7 +167,7 @@ export function Sidebar() {
               aria-label="Open command palette"
             >
               <Command className="h-4 w-4" />
-            </button>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
             <span>Command Palette</span>

@@ -19,6 +19,30 @@ const buttonVariants = cva(
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
+
+        // =============================================================================
+        // T3X Semantic Variants - Canvas Actions
+        // =============================================================================
+
+        // Commit action - Blue (stable/committed state)
+        commit:
+          'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm hover:from-blue-600 hover:to-blue-700 hover:shadow-md focus-visible:ring-blue-500/30 active:from-blue-700 active:to-blue-800',
+
+        // Pending/Draft action - Orange (work in progress)
+        pending:
+          'bg-gradient-to-r from-orange-400 to-orange-500 text-white shadow-sm hover:from-orange-500 hover:to-orange-600 hover:shadow-md focus-visible:ring-orange-500/30 active:from-orange-600 active:to-orange-700',
+
+        // Branch action - Amber
+        branch:
+          'bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 shadow-sm hover:from-amber-500 hover:to-amber-600 hover:shadow-md focus-visible:ring-amber-500/30 active:from-amber-600 active:to-amber-700',
+
+        // Canvas ghost - Subtle for toolbar actions
+        'canvas-ghost':
+          'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 active:bg-slate-200 dark:active:bg-slate-700',
+
+        // Canvas outline - For secondary canvas actions
+        'canvas-outline':
+          'border border-slate-200 bg-white/80 text-slate-700 shadow-sm backdrop-blur-sm hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:border-slate-600',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
@@ -68,16 +92,61 @@ function AnimatedButton({
   variant = 'default',
   size = 'default',
   children,
+  disabled,
   ...props
 }: Omit<HTMLMotionProps<'button'>, 'ref'> &
-  VariantProps<typeof buttonVariants>) {
+  VariantProps<typeof buttonVariants> & { disabled?: boolean }) {
+  return (
+    <motion.button
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      whileTap={disabled ? undefined : buttonTap}
+      whileHover={disabled ? undefined : {
+        scale: 1.02,
+        transition: { type: 'spring', stiffness: 400, damping: 25 }
+      }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      className={cn(buttonVariants({ variant, size, className }))}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+/**
+ * PulseButton - Button with attention-grabbing pulse animation
+ * Use for primary CTAs that need to draw user attention
+ */
+function PulseButton({
+  className,
+  variant = 'default',
+  size = 'default',
+  children,
+  pulse = true,
+  ...props
+}: Omit<HTMLMotionProps<'button'>, 'ref'> &
+  VariantProps<typeof buttonVariants> & { pulse?: boolean }) {
   return (
     <motion.button
       data-slot="button"
       data-variant={variant}
       data-size={size}
       whileTap={buttonTap}
-      whileHover={{ scale: 1.02, transition: { duration: 0.15 } }}
+      whileHover={{ scale: 1.02 }}
+      animate={pulse ? {
+        boxShadow: [
+          '0 0 0 0 rgba(59, 130, 246, 0)',
+          '0 0 0 8px rgba(59, 130, 246, 0.1)',
+          '0 0 0 0 rgba(59, 130, 246, 0)',
+        ],
+      } : undefined}
+      transition={pulse ? {
+        boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
+        default: { type: 'spring', stiffness: 400, damping: 25 }
+      } : { type: 'spring', stiffness: 400, damping: 25 }}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     >
@@ -86,4 +155,4 @@ function AnimatedButton({
   );
 }
 
-export { Button, AnimatedButton, buttonVariants };
+export { Button, AnimatedButton, PulseButton, buttonVariants };
