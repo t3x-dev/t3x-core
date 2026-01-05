@@ -491,8 +491,14 @@ export function NodeModal({
   const [showSettings, setShowSettings] = useState(false);
 
   // Chat state for conversation
+  // Extended to include rings data from Core RingOutput
   const [chatMessages, setChatMessages] = useState<
-    { id: string; role: 'user' | 'assistant'; content: string }[]
+    {
+      id: string;
+      role: 'user' | 'assistant';
+      content: string;
+      rings?: api.RingsData | null;
+    }[]
   >([]);
   const [chatInput, setChatInput] = useState('');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -1574,6 +1580,8 @@ export function NodeModal({
             id: turn.turn_hash,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
+            // Parse rings data from API response
+            rings: api.parseRingsData((turn as api.TurnDetail).rings),
           }))
           .reverse();
         setChatMessages(messages);
@@ -1649,6 +1657,8 @@ export function NodeModal({
           id: turn.turn_hash,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
+          // Parse rings data from API response
+          rings: api.parseRingsData((turn as api.TurnDetail).rings),
         }))
         .reverse();
 
@@ -2055,6 +2065,113 @@ export function NodeModal({
                         <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                           {msg.content}
                         </div>
+                        {/* Ring 1 Meta: topic and timeAnchor */}
+                        {(msg.rings?.ring1?.topic || msg.rings?.ring1?.timeAnchor) && (
+                          <div className="mt-2 pt-2 border-t border-gray-200/50 flex flex-wrap gap-2 text-[0.7rem]">
+                            {msg.rings.ring1.topic && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                                <Tag size={10} />
+                                {msg.rings.ring1.topic}
+                              </span>
+                            )}
+                            {msg.rings.ring1.timeAnchor && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                                <Clock size={10} />
+                                {msg.rings.ring1.timeAnchor}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Ring 1 Keywords - with polarity colors and entity types */}
+                        {msg.rings?.ring1?.keywords && msg.rings.ring1.keywords.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {msg.rings.ring1.keywords.map((kw, idx) => (
+                              <span
+                                key={`${kw.text}-${idx}`}
+                                className={cn(
+                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium',
+                                  // Polarity colors
+                                  kw.polarity === 1 && 'bg-green-100 text-green-700',
+                                  kw.polarity === 0 && 'bg-gray-100 text-gray-600',
+                                  kw.polarity === -1 && 'bg-red-100 text-red-700'
+                                )}
+                                title={`${kw.lemma} (${kw.pos})${kw.entityType ? ` [${kw.entityType}]` : ''}`}
+                              >
+                                {/* Entity type icon */}
+                                {kw.entityType === 'LOCATION' && <span>📍</span>}
+                                {kw.entityType === 'PERSON' && <span>👤</span>}
+                                {kw.entityType === 'DATE' && <span>📅</span>}
+                                {kw.entityType === 'ORGANIZATION' && <span>🏢</span>}
+                                {kw.entityType === 'EVENT' && <span>🎉</span>}
+                                {kw.entityType === 'NUMBER' && <span>#</span>}
+                                {kw.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Ring 1 Preference Keywords - highlighted separately */}
+                        {msg.rings?.ring1?.preferenceKeywords && msg.rings.ring1.preferenceKeywords.length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="text-[0.65rem] text-gray-400 mr-1">偏好:</span>
+                            {msg.rings.ring1.preferenceKeywords.map((kw, idx) => (
+                              <span
+                                key={`pref-${kw.text}-${idx}`}
+                                className={cn(
+                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
+                                  kw.polarity === 1 && 'bg-green-50 text-green-700 border-green-300',
+                                  kw.polarity === -1 && 'bg-red-50 text-red-700 border-red-300'
+                                )}
+                              >
+                                {kw.polarity === 1 ? '✓' : '✗'} {kw.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Ring 2 Facets - structured semantic data */}
+                        {msg.rings?.ring2?.facets && msg.rings.ring2.facets.length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {msg.rings.ring2.facets.map((facet, idx) => (
+                              <span
+                                key={`facet-${facet.key}-${idx}`}
+                                className={cn(
+                                  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.65rem] font-medium',
+                                  // Facet type colors
+                                  facet.facetType === 'intent_seed' && 'bg-indigo-100 text-indigo-700',
+                                  facet.facetType === 'time_window' && 'bg-cyan-100 text-cyan-700',
+                                  facet.facetType === 'preference_soft' && 'bg-amber-100 text-amber-700',
+                                  facet.facetType === 'unknown_slot' && 'bg-slate-100 text-slate-600'
+                                )}
+                                title={`${facet.facetType}: ${facet.key} = ${JSON.stringify(facet.value)} (${Math.round(facet.confidence * 100)}%)`}
+                              >
+                                {/* Facet type icon */}
+                                {facet.facetType === 'intent_seed' && '🎯'}
+                                {facet.facetType === 'time_window' && '⏰'}
+                                {facet.facetType === 'preference_soft' && '💡'}
+                                {facet.facetType === 'unknown_slot' && '❓'}
+                                <span className="font-semibold">{facet.key}:</span>
+                                <span>{String(facet.value)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Ring 3 Segments - sentence-level breakdown */}
+                        {msg.rings?.ring3?.segments && msg.rings.ring3.segments.length > 1 && (
+                          <div className="mt-1 space-y-0.5">
+                            <span className="text-[0.6rem] text-gray-400">句子分段:</span>
+                            <div className="flex flex-col gap-0.5">
+                              {msg.rings.ring3.segments.map((seg, idx) => (
+                                <div
+                                  key={seg.segmentId}
+                                  className="flex items-start gap-1 text-[0.65rem]"
+                                  title={`字符 ${seg.startChar}-${seg.endChar}`}
+                                >
+                                  <span className="text-gray-400 shrink-0">{idx + 1}.</span>
+                                  <span className="text-gray-600">{seg.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                     {/* Streaming response */}
@@ -3391,34 +3508,76 @@ export function NodeModal({
                           className="bg-white border border-gray-200 rounded-md overflow-hidden"
                         >
                           <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-700">
+                            <span>
+                              {type === 'keyword' && '\u{1F3F7}\u{FE0F}'}
+                              {type === 'preference' && '\u{1F496}'}
+                              {type === 'intent_seed' && '\u{1F3AF}'}
+                              {type === 'time_window' && '\u{23F0}'}
+                              {type === 'preference_soft' && '\u{1F4A1}'}
+                              {type === 'unknown_slot' && '\u{2753}'}
+                              {type === 'segment' && '\u{1F4DD}'}
+                              {type === 'topic' && '\u{1F4CC}'}
+                              {type === 'time_anchor' && '\u{1F4C6}'}
+                              {type === 'facet' && '\u{2728}'}
+                            </span>
                             {type}
                             <span className="text-xs text-gray-400">({facets.length})</span>
                           </h5>
                           <div className="p-2 flex flex-wrap gap-2">
-                            {facets.map((facet, idx) => (
-                              <div
-                                key={idx}
-                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded text-sm"
-                              >
-                                {facet.text && <span className="text-gray-700">{facet.text}</span>}
-                                {facet.key && facet.value !== undefined && (
-                                  <span className="text-gray-600">
-                                    <span className="text-gray-400">{facet.key}:</span>
-                                    <span className="ml-0.5">{String(facet.value)}</span>
-                                  </span>
-                                )}
-                                {facet.entity_type && (
-                                  <span className="text-xs text-purple-600">
-                                    [{facet.entity_type}]
-                                  </span>
-                                )}
-                                {facet.confidence !== undefined && (
-                                  <span className="text-xs text-emerald-600 font-medium">
-                                    {Math.round(facet.confidence * 100)}%
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                            {facets.map((facet, idx) => {
+                              // Determine background color based on polarity
+                              const polarityClass =
+                                facet.polarity === 1
+                                  ? 'bg-green-100 text-green-700'
+                                  : facet.polarity === -1
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-gray-50 text-gray-700';
+
+                              // Entity type icon mapping
+                              const entityIcon =
+                                facet.entity_type === 'LOCATION'
+                                  ? '\u{1F4CD}'
+                                  : facet.entity_type === 'PERSON'
+                                    ? '\u{1F464}'
+                                    : facet.entity_type === 'DATE'
+                                      ? '\u{1F4C5}'
+                                      : facet.entity_type === 'ORGANIZATION'
+                                        ? '\u{1F3E2}'
+                                        : facet.entity_type === 'EVENT'
+                                          ? '\u{1F389}'
+                                          : facet.entity_type === 'NUMBER'
+                                            ? '#'
+                                            : null;
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className={cn(
+                                    'inline-flex items-center gap-1.5 px-2 py-1 rounded text-sm',
+                                    polarityClass
+                                  )}
+                                  title={
+                                    facet.turn_hash
+                                      ? `From turn: ${facet.turn_hash.slice(0, 12)}...`
+                                      : undefined
+                                  }
+                                >
+                                  {entityIcon && <span>{entityIcon}</span>}
+                                  {facet.text && <span>{facet.text}</span>}
+                                  {facet.key && facet.value !== undefined && !facet.text && (
+                                    <span>
+                                      <span className="opacity-70">{facet.key}:</span>
+                                      <span className="ml-0.5">{String(facet.value)}</span>
+                                    </span>
+                                  )}
+                                  {facet.confidence !== undefined && facet.confidence < 1 && (
+                                    <span className="text-xs opacity-60 font-medium">
+                                      {Math.round(facet.confidence * 100)}%
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}

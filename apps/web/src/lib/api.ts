@@ -53,25 +53,51 @@ export interface Turn {
   created_at: string;
 }
 
-export interface TurnDetail extends Turn {
-  rings: {
-    ring1: {
-      keywords: string[];
-      entities: Array<{ text: string; type: string }>;
-      time_anchor?: string;
-      preference_keywords: Array<{ keyword: string; polarity: string; lemma: string }>;
-    };
-    ring2: {
-      intent_seed?: string;
-      time_window?: string;
-      preference_soft: string[];
-      unknown_slot: string[];
-      facets: string[];
-    };
-    ring3: {
-      segments: Array<{ id: string; text: string }>;
-    };
+// Keyword from Ring 1 - aligned with @t3x/core Keyword
+export interface RingKeyword {
+  text: string;
+  lemma: string;
+  polarity: -1 | 0 | 1;
+  pos: string;
+  entityType: string | null;
+  confidence: number;
+}
+
+// Facet from Ring 2 - aligned with @t3x/core Facet
+export interface RingFacet {
+  facetType: 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
+  key: string;
+  value: unknown;
+  confidence: number;
+}
+
+// Segment from Ring 3 - aligned with @t3x/core Segment
+export interface RingSegment {
+  segmentId: string;
+  text: string;
+  startChar: number;
+  endChar: number;
+}
+
+// Ring output structure - aligned with @t3x/core RingOutput
+export interface RingsData {
+  ring1: {
+    keywords: RingKeyword[];
+    timeAnchor: string | null;
+    topic: string | null;
+    preferenceKeywords: RingKeyword[];
   };
+  ring2: {
+    facets: RingFacet[];
+  };
+  ring3: {
+    segments: RingSegment[];
+  };
+}
+
+export interface TurnDetail extends Turn {
+  // API returns { rings: { ring1, ring2, ring3 } } wrapper
+  rings: { rings: RingsData } | RingsData | null;
 }
 
 export interface Branch {
@@ -87,6 +113,7 @@ export interface Branch {
 }
 
 // Raw commit from API - contains JSON strings that need parsing
+// Aligned with @t3x/core CommitV2Record
 export interface CommitRaw {
   commit_hash: string;
   project_id: string;
@@ -95,7 +122,9 @@ export interface CommitRaw {
   parents_json: string;
   turn_window_json: string | null;
   facet_snapshot_json: string | null;
-  draft_ref_json: string | null;
+  pipeline_config_json: string | null;
+  draft_id: string | null;
+  draft_text_hash: string | null;
   signature_json: string | null;
   source_excerpt_json: string | null;
   must_have_json: string | null;
@@ -151,6 +180,7 @@ export interface SourceRef {
 }
 
 // Parsed commit for frontend use
+// Aligned with @t3x/core CommitV2Record
 export interface Commit {
   commit_hash: string;
   project_id: string;
@@ -162,10 +192,9 @@ export interface Commit {
     end_turn_hash: string;
   } | null;
   facet_snapshot: Facet[] | null;
-  draft_ref: {
-    draft_id: string;
-    text_hash: string;
-  } | null;
+  pipeline_config: unknown | null;
+  draft_id: string | null;
+  draft_text_hash: string | null;
   signature: {
     algo: string;
     key_id: string;
@@ -377,7 +406,28 @@ function safeJsonParse<T>(json: string | null, fallback: T): T {
 }
 
 /**
+ * Parse rings data from API response
+ * API returns { rings: { ring1, ring2, ring3 } } or directly { ring1, ring2, ring3 }
+ */
+export function parseRingsData(rings: TurnDetail['rings']): RingsData | null {
+  if (!rings) return null;
+
+  // Check if it's wrapped in { rings: ... }
+  if ('rings' in rings && rings.rings) {
+    return rings.rings as RingsData;
+  }
+
+  // Direct format
+  if ('ring1' in rings) {
+    return rings as RingsData;
+  }
+
+  return null;
+}
+
+/**
  * Parse raw commit from API (with JSON string fields) into frontend Commit type
+ * Aligned with @t3x/core CommitV2Record
  */
 function parseCommit(raw: CommitRaw): Commit {
   return {
@@ -388,7 +438,9 @@ function parseCommit(raw: CommitRaw): Commit {
     parent_hashes: safeJsonParse<string[]>(raw.parents_json, []),
     turn_window: safeJsonParse(raw.turn_window_json, null),
     facet_snapshot: safeJsonParse(raw.facet_snapshot_json, null),
-    draft_ref: safeJsonParse(raw.draft_ref_json, null),
+    pipeline_config: safeJsonParse(raw.pipeline_config_json, null),
+    draft_id: raw.draft_id,
+    draft_text_hash: raw.draft_text_hash,
     signature: safeJsonParse(raw.signature_json, null),
     source_excerpt: safeJsonParse<string[] | null>(raw.source_excerpt_json, null),
     must_have: safeJsonParse<string[] | null>(raw.must_have_json, null),
@@ -790,6 +842,9 @@ export async function createCommit(
   message?: string,
   options?: {
     draftId?: string;
+    draftTextHash?: string;
+    pipelineConfig?: unknown;
+    signature?: unknown;
     sourceExcerpt?: string[];
     mustHave?: string[];
     mustntHave?: string[];
@@ -806,6 +861,9 @@ export async function createCommit(
       message,
       turn_window: turnWindow,
       draft_id: options?.draftId,
+      draft_text_hash: options?.draftTextHash,
+      pipeline_config: options?.pipelineConfig,
+      signature: options?.signature,
       source_excerpt: options?.sourceExcerpt,
       must_have: options?.mustHave,
       mustnt_have: options?.mustntHave,

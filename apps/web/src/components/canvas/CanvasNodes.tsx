@@ -4,7 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle,
   ChevronDown,
+  ChevronRight,
+  Copy,
+  ExternalLink,
   FileText,
+  FilePlus,
   FlaskConical,
   GitCommit,
   GitMerge,
@@ -16,18 +20,21 @@ import {
   PenSquare,
   Plus,
   Rocket,
-  Sparkles,
   Twitter,
+  Users,
   XCircle,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { nodeEnter, springConfig } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, LeafType } from '@/types/nodes';
+import type { CanvasNodeData, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
 
 // Define custom node type for React Flow v12
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
@@ -83,12 +90,13 @@ export const LEAF_TYPES: {
 
 type Props = NodeProps<CanvasNode>;
 
+// Handle styles - uses CSS variables for theming
 const targetHandleStyle = {
   width: 22,
   height: 14,
   borderRadius: 8,
-  background: '#fff',
-  border: '3px solid #6d6f76',
+  background: 'var(--color-bg-white, #fff)',
+  border: '3px solid var(--color-text-muted, #94a3b8)',
   top: '50%',
   transform: 'translateY(-50%)',
   left: -6,
@@ -98,8 +106,8 @@ const sourceHandleStyle = {
   width: 18,
   height: 18,
   borderRadius: 999,
-  background: '#fff',
-  border: '3px solid #6d6f76',
+  background: 'var(--color-bg-white, #fff)',
+  border: '3px solid var(--color-text-muted, #94a3b8)',
   top: '50%',
   transform: 'translateY(-50%)',
   right: -9,
@@ -157,10 +165,29 @@ const toneStyles = {
   },
 };
 
-// Unit Node - Combined Conversation + Commit
+// Source type icon mapping
+const SOURCE_ICONS: Record<SourceType, ComponentType<{ size?: number; className?: string }>> = {
+  conversation: MessageSquare,
+  meeting: Users,
+  file: FileText,
+  evidence: FilePlus,
+};
+
+// Get icon for leaf type
+function getLeafIcon(type: LeafType) {
+  const leafInfo = LEAF_TYPES.find((l) => l.type === type);
+  return leafInfo?.icon || FileText;
+}
+
+// Unit Node - 3-Section Layout: Sources → Commit → Leaves
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
-  const [expanded, setExpanded] = useState(false);
+  const [leavesExpanded, setLeavesExpanded] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
+  const router = useRouter();
+  const params = useParams();
+  const projectId = params?.projectId as string | undefined;
+
   const tone = useCanvasStore((state) => state.getCommitTone(id));
   const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
@@ -200,29 +227,30 @@ function UnitNode(props: Props) {
     openLeafPanel(id);
   };
 
+  // Copy commit hash to clipboard
+  const handleCopyHash = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hash = data.commitHash || data.entryId || '';
+    navigator.clipboard.writeText(hash);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
+    notify?.('Hash copied to clipboard', 'success');
+  };
+
+  // Navigate to leaf detail page
+  const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
+    if (leaf.type === 'deploy') {
+      return '/deploy';
+    }
+    if (leaf.type === 'eval' && leaf.id) {
+      // Use leaf.id as runId for eval results
+      return `/eval/${leaf.id}`;
+    }
+    return undefined;
+  };
+
   return (
     <>
-      {/* Top NodeToolbar - Add Leaf for committed units */}
-      {isCommitted && (
-        <NodeToolbar position={Position.Top} offset={4} className="nodrag">
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              'w-7 h-7 rounded-full bg-white shadow-md border-2',
-              'hover:scale-105 transition-transform',
-              styles.accent,
-              data.branchType === 'main'
-                ? 'border-blue-400 hover:bg-blue-50'
-                : 'border-orange-400 hover:bg-orange-50'
-            )}
-            onClick={handleOpenLeafPanel}
-            aria-label="Add Leaf Node"
-          >
-            <Plus size={14} />
-          </Button>
-        </NodeToolbar>
-      )}
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
       <motion.div
@@ -230,169 +258,295 @@ function UnitNode(props: Props) {
         initial="initial"
         animate="animate"
         exit="exit"
-        whileHover={{ scale: 1.015, transition: springConfig.smooth }}
+        whileHover={{ scale: 1.01, transition: springConfig.smooth }}
         whileTap={{ scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-2xl border-2 overflow-visible text-slate-900',
-          styles.bg,
+          'group w-72 rounded-xl border overflow-visible text-slate-900 bg-white',
           styles.border,
           styles.shadow,
           styles.zIndex,
-          selected && 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background',
-          data.highlightMode === 'main' && 'ring-2 ring-blue-500/50 ring-offset-2',
-          data.highlightMode === 'branch' && 'ring-2 ring-amber-500/50 ring-offset-2',
-          expanded && 'cursor-text'
+          selected && 'shadow-[0_0_0_2px_rgba(79,70,229,0.5),0_0_16px_rgba(79,70,229,0.1)]',
+          data.highlightMode === 'main' && 'shadow-[0_0_0_2px_rgba(59,130,246,0.5),0_0_16px_rgba(59,130,246,0.1)]',
+          data.highlightMode === 'branch' && 'shadow-[0_0_0_2px_rgba(245,158,11,0.5),0_0_16px_rgba(245,158,11,0.1)]'
         )}
         style={{ willChange: 'transform' }}
       >
-        {/* Conversation Section (Top) */}
-        <div className="px-4 pt-4 pb-3 bg-white/70 backdrop-blur-sm rounded-t-[14px]">
-          <div className="flex items-center gap-1.5 mb-2">
-            <div className="flex items-center justify-center w-5 h-5 rounded-md bg-slate-100">
-              <MessageSquare size={12} className="text-slate-500" />
+        {/* ═══════════════════════════════════════════
+            SECTION 1: SOURCES (if any)
+            ═══════════════════════════════════════════ */}
+        {data.sources && data.sources.length > 0 && (
+          <div className="px-3 py-2 bg-slate-50/80 border-b border-slate-100 rounded-t-[11px]">
+            <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500 nodrag">
+              <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
+              <span className="text-slate-300">·</span>
+              <TooltipProvider delayDuration={200}>
+                {data.sources.map((source, idx) => {
+                  const Icon = SOURCE_ICONS[source.type] || FileText;
+                  const href = source.type === 'conversation' && projectId
+                    ? `/project/${projectId}/conversation/${source.id}`
+                    : undefined;
+                  const content = (
+                    <span className="inline-flex items-center gap-0.5 hover:text-slate-700 transition-colors cursor-pointer">
+                      <Icon size={10} className="text-slate-400" />
+                      <span>{source.label}</span>
+                    </span>
+                  );
+                  return (
+                    <span key={source.id} className="inline-flex items-center gap-0.5">
+                      {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {href ? (
+                            <Link href={href} className="hover:underline">
+                              {content}
+                            </Link>
+                          ) : (
+                            content
+                          )}
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {source.title || source.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  );
+                })}
+              </TooltipProvider>
             </div>
-            <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400">
-              Conversation
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════
+            SECTION 2: COMMIT (main content)
+            ═══════════════════════════════════════════ */}
+        <div className="px-3 py-3">
+          {/* Row 1: Title + Branch Badge */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h4 className="m-0 text-sm font-semibold text-slate-800 leading-snug flex-1 min-w-0">
+              {data.title}
+            </h4>
+            <span
+              className={cn(
+                'flex-shrink-0 text-[0.6rem] font-semibold px-1.5 py-0.5 rounded',
+                data.branchType === 'main'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-amber-100 text-amber-700'
+              )}
+            >
+              {branchLabel}
             </span>
           </div>
-          <h4 className="m-0 text-[0.95rem] font-semibold text-slate-800 leading-snug tracking-tight">
-            {data.title}
-          </h4>
-          <div className="flex items-center gap-2 mt-2 text-[0.7rem] text-slate-400">
-            <span className="px-1.5 py-0.5 bg-slate-100 rounded">{data.timestamp}</span>
-            <span>{data.status}</span>
+
+          {/* Row 2: Commit hash + merge indicator */}
+          <div className="flex items-center gap-1.5 text-[0.7rem] text-slate-400 mb-2 nodrag">
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleCopyHash}
+                    className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[0.6rem] transition-colors cursor-pointer"
+                  >
+                    {data.commitHash ? data.commitHash.slice(0, 7) : data.entryId?.slice(0, 7)}
+                    {copiedHash ? (
+                      <CheckCircle size={10} className="text-green-500" />
+                    ) : (
+                      <Copy size={10} className="text-slate-400" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {copiedHash ? 'Copied!' : 'Click to copy hash'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {data.isMergeCommit && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-purple-600 font-medium">merge</span>
+              </>
+            )}
           </div>
-        </div>
 
-        {/* Divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-200/80 to-transparent" />
-
-        {/* Commit Section (Bottom) */}
-        <div className="px-4 pt-3 pb-4">
-          <div className="flex justify-between items-center mb-2.5">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'flex items-center justify-center w-5 h-5 rounded-md',
-                  isStaging ? 'bg-slate-100' : 'bg-blue-100'
-                )}
-              >
-                {isStaging ? (
-                  <PenSquare size={12} className="text-slate-500" />
-                ) : (
-                  <GitCommit size={12} className="text-blue-600" />
-                )}
-              </div>
-              <span
-                className={cn(
-                  'inline-flex items-center px-2.5 py-1 rounded-full text-[0.65rem] font-bold uppercase tracking-wide',
-                  isStaging
-                    ? 'bg-slate-100 border border-dashed border-slate-300 text-slate-500'
-                    : cn(styles.badgeBg, 'text-white shadow-sm')
-                )}
-              >
-                {data.commitHash ? data.commitHash.slice(0, 8) : data.entryId}
-              </span>
-            </div>
+          {/* Row 3: Status indicator */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              {isStaging && (
-                <span className="text-[0.6rem] text-slate-400 uppercase tracking-wider font-medium px-2 py-0.5 bg-slate-100 rounded-full">
-                  staging
+              {isStaging ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                  <PenSquare size={12} className="text-amber-500" />
+                  <span>Draft</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                  <GitCommit size={12} className={data.branchType === 'main' ? 'text-blue-500' : 'text-amber-500'} />
+                  <span>Committed</span>
                 </span>
               )}
-              {data.isMergeCommit && (
-                <span className="text-[0.6rem] text-purple-500 uppercase tracking-wider font-medium px-2 py-0.5 bg-purple-50 rounded-full">
-                  merge
-                </span>
-              )}
-              <span
-                className={cn(
-                  'text-[0.65rem] font-semibold px-2 py-0.5 rounded-md border',
-                  styles.accent,
-                  data.branchType === 'main'
-                    ? 'bg-blue-50 border-blue-200'
-                    : 'bg-amber-50 border-amber-200'
-                )}
-              >
-                {branchLabel}
-              </span>
-              <button
-                className="w-6 h-6 rounded-lg border border-slate-200 bg-white inline-flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-300 transition-colors"
-                onClick={() => setExpanded((prev) => !prev)}
-                aria-label="Toggle details"
-                aria-expanded={expanded}
-                type="button"
-              >
-                <ChevronDown
-                  size={14}
-                  className={cn('transition-transform duration-200', expanded && 'rotate-180')}
-                />
-              </button>
             </div>
-          </div>
-
-          <div className="flex justify-between items-center text-xs">
-            <div className="inline-flex items-center gap-1.5 font-medium text-slate-600">
-              <Sparkles size={12} className="text-amber-500" />
-              <span>{isStaging ? 'Staging' : 'Committed'}</span>
-            </div>
-            {isStaging ? (
-              <span className="text-[0.7rem] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                {(data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0
-                  ? `${data.mustHave?.length || 0}✓ ${data.mustntHave?.length || 0}✗`
-                  : 'No constraints'}
+            {isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
+              <span className="text-[0.65rem] font-medium">
+                <span className="text-green-600">{data.mustHave?.length || 0}✓</span>
+                {' '}
+                <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
               </span>
-            ) : (
-              <span className="text-slate-400 text-[0.7rem] truncate max-w-[120px]">
-                {data.summary || data.timestamp}
+            )}
+            {!isStaging && data.summary && (
+              <span className="text-[0.65rem] text-slate-400 truncate max-w-[100px]">
+                {data.summary}
               </span>
             )}
           </div>
         </div>
 
-        {/* Expanded Dropdown */}
-        <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-              className="mt-2 pt-2 border-t border-black/5 px-4 pb-3 nodrag overflow-hidden"
+        {/* ═══════════════════════════════════════════
+            SECTION 3: LEAVES (if any)
+            ═══════════════════════════════════════════ */}
+        {data.leaves && data.leaves.length > 0 && (
+          <div className="border-t border-slate-100">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50/50 transition-colors"
+              onClick={() => setLeavesExpanded((prev) => !prev)}
+              type="button"
             >
-              <p className="text-[0.82rem] text-slate-600 leading-relaxed max-h-20 overflow-y-auto m-0">
-                {data.summary || (isStaging ? 'Staging - click to edit' : 'No summary recorded.')}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <span className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+                Leaves ({data.leaves.length})
+              </span>
+              <ChevronRight
+                size={12}
+                className={cn(
+                  'text-slate-400 transition-transform duration-200',
+                  leavesExpanded && 'rotate-90'
+                )}
+              />
+            </button>
+            <AnimatePresence>
+              {leavesExpanded && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-3 pb-2 space-y-1 nodrag">
+                    {data.leaves.map((leaf) => {
+                      const LeafIcon = getLeafIcon(leaf.type);
+                      const isRunner = leaf.type === 'deploy' || leaf.type === 'eval';
+                      const leafHref = getLeafHref(leaf);
+                      const leafContent = (
+                        <>
+                          <div
+                            className={cn(
+                              'w-5 h-5 rounded flex items-center justify-center',
+                              isRunner ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
+                            )}
+                          >
+                            <LeafIcon size={12} />
+                          </div>
+                          <span className="text-xs text-slate-700 flex-1 truncate">{leaf.title}</span>
+                          {leaf.status && (
+                            <span
+                              className={cn(
+                                'text-[0.6rem] font-medium px-1.5 py-0.5 rounded',
+                                leaf.status === 'running' && 'bg-blue-100 text-blue-700',
+                                leaf.status === 'passed' && 'bg-green-100 text-green-700',
+                                leaf.status === 'failed' && 'bg-red-100 text-red-700',
+                                leaf.status === 'pending' && 'bg-amber-100 text-amber-700',
+                                leaf.status === 'idle' && 'bg-slate-100 text-slate-600'
+                              )}
+                            >
+                              {leaf.status === 'passed' && leaf.passedCount !== undefined
+                                ? `${leaf.passedCount}/${(leaf.passedCount || 0) + (leaf.failedCount || 0)}`
+                                : leaf.status}
+                            </span>
+                          )}
+                          {leafHref && (
+                            <ExternalLink size={10} className="text-slate-300 group-hover/leaf:text-slate-500 transition-colors" />
+                          )}
+                        </>
+                      );
+                      return leafHref ? (
+                        <Link
+                          key={leaf.id}
+                          href={leafHref}
+                          className="group/leaf flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors cursor-pointer"
+                        >
+                          {leafContent}
+                        </Link>
+                      ) : (
+                        <div
+                          key={leaf.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors"
+                        >
+                          {leafContent}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Add Leaf button for committed units without leaves */}
+        {isCommitted && (!data.leaves || data.leaves.length === 0) && (
+          <div className="border-t border-slate-100 px-3 py-2">
+            <button
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 py-1 rounded hover:bg-slate-50 transition-colors"
+              onClick={handleOpenLeafPanel}
+              type="button"
+            >
+              <Plus size={12} />
+              <span>Add output</span>
+            </button>
+          </div>
+        )}
       </motion.div>
 
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
 
       {/* NodeToolbar - appears on hover/selection */}
       <NodeToolbar position={Position.Right} offset={8} className="flex gap-1.5 nodrag">
-        <Button
-          variant="outline"
-          size="icon"
-          className="w-7 h-7 rounded-full bg-white shadow-md border-slate-200 hover:border-blue-400 hover:bg-blue-50"
-          onClick={handleAddUnit}
-          aria-label="Add Unit"
-        >
-          <MessageSquarePlus size={14} />
-        </Button>
-        {data.branchType === 'branch' && (
-          <Button
-            variant="outline"
-            size="icon"
-            className="w-7 h-7 rounded-full bg-white shadow-md border-slate-200 hover:border-orange-400 hover:bg-orange-50"
-            onClick={handleMerge}
-            aria-label="Start Merge"
-            disabled={!canTriggerMerge}
-          >
-            <GitMerge size={14} />
-          </Button>
-        )}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="canvas-outline"
+                size="icon-sm"
+                className="rounded-full hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:border-blue-500"
+                onClick={handleAddUnit}
+                aria-label="Add Unit"
+              >
+                <MessageSquarePlus size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={4}>
+              <p className="text-xs">Continue conversation</p>
+            </TooltipContent>
+          </Tooltip>
+          {data.branchType === 'branch' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="canvas-outline"
+                  size="icon-sm"
+                  className="rounded-full hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950 dark:hover:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleMerge}
+                  aria-label="Start Merge"
+                  disabled={!canTriggerMerge}
+                >
+                  <GitMerge size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={4}>
+                <p className="text-xs">
+                  {canTriggerMerge ? 'Merge branch to main' : 'Merge requires main branch commit'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </TooltipProvider>
       </NodeToolbar>
     </>
   );
@@ -479,7 +633,7 @@ function LeafNode(props: Props) {
         className={cn(
           'w-40 bg-white border border-slate-200 rounded-xl',
           'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)]',
-          selected && 'border-indigo-400 ring-2 ring-indigo-500/20 ring-offset-2'
+          selected && 'border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.3),0_0_16px_rgba(99,102,241,0.15)]'
         )}
         style={{ willChange: 'transform' }}
       >
