@@ -58,11 +58,11 @@ export function loadSuites(dirPath: string): EvalSuite[] {
 }
 
 /**
- * Get the default eval-suites directory path
+ * Get the default suites directory path
  */
 export function getDefaultSuitesPath(): string {
-  // Relative to packages/runner
-  return join(__dirname, '..', 'eval-suites');
+  // Relative to apps/runner
+  return join(__dirname, '..', 'resources', 'suites');
 }
 
 /**

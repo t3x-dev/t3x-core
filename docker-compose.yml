@@ -137,6 +137,8 @@ services:
       - LOG_LEVEL=info
       # CORS: Allow WebUI access from common local origins
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      # LLM for assertion generation
+      - ANTHROPIC_API_KEY
     depends_on:
       t3x-api:
         condition: service_healthy

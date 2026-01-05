@@ -6,8 +6,8 @@ import addFormats from 'ajv-formats';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const runnerRoot = path.resolve(scriptDir, '..');
-const schemaPath = path.join(runnerRoot, 'schemas', 'suite.schema.json');
-const suitesRoot = path.resolve(runnerRoot, '..', 'eval-suites');
+const schemaPath = path.join(runnerRoot, 'resources', 'json-schemas', 'suite.schema.json');
+const suitesRoot = path.join(runnerRoot, 'resources', 'suites');
 
 const ajv = new Ajv2020({
   allErrors: true,

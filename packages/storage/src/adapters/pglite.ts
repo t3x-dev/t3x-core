@@ -220,5 +220,38 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
     CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
 
+    -- Deploy Agents table (for Runner/n8n integration)
+    CREATE TABLE IF NOT EXISTS deploy_agents (
+      deploy_agent_id TEXT PRIMARY KEY,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'http',
+      auth_json TEXT,
+      status TEXT NOT NULL DEFAULT 'idle',
+      last_run_id TEXT,
+      last_run_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_deploy_agents_project ON deploy_agents(project_id);
+
+    -- Runs table (Engine → Runner → n8n flow)
+    CREATE TABLE IF NOT EXISTS runs (
+      run_id TEXT PRIMARY KEY,
+      project_id TEXT,
+      runner_run_id TEXT,
+      commit_ref TEXT,
+      leaf_json TEXT,
+      inputs_json TEXT,
+      workflow_json TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      result_json TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+
   `);
 }
