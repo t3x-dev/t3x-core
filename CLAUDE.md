@@ -10,76 +10,92 @@ T3X is "Git for Meaning" — a semantic version control system for AI conversati
 
 ## Repository Structure
 
+This is a pnpm monorepo managed by Turborepo:
+
 ```
 t3x/
-├── t3x-core/       # Deterministic semantic engine (TypeScript)
-├── t3x-storage/    # PostgreSQL persistence layer (Drizzle ORM)
-├── t3x-webui/      # Next.js 15 frontend (App Router + ReactFlow)
-├── t3x-runner/     # Grey-box agent evaluation engine
-├── agent-demo/     # Demo agent for testing
+├── packages/
+│   ├── core/           # @t3x/core - Deterministic semantic engine
+│   ├── storage/        # @t3x/storage - PostgreSQL persistence (Drizzle ORM)
+│   └── api-client/     # @t3x/api-client - TypeScript API client
+├── apps/
+│   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
+│   ├── api/            # @t3x/api - Hono API server with OpenAPI
+│   ├── runner/         # @t3x/runner - Grey-box agent evaluation engine
+│   ├── cli/            # @t3x/cli - Command line interface
+│   └── agent-demo/     # Demo agent for testing
+├── biome.json          # Linting and formatting config
+├── turbo.json          # Turborepo task config
 └── docker-compose.yml
 ```
 
 ## Build Commands
 
-### t3x-core
+### Monorepo (from root)
 ```bash
-cd t3x-core
-npm install
-npm run build          # tsc
-npm test               # vitest (102 tests)
-npm run test:watch     # watch mode
+pnpm install                    # Install all dependencies
+pnpm build                      # Build all packages
+pnpm test                       # Run all tests
+pnpm lint                       # Biome lint
+pnpm lint:fix                   # Biome lint + auto-fix
+pnpm check                      # Biome check (lint + format)
+pnpm check:fix                  # Biome check + auto-fix
 ```
 
-### t3x-storage
+### Package-specific builds
 ```bash
-cd t3x-storage
-npm install
-npm run build          # tsc
-npm test               # vitest (151 tests)
-npm run db:studio      # Drizzle Studio
+pnpm build:core                 # Build @t3x/core
+pnpm build:storage              # Build @t3x/storage
+pnpm build:webui                # Build t3x-webui
+pnpm build:api                  # Build @t3x/api
+pnpm build:runner               # Build @t3x/runner
+
+pnpm test:core                  # Test @t3x/core
+pnpm test:storage               # Test @t3x/storage
+pnpm test:webui                 # Test t3x-webui
 ```
 
-### t3x-webui
+### Development servers
 ```bash
-cd t3x-webui
-npm install
-npm run dev            # Next.js dev server (port 3000)
-npm run build          # next build
-npm run lint           # eslint
-npm test               # vitest (44 tests)
+pnpm dev:webui                  # Next.js dev server (port 3000)
+pnpm dev:api                    # Hono API server (port 8000)
+pnpm dev:agent                  # Demo agent (port 9000)
 ```
 
-### t3x-runner
+### Run single test
 ```bash
-cd t3x-runner
-npm install
-npm run build          # tsc
-npm run dev            # tsx watch src/server.ts
-npm run start          # node dist/server.js
-```
-
-### Run Single Test
-```bash
-vitest run src/__tests__/api/projects.test.ts   # specific file
-vitest run -t "creates a new project"           # by test name
+# From package directory
+vitest run src/__tests__/some.test.ts           # Specific file
+vitest run -t "creates a new project"           # By test name
 ```
 
 ### Docker
 ```bash
-docker-compose up                    # Start all services
-docker-compose up -d                 # Background mode
-docker-compose --profile n8n up      # Include n8n workflow engine
+docker compose up -d --build               # Default: postgres + api + webui
+docker compose --profile runner up -d      # Include runner
+docker compose --profile n8n up -d         # Include n8n workflow engine
+docker compose down
 ```
 
-Ports: WebUI (3000), Core API (8000), Runner API (8080), Demo Agent (9000)
+Ports: WebUI (3000), API (8000), PostgreSQL (5432), Runner (8080), Agent Demo (9000), n8n (5678)
 
 ## Architecture
 
 ### Package Dependencies
 
 ```
-t3x-webui ──depends──► @t3x/storage ──depends──► @t3x/core
+apps/web (t3x-webui)
+  └─► packages/storage (@t3x/storage)
+        └─► packages/core (@t3x/core)
+
+apps/api (@t3x/api)
+  ├─► packages/storage
+  ├─► packages/core
+  └─► apps/runner (@t3x/runner)
+
+apps/cli (@t3x/cli)
+  ├─► packages/core
+  └─► packages/api-client (@t3x/api-client)
 ```
 
 ### Three-Layer Design
@@ -89,13 +105,13 @@ t3x-webui ──depends──► @t3x/storage ──depends──► @t3x/core
 | **Framework Core** | `@t3x/core` | No (deterministic) |
 | **Storage Layer** | `@t3x/storage` | No |
 | **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
-| **Product Layer** | `t3x-webui`, `t3x-runner` | No |
+| **Product Layer** | `t3x-webui`, `@t3x/api`, `@t3x/runner` | No |
 
 ### Storage Architecture
 
 T3X uses PostgreSQL (via Drizzle ORM):
 - **PGLite** for local development (PostgreSQL WASM, data in `.t3x/database/`)
-- **Postgres** for production
+- **Postgres** for Docker/production
 - **Supabase** adapter available
 
 Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `merge_results`, `segment_embeddings`
@@ -112,23 +128,17 @@ Semantic extraction happens in three rings:
 - **Ring 2**: Intent seeds, relations, facets
 - **Ring 3**: Sentence-level segments
 
-## WebUI Architecture
+## WebUI Architecture (apps/web)
 
-### Directory Structure
 ```
-t3x-webui/src/
+src/
 ├── app/                    # Next.js App Router
-│   ├── api/v1/            # REST API routes
-│   │   ├── projects/      # CRUD operations
-│   │   ├── conversations/ # Conversation management
-│   │   ├── turns/         # Turn (message) management
-│   │   ├── commits/       # Commit operations
-│   │   ├── branches/      # Branch management
-│   │   └── drafts/        # Draft commit workflow
+│   ├── api/v1/            # REST API routes (snake_case JSON)
 │   └── project/[projectId]/ # Project canvas page
 ├── components/            # React components
-├── store/canvasStore.ts   # Zustand state management
-├── hooks/useApi.ts        # Data fetching hooks
+├── store/                 # Zustand state management
+│   └── canvasStore.ts     # Canvas nodes/edges state
+├── hooks/                 # React hooks
 ├── lib/
 │   ├── api.ts             # API client functions
 │   └── db.ts              # Database singleton
@@ -197,7 +207,9 @@ vi.mock('@/lib/db', () => ({
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY`: For Claude API access
-- `T3X_DATA_DIR`: PGLite data directory (default: `.t3x/database`)
-- `DATABASE_URL`: PostgreSQL connection string (production)
-- `LOG_LEVEL`: Logging verbosity (debug/info/warn/error)
+Copy `.env.example` to `.env`:
+
+- `NEXT_PUBLIC_API_URL`: T3X API server URL (default: http://localhost:8000)
+- `DATABASE_URL`: PostgreSQL connection string (production/Docker)
+- `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
+- `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
