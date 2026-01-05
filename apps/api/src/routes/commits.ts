@@ -82,6 +82,7 @@ commitRoutes.post('/v1/commits', async (c) => {
     merge_parents?: string[];
     pipeline_config?: unknown;
     draft_id?: string;
+    draft_text_hash?: string;
     signature?: unknown;
     source_excerpt?: unknown;
     must_have?: unknown[];
@@ -221,6 +222,27 @@ commitRoutes.post('/v1/commits', async (c) => {
                     turn_hash: turn.turnHash,
                   });
                 }
+
+                // Collect preferenceKeywords (keywords with polarity != 0)
+                if (rings?.ring1?.preferenceKeywords) {
+                  for (const keyword of rings.ring1.preferenceKeywords) {
+                    const text = typeof keyword === 'string' ? keyword : keyword.text;
+                    const lemma = typeof keyword === 'string' ? keyword : keyword.lemma;
+                    const polarity = keyword?.polarity ?? 0;
+                    collectedFacets.push({
+                      facet: 'preference',
+                      text,
+                      key: lemma ?? text,
+                      value: text,
+                      polarity,
+                      polarity_label: polarity > 0 ? 'positive' : polarity < 0 ? 'negative' : 'neutral',
+                      confidence: keyword?.confidence ?? 1.0,
+                      pos: keyword?.pos,
+                      entity_type: keyword?.entityType,
+                      turn_hash: turn.turnHash,
+                    });
+                  }
+                }
               } catch (parseErr) {
                 console.warn(
                   '[commits] Failed to parse rings JSON for turn:',
@@ -252,6 +274,7 @@ commitRoutes.post('/v1/commits', async (c) => {
       mergeParents: body.merge_parents,
       pipelineConfig: body.pipeline_config,
       draftId: body.draft_id,
+      draftTextHash: body.draft_text_hash,
       signature: body.signature,
       sourceExcerpt: body.source_excerpt,
       mustHave: body.must_have,
