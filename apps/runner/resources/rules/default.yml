@@ -1,0 +1,38 @@
+version: "1.0"
+name: "default-eval"
+description: "Default evaluation rules for agent runs"
+
+rules:
+  # Output checks
+  - id: "output_exists"
+    name: "Output exists"
+    target: "output"
+    check: "exists"
+    weight: 0.2
+    severity: "error"
+
+  - id: "output_not_empty"
+    name: "Output is not empty"
+    target: "output"
+    check: "not_empty"
+    weight: 0.2
+    severity: "error"
+
+  # Steps checks
+  - id: "no_errors"
+    name: "All steps completed without errors"
+    target: "steps"
+    check: "all"
+    condition:
+      status: "ok"
+    weight: 0.4
+    severity: "error"
+
+  - id: "has_steps"
+    name: "At least one step executed"
+    target: "steps"
+    check: "not_empty"
+    weight: 0.2
+    severity: "warning"
+
+pass_threshold: 0.8

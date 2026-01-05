@@ -8,6 +8,9 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiResponse = any;
+
 // Mock the database module before importing routes
 let mockDB: PGLiteDB;
 
@@ -47,7 +50,7 @@ describe('Projects Routes', () => {
       const res = await app.request('/v1/projects');
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.projects).toEqual([]);
     });
@@ -60,7 +63,7 @@ describe('Projects Routes', () => {
       const res = await app.request('/v1/projects');
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.projects.length).toBe(2);
     });
@@ -74,7 +77,7 @@ describe('Projects Routes', () => {
       const res = await app.request('/v1/projects?limit=2');
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.data.projects.length).toBe(2);
       expect(data.data.limit).toBe(2);
     });
@@ -90,7 +93,7 @@ describe('Projects Routes', () => {
 
       expect(res.status).toBe(201);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('New Project');
       expect(data.data.project_id).toBeDefined();
@@ -107,7 +110,7 @@ describe('Projects Routes', () => {
 
       expect(res.status).toBe(201);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.data.metadata).toEqual(metadata);
     });
 
@@ -120,7 +123,7 @@ describe('Projects Routes', () => {
 
       expect(res.status).toBe(400);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('INVALID_REQUEST');
     });
@@ -134,7 +137,7 @@ describe('Projects Routes', () => {
 
       expect(res.status).toBe(400);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
     });
   });
@@ -146,7 +149,7 @@ describe('Projects Routes', () => {
       const res = await app.request(`/v1/projects/${project.projectId}`);
       expect(res.status).toBe(200);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('Find Me');
     });
@@ -155,7 +158,7 @@ describe('Projects Routes', () => {
       const res = await app.request('/v1/projects/proj_nonexistent');
       expect(res.status).toBe(404);
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('NOT_FOUND');
     });
