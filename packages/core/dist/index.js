@@ -27,7 +27,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.POS_TAG_MAPPING = exports.normalizePosTag = exports.normalizeDependencyLabel = exports.NLPProviderError = exports.GoogleAIEmbeddingProvider = exports.EmbeddingProviderError = exports.createGoogleAIEmbeddingProvider = exports.createClaudeProvider = exports.createCachedEmbeddingProvider = exports.cosineSimilarity = exports.ClaudeProvider = exports.CachedEmbeddingProvider = exports.MergeEngine = exports.createMergeEngine = exports.ConflictType = exports.LLMProviderError = exports.RingExtractor = exports.PolarityRuleEngine = exports.createRingExtractor = exports.createPolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.DiffType = exports.DiffEngine = exports.createDiffEngine = exports.calculateDiffStats = exports.sha256 = exports.hashText = exports.canonText = void 0;
+exports.POS_TAG_MAPPING = exports.normalizePosTag = exports.normalizeDependencyLabel = exports.NLPProviderError = exports.GoogleCloudNLPProvider = exports.GoogleAIEmbeddingProvider = exports.EmbeddingProviderError = exports.createGoogleCloudNLPProvider = exports.createGoogleAIEmbeddingProvider = exports.createClaudeProvider = exports.createCachedEmbeddingProvider = exports.cosineSimilarity = exports.ClaudeProvider = exports.CachedEmbeddingProvider = exports.MergeEngine = exports.createMergeEngine = exports.ConflictType = exports.LLMProviderError = exports.RingExtractor = exports.PolarityRuleEngine = exports.createRingExtractor = exports.createPolarityRuleEngine = exports.createEmptyRingOutput = exports.createEmptyRing3 = exports.createEmptyRing2 = exports.createEmptyRing1 = exports.DiffType = exports.DiffEngine = exports.createDiffEngine = exports.calculateDiffStats = exports.sha256 = exports.hashText = exports.canonText = void 0;
 // Common utilities
 var common_1 = require("./common");
 Object.defineProperty(exports, "canonText", { enumerable: true, get: function () { return common_1.canonText; } });
@@ -66,9 +66,13 @@ Object.defineProperty(exports, "cosineSimilarity", { enumerable: true, get: func
 Object.defineProperty(exports, "createCachedEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createCachedEmbeddingProvider; } });
 Object.defineProperty(exports, "createClaudeProvider", { enumerable: true, get: function () { return providers_1.createClaudeProvider; } });
 Object.defineProperty(exports, "createGoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.createGoogleAIEmbeddingProvider; } });
+// NLP Provider (Google Cloud)
+Object.defineProperty(exports, "createGoogleCloudNLPProvider", { enumerable: true, get: function () { return providers_1.createGoogleCloudNLPProvider; } });
 Object.defineProperty(exports, "EmbeddingProviderError", { enumerable: true, get: function () { return providers_1.EmbeddingProviderError; } });
 // Embedding Provider (implementations)
 Object.defineProperty(exports, "GoogleAIEmbeddingProvider", { enumerable: true, get: function () { return providers_1.GoogleAIEmbeddingProvider; } });
+// NLP Provider (implementations)
+Object.defineProperty(exports, "GoogleCloudNLPProvider", { enumerable: true, get: function () { return providers_1.GoogleCloudNLPProvider; } });
 Object.defineProperty(exports, "NLPProviderError", { enumerable: true, get: function () { return providers_1.NLPProviderError; } });
 Object.defineProperty(exports, "normalizeDependencyLabel", { enumerable: true, get: function () { return providers_1.normalizeDependencyLabel; } });
 Object.defineProperty(exports, "normalizePosTag", { enumerable: true, get: function () { return providers_1.normalizePosTag; } });
