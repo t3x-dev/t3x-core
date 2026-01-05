@@ -8,14 +8,17 @@
    Inspired by Linear, Vercel, Raycast
    ============================================ */
 :root {
-  /* Typography - Inter with better defaults */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Typography - Geist (Vercel's font) with optimal settings */
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-feature-settings: 'rlig' 1, 'calt' 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Monospace font for code */
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', monospace;
 
   /* Brand Colors - Modern Blue/Indigo */
   --color-brand: #4f46e5;
@@ -50,6 +53,22 @@
   --color-bg-subtle: #f1f5f9;
   --color-border: #e2e8f0;
   --color-border-light: #f1f5f9;
+
+  /* Typography Scale - Semantic sizes for consistency */
+  --text-xs: 0.75rem;     /* 12px - labels, timestamps */
+  --text-sm: 0.8125rem;   /* 13px - secondary text */
+  --text-base: 0.875rem;  /* 14px - body text */
+  --text-md: 0.9375rem;   /* 15px - emphasized body */
+  --text-lg: 1rem;        /* 16px - headings */
+  --text-xl: 1.125rem;    /* 18px - section headers */
+  --text-2xl: 1.25rem;    /* 20px - page titles */
+  --text-3xl: 1.5rem;     /* 24px - hero text */
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
 
   /* Spacing - 4px base scale */
   --spacing-xs: 4px;
@@ -223,7 +242,6 @@ a {
 
 /* Button reset moved to @layer base so Tailwind utilities can override */
 
-
 /* ============================================
    ReactFlow Overrides & Animations
    ============================================ */
@@ -283,52 +301,16 @@ a {
 :root {
   --edge-color: #94a3b8;
   --edge-active-color: #3b82f6;
+  --edge-selected-color: #2563eb;
 }
 
 .dark {
   --edge-color: #475569;
   --edge-active-color: #818cf8;
+  --edge-selected-color: #6366f1;
 }
 
-/* Controls - modern floating pill design */
-.react-flow__controls {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px;
-  background: var(--color-bg-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-}
-
-.react-flow__controls-button {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  margin: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  transition: var(--transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.react-flow__controls-button:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
-}
-
-.react-flow__controls-button:active {
-  transform: scale(0.95);
-}
-
-.react-flow__controls-button svg {
-  width: 16px;
-  height: 16px;
-}
+/* Controls - replaced with ZoomSlider component from React Flow UI */
 
 /* MiniMap - refined styling */
 .react-flow__minimap {
@@ -362,10 +344,15 @@ a {
   border-radius: var(--radius-sm);
 }
 
-/* Node selection ring */
-.react-flow__node.selected {
-  box-shadow: 0 0 0 2px var(--color-primary), var(--shadow-glow);
+/* Node selection - disable ReactFlow's default sharp-cornered selection */
+.react-flow__node.selected,
+.react-flow__node.selected:focus,
+.react-flow__node.selected:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
+
+/* Selection is handled by the inner motion.div with rounded corners via Tailwind ring */
 
 /* ============================================
    Keyword Styling (used by renderPhraseWithKeywords)
@@ -473,7 +460,37 @@ a {
   --color-sidebar-accent-foreground: oklch(0.25 0.02 260);
   --color-sidebar-border: oklch(0.93 0.005 260);
   --color-sidebar-ring: oklch(0.55 0.22 260);
-}
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  @keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+    }
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);
+    }
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);
+    }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+    }
+  }
+  --animate-shiny-text: shiny-text 8s infinite
+;
+  @keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }}
 
 .dark {
   --background: oklch(0.145 0 0);
@@ -515,5 +532,51 @@ a {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================
+   Reduced Motion Support
+   Respect user preferences for reduced motion
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable ReactFlow edge animations */
+  .react-flow__edge path {
+    animation: none !important;
+  }
+
+  /* Disable handle pulse animation */
+  .react-flow__handle {
+    animation: none !important;
+  }
+
+  /* Disable skeleton shimmer */
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  /* Remove hover transforms */
+  .react-flow__handle:hover {
+    transform: none !important;
+  }
+
+  .react-flow__controls-button:active {
+    transform: none !important;
+  }
+
+  /* Ensure no motion on focus states */
+  *:focus,
+  *:focus-visible {
+    transition: none !important;
   }
 }

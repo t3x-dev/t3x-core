@@ -171,8 +171,9 @@ export default function ConstraintsPanel({
 
       {/* Clauses Section */}
       <div className="mb-4">
-        <button
-          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        <Button
+          variant="ghost"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
           onClick={() => toggleSection('clauses')}
         >
           {expandedSections.clauses ? (
@@ -184,7 +185,7 @@ export default function ConstraintsPanel({
           <Badge variant="secondary" className="ml-auto">
             {activeClauses.length}/{totalKeepClauses}
           </Badge>
-        </button>
+        </Button>
         {expandedSections.clauses && (
           <div className="pt-3 space-y-2">
             {constraints.clauses
@@ -209,8 +210,9 @@ export default function ConstraintsPanel({
 
       {/* Must-Have Section */}
       <div className="mb-4">
-        <button
-          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        <Button
+          variant="ghost"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
           onClick={() => toggleSection('mustHave')}
         >
           {expandedSections.mustHave ? (
@@ -223,7 +225,7 @@ export default function ConstraintsPanel({
           <Badge variant="secondary" className="ml-auto">
             {activeMustHave.length}
           </Badge>
-        </button>
+        </Button>
         {expandedSections.mustHave && (
           <div className="pt-3">
             <div className="mb-2.5 flex flex-wrap gap-2">
@@ -278,8 +280,9 @@ export default function ConstraintsPanel({
 
       {/* Mustn't-Have Section */}
       <div className="mb-4">
-        <button
-          className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        <Button
+          variant="ghost"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
           onClick={() => toggleSection('mustntHave')}
         >
           {expandedSections.mustntHave ? (
@@ -292,7 +295,7 @@ export default function ConstraintsPanel({
           <Badge variant="secondary" className="ml-auto">
             {activeMustntHave.length}
           </Badge>
-        </button>
+        </Button>
         {expandedSections.mustntHave && (
           <div className="pt-3">
             <div className="mb-2.5 flex flex-wrap gap-2">

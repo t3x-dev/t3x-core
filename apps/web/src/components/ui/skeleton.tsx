@@ -117,4 +117,75 @@ function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   );
 }
 
-export { Skeleton, SkeletonShimmer, SkeletonText, SkeletonCircle, SkeletonCard };
+/**
+ * Skeleton project card - for project list loading
+ */
+function SkeletonProject({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-4 rounded-lg border border-border bg-card p-4',
+        className
+      )}
+      {...props}
+    >
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-5 w-1/3" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-4 w-24 hidden sm:block" />
+        <Skeleton className="h-6 w-16 rounded-full" />
+        <Skeleton className="h-4 w-16 hidden md:block" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton canvas node - for canvas loading
+ */
+function SkeletonNode({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        'w-72 rounded-2xl border-2 border-border bg-card p-4 space-y-3',
+        className
+      )}
+      {...props}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-5 w-5 rounded-md" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      {/* Title */}
+      <Skeleton className="h-5 w-3/4" />
+      {/* Meta */}
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-4 w-16 rounded" />
+        <Skeleton className="h-4 w-12" />
+      </div>
+      {/* Divider */}
+      <div className="h-px bg-border" />
+      {/* Commit section */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-5 w-5 rounded-md" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+        </div>
+        <Skeleton className="h-5 w-12 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+export {
+  Skeleton,
+  SkeletonShimmer,
+  SkeletonText,
+  SkeletonCircle,
+  SkeletonCard,
+  SkeletonProject,
+  SkeletonNode,
+};
