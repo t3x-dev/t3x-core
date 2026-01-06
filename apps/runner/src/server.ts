@@ -435,6 +435,7 @@ function buildRunRecordFromCallback(
         step_index: 0,
         name: 'n8n Workflow',
         type: 'workflow',
+        span_kind: 'workflow',
         status: data.error ? 'error' : 'ok',
         latency_ms: data.meta?.latency_ms || 0,
         input: pending.inputs || {},
