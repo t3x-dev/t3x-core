@@ -247,6 +247,10 @@ async function initializeSchema(client: PGlite): Promise<void> {
       workflow_json TEXT,
       status TEXT NOT NULL DEFAULT 'queued',
       result_json TEXT,
+      -- v2.0: Trace storage fields
+      trace_summary_json TEXT,
+      trace_policy TEXT DEFAULT 'on_failure',
+      full_trace_json TEXT,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
