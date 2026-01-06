@@ -53,6 +53,23 @@ const IngestSchema = z.object({
   eval_metrics: z.record(z.string(), z.unknown()).optional(),
   eval_summary: z.string().optional(),
   evidence_pack: z.record(z.string(), z.unknown()).optional(),
+  // v2.0: Trace data
+  trace_summary: z.object({
+    trajectory: z.object({
+      total_steps: z.number(),
+      llm_calls: z.number(),
+      tool_calls: z.number(),
+      retrieval_calls: z.number(),
+      failed_steps: z.number(),
+    }),
+    tokens: z.object({
+      prompt_tokens: z.number(),
+      completion_tokens: z.number(),
+      total_tokens: z.number(),
+    }),
+    latency_ms: z.number(),
+  }).optional(),
+  full_trace: z.unknown().optional(),
 });
 
 /**
@@ -176,9 +193,12 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
         eval_summary: data.eval_summary,
         evidence_pack: data.evidence_pack,
       }),
+      // v2.0: Trace data storage
+      trace_summary_json: data.trace_summary ? JSON.stringify(data.trace_summary) : null,
+      full_trace_json: data.full_trace ? JSON.stringify(data.full_trace) : null,
     });
 
-    console.log(`[runs] Updated run ${data.run_id} to ${data.status}`);
+    console.log(`[runs] Updated run ${data.run_id} to ${data.status}, trace_summary: ${!!data.trace_summary}, full_trace: ${!!data.full_trace}`);
 
     return c.json({ success: true, data: { ok: true } });
   } catch (error) {

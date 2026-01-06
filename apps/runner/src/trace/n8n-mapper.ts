@@ -2,10 +2,21 @@
  * n8n Execution to RunRecord Mapper
  *
  * Converts n8n execution data to standardized RunRecord format.
+ *
+ * v2.0 enhancements:
+ * - Added span_kind inference based on node type
+ * - Added LLM/Tool/Retrieval data extraction
  */
 
 import pino from 'pino';
-import type { RunRecord, StepRecord } from '../schemas/run-record.js';
+import type {
+  RunRecord,
+  StepRecord,
+  SpanKind,
+  LLMData,
+  ToolData,
+  RetrievalData,
+} from '../schemas/run-record.js';
 import type { N8nExecution, N8nNodeRun, N8nRunData } from './types.js';
 
 const logger = pino({
@@ -76,6 +87,122 @@ function mapNodeType(nodeName: string, nodeType?: string): string {
 
   // Fallback to the normalized name
   return normalized.replace(/\s+/g, '_');
+}
+
+/**
+ * Infer span_kind from step type (v2.0)
+ */
+function inferSpanKind(stepType: string): SpanKind {
+  // LLM-related types
+  if (['llm_call', 'ai_agent'].includes(stepType)) {
+    return 'llm';
+  }
+
+  // Tool-related types
+  if (['tool_call', 'http_request'].includes(stepType)) {
+    return 'tool';
+  }
+
+  // Retrieval-related types
+  if (stepType.includes('retriev') || stepType.includes('vector')) {
+    return 'retriever';
+  }
+
+  // Workflow containers
+  if (stepType === 'webhook' || stepType === 'webhook_response') {
+    return 'workflow';
+  }
+
+  // Default to chain
+  return 'chain';
+}
+
+/**
+ * Extract LLM data from node output (v2.0)
+ */
+function extractLLMData(nodeRun: N8nNodeRun, output: unknown): LLMData | undefined {
+  // Try to extract model info from output
+  const outputObj = output as Record<string, unknown> | undefined;
+  if (!outputObj) return undefined;
+
+  // Common patterns for LLM output
+  const model = (outputObj.model as string) ||
+    (outputObj.modelId as string) ||
+    'unknown';
+
+  // Try to extract token usage
+  const usage = outputObj.usage as Record<string, number> | undefined;
+  const tokenUsage = outputObj.tokenUsage as Record<string, number> | undefined;
+  const tokens = usage || tokenUsage;
+
+  return {
+    model,
+    provider: extractProvider(model),
+    tokens: {
+      prompt: tokens?.prompt_tokens || tokens?.promptTokens || 0,
+      completion: tokens?.completion_tokens || tokens?.completionTokens || 0,
+      total: tokens?.total_tokens || tokens?.totalTokens || 0,
+    },
+  };
+}
+
+/**
+ * Extract provider from model name
+ */
+function extractProvider(model: string): string {
+  const modelLower = model.toLowerCase();
+  if (modelLower.includes('gpt') || modelLower.includes('openai')) return 'openai';
+  if (modelLower.includes('claude') || modelLower.includes('anthropic')) return 'anthropic';
+  if (modelLower.includes('llama') || modelLower.includes('ollama')) return 'ollama';
+  if (modelLower.includes('gemini') || modelLower.includes('google')) return 'google';
+  return 'unknown';
+}
+
+/**
+ * Extract Tool data from node (v2.0)
+ */
+function extractToolData(
+  nodeName: string,
+  nodeRun: N8nNodeRun,
+  input: unknown,
+  output: unknown
+): ToolData | undefined {
+  return {
+    tool_name: nodeName,
+    tool_input: input,
+    tool_output: output,
+  };
+}
+
+/**
+ * Extract Retrieval data from node (v2.0)
+ */
+function extractRetrievalData(
+  nodeRun: N8nNodeRun,
+  input: unknown,
+  output: unknown
+): RetrievalData | undefined {
+  const inputObj = input as Record<string, unknown> | undefined;
+  const outputObj = output as Record<string, unknown> | undefined;
+
+  // Try to extract query
+  const query = (inputObj?.query as string) ||
+    (inputObj?.search as string) ||
+    '';
+
+  // Try to extract documents from output
+  const docs = (outputObj?.documents as Array<Record<string, unknown>>) ||
+    (outputObj?.results as Array<Record<string, unknown>>) ||
+    [];
+
+  return {
+    query,
+    documents: docs.map((doc) => ({
+      content: (doc.content as string) || (doc.text as string) || JSON.stringify(doc),
+      score: doc.score as number | undefined,
+      metadata: doc.metadata as Record<string, unknown> | undefined,
+    })),
+  };
 }
 
 /**
@@ -171,21 +298,38 @@ function mapNodeRunsToSteps(
     const nodeType = workflowNodes?.get(nodeName);
     const stepType = mapNodeType(nodeName, nodeType);
 
+    // Infer span_kind from step type (v2.0)
+    const spanKind = inferSpanKind(stepType);
+
+    // Extract input/output
+    const input = extractInput(run);
+    const output = extractOutput(run, options);
+
     const step: StepRecord = {
       step_id: `step_${nodeName.toLowerCase().replace(/\s+/g, '_')}_${runIndex}`,
       step_index: index,
       name: nodeName,
       type: stepType,
-      input: extractInput(run),
-      output: extractOutput(run, options),
+      span_kind: spanKind,
+      input,
+      output,
       latency_ms: run.executionTime,
       status: run.error ? 'error' : 'ok',
       error: run.error?.message,
     };
 
-    // Add token estimate for LLM-related nodes
+    // Add legacy token estimate for backward compatibility
     if (stepType === 'llm_call' || stepType === 'ai_agent') {
       step.tokens = estimateTokens(step.output);
+    }
+
+    // Add span-specific data based on span_kind (v2.0)
+    if (spanKind === 'llm') {
+      step.llm = extractLLMData(run, output);
+    } else if (spanKind === 'tool') {
+      step.tool = extractToolData(nodeName, run, input, output);
+    } else if (spanKind === 'retriever') {
+      step.retrieval = extractRetrievalData(run, input, output);
     }
 
     steps.push(step);
