@@ -27,3 +27,17 @@ export type {
   N8nClientConfig,
   N8nApiError,
 } from './types.js';
+
+// Trace summary builder (v2.0)
+export {
+  buildTraceSummary,
+  type TraceSummary,
+  type TrajectorySummary,
+  type TokenStats,
+} from './trace-summary.js';
+
+// Trace storage policy (v2.0)
+export {
+  shouldStoreFullTrace,
+  type TracePolicy,
+} from './storage-policy.js';

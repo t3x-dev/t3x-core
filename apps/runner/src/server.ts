@@ -9,7 +9,13 @@ import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import type { RunRecord } from './schemas/run-record.js';
-import { n8nClient, mapN8nExecutionToRunRecord } from './trace/index.js';
+import {
+  n8nClient,
+  mapN8nExecutionToRunRecord,
+  buildTraceSummary,
+  shouldStoreFullTrace,
+  type TracePolicy,
+} from './trace/index.js';
 import {
   AgentConfigSchema,
   AgentInputSchema,
@@ -362,6 +368,21 @@ app.post('/callbacks/n8n', async (req, res) => {
     // ═══════════════════════════════════════════════════
     const status = evalResult.passed ? 'completed' : 'failed';
 
+    // Build trace summary (v2.0) - always included
+    const traceSummary = buildTraceSummary(runRecord);
+
+    // Determine trace storage policy from env (default: on_failure)
+    const tracePolicy = (process.env.TRACE_POLICY || 'on_failure') as TracePolicy;
+    const hasViolations = evalResult.violations && evalResult.violations.length > 0;
+    const storeFullTrace = shouldStoreFullTrace(tracePolicy, status, hasViolations);
+
+    logger.debug({
+      run_id: pending.run_id,
+      trace_policy: tracePolicy,
+      store_full_trace: storeFullTrace,
+      trajectory: traceSummary.trajectory,
+    }, 'Trace storage decision');
+
     const ingestPayload = {
       run_id: pending.run_id,
       runner_run_id: data.runner_run_id,
@@ -381,6 +402,9 @@ app.post('/callbacks/n8n', async (req, res) => {
         n8n_output: data.output, // Keep original output for reference
         n8n_meta: data.meta,
       },
+      // v2.0: Trace data for storage
+      trace_summary: traceSummary,
+      full_trace: storeFullTrace ? runRecord : undefined,
     };
 
     try {
@@ -435,6 +459,7 @@ function buildRunRecordFromCallback(
         step_index: 0,
         name: 'n8n Workflow',
         type: 'workflow',
+        span_kind: 'workflow',
         status: data.error ? 'error' : 'ok',
         latency_ms: data.meta?.latency_ms || 0,
         input: pending.inputs || {},

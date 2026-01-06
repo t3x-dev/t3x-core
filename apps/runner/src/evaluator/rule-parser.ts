@@ -34,6 +34,7 @@ export const DEFAULT_RULES: EvalRules = {
     {
       id: 'output_exists',
       name: 'Output exists',
+      type: 'basic',
       target: 'output',
       check: 'exists',
       weight: 0.2,
@@ -42,6 +43,7 @@ export const DEFAULT_RULES: EvalRules = {
     {
       id: 'output_not_empty',
       name: 'Output is not empty',
+      type: 'basic',
       target: 'output',
       check: 'not_empty',
       weight: 0.2,
@@ -50,6 +52,7 @@ export const DEFAULT_RULES: EvalRules = {
     {
       id: 'no_errors',
       name: 'All steps completed without errors',
+      type: 'basic',
       target: 'steps',
       check: 'all',
       condition: { status: 'ok' },
@@ -59,6 +62,7 @@ export const DEFAULT_RULES: EvalRules = {
     {
       id: 'has_steps',
       name: 'At least one step executed',
+      type: 'basic',
       target: 'steps',
       check: 'not_empty',
       weight: 0.2,

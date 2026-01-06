@@ -23,12 +23,19 @@ export interface CreateRunInput {
   workflow_json?: string | null;
   status?: RunStatus;
   result_json?: string | null;
+  // v2.0: Trace storage fields
+  trace_summary_json?: string | null;
+  trace_policy?: string | null;
+  full_trace_json?: string | null;
 }
 
 export interface UpdateRunInput {
   runner_run_id?: string | null;
   status?: RunStatus;
   result_json?: string | null;
+  // v2.0: Trace storage fields
+  trace_summary_json?: string | null;
+  full_trace_json?: string | null;
 }
 
 export interface ListRunsOptions {
@@ -63,6 +70,10 @@ export async function insertRun(
       workflowJson: input.workflow_json || null,
       status: input.status || 'queued',
       resultJson: input.result_json || null,
+      // v2.0: Trace storage fields
+      traceSummaryJson: input.trace_summary_json || null,
+      tracePolicy: input.trace_policy || null,
+      fullTraceJson: input.full_trace_json || null,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     })
@@ -138,6 +149,13 @@ export async function updateRun(
   }
   if (input.result_json !== undefined) {
     updateData.resultJson = input.result_json;
+  }
+  // v2.0: Trace storage fields
+  if (input.trace_summary_json !== undefined) {
+    updateData.traceSummaryJson = input.trace_summary_json;
+  }
+  if (input.full_trace_json !== undefined) {
+    updateData.fullTraceJson = input.full_trace_json;
   }
 
   const [run] = await db
