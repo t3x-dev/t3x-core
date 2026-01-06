@@ -219,6 +219,8 @@ export const deployAgents = pgTable('deploy_agents', {
 
 /**
  * Runs - Engine run records for tracking workflow executions
+ *
+ * v2.0: Added trace storage fields for agent evaluation
  */
 export const runs = pgTable('runs', {
   runId: text('run_id').primaryKey(),
@@ -231,6 +233,10 @@ export const runs = pgTable('runs', {
   workflowJson: text('workflow_json'), // { type, webhook_id? }
   status: text('status').notNull().default('queued'), // 'queued' | 'running' | 'completed' | 'failed'
   resultJson: text('result_json'), // { run_report, assertions, evidence_pack }
+  // v2.0: Trace storage fields
+  traceSummaryJson: text('trace_summary_json'), // Lightweight stats (always stored)
+  tracePolicy: text('trace_policy').default('on_failure'), // 'always' | 'on_failure' | 'on_violation'
+  fullTraceJson: text('full_trace_json'), // Complete RunRecord (conditional)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (table) => [
