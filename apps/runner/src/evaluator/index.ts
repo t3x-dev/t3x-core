@@ -7,10 +7,21 @@
 
 import pino from 'pino';
 import type { RunRecord } from '../schemas/run-record.js';
-import type { EvalRules, Rule } from '../schemas/eval-rules.js';
-import type { EvalResult, CheckResult, Violation } from '../schemas/eval-result.js';
+import type { EvalRules, Rule, RuleType } from '../schemas/eval-rules.js';
+import type { EvalResult, CheckResult, Violation, DimensionScores } from '../schemas/eval-result.js';
 import { runOperator, type OperatorOptions } from './operators.js';
 import { parseRulesFromLeaf, DEFAULT_RULES } from './rule-parser.js';
+
+/**
+ * Mapping from rule.type to dimension_scores keys
+ */
+const RULE_TYPE_TO_DIMENSION: Record<RuleType, keyof DimensionScores> = {
+  basic: 'task_completion',
+  tool_use: 'tool_use',
+  trajectory: 'trajectory_efficiency',
+  cost: 'cost_efficiency',
+  performance: 'latency',
+};
 
 const logger = pino({
   transport: {
@@ -58,6 +69,66 @@ function getByPath(obj: unknown, path: string): unknown {
   }
 
   return current;
+}
+
+/**
+ * Calculate dimension scores from check results and rules
+ *
+ * Groups rules by their type and calculates weighted average for each dimension.
+ * Dimensions without rules get a perfect score of 1.0 (not penalized).
+ */
+function calculateDimensionScores(
+  checks: CheckResult[],
+  rules: Rule[]
+): DimensionScores {
+  // Create a map of rule_id to rule for quick lookup
+  const ruleMap = new Map<string, Rule>();
+  for (const rule of rules) {
+    ruleMap.set(rule.id, rule);
+  }
+
+  // Group checks by dimension
+  const dimensionData: Record<keyof DimensionScores, { earned: number; total: number }> = {
+    task_completion: { earned: 0, total: 0 },
+    tool_use: { earned: 0, total: 0 },
+    trajectory_efficiency: { earned: 0, total: 0 },
+    cost_efficiency: { earned: 0, total: 0 },
+    latency: { earned: 0, total: 0 },
+  };
+
+  // Aggregate scores by dimension
+  for (const check of checks) {
+    const rule = ruleMap.get(check.rule_id);
+    if (!rule) continue;
+
+    const ruleType = rule.type || 'basic';
+    const dimension = RULE_TYPE_TO_DIMENSION[ruleType];
+
+    dimensionData[dimension].total += rule.weight;
+    dimensionData[dimension].earned += check.score;
+  }
+
+  // Calculate weighted average for each dimension
+  // Dimensions without rules default to 1.0 (not penalized)
+  const scores: DimensionScores = {
+    task_completion: dimensionData.task_completion.total > 0
+      ? dimensionData.task_completion.earned / dimensionData.task_completion.total
+      : 1.0,
+    tool_use: dimensionData.tool_use.total > 0
+      ? dimensionData.tool_use.earned / dimensionData.tool_use.total
+      : 1.0,
+    trajectory_efficiency: dimensionData.trajectory_efficiency.total > 0
+      ? dimensionData.trajectory_efficiency.earned / dimensionData.trajectory_efficiency.total
+      : 1.0,
+    cost_efficiency: dimensionData.cost_efficiency.total > 0
+      ? dimensionData.cost_efficiency.earned / dimensionData.cost_efficiency.total
+      : 1.0,
+    latency: dimensionData.latency.total > 0
+      ? dimensionData.latency.earned / dimensionData.latency.total
+      : 1.0,
+  };
+
+  return scores;
 }
 
 /**
@@ -148,6 +219,9 @@ export class EvalEngine {
     const earnedWeight = checks.reduce((sum, c) => sum + c.score, 0);
     const score = totalWeight > 0 ? earnedWeight / totalWeight : 0;
 
+    // Calculate dimension scores
+    const dimension_scores = calculateDimensionScores(checks, evalRules.rules);
+
     // Determine pass/fail based on threshold
     const passed = score >= evalRules.pass_threshold;
 
@@ -159,6 +233,7 @@ export class EvalEngine {
       score,
       checks,
       violations,
+      dimension_scores,
     };
 
     logger.info(
@@ -169,6 +244,13 @@ export class EvalEngine {
         checks_passed: checks.filter((c) => c.passed).length,
         checks_failed: checks.filter((c) => !c.passed).length,
         violations_count: violations.length,
+        dimension_scores: {
+          task_completion: dimension_scores.task_completion.toFixed(2),
+          tool_use: dimension_scores.tool_use.toFixed(2),
+          trajectory_efficiency: dimension_scores.trajectory_efficiency.toFixed(2),
+          cost_efficiency: dimension_scores.cost_efficiency.toFixed(2),
+          latency: dimension_scores.latency.toFixed(2),
+        },
       },
       'Evaluation complete'
     );
@@ -209,6 +291,14 @@ export class EvalEngine {
 export const evalEngine = new EvalEngine();
 
 // Re-export utilities
-export { parseRulesFromLeaf, parseRulesFromJson, loadRulesFromFile, DEFAULT_RULES } from './rule-parser.js';
+export {
+  parseRulesFromLeaf,
+  parseRulesFromJson,
+  parseRulesFromYaml,
+  loadRulesFromFile,
+  loadDefaultRules,
+  validateRules,
+  DEFAULT_RULES,
+} from './rule-parser.js';
 export { runOperator, operators } from './operators.js';
 export type { OperatorOptions, OperatorFn } from './operators.js';

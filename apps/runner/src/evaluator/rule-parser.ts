@@ -3,15 +3,16 @@
  *
  * Parses evaluation rules from various sources:
  * - JSON string (from leaf.content)
+ * - YAML string
  * - JSON file
+ * - YAML file (.yml, .yaml)
  * - Default rules
- *
- * Note: YAML support can be added later by installing js-yaml package.
  */
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import pino from 'pino';
+import yaml from 'js-yaml';
 import { EvalRulesSchema, type EvalRules } from '../schemas/eval-rules.js';
 
 const logger = pino({
@@ -92,9 +93,28 @@ export function parseRulesFromJson(jsonContent: string): EvalRules {
 }
 
 /**
- * Load rules from JSON file
+ * Parse rules from YAML string
  *
- * @param filePath - Path to JSON file
+ * @param yamlContent - YAML string containing eval rules
+ * @returns Parsed and validated EvalRules
+ */
+export function parseRulesFromYaml(yamlContent: string): EvalRules {
+  try {
+    const parsed = yaml.load(yamlContent);
+    const validated = EvalRulesSchema.parse(parsed);
+    logger.debug({ rules_count: validated.rules.length }, 'Parsed rules from YAML');
+    return validated;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error({ error: msg }, 'Failed to parse rules from YAML');
+    throw new Error(`Failed to parse rules from YAML: ${msg}`);
+  }
+}
+
+/**
+ * Load rules from file (JSON or YAML)
+ *
+ * @param filePath - Path to JSON or YAML file
  * @returns Parsed and validated EvalRules
  */
 export function loadRulesFromFile(filePath: string): EvalRules {
@@ -106,14 +126,10 @@ export function loadRulesFromFile(filePath: string): EvalRules {
     const content = readFileSync(filePath, 'utf-8');
 
     // Support both .json and .yml/.yaml files
-    if (filePath.endsWith('.json')) {
+    if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
+      return parseRulesFromYaml(content);
+    } else if (filePath.endsWith('.json')) {
       return parseRulesFromJson(content);
-    } else if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
-      // YAML support requires js-yaml package
-      // For now, throw an error suggesting JSON
-      throw new Error(
-        'YAML support requires js-yaml package. Please use JSON format or install js-yaml.'
-      );
     } else {
       // Try JSON by default
       return parseRulesFromJson(content);
@@ -176,20 +192,33 @@ export function parseRulesFromLeaf(leafContent?: string): EvalRules {
 export function loadDefaultRules(): EvalRules {
   // Try to load from default.yml first
   const defaultYmlPath = join(process.cwd(), 'resources', 'rules', 'default.yml');
+  const defaultYamlPath = join(process.cwd(), 'resources', 'rules', 'default.yaml');
   const defaultJsonPath = join(process.cwd(), 'resources', 'rules', 'default.json');
 
-  // Try JSON first (no external dependency)
+  // Try YAML first (preferred format)
+  if (existsSync(defaultYmlPath)) {
+    try {
+      return loadRulesFromFile(defaultYmlPath);
+    } catch {
+      logger.warn('Failed to load default.yml, trying other formats');
+    }
+  }
+
+  if (existsSync(defaultYamlPath)) {
+    try {
+      return loadRulesFromFile(defaultYamlPath);
+    } catch {
+      logger.warn('Failed to load default.yaml, trying other formats');
+    }
+  }
+
+  // Try JSON as fallback
   if (existsSync(defaultJsonPath)) {
     try {
       return loadRulesFromFile(defaultJsonPath);
     } catch {
       logger.warn('Failed to load default.json, using built-in defaults');
     }
-  }
-
-  // YAML would be tried here if js-yaml was available
-  if (existsSync(defaultYmlPath)) {
-    logger.debug('Found default.yml but YAML parsing not available, using built-in defaults');
   }
 
   return DEFAULT_RULES;
