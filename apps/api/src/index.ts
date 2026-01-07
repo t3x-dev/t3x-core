@@ -12,6 +12,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import { Hono } from 'hono';
 import { closeDB, getDB } from './lib/db';
+import { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware } from './middleware/logger';
 import {
@@ -173,6 +174,9 @@ async function start() {
     await getDB();
     console.log('Database initialized');
 
+    // Start background tasks
+    startTimeoutChecker();
+
     const server = serve({
       fetch: app.fetch,
       port,
@@ -183,6 +187,7 @@ async function start() {
     // Graceful shutdown
     const shutdown = async () => {
       console.log('Shutting down...');
+      stopTimeoutChecker();
       await closeDB();
       process.exit(0);
     };
