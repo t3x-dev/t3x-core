@@ -9,6 +9,7 @@
  */
 
 import pino from 'pino';
+import { fetchWithRetry } from './utils/retry.js';
 
 const logger = pino({
   transport: {
@@ -78,11 +79,15 @@ export async function getRunByRunnerRunId(runnerRunId: string): Promise<ParsedRu
   logger.debug({ url, runnerRunId }, 'Fetching run from Engine');
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(10000),
-    });
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      },
+      { maxRetries: 3, operationName: 'getRunByRunnerRunId' }
+    );
 
     if (!response.ok) {
       if (response.status === 404) {

@@ -12,6 +12,7 @@ import {
 import { evalEngine, parseRulesFromLeaf } from './evaluator/index.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
+import { fetchWithRetry } from './utils/retry.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import type { RunRecord } from './schemas/run-record.js';
 import {
@@ -413,12 +414,16 @@ app.post('/callbacks/n8n', async (req, res) => {
     const engineCallbackUrl = getEngineCallbackUrl();
 
     try {
-      const engineResponse = await fetch(engineCallbackUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ingestPayload),
-        signal: AbortSignal.timeout(10000),
-      });
+      const engineResponse = await fetchWithRetry(
+        engineCallbackUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ingestPayload),
+          signal: AbortSignal.timeout(10000),
+        },
+        { maxRetries: 3, operationName: 'Engine ingest' }
+      );
 
       if (!engineResponse.ok) {
         const errorText = await engineResponse.text();
@@ -432,7 +437,7 @@ app.post('/callbacks/n8n', async (req, res) => {
     } catch (engineError) {
       logger.error(
         { run_id: runInfo.run_id, error: String(engineError) },
-        'Failed to call Engine ingest'
+        'Failed to call Engine ingest after retries'
       );
     }
 
