@@ -121,21 +121,18 @@ turnRoutes.post('/v1/turns', async (c) => {
     // Extract rings if not provided
     let rings = body.rings as Record<string, unknown> | undefined;
     if (!rings && body.content) {
-      try {
-        const nlpProvider = getNLPProvider();
-        const extractor = createRingExtractor(nlpProvider);
-        // Use a temporary ID for extraction (will be replaced with actual turn hash)
-        const ringOutput = await extractor.extract('temp', body.content, body.language);
-        rings = {
-          rings: {
-            ring1: ringOutput.ring1,
-            ring2: ringOutput.ring2,
-            ring3: ringOutput.ring3,
-          },
-        };
-      } catch (extractErr) {
-        console.warn('[turns] Ring extraction failed, continuing without rings:', extractErr);
-      }
+      // Ring extraction is required - no fallback
+      const nlpProvider = getNLPProvider();
+      const extractor = createRingExtractor(nlpProvider);
+      // Use a temporary ID for extraction (will be replaced with actual turn hash)
+      const ringOutput = await extractor.extract('temp', body.content, body.language);
+      rings = {
+        rings: {
+          ring1: ringOutput.ring1,
+          ring2: ringOutput.ring2,
+          ring3: ringOutput.ring3,
+        },
+      };
     }
 
     const turn = await insertTurn(db, {

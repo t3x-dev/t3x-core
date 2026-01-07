@@ -161,6 +161,8 @@ export interface TextToken {
   id: string;
   text: string;
   index: number; // Position in the token array
+  charStart: number; // Character offset in original text (inclusive)
+  charEnd: number; // Character offset in original text (exclusive)
 }
 
 // A selected range - defined by start and end token indices

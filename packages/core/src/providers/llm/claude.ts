@@ -23,15 +23,18 @@ function getProxyUrl(): string | undefined {
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
+  console.log('[Claude] fetchWithProxy - proxyUrl:', proxyUrl);
   if (proxyUrl) {
     // Dynamic import to avoid build-time issues with undici
     const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+    console.log('[Claude] Using undici with proxy:', proxyUrl);
     const response = await undiciFetch(url, {
       ...options,
       dispatcher: new ProxyAgent(proxyUrl),
     } as Parameters<typeof undiciFetch>[1]);
     return response as unknown as Response;
   }
+  console.log('[Claude] Using native fetch (no proxy)');
   return fetch(url, options);
 }
 
