@@ -1,0 +1,104 @@
+# Example Evaluation Rules (YAML format)
+#
+# This file demonstrates the YAML format for defining evaluation rules.
+# Rules are organized by type for dimension-based scoring.
+
+version: "2.0"
+name: agent-eval-example
+description: Example evaluation rules for agent runs
+
+# Pass threshold (0-1) - runs must score above this to pass
+pass_threshold: 0.8
+
+rules:
+  # ========== Basic Rules (task_completion dimension) ==========
+  - id: output_exists
+    name: Output exists
+    type: basic
+    target: output
+    check: exists
+    weight: 0.2
+    severity: error
+
+  - id: output_not_empty
+    name: Output is not empty
+    type: basic
+    target: output
+    check: not_empty
+    weight: 0.2
+    severity: error
+
+  - id: no_errors
+    name: All steps completed without errors
+    type: basic
+    target: steps
+    check: all
+    condition:
+      status: ok
+    weight: 0.3
+    severity: error
+
+  # ========== Tool Use Rules (tool_use dimension) ==========
+  - id: expected_tools_used
+    name: Expected tools were used
+    type: tool_use
+    target: steps
+    check: expected_tools
+    expected:
+      - search
+      - retrieve
+    weight: 0.15
+    severity: warning
+    skip_if_empty: true
+
+  - id: no_unknown_tools
+    name: No unknown tools called
+    type: tool_use
+    target: steps
+    check: no_unknown_tools
+    expected:
+      - search
+      - retrieve
+      - calculate
+    weight: 0.1
+    severity: warning
+    skip_if_empty: true
+
+  # ========== Trajectory Rules (trajectory_efficiency dimension) ==========
+  - id: max_steps
+    name: Maximum step count
+    type: trajectory
+    target: steps
+    check: step_count
+    max: 10
+    weight: 0.1
+    severity: warning
+
+  - id: no_repeated_calls
+    name: No repeated tool calls
+    type: trajectory
+    target: steps
+    check: no_repeated_steps
+    weight: 0.05
+    severity: warning
+    skip_if_empty: true
+
+  # ========== Cost Rules (cost_efficiency dimension) ==========
+  - id: token_limit
+    name: Token usage within limit
+    type: cost
+    target: usage.total_tokens
+    check: range
+    max: 10000
+    weight: 0.1
+    severity: warning
+
+  # ========== Performance Rules (latency dimension) ==========
+  - id: latency_limit
+    name: Latency within limit
+    type: performance
+    target: latency_ms
+    check: range
+    max: 30000
+    weight: 0.1
+    severity: warning

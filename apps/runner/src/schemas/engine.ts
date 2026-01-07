@@ -61,7 +61,11 @@ export const RunIngestSchema = z.object({
 export type RunIngest = z.infer<typeof RunIngestSchema>;
 
 /**
- * Pending run info (stored in memory for callback handling)
+ * Pending run info
+ *
+ * @deprecated Runner is now stateless. Run info is fetched from Engine API
+ * via getRunByRunnerRunId() instead of being stored in memory.
+ * This type is kept for backward compatibility.
  */
 export interface PendingRun {
   run_id: string;

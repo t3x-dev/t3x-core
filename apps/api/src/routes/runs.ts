@@ -13,6 +13,7 @@ import {
   insertRun,
   updateRun,
   getRun,
+  getRunByRunnerRunId,
   listRuns,
 } from '@t3x/storage';
 
@@ -274,6 +275,44 @@ runsRoutes.get('/v1/runs/:id', async (c) => {
     return c.json({ success: true, data: run });
   } catch (error) {
     console.error('[runs] Error getting run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /runs/by-runner-id/:runnerRunId - Get run by runner_run_id
+ *
+ * Used by Runner to look up run details when receiving n8n callback.
+ * This enables Runner to be stateless (no in-memory pendingRuns map).
+ */
+runsRoutes.get('/v1/runs/by-runner-id/:runnerRunId', async (c) => {
+  try {
+    const runnerRunId = c.req.param('runnerRunId');
+    const db = await getDB();
+    const run = await getRunByRunnerRunId(db, runnerRunId);
+
+    if (!run) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: `Run not found for runner_run_id: ${runnerRunId}` },
+        },
+        404
+      );
+    }
+
+    return c.json({ success: true, data: run });
+  } catch (error) {
+    console.error('[runs] Error getting run by runner_run_id:', error);
     return c.json(
       {
         success: false,
