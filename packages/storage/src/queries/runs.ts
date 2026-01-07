@@ -168,6 +168,24 @@ export async function updateRun(
 }
 
 /**
+ * Find run by runner_run_id
+ *
+ * Used by Runner to look up run details when receiving n8n callback.
+ */
+export async function getRunByRunnerRunId(
+  db: AnyDB,
+  runnerRunId: string
+): Promise<Run | undefined> {
+  const [run] = await db
+    .select()
+    .from(runs)
+    .where(eq(runs.runnerRunId, runnerRunId))
+    .limit(1);
+
+  return run;
+}
+
+/**
  * Delete run
  */
 export async function deleteRun(
