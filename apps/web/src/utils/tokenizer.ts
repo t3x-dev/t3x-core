@@ -2,6 +2,7 @@ import type { KeywordMarker, SourceTextBlock, TextSelection, TextToken } from '.
 
 // Simple tokenizer that splits text into words and punctuation
 // Handles both English and Chinese text
+// Tracks character positions for chunk-to-token mapping
 export function tokenizeText(text: string): TextToken[] {
   const tokens: TextToken[] = [];
 
@@ -19,6 +20,9 @@ export function tokenizeText(text: string): TextToken[] {
 
   while ((match = regex.exec(text)) !== null) {
     const tokenText = match[0];
+    const charStart = match.index;
+    const charEnd = match.index + tokenText.length;
+
     // Skip pure spaces/tabs but keep newlines and punctuation
     if (
       tokenText === '\n' ||
@@ -29,6 +33,8 @@ export function tokenizeText(text: string): TextToken[] {
         id: `token-${index}`,
         text: tokenText,
         index,
+        charStart,
+        charEnd,
       });
       index++;
     }
@@ -323,4 +329,36 @@ export function getMustntHaveKeywords(tokens: TextToken[], keywords: KeywordMark
     .filter((kw) => kw.constraint === 'mustnt_have')
     .map((kw) => tokens[kw.tokenIndex]?.text || '')
     .filter(Boolean);
+}
+
+// Curate chunk type (matches api.CurateChunk)
+export interface CurateChunk {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  score: number;
+  selected: boolean;
+}
+
+/**
+ * Find which curate chunk a token belongs to (by character position overlap)
+ * Returns the chunk if found, null otherwise
+ */
+export function getTokenChunk(token: TextToken, chunks: CurateChunk[]): CurateChunk | null {
+  for (const chunk of chunks) {
+    // Token overlaps with chunk if:
+    // token.charStart < chunk.end AND token.charEnd > chunk.start
+    if (token.charStart < chunk.end && token.charEnd > chunk.start) {
+      return chunk;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get all tokens that belong to a specific chunk
+ */
+export function getChunkTokens(tokens: TextToken[], chunk: CurateChunk): TextToken[] {
+  return tokens.filter((token) => token.charStart < chunk.end && token.charEnd > chunk.start);
 }

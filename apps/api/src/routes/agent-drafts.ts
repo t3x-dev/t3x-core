@@ -295,13 +295,69 @@ function buildBridgePrompt(
   let user: string;
 
   switch (bridgeId) {
+    case 'prose':
+      system =
+        'You are a writing assistant. Extract and rewrite content as coherent prose paragraphs with clear reasoning and flow.';
+      user = `Write coherent prose for: ${intent}
+
+Requirements:
+- Prefer definitions, explanations, reasoning, contrasts, and implications.
+- Keep logical flow: definition/viewpoint -> explanation/reasoning -> (optional) example -> implication/summary.
+- Avoid repeating the same idea in multiple sentences.
+
+**Context**:
+${contextText}${constraints}`;
+      break;
     case 'plan':
       system = 'You are a planning assistant. Create structured, actionable plans.';
       user = `Create a plan for: ${intent}\n\n**Context**:\n${contextText}${constraints}`;
       break;
+    case 'story':
+      system =
+        'You are a narrative assistant. Extract and rewrite content into a coherent story while preserving flow and causality.';
+      user = `Create a narrative for: ${intent}
+
+Requirements:
+- Preserve timeline, causality, and continuity across sentences.
+- Prefer story elements: setup -> development -> climax -> resolution.
+- Avoid jumpy isolated quotes; keep transitions.
+
+**Context**:
+${contextText}${constraints}`;
+      break;
     case 'summary':
       system = 'You are a summarization assistant. Create concise, accurate summaries.';
       user = `Summarize with focus on: ${intent}\n\n**Context**:\n${contextText}${constraints}`;
+      break;
+    case 'refine':
+      system =
+        'You are an editing assistant. Identify core sentences to keep and sentences that need refinement, then suggest improvements.';
+      user = `Refine content for: ${intent}
+
+Output format:
+A) Keep-as-core: sentences that must remain (key facts/conclusions).
+B) Needs-refine: sentences that are unclear, redundant, inconsistent, or poorly phrased.
+Notes:
+- Keep sentence-level granularity so users can locate the original text.
+- For Needs-refine, provide a suggested improved version right after each original.
+
+**Context**:
+${contextText}${constraints}`;
+      break;
+    case 'clarify':
+      system =
+        'You are a clarification assistant. Your job is to ask focused clarifying questions to remove ambiguity and gather missing constraints.';
+      user = `Clarify the intent: ${intent}
+
+Output requirements:
+- Ask 5-10 clarifying questions.
+- Each question should target ONE ambiguity or missing constraint.
+- Prioritize questions that would change the final output most.
+- Avoid questions that are already answered in the context.
+- Do NOT provide a full solution yet; only ask questions.
+
+**Context**:
+${contextText}${constraints}`;
       break;
     case 'explain':
       system = 'You are an explanation assistant. Provide clear explanations.';
@@ -340,6 +396,11 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     base_commit_hash?: string;
     turn_anchor_hash?: string;
     llm_config?: Partial<LLMConfig>;
+    /** Optional: pre-selected text from curate preview. If provided, use this instead of full conversation. */
+    selected_text?: string;
+    /** Curate parameters for debugging/review */
+    cosine?: number;
+    keep_ratio?: number;
   } | null = null;
 
   try {
@@ -377,12 +438,20 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       return jsonError(c, 'NOT_FOUND', `Conversation ${body.conversation_id} not found`, 404);
     }
 
-    // Get conversation turns
-    const turns = await findTurnsByConversation(db, {
-      conversationId: body.conversation_id,
-      limit: 100,
-    });
-    const turnData = turns.map((t) => ({ role: t.role, content: t.content }));
+    // Get conversation turns (or use pre-selected text if provided)
+    let turnData: Array<{ role: string; content: string }>;
+
+    if (body.selected_text && body.selected_text.trim()) {
+      // Use pre-selected text from curate preview
+      turnData = [{ role: 'context', content: body.selected_text }];
+    } else {
+      // Fallback: load full conversation
+      const turns = await findTurnsByConversation(db, {
+        conversationId: body.conversation_id,
+        limit: 100,
+      });
+      turnData = turns.map((t) => ({ role: t.role, content: t.content }));
+    }
 
     // Extract constraints
     const mustHave = await extractMustHave(db, body.conversation_id);
@@ -424,7 +493,11 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       baseCommitHash: body.base_commit_hash,
       turnAnchorHash: body.turn_anchor_hash,
       bridgeId: body.bridge_id,
-      bridgePayload: { intent: body.intent },
+      bridgePayload: {
+        intent: body.intent,
+        cosine: body.cosine,
+        keep_ratio: body.keep_ratio,
+      },
       mustHave,
       mustntHave,
       llmConfig,

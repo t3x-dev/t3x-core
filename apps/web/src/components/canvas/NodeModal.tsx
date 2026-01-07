@@ -398,6 +398,15 @@ export function NodeModal({
   const [cosineThreshold, setCosineThreshold] = useState(0.75);
   const [keywordsThreshold, setKeywordsThreshold] = useState(0.6);
 
+  // Extract intent - user describes what to extract (initialized from first user message)
+  const [extractIntent, setExtractIntent] = useState('');
+
+  // Curate preview state (cosine-based chunk selection)
+  const [curatePreview, setCuratePreview] = useState<api.CuratePreviewResponse | null>(null);
+  const [previewConversationId, setPreviewConversationId] = useState<string | null>(null);
+  const [isCurateLoading, setIsCurateLoading] = useState(false);
+  const [curateError, setCurateError] = useState<string | null>(null);
+
   // Step 1 locked state - when true, config is frozen and Step 2 becomes editable
   const [configLocked, setConfigLocked] = useState(false);
 
@@ -408,6 +417,12 @@ export function NodeModal({
   const [textBlocks, setTextBlocks] = useState<SourceTextBlock[]>(
     node?.data.pendingSource?.textBlocks || []
   );
+  // Ref to access latest textBlocks in auto-convert useEffect without adding it to dependencies
+  const textBlocksRef = useRef(textBlocks);
+  textBlocksRef.current = textBlocks;
+
+  // Ref to track current sourceConversationId for stale request detection
+  const sourceConversationIdRef = useRef<string | null>(null);
 
   // Draft validation state
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
@@ -666,15 +681,35 @@ export function NodeModal({
       try {
         const turnsData = await api.listTurns(projectId, ownConversationId);
         if (turnsData.turns && turnsData.turns.length > 0) {
-          const fullText = turnsData.turns.map((turn) => turn.content).join('\n');
+          // Use [role]: content\n\n format to match backend curate API
+          // This ensures offset consistency between frontend tokenization and backend Ring3 segments
+          const textParts: string[] = [];
+          for (let i = 0; i < turnsData.turns.length; i++) {
+            const turn = turnsData.turns[i];
+            textParts.push(`[${turn.role}]: ${turn.content}`);
+          }
+          const fullText = textParts.join('\n\n');
           const tokens = tokenizeText(fullText);
 
-          // Build turn boundaries
+          // Initialize extractIntent with first user message (if not already set)
+          if (!extractIntent) {
+            const firstUserTurn = turnsData.turns.find((t) => t.role === 'user');
+            if (firstUserTurn) {
+              // Truncate to first 100 chars if too long
+              const truncated = firstUserTurn.content.slice(0, 100);
+              setExtractIntent(truncated + (firstUserTurn.content.length > 100 ? '...' : ''));
+            }
+          }
+
+          // Build turn boundaries based on [role]: content\n\n format
           const turnBoundaries: TurnBoundary[] = [];
           let currentTokenIndex = 0;
 
-          for (const turn of turnsData.turns) {
-            const turnTokens = tokenizeText(turn.content);
+          for (let i = 0; i < turnsData.turns.length; i++) {
+            const turn = turnsData.turns[i];
+            // Include [role]: prefix in tokenization
+            const turnText = `[${turn.role}]: ${turn.content}`;
+            const turnTokens = tokenizeText(turnText);
             const turnTokenCount = turnTokens.length;
 
             if (turnTokenCount > 0) {
@@ -684,7 +719,9 @@ export function NodeModal({
                 endTokenIndex: currentTokenIndex + turnTokenCount - 1,
               });
             }
-            currentTokenIndex += turnTokenCount + 1;
+            // +2 for \n\n separator (except last turn has no separator)
+            const separatorTokens = i < turnsData.turns.length - 1 ? 2 : 0;
+            currentTokenIndex += turnTokenCount + separatorTokens;
           }
 
           // Try to preserve existing selections for this block
@@ -716,10 +753,149 @@ export function NodeModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPendingCommit, node?.id, projectId, data?.conversationId, data?.sourceConversationId]);
 
+  // Clear curate state when conversation changes to avoid stale data on new content
+  useEffect(() => {
+    const newSourceId = data?.sourceConversationId || data?.conversationId || null;
+    sourceConversationIdRef.current = newSourceId; // Invalidate in-flight requests
+    setCuratePreview(null);
+    setPreviewConversationId(null);
+    setCurateError(null);
+  }, [projectId, data?.conversationId, data?.sourceConversationId]);
+
   // Scroll to bottom when new messages added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Debounced curate preview call when intent or cosine slider changes
+  useEffect(() => {
+    // Only call when we have the necessary data and config is NOT locked yet
+    // (Once locked, user moves to Step 2 - no need to keep calling preview)
+    if (configLocked) return;
+
+    // Need intent to be set
+    if (!extractIntent.trim()) return;
+
+    // Get source conversation ID
+    const sourceConversationId = data?.sourceConversationId || data?.conversationId;
+    if (!projectId || !sourceConversationId) return;
+
+    // Track current conversation to detect stale responses
+    sourceConversationIdRef.current = sourceConversationId;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setIsCurateLoading(true);
+      setCurateError(null);
+
+      try {
+        const response = await api.curatePreview(
+          {
+            project_id: projectId,
+            source_conversation_id: sourceConversationId,
+            bridge_id: template as api.BridgeTemplate,
+            intent: extractIntent,
+            cosine: cosineThreshold,
+            unit_title: typeof data?.title === 'string' ? data.title : undefined,
+          },
+          controller.signal
+        );
+
+        // Guard: only update if still on the same conversation (stale request check)
+        if (sourceConversationIdRef.current !== sourceConversationId) return;
+
+        setCuratePreview(response);
+        setPreviewConversationId(sourceConversationId);
+      } catch (err) {
+        // Ignore abort errors (from debounce/unmount)
+        if (err instanceof api.ApiError && err.code === 'ABORTED') return;
+        const message = err instanceof Error ? err.message : 'Failed to get curate preview';
+        setCurateError(message);
+        console.error('Curate preview error:', err);
+      } finally {
+        setIsCurateLoading(false);
+      }
+    }, 500); // 500ms debounce (longer for typing)
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [
+    projectId,
+    data?.sourceConversationId,
+    data?.conversationId,
+    data?.title,
+    extractIntent,
+    template,
+    cosineThreshold,
+    configLocked,
+  ]);
+
+  // Count selected chunks (for Step 1 preview display)
+  const selectedChunksCount = useMemo(() => {
+    if (!curatePreview) return 0;
+    return curatePreview.chunks.filter((c) => c.selected).length;
+  }, [curatePreview]);
+
+  // Auto-convert curate chunks to textBlocks.selections
+  // When curate preview updates, automatically select the relevant tokens
+  // Only runs in Step 1 (before config is locked) to avoid overwriting user's manual edits in Step 2
+  const currentSourceConversationId = data?.sourceConversationId || data?.conversationId;
+  useEffect(() => {
+    if (configLocked) return; // Don't override user's manual selections in Step 2
+    if (!curatePreview || curatePreview.chunks.length === 0) return;
+
+    // Guard: skip if preview is for a different conversation (stale data)
+    if (previewConversationId !== currentSourceConversationId) return;
+
+    // Use ref to get latest textBlocks (avoids stale closure issue)
+    const currentTextBlocks = textBlocksRef.current;
+    if (currentTextBlocks.length === 0) return;
+
+    const block = currentTextBlocks[0];
+    if (!block.tokens || block.tokens.length === 0) return;
+
+    // Build selections from selected chunks
+    const newSelections: Array<{ id: string; startIndex: number; endIndex: number; type: 'include' | 'exclude' }> = [];
+
+    for (const chunk of curatePreview.chunks) {
+      if (!chunk.selected) continue;
+
+      // Find tokens that overlap with this chunk
+      const chunkTokens = block.tokens.filter(
+        (token) => token.charStart < chunk.end && token.charEnd > chunk.start
+      );
+
+      if (chunkTokens.length > 0) {
+        const startIndex = chunkTokens[0].index;
+        const endIndex = chunkTokens[chunkTokens.length - 1].index;
+
+        newSelections.push({
+          id: `curate-${chunk.id}`,
+          startIndex,
+          endIndex,
+          type: 'include',
+        });
+      }
+    }
+
+    // Only update if selections actually changed (avoid infinite loop)
+    const currentSelectionIds = block.selections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
+    const newSelectionIds = newSelections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
+
+    if (currentSelectionIds !== newSelectionIds) {
+      const updatedBlock = {
+        ...block,
+        selections: newSelections,
+        // Keep existing keywords that are within the new selections
+        keywords: block.keywords.filter((kw) =>
+          newSelections.some((sel) => kw.tokenIndex >= sel.startIndex && kw.tokenIndex <= sel.endIndex)
+        ),
+      };
+      setTextBlocks([updatedBlock]);
+    }
+  }, [curatePreview, configLocked, textBlocks.length, textBlocks[0]?.originalText, previewConversationId, currentSourceConversationId]);
 
   const addCommitAction = useMemo(
     () => quickActions?.find((a) => a.key === 'add-commit'),
@@ -918,14 +1094,17 @@ export function NodeModal({
 
   // Check if this pending commit has a source conversation (from conversation) or not (from commit)
   const hasSourceConversation = !!data?.sourceConversationId || !!data?.conversationId;
+  const effectiveSourceConversationId = data?.sourceConversationId || data?.conversationId;
   if (isPendingCommit) {
     console.log(
       '[NodeModal] hasSourceConversation:',
       hasSourceConversation,
-      'sourceConversationId:',
+      'effectiveSourceId:',
+      effectiveSourceConversationId,
+      '(sourceConversationId:',
       data?.sourceConversationId,
-      'conversationId:',
-      data?.conversationId
+      '| conversationId:',
+      data?.conversationId + ')'
     );
   }
   // Check if this commit-derived pending has inherited turn_window for direct commit
@@ -1049,37 +1228,53 @@ export function NodeModal({
     setValidationErrors(null);
 
     try {
-      // Get intent from source selection
-      let intent = '';
+      // Get selected text from textBlocks (unified selection system)
+      let selectedText = '';
+
       if (textBlocks.length > 0) {
-        intent = textBlocks
+        selectedText = textBlocks
           .map((block) => getSelectedText(block.tokens, block.selections))
           .filter((text) => text.length > 0)
           .join('\n');
       } else {
-        intent = allPhrases
+        // Fallback: use legacy phrases selection
+        selectedText = allPhrases
           .filter((p) => p.included)
           .map((p) => p.text)
           .join('\n');
       }
 
-      if (!intent.trim()) {
+      if (!selectedText.trim()) {
         setDraftError('Please select some source text first');
         setIsGeneratingDraft(false);
         return;
       }
 
+      // Use extractIntent as the LLM intent
+      const intentForLLM = extractIntent.trim() || 'Extract key content';
+
       // Map template to bridge_id
       const bridgeId =
         template === 'prose' ||
         template === 'plan' ||
+        template === 'story' ||
         template === 'summary' ||
+        template === 'refine' ||
         template === 'explain' ||
         template === 'clarify'
-          ? (template as 'plan' | 'summary' | 'explain' | 'clarify')
+          ? (template as 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'explain' | 'clarify')
           : 'summary';
 
-      const draft = await api.createDraft(projectId, sourceConversationId, bridgeId, intent);
+      const draft = await api.createDraft(
+        projectId,
+        sourceConversationId,
+        bridgeId,
+        intentForLLM,
+        undefined, // baseCommitHash
+        undefined, // turnAnchorHash
+        selectedText, // selected_text from curate preview
+        { cosine: cosineThreshold, keepRatio: curatePreview?.keep_ratio }
+      );
 
       setCurrentDraft(draft);
 
@@ -1096,7 +1291,7 @@ export function NodeModal({
     } finally {
       setIsGeneratingDraft(false);
     }
-  }, [projectId, data, template, textBlocks, allPhrases]);
+  }, [projectId, data, template, textBlocks, allPhrases, extractIntent]);
 
   // Handle Commit - create commit via API (or merge for merge drafts)
   const handleCommit = useCallback(async () => {
@@ -2619,10 +2814,28 @@ export function NodeModal({
                       </select>
                     </div>
 
+                    {/* Extract Intent */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        What to extract
+                      </label>
+                      <Textarea
+                        className="w-full text-sm min-h-[60px] resize-none"
+                        placeholder="Describe what you want to extract from this conversation..."
+                        value={extractIntent}
+                        onChange={(e) => setExtractIntent(e.target.value)}
+                      />
+                      {!extractIntent.trim() && (
+                        <span className="text-xs text-amber-600">
+                          Required: describe what to extract
+                        </span>
+                      )}
+                    </div>
+
                     {/* Cosine Threshold */}
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Cosine
+                        Filter Strictness
                       </label>
                       <input
                         type="range"
@@ -2633,9 +2846,11 @@ export function NodeModal({
                         value={cosineThreshold}
                         onChange={(e) => setCosineThreshold(parseFloat(e.target.value))}
                       />
-                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">
-                        {cosineThreshold.toFixed(2)}
-                      </span>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>More content</span>
+                        <span className="font-medium text-gray-600">{(100 - cosineThreshold * 60).toFixed(0)}%</span>
+                        <span>Less content</span>
+                      </div>
                     </div>
 
                     {/* Keywords Threshold */}
@@ -2656,6 +2871,33 @@ export function NodeModal({
                         {keywordsThreshold.toFixed(2)}
                       </span>
                     </div>
+
+                    {/* Curate Preview Status */}
+                    {(isCurateLoading || curatePreview || curateError) && (
+                      <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-md border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Preview
+                        </span>
+                        {isCurateLoading ? (
+                          <div className="flex items-center gap-2 text-[0.8rem] text-gray-500">
+                            <Loader2 size={14} className="animate-spin" />
+                            <span>Computing embeddings...</span>
+                          </div>
+                        ) : curateError ? (
+                          <div className="flex items-center gap-2 text-[0.8rem] text-red-500">
+                            <AlertCircle size={14} />
+                            <span>{curateError}</span>
+                          </div>
+                        ) : curatePreview ? (
+                          <div className="flex items-center gap-2 text-[0.8rem] text-gray-600">
+                            <span>Auto-selected:</span>
+                            <span className="font-medium text-emerald-600">
+                              {selectedChunksCount} / {curatePreview.chunks.length} sentences
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
 
                     {/* Proceed Button */}
                     <div className="flex gap-2 mt-2">

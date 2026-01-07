@@ -29,12 +29,18 @@ export interface GoogleAIEmbeddingConfig {
    * @default 30000
    */
   timeout?: number;
+
+  /**
+   * Custom fetch function (for proxy support)
+   * If not provided, uses global fetch
+   */
+  fetch?: typeof fetch;
 }
 
-interface GoogleAIEmbedResponse {
-  embedding: {
+interface GoogleAIBatchEmbedResponse {
+  embeddings: Array<{
     values: number[];
-  };
+  }>;
 }
 
 /**
@@ -49,6 +55,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeout: number;
+  private readonly fetchFn: typeof fetch;
 
   constructor(config: GoogleAIEmbeddingConfig) {
     if (!config.apiKey) {
@@ -62,6 +69,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
     this.apiKey = config.apiKey;
     this.model = config.model ?? 'text-embedding-004';
     this.timeout = config.timeout ?? 30000;
+    this.fetchFn = config.fetch ?? globalThis.fetch;
 
     this.id = `google-ai:${this.model}`;
 
@@ -76,9 +84,8 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
     }
 
     try {
-      // Encode each text (could be optimized with batching)
-      const embeddings = await Promise.all(texts.map((text) => this.embedSingle(text)));
-      return embeddings;
+      // Use batch API for efficiency (single HTTP request)
+      return await this.embedBatch(texts);
     } catch (error) {
       throw new EmbeddingProviderError(
         this.id,
@@ -88,30 +95,28 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  similarity(vecA: number[], vecB: number[]): number {
-    return cosineSimilarity(vecA, vecB);
-  }
-
   /**
-   * Embed a single text using Google AI Studio API
+   * Embed multiple texts in a single batch request
    */
-  private async embedSingle(text: string): Promise<number[]> {
-    const url = `${GOOGLE_AI_EMBEDDING_URL}/${this.model}:embedContent?key=${this.apiKey}`;
+  private async embedBatch(texts: string[]): Promise<number[][]> {
+    const url = `${GOOGLE_AI_EMBEDDING_URL}/${this.model}:batchEmbedContents?key=${this.apiKey}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchFn(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: `models/${this.model}`,
-          content: {
-            parts: [{ text }],
-          },
+          requests: texts.map((text) => ({
+            model: `models/${this.model}`,
+            content: {
+              parts: [{ text }],
+            },
+          })),
         }),
         signal: controller.signal,
       });
@@ -124,13 +129,13 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
         throw new Error(`Google AI API error (${response.status}): ${responseText}`);
       }
 
-      const data = JSON.parse(responseText) as GoogleAIEmbedResponse;
+      const data = JSON.parse(responseText) as GoogleAIBatchEmbedResponse;
 
-      if (!data.embedding?.values) {
-        throw new Error('Invalid response: missing embedding values');
+      if (!data.embeddings || data.embeddings.length !== texts.length) {
+        throw new Error('Invalid response: embeddings count mismatch');
       }
 
-      return data.embedding.values;
+      return data.embeddings.map((e) => e.values);
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -138,6 +143,10 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
       }
       throw error;
     }
+  }
+
+  similarity(vecA: number[], vecB: number[]): number {
+    return cosineSimilarity(vecA, vecB);
   }
 }
 

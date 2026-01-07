@@ -366,7 +366,12 @@ interface SourceBoxProps {
   defaultExpanded?: boolean;
 }
 
-function SourceBox({ block, onChange, readOnly = false, defaultExpanded = false }: SourceBoxProps) {
+function SourceBox({
+  block,
+  onChange,
+  readOnly = false,
+  defaultExpanded = false,
+}: SourceBoxProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   // Determine display info based on source type
@@ -667,17 +672,7 @@ function ConversationTurnRenderer({
             !group.turn && 'border-slate-200 bg-slate-50'
           )}
         >
-          {group.turn && (
-            <div
-              className={cn(
-                'text-[0.6rem] font-bold uppercase tracking-wider mb-2 pb-1 border-b',
-                group.turn.role === 'user' && 'text-blue-600 border-blue-200',
-                group.turn.role === 'assistant' && 'text-emerald-600 border-emerald-200'
-              )}
-            >
-              {group.turn.role === 'user' ? 'USER' : 'ASSISTANT'}
-            </div>
-          )}
+{/* Turn header removed - [role]: prefix in content provides role info */}
           <div className="text-[0.95rem] leading-7 select-none">
             {group.tokens.map((token, idx) => renderToken(token, group.tokens[idx + 1]))}
           </div>
@@ -686,7 +681,9 @@ function ConversationTurnRenderer({
 
       {!readOnly && (
         <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
-          <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
+          <span>
+            左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't
+          </span>
         </div>
       )}
     </div>
