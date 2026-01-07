@@ -6,6 +6,7 @@
 
 import pino from 'pino';
 import type { EngineRunRequest } from './types.js';
+import { fetchWithRetry } from './utils/retry.js';
 
 const logger = pino({
   transport: {
@@ -56,12 +57,16 @@ export async function triggerN8nWorkflow(
   logger.info({ run_id: data.run_id, runner_run_id, webhook_url: webhookUrl }, 'Triggering n8n workflow');
 
   try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30000),
-    });
+    const response = await fetchWithRetry(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30000),
+      },
+      { maxRetries: 3, operationName: 'n8n webhook' }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -74,7 +79,7 @@ export async function triggerN8nWorkflow(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error({ run_id: data.run_id, error: errorMsg }, 'Failed to trigger n8n workflow');
+    logger.error({ run_id: data.run_id, error: errorMsg }, 'Failed to trigger n8n workflow after retries');
     // Don't throw - this is fire-and-forget
     // The Engine will timeout and mark the run as failed if n8n doesn't respond
   }

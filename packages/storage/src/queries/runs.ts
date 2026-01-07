@@ -3,7 +3,7 @@
  *
  * CRUD operations for Engine run records.
  */
-import { eq, desc, and, type SQL } from 'drizzle-orm';
+import { eq, desc, and, lt, type SQL } from 'drizzle-orm';
 import { runs, type Run } from '../schema';
 import type { AnyDB } from '../adapters';
 
@@ -168,6 +168,24 @@ export async function updateRun(
 }
 
 /**
+ * Find run by runner_run_id
+ *
+ * Used by Runner to look up run details when receiving n8n callback.
+ */
+export async function getRunByRunnerRunId(
+  db: AnyDB,
+  runnerRunId: string
+): Promise<Run | undefined> {
+  const [run] = await db
+    .select()
+    .from(runs)
+    .where(eq(runs.runnerRunId, runnerRunId))
+    .limit(1);
+
+  return run;
+}
+
+/**
  * Delete run
  */
 export async function deleteRun(
@@ -180,4 +198,59 @@ export async function deleteRun(
     .returning();
 
   return result.length > 0;
+}
+
+/**
+ * Find runs that have been in 'running' status for too long
+ *
+ * Used by Engine to detect and mark timed-out runs.
+ *
+ * @param db - Database instance
+ * @param timeoutMs - Timeout threshold in milliseconds (default: 5 minutes)
+ * @returns List of timed-out runs
+ */
+export async function getTimedOutRuns(
+  db: AnyDB,
+  timeoutMs: number = 5 * 60 * 1000
+): Promise<Run[]> {
+  const cutoffTime = new Date(Date.now() - timeoutMs);
+
+  return db
+    .select()
+    .from(runs)
+    .where(
+      and(
+        eq(runs.status, 'running'),
+        lt(runs.updatedAt, cutoffTime)
+      )
+    );
+}
+
+/**
+ * Mark a run as timed out
+ *
+ * @param db - Database instance
+ * @param runId - Run ID to mark as timeout
+ * @returns Updated run or undefined
+ */
+export async function markRunAsTimeout(
+  db: AnyDB,
+  runId: string
+): Promise<Run | undefined> {
+  const [run] = await db
+    .update(runs)
+    .set({
+      status: 'failed',
+      resultJson: JSON.stringify({
+        error: {
+          code: 'TIMEOUT',
+          message: 'Run timed out waiting for n8n callback',
+        },
+      }),
+      updatedAt: new Date(),
+    })
+    .where(eq(runs.runId, runId))
+    .returning();
+
+  return run;
 }
