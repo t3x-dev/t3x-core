@@ -36,6 +36,7 @@ import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
+  AnchorCandidate,
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
@@ -826,23 +827,35 @@ export function NodeModal({
     return curatePreview.chunks.filter((c) => c.selected).length;
   }, [curatePreview]);
 
+  // Convert anchor candidates from API format (snake_case) to UI format (camelCase)
+  const anchorCandidates = useMemo((): AnchorCandidate[] => {
+    if (!curatePreview?.anchor_candidates) return [];
+    return api.parseApiAnchorCandidates(curatePreview.anchor_candidates);
+  }, [curatePreview?.anchor_candidates]);
+
   // Auto-convert curate chunks to textBlocks.selections
   // When curate preview updates, automatically select the relevant tokens
   // Only runs in Step 1 (before config is locked) to avoid overwriting user's manual edits in Step 2
+  //
+  // IMPORTANT: We use curatePreview.source_text as the authoritative text source.
+  // This ensures chunk/anchor positions align correctly with the tokenized text.
+  // The API constructs source_text with "[role]: content\n\n" format, so we must use it.
   const currentSourceConversationId = data?.sourceConversationId || data?.conversationId;
   useEffect(() => {
     if (configLocked) return; // Don't override user's manual selections in Step 2
-    if (!curatePreview || curatePreview.chunks.length === 0) return;
+    if (!curatePreview) return;
 
     // Guard: skip if preview is for a different conversation (stale data)
     if (previewConversationId !== currentSourceConversationId) return;
 
-    // Use ref to get latest textBlocks (avoids stale closure issue)
-    const currentTextBlocks = textBlocksRef.current;
-    if (currentTextBlocks.length === 0) return;
+    // Use curatePreview.source_text as the authoritative text source
+    // This ensures chunk/anchor positions align correctly
+    const sourceText = curatePreview.source_text;
+    if (!sourceText || sourceText.trim().length === 0) return;
 
-    const block = currentTextBlocks[0];
-    if (!block.tokens || block.tokens.length === 0) return;
+    // Re-tokenize using the API's source_text (ensures consistent positioning)
+    const tokens = tokenizeText(sourceText);
+    if (tokens.length === 0) return;
 
     // Build selections from selected chunks
     const newSelections: Array<{ id: string; startIndex: number; endIndex: number; type: 'include' | 'exclude' }> = [];
@@ -851,7 +864,7 @@ export function NodeModal({
       if (!chunk.selected) continue;
 
       // Find tokens that overlap with this chunk
-      const chunkTokens = block.tokens.filter(
+      const chunkTokens = tokens.filter(
         (token) => token.charStart < chunk.end && token.charEnd > chunk.start
       );
 
@@ -868,22 +881,38 @@ export function NodeModal({
       }
     }
 
-    // Only update if selections actually changed (avoid infinite loop)
-    const currentSelectionIds = block.selections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
-    const newSelectionIds = newSelections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
+    // Use ref to get latest textBlocks for comparison (avoids stale closure issue)
+    const currentTextBlocks = textBlocksRef.current;
+    const existingBlock = currentTextBlocks[0];
 
-    if (currentSelectionIds !== newSelectionIds) {
-      const updatedBlock = {
-        ...block,
+    // Check if we need to update (either text changed or selections changed)
+    const textChanged = existingBlock?.originalText !== sourceText;
+    const currentSelectionIds = existingBlock?.selections?.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',') ?? '';
+    const newSelectionIds = newSelections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
+    const selectionsChanged = currentSelectionIds !== newSelectionIds;
+
+    if (textChanged || selectionsChanged) {
+      const updatedBlock: SourceTextBlock = {
+        id: existingBlock?.id ?? 'block-conv-1',
+        originalText: sourceText,
+        tokens,
         selections: newSelections,
-        // Keep existing keywords that are within the new selections
-        keywords: block.keywords.filter((kw) =>
-          newSelections.some((sel) => kw.tokenIndex >= sel.startIndex && kw.tokenIndex <= sel.endIndex)
-        ),
+        // Keep existing keywords that are within the new selections (if text unchanged)
+        keywords: textChanged
+          ? []
+          : (existingBlock?.keywords ?? []).filter((kw) =>
+              newSelections.some((sel) => kw.tokenIndex >= sel.startIndex && kw.tokenIndex <= sel.endIndex)
+            ),
+        sourceNodeId: existingBlock?.sourceNodeId,
+        sourceNodeType: existingBlock?.sourceNodeType,
+        sourceNodeTitle: existingBlock?.sourceNodeTitle,
+        // Note: turnBoundaries are no longer accurate after using API's source_text format
+        // The API format includes "[role]: " prefix which changes token positions
+        turnBoundaries: undefined,
       };
       setTextBlocks([updatedBlock]);
     }
-  }, [curatePreview, configLocked, textBlocks.length, textBlocks[0]?.originalText, previewConversationId, currentSourceConversationId]);
+  }, [curatePreview, configLocked, previewConversationId, currentSourceConversationId]);
 
   const addCommitAction = useMemo(
     () => quickActions?.find((a) => a.key === 'add-commit'),
@@ -3085,6 +3114,8 @@ export function NodeModal({
                       blocks={textBlocks}
                       onChange={handleTextBlocksChange}
                       readOnly={!configLocked}
+                      anchorCandidates={anchorCandidates}
+                      anchorThreshold={0.5}
                     />
                   ) : sourceBoxes.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-gray-400">

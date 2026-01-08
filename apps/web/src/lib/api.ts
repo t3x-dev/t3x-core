@@ -5,6 +5,15 @@
  * Falls back to embedded Next.js API routes if standalone API is not configured.
  */
 
+// Import types for CommitAnchors conversion (must be at top level)
+import type {
+  CommitAnchors,
+  SentenceWithAnchors,
+  ConfirmedAnchor,
+  AnchorType,
+  AnchorConstraint,
+} from '@/types/nodes';
+
 // Use standalone API if configured, otherwise fall back to embedded routes
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 const API_V1 = `${API_BASE}/api/v1`;
@@ -79,6 +88,16 @@ export interface RingSegment {
   endChar: number;
 }
 
+// Anchor candidate from Ring 1 (camelCase for internal use)
+export interface RingAnchorCandidate {
+  text: string;
+  type: 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
+  startChar: number;
+  endChar: number;
+  confidence: number;
+  source: 'token' | 'entity' | 'phrase';
+}
+
 // Ring output structure - aligned with @t3x/core RingOutput
 export interface RingsData {
   ring1: {
@@ -86,6 +105,8 @@ export interface RingsData {
     timeAnchor: string | null;
     topic: string | null;
     preferenceKeywords: RingKeyword[];
+    /** v1.1: Anchor candidates for inline highlighting */
+    anchorCandidates?: RingAnchorCandidate[];
   };
   ring2: {
     facets: RingFacet[];
@@ -132,6 +153,8 @@ export interface CommitRaw {
   position_x: number | null;
   position_y: number | null;
   source_refs_json: string | null;
+  /** v1.1: Confirmed anchors (JSON string) */
+  anchors_json: string | null;
   created_at: string;
 }
 
@@ -179,6 +202,47 @@ export interface SourceRef {
   commit_hash?: string;
 }
 
+// ============================================================================
+// Anchor Types for Commits (snake_case API format)
+// ============================================================================
+
+/** Anchor constraint type (snake_case to match API v1.1 output) */
+export type ApiAnchorConstraint = 'must_have' | 'mustnt_have' | 'preferred';
+
+/** Anchor type */
+export type ApiAnchorType = 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
+
+/** Confirmed anchor (snake_case API format) */
+export interface ApiConfirmedAnchor {
+  id: string;
+  text: string;
+  /** Relative position within sentence (for API storage) */
+  start: number;
+  /** Relative position within sentence (for API storage) */
+  end: number;
+  type: ApiAnchorType;
+  constraint: ApiAnchorConstraint;
+  /** Pre-computed global start position (added during parsing for UI rendering) */
+  globalStart?: number;
+  /** Pre-computed global end position (added during parsing for UI rendering) */
+  globalEnd?: number;
+}
+
+/** Sentence with anchors (snake_case API format) */
+export interface ApiSentenceWithAnchors {
+  sentence_id: string;
+  text: string;
+  start_char: number;
+  end_char: number;
+  anchors: ApiConfirmedAnchor[];
+}
+
+/** Commit-level anchor storage (snake_case API format) */
+export interface ApiCommitAnchors {
+  input_text_hash: string;
+  sentences: ApiSentenceWithAnchors[];
+}
+
 // Parsed commit for frontend use
 // Aligned with @t3x/core CommitV2Record
 export interface Commit {
@@ -206,6 +270,8 @@ export interface Commit {
   position_x: number | null;
   position_y: number | null;
   source_refs: SourceRef[] | null;
+  /** v1.1: Confirmed anchors for this commit */
+  anchors: ApiCommitAnchors | null;
   created_at: string;
 }
 
@@ -426,6 +492,53 @@ export function parseRingsData(rings: TurnDetail['rings']): RingsData | null {
 }
 
 /**
+ * Parse CommitAnchors from JSON and pre-compute global positions for UI rendering.
+ *
+ * The API stores anchor positions relative to their sentence (start/end).
+ * For UI rendering, we need global positions (relative to the full source text).
+ * This function adds globalStart/globalEnd to each anchor for efficient UI use.
+ *
+ * Fail-Fast: Throws if sentence.start_char is missing (indicates data corruption).
+ */
+function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors | null {
+  if (!json) return null;
+
+  try {
+    const anchors = JSON.parse(json) as ApiCommitAnchors;
+    if (!anchors?.sentences) return anchors;
+
+    // Pre-compute global positions for each anchor
+    for (let i = 0; i < anchors.sentences.length; i++) {
+      const sentence = anchors.sentences[i];
+
+      // Fail-Fast: start_char is required for correct anchor positioning
+      if (typeof sentence.start_char !== 'number') {
+        throw new Error(
+          `Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
+            `Cannot compute global anchor positions. Re-create the commit with anchor data.`
+        );
+      }
+
+      const sentenceStart = sentence.start_char;
+      for (const anchor of sentence.anchors ?? []) {
+        // Add global positions for UI rendering
+        anchor.globalStart = sentenceStart + anchor.start;
+        anchor.globalEnd = sentenceStart + anchor.end;
+      }
+    }
+
+    return anchors;
+  } catch (err) {
+    // Re-throw fail-fast errors
+    if (err instanceof Error && err.message.includes('Anchor data corrupt')) {
+      throw err;
+    }
+    console.warn('Failed to parse anchors_json:', json?.slice(0, 100));
+    return null;
+  }
+}
+
+/**
  * Parse raw commit from API (with JSON string fields) into frontend Commit type
  * Aligned with @t3x/core CommitV2Record
  */
@@ -448,6 +561,8 @@ function parseCommit(raw: CommitRaw): Commit {
     position_x: raw.position_x,
     position_y: raw.position_y,
     source_refs: raw.source_refs_json ? JSON.parse(raw.source_refs_json) : null,
+    // Use specialized parser to pre-compute global positions for anchors
+    anchors: parseAnchorsWithGlobalPositions(raw.anchors_json),
     created_at: raw.created_at,
   };
 }
@@ -850,6 +965,8 @@ export async function createCommit(
     mustntHave?: string[];
     position?: { x: number; y: number };
     sourceRefs?: SourceRef[];
+    /** v1.1: Confirmed anchors for this commit */
+    anchors?: ApiCommitAnchors;
   }
 ): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
@@ -870,6 +987,7 @@ export async function createCommit(
       position_x: options?.position?.x,
       position_y: options?.position?.y,
       source_refs: options?.sourceRefs,
+      anchors: options?.anchors,
     }),
   });
   const data = await handleResponse<CommitRaw>(res);
@@ -1787,6 +1905,81 @@ export interface CurateChunk {
   cos_intent?: number;
 }
 
+/** Anchor candidate in API response (snake_case) */
+export interface ApiAnchorCandidate {
+  text: string;
+  type: 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
+  start_char: number;
+  end_char: number;
+  confidence: number;
+  source: 'token' | 'entity' | 'phrase';
+}
+
+/**
+ * Convert API anchor candidate (snake_case) to internal format (camelCase)
+ */
+export function parseApiAnchorCandidate(api: ApiAnchorCandidate): RingAnchorCandidate {
+  return {
+    text: api.text,
+    type: api.type,
+    startChar: api.start_char,
+    endChar: api.end_char,
+    confidence: api.confidence,
+    source: api.source,
+  };
+}
+
+/**
+ * Convert array of API anchor candidates to internal format
+ */
+export function parseApiAnchorCandidates(
+  apis: ApiAnchorCandidate[] | undefined
+): RingAnchorCandidate[] {
+  if (!apis) return [];
+  return apis.map(parseApiAnchorCandidate);
+}
+
+/**
+ * Convert API confirmed anchor (snake_case) to internal format (camelCase)
+ */
+export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAnchor {
+  return {
+    id: api.id,
+    text: api.text,
+    start: api.start,
+    end: api.end,
+    type: api.type as AnchorType,
+    constraint: api.constraint as AnchorConstraint,
+    globalStart: api.globalStart,
+    globalEnd: api.globalEnd,
+  };
+}
+
+/**
+ * Convert API sentence with anchors (snake_case) to internal format (camelCase)
+ */
+export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): SentenceWithAnchors {
+  return {
+    sentenceId: api.sentence_id,
+    text: api.text,
+    startChar: api.start_char,
+    endChar: api.end_char,
+    anchors: api.anchors?.map(parseApiConfirmedAnchor) ?? [],
+  };
+}
+
+/**
+ * Convert API commit anchors (snake_case) to internal format (camelCase)
+ * Use this when you need CommitAnchors type for CanvasNodeData.anchors
+ */
+export function parseApiCommitAnchors(api: ApiCommitAnchors | null): CommitAnchors | null {
+  if (!api) return null;
+  return {
+    inputTextHash: api.input_text_hash,
+    sentences: api.sentences?.map(parseApiSentenceWithAnchors) ?? [],
+  };
+}
+
 export interface CuratePreviewResponse {
   algorithm_version: string;
   keep_ratio: number;
@@ -1794,6 +1987,12 @@ export interface CuratePreviewResponse {
   selected_spans: Array<{ start: number; end: number }>;
   /** The source text used for chunking - frontend should use this for tokenization */
   source_text: string;
+  /** v1.1: SHA-256 hash of source_text for CommitAnchors.input_text_hash */
+  input_text_hash: string;
+  /** v1.1: All anchor candidates from Ring1 (global positions, snake_case) */
+  anchor_candidates?: ApiAnchorCandidate[];
+  /** v1.2: Warnings about data quality issues (e.g., skipped anchors, hash mismatches, fallback mode) */
+  warnings?: string[];
 }
 
 export interface CuratePreviewRequest {

@@ -53,6 +53,8 @@ interface DraftResponse {
   llm_config: LLMConfig | null;
   created_at: string;
   completed_at: string | null;
+  /** Warnings about potential quality issues (e.g., fallback used) */
+  warnings?: string[];
 }
 
 // ============================================================================
@@ -440,17 +442,23 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
 
     // Get conversation turns (or use pre-selected text if provided)
     let turnData: Array<{ role: string; content: string }>;
+    const warnings: string[] = [];
 
     if (body.selected_text && body.selected_text.trim()) {
       // Use pre-selected text from curate preview
       turnData = [{ role: 'context', content: body.selected_text }];
     } else {
-      // Fallback: load full conversation
+      // Explicit warning: full conversation fallback may reduce quality
+      // Users should use curate preview to select relevant text first
       const turns = await findTurnsByConversation(db, {
         conversationId: body.conversation_id,
         limit: 100,
       });
       turnData = turns.map((t) => ({ role: t.role, content: t.content }));
+      warnings.push(
+        `No selected_text provided - using full conversation (${turns.length} turns). ` +
+          `For better quality, use POST /v1/curate/preview to select relevant chunks first.`
+      );
     }
 
     // Extract constraints
@@ -521,6 +529,8 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       llm_config: llmConfig,
       created_at: draft.createdAt.toISOString(),
       completed_at: draft.completedAt?.toISOString() ?? null,
+      // Include warnings if any fallbacks were used
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
 
     return jsonSuccess(c, response, 201);
