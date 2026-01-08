@@ -424,24 +424,12 @@ export function NodeModal({
   // Ref to track current sourceConversationId for stale request detection
   const sourceConversationIdRef = useRef<string | null>(null);
 
-  // Draft validation state
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-  const [currentDraft, setCurrentDraft] = useState<api.Draft | null>(null);
-  const [draftError, setDraftError] = useState<string | null>(null);
-
   // Commit state
   const [isCommitting, setIsCommitting] = useState(false);
 
   // For staging units: toggle between conversation view and commit config view
   const [showCommitConfig, setShowCommitConfig] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<{
-    missing: string[];
-    forbidden: string[];
-  } | null>(null);
-
-  // Validation derived from draft
-  const validationPassed = currentDraft?.validation?.passed ?? false;
 
   // Get projectId and edges from canvasStore
   const projectId = useCanvasStore((state) => state.projectId);
@@ -1110,189 +1098,6 @@ export function NodeModal({
   // Check if this commit-derived pending has inherited turn_window for direct commit
   const hasSourceTurnWindow = !!data?.sourceTurnWindow;
 
-  // Local validation state for commit-derived pending commits
-  const [localValidationPassed, setLocalValidationPassed] = useState<boolean | null>(null);
-  const [localValidationErrors, setLocalValidationErrors] = useState<{
-    missing: string[];
-    forbidden: string[];
-  } | null>(null);
-
-  // Reset local validation when selections or keywords change
-  // This ensures user must re-validate after modifying source selection
-  useEffect(() => {
-    if (localValidationPassed !== null) {
-      setLocalValidationPassed(null);
-      setLocalValidationErrors(null);
-    }
-    // Only reset when actual content changes, not on initial render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    // Track selection changes via these derived values
-    selectionsCount,
-    mustHaveKeywordsNew.length,
-    mustntHaveKeywordsNew.length,
-    includedPhrasesCount,
-    mustHaveKeywordsLegacy.length,
-    mustntHaveKeywordsLegacy.length,
-  ]);
-
-  // Helper: normalize keyword for comparison (lowercase, trim, remove punctuation)
-  // Use Unicode-aware regex to preserve CJK characters
-  const normalizeKeyword = (kw: string) =>
-    kw
-      .toLowerCase()
-      .trim()
-      .replace(/[^\p{L}\p{N}\s]/gu, '');
-
-  // Handle local validation for commit-derived pending commits
-  // This validates must_have/mustnt_have keywords against selected source text
-  const handleLocalValidation = useCallback(() => {
-    // Get selected source text and normalize
-    let selectedText = '';
-    if (textBlocks.length > 0) {
-      selectedText = textBlocks
-        .map((block) => getSelectedText(block.tokens, block.selections))
-        .filter((text) => text.length > 0)
-        .join(' ');
-    } else {
-      selectedText = allPhrases
-        .filter((p) => p.included)
-        .map((p) => p.text)
-        .join(' ');
-    }
-
-    // Normalize selected text (lowercase, remove punctuation for matching)
-    // Use Unicode-aware regex to preserve CJK characters
-    const normalizedText = selectedText.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '');
-
-    if (!normalizedText.trim()) {
-      setLocalValidationPassed(false);
-      setLocalValidationErrors({ missing: ['No source text selected'], forbidden: [] });
-      return;
-    }
-
-    // Get must_have and mustnt_have keywords, normalized
-    const mustHave =
-      textBlocks.length > 0 ? mustHaveKeywordsNew : mustHaveKeywordsLegacy.map((kw) => kw.text);
-    const mustntHave =
-      textBlocks.length > 0 ? mustntHaveKeywordsNew : mustntHaveKeywordsLegacy.map((kw) => kw.text);
-
-    // Validate must_have: all keywords must be present in selected text
-    const missingKeywords = mustHave.filter((kw) => {
-      const normalized = normalizeKeyword(kw);
-      return normalized.length > 0 && !normalizedText.includes(normalized);
-    });
-
-    // Validate mustnt_have: none of these keywords should be present
-    const forbiddenKeywords = mustntHave.filter((kw) => {
-      const normalized = normalizeKeyword(kw);
-      return normalized.length > 0 && normalizedText.includes(normalized);
-    });
-
-    const passed = missingKeywords.length === 0 && forbiddenKeywords.length === 0;
-    setLocalValidationPassed(passed);
-    setLocalValidationErrors(
-      passed ? null : { missing: missingKeywords, forbidden: forbiddenKeywords }
-    );
-  }, [
-    textBlocks,
-    allPhrases,
-    mustHaveKeywordsNew,
-    mustntHaveKeywordsNew,
-    mustHaveKeywordsLegacy,
-    mustntHaveKeywordsLegacy,
-  ]);
-
-  // Handle Generate Draft - call Draft API for validation
-  // Only available for pending commits created from conversations
-  // Validate pending commit - generate LLM draft and check keyword constraints
-  const handleValidatePendingCommit = useCallback(async () => {
-    if (!projectId || !data) {
-      setDraftError('No project selected');
-      return;
-    }
-
-    // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
-    // This allows commits created from other commits to work when a unit is later connected
-    const sourceUnitBlock = textBlocks.find((block) => block.sourceNodeType === 'unit');
-    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId;
-    if (!sourceConversationId) {
-      // This shouldn't happen - button should be hidden for commit-derived pending commits
-      setDraftError('No source conversation - validation not available');
-      return;
-    }
-
-    setIsGeneratingDraft(true);
-    setDraftError(null);
-    setCurrentDraft(null);
-    setValidationErrors(null);
-
-    try {
-      // Get selected text from textBlocks (unified selection system)
-      let selectedText = '';
-
-      if (textBlocks.length > 0) {
-        selectedText = textBlocks
-          .map((block) => getSelectedText(block.tokens, block.selections))
-          .filter((text) => text.length > 0)
-          .join('\n');
-      } else {
-        // Fallback: use legacy phrases selection
-        selectedText = allPhrases
-          .filter((p) => p.included)
-          .map((p) => p.text)
-          .join('\n');
-      }
-
-      if (!selectedText.trim()) {
-        setDraftError('Please select some source text first');
-        setIsGeneratingDraft(false);
-        return;
-      }
-
-      // Use extractIntent as the LLM intent
-      const intentForLLM = extractIntent.trim() || 'Extract key content';
-
-      // Map template to bridge_id
-      const bridgeId =
-        template === 'prose' ||
-        template === 'plan' ||
-        template === 'story' ||
-        template === 'summary' ||
-        template === 'refine' ||
-        template === 'explain' ||
-        template === 'clarify'
-          ? (template as 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'explain' | 'clarify')
-          : 'summary';
-
-      const draft = await api.createDraft(
-        projectId,
-        sourceConversationId,
-        bridgeId,
-        intentForLLM,
-        undefined, // baseCommitHash
-        undefined, // turnAnchorHash
-        selectedText, // selected_text from curate preview
-        { cosine: cosineThreshold, keepRatio: curatePreview?.keep_ratio }
-      );
-
-      setCurrentDraft(draft);
-
-      // Set validation errors if validation failed
-      if (draft.validation && !draft.validation.passed) {
-        setValidationErrors({
-          missing: draft.validation.missing_keywords,
-          forbidden: draft.validation.forbidden_keywords,
-        });
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setDraftError(error.message);
-    } finally {
-      setIsGeneratingDraft(false);
-    }
-  }, [projectId, data, template, textBlocks, allPhrases, extractIntent]);
-
   // Handle Commit - create commit via API (or merge for merge drafts)
   const handleCommit = useCallback(async () => {
     if (!projectId || !data) {
@@ -1300,18 +1105,11 @@ export function NodeModal({
       return;
     }
 
-    // Get source unit ID - prefer from textBlocks (dynamic), fallback to data.sourceConversationId (static)
-    // This allows commits created from other commits to work when a unit is later connected
+    // Get source unit ID - prefer from textBlocks (dynamic), fallback to data fields (static)
     const sourceUnitBlock = textBlocks.find((block) => block.sourceNodeType === 'unit');
-    const sourceConversationId = sourceUnitBlock?.sourceNodeId || data.sourceConversationId;
-    if (!sourceConversationId) {
-      setCommitError('No source conversation found. Please connect a conversation to this commit.');
-      return;
-    }
 
     setIsCommitting(true);
     setCommitError(null);
-    setValidationErrors(null);
 
     try {
       // Check if this is a merge draft
@@ -1445,8 +1243,12 @@ export function NodeModal({
       let endTurnHash: string;
 
       // Determine turn_window: from source conversation or inherited from parent commit
-      // For staging units, use conversationId if sourceConversationId is not set
-      const sourceConversationId = data.sourceConversationId || data.conversationId;
+      // Priority: dynamic unit block (if conversation) > static sourceConversationId > staging conversationId
+      // Note: sourceNodeId could be a commit hash (sha256:...) for commit-derived pendings, so only use if it's a conversation
+      const unitBlockConversationId =
+        sourceUnitBlock?.sourceNodeId?.startsWith('conv_') ? sourceUnitBlock.sourceNodeId : null;
+      const sourceConversationId =
+        unitBlockConversationId || data.sourceConversationId || data.conversationId;
       if (sourceConversationId) {
         // Case 1: Pending commit from conversation - fetch turns
         const turnsResponse = await api.listTurns(projectId, sourceConversationId);
@@ -1533,16 +1335,25 @@ export function NodeModal({
       // 5. Build source_refs from all upstream source nodes
       const sourceRefs: api.SourceRef[] = [];
 
-      // Primary source: the conversation with turn_window
-      sourceRefs.push({
-        type: 'conversation',
-        conversation_id: sourceConversationId,
-        turn_window: { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
-      });
+      // Primary source: only add conversation ref if we have a conversation_id
+      if (sourceConversationId) {
+        sourceRefs.push({
+          type: 'conversation',
+          conversation_id: sourceConversationId,
+          turn_window: { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
+        });
+      } else if (data.sourceCommitHash) {
+        // turn_window-only case: add commit ref for traceability
+        sourceRefs.push({
+          type: 'commit',
+          commit_hash: data.sourceCommitHash,
+        });
+      }
 
       // Debug: Log textBlocks info
       console.log('[handleCommit] Building sourceRefs:', {
         sourceConversationId,
+        sourceCommitHash: data.sourceCommitHash,
         textBlocksCount: textBlocks.length,
         textBlocks: textBlocks.map((b) => ({
           id: b.id,
@@ -3029,51 +2840,6 @@ export function NodeModal({
                         : 'Click phrases in SOURCE to toggle inclusion'}
                     </p>
 
-                    {/* Draft error */}
-                    {draftError && (
-                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-                        <AlertCircle size={14} />
-                        <span>{draftError}</span>
-                      </div>
-                    )}
-
-                    {/* Validation result */}
-                    {currentDraft && (
-                      <div
-                        className={cn(
-                          'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
-                          validationPassed
-                            ? 'bg-green-50 border border-green-200 text-green-700'
-                            : 'bg-red-50 border border-red-200 text-red-700'
-                        )}
-                      >
-                        {validationPassed ? (
-                          <>
-                            <Check size={14} className="mt-0.5" />
-                            <span>Validation passed</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle size={14} className="mt-0.5" />
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium">Validation Failed</span>
-                              {validationErrors?.missing && validationErrors.missing.length > 0 && (
-                                <span className="text-xs text-red-600">
-                                  Missing: {validationErrors.missing.join(', ')}
-                                </span>
-                              )}
-                              {validationErrors?.forbidden &&
-                                validationErrors.forbidden.length > 0 && (
-                                  <span className="text-xs text-red-600">
-                                    Forbidden: {validationErrors.forbidden.join(', ')}
-                                  </span>
-                                )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
                     {/* Commit error */}
                     {commitError && (
                       <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
@@ -3111,162 +2877,38 @@ export function NodeModal({
                             </>
                           )}
                         </Button>
-                      ) : hasSourceConversation ? (
-                        <>
-                          {/* Generate Draft Button - only for conversation-derived pending commits */}
-                          <Button
-                            variant="secondary"
-                            onClick={handleValidatePendingCommit}
-                            disabled={
-                              (hasNewSourceData
-                                ? selectionsCount === 0
-                                : includedPhrasesCount === 0) || isGeneratingDraft
-                            }
-                            className="w-full gap-2"
-                          >
-                            {isGeneratingDraft ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin" />
-                                <span>Validating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <GitBranch size={16} />
-                                <span>{currentDraft ? 'Re-validate' : 'Validate'}</span>
-                              </>
-                            )}
-                          </Button>
-
-                          {/* Commit Button - only enabled after validation passed */}
-                          {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
-                          <Button
-                            onClick={handleCommit}
-                            disabled={
-                              isMergeDraft
-                                ? !mergeResult || !allConflictsResolved || isCommitting
-                                : !validationPassed || isCommitting
-                            }
-                            title={
-                              isMergeDraft
-                                ? !mergeResult
-                                  ? 'Analyze merge first'
-                                  : !allConflictsResolved
-                                    ? 'Resolve all conflicts first'
-                                    : ''
-                                : !currentDraft
-                                  ? 'Run validation first'
-                                  : !validationPassed
-                                    ? 'Validation must pass before committing'
-                                    : ''
-                            }
-                            className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
-                          >
-                            {isCommitting ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin" />
-                                <span>Creating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Check size={16} />
-                                <span>Commit</span>
-                              </>
-                            )}
-                          </Button>
-                        </>
-                      ) : hasSourceTurnWindow ? (
-                        /* Commit-derived pending commits with inherited turn_window - local validation */
-                        <>
-                          {/* Local Validate Button */}
-                          <Button
-                            variant="secondary"
-                            onClick={handleLocalValidation}
-                            disabled={
-                              hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0
-                            }
-                            className="w-full gap-2"
-                          >
-                            <GitBranch size={16} />
-                            <span>
-                              {localValidationPassed !== null ? 'Re-validate' : 'Validate'}
-                            </span>
-                          </Button>
-
-                          {/* Local Validation Result */}
-                          {localValidationPassed !== null && (
-                            <div
-                              className={cn(
-                                'flex items-start gap-2 py-2 px-3 rounded-md text-sm',
-                                localValidationPassed
-                                  ? 'bg-green-50 border border-green-200 text-green-700'
-                                  : 'bg-red-50 border border-red-200 text-red-700'
-                              )}
-                            >
-                              {localValidationPassed ? (
-                                <>
-                                  <Check size={14} className="mt-0.5" />
-                                  <span>Local validation passed</span>
-                                </>
-                              ) : (
-                                <>
-                                  <AlertCircle size={14} className="mt-0.5" />
-                                  <div className="flex flex-col gap-1">
-                                    <span>Local validation failed</span>
-                                    {localValidationErrors?.missing &&
-                                      localValidationErrors.missing.length > 0 && (
-                                        <span className="text-xs">
-                                          Missing: {localValidationErrors.missing.join(', ')}
-                                        </span>
-                                      )}
-                                    {localValidationErrors?.forbidden &&
-                                      localValidationErrors.forbidden.length > 0 && (
-                                        <span className="text-xs">
-                                          Forbidden: {localValidationErrors.forbidden.join(', ')}
-                                        </span>
-                                      )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
+                      ) : hasSourceConversation || hasSourceTurnWindow ? (
+                        /* Commit Button - directly enabled when selections are made */
+                        <Button
+                          onClick={handleCommit}
+                          disabled={
+                            (hasNewSourceData
+                              ? selectionsCount === 0
+                              : includedPhrasesCount === 0) || isCommitting
+                          }
+                          title={
+                            hasNewSourceData
+                              ? selectionsCount === 0
+                                ? 'Select some text first'
+                                : ''
+                              : includedPhrasesCount === 0
+                                ? 'Include some phrases first'
+                                : ''
+                          }
+                          className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                        >
+                          {isCommitting ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Creating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check size={16} />
+                              <span>Commit</span>
+                            </>
                           )}
-
-                          {/* Commit Button - enabled after local validation passed */}
-                          {/* For merge drafts: enabled after merge analysis + conflicts resolved */}
-                          <Button
-                            onClick={handleCommit}
-                            disabled={
-                              isMergeDraft
-                                ? !mergeResult || !allConflictsResolved || isCommitting
-                                : localValidationPassed !== true || isCommitting
-                            }
-                            title={
-                              isMergeDraft
-                                ? !mergeResult
-                                  ? 'Analyze merge first'
-                                  : !allConflictsResolved
-                                    ? 'Resolve all conflicts first'
-                                    : ''
-                                : localValidationPassed === null
-                                  ? 'Run validation first'
-                                  : localValidationPassed
-                                    ? ''
-                                    : 'Validation must pass before committing'
-                            }
-                            className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
-                          >
-                            {isCommitting ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin" />
-                                <span>Creating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Check size={16} />
-                                <span>Commit</span>
-                              </>
-                            )}
-                          </Button>
-                        </>
+                        </Button>
                       ) : (
                         /* No valid source - cannot commit */
                         <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-700">
