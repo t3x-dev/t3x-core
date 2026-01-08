@@ -1,7 +1,14 @@
 import { ChevronDown, ChevronRight, GitCommit } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { KeywordMarker, SourceTextBlock, TextSelection, TextToken } from '@/types/nodes';
+import type {
+  AnchorCandidate,
+  ConfirmedAnchor,
+  KeywordMarker,
+  SourceTextBlock,
+  TextSelection,
+  TextToken,
+} from '@/types/nodes';
 import {
   addSelection,
   cleanupKeywords,
@@ -14,28 +21,132 @@ interface SelectableTextBlockProps {
   block: SourceTextBlock;
   onChange: (updatedBlock: SourceTextBlock) => void;
   readOnly?: boolean;
+  /** Anchor candidates from Ring 1 (global character positions) */
+  anchorCandidates?: AnchorCandidate[];
+  /**
+   * Confirmed anchors (user-confirmed)
+   * Position handling:
+   * - If anchor has globalStart/globalEnd, those are used directly (pre-computed)
+   * - Otherwise, sentenceStartChar + start/end is used (requires sentence context)
+   * Note: API response anchors have globalStart/globalEnd pre-computed by parseCommit()
+   */
+  confirmedAnchors?: ConfirmedAnchor[];
+  /**
+   * Callback when user confirms/changes an anchor
+   * TODO: P2.3 next step - Implement click interaction to:
+   * - Click anchor candidate → confirm as 'preferred'
+   * - Click confirmed anchor → cycle: preferred → mustHave → mustntHave → remove
+   * Reference: keyword cycling logic in handleMouseUp
+   */
+  onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
+  /** Confidence threshold for showing anchor candidates (0-1) */
+  anchorThreshold?: number;
 }
 
-type TokenState = 'normal' | 'selected' | 'excluded' | 'keyword-must' | 'keyword-mustnt';
+type TokenState =
+  | 'normal'
+  | 'selected'
+  | 'excluded'
+  | 'keyword-must'
+  | 'keyword-mustnt'
+  | 'anchor-candidate'     // Dotted underline for unconfirmed candidates
+  | 'anchor-must'          // Confirmed mustHave anchor
+  | 'anchor-mustnt'        // Confirmed mustntHave anchor
+  | 'anchor-preferred';    // Confirmed preferred anchor
+
+/**
+ * Check if a token falls within an anchor candidate's character range
+ */
+function isTokenInAnchorCandidate(
+  token: TextToken,
+  candidates: AnchorCandidate[],
+  threshold: number
+): AnchorCandidate | null {
+  for (const candidate of candidates) {
+    if (candidate.confidence < threshold) continue;
+    // Check if token overlaps with candidate's character range
+    if (token.charStart < candidate.endChar && token.charEnd > candidate.startChar) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if a token falls within a confirmed anchor's range
+ *
+ * Position resolution priority:
+ * 1. Use globalStart/globalEnd if present (pre-computed for UI rendering)
+ * 2. Fall back to sentenceStartChar + start/end (requires sentence context)
+ */
+function isTokenInConfirmedAnchor(
+  token: TextToken,
+  anchors: ConfirmedAnchor[],
+  sentenceStartChar: number
+): ConfirmedAnchor | null {
+  for (const anchor of anchors) {
+    // Use pre-computed global positions if available, otherwise convert from relative
+    const anchorGlobalStart = anchor.globalStart ?? (sentenceStartChar + anchor.start);
+    const anchorGlobalEnd = anchor.globalEnd ?? (sentenceStartChar + anchor.end);
+    // Check if token overlaps with anchor's character range
+    if (token.charStart < anchorGlobalEnd && token.charEnd > anchorGlobalStart) {
+      return anchor;
+    }
+  }
+  return null;
+}
 
 function getTokenState(
   token: TextToken,
   selections: TextSelection[],
-  keywords: KeywordMarker[]
+  keywords: KeywordMarker[],
+  anchorCandidates?: AnchorCandidate[],
+  confirmedAnchors?: ConfirmedAnchor[],
+  anchorThreshold: number = 0.5,
+  sentenceStartChar: number = 0
 ): TokenState {
-  // Check keywords first (they override selection display)
+  // Check confirmed anchors first (highest priority)
+  if (confirmedAnchors && confirmedAnchors.length > 0) {
+    const anchor = isTokenInConfirmedAnchor(token, confirmedAnchors, sentenceStartChar);
+    if (anchor) {
+      // Handle both camelCase (UI) and snake_case (API v1.1) constraint values
+      const constraint = anchor.constraint;
+      if (constraint === 'mustHave' || constraint === 'must_have') {
+        return 'anchor-must';
+      }
+      if (constraint === 'mustntHave' || constraint === 'mustnt_have') {
+        return 'anchor-mustnt';
+      }
+      if (constraint === 'preferred') {
+        return 'anchor-preferred';
+      }
+    }
+  }
+
+  // Check keywords (they override selection display)
   const keyword = keywords.find((kw) => kw.tokenIndex === token.index);
   if (keyword) {
     return keyword.constraint === 'must_have' ? 'keyword-must' : 'keyword-mustnt';
   }
+
   // Check if in exclude selection (浅红)
   if (isTokenInExcludeSelection(token.index, selections)) {
     return 'excluded';
   }
+
   // Check if in include selection (浅绿)
   if (isTokenInIncludeSelection(token.index, selections)) {
     return 'selected';
   }
+
+  // Check anchor candidates (lowest priority, shown as dotted underline)
+  if (anchorCandidates && anchorCandidates.length > 0) {
+    const candidate = isTokenInAnchorCandidate(token, anchorCandidates, anchorThreshold);
+    if (candidate) {
+      return 'anchor-candidate';
+    }
+  }
+
   return 'normal';
 }
 
@@ -54,6 +165,10 @@ export function SelectableTextBlock({
   block,
   onChange,
   readOnly = false,
+  anchorCandidates,
+  confirmedAnchors,
+  onAnchorChange,
+  anchorThreshold = 0.5,
 }: SelectableTextBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -277,6 +392,12 @@ export function SelectableTextBlock({
       state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
+      // Anchor candidate: dotted underline (unconfirmed)
+      state === 'anchor-candidate' && 'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+      // Confirmed anchors: solid background with appropriate color
+      state === 'anchor-must' && 'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+      state === 'anchor-mustnt' && 'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+      state === 'anchor-preferred' && 'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
       isDragging && state === 'normal' && 'bg-blue-100'
     );
   };
@@ -298,7 +419,15 @@ export function SelectableTextBlock({
     >
       <div className="text-[0.95rem] leading-8 select-none">
         {block.tokens.map((token, idx) => {
-          const state = getTokenState(token, block.selections, block.keywords);
+          const state = getTokenState(
+            token,
+            block.selections,
+            block.keywords,
+            anchorCandidates,
+            confirmedAnchors,
+            anchorThreshold,
+            0 // sentenceStartChar - assuming block starts at 0 for now
+          );
           const isDragging = isInDragSelection(token.index);
           const nextToken = block.tokens[idx + 1];
           const addSpace = needsSpaceAfter(token, nextToken);
@@ -356,6 +485,14 @@ interface PendingSourceEditorProps {
   blocks: SourceTextBlock[];
   onChange: (blocks: SourceTextBlock[]) => void;
   readOnly?: boolean;
+  /** Anchor candidates from Ring 1 (global positions) */
+  anchorCandidates?: AnchorCandidate[];
+  /** Confirmed anchors (user-confirmed) */
+  confirmedAnchors?: ConfirmedAnchor[];
+  /** Callback when user confirms/changes an anchor */
+  onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
+  /** Confidence threshold for showing anchor candidates (0-1) */
+  anchorThreshold?: number;
 }
 
 // Collapsible Source Box component
@@ -364,6 +501,14 @@ interface SourceBoxProps {
   onChange: (block: SourceTextBlock) => void;
   readOnly?: boolean;
   defaultExpanded?: boolean;
+  /** Anchor candidates from Ring 1 (global positions) */
+  anchorCandidates?: AnchorCandidate[];
+  /** Confirmed anchors (user-confirmed) */
+  confirmedAnchors?: ConfirmedAnchor[];
+  /** Callback when user confirms/changes an anchor */
+  onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
+  /** Confidence threshold for showing anchor candidates (0-1) */
+  anchorThreshold?: number;
 }
 
 function SourceBox({
@@ -371,6 +516,10 @@ function SourceBox({
   onChange,
   readOnly = false,
   defaultExpanded = false,
+  anchorCandidates,
+  confirmedAnchors,
+  onAnchorChange,
+  anchorThreshold,
 }: SourceBoxProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
@@ -409,10 +558,26 @@ function SourceBox({
         <div className="p-4 bg-white">
           {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
             // Unit with turns: Render with turn groups
-            <ConversationTurnRenderer block={block} onChange={onChange} readOnly={readOnly} />
+            <ConversationTurnRenderer
+              block={block}
+              onChange={onChange}
+              readOnly={readOnly}
+              anchorCandidates={anchorCandidates}
+              confirmedAnchors={confirmedAnchors}
+              onAnchorChange={onAnchorChange}
+              anchorThreshold={anchorThreshold}
+            />
           ) : (
             // Unit without turns: Render as simple block
-            <SelectableTextBlock block={block} onChange={onChange} readOnly={readOnly} />
+            <SelectableTextBlock
+              block={block}
+              onChange={onChange}
+              readOnly={readOnly}
+              anchorCandidates={anchorCandidates}
+              confirmedAnchors={confirmedAnchors}
+              onAnchorChange={onAnchorChange}
+              anchorThreshold={anchorThreshold}
+            />
           )}
         </div>
       )}
@@ -425,12 +590,24 @@ interface ConversationTurnRendererProps {
   block: SourceTextBlock;
   onChange: (block: SourceTextBlock) => void;
   readOnly?: boolean;
+  /** Anchor candidates from Ring 1 (global positions) */
+  anchorCandidates?: AnchorCandidate[];
+  /** Confirmed anchors (user-confirmed) */
+  confirmedAnchors?: ConfirmedAnchor[];
+  /** Callback when user confirms/changes an anchor */
+  onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
+  /** Confidence threshold for showing anchor candidates (0-1) */
+  anchorThreshold?: number;
 }
 
 function ConversationTurnRenderer({
   block,
   onChange,
   readOnly = false,
+  anchorCandidates,
+  confirmedAnchors,
+  onAnchorChange,
+  anchorThreshold = 0.5,
 }: ConversationTurnRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -610,13 +787,27 @@ function ConversationTurnRenderer({
       state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
+      // Anchor candidate: dotted underline (unconfirmed)
+      state === 'anchor-candidate' && 'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+      // Confirmed anchors: solid background with appropriate color
+      state === 'anchor-must' && 'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+      state === 'anchor-mustnt' && 'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+      state === 'anchor-preferred' && 'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
       isDragging && state === 'normal' && 'bg-blue-100'
     );
   };
 
   // Render a single token
   const renderToken = (token: TextToken, nextToken: TextToken | undefined) => {
-    const state = getTokenState(token, block.selections, block.keywords);
+    const state = getTokenState(
+      token,
+      block.selections,
+      block.keywords,
+      anchorCandidates,
+      confirmedAnchors,
+      anchorThreshold,
+      0 // sentenceStartChar
+    );
     const isDragging = isInDragSelection(token.index);
     const addSpace = needsSpaceAfter(token, nextToken);
 
@@ -694,6 +885,10 @@ export function PendingSourceEditor({
   blocks,
   onChange,
   readOnly = false,
+  anchorCandidates,
+  confirmedAnchors,
+  onAnchorChange,
+  anchorThreshold,
 }: PendingSourceEditorProps) {
   const handleBlockChange = useCallback(
     (updatedBlock: SourceTextBlock) => {
@@ -715,6 +910,10 @@ export function PendingSourceEditor({
           onChange={handleBlockChange}
           readOnly={readOnly}
           defaultExpanded={defaultExpanded}
+          anchorCandidates={anchorCandidates}
+          confirmedAnchors={confirmedAnchors}
+          onAnchorChange={onAnchorChange}
+          anchorThreshold={anchorThreshold}
         />
       ))}
     </div>

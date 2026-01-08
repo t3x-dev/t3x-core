@@ -9,10 +9,14 @@
  * Ring 3 (分句结构): sentence segments
  */
 
+import { sha256 } from '../common/hash';
 import type { NLPAnalysis, NLPEntity, NLPProvider, NLPToken } from '../providers/nlp';
 import { createPolarityRuleEngine, type PolarityRuleEngine } from './polarityRules';
 import {
   createEmptyRingOutput,
+  type AnchorCandidate,
+  type AnchorSource,
+  type AnchorType,
   type Facet,
   type Keyword,
   type Polarity,
@@ -275,6 +279,61 @@ const DEFAULT_CONFIG: Required<Omit<ExtractorConfig, 'customPolarityRules'>> = {
 };
 
 /**
+ * Phrase patterns for anchor candidate extraction (v1.1)
+ * Each pattern extracts a specific type of anchor candidate.
+ */
+interface PhrasePattern {
+  type: AnchorType;
+  pattern: RegExp;
+  /** Default confidence for matches */
+  confidence: number;
+}
+
+/**
+ * Phrase patterns for anchor candidate extraction (v1.1)
+ *
+ * IMPORTANT: Patterns are ordered by specificity (most specific first).
+ * More specific patterns (money, percent, duration, date) are checked before
+ * generic number pattern to avoid false positives.
+ *
+ * NOTE: We store pattern sources and flags separately to avoid global regex
+ * lastIndex issues in concurrent calls. Regex is cloned in extractAnchorCandidates().
+ */
+const PHRASE_PATTERNS: PhrasePattern[] = [
+  // Money: $5000, $1,234.56, USD 100, 100 USD, EUR 50
+  {
+    type: 'money',
+    pattern: /(?:\$[\d,]+(?:\.\d{1,2})?)|(?:(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD)\s*[\d,]+(?:\.\d{1,2})?)|(?:[\d,]+(?:\.\d{1,2})?\s*(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD))/gi,
+    confidence: 0.95,
+  },
+  // Percent: 15%, 3.5%, 100%
+  {
+    type: 'percent',
+    pattern: /\d+(?:\.\d+)?\s*%/g,
+    confidence: 0.95,
+  },
+  // Duration: 30 days, 2 months, 1 year, 24 hours, 3 weeks
+  {
+    type: 'duration',
+    pattern: /\d+\s*(?:days?|months?|years?|weeks?|hours?|minutes?|seconds?)/gi,
+    confidence: 0.9,
+  },
+  // Date patterns: January 2025, 2025-01-01, 01/15/2025, Dec 31, 2025
+  {
+    type: 'date',
+    pattern: /(?:(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,?\s+\d{4})?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}\/\d{1,2}\/\d{4})/gi,
+    confidence: 0.9,
+  },
+  // Number: bare numbers like 123, 5.5, 1000 (checked last to avoid conflicts)
+  // Requires at least 2 digits or decimal to filter out single-digit noise
+  {
+    type: 'number',
+    pattern: /\b\d{2,}(?:\.\d+)?\b|\b\d+\.\d+\b/g,
+    confidence: 0.7,
+  },
+];
+
+/**
  * Ring Extractor
  *
  * Converts NLP analysis results into the Ring 1/2/3 structure.
@@ -311,7 +370,8 @@ export class RingExtractor {
     const analysis = await this.nlpProvider.analyze(content, language);
 
     // Build Ring output
-    const ring1 = this.extractRing1(analysis);
+    // Pass original content to extractRing1 for anchor candidate extraction
+    const ring1 = this.extractRing1(analysis, content);
     const ring2 = this.extractRing2(analysis, ring1);
     const ring3 = this.extractRing3(analysis, content);
 
@@ -333,8 +393,10 @@ export class RingExtractor {
    * 4. Named entities
    * 5. Time anchor
    * 6. Topic
+   * 7. v1.1: Anchor candidates (numbers, dates, entities, phrases with positions)
+   * 8. v1.1: Input text hash for offset consistency
    */
-  private extractRing1(analysis: NLPAnalysis): Ring1Output {
+  private extractRing1(analysis: NLPAnalysis, originalText: string): Ring1Output {
     const { tokens, entities } = analysis;
 
     // Extract preference relations using polarity rule engine
@@ -455,11 +517,19 @@ export class RingExtractor {
     // Extract preference keywords (polarity != 0)
     const preferenceKeywords = keywords.filter((kw) => kw.polarity !== 0);
 
+    // v1.1: Extract anchor candidates (preserves positions, no deduplication)
+    const anchorCandidates = this.extractAnchorCandidates(originalText, tokens, entities);
+
+    // v1.1: Compute input text hash for offset consistency verification
+    const inputTextHash = sha256(originalText);
+
     return {
       keywords,
       timeAnchor,
       topic,
       preferenceKeywords,
+      anchorCandidates,
+      inputTextHash,
     };
   }
 
@@ -537,18 +607,28 @@ export class RingExtractor {
   private extractRing3(analysis: NLPAnalysis, originalText: string): Ring3Output {
     const { sentences } = analysis;
 
-    // If no sentences from NLP, fallback to simple splitting
+    // Fail-Fast: NLP provider must return at least one sentence for meaningful text
+    // The NLP provider (e.g., GoogleCloudNLPProvider) uses splitSentencesRuleBased
+    // which should always produce at least one sentence for non-empty text.
+    // Exception: punctuation-only text may produce 0 sentences, which is valid.
     if (sentences.length === 0) {
-      return {
-        segments: [
-          {
-            segmentId: 's-1',
-            text: originalText.trim(),
-            startChar: 0,
-            endChar: originalText.length,
-          },
-        ],
-      };
+      const trimmed = originalText.trim();
+      // Empty or whitespace-only input - return empty segments
+      if (trimmed.length === 0) {
+        return { segments: [] };
+      }
+      // Punctuation-only text (e.g., "...!!!???") may produce 0 sentences - valid
+      const hasMeaningfulContent = /[a-zA-Z0-9\u4e00-\u9fff\u3040-\u30ff]/.test(trimmed);
+      if (!hasMeaningfulContent) {
+        return { segments: [] };
+      }
+      // Non-empty meaningful text but no sentences - this is a bug
+      throw new Error(
+        `[ringExtractor] NLP provider returned 0 sentences for non-empty text. ` +
+          `Text preview: "${originalText.slice(0, 50)}...". ` +
+          `This indicates a bug in the NLP provider's sentence segmentation. ` +
+          `Expected at least 1 sentence from splitSentencesRuleBased.`
+      );
     }
 
     const segments: Segment[] = sentences.map((sentence, index) => ({
@@ -559,6 +639,171 @@ export class RingExtractor {
     }));
 
     return { segments };
+  }
+
+  /**
+   * Extract anchor candidates from text (v1.1)
+   *
+   * Unlike keywords (deduplicated by lemma), anchor candidates preserve exact positions.
+   * This enables sentence-level highlighting in the UI.
+   *
+   * Sources:
+   * 1. Phrase patterns (money, duration, percent, date)
+   * 2. Named entities from NLP (with positions)
+   * 3. Term tokens from NLP (NOUN/PROPN with high salience)
+   */
+  private extractAnchorCandidates(
+    text: string,
+    tokens: NLPToken[],
+    entities: NLPEntity[]
+  ): AnchorCandidate[] {
+    const candidates: AnchorCandidate[] = [];
+    const coveredRanges: Array<{ start: number; end: number }> = [];
+
+    // Helper: check if a range overlaps with any covered range
+    const isOverlapping = (start: number, end: number): boolean => {
+      return coveredRanges.some(
+        (range) => !(end <= range.start || start >= range.end)
+      );
+    };
+
+    // Helper: mark a range as covered
+    const markCovered = (start: number, end: number): void => {
+      coveredRanges.push({ start, end });
+    };
+
+    // 1. Extract phrase patterns (highest priority - most specific)
+    for (const { type, pattern, confidence } of PHRASE_PATTERNS) {
+      // Clone regex to avoid lastIndex conflicts in concurrent calls
+      // This is necessary because global regexes share state across exec() calls
+      const regex = new RegExp(pattern.source, pattern.flags);
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(text)) !== null) {
+        const startChar = match.index;
+        const endChar = match.index + match[0].length;
+
+        // Skip if overlapping with existing candidate
+        if (isOverlapping(startChar, endChar)) {
+          continue;
+        }
+
+        candidates.push({
+          text: match[0],
+          type,
+          startChar,
+          endChar,
+          confidence,
+          source: 'phrase',
+        });
+
+        markCovered(startChar, endChar);
+      }
+    }
+
+    // 2. Extract from named entities (with NLP-provided positions)
+    for (const entity of entities) {
+      // Skip entities without position info
+      if (entity.beginOffset === undefined || entity.endOffset === undefined) {
+        continue;
+      }
+
+      // Skip low salience entities
+      if (entity.salience < this.config.minEntitySalience) {
+        continue;
+      }
+
+      // Skip if overlapping with phrase patterns
+      if (isOverlapping(entity.beginOffset, entity.endOffset)) {
+        continue;
+      }
+
+      // Map entity type to anchor type
+      const anchorType = this.mapEntityTypeToAnchorType(entity.type);
+
+      candidates.push({
+        text: entity.text,
+        type: anchorType,
+        startChar: entity.beginOffset,
+        endChar: entity.endOffset,
+        confidence: entity.salience,
+        source: 'entity',
+      });
+
+      markCovered(entity.beginOffset, entity.endOffset);
+    }
+
+    // 3. Extract from tokens (terms with high-value POS tags)
+    // Only include NOUN and PROPN as term candidates
+    const termPosTags = ['NOUN', 'PROPN'];
+    for (const token of tokens) {
+      // Only term-like POS tags
+      if (!termPosTags.includes(token.pos)) {
+        continue;
+      }
+
+      // Skip if overlapping with existing candidates
+      if (isOverlapping(token.beginOffset, token.endOffset)) {
+        continue;
+      }
+
+      // Skip stop words
+      const lemmaLower = token.lemma.toLowerCase();
+      if (STOP_WORDS.has(lemmaLower) || STOP_WORDS.has(token.text.toLowerCase())) {
+        continue;
+      }
+
+      // Skip very short tokens
+      if (token.text.length <= 2) {
+        continue;
+      }
+
+      // Skip pure punctuation/symbols
+      if (/^[^\w\s]+$/.test(token.text) || /^[\d]+$/.test(token.text)) {
+        continue;
+      }
+
+      candidates.push({
+        text: token.text,
+        type: 'term',
+        startChar: token.beginOffset,
+        endChar: token.endOffset,
+        confidence: 0.7, // Default confidence for terms
+        source: 'token',
+      });
+
+      markCovered(token.beginOffset, token.endOffset);
+    }
+
+    // Sort by startChar for consistent ordering
+    candidates.sort((a, b) => a.startChar - b.startChar);
+
+    return candidates;
+  }
+
+  /**
+   * Map NLP entity type to anchor type
+   * Normalizes to uppercase to handle providers with different casing conventions.
+   */
+  private mapEntityTypeToAnchorType(entityType: string): AnchorType {
+    // Normalize to uppercase for case-insensitive matching
+    const normalized = entityType.toUpperCase();
+    switch (normalized) {
+      case 'DATE':
+      case 'TIME':
+        return 'date';
+      case 'MONEY':
+      case 'PRICE':
+        return 'money';
+      case 'PERCENT':
+        return 'percent';
+      case 'NUMBER':
+      case 'CARDINAL':
+      case 'QUANTITY':
+        return 'number';
+      default:
+        // All other entities (PERSON, GPE, ORG, etc.) are 'entity' type
+        return 'entity';
+    }
   }
 
   /**

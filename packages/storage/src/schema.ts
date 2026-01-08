@@ -135,6 +135,7 @@ export const commits = pgTable(
     positionX: real('position_x'),
     positionY: real('position_y'),
     sourceRefsJson: text('source_refs_json'), // Multi-source references
+    anchorsJson: text('anchors_json'), // v1.1: Confirmed anchors for auditing
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [

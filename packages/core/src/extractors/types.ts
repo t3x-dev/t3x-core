@@ -37,6 +37,49 @@ export type Polarity = -1 | 0 | 1;
 export type FacetType = 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
 
 /**
+ * Anchor types for Ring 1 v1.1
+ * @see docs/specification/ring-schema.md#anchortype-enum-v11
+ */
+export type AnchorType =
+  | 'number'   // Numeric value: 123, 5.5
+  | 'money'    // Currency amount: $5000, 100 USD
+  | 'duration' // Time duration: 30 days, 2 months
+  | 'percent'  // Percentage: 15%, 3.5%
+  | 'date'     // Date expression: January 2025
+  | 'entity'   // Named entity from NLP: Bangkok, Party A
+  | 'term';    // Domain-specific term: indemnify, terminate
+
+/**
+ * Anchor source for Ring 1 v1.1
+ * @see docs/specification/ring-schema.md#anchorsource-enum-v11
+ */
+export type AnchorSource =
+  | 'token'    // Derived from NLP token
+  | 'entity'   // Derived from NLP named entity
+  | 'phrase';  // Derived from phrase pattern matching
+
+/**
+ * Anchor candidate for Ring 1 v1.1
+ * Unlike keywords (deduplicated by lemma), anchor candidates preserve exact positions.
+ *
+ * @see docs/specification/ring-schema.md#anchorcandidate-v11
+ */
+export interface AnchorCandidate {
+  /** The candidate text (e.g., "$5000", "30 days", "Bangkok") */
+  text: string;
+  /** Semantic type of the anchor */
+  type: AnchorType;
+  /** Start character offset in original input text */
+  startChar: number;
+  /** End character offset in original input text */
+  endChar: number;
+  /** Confidence/salience score [0, 1] */
+  confidence: number;
+  /** Where this candidate was derived from */
+  source: AnchorSource;
+}
+
+/**
  * Keyword extracted in Ring 1
  *
  * @see docs/specification/ring-schema.md#keyword
@@ -70,6 +113,10 @@ export interface Ring1Output {
   topic: string | null;
   /** Auto-filtered keywords where polarity != 0 */
   preferenceKeywords: Keyword[];
+  /** v1.1: Anchor candidates for UI highlighting (numbers, dates, entities, phrases) */
+  anchorCandidates?: AnchorCandidate[];
+  /** v1.1: SHA-256 hash of input text for offset consistency verification */
+  inputTextHash?: string;
 }
 
 /**

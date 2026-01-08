@@ -32,6 +32,8 @@ export interface CreateCommitInput {
   mergeParents?: string[];
   positionX?: number;
   positionY?: number;
+  /** v1.1: Confirmed anchors for auditing */
+  anchors?: unknown;
 }
 
 export interface ListCommitsOptions {
@@ -93,6 +95,7 @@ export async function insertCommit(db: AnyDB, input: CreateCommitInput): Promise
   const mustHaveJson = input.mustHave ? JSON.stringify(input.mustHave) : null;
   const mustntHaveJson = input.mustntHave ? JSON.stringify(input.mustntHave) : null;
   const sourceRefsJson = input.sourceRefs ? JSON.stringify(input.sourceRefs) : null;
+  const anchorsJson = input.anchors ? JSON.stringify(input.anchors) : null;
 
   // Compute commit hash
   const commitHash = computeCommitHash({
@@ -128,6 +131,7 @@ export async function insertCommit(db: AnyDB, input: CreateCommitInput): Promise
       positionX: input.positionX ?? null,
       positionY: input.positionY ?? null,
       sourceRefsJson,
+      anchorsJson,
       createdAt,
     })
     .returning();

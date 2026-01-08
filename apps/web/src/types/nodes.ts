@@ -130,6 +130,94 @@ export type ClauseStatus = 'neutral' | 'keep' | 'discard';
 // Keyword constraint type
 export type KeywordConstraintType = 'must_have' | 'mustnt_have' | 'neutral';
 
+// ============================================
+// Anchor Types (P2 Implementation)
+// ============================================
+
+/**
+ * Anchor type - categorizes the semantic meaning of an anchor candidate
+ * Matches API's anchor candidate types from Ring 1 extraction
+ */
+export type AnchorType =
+  | 'number'    // Pure numbers: "100", "2025"
+  | 'money'     // Currency: "$5000", "100 USD"
+  | 'duration'  // Time periods: "30 days", "2 weeks"
+  | 'percent'   // Percentages: "15%", "3.5%"
+  | 'date'      // Dates: "November", "2025-01-08"
+  | 'entity'    // Named entities: "Bangkok", "Google"
+  | 'term'      // Important terms/keywords
+  | 'phrase';   // Multi-token phrases
+
+/**
+ * Anchor constraint - user's choice for how this anchor should be treated
+ * in downstream processing (generation, validation, etc.)
+ * Accepts both camelCase (UI) and snake_case (API v1.1) formats.
+ */
+export type AnchorConstraint =
+  | 'mustHave' | 'must_have'       // Must include this anchor
+  | 'mustntHave' | 'mustnt_have'   // Must exclude this anchor
+  | 'preferred';                    // Prefer to include (soft constraint)
+
+/**
+ * Anchor candidate for UI display (camelCase version of ApiAnchorCandidate)
+ * These are the candidates extracted from Ring 1 that can be confirmed by users
+ */
+export interface AnchorCandidate {
+  text: string;
+  type: AnchorType;
+  startChar: number;   // Global position in source text
+  endChar: number;
+  confidence: number;  // 0-1 confidence/salience score
+  source: 'token' | 'entity' | 'phrase';
+}
+
+/**
+ * Confirmed anchor - user has clicked and confirmed this anchor
+ * Stored within a sentence context for precise auditing
+ *
+ * Position fields:
+ * - start/end: Relative position within sentence (used for API storage)
+ * - globalStart/globalEnd: Optional pre-computed global positions (used for UI rendering)
+ *
+ * When rendering, if globalStart/globalEnd are present, use them directly.
+ * Otherwise, add sentenceStartChar to start/end to get global positions.
+ */
+export interface ConfirmedAnchor {
+  id: string;
+  text: string;
+  /** Relative position within sentence (for API storage) */
+  start: number;
+  /** Relative position within sentence (for API storage) */
+  end: number;
+  type: AnchorType;
+  constraint: AnchorConstraint;
+  /** Optional: Pre-computed global start position (for UI rendering) */
+  globalStart?: number;
+  /** Optional: Pre-computed global end position (for UI rendering) */
+  globalEnd?: number;
+}
+
+/**
+ * Sentence with its confirmed anchors
+ * Provides the sentence context for anchor display and auditing
+ */
+export interface SentenceWithAnchors {
+  sentenceId: string;  // Ring 3 segment ID
+  text: string;        // Sentence original text
+  startChar: number;   // Position in source text (global)
+  endChar: number;
+  anchors: ConfirmedAnchor[];
+}
+
+/**
+ * Commit-level anchor storage
+ * Persisted in commit for auditing and playback
+ */
+export interface CommitAnchors {
+  inputTextHash: string;              // SHA-256 of source text for validation
+  sentences: SentenceWithAnchors[];
+}
+
 // Individual clause/sentence with its status
 export interface Clause {
   id: string;
@@ -327,6 +415,14 @@ export interface CanvasNodeData {
     end_turn_hash: string;
   };
 
+  // Staging commit: anchor candidates and confirmed anchors
+  /** Anchor candidates from Ring 1 (for inline highlighting during curation) */
+  anchorCandidates?: AnchorCandidate[];
+  /** User-confirmed anchors during staging (will be persisted on commit) */
+  pendingAnchors?: CommitAnchors;
+  /** SHA-256 hash of source text for anchor validation */
+  inputTextHash?: string;
+
   // Committed commit data (from database)
   sourceExcerpt?: string[]; // User-selected source excerpts
   mustHave?: string[]; // Must-have keywords
@@ -346,6 +442,13 @@ export interface CanvasNodeData {
     turn_hash?: string;
   }>;
   facets?: string[]; // Legacy facets field
+
+  /**
+   * Confirmed anchors for this commit
+   * @display Sentence-level inline highlights in commit detail view
+   * @format SentenceWithAnchors[] with confirmed anchor spans
+   */
+  anchors?: CommitAnchors;
 
   // Merge commit configuration
   mergeConfig?: MergeConfig;

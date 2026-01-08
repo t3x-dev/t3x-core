@@ -166,11 +166,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
       position_x REAL,
       position_y REAL,
       source_refs_json TEXT,
+      anchors_json TEXT,
       created_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_commits_v2_project ON commits_v2(project_id);
     CREATE INDEX IF NOT EXISTS idx_commits_v2_branch ON commits_v2(branch);
     CREATE INDEX IF NOT EXISTS idx_commits_v2_draft ON commits_v2(draft_id);
+
+    -- Migration: Add anchors_json column to existing commits_v2 tables (v1.1)
+    DO $$ BEGIN
+      ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
+    EXCEPTION WHEN duplicate_column THEN
+      NULL;
+    END $$;
 
     -- Drafts V2 table
     CREATE TABLE IF NOT EXISTS drafts_v2 (

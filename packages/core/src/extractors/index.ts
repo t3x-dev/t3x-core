@@ -17,6 +17,10 @@ export {
 } from './ringExtractor';
 // Types
 export {
+  // v1.1: Anchor types
+  type AnchorCandidate,
+  type AnchorSource,
+  type AnchorType,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
