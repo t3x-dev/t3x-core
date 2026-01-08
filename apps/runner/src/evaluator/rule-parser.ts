@@ -15,6 +15,17 @@ import pino from 'pino';
 import yaml from 'js-yaml';
 import { EvalRulesSchema, type EvalRules } from '../schemas/eval-rules.js';
 
+/**
+ * Leaf 对象类型（用于规则解析）
+ *
+ * content: prompt 内容，给 n8n AI Agent 使用，不参与规则解析
+ * rules_ref: 规则文件引用名，指向 resources/rules/ 目录下的文件
+ */
+export interface LeafForRules {
+  content?: string;
+  rules_ref?: string;
+}
+
 const logger = pino({
   transport: {
     target: 'pino-pretty',
@@ -142,48 +153,47 @@ export function loadRulesFromFile(filePath: string): EvalRules {
 }
 
 /**
- * Parse rules from leaf.content
+ * Parse rules from leaf object
  *
- * The leaf.content may contain:
- * - Full eval rules JSON
- * - Partial rules that need merging with defaults
- * - undefined/null (use defaults)
+ * 优先级:
+ * 1. leaf.rules_ref → 从 resources/rules/ 目录加载对应文件
+ * 2. 默认规则 (default.yml 或内置 DEFAULT_RULES)
  *
- * @param leafContent - Content from leaf (may be JSON string or undefined)
+ * 注意: leaf.content 是给 n8n AI Agent 的 prompt，不参与规则解析
+ *
+ * @param leaf - Leaf 对象，包含 rules_ref 字段
  * @returns EvalRules
  */
-export function parseRulesFromLeaf(leafContent?: string): EvalRules {
-  if (!leafContent) {
-    logger.debug('No leaf content, using default rules');
-    return DEFAULT_RULES;
-  }
+export function parseRulesFromLeaf(leaf?: LeafForRules): EvalRules {
+  // 1. 如果有 rules_ref，从文件加载
+  if (leaf?.rules_ref) {
+    const rulesDir = join(process.cwd(), 'resources', 'rules');
 
-  try {
-    const parsed = JSON.parse(leafContent);
+    // 尝试多种扩展名
+    const candidates = [
+      join(rulesDir, `${leaf.rules_ref}.yaml`),
+      join(rulesDir, `${leaf.rules_ref}.yml`),
+      join(rulesDir, `${leaf.rules_ref}.json`),
+      join(rulesDir, leaf.rules_ref), // 完整文件名（如 "custom.yaml"）
+    ];
 
-    // If it looks like full eval rules (has version and rules array)
-    if (parsed.version && Array.isArray(parsed.rules)) {
-      const validated = EvalRulesSchema.parse(parsed);
-      logger.debug({ rules_count: validated.rules.length }, 'Parsed rules from leaf content');
-      return validated;
+    for (const filePath of candidates) {
+      if (existsSync(filePath)) {
+        try {
+          logger.info({ rules_ref: leaf.rules_ref, file: filePath }, 'Loading rules from file');
+          return loadRulesFromFile(filePath);
+        } catch (error) {
+          logger.warn({ file: filePath, error: String(error) }, 'Failed to load rules file');
+        }
+      }
     }
 
-    // If it's partial config, merge with defaults
-    // This supports cases like { pass_threshold: 0.9 }
-    const merged = {
-      ...DEFAULT_RULES,
-      ...parsed,
-      rules: parsed.rules || DEFAULT_RULES.rules,
-    };
-
-    const validated = EvalRulesSchema.parse(merged);
-    logger.debug({ rules_count: validated.rules.length }, 'Merged rules from leaf content');
-    return validated;
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.warn({ error: msg }, 'Failed to parse leaf content as rules, using defaults');
-    return DEFAULT_RULES;
+    logger.warn({ rules_ref: leaf.rules_ref }, 'Rules file not found, falling back to defaults');
   }
+
+  // 2. 没有 rules_ref，用默认规则
+  logger.debug('No rules_ref provided, using default rules');
+  return loadDefaultRules();
 }
 
 /**

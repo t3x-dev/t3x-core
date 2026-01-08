@@ -35,7 +35,8 @@ const CreateRunSchema = z.object({
   leaf: z.object({
     id: z.string(),
     type: z.enum(['deploy', 'eval']),
-    content: z.string().optional(),
+    content: z.string().optional(),      // prompt（给 n8n AI Agent）
+    rules_ref: z.string().optional(),    // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   }).optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),
   workflow: z.object({
