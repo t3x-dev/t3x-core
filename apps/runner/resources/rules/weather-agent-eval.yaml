@@ -1,0 +1,233 @@
+# ============================================================================
+# Weather Agent Evaluation Rules
+# ============================================================================
+#
+# File: weather-agent-eval.yaml
+# Purpose: Example rules for Phase 6 end-to-end validation
+#
+# Design Goals:
+# ----------
+# These rules are intentionally designed to demonstrate "tuning" effects,
+# not to let the Agent pass easily.
+# Rule parameters are carefully adjusted so that:
+#   - Basic checks (task_completion): Easy to pass, high scores
+#   - Tool usage (tool_use): Medium difficulty, may lose points for unnecessary tools
+#   - Path efficiency (trajectory_efficiency): Hard to pass, strict step thresholds
+#   - Cost efficiency (cost_efficiency): Medium difficulty, tight token budget
+#   - Latency performance (latency): Easy to pass, lenient thresholds
+#
+# Expected Results:
+# ----------
+# With initial prompt version ("Please answer as comprehensively as possible..."):
+#   - Overall score: ~0.65-0.75 (on the edge of pass_threshold)
+#   - task_completion: 0.85-1.0 (high)
+#   - tool_use: 0.5-0.7 (medium)
+#   - trajectory_efficiency: 0.3-0.5 (low)
+#   - cost_efficiency: 0.5-0.8 (medium)
+#   - latency: 0.9-1.0 (high)
+#
+# Tuned prompt ("Please answer concisely...") should significantly improve scores.
+#
+# ============================================================================
+
+version: "2.0"
+name: "weather-agent-eval"
+description: "Weather agent evaluation rules - designed for tuning demonstration"
+
+rules:
+  # ==========================================================================
+  # Basic Checks
+  # ==========================================================================
+  # Dimension: task_completion
+  # Expected: All pass ✅
+  # Note: These are the most basic checks - Agent passes as long as it runs
+  #       normally and returns results
+  # ==========================================================================
+
+  - id: "output_exists"
+    name: "Output exists"
+    type: "basic"
+    target: "output"
+    check: "exists"
+    weight: 0.15
+    severity: "error"
+    # Design intent: Check if there's output - most basic requirement
+    # Expected result: ✅ Pass (Agent running normally will have output)
+
+  - id: "output_not_empty"
+    name: "Output not empty"
+    type: "basic"
+    target: "output"
+    check: "not_empty"
+    weight: 0.15
+    severity: "error"
+    # Design intent: Check output is not empty string/object
+    # Expected result: ✅ Pass (Agent will generate weather response)
+
+  - id: "no_errors"
+    name: "No execution errors"
+    type: "basic"
+    target: "steps"
+    check: "all"
+    condition:
+      status: "ok"
+    weight: 0.1
+    severity: "error"
+    # Design intent: Check all execution steps have no errors
+    # Expected result: ✅ Pass (assuming n8n workflow is configured correctly)
+
+  # ==========================================================================
+  # Tool Use Checks
+  # ==========================================================================
+  # Dimension: tool_use
+  # Expected: Partial failure ⚠️
+  # Note: If the prompt isn't precise enough, Agent may call unnecessary tools
+  # ==========================================================================
+
+  - id: "weather_tool_used"
+    name: "Weather tool used"
+    type: "tool_use"
+    target: "steps"
+    check: "expected_tools"
+    expected:
+      - "WeatherTool"
+    skip_if_empty: true
+    weight: 0.1
+    severity: "error"
+    # Design intent: Ensure Agent at least called WeatherTool
+    # Expected result: ✅ Pass (querying weather requires this tool)
+    # Tuning suggestion: If fails, Agent doesn't understand the task at all
+
+  - id: "no_unnecessary_tools"
+    name: "No unnecessary tools used"
+    type: "tool_use"
+    target: "steps"
+    check: "no_unknown_tools"
+    expected:
+      - "WeatherTool"
+    skip_if_empty: true
+    weight: 0.1
+    severity: "warning"
+    # Design intent: Check only WeatherTool was used, no SearchTool etc.
+    # Expected result: ⚠️ May fail
+    # Failure reason: Initial prompt says "you can use these tools...", Agent
+    #                 may "over-enthusiastically" call SearchTool for more info,
+    #                 or CalculatorTool for calculations
+    # Tuning suggestion: Add "prefer WeatherTool, only use others when necessary"
+
+  # ==========================================================================
+  # Trajectory Efficiency Checks
+  # ==========================================================================
+  # Dimension: trajectory_efficiency
+  # Expected: Hard to pass ❌
+  # Note: Thresholds are set strictly to make Agent easily "exceed limits"
+  # ==========================================================================
+
+  - id: "trajectory_length"
+    name: "Reasonable execution steps"
+    type: "trajectory"
+    target: "steps"
+    check: "step_count"
+    max: 3
+    weight: 0.1
+    severity: "warning"
+    # Design intent: Limit execution steps to max 3
+    # Parameter note: max=3 is intentionally strict!
+    #                 Ideal: LLM think → WeatherTool call → LLM generate reply = 3 steps
+    #                 But actually Agent may:
+    #                 - Think multiple times (each counts as a step)
+    #                 - Call multiple tools
+    #                 - Retry failed calls
+    # Expected result: ❌ Likely fail (steps exceed 3)
+    # Tuning suggestions:
+    #   1. Add "answer directly, don't over-analyze" to prompt
+    #   2. Or relax max to 5-6 (but loses tuning demo value)
+
+  - id: "no_loops"
+    name: "No repeated calls"
+    type: "trajectory"
+    target: "steps"
+    check: "no_repeated_steps"
+    weight: 0.05
+    severity: "warning"
+    # Design intent: Check for identical tool calls (same parameters)
+    # Expected result: ✅ Usually passes (unless Agent loops)
+    # Failure scenario: Agent repeatedly queries weather for same city
+
+  # ==========================================================================
+  # Cost Checks
+  # ==========================================================================
+  # Dimension: cost_efficiency
+  # Expected: Medium difficulty ⚠️
+  # Note: Token budget is tight to encourage concise responses
+  # ==========================================================================
+
+  - id: "token_budget"
+    name: "Within token budget"
+    type: "cost"
+    target: "steps"
+    check: "total_tokens"
+    max: 1500
+    weight: 0.1
+    severity: "warning"
+    # Design intent: Limit total token usage to 1500
+    # Parameter note: max=1500 is a relatively tight budget!
+    #                 Simple weather query theoretically needs ~500-800 tokens
+    #                 But if prompt requests "detailed and professional", Agent may:
+    #                 - Generate lengthy responses
+    #                 - Call LLM multiple times for thinking
+    #                 - Call multiple tools for more information
+    # Expected result: ⚠️ Borderline or fail (depends on response length)
+    # Tuning suggestion: Add "keep response under 100 words" to prompt
+
+  # ==========================================================================
+  # Performance Checks
+  # ==========================================================================
+  # Dimension: latency
+  # Expected: Pass ✅
+  # Note: Latency threshold is lenient, mainly a safety check
+  # ==========================================================================
+
+  - id: "latency_budget"
+    name: "Within latency budget"
+    type: "performance"
+    target: "steps"
+    check: "total_latency_ms"
+    max: 15000
+    weight: 0.05
+    severity: "warning"
+    # Design intent: Limit total execution time to 15 seconds
+    # Parameter note: max=15000ms (15 seconds) is a lenient threshold
+    #                 Normal weather query should complete in 3-8 seconds
+    #                 Only times out with network issues or Agent stuck thinking
+    # Expected result: ✅ Pass (unless serious problems)
+
+# ============================================================================
+# Pass Threshold
+# ============================================================================
+# Set to 0.7 means 70% weighted score required to pass
+# Based on the rule design above, initial prompt gets about 65-75% score
+# This puts it at the "barely passing" or "just short" edge state,
+# perfect for demonstrating tuning effects
+# ============================================================================
+
+pass_threshold: 0.7
+
+# ============================================================================
+# Weight Distribution Summary
+# ============================================================================
+#
+# Dimension                 | Rules | Weight | Expected Score
+# --------------------------|-------|--------|---------------
+# task_completion (basic)   | 3     | 0.40   | High (0.85-1.0)
+# tool_use                  | 2     | 0.20   | Medium (0.5-0.7)
+# trajectory_efficiency     | 2     | 0.15   | Low (0.3-0.5)
+# cost_efficiency           | 1     | 0.10   | Medium (0.5-0.8)
+# latency (performance)     | 1     | 0.05   | High (0.9-1.0)
+# --------------------------|-------|--------|---------------
+# Total                     | 9     | 0.90   | ~0.65-0.75
+#
+# Note: Total weight is 0.90, not 1.0 - this is intentional design
+#       Scoring calculates weighted average based on actual weights
+#
+# ============================================================================

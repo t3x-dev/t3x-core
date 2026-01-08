@@ -311,10 +311,10 @@ app.post('/callbacks/n8n', async (req, res) => {
     // ═══════════════════════════════════════════════════
     // Step 2: Deterministic evaluation
     // ═══════════════════════════════════════════════════
-    logger.info({ run_id: runInfo.run_id }, 'Running deterministic evaluation...');
-    const evalResult: EvalResult = evalEngine.evaluateWithLeafRules(
+    logger.info({ run_id: runInfo.run_id, rules_ref: runInfo.leaf?.rules_ref }, 'Running deterministic evaluation...');
+    const evalResult: EvalResult = evalEngine.evaluateWithLeaf(
       runRecord,
-      runInfo.leaf?.content
+      runInfo.leaf ?? undefined  // null -> undefined，根据 rules_ref 加载规则文件
     );
 
     logger.info({

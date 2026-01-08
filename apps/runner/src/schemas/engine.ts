@@ -10,7 +10,8 @@ export const EngineRunRequestSchema = z.object({
     .object({
       id: z.string(),
       type: z.enum(['deploy', 'eval']),
-      content: z.string().optional(),
+      content: z.string().optional(),      // prompt（给 n8n AI Agent 使用）
+      rules_ref: z.string().optional(),    // 规则文件引用名（指向 resources/rules/ 目录）
     })
     .optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),
@@ -72,5 +73,5 @@ export interface PendingRun {
   engine_callback_url: string;
   started_at: string;
   inputs?: Record<string, unknown>;
-  leaf?: { id: string; type: 'deploy' | 'eval'; content?: string };
+  leaf?: { id: string; type: 'deploy' | 'eval'; content?: string; rules_ref?: string };
 }
