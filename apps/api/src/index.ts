@@ -21,6 +21,7 @@ import {
   chatRoutes,
   commitRoutes,
   conversationRoutes,
+  curateRoutes,
   diffRoutes,
   draftRoutes,
   exportRoutes,
@@ -35,30 +36,38 @@ import {
 import { projectRoutes } from './routes/projects';
 
 function loadEnvLocal(): void {
+  // Load env from monorepo root (unified config)
+  // Supports running from root (pnpm dev:api) or from apps/api directory
+  const cwd = process.cwd();
+  const isInAppsApi = cwd.endsWith('apps/api') || cwd.endsWith('apps\\api');
+  const rootDir = isInAppsApi ? path.resolve(cwd, '../..') : cwd;
+
   const candidates = [
-    path.resolve(process.cwd(), '.env.local'),
-    path.resolve(process.cwd(), 'apps/api/.env.local'),
+    path.resolve(rootDir, '.env.local'),
+    path.resolve(rootDir, '.env'),
   ];
 
-  const envPath = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!envPath) return;
+  for (const envPath of candidates) {
+    if (!fs.existsSync(envPath)) continue;
 
-  const content = fs.readFileSync(envPath, 'utf8');
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const equalsIndex = trimmed.indexOf('=');
-    if (equalsIndex === -1) continue;
-    const key = trimmed.slice(0, equalsIndex).trim();
-    let value = trimmed.slice(equalsIndex + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const equalsIndex = trimmed.indexOf('=');
+      if (equalsIndex === -1) continue;
+      const key = trimmed.slice(0, equalsIndex).trim();
+      let value = trimmed.slice(equalsIndex + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      // Only set if not already defined (first found wins)
+      if (!key || process.env[key] !== undefined) continue;
+      process.env[key] = value;
     }
-    if (!key || process.env[key] !== undefined) continue;
-    process.env[key] = value;
   }
 }
 
@@ -86,6 +95,7 @@ api.route('/', branchRoutes); // /v1/branches
 api.route('/', draftRoutes); // /v1/drafts
 api.route('/', agentDraftRoutes); // /v1/agent/drafts
 api.route('/', chatRoutes); // /v1/chat
+api.route('/', curateRoutes); // /v1/curate
 api.route('/', diffRoutes); // /v1/diff
 api.route('/', exportRoutes); // /v1/export
 api.route('/', mergeRoutes); // /v1/merge

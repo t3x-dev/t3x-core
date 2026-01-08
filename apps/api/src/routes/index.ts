@@ -7,6 +7,7 @@ export { branchRoutes } from './branches';
 export { chatRoutes } from './chat';
 export { commitRoutes } from './commits';
 export { conversationRoutes } from './conversations';
+export { curateRoutes } from './curate';
 export { diffRoutes } from './diff';
 export { draftRoutes } from './drafts';
 export { exportRoutes } from './export';

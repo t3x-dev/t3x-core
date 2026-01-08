@@ -8,7 +8,9 @@
  * - Dependency parsing
  * - Named entity recognition
  * - Sentiment analysis
- * - Sentence segmentation
+ *
+ * NOTE: Sentence segmentation uses rule-based splitter (`splitSentencesRuleBased`),
+ * NOT Google NLP's sentence boundaries. This provides more stable and controllable results.
  *
  * @see https://cloud.google.com/natural-language/docs/reference/rest
  * @see docs/specification/ring-schema.md for mapping guidelines
@@ -16,6 +18,7 @@
 
 import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from './base';
 import { NLPProviderError, normalizeDependencyLabel, normalizePosTag } from './base';
+import { splitSentencesRuleBased } from './sentenceRules';
 
 /**
  * Google Cloud NLP API response types
@@ -228,13 +231,8 @@ export class GoogleCloudNLPProvider implements NLPProvider {
       };
     });
 
-    // Map sentences
-    const sentences: NLPSentence[] = (response.sentences ?? []).map((sentence) => ({
-      text: sentence.text.content,
-      sentiment: sentence.sentiment?.score ?? 0,
-      beginOffset: sentence.text.beginOffset,
-      endOffset: sentence.text.beginOffset + sentence.text.content.length,
-    }));
+    // Use rule-based segmentation (ignore Google sentence boundaries).
+    const sentences: NLPSentence[] = splitSentencesRuleBased(originalText);
 
     // Document sentiment
     const sentiment = {
