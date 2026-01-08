@@ -1046,10 +1046,14 @@ export async function merge(
 export async function createDraft(
   projectId: string,
   conversationId: string,
-  bridgeId: 'plan' | 'summary' | 'explain' | 'clarify',
+  bridgeId: 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'explain' | 'clarify',
   intent: string,
   baseCommitHash?: string,
-  turnAnchorHash?: string
+  turnAnchorHash?: string,
+  /** Optional: pre-selected text from curate preview. If provided, use this instead of full conversation. */
+  selectedText?: string,
+  /** Curate parameters for debugging/review */
+  curateParams?: { cosine?: number; keepRatio?: number }
 ): Promise<Draft> {
   // LLM draft generation typically takes 10-20 seconds for a single call
   const res = await fetchWithTimeout(
@@ -1064,6 +1068,9 @@ export async function createDraft(
         intent,
         base_commit_hash: baseCommitHash,
         turn_anchor_hash: turnAnchorHash,
+        selected_text: selectedText,
+        cosine: curateParams?.cosine,
+        keep_ratio: curateParams?.keepRatio,
       }),
     },
     30000
@@ -1762,4 +1769,68 @@ export async function* chatStream(
   } finally {
     reader.releaseLock();
   }
+}
+
+// ============================================================================
+// Curate Preview API
+// ============================================================================
+
+export type BridgeTemplate = 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'explain' | 'clarify';
+
+export interface CurateChunk {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  score: number;
+  selected: boolean;
+  cos_intent?: number;
+}
+
+export interface CuratePreviewResponse {
+  algorithm_version: string;
+  keep_ratio: number;
+  chunks: CurateChunk[];
+  selected_spans: Array<{ start: number; end: number }>;
+  /** The source text used for chunking - frontend should use this for tokenization */
+  source_text: string;
+}
+
+export interface CuratePreviewRequest {
+  project_id: string;
+  source_conversation_id: string;
+  bridge_id: BridgeTemplate;
+  intent: string;
+  cosine: number;
+  unit_title?: string;
+  user_message?: string;
+  source_text?: string;
+}
+
+/**
+ * Get curated preview based on cosine similarity
+ *
+ * This endpoint calculates which text chunks to select based on:
+ * - Bridge template queries (task/schema)
+ * - User intent
+ * - Cosine similarity threshold (controlled by slider)
+ *
+ * @param params - Curate preview parameters
+ * @param signal - Optional AbortSignal for cancellation (e.g., debounce)
+ */
+export async function curatePreview(
+  params: CuratePreviewRequest,
+  signal?: AbortSignal
+): Promise<CuratePreviewResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/curate/preview`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    },
+    30000, // 30s timeout for embedding computation
+    signal
+  );
+  return handleResponse<CuratePreviewResponse>(res);
 }
