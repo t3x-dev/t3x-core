@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   position_x REAL,
   position_y REAL,
   source_refs_json TEXT,
+  anchors_json TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
