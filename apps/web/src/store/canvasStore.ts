@@ -680,6 +680,8 @@ const unitToNode = (
       facetSnapshot: commit?.facet_snapshot ?? undefined,
       // Turn window for creating child commits
       sourceTurnWindow: commit?.turn_window ?? undefined,
+      // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
+      anchors: commit?.anchors ? api.parseApiCommitAnchors(commit.anchors) ?? undefined : undefined,
     },
   };
 };

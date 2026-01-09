@@ -18,6 +18,7 @@ import {
   findDeployAgentById,
   updateDeployAgent,
   deleteDeployAgent,
+  findProjectById,
 } from '@t3x/storage/pglite';
 
 export const deployAgentRoutes = new Hono();
@@ -90,6 +91,15 @@ deployAgentRoutes.post('/v1/deploy-agents', async (c) => {
 
   try {
     const db = await getDB();
+
+    // Validate project_id exists if provided
+    if (body.project_id) {
+      const project = await findProjectById(db, body.project_id);
+      if (!project) {
+        return jsonError(c, 'PROJECT_NOT_FOUND', `Project ${body.project_id} not found`, 400);
+      }
+    }
+
     const agent = await insertDeployAgent(db, {
       id: body.id,
       name: body.name,
