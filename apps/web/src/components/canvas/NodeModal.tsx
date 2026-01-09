@@ -38,6 +38,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type {
   AnchorCandidate,
   CanvasNodeData,
+  ConfirmedAnchor,
   ConversationConstraints,
   DraftConstraintOverrides,
   SourceTextBlock,
@@ -422,6 +423,13 @@ export function NodeModal({
   const textBlocksRef = useRef(textBlocks);
   textBlocksRef.current = textBlocks;
 
+  // Pending anchors: user-confirmed anchors during commit flow (before actual commit)
+  // These are merged with any existing anchors from committed data for display
+  // Initialized from pendingSource to persist across re-renders
+  const [pendingAnchors, setPendingAnchors] = useState<ConfirmedAnchor[]>(
+    node?.data.pendingSource?.confirmedAnchors || []
+  );
+
   // Ref to track current sourceConversationId for stale request detection
   const sourceConversationIdRef = useRef<string | null>(null);
 
@@ -577,16 +585,21 @@ export function NodeModal({
   }, [textBlocks]);
 
   // Persist text block edits (selections/keywords) back to canvas store
+  // Preserves inputTextHash and sentences from curate preview
   const handleTextBlocksChange = useCallback(
     (updatedBlocks: SourceTextBlock[]) => {
       setTextBlocks(updatedBlocks);
+      const existingPendingSource = node?.data?.pendingSource;
       onUpdate({
         pendingSource: {
           textBlocks: updatedBlocks,
+          confirmedAnchors: existingPendingSource?.confirmedAnchors,
+          inputTextHash: existingPendingSource?.inputTextHash,
+          sentences: existingPendingSource?.sentences,
         },
       });
     },
-    [onUpdate]
+    [onUpdate, node?.data?.pendingSource]
   );
 
   // Derive node-dependent values
@@ -742,14 +755,74 @@ export function NodeModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPendingCommit, node?.id, projectId, data?.conversationId, data?.sourceConversationId]);
 
-  // Clear curate state when conversation changes to avoid stale data on new content
+  // Track previous node ID to reinitialize pendingAnchors when switching nodes
+  const prevNodeIdRef = useRef<string | undefined>(node?.id);
+
+  // Track previous source ID to detect actual source changes
+  // Defined here (before node-switch effect) so we can update it when node changes
+  const prevSourceIdRef = useRef<string | null>(null);
+
+  // Reinitialize state when node changes (e.g., user double-clicks another node while modal is open)
+  // useState initial values are only used on first render, so we need this effect for subsequent node changes
+  // IMPORTANT: Also update prevSourceIdRef to prevent the source-change effect from clearing anchors
+  useEffect(() => {
+    if (prevNodeIdRef.current !== node?.id) {
+      // Reinitialize pendingAnchors from new node's data
+      const newAnchors = node?.data?.pendingSource?.confirmedAnchors || [];
+      setPendingAnchors(newAnchors);
+
+      // Clear curate preview state - even if sourceConversationId is same,
+      // different nodes may have different intent/threshold configs
+      setCuratePreview(null);
+      setPreviewConversationId(null);
+      setCurateError(null);
+
+      prevNodeIdRef.current = node?.id;
+      // Sync update sourceId ref to prevent source-change effect from clearing these anchors
+      // (both effects trigger on node switch, but we don't want the second one to undo our work)
+      const newSourceId = data?.sourceConversationId || data?.conversationId || null;
+      prevSourceIdRef.current = newSourceId;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node?.id, data?.sourceConversationId, data?.conversationId]);
+
+  // Ref to access current node data without adding it to effect dependencies
+  const nodeDataRef = useRef(node?.data);
+  nodeDataRef.current = node?.data;
+
+  // Clear curate state and pending anchors when conversation changes to avoid stale data on new content
+  // IMPORTANT: Do NOT add node or node.data to dependencies - it would trigger on every pendingSource update
   useEffect(() => {
     const newSourceId = data?.sourceConversationId || data?.conversationId || null;
-    sourceConversationIdRef.current = newSourceId; // Invalidate in-flight requests
-    setCuratePreview(null);
-    setPreviewConversationId(null);
-    setCurateError(null);
-  }, [projectId, data?.conversationId, data?.sourceConversationId]);
+    const sourceChanged = prevSourceIdRef.current !== null && prevSourceIdRef.current !== newSourceId;
+
+    // Always update the ref for in-flight request invalidation
+    sourceConversationIdRef.current = newSourceId;
+
+    // Only clear state when source actually changes (not on initial mount or other updates)
+    if (sourceChanged) {
+      // Clear curate preview state
+      setCuratePreview(null);
+      setPreviewConversationId(null);
+      setCurateError(null);
+      // Clear pending anchors when source changes (both local state and persisted)
+      setPendingAnchors([]);
+      // Also clear pendingSource.confirmedAnchors to prevent stale anchors from reappearing
+      // Access via ref to avoid adding node to dependencies
+      const currentPendingSource = nodeDataRef.current?.pendingSource;
+      if (currentPendingSource?.confirmedAnchors?.length) {
+        onUpdate({
+          pendingSource: {
+            ...currentPendingSource,
+            confirmedAnchors: [],
+          },
+        });
+      }
+    }
+
+    prevSourceIdRef.current = newSourceId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, data?.conversationId, data?.sourceConversationId, onUpdate]);
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -833,6 +906,68 @@ export function NodeModal({
     return api.parseApiAnchorCandidates(curatePreview.anchor_candidates);
   }, [curatePreview?.anchor_candidates]);
 
+  // Extract confirmed anchors from committed commit data
+  // data.anchors is already in camelCase format (converted by canvasStore.loadProjectData)
+  const committedAnchors = useMemo((): ConfirmedAnchor[] => {
+    if (!data?.anchors?.sentences) return [];
+    // Flatten anchors from all sentences (already have globalStart/globalEnd computed)
+    return data.anchors.sentences.flatMap((sentence) => sentence.anchors);
+  }, [data?.anchors]);
+
+  // Merge committed anchors with pending (user-confirmed during this session)
+  // pendingAnchors takes precedence (user can override existing anchors)
+  const confirmedAnchors = useMemo((): ConfirmedAnchor[] => {
+    if (pendingAnchors.length === 0) return committedAnchors;
+    if (committedAnchors.length === 0) return pendingAnchors;
+    // Merge: pending anchors override committed ones with same id
+    const pendingIds = new Set(pendingAnchors.map((a) => a.id));
+    const merged = [
+      ...pendingAnchors,
+      ...committedAnchors.filter((a) => !pendingIds.has(a.id)),
+    ];
+    return merged;
+  }, [committedAnchors, pendingAnchors]);
+
+  // Handle anchor change from user interaction (click to confirm/toggle/remove)
+  const handleAnchorChange = useCallback(
+    (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => {
+      setPendingAnchors((prev) => {
+        let newAnchors: ConfirmedAnchor[];
+        switch (action) {
+          case 'add':
+            // Add new anchor if not already present
+            if (prev.some((a) => a.id === anchor.id)) {
+              newAnchors = prev.map((a) => (a.id === anchor.id ? anchor : a));
+            } else {
+              newAnchors = [...prev, anchor];
+            }
+            break;
+          case 'remove':
+            newAnchors = prev.filter((a) => a.id !== anchor.id);
+            break;
+          case 'update':
+            newAnchors = prev.map((a) => (a.id === anchor.id ? anchor : a));
+            break;
+          default:
+            newAnchors = prev;
+        }
+        // Sync to pendingSource for persistence
+        // Preserves inputTextHash and sentences from curate preview
+        const existingPendingSource = node?.data?.pendingSource;
+        onUpdate({
+          pendingSource: {
+            textBlocks: textBlocksRef.current,
+            confirmedAnchors: newAnchors,
+            inputTextHash: existingPendingSource?.inputTextHash,
+            sentences: existingPendingSource?.sentences,
+          },
+        });
+        return newAnchors;
+      });
+    },
+    [onUpdate, node?.data?.pendingSource]
+  );
+
   // Auto-convert curate chunks to textBlocks.selections
   // When curate preview updates, automatically select the relevant tokens
   // Only runs in Step 1 (before config is locked) to avoid overwriting user's manual edits in Step 2
@@ -911,8 +1046,36 @@ export function NodeModal({
         turnBoundaries: undefined,
       };
       setTextBlocks([updatedBlock]);
+
+      // v1.1: Persist inputTextHash and sentences for CommitAnchors construction
+      // Also preserve existing confirmedAnchors if text hash matches (same source text)
+      const existingPendingSource = data?.pendingSource;
+      const preserveAnchors =
+        !textChanged &&
+        existingPendingSource?.inputTextHash === curatePreview.input_text_hash &&
+        existingPendingSource?.confirmedAnchors;
+
+      // If not preserving anchors, also clear the local pendingAnchors state
+      // to keep UI and storage in sync (prevents stale anchors from being shown or committed)
+      if (!preserveAnchors) {
+        setPendingAnchors([]);
+      }
+
+      onUpdate({
+        pendingSource: {
+          textBlocks: [updatedBlock],
+          confirmedAnchors: preserveAnchors ? existingPendingSource.confirmedAnchors : [],
+          inputTextHash: curatePreview.input_text_hash,
+          sentences: curatePreview.chunks.map((chunk) => ({
+            id: chunk.id,
+            text: chunk.text,
+            start: chunk.start,
+            end: chunk.end,
+          })),
+        },
+      });
     }
-  }, [curatePreview, configLocked, previewConversationId, currentSourceConversationId]);
+  }, [curatePreview, configLocked, previewConversationId, currentSourceConversationId, data?.pendingSource, onUpdate]);
 
   const addCommitAction = useMemo(
     () => quickActions?.find((a) => a.key === 'add-commit'),
@@ -1097,7 +1260,7 @@ export function NodeModal({
     setConfigLocked(true);
   }, [textBlocks, sourceBoxes]);
 
-  // Handle Reset - unlock Step 1 config and reset phrases to default
+  // Handle Reset - unlock Step 1 config and reset phrases/anchors to default
   const handleReset = useCallback(() => {
     setConfigLocked(false);
     // Re-extract to reset all phrase/keyword states
@@ -1107,7 +1270,18 @@ export function NodeModal({
         phrases: extractPhrasesFromText(sb.content, sb.id, keywordsThreshold),
       }))
     );
-  }, [keywordsThreshold]);
+    // Clear pending anchors but preserve inputTextHash and sentences for future anchor confirmations
+    setPendingAnchors([]);
+    const existingPendingSource = node?.data?.pendingSource;
+    onUpdate({
+      pendingSource: {
+        textBlocks: textBlocksRef.current,
+        confirmedAnchors: [],
+        inputTextHash: existingPendingSource?.inputTextHash,
+        sentences: existingPendingSource?.sentences,
+      },
+    });
+  }, [keywordsThreshold, onUpdate, node?.data?.pendingSource]);
 
   // Check if this pending commit has a source conversation (from conversation) or not (from commit)
   const hasSourceConversation = !!data?.sourceConversationId || !!data?.conversationId;
@@ -1421,7 +1595,56 @@ export function NodeModal({
 
       console.log('[handleCommit] Final sourceRefs:', sourceRefs);
 
-      // 6. Create Commit directly (Ring data already extracted during turn creation)
+      // 6. Build CommitAnchors from pendingSource (v1.1)
+      // Convert pendingAnchors (global positions) to sentence-relative positions
+      let anchorsParam: api.ApiCommitAnchors | undefined;
+      const pendingSource = data.pendingSource;
+
+      if (pendingSource?.inputTextHash && pendingSource?.sentences && pendingAnchors.length > 0) {
+        // Group anchors by sentence (find which sentence contains each anchor)
+        const sentencesWithAnchors: api.ApiSentenceWithAnchors[] = pendingSource.sentences.map((sentence) => {
+          // Find anchors that fall within this sentence
+          const sentenceAnchors = pendingAnchors.filter((anchor) => {
+            const anchorStart = anchor.globalStart ?? anchor.start;
+            const anchorEnd = anchor.globalEnd ?? anchor.end;
+            return anchorStart >= sentence.start && anchorEnd <= sentence.end;
+          });
+
+          // Convert to API format with sentence-relative positions
+          const apiAnchors: api.ApiConfirmedAnchor[] = sentenceAnchors.map((anchor) => ({
+            id: anchor.id,
+            text: anchor.text,
+            // Convert global position to sentence-relative position
+            start: (anchor.globalStart ?? anchor.start) - sentence.start,
+            end: (anchor.globalEnd ?? anchor.end) - sentence.start,
+            type: anchor.type as api.ApiAnchorType,
+            constraint: (anchor.constraint === 'mustHave' ? 'must_have' :
+                        anchor.constraint === 'mustntHave' ? 'mustnt_have' :
+                        anchor.constraint) as api.ApiAnchorConstraint,
+          }));
+
+          return {
+            sentence_id: sentence.id,
+            text: sentence.text,
+            start_char: sentence.start,
+            end_char: sentence.end,
+            anchors: apiAnchors,
+          };
+        });
+
+        // Only include sentences that have anchors
+        const nonEmptySentences = sentencesWithAnchors.filter((s) => s.anchors.length > 0);
+
+        if (nonEmptySentences.length > 0) {
+          anchorsParam = {
+            input_text_hash: pendingSource.inputTextHash,
+            sentences: nonEmptySentences,
+          };
+          console.log('[handleCommit] CommitAnchors built:', anchorsParam);
+        }
+      }
+
+      // 7. Create Commit directly (Ring data already extracted during turn creation)
       // Get the current node position to save with the commit
       const currentPosition = node?.position;
       const commit = await api.createCommit(
@@ -1435,6 +1658,7 @@ export function NodeModal({
           mustntHave,
           position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
           sourceRefs,
+          anchors: anchorsParam,
         }
       );
 
@@ -1483,6 +1707,7 @@ export function NodeModal({
     conflictResolutions,
     allConflictsResolved,
     branches,
+    pendingAnchors,
   ]);
 
   // Handle Diff - compare two commits
@@ -3115,7 +3340,9 @@ export function NodeModal({
                       onChange={handleTextBlocksChange}
                       readOnly={!configLocked}
                       anchorCandidates={anchorCandidates}
-                      anchorThreshold={0.5}
+                      confirmedAnchors={confirmedAnchors}
+                      anchorThreshold={keywordsThreshold}
+                      onAnchorChange={handleAnchorChange}
                     />
                   ) : sourceBoxes.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-gray-400">

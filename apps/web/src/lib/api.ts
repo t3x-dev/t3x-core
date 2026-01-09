@@ -222,10 +222,10 @@ export interface ApiConfirmedAnchor {
   end: number;
   type: ApiAnchorType;
   constraint: ApiAnchorConstraint;
-  /** Pre-computed global start position (added during parsing for UI rendering) */
-  globalStart?: number;
-  /** Pre-computed global end position (added during parsing for UI rendering) */
-  globalEnd?: number;
+  /** Optional: Pre-computed global start position (NOT from API, computed in UI layer during parsing) */
+  global_start?: number;
+  /** Optional: Pre-computed global end position (NOT from API, computed in UI layer during parsing) */
+  global_end?: number;
 }
 
 /** Sentence with anchors (snake_case API format) */
@@ -496,9 +496,11 @@ export function parseRingsData(rings: TurnDetail['rings']): RingsData | null {
  *
  * The API stores anchor positions relative to their sentence (start/end).
  * For UI rendering, we need global positions (relative to the full source text).
- * This function adds globalStart/globalEnd to each anchor for efficient UI use.
+ * This function adds global_start/global_end (snake_case) to each anchor.
+ * These are later converted to camelCase (globalStart/globalEnd) by parseApiConfirmedAnchor.
  *
- * Fail-Fast: Throws if sentence.start_char is missing (indicates data corruption).
+ * Graceful degradation: Returns null if data is corrupt (logs warning).
+ * This prevents a single corrupt commit from breaking the entire canvas.
  */
 function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors | null {
   if (!json) return null;
@@ -511,29 +513,27 @@ function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors 
     for (let i = 0; i < anchors.sentences.length; i++) {
       const sentence = anchors.sentences[i];
 
-      // Fail-Fast: start_char is required for correct anchor positioning
+      // Graceful degradation: if start_char is missing, warn and return null
+      // This prevents a single corrupt commit from breaking the entire canvas
       if (typeof sentence.start_char !== 'number') {
-        throw new Error(
-          `Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
-            `Cannot compute global anchor positions. Re-create the commit with anchor data.`
+        console.warn(
+          `[api] Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
+            `Cannot compute global anchor positions. Anchor highlighting disabled for this commit.`
         );
+        return null;
       }
 
       const sentenceStart = sentence.start_char;
       for (const anchor of sentence.anchors ?? []) {
-        // Add global positions for UI rendering
-        anchor.globalStart = sentenceStart + anchor.start;
-        anchor.globalEnd = sentenceStart + anchor.end;
+        // Add global positions for UI rendering (snake_case for API type consistency)
+        anchor.global_start = sentenceStart + anchor.start;
+        anchor.global_end = sentenceStart + anchor.end;
       }
     }
 
     return anchors;
   } catch (err) {
-    // Re-throw fail-fast errors
-    if (err instanceof Error && err.message.includes('Anchor data corrupt')) {
-      throw err;
-    }
-    console.warn('Failed to parse anchors_json:', json?.slice(0, 100));
+    console.warn('[api] Failed to parse anchors_json:', json?.slice(0, 100), err);
     return null;
   }
 }
@@ -1941,8 +1941,13 @@ export function parseApiAnchorCandidates(
 
 /**
  * Convert API confirmed anchor (snake_case) to internal format (camelCase)
+ * Note: global_start/global_end are optional and typically computed in UI layer,
+ * not returned from API. See NodeModal.committedAnchors for the computation.
+ * Supports both snake_case (global_start) and legacy camelCase (globalStart) for backward compat.
  */
 export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAnchor {
+  // Support both snake_case (new) and camelCase (legacy) for backward compatibility
+  const apiAny = api as ApiConfirmedAnchor & { globalStart?: number; globalEnd?: number };
   return {
     id: api.id,
     text: api.text,
@@ -1950,21 +1955,38 @@ export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAncho
     end: api.end,
     type: api.type as AnchorType,
     constraint: api.constraint as AnchorConstraint,
-    globalStart: api.globalStart,
-    globalEnd: api.globalEnd,
+    globalStart: api.global_start ?? apiAny.globalStart,
+    globalEnd: api.global_end ?? apiAny.globalEnd,
   };
 }
 
 /**
  * Convert API sentence with anchors (snake_case) to internal format (camelCase)
+ * Computes globalStart/globalEnd for each anchor using sentence.start_char offset
+ * If start_char is missing/invalid, anchors will only have their original positions (no global computation)
  */
 export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): SentenceWithAnchors {
+  const sentenceStartChar = api.start_char;
+  const hasValidStartChar = typeof sentenceStartChar === 'number' && !Number.isNaN(sentenceStartChar);
+
   return {
     sentenceId: api.sentence_id,
     text: api.text,
     startChar: api.start_char,
     endChar: api.end_char,
-    anchors: api.anchors?.map(parseApiConfirmedAnchor) ?? [],
+    anchors: api.anchors?.map((anchor) => {
+      const parsed = parseApiConfirmedAnchor(anchor);
+      // Compute global positions if not already present and start_char is valid
+      // If start_char is missing/corrupt, skip computation to avoid NaN positions
+      if (hasValidStartChar) {
+        return {
+          ...parsed,
+          globalStart: parsed.globalStart ?? (sentenceStartChar + parsed.start),
+          globalEnd: parsed.globalEnd ?? (sentenceStartChar + parsed.end),
+        };
+      }
+      return parsed;
+    }) ?? [],
   };
 }
 
@@ -1997,12 +2019,14 @@ export interface CuratePreviewResponse {
 
 export interface CuratePreviewRequest {
   project_id: string;
-  source_conversation_id: string;
+  /** Either source_conversation_id or source_text is required */
+  source_conversation_id?: string;
   bridge_id: BridgeTemplate;
   intent: string;
   cosine: number;
   unit_title?: string;
   user_message?: string;
+  /** Fallback mode: if provided without source_conversation_id, uses regex splitting (no Ring3/anchors) */
   source_text?: string;
 }
 

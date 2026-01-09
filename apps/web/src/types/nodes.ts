@@ -175,25 +175,32 @@ export interface AnchorCandidate {
  * Confirmed anchor - user has clicked and confirmed this anchor
  * Stored within a sentence context for precise auditing
  *
- * Position fields:
- * - start/end: Relative position within sentence (used for API storage)
- * - globalStart/globalEnd: Optional pre-computed global positions (used for UI rendering)
+ * Position fields have different semantics depending on context:
  *
- * When rendering, if globalStart/globalEnd are present, use them directly.
- * Otherwise, add sentenceStartChar to start/end to get global positions.
+ * **API storage (after commit):**
+ * - start/end: Relative position within sentence
+ * - globalStart/globalEnd: Computed from sentence.startChar + start/end
+ *
+ * **UI layer (during staging, before commit):**
+ * - start/end: May temporarily hold GLOBAL positions (same as globalStart/globalEnd)
+ * - globalStart/globalEnd: Global positions for UI rendering
+ * - When committing, handleCommit converts to sentence-relative positions
+ *
+ * When rendering, always use globalStart/globalEnd if present.
+ * The start/end fields are authoritative only after API round-trip.
  */
 export interface ConfirmedAnchor {
   id: string;
   text: string;
-  /** Relative position within sentence (for API storage) */
+  /** Position within sentence (relative after API storage, may be global during staging) */
   start: number;
-  /** Relative position within sentence (for API storage) */
+  /** Position within sentence (relative after API storage, may be global during staging) */
   end: number;
   type: AnchorType;
   constraint: AnchorConstraint;
-  /** Optional: Pre-computed global start position (for UI rendering) */
+  /** Global start position (for UI rendering) - authoritative for positioning */
   globalStart?: number;
-  /** Optional: Pre-computed global end position (for UI rendering) */
+  /** Global end position (for UI rendering) - authoritative for positioning */
   globalEnd?: number;
 }
 
@@ -293,9 +300,21 @@ export interface SourceTextBlock {
   turnBoundaries?: TurnBoundary[];
 }
 
+// Sentence info for building CommitAnchors (from curate preview chunks)
+export interface PendingCommitSentence {
+  id: string;      // Sentence/chunk ID
+  text: string;    // Sentence text
+  start: number;   // Global start char position
+  end: number;     // Global end char position
+}
+
 // Pending commit source data - replaces old clause-based system for pending commits
 export interface PendingCommitSource {
   textBlocks: SourceTextBlock[]; // Multiple source text blocks
+  confirmedAnchors?: ConfirmedAnchor[]; // User-confirmed anchors during staging
+  // v1.1: Data for building CommitAnchors on commit
+  inputTextHash?: string; // SHA-256 hash of source text
+  sentences?: PendingCommitSentence[]; // Ring3 sentences from curate preview
 }
 
 // Draft-level constraint overrides
