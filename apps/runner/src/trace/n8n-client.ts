@@ -55,7 +55,9 @@ export class N8nClient {
    * @returns The full execution details including all node run data
    */
   async getExecution(executionId: string): Promise<N8nExecution> {
-    const url = `${this.apiUrl}/api/v1/executions/${executionId}`;
+    // Remove trailing /api/v1 if present to avoid duplication, then add includeData=true
+    const baseUrl = this.apiUrl.replace(/\/api\/v1\/?$/, '');
+    const url = `${baseUrl}/api/v1/executions/${executionId}?includeData=true`;
 
     logger.debug({ execution_id: executionId, url }, 'Fetching n8n execution');
 
@@ -101,7 +103,7 @@ export class N8nClient {
             ? Object.keys(execution.data.resultData.runData).length
             : 0,
         },
-        'n8n execution fetched successfully'
+        'n8n execution fetched'
       );
 
       return execution;
@@ -115,6 +117,54 @@ export class N8nClient {
 
       throw new N8nClientError(`Failed to fetch n8n execution: ${errorMsg}`);
     }
+  }
+
+  /**
+   * Get execution with retry (for async fetching after workflow completes)
+   *
+   * @param executionId - The n8n execution ID
+   * @param maxRetries - Maximum retry attempts
+   * @param retryDelayMs - Base delay between retries (with exponential backoff)
+   * @returns The full execution details
+   */
+  async getExecutionWithRetry(
+    executionId: string,
+    maxRetries: number = 5,
+    retryDelayMs: number = 1000
+  ): Promise<N8nExecution> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const execution = await this.getExecution(executionId);
+
+        // If execution is finished, return it
+        if (execution.finished) {
+          return execution;
+        }
+
+        // If not finished and we have retries left, wait and retry
+        if (attempt < maxRetries) {
+          const delay = retryDelayMs * Math.pow(1.5, attempt);
+          logger.info(
+            { execution_id: executionId, attempt: attempt + 1, maxRetries, delay_ms: delay },
+            'Execution not finished, waiting before retry...'
+          );
+          await this.sleep(delay);
+        }
+      } catch (error) {
+        // On last attempt, throw the error
+        if (attempt >= maxRetries) {
+          throw error;
+        }
+        // Otherwise, log and retry
+        logger.warn(
+          { execution_id: executionId, attempt: attempt + 1, error: String(error) },
+          'Fetch failed, retrying...'
+        );
+        await this.sleep(retryDelayMs * Math.pow(1.5, attempt));
+      }
+    }
+
+    throw new N8nClientError(`Execution ${executionId} not finished after ${maxRetries} retries`);
   }
 
   /**
