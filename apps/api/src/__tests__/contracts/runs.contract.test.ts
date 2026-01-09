@@ -9,7 +9,7 @@
  * 2. apps/runner/src/types.ts - if Runner consumes this API
  */
 
-import { insertRun, deleteRun, listRuns } from '@t3x/storage';
+import { insertRun, deleteRun, listRuns, insertProject, deleteProject, findProjects } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,6 +35,7 @@ describe('Runs API Contract', () => {
   app.route('/', runsRoutes);
 
   const testRunId = 'run_contract_test';
+  let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -52,6 +53,16 @@ describe('Runs API Contract', () => {
     for (const run of existingRuns) {
       await deleteRun(mockDB, run.runId);
     }
+    // Clean up test projects
+    const existingProjects = await findProjects(mockDB);
+    for (const project of existingProjects) {
+      await deleteProject(mockDB, project.projectId);
+    }
+    // Create a test project for foreign key reference
+    const project = await insertProject(mockDB, {
+      name: 'Contract Test Project',
+    });
+    testProjectId = project.projectId;
   });
 
   describe('GET /v1/runs - List runs response schema', () => {
@@ -102,9 +113,10 @@ describe('Runs API Contract', () => {
     });
 
     it('returns correct data types', async () => {
+      // Use the test project ID created in beforeEach
       await insertRun(mockDB, {
         run_id: testRunId,
-        project_id: 'proj_123',
+        project_id: testProjectId,
         runner_run_id: 'runner_test_123',
         commit_ref: 'abc123',
         leaf_json: JSON.stringify({ id: 'agent-1', type: 'deploy' }),

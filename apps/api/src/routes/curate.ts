@@ -38,6 +38,21 @@ function getProxyFetch() {
 }
 
 // ============================================================================
+// Error Classes
+// ============================================================================
+
+/**
+ * Error thrown when data validation fails (corrupt data, missing fields, hash mismatch).
+ * This should result in a 400 response, not 500.
+ */
+class DataValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DataValidationError';
+  }
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -45,13 +60,15 @@ type BridgeTemplate = 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'expla
 
 interface CuratePreviewRequest {
   project_id: string;
-  source_conversation_id: string;
+  /** Either source_conversation_id or source_text is required */
+  source_conversation_id?: string;
   bridge_id: BridgeTemplate;
   intent: string;
   cosine: number; // 0..1 slider value
   unit_title?: string;
   user_message?: string;
-  source_text?: string; // Optional: if provided, skip DB lookup
+  /** Fallback mode: if provided without source_conversation_id, uses regex splitting (no Ring3/anchors) */
+  source_text?: string;
 }
 
 interface Chunk {
@@ -203,7 +220,7 @@ function extractChunksFromTurns(
 
     // Fail-Fast: Distinguish "ring3 missing" from "ring3 exists with empty segments"
     if (!ring3) {
-      throw new Error(
+      throw new DataValidationError(
         `[curate] Ring3 missing for turn ${i} (role: ${turn.role}). ` +
           `Content preview: "${turn.content.slice(0, 50)}...". ` +
           `Ensure turns were created with NLP extraction enabled (POST /v1/turns with content).`
@@ -214,7 +231,7 @@ function extractChunksFromTurns(
 
     // Fail-Fast: ring3.segments must be an array (not undefined/null)
     if (!Array.isArray(segments)) {
-      throw new Error(
+      throw new DataValidationError(
         `[curate] Ring3 segments is not an array for turn ${i} (role: ${turn.role}). ` +
           `Got: ${segments === undefined ? 'undefined' : typeof segments}. ` +
           `Content preview: "${turn.content.slice(0, 50)}...". ` +
@@ -253,7 +270,7 @@ function extractChunksFromTurns(
 
       // Fail-Fast: Any segment missing required fields is an error (no silent degradation)
       if (invalidSegmentDetails.length > 0) {
-        throw new Error(
+        throw new DataValidationError(
           `[curate] Ring3 segments have missing fields for turn ${i} (role: ${turn.role}). ` +
             `${invalidSegmentDetails.length}/${segments.length} segments invalid: ${invalidSegmentDetails.join('; ')}. ` +
             `Content preview: "${turn.content.slice(0, 50)}...".`
@@ -282,23 +299,17 @@ function extractChunksFromTurns(
     const rawCamel = ring1?.anchorCandidates;
     const rawSnake = ring1?.anchor_candidates;
 
-    // Strict validation: if property exists but is not an array, fail immediately
+    // Strict fail-fast: if property exists but is not an array, data is corrupt
     if (rawCamel !== undefined && rawCamel !== null && !Array.isArray(rawCamel)) {
-      return jsonError(
-        c,
-        'ANCHOR_DATA_CORRUPT',
-        `Turn ${i}: ring1.anchorCandidates is not an array (got ${typeof rawCamel}). ` +
-          `This indicates data corruption. Re-create the turn with NLP extraction enabled.`,
-        400
+      throw new DataValidationError(
+        `[curate] Turn ${i}: ring1.anchorCandidates is not an array (got ${typeof rawCamel}). ` +
+          `This indicates data corruption. Re-create the turn with NLP extraction enabled.`
       );
     }
     if (rawSnake !== undefined && rawSnake !== null && !Array.isArray(rawSnake)) {
-      return jsonError(
-        c,
-        'ANCHOR_DATA_CORRUPT',
-        `Turn ${i}: ring1.anchor_candidates is not an array (got ${typeof rawSnake}). ` +
-          `This indicates data corruption. Re-create the turn with NLP extraction enabled.`,
-        400
+      throw new DataValidationError(
+        `[curate] Turn ${i}: ring1.anchor_candidates is not an array (got ${typeof rawSnake}). ` +
+          `This indicates data corruption. Re-create the turn with NLP extraction enabled.`
       );
     }
 
@@ -312,16 +323,13 @@ function extractChunksFromTurns(
         : undefined;
 
     if (anchorCandidates && anchorCandidates.length > 0) {
-      // Strict validation: hash mismatch indicates content modification, fail immediately
+      // Strict fail-fast: hash mismatch indicates content was modified after anchor extraction
       if (storedHash) {
         const currentHash = computeHash(turn.content);
         if (currentHash !== storedHash) {
-          return jsonError(
-            c,
-            'ANCHOR_HASH_MISMATCH',
-            `Turn ${i}: Content hash mismatch (stored=${storedHash.slice(0, 8)}... current=${currentHash.slice(0, 8)}...). ` +
-              `Turn content was modified after anchor extraction. Re-create the turn with NLP extraction enabled.`,
-            400
+          throw new DataValidationError(
+            `[curate] Turn ${i}: Content hash mismatch (stored=${storedHash.slice(0, 8)}... current=${currentHash.slice(0, 8)}...). ` +
+            `Turn content was modified after anchor extraction. Re-create the turn with NLP extraction enabled.`
           );
         }
       }
@@ -342,34 +350,29 @@ function extractChunksFromTurns(
         const confidence = candidate.confidence;
         const source = candidate.source;
 
-        // Validate required fields exist and have correct types
-        if (typeof text !== 'string') issues.push('text: not a string');
+        // Validate ALL required fields - strict fail-fast
+        // Normal flow (RingExtractor) always provides all fields.
+        // Missing fields indicate data corruption or incompatible external data.
+        if (typeof text !== 'string') issues.push('text: required, got ' + typeof text);
         if (typeof type !== 'string') {
-          issues.push('type: not a string');
+          issues.push('type: required, got ' + typeof type);
         } else if (!VALID_ANCHOR_TYPES.includes(type)) {
           issues.push(`type: invalid value "${type}"`);
         }
-        if (typeof startChar !== 'number') issues.push('startChar/start_char: not a number');
-        if (typeof endChar !== 'number') issues.push('endChar/end_char: not a number');
-
-        // Validate optional fields if present
-        if (confidence !== undefined && typeof confidence !== 'number') {
-          issues.push('confidence: not a number');
-        }
-        if (source !== undefined && typeof source !== 'string') {
-          issues.push('source: not a string');
-        } else if (source !== undefined && !VALID_ANCHOR_SOURCES.includes(source)) {
+        if (typeof startChar !== 'number') issues.push('startChar/start_char: required, got ' + typeof startChar);
+        if (typeof endChar !== 'number') issues.push('endChar/end_char: required, got ' + typeof endChar);
+        if (typeof confidence !== 'number') issues.push('confidence: required, got ' + typeof confidence);
+        if (typeof source !== 'string') {
+          issues.push('source: required, got ' + typeof source);
+        } else if (!VALID_ANCHOR_SOURCES.includes(source)) {
           issues.push(`source: invalid value "${source}"`);
         }
 
-        // Fail-Fast: any invalid anchor candidate is a hard error
+        // Strict fail-fast: invalid anchor candidates indicate data corruption
         if (issues.length > 0) {
-          return jsonError(
-            c,
-            'ANCHOR_CANDIDATE_INVALID',
-            `Turn ${i}, anchor[${k}]: Invalid fields - ${issues.join(', ')}. ` +
-              `Anchor candidate data is corrupt. Re-create the turn with NLP extraction enabled.`,
-            400
+          throw new DataValidationError(
+            `[curate] Turn ${i}, anchor[${k}]: Invalid fields - ${issues.join(', ')}. ` +
+            `This indicates data corruption. Re-create the turn with NLP extraction enabled.`
           );
         }
 
@@ -379,8 +382,8 @@ function extractChunksFromTurns(
           // Adjust offset: prefix length + candidate's startChar + global offset
           startChar: globalOffset + prefix.length + startChar,
           endChar: globalOffset + prefix.length + endChar,
-          confidence: typeof confidence === 'number' ? confidence : 1.0, // Default to 1.0 if missing
-          source: (source as AnchorSource) ?? 'token', // Default to 'token' if missing
+          confidence, // Already validated as number
+          source: source as AnchorSource, // Already validated as valid AnchorSource
         });
       }
     }
@@ -509,11 +512,22 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
   }
 
-  if (!body?.project_id || !body?.source_conversation_id || !body?.bridge_id || !body?.intent) {
+  // source_conversation_id is optional if source_text is provided
+  if (!body?.project_id || !body?.bridge_id || !body?.intent) {
     return jsonError(
       c,
       'INVALID_REQUEST',
-      'project_id, source_conversation_id, bridge_id, and intent are required',
+      'project_id, bridge_id, and intent are required',
+      400
+    );
+  }
+
+  // Either source_conversation_id or source_text must be provided
+  if (!body?.source_conversation_id && !body?.source_text) {
+    return jsonError(
+      c,
+      'INVALID_REQUEST',
+      'Either source_conversation_id or source_text is required',
       400
     );
   }
@@ -540,13 +554,22 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
 
   try {
     const db = await getDB();
-    let sourceText = body.source_text;
+    let sourceText: string | undefined;
     let chunks: Array<{ id: string; start: number; end: number; text: string }>;
     let allAnchorCandidates: AnchorCandidate[] = [];
     let extractionWarnings: string[] = [];
 
-    // If no sourceText provided, load from conversation with Ring3 segments
-    if (!sourceText) {
+    // Priority: source_conversation_id > source_text
+    // source_conversation_id provides Ring3 segments and anchor candidates
+    // source_text is fallback mode with regex splitting (no Ring3/anchors)
+    if (body.source_conversation_id) {
+      // Warn if source_text was also provided (it will be ignored)
+      if (body.source_text) {
+        extractionWarnings.push(
+          'Both source_conversation_id and source_text provided. Using source_conversation_id (source_text ignored).'
+        );
+      }
+
       const conversation = await findConversationById(db, body.source_conversation_id);
       if (!conversation) {
         return jsonError(c, 'NOT_FOUND', `Conversation ${body.source_conversation_id} not found`, 404);
@@ -571,16 +594,21 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
       sourceText = extracted.sourceText;
       // v1.1: Also extract anchor candidates and warnings
       allAnchorCandidates = extracted.anchorCandidates;
-      extractionWarnings = extracted.warnings;
-    } else {
-      // Fallback: source_text provided directly, use simple regex splitting
-      // No anchor candidates available in this case
+      // Merge warnings (preserve any warnings added earlier, e.g., "both sources provided")
+      extractionWarnings.push(...extracted.warnings);
+    } else if (body.source_text) {
+      // source_text provided directly, use simple regex splitting
+      // No anchor candidates available in this mode
+      sourceText = body.source_text;
       chunks = chunkBySentencesFallback(sourceText);
-      // Warn caller about degraded experience (no Ring3 segments, no anchor candidates)
+      // Inform caller about degraded experience (no Ring3 segments, no anchor candidates)
       extractionWarnings.push(
-        'Using fallback regex sentence splitting (source_text provided without source_conversation_id). ' +
-          'Anchor candidates not available. For better results, provide source_conversation_id.'
+        'Using fallback regex sentence splitting (source_text mode). ' +
+          'Anchor candidates not available. For Ring3 segments and anchor extraction, use source_conversation_id instead.'
       );
+    } else {
+      // This should not happen due to validation above, but handle gracefully
+      return jsonError(c, 'INVALID_REQUEST', 'Either source_conversation_id or source_text is required', 400);
     }
 
     if (!sourceText || sourceText.trim().length === 0) {
@@ -723,6 +751,10 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
   } catch (err) {
     if (err instanceof EmbeddingProviderError) {
       return jsonError(c, 'EMBEDDING_ERROR', err.message, 500);
+    }
+    // Data validation errors are client errors (400), not server errors (500)
+    if (err instanceof DataValidationError) {
+      return jsonError(c, 'DATA_VALIDATION_ERROR', err.message, 400);
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'CURATE_PREVIEW_FAILED', message, 500);

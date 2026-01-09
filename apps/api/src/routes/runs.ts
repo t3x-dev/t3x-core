@@ -15,6 +15,7 @@ import {
   getRun,
   getRunByRunnerRunId,
   listRuns,
+  findProjectById,
 } from '@t3x/storage';
 
 // Runner URL (t3x-runner service)
@@ -88,6 +89,18 @@ runsRoutes.post('/v1/runs', async (c) => {
 
     // Store run in database
     const db = await getDB();
+
+    // Validate project_id exists if provided
+    if (input.project_id) {
+      const project = await findProjectById(db, input.project_id);
+      if (!project) {
+        return c.json({
+          success: false,
+          error: { code: 'PROJECT_NOT_FOUND', message: `Project ${input.project_id} not found` },
+        }, 400);
+      }
+    }
+
     await insertRun(db, {
       run_id,
       project_id: input.project_id || null,

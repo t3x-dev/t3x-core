@@ -145,11 +145,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_v2_draft ON commits_v2(draft_id);
 
     -- Migration: Add anchors_json column to existing commits_v2 tables (v1.1)
-    DO $$ BEGIN
-      ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
-    EXCEPTION WHEN duplicate_column THEN
-      NULL;
-    END $$;
+    -- Note: ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL 9.6+
+    ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
 
     -- Drafts V2 table
     CREATE TABLE IF NOT EXISTS drafts_v2 (
@@ -200,9 +197,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
 
     -- Deploy Agents table (for Runner/n8n integration)
+    -- NOTE: Foreign key on project_id is only applied to new databases.
+    -- For existing databases, the API layer validates project_id existence.
+    -- project_id is nullable by design (agents can be global/unattached to projects).
     CREATE TABLE IF NOT EXISTS deploy_agents (
       deploy_agent_id TEXT PRIMARY KEY,
-      project_id TEXT,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       endpoint TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'http',
@@ -216,9 +216,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_deploy_agents_project ON deploy_agents(project_id);
 
     -- Runs table (Engine → Runner → n8n flow)
+    -- NOTE: Foreign key on project_id is only applied to new databases.
+    -- For existing databases, the API layer validates project_id existence.
+    -- project_id is nullable by design (runs can be standalone/unattached to projects).
     CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY,
-      project_id TEXT,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       runner_run_id TEXT,
       commit_ref TEXT,
       leaf_json TEXT,
@@ -235,5 +238,36 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+
+    -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
+    -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
+    -- created before v1.2 won't have them. This migration adds them safely.
+    -- Exception handling:
+    --   - duplicate_object: constraint already exists (skip)
+    --   - undefined_table: table doesn't exist yet (skip)
+    --   - foreign_key_violation: orphan data exists (skip, API layer validates)
+    DO $$
+    BEGIN
+      ALTER TABLE deploy_agents
+        ADD CONSTRAINT fk_deploy_agents_project
+        FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+      WHEN undefined_table THEN NULL;
+      WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Skipping FK constraint on deploy_agents: orphan project_id values exist. API layer will validate.';
+    END $$;
+
+    DO $$
+    BEGIN
+      ALTER TABLE runs
+        ADD CONSTRAINT fk_runs_project
+        FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+      WHEN undefined_table THEN NULL;
+      WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Skipping FK constraint on runs: orphan project_id values exist. API layer will validate.';
+    END $$;
   `);
 }
