@@ -9,7 +9,7 @@
  * 2. apps/web/src/app/deploy/page.tsx - if field names change
  */
 
-import { insertDeployAgent, deleteDeployAgent, findDeployAgents } from '@t3x/storage';
+import { insertDeployAgent, deleteDeployAgent, findDeployAgents, insertProject, deleteProject, findProjects } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,6 +35,7 @@ describe('Deploy Agents API Contract', () => {
   app.route('/', deployAgentRoutes);
 
   const testAgentId = 'agent_contract_test';
+  let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -52,6 +53,16 @@ describe('Deploy Agents API Contract', () => {
     for (const agent of existingAgents) {
       await deleteDeployAgent(mockDB, agent.deployAgentId);
     }
+    // Clean up test projects
+    const existingProjects = await findProjects(mockDB);
+    for (const project of existingProjects) {
+      await deleteProject(mockDB, project.projectId);
+    }
+    // Create a test project for foreign key reference
+    const project = await insertProject(mockDB, {
+      name: 'Contract Test Project',
+    });
+    testProjectId = project.projectId;
   });
 
   describe('GET /v1/deploy-agents - List response schema', () => {
@@ -96,9 +107,10 @@ describe('Deploy Agents API Contract', () => {
     });
 
     it('returns correct data types for deploy agent fields', async () => {
+      // Use the test project ID created in beforeEach
       await insertDeployAgent(mockDB, {
         id: testAgentId,
-        projectId: 'proj_123',
+        projectId: testProjectId,
         name: 'Test Agent',
         endpoint: 'http://localhost:5678/webhook/test',
         type: 'http',

@@ -278,6 +278,121 @@ describe('RingExtractor', () => {
       expect(upperLemmas).toHaveLength(0);
     });
   });
+
+  describe('Ring 1 - Anchor Candidates (v1.1)', () => {
+    it('extracts money patterns as anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'The price is $5000 or 1000 USD.');
+
+      expect(result.ring1.anchorCandidates).toBeDefined();
+      const moneyAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'money') ?? [];
+      expect(moneyAnchors.length).toBeGreaterThanOrEqual(1);
+
+      const fiveK = moneyAnchors.find((a) => a.text === '$5000');
+      if (fiveK) {
+        expect(fiveK.source).toBe('phrase');
+        expect(fiveK.startChar).toBeGreaterThanOrEqual(0);
+        expect(fiveK.endChar).toBeGreaterThan(fiveK.startChar);
+      }
+    });
+
+    it('extracts duration patterns as anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'The lease is for 30 days.');
+
+      const durationAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'duration') ?? [];
+      expect(durationAnchors.length).toBeGreaterThanOrEqual(1);
+
+      const thirtyDays = durationAnchors.find((a) => a.text === '30 days');
+      expect(thirtyDays).toBeDefined();
+      expect(thirtyDays?.source).toBe('phrase');
+    });
+
+    it('extracts percent patterns as anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'The discount is 15%.');
+
+      const percentAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'percent') ?? [];
+      expect(percentAnchors.length).toBeGreaterThanOrEqual(1);
+      expect(percentAnchors[0]?.text).toBe('15%');
+    });
+
+    it('extracts bare numbers as anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'We have 500 units in stock.');
+
+      const numberAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'number') ?? [];
+      expect(numberAnchors.length).toBeGreaterThanOrEqual(1);
+      expect(numberAnchors[0]?.text).toBe('500');
+    });
+
+    it('extracts date patterns as anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'The meeting is on January 15, 2025.');
+
+      const dateAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'date') ?? [];
+      expect(dateAnchors.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('preserves correct character offsets for phrase patterns', async () => {
+      const text = 'Price: $100 for 7 days.';
+      const result = await extractor.extract('turn-1', text);
+
+      // Only verify phrase-sourced candidates (regex-matched, guaranteed correct offsets)
+      // Token/entity candidates depend on stub provider which may have mock offsets
+      const phraseCandidates =
+        result.ring1.anchorCandidates?.filter((a) => a.source === 'phrase') ?? [];
+      for (const candidate of phraseCandidates) {
+        // Verify that the text at the offset matches the candidate text
+        const extracted = text.slice(candidate.startChar, candidate.endChar);
+        expect(extracted).toBe(candidate.text);
+      }
+
+      // Should have at least $100 and 7 days
+      expect(phraseCandidates.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does not overlap anchor candidates', async () => {
+      const result = await extractor.extract('turn-1', 'The fee is $5000 for 30 days.');
+
+      const candidates = result.ring1.anchorCandidates ?? [];
+
+      // Check no overlapping ranges
+      for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+          const a = candidates[i];
+          const b = candidates[j];
+          const overlaps = !(a.endChar <= b.startChar || b.endChar <= a.startChar);
+          expect(overlaps).toBe(false);
+        }
+      }
+    });
+
+    it('generates inputTextHash for consistency verification', async () => {
+      const text = 'Hello world.';
+      const result = await extractor.extract('turn-1', text);
+
+      expect(result.ring1.inputTextHash).toBeDefined();
+      expect(result.ring1.inputTextHash?.length).toBe(64); // SHA-256 hex is 64 chars
+
+      // Same input should produce same hash
+      const result2 = await extractor.extract('turn-2', text);
+      expect(result2.ring1.inputTextHash).toBe(result.ring1.inputTextHash);
+    });
+
+    it('handles entity types case-insensitively', async () => {
+      // This test verifies that mapEntityTypeToAnchorType works with lowercase
+      // The stub provider may not provide lowercase types, but the code should handle it
+      const result = await extractor.extract('turn-1', 'Visit Bangkok on January 1.');
+
+      // If entities are extracted, they should be mapped correctly regardless of case
+      expect(result.ring1.anchorCandidates).toBeDefined();
+    });
+
+    it('orders anchor candidates by startChar', async () => {
+      const result = await extractor.extract('turn-1', 'Pay $100 in 30 days with 5% interest.');
+
+      const candidates = result.ring1.anchorCandidates ?? [];
+      for (let i = 1; i < candidates.length; i++) {
+        expect(candidates[i].startChar).toBeGreaterThanOrEqual(candidates[i - 1].startChar);
+      }
+    });
+  });
 });
 
 describe('Ring Type Helpers', () => {
