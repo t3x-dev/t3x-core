@@ -33,10 +33,9 @@ interface SelectableTextBlockProps {
   confirmedAnchors?: ConfirmedAnchor[];
   /**
    * Callback when user confirms/changes an anchor
-   * TODO: P2.3 next step - Implement click interaction to:
+   * Click interaction:
    * - Click anchor candidate → confirm as 'preferred'
    * - Click confirmed anchor → cycle: preferred → mustHave → mustntHave → remove
-   * Reference: keyword cycling logic in handleMouseUp
    */
   onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
   /** Confidence threshold for showing anchor candidates (0-1) */
@@ -273,7 +272,7 @@ export function SelectableTextBlock({
     []
   );
 
-  // Handle mouse up - finalize selection or toggle keyword
+  // Handle mouse up - finalize selection or toggle keyword/anchor
   const handleMouseUp = useCallback(() => {
     if (readOnly) return;
 
@@ -297,6 +296,67 @@ export function SelectableTextBlock({
         // Left-drag or click
         if (isSingleClick) {
           // Single click on a token
+          const token = block.tokens[start];
+
+          // Check if clicking on an anchor (confirmed or candidate)
+          if (token && onAnchorChange) {
+            // Check confirmed anchors first
+            const existingAnchor = confirmedAnchors
+              ? isTokenInConfirmedAnchor(token, confirmedAnchors, 0)
+              : null;
+
+            if (existingAnchor) {
+              // Click on confirmed anchor -> cycle: preferred -> mustHave -> mustntHave -> remove
+              const constraint = existingAnchor.constraint;
+              if (constraint === 'preferred') {
+                // preferred -> mustHave
+                onAnchorChange({ ...existingAnchor, constraint: 'mustHave' }, 'update');
+              } else if (constraint === 'mustHave' || constraint === 'must_have') {
+                // mustHave -> mustntHave
+                onAnchorChange({ ...existingAnchor, constraint: 'mustntHave' }, 'update');
+              } else {
+                // mustntHave -> remove
+                onAnchorChange(existingAnchor, 'remove');
+              }
+              // Anchor interaction handled, skip other logic
+              setIsSelecting(false);
+              setIsRightDragging(false);
+              setSelectionStart(null);
+              setSelectionEnd(null);
+              return;
+            }
+
+            // Check anchor candidates
+            const candidate = anchorCandidates
+              ? isTokenInAnchorCandidate(token, anchorCandidates, anchorThreshold)
+              : null;
+
+            if (candidate) {
+              // Click on anchor candidate -> confirm as 'preferred'
+              // Note: start/end use global positions (same as globalStart/globalEnd) because
+              // we don't have sentence boundary info here. When submitting to API,
+              // these should be converted to sentence-relative positions if needed.
+              const newAnchor: ConfirmedAnchor = {
+                id: `anchor-${candidate.startChar}-${candidate.endChar}`,
+                text: candidate.text,
+                start: candidate.startChar,  // Global position (for now)
+                end: candidate.endChar,      // Global position (for now)
+                type: candidate.type,
+                constraint: 'preferred',
+                globalStart: candidate.startChar,
+                globalEnd: candidate.endChar,
+              };
+              onAnchorChange(newAnchor, 'add');
+              // Anchor interaction handled, skip other logic
+              setIsSelecting(false);
+              setIsRightDragging(false);
+              setSelectionStart(null);
+              setSelectionEnd(null);
+              return;
+            }
+          }
+
+          // Not an anchor click, continue with keyword/selection logic
           const isInInclude = isTokenInIncludeSelection(start, block.selections);
 
           if (isInInclude) {
@@ -365,6 +425,10 @@ export function SelectableTextBlock({
     onChange,
     readOnly,
     removeFromOppositeSelections,
+    onAnchorChange,
+    confirmedAnchors,
+    anchorCandidates,
+    anchorThreshold,
   ]);
 
   // Prevent context menu
@@ -703,7 +767,7 @@ function ConversationTurnRenderer({
     []
   );
 
-  // Handle mouse up
+  // Handle mouse up - finalize selection or toggle keyword/anchor
   const handleMouseUp = useCallback(() => {
     if (readOnly) return;
 
@@ -719,6 +783,63 @@ function ConversationTurnRenderer({
         onChange({ ...block, selections: newSelections, keywords: newKeywords });
       } else {
         if (isSingleClick) {
+          // Single click on a token
+          const token = block.tokens[start];
+
+          // Check if clicking on an anchor (confirmed or candidate)
+          if (token && onAnchorChange) {
+            // Check confirmed anchors first
+            const existingAnchor = confirmedAnchors
+              ? isTokenInConfirmedAnchor(token, confirmedAnchors, 0)
+              : null;
+
+            if (existingAnchor) {
+              // Click on confirmed anchor -> cycle: preferred -> mustHave -> mustntHave -> remove
+              const constraint = existingAnchor.constraint;
+              if (constraint === 'preferred') {
+                onAnchorChange({ ...existingAnchor, constraint: 'mustHave' }, 'update');
+              } else if (constraint === 'mustHave' || constraint === 'must_have') {
+                onAnchorChange({ ...existingAnchor, constraint: 'mustntHave' }, 'update');
+              } else {
+                onAnchorChange(existingAnchor, 'remove');
+              }
+              setIsSelecting(false);
+              setIsRightDragging(false);
+              setSelectionStart(null);
+              setSelectionEnd(null);
+              return;
+            }
+
+            // Check anchor candidates
+            const candidate = anchorCandidates
+              ? isTokenInAnchorCandidate(token, anchorCandidates, anchorThreshold ?? 0.5)
+              : null;
+
+            if (candidate) {
+              // Click on anchor candidate -> confirm as 'preferred'
+              // Note: start/end use global positions (same as globalStart/globalEnd) because
+              // we don't have sentence boundary info here. When submitting to API,
+              // these should be converted to sentence-relative positions if needed.
+              const newAnchor: ConfirmedAnchor = {
+                id: `anchor-${candidate.startChar}-${candidate.endChar}`,
+                text: candidate.text,
+                start: candidate.startChar,  // Global position (for now)
+                end: candidate.endChar,      // Global position (for now)
+                type: candidate.type,
+                constraint: 'preferred',
+                globalStart: candidate.startChar,
+                globalEnd: candidate.endChar,
+              };
+              onAnchorChange(newAnchor, 'add');
+              setIsSelecting(false);
+              setIsRightDragging(false);
+              setSelectionStart(null);
+              setSelectionEnd(null);
+              return;
+            }
+          }
+
+          // Not an anchor click, continue with keyword/selection logic
           const isInInclude = isTokenInIncludeSelection(start, block.selections);
 
           if (isInInclude) {
@@ -768,6 +889,10 @@ function ConversationTurnRenderer({
     onChange,
     readOnly,
     removeFromOppositeSelections,
+    onAnchorChange,
+    confirmedAnchors,
+    anchorCandidates,
+    anchorThreshold,
   ]);
 
   // Check if token is in drag selection
