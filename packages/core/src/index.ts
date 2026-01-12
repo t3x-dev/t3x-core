@@ -14,6 +14,15 @@
 
 // Common utilities
 export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// Commit Builders
+export {
+  buildConstraints,
+  buildSentencesFromSegments,
+  findBestSourceSentenceId,
+  getDockerAuthor,
+  getLocalAuthor,
+  getWebAuthor,
+} from './commit';
 // CommitV3 types
 export type {
   CommitAuthor,
