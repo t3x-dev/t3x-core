@@ -28,3 +28,6 @@ export { tokenize } from './tokenize';
 export { jaccard, JACCARD_THRESHOLD } from './jaccard';
 export { lcs, wordDiff } from './lcs';
 export { diffCommits } from './diffCommits';
+
+// Hungarian algorithm - optimal matching (Issue #71)
+export { hungarian, buildSimilarityMatrix, type MatchPair } from './hungarian';
