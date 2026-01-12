@@ -34,6 +34,12 @@ export {
   type MatchPair,
   type SegmentDiff,
   type SegmentMatch,
+  // Smart Diff (Issue #76 - Phase 2)
+  type SemanticMatch,
+  SEMANTIC_THRESHOLD,
+  smartDiff,
+  type SmartDiffResult,
+  type SmartDiffStats,
   type SentencePair,
   tokenize,
   wordDiff,
