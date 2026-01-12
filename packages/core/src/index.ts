@@ -16,6 +16,7 @@
 export { canonText, hashText, sha256 } from './common';
 // Diff Engine
 export {
+  buildSimilarityMatrix,
   calculateDiffStats,
   type CommitDiff,
   createDiffEngine,
@@ -26,9 +27,11 @@ export {
   type DiffSegment,
   type DiffStats,
   DiffType,
+  hungarian,
   jaccard,
   JACCARD_THRESHOLD,
   lcs,
+  type MatchPair,
   type SegmentDiff,
   type SegmentMatch,
   type SentencePair,
