@@ -17,16 +17,28 @@ export { canonText, hashText, sha256 } from './common';
 // Diff Engine
 export {
   calculateDiffStats,
+  type CommitDiff,
   createDiffEngine,
   DiffEngine,
   type DiffEngineConfig,
+  diffCommits,
   type DiffResult,
   type DiffSegment,
   type DiffStats,
   DiffType,
+  jaccard,
+  JACCARD_THRESHOLD,
+  lcs,
   type SegmentDiff,
   type SegmentMatch,
+  type SentencePair,
+  tokenize,
+  wordDiff,
+  type WordDiffSegment,
 } from './diff';
+
+// Commit types
+export { type Sentence, type SentenceSource } from './types';
 // Extractors (Ring 1/2/3)
 export {
   // v1.1: Anchor types
