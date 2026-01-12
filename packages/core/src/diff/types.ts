@@ -4,6 +4,8 @@
  * Types for semantic diff operations.
  */
 
+import type { Sentence } from '../types/commit';
+
 /**
  * Diff type enumeration
  */
@@ -138,4 +140,44 @@ export function calculateDiffStats(segmentDiffs: SegmentDiff[]): DiffStats {
   }
 
   return stats;
+}
+
+// ============================================================================
+// Word-level Diff Types (Issue #70)
+// ============================================================================
+
+/**
+ * A segment of word-level diff output
+ */
+export interface WordDiffSegment {
+  type: 'unchanged' | 'added' | 'removed';
+  text: string;
+}
+
+/**
+ * A pair of similar sentences with their word-level diff
+ */
+export interface SentencePair {
+  /** Source sentence */
+  source: Sentence;
+  /** Target sentence */
+  target: Sentence;
+  /** Jaccard similarity score (0-1) */
+  similarity: number;
+  /** Word-level diff segments */
+  wordDiff: WordDiffSegment[];
+}
+
+/**
+ * Result of comparing two commits
+ */
+export interface CommitDiff {
+  /** Sentences with identical text in both commits */
+  identical: Sentence[];
+  /** Sentences that are similar (Jaccard >= 0.3) with word diffs */
+  similar: SentencePair[];
+  /** Sentences only in source commit (removed/old) */
+  onlyInSource: Sentence[];
+  /** Sentences only in target commit (added/new) */
+  onlyInTarget: Sentence[];
 }
