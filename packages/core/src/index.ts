@@ -13,7 +13,17 @@
  */
 
 // Common utilities
-export { canonText, hashText, sha256 } from './common';
+export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// CommitV3 types
+export type {
+  CommitAuthor,
+  CommitContent,
+  CommitV3,
+  Constraint,
+  ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
+} from './types';
 // Diff Engine
 export {
   calculateDiffStats,
