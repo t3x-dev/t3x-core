@@ -16,17 +16,38 @@
 export { canonText, hashText, sha256 } from './common';
 // Diff Engine
 export {
+  buildSimilarityMatrix,
   calculateDiffStats,
+  type CommitDiff,
   createDiffEngine,
   DiffEngine,
   type DiffEngineConfig,
+  diffCommits,
   type DiffResult,
   type DiffSegment,
   type DiffStats,
   DiffType,
+  hungarian,
+  jaccard,
+  JACCARD_THRESHOLD,
+  lcs,
+  type MatchPair,
   type SegmentDiff,
   type SegmentMatch,
+  // Smart Diff (Issue #76 - Phase 2)
+  type SemanticMatch,
+  SEMANTIC_THRESHOLD,
+  smartDiff,
+  type SmartDiffResult,
+  type SmartDiffStats,
+  type SentencePair,
+  tokenize,
+  wordDiff,
+  type WordDiffSegment,
 } from './diff';
+
+// Commit types
+export { type Sentence, type SentenceSource } from './types';
 // Extractors (Ring 1/2/3)
 export {
   // v1.1: Anchor types
