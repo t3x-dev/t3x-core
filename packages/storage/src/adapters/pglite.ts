@@ -268,6 +268,34 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
 
+    -- Commits V3 table (sentence-based semantic snapshots)
+    -- NOTE: project_id is nullable by design (commits can be standalone/unattached).
+    CREATE TABLE IF NOT EXISTS commits_v3 (
+      -- First class (in hash)
+      hash TEXT PRIMARY KEY,
+      schema TEXT NOT NULL DEFAULT 'commit/v3',
+      parents TEXT[] NOT NULL DEFAULT '{}',
+      author JSONB NOT NULL,
+      committed_at TIMESTAMPTZ NOT NULL,
+      content JSONB NOT NULL,
+
+      -- Second class (not in hash)
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      message TEXT,
+      branch TEXT,
+      position_x REAL,
+      position_y REAL,
+
+      -- Timestamps
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commits_v3_branch ON commits_v3(branch);
+    CREATE INDEX IF NOT EXISTS idx_commits_v3_committed_at ON commits_v3(committed_at);
+    CREATE INDEX IF NOT EXISTS idx_commits_v3_sentences ON commits_v3 USING GIN ((content->'sentences'));
+    CREATE INDEX IF NOT EXISTS idx_commits_v3_constraints ON commits_v3 USING GIN ((content->'constraints'));
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.
