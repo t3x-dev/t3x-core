@@ -19,7 +19,10 @@ export {
   DiffType,
   type SegmentDiff,
   type SegmentMatch,
+  type SemanticMatch,
   type SentencePair,
+  type SmartDiffResult,
+  type SmartDiffStats,
   type WordDiffSegment,
 } from './types';
 
@@ -29,5 +32,8 @@ export { jaccard, JACCARD_THRESHOLD } from './jaccard';
 export { lcs, wordDiff } from './lcs';
 export { diffCommits } from './diffCommits';
 
-// Hungarian algorithm - optimal matching (Issue #71)
-export { hungarian, buildSimilarityMatrix, type MatchPair } from './hungarian';
+// Hungarian algorithm - optimal matching (Issue #76)
+export { buildSimilarityMatrix, hungarian, type MatchPair } from './hungarian';
+
+// Smart Diff - two-layer intelligent diff (Issue #76 - Phase 2)
+export { SEMANTIC_THRESHOLD, smartDiff } from './smartDiff';
