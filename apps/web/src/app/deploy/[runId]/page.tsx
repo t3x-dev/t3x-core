@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { getEngineRun, type EngineRun } from '@/lib/api';
 import { ChartToggle } from '@/components/optimiser/charts/ChartToggle';
 import { AssertionsSection, type Violation, type Suggestion } from '@/components/optimiser/AssertionsSection';
+import { TraceTimeline, type StepRecord } from '@/components/optimiser/trace';
 
 // Types for parsed result data
 interface DimensionScores {
@@ -57,6 +58,7 @@ interface EvalResult {
 interface ParsedRunData {
   evalResult: EvalResult | null;
   traceSummary: TraceSummary | null;
+  steps: StepRecord[];
 }
 
 /**
@@ -65,7 +67,7 @@ interface ParsedRunData {
 function parseRunData(run: EngineRun): ParsedRunData {
   const result = run.result as Record<string, unknown> | null;
   if (!result) {
-    return { evalResult: null, traceSummary: null };
+    return { evalResult: null, traceSummary: null, steps: [] };
   }
 
   // Parse eval result
@@ -101,7 +103,12 @@ function parseRunData(run: EngineRun): ParsedRunData {
     latency_ms: traceSummaryRaw.latency_ms as number,
   } : null;
 
-  return { evalResult, traceSummary };
+  // Parse steps from run_report or direct result
+  const runRecordRaw = runReport?.run_record as Record<string, unknown> | undefined;
+  const stepsRaw = (runRecordRaw?.steps || result.steps) as StepRecord[] | undefined;
+  const steps = stepsRaw || [];
+
+  return { evalResult, traceSummary, steps };
 }
 
 /**
@@ -179,7 +186,7 @@ export default function RunDetailPage() {
     );
   }
 
-  const { evalResult, traceSummary } = parseRunData(run);
+  const { evalResult, traceSummary, steps } = parseRunData(run);
   const passed = evalResult?.passed ?? run.status === 'completed';
   const score = evalResult?.score;
   const dimensionScores = evalResult?.dimension_scores;
@@ -355,12 +362,10 @@ export default function RunDetailPage() {
         <TabsContent value="trace" className="mt-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Full Trace</CardTitle>
+              <CardTitle className="text-base">Execution Trace</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-muted-foreground">
-                Trace Timeline (Coming in Phase 4)
-              </div>
+              <TraceTimeline steps={steps} />
             </CardContent>
           </Card>
         </TabsContent>
