@@ -14,6 +14,7 @@
   "dependencies": {
     "@hono/node-server": "^1.15.2",
     "@hono/zod-openapi": "^1.2.0",
+    "@hono/zod-validator": "^0.7.6",
     "@scalar/hono-api-reference": "^0.9.30",
     "@t3x/core": "workspace:*",
     "@t3x/runner": "workspace:*",
