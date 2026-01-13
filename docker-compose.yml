@@ -134,7 +134,11 @@ services:
       - PORT=8080
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
+      - N8N_API_URL=http://n8n:5678/api/v1
+      - N8N_API_KEY=${N8N_API_KEY:-}
       - LOG_LEVEL=info
+      # Trace storage policy: always | on_failure | on_violation
+      - TRACE_POLICY=${TRACE_POLICY:-always}
       # CORS: Allow WebUI access from common local origins
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
       # LLM for assertion generation

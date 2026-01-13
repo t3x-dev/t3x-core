@@ -1,0 +1,130 @@
+{
+  "name": "Weather Agent - T3X E2E Test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "weather-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "run_id",
+              "value": "={{ $json.run_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "runner_run_id",
+              "value": "={{ $json.runner_run_id }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "system_prompt",
+              "value": "={{ $json.leaf.content }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "user_query",
+              "value": "={{ $json.inputs.query }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "callback_url",
+              "value": "={{ $json.callback_url }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "start_time",
+              "value": "={{ Date.now() }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-node",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "={{ $('Set').item.json.system_prompt }}"
+        },
+        "text": "={{ $('Set').item.json.user_query }}"
+      },
+      "id": "ai-agent-node",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://t3x-runner:8080/callbacks/n8n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"runner_run_id\": \"{{ $('Set').item.json.runner_run_id }}\",\n  \"run_id\": \"{{ $('Set').item.json.run_id }}\",\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"output\": {\n    \"response\": \"{{ $json.output }}\"\n  },\n  \"meta\": {\n    \"latency_ms\": {{ Date.now() - $('Set').item.json.start_time }}\n  }\n}",
+        "options": {}
+      },
+      "id": "callback-node",
+      "name": "Callback Runner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Callback sent\" } }}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Set", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set": {
+      "main": [
+        [{ "node": "AI Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [{ "node": "Callback Runner", "type": "main", "index": 0 }]
+      ]
+    },
+    "Callback Runner": {
+      "main": [
+        [{ "node": "Respond", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
