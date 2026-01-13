@@ -18,8 +18,8 @@ const logger = pino({
   },
 });
 
-// Engine API URL
-const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || 'http://localhost:8000';
+// Engine API URL (support both T3X_ENGINE_URL and T3X_API_URL for compatibility)
+const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || process.env.T3X_API_URL || 'http://localhost:8000';
 
 // Default callback URL for Runner → Engine ingest
 const ENGINE_CALLBACK_URL = process.env.ENGINE_CALLBACK_URL || `${T3X_ENGINE_URL}/api/v1/runs/ingest`;
@@ -52,7 +52,7 @@ export interface ParsedRun {
   project_id: string | null;
   runner_run_id: string | null;
   commit_ref: string | null;
-  leaf: { id: string; type: 'deploy' | 'eval'; content?: string } | null;
+  leaf: { id: string; type: 'deploy' | 'eval'; content?: string; rules_ref?: string } | null;
   inputs: Record<string, unknown>;
   workflow: { type: string; webhook_id?: string } | null;
   status: string;

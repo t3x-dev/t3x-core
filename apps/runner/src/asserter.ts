@@ -247,30 +247,27 @@ ${JSON.stringify(runRecord.output, null, 2)?.slice(0, 1000) || 'No output'}
 ${context?.inputs ? `## Inputs\n${JSON.stringify(context.inputs, null, 2)?.slice(0, 500)}` : ''}
 
 ## Task
-Based on the evaluation results above, generate:
+Based on the evaluation results above, generate ONE concise overall assessment:
 
-1. **Assertions**: Human-readable explanations of what passed/failed and why
-2. **Suggestions**: Actionable improvements to fix the issues
+1. **Summary**: A brief summary of what happened (1-2 sentences)
+2. **Improvement**: ONE key improvement suggestion that would have the biggest impact
 
-For each assertion:
-- type: pass, fail, or warning
-- category: correctness, coverage, efficiency, behavior, or error
-- message: Clear explanation
-- evidence_refs: JSON paths to relevant data
-- confidence: 0-1
-- patch_suggestion: For failures, suggest a fix
-
-For each suggestion:
-- type: prompt_change, config_change, workflow_fix, or other
-- description: What to do
-- priority: high, medium, or low
-- affected_rules: Which rule IDs this addresses
+Keep it concise and actionable. Focus on the most important issue.
 
 Respond in JSON:
 {
-  "assertions": [...],
-  "suggestions": [...],
-  "summary": "Brief summary of the evaluation"
+  "assertions": [
+    {
+      "type": "pass" or "fail" or "warning",
+      "category": "correctness" or "efficiency" or "behavior" or "error",
+      "message": "One sentence overall assessment",
+      "evidence_refs": ["key evidence path"],
+      "confidence": 0.0-1.0,
+      "patch_suggestion": "One key improvement suggestion (if failed)"
+    }
+  ],
+  "suggestions": [],
+  "summary": "Brief 1-2 sentence summary"
 }`;
   }
 

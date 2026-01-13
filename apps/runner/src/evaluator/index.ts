@@ -10,7 +10,7 @@ import type { RunRecord } from '../schemas/run-record.js';
 import type { EvalRules, Rule, RuleType } from '../schemas/eval-rules.js';
 import type { EvalResult, CheckResult, Violation, DimensionScores } from '../schemas/eval-result.js';
 import { runOperator, type OperatorOptions } from './operators.js';
-import { parseRulesFromLeaf, DEFAULT_RULES } from './rule-parser.js';
+import { parseRulesFromLeaf, DEFAULT_RULES, type LeafForRules } from './rule-parser.js';
 
 /**
  * Mapping from rule.type to dimension_scores keys
@@ -277,13 +277,31 @@ export class EvalEngine {
   }
 
   /**
-   * Load rules from leaf content and evaluate
+   * 使用 leaf 对象进行评测（推荐）
    *
-   * Convenience method for the common case of evaluating with rules from leaf.content
+   * 根据 leaf.rules_ref 从 resources/rules/ 目录加载规则文件
+   * leaf.content 是给 n8n 的 prompt，不参与规则解析
+   *
+   * @param record - 运行记录（来自 n8n 执行结果）
+   * @param leaf - Leaf 对象，包含 rules_ref 字段
+   * @returns 评测结果
    */
-  evaluateWithLeafRules(record: RunRecord, leafContent?: string): EvalResult {
-    const rules = parseRulesFromLeaf(leafContent);
+  evaluateWithLeaf(
+    record: RunRecord,
+    leaf?: LeafForRules
+  ): EvalResult {
+    const rules = parseRulesFromLeaf(leaf);
     return this.evaluate(record, rules);
+  }
+
+  /**
+   * @deprecated 请使用 evaluateWithLeaf() 代替
+   *
+   * 保留此方法是为了向后兼容，新代码请使用 evaluateWithLeaf()
+   */
+  evaluateWithLeafRules(record: RunRecord, _leafContent?: string): EvalResult {
+    // 向后兼容：不再尝试解析 leafContent，直接使用默认规则
+    return this.evaluateWithLeaf(record, undefined);
   }
 }
 
@@ -299,6 +317,7 @@ export {
   loadDefaultRules,
   validateRules,
   DEFAULT_RULES,
+  type LeafForRules,
 } from './rule-parser.js';
 export { runOperator, operators } from './operators.js';
 export type { OperatorOptions, OperatorFn } from './operators.js';

@@ -119,29 +119,74 @@ function inferSpanKind(stepType: string): SpanKind {
 
 /**
  * Extract LLM data from node output (v2.0)
+ *
+ * n8n stores LLM data in different locations:
+ * - Token usage: nodeRun.data.ai_languageModel[0][0].json.tokenUsageEstimate
+ * - Model info: nodeRun.inputOverride.ai_languageModel[0][0].json.options.model
  */
 function extractLLMData(nodeRun: N8nNodeRun, output: unknown): LLMData | undefined {
-  // Try to extract model info from output
-  const outputObj = output as Record<string, unknown> | undefined;
-  if (!outputObj) return undefined;
+  // Try to extract from n8n's ai_languageModel data first (preferred)
+  // n8n stores LLM data in nodeRun.data.ai_languageModel (not in data.main)
+  const nodeData = nodeRun.data as unknown as Record<string, unknown> | undefined;
+  const aiLmData = nodeData?.ai_languageModel as unknown[][][] | undefined;
+  const nodeRunAny = nodeRun as unknown as Record<string, unknown>;
+  const aiLmInput = nodeRunAny.inputOverride as Record<string, unknown> | undefined;
+  const aiLmInputData = aiLmInput?.ai_languageModel as unknown[][][] | undefined;
 
-  // Common patterns for LLM output
-  const model = (outputObj.model as string) ||
-    (outputObj.modelId as string) ||
-    'unknown';
+  // Extract token usage from ai_languageModel output
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
+  let model = 'unknown';
 
-  // Try to extract token usage
-  const usage = outputObj.usage as Record<string, number> | undefined;
-  const tokenUsage = outputObj.tokenUsage as Record<string, number> | undefined;
-  const tokens = usage || tokenUsage;
+  if (aiLmData?.[0]?.[0]) {
+    const lmOutput = (Array.isArray(aiLmData[0][0]) ? null : aiLmData[0][0]) as Record<string, unknown> | null;
+    const json = lmOutput?.json as Record<string, unknown> | undefined;
+
+    // n8n uses tokenUsageEstimate
+    const tokenUsageEstimate = json?.tokenUsageEstimate as Record<string, number> | undefined;
+    if (tokenUsageEstimate) {
+      promptTokens = tokenUsageEstimate.promptTokens || 0;
+      completionTokens = tokenUsageEstimate.completionTokens || 0;
+      totalTokens = tokenUsageEstimate.totalTokens || 0;
+    }
+  }
+
+  // Extract model from inputOverride
+  if (aiLmInputData?.[0]?.[0]) {
+    const lmInput = (Array.isArray(aiLmInputData[0][0]) ? null : aiLmInputData[0][0]) as Record<string, unknown> | null;
+    const json = lmInput?.json as Record<string, unknown> | undefined;
+    const options = json?.options as Record<string, unknown> | undefined;
+    if (options?.model) {
+      model = options.model as string;
+    }
+  }
+
+  // Fallback: Try to extract from output object (for non-n8n sources)
+  if (totalTokens === 0) {
+    const outputObj = output as Record<string, unknown> | undefined;
+    if (outputObj) {
+      const usage = outputObj.usage as Record<string, number> | undefined;
+      const tokenUsage = outputObj.tokenUsage as Record<string, number> | undefined;
+      const tokens = usage || tokenUsage;
+      if (tokens) {
+        promptTokens = tokens.prompt_tokens || tokens.promptTokens || 0;
+        completionTokens = tokens.completion_tokens || tokens.completionTokens || 0;
+        totalTokens = tokens.total_tokens || tokens.totalTokens || 0;
+      }
+      if (model === 'unknown') {
+        model = (outputObj.model as string) || (outputObj.modelId as string) || 'unknown';
+      }
+    }
+  }
 
   return {
     model,
     provider: extractProvider(model),
     tokens: {
-      prompt: tokens?.prompt_tokens || tokens?.promptTokens || 0,
-      completion: tokens?.completion_tokens || tokens?.completionTokens || 0,
-      total: tokens?.total_tokens || tokens?.totalTokens || 0,
+      prompt: promptTokens,
+      completion: completionTokens,
+      total: totalTokens,
     },
   };
 }
