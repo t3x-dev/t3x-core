@@ -65,8 +65,6 @@ export {
   type WordDiffSegment,
 } from './diff';
 
-// Commit types
-export { type Sentence, type SentenceSource } from './types';
 // Extractors (Ring 1/2/3)
 export {
   // v1.1: Anchor types
