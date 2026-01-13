@@ -11,6 +11,7 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   pgTable,
   real,
   text,
@@ -246,6 +247,51 @@ export const runs = pgTable('runs', {
 ]);
 
 /**
+ * Commits V3 - Sentence-based semantic snapshots with JSONB content
+ *
+ * First-class fields (included in hash computation):
+ * - hash, schema, parents, author, committedAt, content
+ *
+ * Second-class fields (not in hash, for UI/organization):
+ * - projectId, message, branch, positionX, positionY
+ */
+export const commitsV3 = pgTable(
+  'commits_v3',
+  {
+    // First class (in hash)
+    hash: text('hash').primaryKey(),
+    schema: text('schema').notNull().default('commit/v3'),
+    parents: text('parents').array().notNull().default([]),
+    author: jsonb('author').notNull().$type<{
+      name: string;
+      identity?: string;
+      verification?: string;
+    }>(),
+    committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
+    content: jsonb('content').notNull().$type<{
+      sentences: unknown[];
+      constraints?: unknown[];
+    }>(),
+
+    // Second class (not in hash)
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+    message: text('message'),
+    branch: text('branch'),
+    positionX: real('position_x'),
+    positionY: real('position_y'),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_commits_v3_project').on(table.projectId),
+    index('idx_commits_v3_branch').on(table.branch),
+    index('idx_commits_v3_committed_at').on(table.committedAt),
+  ]
+);
+
+/**
  * Segment Embeddings - Pre-computed vectors for Ring 3 segments
  */
 export const segmentEmbeddings = pgTable(
@@ -301,3 +347,6 @@ export type NewDeployAgent = typeof deployAgents.$inferInsert;
 
 export type Run = typeof runs.$inferSelect;
 export type NewRun = typeof runs.$inferInsert;
+
+export type CommitV3 = typeof commitsV3.$inferSelect;
+export type NewCommitV3 = typeof commitsV3.$inferInsert;

@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import { canonicalize } from 'json-canonicalize';
 
-import type { CommitAuthor, CommitContent } from '../types/commit';
+import type { CommitV3 } from '../types';
 import { canonText } from './canon';
 
 export function hashText(input: string): string {
@@ -27,28 +27,35 @@ function isBuffer(value: unknown): value is Buffer {
 }
 
 /**
- * Input data for computing CommitV3 hash
- * 用于计算 CommitV3 哈希的输入数据
+ * Compute the hash for a CommitV3.
+ *
+ * Only first-class fields are included in the hash:
+ * - schema, parents, author, committed_at, content
+ *
+ * Second-class fields are excluded:
+ * - project_id, message, branch, position
+ *
+ * @param commit - The commit object (without hash field)
+ * @returns The computed hash with "sha256:" prefix
  */
-export interface CommitV3HashInput {
-  schema: 'commit/v3';
-  parents: string[];
-  author: CommitAuthor;
-  committed_at: string;
-  content: CommitContent;
-}
+export function computeCommitV3Hash(
+  commit: Omit<CommitV3, 'hash'>
+): string {
+  // Normalize constraints to [] to avoid undefined vs [] hash differences
+  const normalizedContent = {
+    sentences: commit.content.sentences,
+    constraints: commit.content.constraints ?? [],
+  };
 
-/**
- * Compute hash for a CommitV3
- *
- * Hash is SHA-256 of JCS-canonicalized JSON (excluding the hash field itself).
- * This ensures deterministic hash computation regardless of field order.
- * 计算 CommitV3 的哈希值 - 使用 JCS 规范化的 JSON 的 SHA-256
- *
- * @param data - Commit data (without hash field)
- * @returns SHA-256 hash prefixed with 'sha256:'
- */
-export function computeCommitV3Hash(data: CommitV3HashInput): string {
-  const hash = sha256(data);
+  // Only hash first-class fields
+  const hashable = {
+    schema: commit.schema,
+    parents: commit.parents,
+    author: commit.author,
+    committed_at: commit.committed_at,
+    content: normalizedContent,
+  };
+
+  const hash = sha256(hashable);
   return `sha256:${hash}`;
 }

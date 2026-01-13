@@ -16,6 +16,62 @@ import type {
 } from '../types/commit';
 import { computeCommitV3Hash } from '../common/hash';
 import type { Merge2WayResult } from './types';
+import type {
+  CommitV3 as CommitV3New,
+  Sentence as SentenceNew,
+  Constraint as ConstraintNew,
+  RequireConstraint,
+  ExcludeConstraint,
+} from '../types/commit-v3';
+
+/**
+ * Convert old Sentence format to new CommitV3 Sentence format
+ * 将旧的 Sentence 格式转换为新的 CommitV3 Sentence 格式
+ */
+function convertSentenceToV3(sentence: Sentence): SentenceNew {
+  return {
+    id: sentence.id,
+    text: sentence.text,
+    source: {
+      turn_hash: sentence.source.id, // Map old source.id to turn_hash
+      start_char: 0, // Default values since old format doesn't have these
+      end_char: sentence.text.length,
+    },
+  };
+}
+
+/**
+ * Convert old Constraint format to new CommitV3 Constraint format
+ * 将旧的 Constraint 格式转换为新的 CommitV3 Constraint 格式
+ */
+function convertConstraintToV3(constraint: Constraint): ConstraintNew {
+  if (constraint.type === 'require') {
+    return {
+      type: 'require',
+      id: constraint.id,
+      value: constraint.value,
+      match: 'exact', // Default to exact match
+      source_sentence_id: constraint.source_sentence_id,
+      suggested: false,
+    } as RequireConstraint;
+  } else if (constraint.type === 'exclude') {
+    return {
+      type: 'exclude',
+      id: constraint.id,
+      value: constraint.value,
+      match: 'exact',
+      reason: undefined,
+    } as ExcludeConstraint;
+  }
+  // Default to require constraint for unknown types
+  return {
+    type: 'require',
+    id: constraint.id,
+    value: constraint.value,
+    match: 'exact',
+    source_sentence_id: constraint.source_sentence_id,
+  } as RequireConstraint;
+}
 
 /**
  * Execute a merge after user has made all decisions
@@ -118,21 +174,34 @@ export function executeMerge(
 
   const committedAt = new Date().toISOString();
 
+  // Convert to V3 format for hash computation
+  // 转换为 V3 格式以计算哈希
+  const contentV3 = {
+    sentences: sentences.map(convertSentenceToV3),
+    constraints: constraints.length > 0 ? constraints.map(convertConstraintToV3) : [],
+  };
+
   // Prepare data for hash computation (excludes hash field)
   // 准备用于计算哈希的数据（不包含 hash 字段）
-  const commitData = {
+  const commitDataV3 = {
+    schema: 'commit/v3' as const,
+    parents: [sourceCommitHash, targetCommitHash],
+    author,
+    committed_at: committedAt,
+    content: contentV3,
+  };
+
+  const hash = computeCommitV3Hash(commitDataV3);
+
+  // Return using old format (for compatibility with existing code)
+  // 返回旧格式（与现有代码兼容）
+  return {
+    hash,
     schema: 'commit/v3' as const,
     parents: [sourceCommitHash, targetCommitHash],
     author,
     committed_at: committedAt,
     content,
-  };
-
-  const hash = computeCommitV3Hash(commitData);
-
-  return {
-    hash,
-    ...commitData,
     message,
     // Note: branch should be set by caller based on merge target
     // 注意：branch 应由调用者根据合并目标设置
