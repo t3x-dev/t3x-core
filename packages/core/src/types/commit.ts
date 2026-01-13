@@ -62,9 +62,9 @@ export interface CommitAuthor {
   /** Author name (作者名称) */
   name: string;
   /** Author identity, e.g., email (作者身份标识，如邮箱) */
-  identity: string;
+  identity?: string;
   /** Verification status (验证状态) */
-  verification?: 'verified' | 'unverified';
+  verification?: 'none' | 'device' | 'verified';
 }
 
 /**

@@ -9,23 +9,15 @@ import {
   RefreshCw,
   ExternalLink,
   AlertCircle,
-  CheckCircle,
   Loader2,
   Trash2,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
+import { RunsTable } from '@/components/optimiser/RunsTable';
 import {
   checkRunnerHealth,
   listEngineRuns,
@@ -172,8 +164,8 @@ export default function DeployPage() {
         console.warn('Run warning:', result.warning);
       }
 
-      // Navigate to eval page with run
-      router.push(`/eval/${result.run_id}`);
+      // Navigate to run detail page
+      router.push(`/deploy/${result.run_id}`);
     } catch (err) {
       console.error('Failed to run deploy agent:', err);
 
@@ -205,58 +197,19 @@ export default function DeployPage() {
     }
   };
 
-  const getRunStatusBadge = (status: EngineRun['status']) => {
-    const variants: Record<string, string> = {
-      queued: 'border-gray-500/30 bg-gray-500/10 text-gray-600',
-      running: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
-      completed: 'border-green-500/30 bg-green-500/10 text-green-600',
-      failed: 'border-red-500/30 bg-red-500/10 text-red-600',
-      timeout: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600',
-    };
-    return (
-      <Badge variant="outline" className={variants[status] || ''}>
-        {status}
-      </Badge>
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Connecting to runner...</span>
+        <span className="text-sm text-muted-foreground">Loading...</span>
       </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Rocket className="h-5 w-5" />
-          <h1 className="text-2xl font-bold tracking-tight">Deploy</h1>
-        </div>
-        <div>
-          {runnerHealthy ? (
-            <Badge
-              variant="outline"
-              className="border-green-500/30 bg-green-500/10 text-green-600"
-            >
-              <CheckCircle className="h-3 w-3" />
-              Runner Connected
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-600">
-              <AlertCircle className="h-3 w-3" />
-              Runner Offline
-            </Badge>
-          )}
-        </div>
-      </header>
-
-      {/* Alert */}
-      {!runnerHealthy && (
+      {/* Runner Offline Alert */}
+      {runnerHealthy === false && (
         <Card className="border-red-500/30 bg-red-500/5">
           <CardContent className="flex items-start gap-3 py-4">
             <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
@@ -391,7 +344,7 @@ export default function DeployPage() {
                       <p className="text-xs text-muted-foreground">
                         Last run:{' '}
                         <a
-                          href={`/eval/${agent.last_run_id}`}
+                          href={`/deploy/${agent.last_run_id}`}
                           className="text-primary hover:underline"
                         >
                           {agent.last_run_id}
@@ -406,6 +359,9 @@ export default function DeployPage() {
         </CardContent>
       </Card>
 
+      {/* Quick Stats */}
+      <QuickStatsBar runs={runs} />
+
       {/* Recent Runs Section */}
       <Card>
         <CardHeader className="flex-row items-center justify-between border-b pb-4">
@@ -416,49 +372,7 @@ export default function DeployPage() {
           </Button>
         </CardHeader>
         <CardContent className="pt-4">
-          {runs.length === 0 ? (
-            <EmptyState
-              icon={Play}
-              title="No runs yet"
-              description="Run an agent to see results here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Run ID</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {runs.slice(0, 15).map((run) => (
-                  <TableRow key={run.run_id}>
-                    <TableCell>
-                      <code className="text-xs">{run.run_id}</code>
-                    </TableCell>
-                    <TableCell>{run.leaf?.id || '-'}</TableCell>
-                    <TableCell>{getRunStatusBadge(run.status)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(run.created_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-auto"
-                        onClick={() => router.push(`/eval/${run.run_id}`)}
-                      >
-                        View Eval
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <RunsTable runs={runs} maxRows={15} />
         </CardContent>
       </Card>
     </div>

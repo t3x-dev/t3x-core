@@ -1,12 +1,14 @@
 /**
- * Type exports
+ * Core Types
  */
 
-export {
-  type CommitAuthor,
-  type CommitContent,
-  type CommitV3,
-  type Constraint,
-  type Sentence,
-  type SentenceSource,
-} from './commit';
+export type {
+  CommitAuthor,
+  CommitContent,
+  CommitV3,
+  Constraint,
+  ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
+  SentenceSource,
+} from './commit-v3';
