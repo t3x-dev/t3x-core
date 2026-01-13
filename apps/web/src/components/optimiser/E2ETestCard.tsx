@@ -91,6 +91,10 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         },
       });
 
+      if (!result?.run_id) {
+        throw new Error('Invalid response: missing run_id');
+      }
+
       setLastRun({
         runId: result.run_id,
         version: selectedVersion,
@@ -120,20 +124,22 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         {/* Agent Selection */}
         <div className="space-y-2">
           <span className="text-sm font-medium">Agent</span>
-          <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+          <Select
+            value={selectedAgentId}
+            onValueChange={setSelectedAgentId}
+            disabled={!agents || agents.length === 0}
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Select an agent..." />
+              <SelectValue
+                placeholder={agents?.length ? 'Select an agent...' : 'No agents available'}
+              />
             </SelectTrigger>
             <SelectContent>
-              {agents.length === 0 ? (
-                <div className="p-2 text-sm text-muted-foreground">No agents registered</div>
-              ) : (
-                agents.map((agent) => (
-                  <SelectItem key={agent.deploy_agent_id} value={agent.deploy_agent_id}>
-                    {agent.name}
-                  </SelectItem>
-                ))
-              )}
+              {agents?.map((agent) => (
+                <SelectItem key={agent.deploy_agent_id} value={agent.deploy_agent_id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

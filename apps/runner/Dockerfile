@@ -16,7 +16,9 @@ COPY packages/core/package.json ./packages/core/
 COPY apps/runner/package.json ./apps/runner/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
-RUN pnpm install --frozen-lockfile --shamefully-hoist
+# Use China npm mirror for faster downloads
+RUN pnpm config set registry https://registry.npmmirror.com && \
+    pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source files
 COPY packages/core/ ./packages/core/
