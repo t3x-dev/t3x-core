@@ -13,7 +13,26 @@
  */
 
 // Common utilities
-export { canonText, hashText, sha256 } from './common';
+export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// Commit Builders
+export {
+  buildConstraints,
+  buildSentencesFromSegments,
+  findBestSourceSentenceId,
+  getDockerAuthor,
+  getLocalAuthor,
+  getWebAuthor,
+} from './commit';
+// CommitV3 types
+export type {
+  CommitAuthor,
+  CommitContent,
+  CommitV3,
+  Constraint,
+  ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
+} from './types';
 // Diff Engine
 export {
   buildSimilarityMatrix,
@@ -46,8 +65,6 @@ export {
   type WordDiffSegment,
 } from './diff';
 
-// Commit types
-export { type Sentence, type SentenceSource } from './types';
 // Extractors (Ring 1/2/3)
 export {
   // v1.1: Anchor types
