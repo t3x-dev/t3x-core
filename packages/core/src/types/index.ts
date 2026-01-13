@@ -2,4 +2,11 @@
  * Type exports
  */
 
-export { type Sentence, type SentenceSource } from './commit';
+export {
+  type CommitAuthor,
+  type CommitContent,
+  type CommitV3,
+  type Constraint,
+  type Sentence,
+  type SentenceSource,
+} from './commit';
