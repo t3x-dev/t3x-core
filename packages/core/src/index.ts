@@ -13,7 +13,27 @@
  */
 
 // Common utilities
-export { canonText, hashText, sha256 } from './common';
+export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// Commit Builders
+export {
+  buildConstraints,
+  buildSentencesFromSegments,
+  findBestSourceSentenceId,
+  getDockerAuthor,
+  getLocalAuthor,
+  getWebAuthor,
+} from './commit';
+// CommitV3 types
+export type {
+  CommitAuthor,
+  CommitContent,
+  CommitV3,
+  Constraint,
+  ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
+  SentenceSource,
+} from './types';
 // Diff Engine
 export {
   buildSimilarityMatrix,
@@ -34,20 +54,11 @@ export {
   type MatchPair,
   type SegmentDiff,
   type SegmentMatch,
-  // Smart Diff (Issue #76 - Phase 2)
-  type SemanticMatch,
-  SEMANTIC_THRESHOLD,
-  smartDiff,
-  type SmartDiffResult,
-  type SmartDiffStats,
   type SentencePair,
   tokenize,
   wordDiff,
   type WordDiffSegment,
 } from './diff';
-
-// Commit types
-export { type Sentence, type SentenceSource } from './types';
 // Extractors (Ring 1/2/3)
 export {
   // v1.1: Anchor types
@@ -90,13 +101,21 @@ export {
   type AutoMergedFacet,
   ConflictType,
   createMergeEngine,
+  // Two-way merge functions (Issue #71)
+  executeMerge,
+  groupConstraintsBySentence,
+  // Two-way merge types (Issue #71)
+  type Merge2WayResult,
+  type MergeCandidate,
   type MergeConflict,
   MergeEngine,
   type MergeEngineOptions,
   type MergeFacet,
   type MergeResult,
+  type MergeSimilarPair,
   type MergeSource,
   type MergeStats,
+  prepareMerge,
 } from './merge';
 // Provider interfaces and implementations
 export {

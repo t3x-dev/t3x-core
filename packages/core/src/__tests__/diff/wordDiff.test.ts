@@ -13,7 +13,7 @@ import {
   tokenize,
   wordDiff,
 } from '../../diff';
-import type { Sentence } from '../../types';
+import type { Sentence } from '../../types/commit';
 
 // Helper to create test sentences
 function createSentence(id: string, text: string): Sentence {

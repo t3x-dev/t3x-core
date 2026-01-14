@@ -33,6 +33,25 @@ export {
   type TurnWindow,
   updateCommitPosition,
 } from './commits';
+// Commits V3
+export {
+  type CommitV3Author,
+  type CommitV3Constraint,
+  type CommitV3Content,
+  type CommitV3Output,
+  type CommitV3Sentence,
+  type CreateCommitV3Input,
+  type CreateCommitV3Options,
+  createCommitV3,
+  deleteCommitV3,
+  getCommitV3,
+  getCommitV3Parents,
+  getCommitsV3ByHashes,
+  type ListCommitsV3Options,
+  listCommitsV3,
+  ParentNotFoundError,
+  updateCommitV3Position,
+} from './commits-v3';
 // Conversations
 export {
   type CreateConversationInput,

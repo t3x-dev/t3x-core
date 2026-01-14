@@ -143,7 +143,7 @@ export class N8nClient {
 
         // If not finished and we have retries left, wait and retry
         if (attempt < maxRetries) {
-          const delay = retryDelayMs * Math.pow(1.5, attempt);
+          const delay = retryDelayMs * 1.5 ** attempt;
           logger.info(
             { execution_id: executionId, attempt: attempt + 1, maxRetries, delay_ms: delay },
             'Execution not finished, waiting before retry...'
@@ -160,7 +160,7 @@ export class N8nClient {
           { execution_id: executionId, attempt: attempt + 1, error: String(error) },
           'Fetch failed, retrying...'
         );
-        await this.sleep(retryDelayMs * Math.pow(1.5, attempt));
+        await this.sleep(retryDelayMs * 1.5 ** attempt);
       }
     }
 

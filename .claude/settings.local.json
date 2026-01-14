@@ -127,7 +127,9 @@
       "Bash(pnpm --filter t3x-webui build:*)",
       "WebFetch(domain:magicui.design)",
       "WebFetch(domain:ui.reactflow.dev)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "Bash(pnpm -w run build:api:*)",
+      "Bash(timeout 10 pnpm dev:*)"
     ],
     "deny": [],
     "ask": []
