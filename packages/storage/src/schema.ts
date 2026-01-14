@@ -178,27 +178,6 @@ export const drafts = pgTable(
 );
 
 /**
- * Merge Results - Cached merge computation results
- */
-export const mergeResults = pgTable(
-  'merge_results',
-  {
-    mergeResultId: text('merge_result_id').primaryKey(),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.projectId, { onDelete: 'cascade' }),
-    baseCommitHash: text('base_commit_hash').notNull(),
-    sourceCommitHash: text('source_commit_hash').notNull(),
-    targetCommitHash: text('target_commit_hash').notNull(),
-    status: text('status').notNull(), // 'clean' | 'conflicts'
-    autoMergedJson: text('auto_merged_json').notNull(),
-    conflictsJson: text('conflicts_json').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  },
-  (table) => [index('idx_merge_results_project').on(table.projectId)]
-);
-
-/**
  * Deploy Agents - Registered agents for deployment and evaluation
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
@@ -335,9 +314,6 @@ export type NewCommit = typeof commits.$inferInsert;
 
 export type Draft = typeof drafts.$inferSelect;
 export type NewDraft = typeof drafts.$inferInsert;
-
-export type MergeResult = typeof mergeResults.$inferSelect;
-export type NewMergeResult = typeof mergeResults.$inferInsert;
 
 export type SegmentEmbedding = typeof segmentEmbeddings.$inferSelect;
 export type NewSegmentEmbedding = typeof segmentEmbeddings.$inferInsert;

@@ -5,8 +5,8 @@
  *
  * This package provides:
  * - Ring 1/2/3 semantic extraction
- * - Semantic diff (two-way and three-way)
- * - Three-way merge with conflict detection
+ * - Semantic diff (two-way)
+ * - Two-way merge for combining commits
  * - Provider interfaces (NLP, Embedding, LLM)
  *
  * All operations are deterministic and do not depend on LLMs.
@@ -96,25 +96,13 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
-// Merge Engine
+// Merge (Two-way merge for combining two commits - Issue #71)
 export {
-  type AutoMergedFacet,
-  ConflictType,
-  createMergeEngine,
-  // Two-way merge functions (Issue #71)
   executeMerge,
   groupConstraintsBySentence,
-  // Two-way merge types (Issue #71)
   type Merge2WayResult,
   type MergeCandidate,
-  type MergeConflict,
-  MergeEngine,
-  type MergeEngineOptions,
-  type MergeFacet,
-  type MergeResult,
   type MergeSimilarPair,
-  type MergeSource,
-  type MergeStats,
   prepareMerge,
 } from './merge';
 // Provider interfaces and implementations
