@@ -89,6 +89,11 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
           type: 'n8n',
           webhook_id: selectedAgent.endpoint,
         },
+        // v2.1: Metadata for A/B test filtering
+        metadata: {
+          prompt_version: selectedVersion,
+          test_case: 'weather-query',
+        },
       });
 
       if (!result?.run_id) {

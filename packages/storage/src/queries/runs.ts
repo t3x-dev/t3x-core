@@ -3,7 +3,7 @@
  *
  * CRUD operations for Engine run records.
  */
-import { eq, desc, and, lt, type SQL } from 'drizzle-orm';
+import { eq, desc, and, lt, sql, type SQL } from 'drizzle-orm';
 import { runs, type Run } from '../schema';
 import type { AnyDB } from '../adapters';
 
@@ -27,6 +27,8 @@ export interface CreateRunInput {
   trace_summary_json?: string | null;
   trace_policy?: string | null;
   full_trace_json?: string | null;
+  // v2.1: Metadata for A/B test filtering
+  metadata_json?: string | null;
 }
 
 export interface UpdateRunInput {
@@ -36,11 +38,16 @@ export interface UpdateRunInput {
   // v2.0: Trace storage fields
   trace_summary_json?: string | null;
   full_trace_json?: string | null;
+  // v2.1: Metadata for A/B test filtering
+  metadata_json?: string | null;
 }
 
 export interface ListRunsOptions {
   projectId?: string;
   status?: RunStatus;
+  // v2.1: Metadata filters for A/B test
+  model?: string;
+  prompt_version?: string;
   limit?: number;
   offset?: number;
 }
@@ -74,6 +81,8 @@ export async function insertRun(
       traceSummaryJson: input.trace_summary_json || null,
       tracePolicy: input.trace_policy || null,
       fullTraceJson: input.full_trace_json || null,
+      // v2.1: Metadata for A/B test filtering
+      metadataJson: input.metadata_json || null,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     })
@@ -100,12 +109,14 @@ export async function getRun(
 
 /**
  * List runs with optional filters
+ *
+ * v2.1: Added model and prompt_version filters for A/B test comparison
  */
 export async function listRuns(
   db: AnyDB,
   options: ListRunsOptions = {}
 ): Promise<Run[]> {
-  const { projectId, status, limit = 50, offset = 0 } = options;
+  const { projectId, status, model, prompt_version, limit = 50, offset = 0 } = options;
 
   const conditions: SQL[] = [];
   if (projectId) {
@@ -113,6 +124,13 @@ export async function listRuns(
   }
   if (status) {
     conditions.push(eq(runs.status, status));
+  }
+  // v2.1: Metadata JSON filters
+  if (model) {
+    conditions.push(sql`${runs.metadataJson}::jsonb->>'model' = ${model}`);
+  }
+  if (prompt_version) {
+    conditions.push(sql`${runs.metadataJson}::jsonb->>'prompt_version' = ${prompt_version}`);
   }
 
   const query = db
@@ -156,6 +174,10 @@ export async function updateRun(
   }
   if (input.full_trace_json !== undefined) {
     updateData.fullTraceJson = input.full_trace_json;
+  }
+  // v2.1: Metadata for A/B test filtering
+  if (input.metadata_json !== undefined) {
+    updateData.metadataJson = input.metadata_json;
   }
 
   const [run] = await db
@@ -253,4 +275,38 @@ export async function markRunAsTimeout(
     .returning();
 
   return run;
+}
+
+/**
+ * Get unique filter options for runs
+ *
+ * v2.1: Returns distinct model and prompt_version values from metadata
+ * for populating filter dropdowns in the UI.
+ *
+ * @param db - Database instance
+ * @returns Object containing arrays of unique models and prompt_versions
+ */
+export async function getRunFilterOptions(
+  db: AnyDB
+): Promise<{ models: string[]; prompt_versions: string[] }> {
+  // Get distinct models
+  const modelResults = await db
+    .selectDistinct({
+      model: sql<string>`${runs.metadataJson}::jsonb->>'model'`,
+    })
+    .from(runs)
+    .where(sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`);
+
+  // Get distinct prompt_versions
+  const promptResults = await db
+    .selectDistinct({
+      prompt_version: sql<string>`${runs.metadataJson}::jsonb->>'prompt_version'`,
+    })
+    .from(runs)
+    .where(sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`);
+
+  return {
+    models: modelResults.map((r) => r.model).filter(Boolean),
+    prompt_versions: promptResults.map((r) => r.prompt_version).filter(Boolean),
+  };
 }

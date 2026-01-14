@@ -152,6 +152,7 @@ export {
   deleteRun,
   getRun,
   getRunByRunnerRunId,
+  getRunFilterOptions,
   getTimedOutRuns,
   insertRun,
   listRuns,

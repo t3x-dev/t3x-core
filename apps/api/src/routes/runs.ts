@@ -15,6 +15,7 @@ import {
   getRun,
   getRunByRunnerRunId,
   listRuns,
+  getRunFilterOptions,
   findProjectById,
 } from '@t3x/storage';
 
@@ -43,6 +44,12 @@ const CreateRunSchema = z.object({
   workflow: z.object({
     type: z.string(),
     webhook_id: z.string().optional(),
+  }).optional(),
+  // v2.1: Metadata for A/B test filtering
+  metadata: z.object({
+    model: z.string().optional(),           // 模型名称，如 "gpt-4", "claude-3"
+    prompt_version: z.string().optional(),  // prompt 版本，如 "v1.0", "v2.0"
+    test_case: z.string().optional(),       // 测试用例标识
   }).optional(),
 });
 
@@ -112,6 +119,8 @@ runsRoutes.post('/v1/runs', async (c) => {
       workflow_json: input.workflow ? JSON.stringify(input.workflow) : null,
       status: 'queued',
       result_json: null,
+      // v2.1: Metadata for A/B test filtering
+      metadata_json: input.metadata ? JSON.stringify(input.metadata) : null,
     });
 
     console.log(`[runs] Created run ${run_id}, forwarding to Runner`);
@@ -233,16 +242,21 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
 
 /**
  * GET /runs - List runs
+ *
+ * v2.1: Added model and prompt_version filters for A/B test comparison
  */
 runsRoutes.get('/v1/runs', async (c) => {
   try {
     const projectId = c.req.query('project_id');
     const status = c.req.query('status') as 'queued' | 'running' | 'completed' | 'failed' | undefined;
+    // v2.1: Metadata filters for A/B test
+    const model = c.req.query('model');
+    const prompt_version = c.req.query('prompt_version');
     const limit = parseInt(c.req.query('limit') || '50', 10);
     const offset = parseInt(c.req.query('offset') || '0', 10);
 
     const db = await getDB();
-    const result = await listRuns(db, { projectId, status, limit, offset });
+    const result = await listRuns(db, { projectId, status, model, prompt_version, limit, offset });
 
     return c.json({
       success: true,
@@ -327,6 +341,35 @@ runsRoutes.get('/v1/runs/by-runner-id/:runnerRunId', async (c) => {
     return c.json({ success: true, data: run });
   } catch (error) {
     console.error('[runs] Error getting run by runner_run_id:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /runs/filters - Get available filter options
+ *
+ * v2.1: Returns distinct model and prompt_version values for filter dropdowns
+ */
+runsRoutes.get('/v1/runs/filters', async (c) => {
+  try {
+    const db = await getDB();
+    const options = await getRunFilterOptions(db);
+
+    return c.json({
+      success: true,
+      data: options,
+    });
+  } catch (error) {
+    console.error('[runs] Error getting filter options:', error);
     return c.json(
       {
         success: false,
