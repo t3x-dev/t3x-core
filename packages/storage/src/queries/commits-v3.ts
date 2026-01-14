@@ -16,27 +16,45 @@ import { type CommitV3, commitsV3 } from '../schema';
 export interface CommitV3Author {
   name: string;
   identity?: string;
-  verification?: string;
+  verification?: 'none' | 'device' | 'verified';
+}
+
+/**
+ * Sentence source in V3 commit content
+ * Matches Core Sentence.source (packages/core/src/types/commit-v3.ts)
+ */
+export interface CommitV3SentenceSource {
+  turn_hash: string;
+  start_char: number;
+  end_char: number;
 }
 
 /**
  * Sentence in V3 commit content
- * Field names align with Ring3 Segment specification (ring-schema.md)
+ * Matches Core Sentence type (packages/core/src/types/commit-v3.ts)
  */
 export interface CommitV3Sentence {
+  id: string;
   text: string;
-  startChar: number;
-  endChar: number;
-  [key: string]: unknown; // Allow additional fields
+  source: CommitV3SentenceSource;
 }
 
 /**
  * Constraint in V3 commit content
+ * Matches Core Constraint types (packages/core/src/types/commit-v3.ts)
+ * Uses 'require'/'exclude' types with required id and match fields
  */
 export interface CommitV3Constraint {
-  type: 'must_have' | 'mustnt_have' | 'preferred';
+  type: 'require' | 'exclude';
+  id: string;
   value: string;
-  [key: string]: unknown; // Allow additional fields
+  match: 'exact' | 'semantic';
+  /** For 'require' type: source sentence ID */
+  source_sentence_id?: string;
+  /** For 'require' type: whether this constraint was suggested */
+  suggested?: boolean;
+  /** For 'exclude' type: reason for exclusion */
+  reason?: string;
 }
 
 export interface CommitV3Content {

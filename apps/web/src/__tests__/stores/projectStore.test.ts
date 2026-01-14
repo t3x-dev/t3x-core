@@ -89,7 +89,8 @@ describe('Project Store', () => {
             conversations_count: 2,
           },
         ],
-        total: 1,
+        limit: 100,
+        offset: 0,
       };
 
       vi.mocked(api.listProjects).mockResolvedValueOnce(mockProjects);
@@ -106,7 +107,7 @@ describe('Project Store', () => {
 
     it('sets loading state during fetch', async () => {
       vi.mocked(api.listProjects).mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ projects: [], total: 0 }), 100))
+        () => new Promise((resolve) => setTimeout(() => resolve({ projects: [], limit: 100, offset: 0 }), 100))
       );
 
       const fetchPromise = useProjectStore.getState().fetchProjects();
@@ -259,7 +260,7 @@ describe('Project Store', () => {
     });
 
     it('removes project from state and calls API', async () => {
-      vi.mocked(api.deleteProject).mockResolvedValueOnce(undefined);
+      vi.mocked(api.deleteProject).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
 
       await useProjectStore.getState().deleteProject('proj_123');
 
@@ -268,7 +269,7 @@ describe('Project Store', () => {
     });
 
     it('notifies on successful deletion', async () => {
-      vi.mocked(api.deleteProject).mockResolvedValueOnce(undefined);
+      vi.mocked(api.deleteProject).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
