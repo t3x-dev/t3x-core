@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { nodeEnter, springConfig } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
+import type { CanvasNodeData, CommitV3Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
 
 // Define custom node type for React Flow v12
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
@@ -179,6 +179,103 @@ function getLeafIcon(type: LeafType) {
   return leafInfo?.icon || FileText;
 }
 
+// ============================================
+// CommitV3 Display Components
+// ============================================
+
+function AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
+  const isVerified = author.verification === 'verified';
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded ${
+      isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {author.name}
+      {isVerified && ' ✓'}
+    </span>
+  );
+}
+
+function ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
+  const isRequire = constraint.type === 'require';
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded ${
+      isRequire
+        ? 'bg-green-100 text-green-700 border border-green-300'
+        : 'bg-red-100 text-red-700 border border-red-300 line-through'
+    }`}>
+      {isRequire ? '✓' : '✗'} {constraint.value}
+    </span>
+  );
+}
+
+// Preview limits for UnitNode display
+const PREVIEW_MAX_SENTENCES = 3;
+const PREVIEW_MAX_CONSTRAINTS = 3;
+
+/**
+ * CommitV3 content section - only shows sentences and constraints
+ * Header (title, branch, hash, status) is rendered by parent UnitNode
+ */
+function CommitV3Content({ commit }: { commit: CommitV3Display }) {
+  // Preview mode: limit sentences and constraints
+  const displaySentences = commit.sentences.slice(0, PREVIEW_MAX_SENTENCES);
+  const remainingSentences = commit.sentences.length - PREVIEW_MAX_SENTENCES;
+  const displayConstraints = commit.constraints.slice(0, PREVIEW_MAX_CONSTRAINTS);
+  const remainingConstraints = commit.constraints.length - PREVIEW_MAX_CONSTRAINTS;
+
+  return (
+    <div className="commit-v3-content mt-2 pt-2 border-t border-slate-100">
+      {/* Author badge */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-[0.65rem] text-slate-400">by</span>
+        <AuthorBadge author={commit.author} />
+      </div>
+
+      {/* Sentences (preview) */}
+      <div>
+        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+          Sentences ({commit.sentences.length})
+        </div>
+        {commit.sentences.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            {displaySentences.map((s) => (
+              <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
+                • {s.text}
+              </li>
+            ))}
+            {remainingSentences > 0 && (
+              <li className="text-[0.65rem] text-slate-400">
+                +{remainingSentences} more
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      {/* Constraints (preview) */}
+      {commit.constraints.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Constraints ({commit.constraints.length})
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {displayConstraints.map((c) => (
+              <ConstraintBadge key={c.id} constraint={c} />
+            ))}
+            {remainingConstraints > 0 && (
+              <span className="text-[0.65rem] text-slate-400 px-1 py-0.5">
+                +{remainingConstraints}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
@@ -227,10 +324,10 @@ function UnitNode(props: Props) {
     openLeafPanel(id);
   };
 
-  // Copy commit hash to clipboard
+  // Copy commit hash to clipboard (V3 hash takes priority)
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash = data.commitHash || data.entryId || '';
+    const hash = data.commitV3?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard.writeText(hash);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
@@ -320,7 +417,7 @@ function UnitNode(props: Props) {
             SECTION 2: COMMIT (main content)
             ═══════════════════════════════════════════ */}
         <div className="px-3 py-3">
-          {/* Row 1: Title + Branch Badge */}
+          {/* Row 1: Title + Branch Badge (shared by V2 and V3) */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <h4 className="m-0 text-sm font-semibold text-slate-800 leading-snug flex-1 min-w-0">
               {data.title}
@@ -337,7 +434,7 @@ function UnitNode(props: Props) {
             </span>
           </div>
 
-          {/* Row 2: Commit hash + merge indicator */}
+          {/* Row 2: Commit hash + merge indicator (shared by V2 and V3) */}
           <div className="flex items-center gap-1.5 text-[0.7rem] text-slate-400 mb-2 nodrag">
             <TooltipProvider delayDuration={200}>
               <Tooltip>
@@ -347,7 +444,11 @@ function UnitNode(props: Props) {
                     onClick={handleCopyHash}
                     className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[0.6rem] transition-colors cursor-pointer"
                   >
-                    {data.commitHash ? data.commitHash.slice(0, 7) : data.entryId?.slice(0, 7)}
+                    {data.commitV3?.hash
+                      ? data.commitV3.hash.slice(0, 7)
+                      : data.commitHash
+                        ? data.commitHash.slice(0, 7)
+                        : data.entryId?.slice(0, 7)}
                     {copiedHash ? (
                       <CheckCircle size={10} className="text-green-500" />
                     ) : (
@@ -368,7 +469,7 @@ function UnitNode(props: Props) {
             )}
           </div>
 
-          {/* Row 3: Status indicator */}
+          {/* Row 3: Status indicator (shared by V2 and V3) */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               {isStaging ? (
@@ -383,19 +484,24 @@ function UnitNode(props: Props) {
                 </span>
               )}
             </div>
-            {isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
+            {/* V2: mustHave/mustntHave counts for staging */}
+            {!data.commitV3 && isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
               <span className="text-[0.65rem] font-medium">
                 <span className="text-green-600">{data.mustHave?.length || 0}✓</span>
                 {' '}
                 <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
               </span>
             )}
-            {!isStaging && data.summary && (
+            {/* V2: summary for committed */}
+            {!data.commitV3 && !isStaging && data.summary && (
               <span className="text-[0.65rem] text-slate-400 truncate max-w-[100px]">
                 {data.summary}
               </span>
             )}
           </div>
+
+          {/* V3: Sentences and Constraints content */}
+          {data.commitV3 && <CommitV3Content commit={data.commitV3} />}
         </div>
 
         {/* ═══════════════════════════════════════════
