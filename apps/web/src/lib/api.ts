@@ -994,6 +994,82 @@ export async function createCommit(
   return parseCommit(data);
 }
 
+// ============================================================================
+// Commits V3 (Sentence-based commits)
+// ============================================================================
+
+// CommitV3 sentence from API
+export interface CommitV3Sentence {
+  id: string;
+  text: string;
+  source: {
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
+}
+
+// CommitV3 constraint from API
+export interface CommitV3Constraint {
+  type: 'require' | 'exclude';
+  id: string;
+  value: string;
+  match: 'exact' | 'semantic';
+  source_sentence_id?: string;
+  suggested?: boolean;
+  reason?: string;
+}
+
+// CommitV3 author from API
+export interface CommitV3Author {
+  name: string;
+  identity?: string;
+  verification?: 'none' | 'device' | 'verified';
+}
+
+// CommitV3 from API response
+export interface CommitV3 {
+  hash: string;
+  schema: 'commit/v3';
+  parents: string[];
+  author: CommitV3Author;
+  committed_at: string;
+  content: {
+    sentences: CommitV3Sentence[];
+    constraints?: CommitV3Constraint[];
+  };
+  project_id: string | null;
+  message: string | null;
+  branch: string | null;
+  position?: { x: number; y: number };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommitV3ListData {
+  commits: CommitV3[];
+  project_id: string;
+  branch?: string;
+  limit: number;
+  offset: number;
+}
+
+export async function listCommitsV3(
+  projectId: string,
+  branch?: string,
+  limit = 50,
+  offset = 0
+): Promise<CommitV3ListData> {
+  const query = buildQueryString({ project_id: projectId, branch, limit, offset });
+  const res = await fetchWithTimeout(`${API_V1}/commits-v3?${query}`);
+  return handleResponse<CommitV3ListData>(res);
+}
+
+export async function getCommitV3(commitHash: string): Promise<CommitV3> {
+  const res = await fetchWithTimeout(`${API_V1}/commits-v3/${commitHash}`);
+  return handleResponse<CommitV3>(res);
+}
+
 // Resolved facet for merge commit
 // source values: backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
 // UI adds 'custom' for user-provided text
