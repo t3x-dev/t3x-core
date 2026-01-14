@@ -26,14 +26,14 @@ import {
   draftRoutes,
   exportRoutes,
   healthRoutes,
-  mergeRoutes,
   runnerRoutes,
   statusRoutes,
   turnRoutes,
   deployAgentRoutes,
   runsRoutes,
 } from './routes';
-import { projectRoutes } from './routes/projects';
+import { projectRoutes } from './routes/projects.openapi';
+import { mergeRoutes } from './routes/merge.openapi';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
