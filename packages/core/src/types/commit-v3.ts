@@ -6,6 +6,17 @@
  */
 
 /**
+ * Source reference for a sentence
+ * Tracks where the sentence originated from
+ */
+export interface SentenceSource {
+  /** Type of source (e.g., 'conversation', 'turn') */
+  type: string;
+  /** Source identifier */
+  id: string;
+}
+
+/**
  * A sentence extracted from a turn, with source provenance.
  *
  * Note: confidence scores are stored in the extraction layer (turns.rings_json),
