@@ -52,6 +52,20 @@ export interface ListRunsOptions {
   offset?: number;
 }
 
+// v2.2: Configuration stats for A/B test comparison
+export interface ConfigurationStats {
+  model: string;              // 模型名称
+  prompt_version: string;     // prompt 版本
+  run_count: number;          // 运行次数（样本量）
+  pass_count: number;         // 通过次数
+  pass_rate: number;          // 通过率 (0-1)
+  avg_score: number;          // 平均得分
+  avg_latency_ms: number;     // 平均延迟
+  avg_tokens: number;         // 平均 token 数
+  scores: number[];           // 原始得分数组（用于 t-test）
+  latencies: number[];        // 原始延迟数组
+}
+
 // ============================================================
 // Queries
 // ============================================================
@@ -309,4 +323,128 @@ export async function getRunFilterOptions(
     models: modelResults.map((r) => r.model).filter(Boolean),
     prompt_versions: promptResults.map((r) => r.prompt_version).filter(Boolean),
   };
+}
+
+/**
+ * Get configuration stats grouped by model + prompt_version
+ *
+ * v2.2: Aggregates run data for A/B test comparison.
+ * Returns statistics for each unique (model, prompt_version) combination.
+ *
+ * @param db - Database instance
+ * @param projectId - Optional project ID filter
+ * @returns Array of configuration stats
+ */
+export async function getConfigurationStats(
+  db: AnyDB,
+  projectId?: string
+): Promise<ConfigurationStats[]> {
+  // Get all completed runs with metadata
+  const conditions: SQL[] = [
+    eq(runs.status, 'completed'),
+    sql`${runs.metadataJson} IS NOT NULL`,
+    sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`,
+    sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`,
+  ];
+
+  if (projectId) {
+    conditions.push(eq(runs.projectId, projectId));
+  }
+
+  const allRuns = await db
+    .select()
+    .from(runs)
+    .where(and(...conditions));
+
+  // Group runs by model + prompt_version
+  const groups = new Map<string, {
+    model: string;
+    prompt_version: string;
+    runs: typeof allRuns;
+  }>();
+
+  for (const run of allRuns) {
+    const metadata = JSON.parse(run.metadataJson || '{}');
+    const model = metadata.model || 'unknown';
+    const prompt_version = metadata.prompt_version || 'unknown';
+    const key = `${model}::${prompt_version}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { model, prompt_version, runs: [] });
+    }
+    groups.get(key)!.runs.push(run);
+  }
+
+  // Calculate stats for each group
+  const stats: ConfigurationStats[] = [];
+
+  for (const group of groups.values()) {
+    const { model, prompt_version, runs: groupRuns } = group;
+
+    // Parse result data from each run
+    const scores: number[] = [];
+    const latencies: number[] = [];
+    const tokens: number[] = [];
+    let passCount = 0;
+
+    for (const run of groupRuns) {
+      // Parse result JSON for score
+      if (run.resultJson) {
+        try {
+          const result = JSON.parse(run.resultJson);
+          // Try to get score from eval_metrics or run_report
+          const score = result.eval_metrics?.overall_score
+            ?? result.run_report?.overall_score
+            ?? result.overall_score;
+          if (typeof score === 'number') {
+            scores.push(score);
+            if (score >= 0.6) passCount++; // Consider >= 60% as pass
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      // Parse trace summary for latency and tokens
+      if (run.traceSummaryJson) {
+        try {
+          const trace = JSON.parse(run.traceSummaryJson);
+          if (typeof trace.latency_ms === 'number') {
+            latencies.push(trace.latency_ms);
+          }
+          if (typeof trace.tokens?.total_tokens === 'number') {
+            tokens.push(trace.tokens.total_tokens);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    const runCount = groupRuns.length;
+    const avgScore = scores.length > 0
+      ? scores.reduce((a, b) => a + b, 0) / scores.length
+      : 0;
+    const avgLatency = latencies.length > 0
+      ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+      : 0;
+    const avgTokens = tokens.length > 0
+      ? tokens.reduce((a, b) => a + b, 0) / tokens.length
+      : 0;
+
+    stats.push({
+      model,
+      prompt_version,
+      run_count: runCount,
+      pass_count: passCount,
+      pass_rate: runCount > 0 ? passCount / runCount : 0,
+      avg_score: avgScore,
+      avg_latency_ms: avgLatency,
+      avg_tokens: avgTokens,
+      scores,
+      latencies,
+    });
+  }
+
+  return stats;
 }

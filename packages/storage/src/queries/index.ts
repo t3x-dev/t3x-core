@@ -148,8 +148,10 @@ export {
 } from './deployAgents';
 // Runs (Engine → Runner → n8n flow)
 export {
+  type ConfigurationStats,
   type CreateRunInput,
   deleteRun,
+  getConfigurationStats,
   getRun,
   getRunByRunnerRunId,
   getRunFilterOptions,
