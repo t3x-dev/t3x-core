@@ -239,6 +239,8 @@ export const runs = pgTable('runs', {
   traceSummaryJson: text('trace_summary_json'), // Lightweight stats (always stored)
   tracePolicy: text('trace_policy').default('on_failure'), // 'always' | 'on_failure' | 'on_violation'
   fullTraceJson: text('full_trace_json'), // Complete RunRecord (conditional)
+  // v2.1: Metadata for A/B test filtering
+  metadataJson: text('metadata_json'), // { model, prompt_version, workflow_id, test_case }
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (table) => [

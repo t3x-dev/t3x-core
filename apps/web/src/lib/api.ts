@@ -1714,6 +1714,13 @@ export interface EngineRun {
     assertions?: unknown[];
     evidence_pack?: Record<string, unknown>;
   } | null;
+  // v2.1: Metadata for A/B test filtering
+  metadata: {
+    model?: string;
+    prompt_version?: string;
+    workflow_id?: string;
+    test_case?: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -1730,6 +1737,13 @@ export interface CreateEngineRunInput {
   workflow?: {
     type: string;
     webhook_id?: string;
+  };
+  // v2.1: Metadata for A/B test filtering
+  metadata?: {
+    model?: string;
+    prompt_version?: string;
+    workflow_id?: string;
+    test_case?: string;
   };
 }
 
@@ -1776,6 +1790,8 @@ interface EngineRunRaw {
   workflowJson: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed';
   resultJson: string | null;
+  // v2.1: Metadata for A/B test filtering
+  metadataJson: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1794,6 +1810,7 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
     workflow: safeJsonParse(raw.workflowJson, null),
     status: raw.status,
     result: safeJsonParse(raw.resultJson, null),
+    metadata: safeJsonParse(raw.metadataJson, null),
     created_at: raw.createdAt,
     updated_at: raw.updatedAt,
   };
@@ -1810,16 +1827,23 @@ export async function getEngineRun(runId: string): Promise<EngineRun> {
 
 /**
  * List runs from Engine
+ *
+ * v2.1: Added model and prompt_version filters for A/B test comparison
  */
 export async function listEngineRuns(options?: {
   project_id?: string;
   status?: 'queued' | 'running' | 'completed' | 'failed';
+  // v2.1: Metadata filters for A/B test
+  model?: string;
+  prompt_version?: string;
   limit?: number;
   offset?: number;
 }): Promise<EngineRunListData> {
   const query = buildQueryString({
     project_id: options?.project_id,
     status: options?.status,
+    model: options?.model,
+    prompt_version: options?.prompt_version,
     limit: options?.limit ?? 50,
     offset: options?.offset ?? 0,
   });
@@ -1830,6 +1854,23 @@ export async function listEngineRuns(options?: {
     limit: data.limit,
     offset: data.offset,
   };
+}
+
+/**
+ * Get filter options for runs (unique models and prompt_versions)
+ *
+ * v2.1: Returns distinct values for populating filter dropdowns in the UI.
+ */
+export async function getRunFilterOptions(): Promise<{
+  models: string[];
+  prompt_versions: string[];
+}> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/filters`);
+  const data = await handleResponse<{
+    models: string[];
+    prompt_versions: string[];
+  }>(res);
+  return data;
 }
 
 export async function* chatStream(
