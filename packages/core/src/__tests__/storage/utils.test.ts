@@ -13,7 +13,6 @@ import {
   generateBranchId,
   generateConversationId,
   generateDraftId,
-  generateMergeResultId,
   generateProjectId,
   isoNow,
 } from '../../storage/utils';
@@ -64,18 +63,6 @@ describe('Storage Utils', () => {
 
       it('generates unique IDs', () => {
         const ids = new Set(Array.from({ length: 100 }, () => generateDraftId()));
-        expect(ids.size).toBe(100);
-      });
-    });
-
-    describe('generateMergeResultId', () => {
-      it('generates ID with merge_ prefix', () => {
-        const id = generateMergeResultId();
-        expect(id).toMatch(/^merge_[a-f0-9]{8}$/);
-      });
-
-      it('generates unique IDs', () => {
-        const ids = new Set(Array.from({ length: 100 }, () => generateMergeResultId()));
         expect(ids.size).toBe(100);
       });
     });

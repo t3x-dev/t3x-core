@@ -36,6 +36,7 @@ import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
+import { MergePanel } from '../merge/MergePanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
@@ -820,6 +821,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         />
       )}
       <LeafPanel />
+      <MergePanel />
       <DeletionConfirmDialog />
     </div>
   );

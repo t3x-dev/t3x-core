@@ -537,4 +537,222 @@ describe('Canvas Store - Unit Node Model', () => {
       // The exact behavior depends on isUpstreamOfStagingUnit
     });
   });
+
+  // ===========================================================================
+  // Merge Store Tests
+  // ===========================================================================
+  describe('Merge Store', () => {
+    beforeEach(() => {
+      // Reset store and clear all mocks
+      useCanvasStore.setState({
+        nodes: [],
+        edges: [],
+        hasMainCommit: false,
+        mergeState: null,
+      });
+      vi.clearAllMocks();
+    });
+
+    it('startMerge sets mergeState', async () => {
+      // Mock fetch
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                identical: [],
+                similarPairs: [],
+                onlyInSource: [],
+                onlyInTarget: [],
+              },
+            }),
+        })
+      ) as unknown as typeof fetch;
+
+      await useCanvasStore.getState().startMerge('sha256:a', 'sha256:b');
+
+      expect(useCanvasStore.getState().mergeState).not.toBeNull();
+      expect(useCanvasStore.getState().mergeState?.sourceHash).toBe('sha256:a');
+      expect(useCanvasStore.getState().mergeState?.targetHash).toBe('sha256:b');
+      expect(useCanvasStore.getState().mergeError).toBeNull();
+      expect(useCanvasStore.getState().mergeLoading).toBe(false);
+    });
+
+    it('resolveSimilarPair updates resolution', () => {
+      // Setup with existing mergeState
+      const store = useCanvasStore.getState();
+      useCanvasStore.setState({
+        mergeState: {
+          sourceHash: 'sha256:a',
+          targetHash: 'sha256:b',
+          prepared: {
+            identical: [],
+            similarPairs: [
+              {
+                source: {
+                  id: 's1',
+                  text: 'Hello world.',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv1' },
+                },
+                target: {
+                  id: 't1',
+                  text: 'Hello world!',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv2' },
+                },
+                wordDiff: [],
+                sourceConstraints: [],
+                targetConstraints: [],
+              },
+            ],
+            onlyInSource: [],
+            onlyInTarget: [],
+          },
+        },
+      });
+
+      store.resolveSimilarPair(0, 'source');
+
+      expect(useCanvasStore.getState().mergeState?.prepared.similarPairs[0].resolution).toBe(
+        'source'
+      );
+    });
+
+    it('toggleKeep flips boolean', () => {
+      useCanvasStore.setState({
+        mergeState: {
+          sourceHash: 'sha256:a',
+          targetHash: 'sha256:b',
+          prepared: {
+            identical: [],
+            similarPairs: [],
+            onlyInSource: [
+              {
+                sentence: {
+                  id: 's1',
+                  text: 'Unique sentence.',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv1' },
+                },
+                constraints: [],
+                keep: true,
+              },
+            ],
+            onlyInTarget: [],
+          },
+        },
+      });
+
+      const initialKeep = useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep;
+
+      useCanvasStore.getState().toggleKeep('source', 0);
+
+      expect(useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep).toBe(false);
+      expect(useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep).toBe(
+        !initialKeep
+      );
+    });
+
+    it('cancelMerge clears state', () => {
+      useCanvasStore.setState({
+        mergeState: {
+          sourceHash: 'sha256:a',
+          targetHash: 'sha256:b',
+          prepared: {
+            identical: [],
+            similarPairs: [],
+            onlyInSource: [],
+            onlyInTarget: [],
+          },
+        },
+      });
+
+      const store = useCanvasStore.getState();
+      store.cancelMerge();
+
+      expect(useCanvasStore.getState().mergeState).toBeNull();
+    });
+
+    it('selectCanExecuteMerge returns true when all resolved', async () => {
+      const { selectCanExecuteMerge } = await import('@/store/canvasStore');
+
+      // Setup with all pairs resolved
+      const state = {
+        mergeState: {
+          sourceHash: 'sha256:a',
+          targetHash: 'sha256:b',
+          prepared: {
+            identical: [],
+            similarPairs: [
+              {
+                source: {
+                  id: 's1',
+                  text: 'Hello',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv1' },
+                },
+                target: {
+                  id: 't1',
+                  text: 'Hi',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv2' },
+                },
+                wordDiff: [],
+                resolution: 'source' as const,
+                sourceConstraints: [],
+                targetConstraints: [],
+              },
+            ],
+            onlyInSource: [],
+            onlyInTarget: [],
+          },
+        },
+      } as Parameters<typeof selectCanExecuteMerge>[0];
+
+      expect(selectCanExecuteMerge(state)).toBe(true);
+    });
+
+    it('selectCanExecuteMerge returns false when unresolved', async () => {
+      const { selectCanExecuteMerge } = await import('@/store/canvasStore');
+
+      const state = {
+        mergeState: {
+          sourceHash: 'sha256:a',
+          targetHash: 'sha256:b',
+          prepared: {
+            identical: [],
+            similarPairs: [
+              {
+                source: {
+                  id: 's1',
+                  text: 'Hello',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv1' },
+                },
+                target: {
+                  id: 't1',
+                  text: 'Hi',
+                  confidence: 0.9,
+                  source: { type: 'conversation', id: 'conv2' },
+                },
+                wordDiff: [],
+                resolution: undefined,
+                sourceConstraints: [],
+                targetConstraints: [],
+              },
+            ],
+            onlyInSource: [],
+            onlyInTarget: [],
+          },
+        },
+      } as Parameters<typeof selectCanExecuteMerge>[0];
+
+      expect(selectCanExecuteMerge(state)).toBe(false);
+    });
+  });
 });

@@ -114,7 +114,7 @@ T3X uses PostgreSQL (via Drizzle ORM):
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
-Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `merge_results`, `segment_embeddings`
+Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `commits_v3`, `segment_embeddings`
 
 ### Hash Chains
 
