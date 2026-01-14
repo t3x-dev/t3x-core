@@ -10,4 +10,5 @@ export type {
   ExcludeConstraint,
   RequireConstraint,
   Sentence,
+  SentenceSource,
 } from './commit-v3';
