@@ -4,7 +4,7 @@
  * Tests for prepareMerge and executeMerge functions.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type {
   CommitAuthor,
   CommitContent,
@@ -348,17 +348,8 @@ describe('executeMerge', () => {
     };
 
     // Mock Date to ensure same timestamp
-    const fixedDate = new Date('2024-01-01T00:00:00.000Z');
-    const originalDate = global.Date;
-    global.Date = class extends originalDate {
-      constructor() {
-        super();
-        return fixedDate;
-      }
-      static now() {
-        return fixedDate.getTime();
-      }
-    } as DateConstructor;
+    const fixedTimestamp = new Date('2024-01-01T00:00:00.000Z').getTime();
+    vi.setSystemTime(fixedTimestamp);
 
     try {
       const result1 = executeMerge(prepared, 'a', 'b', author, 'Merge');
@@ -366,7 +357,7 @@ describe('executeMerge', () => {
 
       expect(result1.hash).toBe(result2.hash);
     } finally {
-      global.Date = originalDate;
+      vi.useRealTimers();
     }
   });
 

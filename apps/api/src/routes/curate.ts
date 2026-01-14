@@ -557,7 +557,7 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
     let sourceText: string | undefined;
     let chunks: Array<{ id: string; start: number; end: number; text: string }>;
     let allAnchorCandidates: AnchorCandidate[] = [];
-    let extractionWarnings: string[] = [];
+    const extractionWarnings: string[] = [];
 
     // Priority: source_conversation_id > source_text
     // source_conversation_id provides Ring3 segments and anchor candidates
