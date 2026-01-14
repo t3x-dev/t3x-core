@@ -6,7 +6,7 @@
  * may have CORS issues, so we proxy through Next.js.
  */
 
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
