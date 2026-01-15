@@ -575,34 +575,7 @@ export function NodeModal({
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // Merge state for merge drafts
-  const [mergeResult, setMergeResult] = useState<api.MergeResult | null>(null);
-  const [isMergeAnalyzing, setIsMergeAnalyzing] = useState(false);
-  const [mergeError, setMergeError] = useState<string | null>(null);
-  // Conflict resolutions: facet -> 'source' | 'target' | 'custom'
-  const [conflictResolutions, setConflictResolutions] = useState<
-    Record<
-      string,
-      {
-        choice: 'source' | 'target' | 'custom';
-        customText?: string;
-      }
-    >
-  >({});
-
-  // Check if all conflicts are resolved (needed before handleCommit)
-  const allConflictsResolved = useMemo(() => {
-    if (!mergeResult || mergeResult.status !== 'conflicts') return true;
-    return mergeResult.conflicts.every((conflict) => {
-      const resolution = conflictResolutions[conflict.facet];
-      if (!resolution) return false;
-      // For delete_modify / modify_delete conflicts, one side may legitimately be null/empty
-      // Only require non-empty text for 'custom' choice
-      if (resolution.choice === 'custom' && !resolution.customText?.trim()) return false;
-      // For source/target choices, just require a choice was made (empty text is valid for deletions)
-      return true;
-    });
-  }, [mergeResult, conflictResolutions]);
+  // Legacy three-way merge state removed - use MergePanel for two-way merge
 
   // Get all committed commits for diff target selection
   // Use nodes directly and filter in useMemo to avoid infinite loop from .filter() creating new arrays
@@ -1434,131 +1407,8 @@ export function NodeModal({
     setCommitError(null);
 
     try {
-      // Check if this is a merge draft
-      const isMerge = data.bridgePrompt === '/merge' && !!data.mergeConfig;
-
-      if (isMerge) {
-        // Merge commit flow
-        if (!mergeResult) {
-          setCommitError('Please analyze the merge first');
-          setIsCommitting(false);
-          return;
-        }
-        if (!allConflictsResolved) {
-          setCommitError('Please resolve all conflicts first');
-          setIsCommitting(false);
-          return;
-        }
-
-        const { sourceCommitHash, targetCommitHash } = data.mergeConfig!;
-
-        // Build resolved facets from auto-merged + conflict resolutions
-        const resolvedFacets: api.ResolvedFacet[] = [];
-
-        // Add auto-merged facets
-        for (const auto of mergeResult.auto_merged_facets) {
-          resolvedFacets.push({
-            facet: auto.facet,
-            text: auto.merged_text,
-            source: auto.source, // backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
-            keywords: auto.keywords || [],
-          });
-        }
-
-        // Add resolved conflicts
-        for (const conflict of mergeResult.conflicts) {
-          const resolution = conflictResolutions[conflict.facet];
-          if (!resolution) continue;
-
-          // For delete_modify / modify_delete conflicts, one side may be null
-          let text: string | null;
-          if (resolution.choice === 'source') {
-            text = conflict.source_text;
-          } else if (resolution.choice === 'target') {
-            text = conflict.target_text;
-          } else {
-            text = resolution.customText || '';
-          }
-
-          resolvedFacets.push({
-            facet: conflict.facet,
-            text,
-            source: resolution.choice,
-            keywords: [],
-          });
-        }
-
-        // Determine branch
-        // If user selected 'branch' mode, use their branch name or generate one
-        const branch =
-          data.pendingBranch === 'branch'
-            ? data.pendingBranchName?.trim() || `branch-${Date.now()}`
-            : 'main';
-
-        console.log('[handleCommit:merge] Branch decision:', {
-          pendingBranch: data.pendingBranch,
-          pendingBranchName: data.pendingBranchName,
-          computedBranch: branch,
-          existingBranches: branches.map((b) => b.name),
-          branchExists: branches.some((b) => b.name === branch),
-        });
-
-        // Create branch if needed (new branch that doesn't exist yet)
-        if (branch !== 'main' && !branches.some((b) => b.name === branch)) {
-          console.log('[handleCommit:merge] Creating new branch:', branch);
-          try {
-            await api.createBranch(projectId, branch, 'main', undefined, false);
-            console.log('[handleCommit:merge] Branch created successfully:', branch);
-          } catch (branchErr) {
-            // Ignore if branch already exists (race condition)
-            const errMsg = branchErr instanceof Error ? branchErr.message : String(branchErr);
-            console.log('[handleCommit:merge] Branch creation error:', errMsg);
-            if (!errMsg.includes('already exists')) {
-              throw branchErr;
-            }
-          }
-        } else {
-          console.log('[handleCommit:merge] Skipping branch creation:', {
-            branch,
-            isMain: branch === 'main',
-            exists: branches.some((b) => b.name === branch),
-          });
-        }
-
-        // Create merge commit
-        const currentPosition = node?.position;
-        const commit = await api.createMergeCommit(
-          projectId,
-          sourceCommitHash!,
-          targetCommitHash!,
-          branch,
-          data.title ||
-            `Merge ${data.mergeConfig?.sourceCommitTitle} into ${data.mergeConfig?.targetCommitTitle}`,
-          resolvedFacets,
-          currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined
-        );
-
-        // Trigger convert to committed state BEFORE updating node ID
-        // (onConvertDraft closure captures the old node.id, so must be called first)
-        onConvertDraft?.();
-
-        // Update local node ID to match API commit_hash
-        if (node && commit.commit_hash) {
-          useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash);
-        }
-
-        // Update local state with final values
-        onUpdate({
-          commitHash: commit.commit_hash,
-          isMergeCommit: true,
-        });
-
-        // Refresh canvas data
-        useCanvasStore.getState().loadProjectData(projectId);
-
-        setIsCommitting(false);
-        return;
-      }
+      // Legacy three-way merge flow removed - use MergePanel for two-way merge
+      // This handleCommit only handles regular commits now
 
       // Regular commit flow
       let startTurnHash: string;
@@ -1822,9 +1672,6 @@ export function NodeModal({
     mustntHaveKeywordsNew,
     mustHaveKeywordsLegacy,
     mustntHaveKeywordsLegacy,
-    mergeResult,
-    conflictResolutions,
-    allConflictsResolved,
     branches,
     pendingAnchors,
   ]);
@@ -1856,48 +1703,7 @@ export function NodeModal({
     }
   }, [data?.commitHash, diffTargetCommit]);
 
-  // Handle Merge Analysis - analyze merge conflicts
-  const handleMergeAnalysis = useCallback(async () => {
-    if (!projectId || !data?.mergeConfig) {
-      setMergeError('No merge configuration available');
-      return;
-    }
-
-    const { baseCommitHash, sourceCommitHash, targetCommitHash } = data.mergeConfig;
-    if (!baseCommitHash || !sourceCommitHash || !targetCommitHash) {
-      setMergeError('Missing commit hashes for merge analysis');
-      return;
-    }
-
-    setIsMergeAnalyzing(true);
-    setMergeError(null);
-    setMergeResult(null);
-    setConflictResolutions({});
-
-    try {
-      const result = await api.merge(projectId, baseCommitHash, sourceCommitHash, targetCommitHash);
-      setMergeResult(result);
-
-      // Auto-resolve clean merges (no user action needed)
-      // For conflicts, user must choose
-      if (result.status === 'conflicts') {
-        // Initialize conflict resolutions with 'target' as default
-        const initialResolutions: Record<
-          string,
-          { choice: 'source' | 'target' | 'custom'; customText?: string }
-        > = {};
-        result.conflicts.forEach((conflict) => {
-          initialResolutions[conflict.facet] = { choice: 'target' };
-        });
-        setConflictResolutions(initialResolutions);
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setMergeError(error.message);
-    } finally {
-      setIsMergeAnalyzing(false);
-    }
-  }, [projectId, data?.mergeConfig]);
+  // Legacy three-way merge analysis removed - use MergePanel for two-way merge
 
   // Scroll to bottom when new messages added
   useEffect(() => {
@@ -2685,10 +2491,9 @@ export function NodeModal({
                   </span>
                 </div>
 
-                {/* Merge Draft: Show merge-specific UI */}
+                {/* Merge Draft: Legacy three-way merge UI removed */}
                 {isMergeDraft ? (
                   <div className="flex flex-col gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg flex-1 min-h-0 overflow-y-auto">
-                    {/* Merge info header */}
                     <div className="flex items-center gap-2 font-semibold text-slate-700">
                       <GitCompare size={16} />
                       <span>
@@ -2696,218 +2501,8 @@ export function NodeModal({
                         {data?.mergeConfig?.targetCommitTitle}
                       </span>
                     </div>
-
-                    {/* Merge error */}
-                    {mergeError && (
-                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-                        <AlertCircle size={14} />
-                        <span>{mergeError}</span>
-                      </div>
-                    )}
-
-                    {/* Analyze button - only show if not analyzed yet */}
-                    {!mergeResult && (
-                      <Button
-                        onClick={handleMergeAnalysis}
-                        disabled={isMergeAnalyzing}
-                        className="w-full gap-2"
-                      >
-                        {isMergeAnalyzing ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>Analyzing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <GitCompare size={16} />
-                            <span>Analyze Merge</span>
-                          </>
-                        )}
-                      </Button>
-                    )}
-
-                    {/* Merge result */}
-                    {mergeResult && (
-                      <div className="flex flex-col gap-3">
-                        {/* Status badge */}
-                        <div
-                          className={cn(
-                            'flex items-center gap-2 py-2 px-3 rounded-md text-[0.85rem] font-medium',
-                            mergeResult.status === 'clean'
-                              ? 'bg-green-50 border border-green-200 text-green-700'
-                              : 'bg-yellow-50 border border-yellow-300 text-amber-700'
-                          )}
-                        >
-                          {mergeResult.status === 'clean' ? (
-                            <>
-                              <Check size={14} />
-                              <span>Clean merge - no conflicts</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle size={14} />
-                              <span>
-                                {mergeResult.conflicts.length} conflict(s) need resolution
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Auto-merged facets summary */}
-                        {mergeResult.auto_merged_facets.length > 0 && (
-                          <div className="text-sm text-slate-500">
-                            <span>
-                              {mergeResult.auto_merged_facets.length} facet(s) auto-merged
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Conflicts list */}
-                        {mergeResult.conflicts.length > 0 && (
-                          <div className="flex flex-col gap-3">
-                            <div className="font-semibold text-[0.85rem] text-slate-600">
-                              Resolve Conflicts:
-                            </div>
-                            {mergeResult.conflicts.map((conflict) => (
-                              <div
-                                key={conflict.facet}
-                                className="p-3 bg-white border border-slate-200 rounded-md"
-                              >
-                                <div className="font-semibold text-[0.85rem] text-slate-800 mb-2">
-                                  {conflict.facet}
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
-                                    <input
-                                      type="radio"
-                                      name={`conflict-${conflict.facet}`}
-                                      checked={
-                                        conflictResolutions[conflict.facet]?.choice === 'source'
-                                      }
-                                      onChange={() =>
-                                        setConflictResolutions((prev) => ({
-                                          ...prev,
-                                          [conflict.facet]: { choice: 'source' },
-                                        }))
-                                      }
-                                      className="mt-0.5"
-                                    />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
-                                      Source
-                                    </span>
-                                    <span className="text-xs text-slate-400 truncate flex-1">
-                                      {conflict.source_text
-                                        ? `${conflict.source_text.slice(0, 50)}...`
-                                        : '(deleted)'}
-                                    </span>
-                                  </label>
-                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
-                                    <input
-                                      type="radio"
-                                      name={`conflict-${conflict.facet}`}
-                                      checked={
-                                        conflictResolutions[conflict.facet]?.choice === 'target'
-                                      }
-                                      onChange={() =>
-                                        setConflictResolutions((prev) => ({
-                                          ...prev,
-                                          [conflict.facet]: { choice: 'target' },
-                                        }))
-                                      }
-                                      className="mt-0.5"
-                                    />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
-                                      Target
-                                    </span>
-                                    <span className="text-xs text-slate-400 truncate flex-1">
-                                      {conflict.target_text
-                                        ? `${conflict.target_text.slice(0, 50)}...`
-                                        : '(deleted)'}
-                                    </span>
-                                  </label>
-                                  <label className="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-50 transition-colors">
-                                    <input
-                                      type="radio"
-                                      name={`conflict-${conflict.facet}`}
-                                      checked={
-                                        conflictResolutions[conflict.facet]?.choice === 'custom'
-                                      }
-                                      onChange={() =>
-                                        setConflictResolutions((prev) => ({
-                                          ...prev,
-                                          [conflict.facet]: {
-                                            choice: 'custom',
-                                            customText: prev[conflict.facet]?.customText || '',
-                                          },
-                                        }))
-                                      }
-                                      className="mt-0.5"
-                                    />
-                                    <span className="font-medium text-sm text-slate-600 min-w-[50px]">
-                                      Custom
-                                    </span>
-                                  </label>
-                                  {conflictResolutions[conflict.facet]?.choice === 'custom' && (
-                                    <Textarea
-                                      placeholder="Enter custom resolution..."
-                                      value={conflictResolutions[conflict.facet]?.customText || ''}
-                                      onChange={(e) =>
-                                        setConflictResolutions((prev) => ({
-                                          ...prev,
-                                          [conflict.facet]: {
-                                            choice: 'custom',
-                                            customText: e.target.value,
-                                          },
-                                        }))
-                                      }
-                                      className="min-h-[60px] text-sm mt-1"
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Re-analyze button */}
-                        <Button
-                          variant="secondary"
-                          onClick={handleMergeAnalysis}
-                          disabled={isMergeAnalyzing}
-                          className="w-full gap-2"
-                        >
-                          <RotateCcw size={14} />
-                          <span>Re-analyze</span>
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Commit button for merge */}
-                    <div className="flex gap-2 mt-4">
-                      <Button
-                        onClick={handleCommit}
-                        disabled={!mergeResult || !allConflictsResolved || isCommitting}
-                        title={
-                          !mergeResult
-                            ? 'Analyze merge first'
-                            : !allConflictsResolved
-                              ? 'Resolve all conflicts first'
-                              : ''
-                        }
-                        className="flex-1 gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
-                      >
-                        {isCommitting ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>Committing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <GitCommit size={16} />
-                            <span>Commit Merge</span>
-                          </>
-                        )}
-                      </Button>
+                    <div className="text-sm text-slate-500">
+                      Use the MergePanel for two-way merge operations.
                     </div>
                   </div>
                 ) : !configLocked ? (
@@ -3225,31 +2820,10 @@ export function NodeModal({
                     <div className="flex flex-col gap-2 mt-2">
                       {/* Show different buttons based on source type */}
                       {isMergeDraft ? (
-                        /* Merge draft - analyze and commit */
-                        <Button
-                          onClick={handleCommit}
-                          disabled={!mergeResult || !allConflictsResolved || isCommitting}
-                          title={
-                            !mergeResult
-                              ? 'Analyze merge first'
-                              : !allConflictsResolved
-                                ? 'Resolve all conflicts first'
-                                : ''
-                          }
-                          className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
-                        >
-                          {isCommitting ? (
-                            <>
-                              <Loader2 size={16} className="animate-spin" />
-                              <span>Creating merge commit...</span>
-                            </>
-                          ) : (
-                            <>
-                              <GitMerge size={16} />
-                              <span>Create Merge Commit</span>
-                            </>
-                          )}
-                        </Button>
+                        /* Legacy merge UI disabled - use MergePanel for two-way merge */
+                        <div className="text-sm text-slate-500 text-center py-2">
+                          Use MergePanel for merge operations
+                        </div>
                       ) : hasSourceConversation || hasSourceTurnWindow ? (
                         /* Commit Button - directly enabled when selections are made */
                         <Button
@@ -3323,134 +2897,31 @@ export function NodeModal({
                   </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                  {/* Merge draft - show merge analysis results */}
+                  {/* Merge draft - legacy three-way merge UI removed */}
                   {isMergeDraft ? (
-                    <div>
-                      {!mergeResult ? (
-                        /* Before analysis - show prompt */
-                        <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
-                          <GitCompare size={48} strokeWidth={1} className="text-gray-300 mb-4" />
-                          <h4 className="font-semibold text-gray-700 mb-2">
-                            Merge Analysis Required
-                          </h4>
-                          <p className="text-sm text-gray-500 mb-6">
-                            Click &quot;Analyze Merge&quot; in the sidebar to compare semantic
-                            content between commits.
-                          </p>
-                          <div className="flex items-center gap-4 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Badge className="bg-blue-100 text-blue-700">SOURCE</Badge>
-                              <span className="text-gray-600">
-                                {data?.mergeConfig?.sourceCommitTitle}
-                              </span>
-                            </div>
-                            <span className="text-gray-400">→</span>
-                            <div className="flex items-center gap-2">
-                              <Badge className="bg-orange-100 text-orange-700">TARGET</Badge>
-                              <span className="text-gray-600">
-                                {data?.mergeConfig?.targetCommitTitle}
-                              </span>
-                            </div>
-                          </div>
+                    <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
+                      <GitCompare size={48} strokeWidth={1} className="text-gray-300 mb-4" />
+                      <h4 className="font-semibold text-gray-700 mb-2">
+                        Merge via MergePanel
+                      </h4>
+                      <p className="text-sm text-gray-500 mb-6">
+                        Use the MergePanel component for two-way merge operations.
+                      </p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-blue-100 text-blue-700">SOURCE</Badge>
+                          <span className="text-gray-600">
+                            {data?.mergeConfig?.sourceCommitTitle}
+                          </span>
                         </div>
-                      ) : (
-                        /* After analysis - show merge results */
-                        <div className="flex flex-col gap-4">
-                          {/* Auto-merged facets */}
-                          {mergeResult.auto_merged_facets.length > 0 && (
-                            <div className="border border-green-200 rounded-lg overflow-hidden">
-                              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-b border-green-200 text-green-700 font-medium text-sm">
-                                <Check size={16} />
-                                <span>Auto-merged ({mergeResult.auto_merged_facets.length})</span>
-                              </div>
-                              <div className="flex flex-col divide-y divide-gray-100">
-                                {mergeResult.auto_merged_facets.map((facet, idx) => (
-                                  <div key={idx} className="p-3 bg-white">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-medium text-sm text-gray-800">
-                                        {facet.facet}
-                                      </span>
-                                      <Badge
-                                        variant="outline"
-                                        className={cn(
-                                          'text-[0.65rem]',
-                                          facet.source === 'source'
-                                            ? 'text-blue-600 border-blue-300'
-                                            : 'text-orange-600 border-orange-300'
-                                        )}
-                                      >
-                                        from {facet.source}
-                                      </Badge>
-                                    </div>
-                                    <div className="text-sm text-gray-600">
-                                      {facet.merged_text || '(deleted)'}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Conflicts */}
-                          {mergeResult.conflicts.length > 0 && (
-                            <div className="border border-amber-300 rounded-lg overflow-hidden">
-                              <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-300 text-amber-700 font-medium text-sm">
-                                <AlertCircle size={16} />
-                                <span>Conflicts ({mergeResult.conflicts.length})</span>
-                              </div>
-                              <div className="flex flex-col divide-y divide-gray-100">
-                                {mergeResult.conflicts.map((conflict, idx) => (
-                                  <div key={idx} className="p-3 bg-white">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="font-medium text-sm text-gray-800">
-                                        {conflict.facet}
-                                      </span>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[0.65rem] text-amber-600 border-amber-300"
-                                      >
-                                        {conflict.conflict_type}
-                                      </Badge>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="p-2 bg-blue-50/50 rounded border border-blue-100">
-                                        <Badge className="bg-blue-100 text-blue-700 text-[0.6rem] mb-1.5">
-                                          SOURCE
-                                        </Badge>
-                                        <div className="text-sm text-gray-600">
-                                          {conflict.source_text || '(deleted)'}
-                                        </div>
-                                      </div>
-                                      <div className="p-2 bg-orange-50/50 rounded border border-orange-100">
-                                        <Badge className="bg-orange-100 text-orange-700 text-[0.6rem] mb-1.5">
-                                          TARGET
-                                        </Badge>
-                                        <div className="text-sm text-gray-600">
-                                          {conflict.target_text || '(deleted)'}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Clean merge message */}
-                          {mergeResult.status === 'clean' &&
-                            mergeResult.auto_merged_facets.length === 0 && (
-                              <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
-                                <Check size={48} strokeWidth={1} className="text-green-300 mb-4" />
-                                <h4 className="font-semibold text-gray-700 mb-2">
-                                  No Changes Detected
-                                </h4>
-                                <p className="text-sm text-gray-500">
-                                  The source and target commits have identical semantic content.
-                                </p>
-                              </div>
-                            )}
+                        <span className="text-gray-400">→</span>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-orange-100 text-orange-700">TARGET</Badge>
+                          <span className="text-gray-600">
+                            {data?.mergeConfig?.targetCommitTitle}
+                          </span>
                         </div>
-                      )}
+                      </div>
                     </div>
                   ) : hasNewSourceData ? (
                     /* New free-form text selection UI */

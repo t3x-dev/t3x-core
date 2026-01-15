@@ -103,19 +103,6 @@ CREATE TABLE IF NOT EXISTS drafts_v2 (
   completed_at TIMESTAMPTZ
 );
 
--- Merge Results
-CREATE TABLE IF NOT EXISTS merge_results (
-  merge_result_id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-  base_commit_hash TEXT NOT NULL,
-  source_commit_hash TEXT NOT NULL,
-  target_commit_hash TEXT NOT NULL,
-  status TEXT NOT NULL,
-  auto_merged_json TEXT NOT NULL,
-  conflicts_json TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- Segment Embeddings
 CREATE TABLE IF NOT EXISTS segment_embeddings (
   segment_id TEXT PRIMARY KEY,
@@ -163,7 +150,6 @@ CREATE INDEX IF NOT EXISTS idx_drafts_v2_project ON drafts_v2(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
-CREATE INDEX IF NOT EXISTS idx_merge_results_project ON merge_results(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_branch ON commits_v3(branch);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_committed_at ON commits_v3(committed_at);

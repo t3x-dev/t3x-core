@@ -40,7 +40,8 @@ async function initializeDB(): Promise<AnyDB> {
     // Fall back to PGLite for local development
     // Note: File mode may have issues with Node 23, use Node 20 LTS if problems occur
     const inMemory = process.env.T3X_IN_MEMORY === 'true';
-    const dataDir = process.env.T3X_DATA_DIR || './.t3x/data';
+    // Use same default path as WebUI for data sharing
+    const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
     console.log('[DB] Using PGLite:', dataDir, inMemory ? '(in-memory)' : '');
     const { createPGLiteStorage, closePGLiteStorage } = await import('@t3x/storage');
     db = await createPGLiteStorage({ dataDir, inMemory });

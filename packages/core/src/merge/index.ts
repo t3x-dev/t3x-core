@@ -1,25 +1,16 @@
 /**
  * Merge exports
+ *
+ * Two-way merge functions for combining two commits (Issue #71).
  */
 
-export {
-  createMergeEngine,
-  MergeEngine,
-  type MergeEngineOptions,
-} from './engine';
-// Two-way merge functions (Issue #71)
+// Two-way merge functions
 export { executeMerge } from './executeMerge';
 export { groupConstraintsBySentence, prepareMerge } from './prepareMerge';
+
+// Two-way merge types
 export {
-  type AutoMergedFacet,
-  ConflictType,
-  // Two-way merge types (Issue #71)
   type Merge2WayResult,
   type MergeCandidate,
-  type MergeConflict,
-  type MergeFacet,
-  type MergeResult,
   type MergeSimilarPair,
-  type MergeSource,
-  type MergeStats,
 } from './types';

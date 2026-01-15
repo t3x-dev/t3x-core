@@ -12,7 +12,12 @@ import type {
   SourceTextBlock,
   TurnBoundary,
 } from '../types/nodes';
+import type { MergeState, CommitV3 } from '../types/merge';
 import { tokenizeText } from '../utils/tokenizer';
+
+// API base URL - uses standalone API server if configured
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_V1 = `${API_BASE}/api/v1`;
 
 type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked';
 type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history';
@@ -43,6 +48,10 @@ type CanvasState = {
   // Leaf panel state
   leafPanelOpen: boolean;
   leafPanelCommitId?: string;
+  // Merge state (当前合并操作状态，如果有的话)
+  mergeState: MergeState | null;
+  mergeLoading: boolean;
+  mergeError: string | null;
   // Data loading
   loadProjectData: (projectId: string) => Promise<void>;
   clearCanvas: () => void;
@@ -95,6 +104,13 @@ type CanvasState = {
   updateNodeId: (oldId: string, newId: string) => void;
   // Get direct upstream source nodes (conversations and committed commits) for a pending commit
   getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
+  // Merge operations (合并操作)
+  startMerge: (sourceHash: string, targetHash: string) => Promise<void>;
+  resolveSimilarPair: (index: number, pick: 'source' | 'target') => void;
+  toggleKeep: (side: 'source' | 'target', index: number) => void;
+  executeMerge: (message: string) => Promise<CommitV3>;
+  cancelMerge: () => void;
+  clearMergeError: () => void;
 };
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
@@ -130,13 +146,6 @@ const commitQuickOffset = conversationCommitOffset + 40;
 const reactFlowGridSize = 16;
 const conversationNodeHeight = reactFlowGridSize * 8;
 const _commitNodeHeight = reactFlowGridSize * 10;
-const mergeArrowMarker = {
-  type: MarkerType.ArrowClosed,
-  color: '#6d6f76',
-  width: 18,
-  height: 18,
-} as const;
-
 const alignToGrid = (value: number) => Math.round(value / reactFlowGridSize) * reactFlowGridSize;
 const snapPosition = (position: { x: number; y: number }) => ({
   x: alignToGrid(position.x),
@@ -701,6 +710,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
   deletionConfirmation: null,
+  mergeState: null,
+  mergeLoading: false,
+  mergeError: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
@@ -1300,105 +1312,67 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   // Alias for addPendingCommitFromCommit for unit model
   addUnitFromUnit: (unitId) => get().addPendingCommitFromCommit(unitId),
 
-  createMergePendingCommit: (commitId) =>
-    set((state) => {
-      const nodes = state.nodes;
-      const edges = state.edges;
-      const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-      const branchCommit = nodeMap.get(commitId);
-      if (
-        !branchCommit ||
-        branchCommit.data.kind !== 'unit' ||
-        branchCommit.data.branchType !== 'branch'
-      ) {
-        return {};
-      }
-      const latestMainId = resolveLatestMainUnitId(nodes, state.latestMainCommitId);
-      if (!latestMainId) {
-        return {};
-      }
-      const latestMainCommit = nodeMap.get(latestMainId);
-      if (!latestMainCommit) {
-        return {};
-      }
-      const outgoingMap = buildOutgoingMap(edges);
-      const hasPendingMergeCommit =
-        outgoingMap.get(commitId)?.some((targetId) => {
-          const targetNode = nodeMap.get(targetId);
-          return (
-            targetNode?.data.kind === 'unit' &&
-            targetNode.data.commitStatus === 'staging' &&
-            targetNode.data.bridgePrompt === '/merge'
-          );
-        }) ?? false;
-      if (hasPendingMergeCommit) {
-        return {};
-      }
-      const tone = computeUnitTone(nodes, edges, state.latestMainCommitId, commitId);
-      if (tone !== 'branch-latest') {
-        return {};
-      }
-      const baseCommit = findNearestMainAncestorUnit(commitId, nodes, edges);
-      const mergeNodeId = nextNodeId();
-      const mergeLabel =
-        branchCommit.data.branchName?.trim() || branchCommit.data.title || 'branch';
-      const mergeConfig = {
-        targetCommitId: latestMainCommit.id,
-        targetCommitTitle: latestMainCommit.data.title,
-        targetContent: latestMainCommit.data.summary,
-        targetCommitHash: latestMainCommit.data.commitHash || latestMainCommit.id,
-        sourceCommitId: branchCommit.id,
-        sourceCommitTitle: branchCommit.data.title,
-        sourceContent: branchCommit.data.summary,
-        sourceCommitHash: branchCommit.data.commitHash || branchCommit.id,
-        baseCommitId: baseCommit?.id,
-        baseCommitTitle: baseCommit?.data.title,
-        baseContent: baseCommit?.data.summary,
-        baseCommitHash: baseCommit?.data.commitHash || baseCommit?.id,
-      };
-      const mergePendingCommit: Node<CanvasNodeData> = {
-        id: mergeNodeId,
-        type: 'unit',
-        position: computeAttachedPosition(latestMainCommit, 'unit', commitQuickOffset),
-        data: {
-          entryId: `MERGE-${getNumericId(mergeNodeId)}`,
-          title: `Merge · ${mergeLabel}`,
-          summary: 'Resolve semantic conflicts before committing to main.',
-          status: 'merge in progress',
-          timestamp: 'just now',
-          tags: ['unit', 'merge'],
-          kind: 'unit',
-          bridgePrompt: '/merge',
-          pendingBranch: 'main',
-          mergeConfig,
-          commitStatus: 'staging',
-        },
-      };
+  /**
+   * Trigger two-way merge from a branch commit to latest main
+   * Opens MergePanel with prepared merge results
+   */
+  createMergePendingCommit: (commitId) => {
+    const state = get();
+    const nodes = state.nodes;
+    const edges = state.edges;
+    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+    const branchCommit = nodeMap.get(commitId);
 
-      const mainEdge: Edge = {
-        id: nextEdgeId(),
-        source: latestMainCommit.id,
-        target: mergeNodeId,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-      };
+    // Validate: must be a branch commit
+    if (
+      !branchCommit ||
+      branchCommit.data.kind !== 'unit' ||
+      branchCommit.data.branchType !== 'branch'
+    ) {
+      state.notifyCallback?.('Cannot merge: not a branch commit', 'error');
+      return;
+    }
 
-      const branchEdge: Edge = {
-        id: nextEdgeId(),
-        source: branchCommit.id,
-        target: mergeNodeId,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-        markerEnd: mergeArrowMarker,
-      };
+    // Get source commit hash (branch commit)
+    const sourceHash = branchCommit.data.commitHash;
+    if (!sourceHash) {
+      state.notifyCallback?.('Cannot merge: branch commit has no hash', 'error');
+      return;
+    }
 
-      return {
-        nodes: [...nodes, mergePendingCommit],
-        edges: [...edges, mainEdge, branchEdge],
-      };
-    }),
+    // Get target commit hash (latest main)
+    const latestMainId = resolveLatestMainUnitId(nodes, state.latestMainCommitId);
+    if (!latestMainId) {
+      state.notifyCallback?.('Cannot merge: no main commits found', 'error');
+      return;
+    }
+    const latestMainCommit = nodeMap.get(latestMainId);
+    if (!latestMainCommit) {
+      state.notifyCallback?.('Cannot merge: main commit not found', 'error');
+      return;
+    }
+    const targetHash = latestMainCommit.data.commitHash;
+    if (!targetHash) {
+      state.notifyCallback?.('Cannot merge: main commit has no hash', 'error');
+      return;
+    }
+
+    // Check tone - only branch-latest can merge
+    const tone = computeUnitTone(nodes, edges, state.latestMainCommitId, commitId);
+    if (tone !== 'branch-latest') {
+      state.notifyCallback?.('Cannot merge: only latest branch commit can be merged', 'error');
+      return;
+    }
+
+    // Check if merge already in progress
+    if (state.mergeState) {
+      state.notifyCallback?.('A merge is already in progress', 'warning');
+      return;
+    }
+
+    // Start two-way merge - this will open MergePanel
+    get().startMerge(sourceHash, targetHash);
+  },
 
   getPendingCommitBranchMode: (commitId) => determineStagingUnitBranchMode(get(), commitId),
   canCreatePendingCommitFromConversation: (unitId) => {
@@ -2133,4 +2107,246 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     return sourceNodes;
   },
+
+  // ============================================================================
+  // Merge Operations (合并操作)
+  // ============================================================================
+
+  /**
+   * Start a merge between two commits
+   * Calls API to prepare merge, stores result
+   * 启动两个 commit 之间的合并操作
+   */
+  startMerge: async (sourceHash: string, targetHash: string) => {
+    const { notifyCallback } = get();
+
+    // Clear previous errors and set loading
+    set({ mergeLoading: true, mergeError: null });
+
+    try {
+      const response = await fetch(`${API_V1}/merge/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error?.message || 'Failed to prepare merge');
+      }
+
+      set({
+        mergeState: {
+          sourceHash,
+          targetHash,
+          prepared: json.data,
+        },
+        mergeLoading: false,
+        mergeError: null,
+      });
+
+      notifyCallback?.('Merge prepared successfully', 'success');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      set({
+        mergeLoading: false,
+        mergeError: errorMessage,
+      });
+
+      notifyCallback?.(`Failed to prepare merge: ${errorMessage}`, 'error');
+      throw error;
+    }
+  },
+
+  /**
+   * Resolve a similar pair conflict
+   * @param index - Index in similarPairs array
+   * @param pick - 'source' or 'target'
+   * 解决相似句子对的冲突
+   */
+  resolveSimilarPair: (index: number, pick: 'source' | 'target') => {
+    set((state) => {
+      if (!state.mergeState) return state;
+
+      const newPairs = [...state.mergeState.prepared.similarPairs];
+      newPairs[index] = { ...newPairs[index], resolution: pick };
+
+      return {
+        mergeState: {
+          ...state.mergeState,
+          prepared: {
+            ...state.mergeState.prepared,
+            similarPairs: newPairs,
+          },
+        },
+      };
+    });
+  },
+
+  /**
+   * Toggle keep/discard for a unique sentence
+   * @param side - 'source' or 'target'
+   * @param index - Index in onlyInSource or onlyInTarget array
+   * 切换唯一句子的保留/丢弃状态
+   */
+  toggleKeep: (side: 'source' | 'target', index: number) => {
+    set((state) => {
+      if (!state.mergeState) return state;
+
+      const key = side === 'source' ? 'onlyInSource' : 'onlyInTarget';
+      const newCandidates = [...state.mergeState.prepared[key]];
+      newCandidates[index] = {
+        ...newCandidates[index],
+        keep: !newCandidates[index].keep,
+      };
+
+      return {
+        mergeState: {
+          ...state.mergeState,
+          prepared: {
+            ...state.mergeState.prepared,
+            [key]: newCandidates,
+          },
+        },
+      };
+    });
+  },
+
+  /**
+   * Execute the merge after all decisions are made
+   * @param message - Commit message for merge
+   * @returns The created merge commit
+   * 执行合并，创建合并 commit
+   */
+  executeMerge: async (message: string) => {
+    const { mergeState, notifyCallback } = get();
+
+    if (!mergeState) {
+      const errorMsg = 'No merge in progress';
+      set({ mergeError: errorMsg });
+      notifyCallback?.(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    // Set loading state
+    set({ mergeLoading: true, mergeError: null });
+
+    try {
+      const response = await fetch(`${API_V1}/merge/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_hash: mergeState.sourceHash,
+          target_hash: mergeState.targetHash,
+          prepared: mergeState.prepared,
+          message,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error?.message || 'Failed to execute merge');
+      }
+
+      const mergeCommit = json.data;
+
+      // Clear merge state on success
+      set({
+        mergeState: null,
+        mergeLoading: false,
+        mergeError: null
+      });
+
+      notifyCallback?.('Merge executed successfully', 'success');
+
+      // Add merge commit node to canvas (existing addNode logic)
+      // ... add mergeCommit node ...
+
+      return mergeCommit;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      set({
+        mergeLoading: false,
+        mergeError: errorMessage,
+      });
+
+      notifyCallback?.(`Failed to execute merge: ${errorMessage}`, 'error');
+      throw error;
+    }
+  },
+
+  /**
+   * Cancel the current merge operation
+   * 取消当前合并操作
+   */
+  cancelMerge: () => {
+    set({
+      mergeState: null,
+      mergeLoading: false,
+      mergeError: null,
+    });
+  },
+
+  /**
+   * Clear merge error message
+   * 清除合并错误信息
+   */
+  clearMergeError: () => {
+    set({ mergeError: null });
+  },
 }));
+
+// ============================================================================
+// Merge Selectors (合并选择器)
+// ============================================================================
+
+/**
+ * Is a merge currently in progress?
+ * 是否正在进行合并？
+ */
+export const selectIsMerging = (state: CanvasState) => state.mergeState !== null;
+
+/**
+ * Can the merge be executed? (all similar pairs resolved)
+ * 合并是否可以执行？（所有冲突都已解决）
+ */
+export const selectCanExecuteMerge = (state: CanvasState) => {
+  if (!state.mergeState) return false;
+  return state.mergeState.prepared.similarPairs.every((p) => p.resolution !== undefined);
+};
+
+/**
+ * How many similar pairs are unresolved?
+ * 有多少未解决的冲突？
+ */
+export const selectUnresolvedCount = (state: CanvasState) => {
+  if (!state.mergeState) return 0;
+  return state.mergeState.prepared.similarPairs.filter((p) => p.resolution === undefined).length;
+};
+
+/**
+ * Get counts for merge summary
+ * 获取合并统计数据
+ */
+export const selectMergeCounts = (state: CanvasState) => {
+  if (!state.mergeState) {
+    return null;
+  }
+
+  const { prepared } = state.mergeState;
+  return {
+    identical: prepared.identical.length,
+    similar: prepared.similarPairs.length,
+    onlyInSource: prepared.onlyInSource.length,
+    onlyInTarget: prepared.onlyInTarget.length,
+    resolved: prepared.similarPairs.filter((p) => p.resolution).length,
+  };
+};
