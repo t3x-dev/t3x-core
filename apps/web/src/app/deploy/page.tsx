@@ -27,10 +27,18 @@ import {
   type DeployAgent,
   deleteDeployAgent,
   type EngineRun,
+  getRunFilterOptions,
   listDeployAgents,
   listEngineRuns,
   updateDeployAgent,
 } from '@/lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useOptimiserStore } from '@/store/optimiserStore';
 
 export default function DeployPage() {
@@ -46,6 +54,14 @@ export default function DeployPage() {
     endpoint: '',
   });
 
+  // v2.1: Filter states for A/B test comparison
+  const [filterModel, setFilterModel] = useState<string | null>(null);
+  const [filterPromptVersion, setFilterPromptVersion] = useState<string | null>(null);
+  const [filterOptions, setFilterOptions] = useState<{
+    models: string[];
+    prompt_versions: string[];
+  }>({ models: [], prompt_versions: [] });
+
   // Load deploy agents from database
   const loadDeployAgents = useCallback(async () => {
     try {
@@ -56,6 +72,19 @@ export default function DeployPage() {
       console.warn('Failed to load deploy agents from database:', err);
     }
     return [];
+  }, []);
+
+  // Load runs with optional filters
+  const loadRuns = useCallback(async (model?: string | null, promptVersion?: string | null) => {
+    try {
+      const runsData = await listEngineRuns({
+        model: model || undefined,
+        prompt_version: promptVersion || undefined,
+      });
+      setRuns(runsData.runs);
+    } catch (err) {
+      console.warn('Failed to load runs:', err);
+    }
   }, []);
 
   // Check runner health and load data
@@ -69,24 +98,38 @@ export default function DeployPage() {
         await loadDeployAgents();
 
         // Load Engine runs from database
+        await loadRuns();
+
+        // Load filter options for A/B test
         try {
-          const runsData = await listEngineRuns();
-          setRuns(runsData.runs);
+          const options = await getRunFilterOptions();
+          setFilterOptions(options);
         } catch (err) {
-          console.warn('Failed to load runs:', err);
+          console.warn('Failed to load filter options:', err);
         }
       } catch (err) {
         console.error('Failed to connect to runner:', err);
         setRunnerHealthy(false);
         // Still try to load deploy agents even if runner is offline
         await loadDeployAgents();
+        await loadRuns();
       } finally {
         setLoading(false);
       }
     }
 
     loadData();
-  }, [loadDeployAgents]);
+  }, [loadDeployAgents, loadRuns]);
+
+  // Handle filter changes
+  const handleFilterChange = useCallback(
+    (model: string | null, promptVersion: string | null) => {
+      setFilterModel(model);
+      setFilterPromptVersion(promptVersion);
+      loadRuns(model, promptVersion);
+    },
+    [loadRuns]
+  );
 
   const handleAddAgent = async () => {
     if (!newAgent.id || !newAgent.name || !newAgent.endpoint) return;
@@ -368,12 +411,14 @@ export default function DeployPage() {
         agents={deployAgents}
         runnerHealthy={runnerHealthy === true}
         onRunComplete={async (runId) => {
-          // Refresh runs list after test completes
+          // Refresh runs list with current filters
+          await loadRuns(filterModel, filterPromptVersion);
+          // Refresh filter options in case new model/prompt was used
           try {
-            const runsData = await listEngineRuns();
-            setRuns(runsData.runs);
+            const options = await getRunFilterOptions();
+            setFilterOptions(options);
           } catch (err) {
-            console.warn('Failed to refresh runs:', err);
+            console.warn('Failed to refresh filter options:', err);
           }
           // Navigate to run detail page
           router.push(`/deploy/${runId}`);
@@ -384,20 +429,35 @@ export default function DeployPage() {
       <QuickStatsBar runs={runs} />
 
       {/* Recent Runs Section */}
-      <RecentRunsSection runs={runs} router={router} />
+      <RecentRunsSection
+        runs={runs}
+        router={router}
+        filterModel={filterModel}
+        filterPromptVersion={filterPromptVersion}
+        filterOptions={filterOptions}
+        onFilterChange={handleFilterChange}
+      />
     </div>
   );
 }
 
 /**
- * Recent Runs Section with Compare Mode
+ * Recent Runs Section with Compare Mode and Filters
  */
 function RecentRunsSection({
   runs,
   router,
+  filterModel,
+  filterPromptVersion,
+  filterOptions,
+  onFilterChange,
 }: {
   runs: EngineRun[];
   router: ReturnType<typeof useRouter>;
+  filterModel: string | null;
+  filterPromptVersion: string | null;
+  filterOptions: { models: string[]; prompt_versions: string[] };
+  onFilterChange: (model: string | null, promptVersion: string | null) => void;
 }) {
   const { compareModeEnabled, toggleCompareMode, selectedRunIds, clearSelectedRuns } =
     useOptimiserStore();
@@ -414,10 +474,51 @@ function RecentRunsSection({
     }
   };
 
+  const handleModelChange = (value: string) => {
+    const newModel = value === 'all' ? null : value;
+    onFilterChange(newModel, filterPromptVersion);
+  };
+
+  const handlePromptVersionChange = (value: string) => {
+    const newPromptVersion = value === 'all' ? null : value;
+    onFilterChange(filterModel, newPromptVersion);
+  };
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between border-b pb-4">
-        <CardTitle>Recent Runs</CardTitle>
+        <div className="flex items-center gap-4">
+          <CardTitle>Recent Runs</CardTitle>
+          {/* Filter dropdowns */}
+          <div className="flex items-center gap-2">
+            <Select value={filterModel || 'all'} onValueChange={handleModelChange}>
+              <SelectTrigger className="h-8 w-[140px]">
+                <SelectValue placeholder="All Models" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Models</SelectItem>
+                {filterOptions.models.map((model) => (
+                  <SelectItem key={model} value={model}>
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterPromptVersion || 'all'} onValueChange={handlePromptVersionChange}>
+              <SelectTrigger className="h-8 w-[140px]">
+                <SelectValue placeholder="All Prompts" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Prompts</SelectItem>
+                {filterOptions.prompt_versions.map((version) => (
+                  <SelectItem key={version} value={version}>
+                    {version}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {compareModeEnabled && (
             <>

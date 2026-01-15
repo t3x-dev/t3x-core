@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   ArrowLeftRight,
-  CheckCircle,
-  XCircle,
   Loader2,
   ChevronDown,
+  AlertTriangle,
+  CheckCircle2,
+  Trophy,
+  Eye,
+  ExternalLink,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,194 +22,415 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { getEngineRun, listEngineRuns, type EngineRun } from '@/lib/api';
-import { DualChart, type DimensionScores } from '@/components/optimiser/charts/DualChart';
+import {
+  getConfigurations,
+  compareConfigurations,
+  listEngineRuns,
+  type ConfigurationStats,
+  type ComparisonResult,
+  type EngineRun,
+} from '@/lib/api';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
 
-// Parse dimension scores from run result
-function parseDimensionScores(run: EngineRun): DimensionScores | null {
-  const result = run.result as Record<string, unknown> | null;
-  if (!result) return null;
-
-  const runReport = result.run_report as Record<string, unknown> | undefined;
-  const evalResult = (runReport?.eval_result || result.eval_result) as Record<string, unknown> | undefined;
-
-  return evalResult?.dimension_scores as DimensionScores | undefined || null;
+/**
+ * 格式化配置为显示字符串
+ * Format configuration as display string
+ */
+function formatConfig(config: ConfigurationStats): string {
+  return `${config.model} + ${config.prompt_version}`;
 }
 
-// Parse score from run result
-function parseScore(run: EngineRun): number | null {
-  const result = run.result as Record<string, unknown> | null;
-  if (!result) return null;
-
-  const runReport = result.run_report as Record<string, unknown> | undefined;
-  const evalResult = (runReport?.eval_result || result.eval_result) as Record<string, unknown> | undefined;
-
-  return evalResult?.score as number | undefined ?? null;
+/**
+ * 解析 URL 参数为配置对象
+ * Parse URL param to config object (format: "model|version")
+ */
+function parseConfigParam(param: string | null): { model: string; prompt_version: string } | null {
+  if (!param) return null;
+  const [model, version] = param.split('|');
+  if (!model || !version) return null;
+  return { model, prompt_version: version };
 }
 
-// Parse passed status from run result
-function parsePassed(run: EngineRun): boolean {
-  const result = run.result as Record<string, unknown> | null;
-  if (!result) return run.status === 'completed';
-
-  const runReport = result.run_report as Record<string, unknown> | undefined;
-  const evalResult = (runReport?.eval_result || result.eval_result) as Record<string, unknown> | undefined;
-
-  return evalResult?.passed as boolean ?? run.status === 'completed';
+/**
+ * 编码配置为 URL 参数
+ * Encode config to URL param (format: "model|version")
+ */
+function encodeConfigParam(config: { model: string; prompt_version: string }): string {
+  return `${config.model}|${config.prompt_version}`;
 }
 
-// Dimension labels
-const DIMENSION_LABELS: Record<keyof DimensionScores, string> = {
-  task_completion: 'Task Completion',
-  tool_use: 'Tool Use',
-  trajectory_efficiency: 'Efficiency',
-  cost_efficiency: 'Cost',
-  latency: 'Latency',
-};
+/**
+ * 格式化延迟显示
+ */
+function formatLatency(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * 计算比例的 95% 置信区间 (Wilson score interval)
+ * 用于 Pass Rate 等二项分布数据
+ * @param p - 比例 (0-1)
+ * @param n - 样本量
+ * @returns [lower, upper] 95% CI bounds
+ */
+function calculateProportionCI(p: number, n: number): [number, number] {
+  if (n === 0) return [0, 0];
+  // Z-score for 95% confidence
+  const z = 1.96;
+  const z2 = z * z;
+
+  // Wilson score interval (more accurate for small n)
+  const denominator = 1 + z2 / n;
+  const center = (p + z2 / (2 * n)) / denominator;
+  const margin = (z / denominator) * Math.sqrt((p * (1 - p) / n) + (z2 / (4 * n * n)));
+
+  return [
+    Math.max(0, center - margin),
+    Math.min(1, center + margin)
+  ];
+}
+
+/**
+ * 计算均值的 95% 置信区间
+ * 用于 Avg Score 等连续数据
+ * @param mean - 均值
+ * @param std - 标准差 (估计值，默认使用 mean * 0.2)
+ * @param n - 样本量
+ * @returns [lower, upper] 95% CI bounds
+ */
+function calculateMeanCI(mean: number, n: number, std?: number): [number, number] {
+  if (n === 0) return [0, 0];
+  // Use estimated std if not provided (assume CV ~20%)
+  const sigma = std ?? mean * 0.2;
+  const z = 1.96;
+  const margin = z * (sigma / Math.sqrt(n));
+
+  return [
+    Math.max(0, mean - margin),
+    mean + margin
+  ];
+}
+
+/**
+ * 格式化置信区间为字符串
+ */
+function formatCI(ci: [number, number], asPercent: boolean = true): string {
+  if (asPercent) {
+    return `${Math.round(ci[0] * 100)}-${Math.round(ci[1] * 100)}%`;
+  }
+  return `${ci[0].toFixed(2)}-${ci[1].toFixed(2)}`;
+}
+
+/**
+ * Extract evaluation metrics from EngineRun result
+ */
+function getRunMetrics(run: EngineRun): {
+  passed: boolean | null;
+  score: number | null;
+  latencyMs: number | null;
+} {
+  const result = run.result as Record<string, unknown> | null;
+  if (!result) {
+    return { passed: null, score: null, latencyMs: null };
+  }
+
+  const runReport = result.run_report as Record<string, unknown> | undefined;
+  const evalResult = (runReport?.eval_result || result.eval_result) as
+    | Record<string, unknown>
+    | undefined;
+
+  const passed = (evalResult?.passed as boolean | undefined) ?? null;
+  const score = (evalResult?.score as number | undefined) ?? null;
+
+  const traceSummary = result.trace_summary as Record<string, unknown> | undefined;
+  const latencyMs = (traceSummary?.latency_ms as number | undefined) ?? null;
+
+  return { passed, score, latencyMs };
+}
+
+/**
+ * Format score as percentage
+ */
+function formatScore(score: number | null): string {
+  if (score === null) return '-';
+  return `${Math.round(score * 100)}%`;
+}
 
 function ComparePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const v1Id = searchParams.get('v1');
-  const v2Id = searchParams.get('v2');
+  // Parse URL params
+  const controlParam = searchParams.get('a');
+  const treatmentParam = searchParams.get('b');
+  const controlConfig = parseConfigParam(controlParam);
+  const treatmentConfig = parseConfigParam(treatmentParam);
 
-  const [runV1, setRunV1] = useState<EngineRun | null>(null);
-  const [runV2, setRunV2] = useState<EngineRun | null>(null);
-  const [availableRuns, setAvailableRuns] = useState<EngineRun[]>([]);
+  // State
+  const [configurations, setConfigurations] = useState<ConfigurationStats[]>([]);
+  const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [comparing, setComparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load available runs for dropdown
-  useEffect(() => {
-    async function loadRuns() {
-      try {
-        const { runs } = await listEngineRuns({ status: 'completed', limit: 50 });
-        setAvailableRuns(runs);
-      } catch (err) {
-        console.error('Failed to load runs:', err);
-      }
-    }
-    loadRuns();
-  }, []);
+  // Individual runs state
+  const [controlRuns, setControlRuns] = useState<EngineRun[]>([]);
+  const [treatmentRuns, setTreatmentRuns] = useState<EngineRun[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [runFilter, setRunFilter] = useState<'all' | 'a' | 'b'>('all');
 
-  // Load selected runs
+  // Load available configurations
   useEffect(() => {
-    async function loadSelectedRuns() {
-      setLoading(true);
-      setError(null);
-
+    async function loadConfigurations() {
       try {
-        const [r1, r2] = await Promise.all([
-          v1Id ? getEngineRun(v1Id) : Promise.resolve(null),
-          v2Id ? getEngineRun(v2Id) : Promise.resolve(null),
-        ]);
-        setRunV1(r1);
-        setRunV2(r2);
+        const configs = await getConfigurations();
+        setConfigurations(configs);
       } catch (err) {
-        console.error('Failed to load runs:', err);
-        setError('Failed to load run data');
+        console.error('Failed to load configurations:', err);
+        setError('Failed to load configurations');
       } finally {
         setLoading(false);
       }
     }
+    loadConfigurations();
+  }, []);
 
-    loadSelectedRuns();
-  }, [v1Id, v2Id]);
+  // Load comparison when both configs are selected
+  useEffect(() => {
+    async function loadComparison() {
+      if (!controlConfig || !treatmentConfig) {
+        setComparisonResult(null);
+        return;
+      }
 
-  // Update URL with selected runs
-  const selectRun = (slot: 'v1' | 'v2', runId: string | null) => {
+      setComparing(true);
+      setError(null);
+
+      try {
+        const result = await compareConfigurations(controlConfig, treatmentConfig);
+        setComparisonResult(result);
+      } catch (err) {
+        console.error('Failed to compare configurations:', err);
+        setError('Failed to load comparison data');
+        setComparisonResult(null);
+      } finally {
+        setComparing(false);
+      }
+    }
+
+    loadComparison();
+  }, [controlConfig?.model, controlConfig?.prompt_version, treatmentConfig?.model, treatmentConfig?.prompt_version]);
+
+  // Load individual runs when configurations are selected
+  useEffect(() => {
+    async function loadIndividualRuns() {
+      if (!controlConfig && !treatmentConfig) {
+        setControlRuns([]);
+        setTreatmentRuns([]);
+        return;
+      }
+
+      setLoadingRuns(true);
+
+      try {
+        const [controlResult, treatmentResult] = await Promise.all([
+          controlConfig
+            ? listEngineRuns({
+                model: controlConfig.model,
+                prompt_version: controlConfig.prompt_version,
+                limit: 10,
+              })
+            : Promise.resolve({ runs: [] }),
+          treatmentConfig
+            ? listEngineRuns({
+                model: treatmentConfig.model,
+                prompt_version: treatmentConfig.prompt_version,
+                limit: 10,
+              })
+            : Promise.resolve({ runs: [] }),
+        ]);
+
+        setControlRuns(controlResult.runs);
+        setTreatmentRuns(treatmentResult.runs);
+      } catch (err) {
+        console.error('Failed to load individual runs:', err);
+      } finally {
+        setLoadingRuns(false);
+      }
+    }
+
+    loadIndividualRuns();
+  }, [controlConfig?.model, controlConfig?.prompt_version, treatmentConfig?.model, treatmentConfig?.prompt_version]);
+
+  // Update URL with selected config
+  const selectConfig = (slot: 'a' | 'b', config: { model: string; prompt_version: string } | null) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (runId) {
-      params.set(slot, runId);
+    if (config) {
+      params.set(slot, encodeConfigParam(config));
     } else {
       params.delete(slot);
     }
     router.push(`/deploy/compare?${params.toString()}`);
   };
 
-  // Swap V1 and V2
-  const swapRuns = () => {
+  // Swap A and B
+  const swapConfigs = () => {
     const params = new URLSearchParams();
-    if (v2Id) params.set('v1', v2Id);
-    if (v1Id) params.set('v2', v1Id);
+    if (treatmentParam) params.set('a', treatmentParam);
+    if (controlParam) params.set('b', controlParam);
     router.push(`/deploy/compare?${params.toString()}`);
   };
 
-  // Parse scores
-  const scoresV1 = runV1 ? parseDimensionScores(runV1) : null;
-  const scoresV2 = runV2 ? parseDimensionScores(runV2) : null;
-  const scoreV1 = runV1 ? parseScore(runV1) : null;
-  const scoreV2 = runV2 ? parseScore(runV2) : null;
-  const passedV1 = runV1 ? parsePassed(runV1) : false;
-  const passedV2 = runV2 ? parsePassed(runV2) : false;
+  // Check if a config matches the current selection
+  const isConfigSelected = (
+    config: ConfigurationStats,
+    selected: { model: string; prompt_version: string } | null
+  ): boolean => {
+    if (!selected) return false;
+    return config.model === selected.model && config.prompt_version === selected.prompt_version;
+  };
 
-  // Can compare when both runs are selected and have dimension scores
-  const canCompare = scoresV1 && scoresV2;
-
-  // Dimension comparison data
-  const dimensionComparison = useMemo(() => {
-    if (!scoresV1 || !scoresV2) return [];
-
-    return (Object.keys(DIMENSION_LABELS) as Array<keyof DimensionScores>).map((key) => ({
-      key,
-      label: DIMENSION_LABELS[key],
-      v1: scoresV1[key],
-      v2: scoresV2[key],
-      delta: scoresV2[key] - scoresV1[key],
-    }));
-  }, [scoresV1, scoresV2]);
-
-  // Run selector dropdown
-  const RunSelector = ({
-    slot,
-    selectedId,
-    selectedRun,
-  }: {
-    slot: 'v1' | 'v2';
-    selectedId: string | null;
-    selectedRun: EngineRun | null;
-  }) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
-          {selectedRun ? (
-            <span className="truncate">{selectedRun.run_id}</span>
-          ) : (
-            <span className="text-muted-foreground">Select run...</span>
-          )}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 max-h-64 overflow-auto">
-        {availableRuns.length === 0 ? (
-          <div className="p-2 text-sm text-muted-foreground">No completed runs</div>
-        ) : (
-          availableRuns.map((run) => (
-            <DropdownMenuItem
-              key={run.run_id}
-              onClick={() => selectRun(slot, run.run_id)}
-              className={cn(selectedId === run.run_id && 'bg-muted')}
-            >
-              <div className="flex items-center gap-2 w-full">
-                {parsePassed(run) ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                ) : (
-                  <XCircle className="h-3.5 w-3.5 text-red-500" />
-                )}
-                <span className="truncate flex-1">{run.run_id}</span>
-                <span className="text-xs text-muted-foreground font-mono">
-                  {parseScore(run) !== null ? `${Math.round(parseScore(run)! * 100)}%` : '-'}
-                </span>
-              </div>
-            </DropdownMenuItem>
-          ))
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+  // Check if treatment is the winner (significantly better in key metrics)
+  const isWinner = comparisonResult && (
+    (comparisonResult.comparison.pass_rate.isSignificant &&
+      comparisonResult.treatment.pass_rate > comparisonResult.control.pass_rate) ||
+    (comparisonResult.comparison.avg_score.isSignificant &&
+      comparisonResult.treatment.avg_score > comparisonResult.control.avg_score)
   );
+
+  // Configuration selector dropdown
+  const ConfigSelector = ({
+    slot,
+    selectedConfig,
+    label,
+    badgeColor,
+  }: {
+    slot: 'a' | 'b';
+    selectedConfig: { model: string; prompt_version: string } | null;
+    label: string;
+    badgeColor: string;
+  }) => {
+    const selectedStats = configurations.find((c) => isConfigSelected(c, selectedConfig));
+    const showWinner = slot === 'b' && isWinner;
+
+    // Calculate CIs for display
+    const passRateCI = selectedStats
+      ? calculateProportionCI(selectedStats.pass_rate, selectedStats.run_count)
+      : null;
+    const avgScoreCI = selectedStats
+      ? calculateMeanCI(selectedStats.avg_score, selectedStats.run_count)
+      : null;
+
+    return (
+      <Card className={cn(showWinner && 'ring-2 ring-green-500/50')}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Badge variant="outline" className={badgeColor}>
+              {slot.toUpperCase()}
+            </Badge>
+            {label}
+            {showWinner && (
+              <Badge className="ml-auto bg-green-500/10 text-green-600 border-green-500/30">
+                <Trophy className="h-3 w-3 mr-1" />
+                Winner
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                {selectedStats ? (
+                  <span className="truncate">
+                    {formatConfig(selectedStats)} (n={selectedStats.run_count})
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Select configuration...</span>
+                )}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72 max-h-64 overflow-auto">
+              {configurations.length === 0 ? (
+                <div className="p-2 text-sm text-muted-foreground">No configurations available</div>
+              ) : (
+                configurations.map((config) => (
+                  <DropdownMenuItem
+                    key={`${config.model}-${config.prompt_version}`}
+                    onClick={() => selectConfig(slot, { model: config.model, prompt_version: config.prompt_version })}
+                    className={cn(isConfigSelected(config, selectedConfig) && 'bg-muted')}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="truncate">{formatConfig(config)}</span>
+                      <span className="text-xs text-muted-foreground font-mono ml-2">
+                        n={config.run_count}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Stats display with CI */}
+          {selectedStats && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Sample Size</span>
+                <span className="font-mono font-medium">n = {selectedStats.run_count}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Pass Rate</span>
+                <div className="text-right">
+                  <span className="font-mono font-medium">
+                    {Math.round(selectedStats.pass_rate * 100)}%
+                  </span>
+                  {passRateCI && selectedStats.run_count >= 5 && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (CI: {formatCI(passRateCI)})
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Avg Score</span>
+                <div className="text-right">
+                  <span className="font-mono font-medium">{selectedStats.avg_score.toFixed(2)}</span>
+                  {avgScoreCI && selectedStats.run_count >= 5 && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (CI: {formatCI(avgScoreCI, false)})
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Avg Latency</span>
+                <span className="font-mono">{formatLatency(selectedStats.avg_latency_ms)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Avg Tokens</span>
+                <span className="font-mono">{Math.round(selectedStats.avg_tokens)}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Can compare when both configs are selected
+  const canCompare = controlConfig && treatmentConfig;
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
@@ -218,94 +442,49 @@ function ComparePageContent() {
             Back
           </Button>
           <div className="h-4 w-px bg-border" />
-          <h1 className="text-lg font-semibold">Compare Runs</h1>
+          <h1 className="text-lg font-semibold">A/B Test Comparison</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={swapRuns} disabled={!v1Id && !v2Id}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={swapConfigs}
+          disabled={!controlParam && !treatmentParam}
+        >
           <ArrowLeftRight className="h-4 w-4" />
-          Swap V1 ⇄ V2
+          Swap A ⇄ B
         </Button>
       </header>
 
-      {/* Run Selectors */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* V1 Selector */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
-                V1
-              </Badge>
-              Baseline
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <RunSelector slot="v1" selectedId={v1Id} selectedRun={runV1} />
-            {runV1 && (
-              <div className="flex items-center gap-4 text-sm">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    passedV1
-                      ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                      : 'border-red-500/30 bg-red-500/10 text-red-600'
-                  )}
-                >
-                  {passedV1 ? 'Passed' : 'Failed'}
-                </Badge>
-                <span>
-                  Score:{' '}
-                  <span className="font-mono font-medium">
-                    {scoreV1 !== null ? `${Math.round(scoreV1 * 100)}%` : '-'}
-                  </span>
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* V2 Selector */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                V2
-              </Badge>
-              Comparison
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <RunSelector slot="v2" selectedId={v2Id} selectedRun={runV2} />
-            {runV2 && (
-              <div className="flex items-center gap-4 text-sm">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    passedV2
-                      ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                      : 'border-red-500/30 bg-red-500/10 text-red-600'
-                  )}
-                >
-                  {passedV2 ? 'Passed' : 'Failed'}
-                </Badge>
-                <span>
-                  Score:{' '}
-                  <span className="font-mono font-medium">
-                    {scoreV2 !== null ? `${Math.round(scoreV2 * 100)}%` : '-'}
-                  </span>
-                </span>
-                {scoreV1 !== null && scoreV2 !== null && (
-                  <MetricsDelta v1={scoreV1} v2={scoreV2} />
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Loading State */}
-      {loading && (v1Id || v2Id) && (
+      {/* Loading configurations */}
+      {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Configuration Selectors */}
+      {!loading && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <ConfigSelector
+            slot="a"
+            selectedConfig={controlConfig}
+            label="Control (Baseline)"
+            badgeColor="bg-blue-500/10 text-blue-600 border-blue-500/30"
+          />
+          <ConfigSelector
+            slot="b"
+            selectedConfig={treatmentConfig}
+            label="Treatment (Variant)"
+            badgeColor="bg-green-500/10 text-green-600 border-green-500/30"
+          />
+        </div>
+      )}
+
+      {/* Comparing loading state */}
+      {comparing && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-sm text-muted-foreground">Calculating statistics...</span>
         </div>
       )}
 
@@ -316,100 +495,422 @@ function ComparePageContent() {
         </Card>
       )}
 
-      {/* Comparison Content */}
-      {!loading && canCompare && (
+      {/* Comparison Results */}
+      {!comparing && comparisonResult && (
         <>
-          {/* Dual Chart */}
+          {/* Statistical Comparison Table */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Dimension Scores Comparison</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DualChart
-                scoresV1={scoresV1}
-                scoresV2={scoresV2}
-                labelV1={`V1: ${v1Id?.slice(0, 8)}...`}
-                labelV2={`V2: ${v2Id?.slice(0, 8)}...`}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Dimension Comparison Table */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Detailed Comparison</CardTitle>
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>Statistical Comparison</span>
+                {isWinner && (
+                  <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
+                    <Trophy className="h-3 w-3 mr-1" />
+                    Treatment (B) wins
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b text-left text-sm">
-                      <th className="pb-3 font-medium">Dimension</th>
+                      <th className="pb-3 font-medium">Metric</th>
                       <th className="pb-3 font-medium text-center">
                         <span className="inline-flex items-center gap-1">
                           <span className="h-2 w-2 rounded-full bg-blue-500" />
-                          V1
+                          Control (A)
                         </span>
                       </th>
                       <th className="pb-3 font-medium text-center">
                         <span className="inline-flex items-center gap-1">
                           <span className="h-2 w-2 rounded-full bg-green-500" />
-                          V2
+                          Treatment (B)
                         </span>
                       </th>
                       <th className="pb-3 font-medium text-center">Delta</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
+                      <th className="pb-3 font-medium text-center">95% CI</th>
+                      <th className="pb-3 font-medium text-center">p-value</th>
+                      <th className="pb-3 font-medium text-center">Sig.</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {dimensionComparison.map((dim) => {
-                      const isImproved = dim.delta > 0.001;
-                      const isRegressed = dim.delta < -0.001;
-                      const isSame = !isImproved && !isRegressed;
-
+                    {/* Pass Rate */}
+                    {(() => {
+                      const controlCI = calculateProportionCI(
+                        comparisonResult.control.pass_rate,
+                        comparisonResult.control.run_count
+                      );
+                      const treatmentCI = calculateProportionCI(
+                        comparisonResult.treatment.pass_rate,
+                        comparisonResult.treatment.run_count
+                      );
                       return (
-                        <tr key={dim.key} className="border-b last:border-0">
-                          <td className="py-3 text-sm">{dim.label}</td>
-                          <td className="py-3 text-center font-mono text-sm">
-                            {Math.round(dim.v1 * 100)}%
-                          </td>
-                          <td className="py-3 text-center font-mono text-sm font-medium">
-                            {Math.round(dim.v2 * 100)}%
+                        <tr className="border-b">
+                          <td className="py-3 text-sm font-medium">Pass Rate</td>
+                          <td className="py-3 text-center">
+                            <div className="font-mono text-sm">
+                              {Math.round(comparisonResult.control.pass_rate * 100)}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              ({formatCI(controlCI)})
+                            </div>
                           </td>
                           <td className="py-3 text-center">
-                            <MetricsDelta v1={dim.v1} v2={dim.v2} />
+                            <div className="font-mono text-sm">
+                              {Math.round(comparisonResult.treatment.pass_rate * 100)}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              ({formatCI(treatmentCI)})
+                            </div>
                           </td>
                           <td className="py-3 text-center">
-                            {isSame && (
-                              <span className="text-xs text-muted-foreground">─ Same</span>
-                            )}
-                            {isImproved && (
-                              <span className="text-xs text-green-600">▲ Improved</span>
-                            )}
-                            {isRegressed && (
-                              <span className="text-xs text-red-600">▼ Regressed</span>
+                            <MetricsDelta
+                              v1={comparisonResult.control.pass_rate}
+                              v2={comparisonResult.treatment.pass_rate}
+                            />
+                          </td>
+                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                            {formatCI([
+                              treatmentCI[0] - controlCI[1],
+                              treatmentCI[1] - controlCI[0]
+                            ])}
+                          </td>
+                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                            {comparisonResult.comparison.pass_rate.pValue.toFixed(3)}
+                          </td>
+                          <td className="py-3 text-center">
+                            {comparisonResult.comparison.pass_rate.isSignificant ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">─</span>
                             )}
                           </td>
                         </tr>
                       );
-                    })}
+                    })()}
+
+                    {/* Avg Score */}
+                    {(() => {
+                      const controlCI = calculateMeanCI(
+                        comparisonResult.control.avg_score,
+                        comparisonResult.control.run_count
+                      );
+                      const treatmentCI = calculateMeanCI(
+                        comparisonResult.treatment.avg_score,
+                        comparisonResult.treatment.run_count
+                      );
+                      return (
+                        <tr className="border-b">
+                          <td className="py-3 text-sm font-medium">Avg Score</td>
+                          <td className="py-3 text-center">
+                            <div className="font-mono text-sm">
+                              {comparisonResult.control.avg_score.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              ({formatCI(controlCI, false)})
+                            </div>
+                          </td>
+                          <td className="py-3 text-center">
+                            <div className="font-mono text-sm">
+                              {comparisonResult.treatment.avg_score.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              ({formatCI(treatmentCI, false)})
+                            </div>
+                          </td>
+                          <td className="py-3 text-center">
+                            <MetricsDelta
+                              v1={comparisonResult.control.avg_score}
+                              v2={comparisonResult.treatment.avg_score}
+                            />
+                          </td>
+                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                            {formatCI([
+                              treatmentCI[0] - controlCI[1],
+                              treatmentCI[1] - controlCI[0]
+                            ], false)}
+                          </td>
+                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                            {comparisonResult.comparison.avg_score.pValue.toFixed(3)}
+                          </td>
+                          <td className="py-3 text-center">
+                            {comparisonResult.comparison.avg_score.isSignificant ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">─</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })()}
+
+                    {/* Avg Latency */}
+                    <tr className="border-b">
+                      <td className="py-3 text-sm font-medium">Avg Latency</td>
+                      <td className="py-3 text-center font-mono text-sm">
+                        {formatLatency(comparisonResult.control.avg_latency_ms)}
+                      </td>
+                      <td className="py-3 text-center font-mono text-sm">
+                        {formatLatency(comparisonResult.treatment.avg_latency_ms)}
+                      </td>
+                      <td className="py-3 text-center">
+                        <span
+                          className={cn(
+                            'text-xs font-mono',
+                            comparisonResult.comparison.avg_latency.delta < 0
+                              ? 'text-green-600'
+                              : comparisonResult.comparison.avg_latency.delta > 0
+                                ? 'text-red-600'
+                                : 'text-muted-foreground'
+                          )}
+                        >
+                          {comparisonResult.comparison.avg_latency.delta > 0 ? '+' : ''}
+                          {formatLatency(comparisonResult.comparison.avg_latency.delta)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                    </tr>
+
+                    {/* Avg Tokens */}
+                    <tr className="border-b last:border-0">
+                      <td className="py-3 text-sm font-medium">Avg Tokens</td>
+                      <td className="py-3 text-center font-mono text-sm">
+                        {Math.round(comparisonResult.control.avg_tokens)}
+                      </td>
+                      <td className="py-3 text-center font-mono text-sm">
+                        {Math.round(comparisonResult.treatment.avg_tokens)}
+                      </td>
+                      <td className="py-3 text-center">
+                        <span
+                          className={cn(
+                            'text-xs font-mono',
+                            comparisonResult.comparison.avg_tokens.delta < 0
+                              ? 'text-green-600'
+                              : comparisonResult.comparison.avg_tokens.delta > 0
+                                ? 'text-red-600'
+                                : 'text-muted-foreground'
+                          )}
+                        >
+                          {comparisonResult.comparison.avg_tokens.delta > 0 ? '+' : ''}
+                          {Math.round(comparisonResult.comparison.avg_tokens.delta)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
+
+              {/* Sample size warning */}
+              {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
+                !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
+                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-700">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    Sample size may be insufficient for reliable significance detection (recommended: n
+                    &ge; 30 per group)
+                  </span>
+                </div>
+              )}
+
+              {/* Significance note */}
+              <p className="mt-4 text-xs text-muted-foreground">
+                * Statistical significance: p &lt; 0.05. Pass rate: two-proportion z-test; Avg score: Welch's t-test.
+                CI = 95% confidence interval (Wilson score for proportions).
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Individual Runs Section */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>Individual Runs</span>
+                <div className="flex gap-1">
+                  <Button
+                    variant={runFilter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setRunFilter('all')}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={runFilter === 'a' ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      'h-7 px-2 text-xs',
+                      runFilter === 'a' && 'bg-blue-600 hover:bg-blue-700'
+                    )}
+                    onClick={() => setRunFilter('a')}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-blue-400 mr-1" />A
+                  </Button>
+                  <Button
+                    variant={runFilter === 'b' ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      'h-7 px-2 text-xs',
+                      runFilter === 'b' && 'bg-green-600 hover:bg-green-700'
+                    )}
+                    onClick={() => setRunFilter('b')}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-green-400 mr-1" />B
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingRuns ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading runs...</span>
+                </div>
+              ) : (
+                <>
+                  {(() => {
+                    // Combine and filter runs based on selection
+                    const taggedControlRuns = controlRuns.map((r) => ({ ...r, group: 'a' as const }));
+                    const taggedTreatmentRuns = treatmentRuns.map((r) => ({ ...r, group: 'b' as const }));
+
+                    let combinedRuns =
+                      runFilter === 'a'
+                        ? taggedControlRuns
+                        : runFilter === 'b'
+                          ? taggedTreatmentRuns
+                          : [...taggedControlRuns, ...taggedTreatmentRuns];
+
+                    // Sort by created_at descending
+                    combinedRuns = combinedRuns.sort(
+                      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    );
+
+                    // Limit to 10 runs
+                    combinedRuns = combinedRuns.slice(0, 10);
+
+                    if (combinedRuns.length === 0) {
+                      return (
+                        <div className="py-8 text-center text-sm text-muted-foreground">
+                          No runs found for the selected configurations
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">Group</TableHead>
+                            <TableHead>Run ID</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Score</TableHead>
+                            <TableHead className="text-right">Latency</TableHead>
+                            <TableHead>Time</TableHead>
+                            <TableHead className="w-20">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {combinedRuns.map((run) => {
+                            const metrics = getRunMetrics(run);
+                            return (
+                              <TableRow
+                                key={run.run_id}
+                                className="cursor-pointer hover:bg-muted/50"
+                                onClick={() => router.push(`/deploy/${run.run_id}`)}
+                              >
+                                <TableCell>
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-xs',
+                                      run.group === 'a'
+                                        ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                                        : 'bg-green-500/10 text-green-600 border-green-500/30'
+                                    )}
+                                  >
+                                    {run.group.toUpperCase()}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <code className="text-xs">{run.run_id.slice(0, 12)}...</code>
+                                </TableCell>
+                                <TableCell>
+                                  {metrics.passed !== null ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        metrics.passed
+                                          ? 'border-green-500/30 bg-green-500/10 text-green-600'
+                                          : 'border-red-500/30 bg-red-500/10 text-red-600'
+                                      )}
+                                    >
+                                      {metrics.passed ? 'passed' : 'failed'}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-muted-foreground">
+                                      {run.status}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-sm">
+                                  {metrics.score !== null ? (
+                                    <span
+                                      className={metrics.passed ? 'text-green-600' : 'text-red-600'}
+                                    >
+                                      {formatScore(metrics.score)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                                  {formatLatency(metrics.latencyMs ?? 0)}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {new Date(run.created_at).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/deploy/${run.run_id}`);
+                                    }}
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    );
+                  })()}
+                </>
+              )}
             </CardContent>
           </Card>
         </>
       )}
 
       {/* Empty State */}
-      {!loading && !canCompare && (
+      {!loading && !comparing && !canCompare && (
         <Card>
           <CardContent className="flex h-64 flex-col items-center justify-center text-center">
             <ArrowLeftRight className="mb-4 h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium">Select Two Runs to Compare</h3>
+            <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Choose a baseline run (V1) and a comparison run (V2) from the dropdowns above to see a
-              side-by-side comparison of their dimension scores.
+              Choose a control configuration (A) and a treatment configuration (B) from the dropdowns
+              above to see an A/B test comparison with statistical significance.
             </p>
           </CardContent>
         </Card>
