@@ -313,11 +313,15 @@ function UnitNode(props: Props) {
   };
 
   const canTriggerMerge = data.branchType === 'branch' && tone === 'branch-latest' && hasMainCommit;
-  const handleMerge = () => {
-    if (!canTriggerMerge) {
+  const handleMerge = async () => {
+    if (!canTriggerMerge || !projectId) {
       return;
     }
-    startMergeFromCommit(id);
+    const draftId = await startMergeFromCommit(id);
+    if (draftId) {
+      // Navigate to Merge Workspace
+      router.push(`/project/${projectId}/merge/${draftId}`);
+    }
   };
 
   const handleOpenLeafPanel = () => {
