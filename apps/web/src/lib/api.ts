@@ -1790,6 +1790,13 @@ export interface EngineRun {
     assertions?: unknown[];
     evidence_pack?: Record<string, unknown>;
   } | null;
+  // v2.1: Metadata for A/B test filtering
+  metadata: {
+    model?: string;
+    prompt_version?: string;
+    workflow_id?: string;
+    test_case?: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -1806,6 +1813,13 @@ export interface CreateEngineRunInput {
   workflow?: {
     type: string;
     webhook_id?: string;
+  };
+  // v2.1: Metadata for A/B test filtering
+  metadata?: {
+    model?: string;
+    prompt_version?: string;
+    workflow_id?: string;
+    test_case?: string;
   };
 }
 
@@ -1852,6 +1866,8 @@ interface EngineRunRaw {
   workflowJson: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed';
   resultJson: string | null;
+  // v2.1: Metadata for A/B test filtering
+  metadataJson: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1870,6 +1886,7 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
     workflow: safeJsonParse(raw.workflowJson, null),
     status: raw.status,
     result: safeJsonParse(raw.resultJson, null),
+    metadata: safeJsonParse(raw.metadataJson, null),
     created_at: raw.createdAt,
     updated_at: raw.updatedAt,
   };
@@ -1886,16 +1903,23 @@ export async function getEngineRun(runId: string): Promise<EngineRun> {
 
 /**
  * List runs from Engine
+ *
+ * v2.1: Added model and prompt_version filters for A/B test comparison
  */
 export async function listEngineRuns(options?: {
   project_id?: string;
   status?: 'queued' | 'running' | 'completed' | 'failed';
+  // v2.1: Metadata filters for A/B test
+  model?: string;
+  prompt_version?: string;
   limit?: number;
   offset?: number;
 }): Promise<EngineRunListData> {
   const query = buildQueryString({
     project_id: options?.project_id,
     status: options?.status,
+    model: options?.model,
+    prompt_version: options?.prompt_version,
     limit: options?.limit ?? 50,
     offset: options?.offset ?? 0,
   });
@@ -1906,6 +1930,123 @@ export async function listEngineRuns(options?: {
     limit: data.limit,
     offset: data.offset,
   };
+}
+
+/**
+ * Get filter options for runs (unique models and prompt_versions)
+ *
+ * v2.1: Returns distinct values for populating filter dropdowns in the UI.
+ */
+export async function getRunFilterOptions(): Promise<{
+  models: string[];
+  prompt_versions: string[];
+}> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/filters`);
+  const data = await handleResponse<{
+    models: string[];
+    prompt_versions: string[];
+  }>(res);
+  return data;
+}
+
+// ============================================================================
+// A/B Test Comparison API (v2.2)
+// ============================================================================
+
+/**
+ * 配置组的聚合统计
+ * Configuration stats grouped by model + prompt_version
+ */
+export interface ConfigurationStats {
+  model: string;              // 模型名称
+  prompt_version: string;     // prompt 版本
+  run_count: number;          // 运行次数（样本量）
+  pass_count: number;         // 通过次数
+  pass_rate: number;          // 通过率 (0-1)
+  avg_score: number;          // 平均得分
+  avg_latency_ms: number;     // 平均延迟（毫秒）
+  avg_tokens: number;         // 平均 token 数
+}
+
+/**
+ * A/B 测试单项结果
+ * Result of statistical test (z-test or t-test)
+ */
+export interface ABTestResult {
+  controlMean: number;                    // 控制组均值
+  treatmentMean: number;                  // 实验组均值
+  delta: number;                          // 差值 (B - A)
+  deltaPercent: number;                   // 差值百分比
+  pValue: number;                         // p 值（小于 0.05 表示显著）
+  confidenceInterval: [number, number];   // 95% 置信区间
+  isSignificant: boolean;                 // 是否统计显著 (p < 0.05)
+  sampleSizeAdequate: boolean;            // 样本量是否足够 (>= 30)
+}
+
+/**
+ * 简单差值结果（无统计检验）
+ * Simple delta result without statistical test
+ */
+export interface SimpleDeltaResult {
+  controlMean: number;
+  treatmentMean: number;
+  delta: number;
+  deltaPercent: number;
+}
+
+/**
+ * A/B 测试对比结果
+ * Complete comparison result between two configurations
+ */
+export interface ComparisonResult {
+  control: ConfigurationStats;            // 控制组 A 的统计
+  treatment: ConfigurationStats;          // 实验组 B 的统计
+  comparison: {
+    pass_rate: ABTestResult;              // 通过率对比（z-test）
+    avg_score: ABTestResult;              // 平均分对比（t-test）
+    avg_latency: SimpleDeltaResult;       // 延迟对比
+    avg_tokens: SimpleDeltaResult;        // token 对比
+  };
+}
+
+/**
+ * 获取所有配置的聚合统计
+ * Get aggregated stats for all configurations (model + prompt_version combinations)
+ *
+ * v2.2: Used for selecting which configurations to compare in A/B test
+ */
+export async function getConfigurations(projectId?: string): Promise<ConfigurationStats[]> {
+  const query = projectId ? buildQueryString({ project_id: projectId }) : '';
+  const res = await fetchWithTimeout(`${API_V1}/runs/configurations${query ? `?${query}` : ''}`);
+  const data = await handleResponse<{ configurations: ConfigurationStats[] }>(res);
+  return data.configurations;
+}
+
+/**
+ * A/B 测试对比两个配置
+ * Compare two configurations with statistical significance tests
+ *
+ * v2.2: Performs z-test for pass_rate and t-test for avg_score
+ *
+ * @param control - 控制组配置 (A)
+ * @param treatment - 实验组配置 (B)
+ * @param projectId - 可选的项目 ID 过滤
+ */
+export async function compareConfigurations(
+  control: { model: string; prompt_version: string },
+  treatment: { model: string; prompt_version: string },
+  projectId?: string
+): Promise<ComparisonResult> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      control,
+      treatment,
+      project_id: projectId,
+    }),
+  });
+  return handleResponse<ComparisonResult>(res);
 }
 
 export async function* chatStream(
