@@ -5,6 +5,7 @@
  * POST /v1/turns - Create turn
  * GET  /v1/turns/:hash - Get turn by hash
  * GET  /v1/turns/:hash/chain - Get turn chain (history)
+ * GET  /v1/turns/:hash/context - Get turn with surrounding context (for source tracing)
  */
 
 import { createRingExtractor } from '@t3x/core';
@@ -14,6 +15,7 @@ import {
   findTurnChain,
   findTurnsByConversation,
   insertTurn,
+  type Turn,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
@@ -220,6 +222,84 @@ turnRoutes.get('/v1/turns/:hash/chain', async (c) => {
     }));
 
     return jsonSuccess(c, { chain: apiChain, end_turn_hash: turnHash });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'GET_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/turns/:hash/context - Get turn with surrounding context
+ *
+ * Used for source tracing in merge UI - shows where a sentence came from
+ * with surrounding conversation context.
+ *
+ * Query params:
+ *   before - Number of turns before the target (default: 2)
+ *   after - Number of turns after the target (default: 2)
+ *   highlight_start - Start character position to highlight (optional)
+ *   highlight_end - End character position to highlight (optional)
+ */
+turnRoutes.get('/v1/turns/:hash/context', async (c) => {
+  const turnHash = decodeURIComponent(c.req.param('hash'));
+  const before = parseInt(c.req.query('before') ?? '2', 10);
+  const after = parseInt(c.req.query('after') ?? '2', 10);
+  const highlightStart = c.req.query('highlight_start');
+  const highlightEnd = c.req.query('highlight_end');
+
+  try {
+    const db = await getDB();
+
+    // Get the target turn
+    const targetTurn = await findTurnByHash(db, turnHash);
+    if (!targetTurn) {
+      return jsonError(c, 'NOT_FOUND', `Turn ${turnHash} not found`, 404);
+    }
+
+    // Get conversation info
+    const conversation = await findConversationById(db, targetTurn.conversationId);
+
+    // Get all turns in this conversation
+    const allTurns = await findTurnsByConversation(db, {
+      conversationId: targetTurn.conversationId,
+      limit: 1000,
+      order: 'asc',
+    });
+
+    // Find target turn index
+    const targetIndex = allTurns.findIndex(t => t.turnHash === turnHash);
+    if (targetIndex === -1) {
+      return jsonError(c, 'NOT_FOUND', 'Turn not found in conversation', 404);
+    }
+
+    // Extract context window
+    const startIndex = Math.max(0, targetIndex - before);
+    const endIndex = Math.min(allTurns.length - 1, targetIndex + after);
+    const contextTurns = allTurns.slice(startIndex, endIndex + 1);
+
+    // Convert to API format
+    const toApiTurn = (t: Turn, isTarget: boolean) => ({
+      turn_hash: t.turnHash,
+      parent_turn_hash: t.parentTurnHash,
+      project_id: t.projectId,
+      conversation_id: t.conversationId,
+      role: t.role,
+      content: t.content,
+      language: t.language,
+      rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      created_at: t.createdAt.toISOString(),
+      is_target: isTarget,
+      highlight: isTarget && highlightStart && highlightEnd
+        ? { start: parseInt(highlightStart, 10), end: parseInt(highlightEnd, 10) }
+        : undefined,
+    });
+
+    return jsonSuccess(c, {
+      target_turn: toApiTurn(targetTurn, true),
+      context: contextTurns.map(t => toApiTurn(t, t.turnHash === turnHash)),
+      conversation_id: targetTurn.conversationId,
+      conversation_title: conversation?.title ?? null,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'GET_FAILED', message, 500);

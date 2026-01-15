@@ -1,6 +1,7 @@
 import type { MergeSimilarPair } from '@/types/merge';
 import { WordDiffDisplay } from './WordDiffDisplay';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useCallback, useRef } from 'react';
 
 interface MergeSimilarPairCardProps {
   pair: MergeSimilarPair;
@@ -20,6 +21,23 @@ interface MergeSimilarPairCardProps {
 export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps) {
   const resolveSimilarPair = useCanvasStore((s) => s.resolveSimilarPair);
   const isResolved = pair.resolution !== undefined;
+  const isUpdatingRef = useRef(false);
+
+  const handleSelect = useCallback(
+    (pick: 'source' | 'target') => {
+      // Prevent double updates
+      if (isUpdatingRef.current) return;
+      if (pair.resolution === pick) return; // Already selected
+
+      isUpdatingRef.current = true;
+      // Use requestAnimationFrame to batch DOM updates
+      requestAnimationFrame(() => {
+        resolveSimilarPair(index, pick);
+        isUpdatingRef.current = false;
+      });
+    },
+    [index, pair.resolution, resolveSimilarPair]
+  );
 
   return (
     <div
@@ -36,9 +54,9 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
       <label className="flex items-start gap-2 cursor-pointer">
         <input
           type="radio"
-          name={`pair-${index}`}
+          name={`pair-${pair.source.id}-${pair.target.id}`}
           checked={pair.resolution === 'source'}
-          onChange={() => resolveSimilarPair(index, 'source')}
+          onChange={() => handleSelect('source')}
           className="mt-1"
         />
         <div className="flex-1">
@@ -56,9 +74,9 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
       <label className="flex items-start gap-2 cursor-pointer">
         <input
           type="radio"
-          name={`pair-${index}`}
+          name={`pair-${pair.source.id}-${pair.target.id}`}
           checked={pair.resolution === 'target'}
-          onChange={() => resolveSimilarPair(index, 'target')}
+          onChange={() => handleSelect('target')}
           className="mt-1"
         />
         <div className="flex-1">
