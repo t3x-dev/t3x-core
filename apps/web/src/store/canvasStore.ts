@@ -64,7 +64,7 @@ type CanvasState = {
   addConversationFromCommit: (commitId: string) => Promise<void>;
   addPendingCommitFromCommit: (commitId: string) => void;
   addUnitFromUnit: (unitId: string) => void;
-  createMergePendingCommit: (commitId: string) => void;
+  createMergePendingCommit: (commitId: string) => Promise<string | null>;
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
   canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -726,14 +726,47 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations and commits in parallel
-      const [convResponse, commitResponse] = await Promise.all([
+      // Fetch conversations and both V2/V3 commits in parallel
+      const [convResponse, commitResponse, commitV3Response] = await Promise.all([
         api.listConversations(projectId, 100, 0),
         api.listCommits(projectId, undefined, 100, 0),
+        api.listCommitsV3(projectId, undefined, 100, 0),
       ]);
 
       const conversations = convResponse.conversations;
-      const commits = commitResponse.commits;
+
+      // Convert V3 commits to V2-compatible format for unitToNode
+      const v3AsV2Commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
+        commit_hash: v3.hash,
+        project_id: v3.project_id || projectId,
+        branch: v3.branch || 'main',
+        message: v3.message,
+        parent_hashes: v3.parents,
+        turn_window: null, // V3 doesn't have turn_window
+        facet_snapshot: null, // V3 uses sentences/constraints instead
+        pipeline_config: null,
+        draft_id: null,
+        draft_text_hash: null,
+        signature: null,
+        source_excerpt: v3.content.sentences.map((s) => s.text), // Convert sentences to source_excerpt
+        must_have: v3.content.constraints?.filter((c) => c.type === 'require').map((c) => c.value) || null,
+        mustnt_have: v3.content.constraints?.filter((c) => c.type === 'exclude').map((c) => c.value) || null,
+        position_x: v3.position?.x ?? null,
+        position_y: v3.position?.y ?? null,
+        source_refs: null,
+        anchors: null,
+        created_at: v3.created_at,
+        // Store original V3 data for merge compatibility
+        sourceTurnWindow: v3.content.sentences[0]?.source ? {
+          start_turn_hash: v3.content.sentences[0].source.turn_hash,
+          end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source.turn_hash || v3.content.sentences[0].source.turn_hash,
+        } : undefined,
+      } as api.Commit));
+
+      // Merge V2 and V3 commits, preferring V3 if same hash exists
+      const v3Hashes = new Set(v3AsV2Commits.map((c) => c.commit_hash));
+      const v2OnlyCommits = commitResponse.commits.filter((c) => !v3Hashes.has(c.commit_hash));
+      const commits = [...v3AsV2Commits, ...v2OnlyCommits];
 
       // Preserve existing node positions
       const existingNodePositions = new Map<string, { x: number; y: number }>();
@@ -1269,6 +1302,24 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         // No turnBoundaries for unit type
       };
 
+      // Build sentences for V3 commit compatibility
+      // Each sourceExcerpt item becomes a sentence
+      const turnHash = source.data.sourceTurnWindow?.end_turn_hash || 'sha256:unknown';
+      let charOffset = 0;
+      const sentences = sourceExcerptArray.map((text, idx) => {
+        const sentence = {
+          id: `s${idx + 1}`,
+          text,
+          start: charOffset,
+          end: charOffset + text.length,
+        };
+        charOffset += text.length + 1; // +1 for newline separator
+        return sentence;
+      });
+
+      // Compute inputTextHash for anchor tracking
+      const inputTextHash = `sha256:${sourceExcerptText.length}-${Date.now()}`;
+
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
         type: 'unit',
@@ -1291,8 +1342,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           // Inherit source commit info for creating child commits without conversation
           sourceCommitHash: source.data.commitHash,
           sourceTurnWindow: source.data.sourceTurnWindow,
-          // New: pendingSource with structured text block
-          pendingSource: tokens.length > 0 ? { textBlocks: [pendingSourceBlock] } : undefined,
+          // New: pendingSource with structured text block AND sentences for V3
+          pendingSource: tokens.length > 0 ? {
+            textBlocks: [pendingSourceBlock],
+            sentences: sentences.length > 0 ? sentences : undefined,
+            inputTextHash: sentences.length > 0 ? inputTextHash : undefined,
+          } : undefined,
         },
       };
       const newEdge: Edge = {
@@ -1316,7 +1371,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
    * Trigger two-way merge from a branch commit to latest main
    * Opens MergePanel with prepared merge results
    */
-  createMergePendingCommit: (commitId) => {
+  createMergePendingCommit: async (commitId) => {
     const state = get();
     const nodes = state.nodes;
     const edges = state.edges;
@@ -1330,48 +1385,73 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       branchCommit.data.branchType !== 'branch'
     ) {
       state.notifyCallback?.('Cannot merge: not a branch commit', 'error');
-      return;
+      return null;
     }
 
     // Get source commit hash (branch commit)
     const sourceHash = branchCommit.data.commitHash;
     if (!sourceHash) {
       state.notifyCallback?.('Cannot merge: branch commit has no hash', 'error');
-      return;
+      return null;
     }
+
+    // Get source branch name
+    const sourceBranch = branchCommit.data.branchName || 'branch';
 
     // Get target commit hash (latest main)
     const latestMainId = resolveLatestMainUnitId(nodes, state.latestMainCommitId);
     if (!latestMainId) {
       state.notifyCallback?.('Cannot merge: no main commits found', 'error');
-      return;
+      return null;
     }
     const latestMainCommit = nodeMap.get(latestMainId);
     if (!latestMainCommit) {
       state.notifyCallback?.('Cannot merge: main commit not found', 'error');
-      return;
+      return null;
     }
     const targetHash = latestMainCommit.data.commitHash;
     if (!targetHash) {
       state.notifyCallback?.('Cannot merge: main commit has no hash', 'error');
-      return;
+      return null;
     }
 
     // Check tone - only branch-latest can merge
     const tone = computeUnitTone(nodes, edges, state.latestMainCommitId, commitId);
     if (tone !== 'branch-latest') {
       state.notifyCallback?.('Cannot merge: only latest branch commit can be merged', 'error');
-      return;
+      return null;
     }
 
-    // Check if merge already in progress
-    if (state.mergeState) {
-      state.notifyCallback?.('A merge is already in progress', 'warning');
-      return;
-    }
+    // Create merge draft via API (redirects to Merge Workspace)
+    try {
+      const response = await fetch(`${API_V1}/merge/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: state.projectId,
+          source_hash: sourceHash,
+          target_hash: targetHash,
+          source_branch: sourceBranch,
+          target_branch: 'main',
+        }),
+      });
 
-    // Start two-way merge - this will open MergePanel
-    get().startMerge(sourceHash, targetHash);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error?.message || 'Failed to create merge draft');
+      }
+
+      // Return the draft ID for navigation
+      return json.data.draftId as string;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      state.notifyCallback?.(`Failed to create merge: ${errorMessage}`, 'error');
+      return null;
+    }
   },
 
   getPendingCommitBranchMode: (commitId) => determineStagingUnitBranchMode(get(), commitId),
@@ -2236,6 +2316,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ mergeLoading: true, mergeError: null });
 
     try {
+      // Determine target branch for the merge commit (default to 'main')
+      const targetBranch = mergeState.targetBranch || 'main';
+
       const response = await fetch(`${API_V1}/merge/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2244,6 +2327,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           target_hash: mergeState.targetHash,
           prepared: mergeState.prepared,
           message,
+          branch: targetBranch, // Merge commit goes to target branch
         }),
       });
 
@@ -2256,19 +2340,82 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         throw new Error(json.error?.message || 'Failed to execute merge');
       }
 
-      const mergeCommit = json.data;
+      const mergeCommit = json.data as CommitV3;
 
-      // Clear merge state on success
+      // Get current nodes and edges to add the merge commit node
+      const { nodes, edges } = get();
+
+      // Find source and target nodes to calculate merge node position
+      const sourceNode = nodes.find((n) => n.id === mergeState.sourceHash);
+      const targetNode = nodes.find((n) => n.id === mergeState.targetHash);
+
+      // Calculate position for merge commit node (below and between source/target)
+      let mergeNodePosition = { x: 400, y: 400 }; // Default position
+      if (sourceNode && targetNode) {
+        const midX = (sourceNode.position.x + targetNode.position.x) / 2;
+        const maxY = Math.max(sourceNode.position.y, targetNode.position.y);
+        mergeNodePosition = snapPosition({
+          x: midX,
+          y: maxY + 200, // 200px below the lower node
+        });
+      } else if (sourceNode) {
+        mergeNodePosition = snapPosition({
+          x: sourceNode.position.x,
+          y: sourceNode.position.y + 200,
+        });
+      } else if (targetNode) {
+        mergeNodePosition = snapPosition({
+          x: targetNode.position.x,
+          y: targetNode.position.y + 200,
+        });
+      }
+
+      // Create the merge commit node
+      const mergeNode: Node<CanvasNodeData> = {
+        id: mergeCommit.hash,
+        type: 'unit',
+        position: mergeNodePosition,
+        data: {
+          entryId: mergeCommit.hash.slice(0, 12),
+          title: mergeCommit.message || 'Merge commit',
+          summary: `${mergeCommit.content.sentences.length} sentences`,
+          status: 'committed',
+          timestamp: mergeCommit.committed_at,
+          tags: ['merge'],
+          kind: 'unit',
+          // Commit data
+          commitStatus: 'committed',
+          commitHash: mergeCommit.hash,
+          // Use targetBranch as fallback if mergeCommit.branch is not set
+          branchType: (mergeCommit.branch || targetBranch) === 'main' ? 'main' : 'branch',
+          branchName: (mergeCommit.branch || targetBranch) !== 'main' ? (mergeCommit.branch || targetBranch) : undefined,
+          // Content
+          sourceExcerpt: mergeCommit.content.sentences.map((s) => s.text),
+          mustHave: mergeCommit.content.constraints?.filter((c) => c.type === 'require').map((c) => c.value) ?? undefined,
+          mustntHave: mergeCommit.content.constraints?.filter((c) => c.type === 'exclude').map((c) => c.value) ?? undefined,
+        },
+      };
+
+      // Create edges from parent commits to merge commit
+      const newEdges: Edge[] = mergeCommit.parents.map((parentHash, idx) => ({
+        id: `merge-edge-${parentHash}-${mergeCommit.hash}-${idx}`,
+        source: parentHash,
+        target: mergeCommit.hash,
+        type: edgeType,
+        animated: false,
+        style: edgeStyle,
+      }));
+
+      // Update state with new node and edges
       set({
+        nodes: [...nodes, mergeNode],
+        edges: [...edges, ...newEdges],
         mergeState: null,
         mergeLoading: false,
-        mergeError: null
+        mergeError: null,
       });
 
       notifyCallback?.('Merge executed successfully', 'success');
-
-      // Add merge commit node to canvas (existing addNode logic)
-      // ... add mergeCommit node ...
 
       return mergeCommit;
     } catch (error) {

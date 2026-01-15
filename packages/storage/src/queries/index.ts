@@ -155,3 +155,18 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
+// Merge Drafts (Pending merge operations)
+export {
+  cancelMergeDraft,
+  commitMergeDraft,
+  type CreateMergeDraftInput,
+  createMergeDraft,
+  deleteMergeDraft,
+  findPendingMergeDraft,
+  getMergeDraft,
+  type ListMergeDraftsOptions,
+  listMergeDraftsByProject,
+  type MergeDraftStatus,
+  type UpdateMergeDraftInput,
+  updateMergeDraft,
+} from './merge-drafts';
