@@ -1,7 +1,7 @@
 'use client';
 
+import { Check, Eye, Play } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Play, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,10 +14,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { EngineRun } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useOptimiserStore } from '@/store/optimiserStore';
 
 interface RunsTableProps {
   runs: EngineRun[];
   maxRows?: number;
+  compareModeEnabled?: boolean;
 }
 
 /**
@@ -36,16 +39,18 @@ function getRunMetrics(run: EngineRun): {
 
   // Try to get eval_result from run_report or directly
   const runReport = result.run_report as Record<string, unknown> | undefined;
-  const evalResult = (runReport?.eval_result || result.eval_result) as Record<string, unknown> | undefined;
+  const evalResult = (runReport?.eval_result || result.eval_result) as
+    | Record<string, unknown>
+    | undefined;
 
-  const passed = evalResult?.passed as boolean | undefined ?? null;
-  const score = evalResult?.score as number | undefined ?? null;
+  const passed = (evalResult?.passed as boolean | undefined) ?? null;
+  const score = (evalResult?.score as number | undefined) ?? null;
 
   // Try to get trace summary data
   const traceSummary = result.trace_summary as Record<string, unknown> | undefined;
-  const latencyMs = traceSummary?.latency_ms as number | undefined ?? null;
+  const latencyMs = (traceSummary?.latency_ms as number | undefined) ?? null;
   const tokens = traceSummary?.tokens as Record<string, unknown> | undefined;
-  const totalTokens = tokens?.total_tokens as number | undefined ?? null;
+  const totalTokens = (tokens?.total_tokens as number | undefined) ?? null;
 
   return { passed, score, latencyMs, totalTokens };
 }
@@ -109,25 +114,31 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   );
 }
 
-export function RunsTable({ runs, maxRows = 15 }: RunsTableProps) {
+export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: RunsTableProps) {
   const router = useRouter();
+  const { selectedRunIds, toggleRunSelection } = useOptimiserStore();
 
   if (runs.length === 0) {
     return (
-      <EmptyState
-        icon={Play}
-        title="No runs yet"
-        description="Run an agent to see results here."
-      />
+      <EmptyState icon={Play} title="No runs yet" description="Run an agent to see results here." />
     );
   }
 
   const displayRuns = runs.slice(0, maxRows);
 
+  const handleRowClick = (run: EngineRun) => {
+    if (compareModeEnabled) {
+      toggleRunSelection(run.run_id);
+    } else {
+      router.push(`/deploy/${run.run_id}`);
+    }
+  };
+
   return (
     <Table>
       <TableHeader>
         <TableRow>
+          {compareModeEnabled && <TableHead className="w-12"></TableHead>}
           <TableHead>Run ID</TableHead>
           <TableHead>Agent</TableHead>
           <TableHead>Status</TableHead>
@@ -141,13 +152,35 @@ export function RunsTable({ runs, maxRows = 15 }: RunsTableProps) {
       <TableBody>
         {displayRuns.map((run) => {
           const metrics = getRunMetrics(run);
+          const isSelected = selectedRunIds.has(run.run_id);
 
           return (
             <TableRow
               key={run.run_id}
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => router.push(`/deploy/${run.run_id}`)}
+              className={cn(
+                'cursor-pointer hover:bg-muted/50',
+                isSelected && 'bg-primary/5 hover:bg-primary/10'
+              )}
+              onClick={() => handleRowClick(run)}
             >
+              {compareModeEnabled && (
+                <TableCell className="w-12">
+                  <div
+                    className={cn(
+                      'flex h-5 w-5 items-center justify-center rounded border',
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-muted-foreground/30'
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleRunSelection(run.run_id);
+                    }}
+                  >
+                    {isSelected && <Check className="h-3 w-3" />}
+                  </div>
+                </TableCell>
+              )}
               <TableCell>
                 <code className="text-xs">{run.run_id}</code>
               </TableCell>

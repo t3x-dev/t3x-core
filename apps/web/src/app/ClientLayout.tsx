@@ -25,7 +25,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen bg-muted/30">
       <Sidebar />
-      <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+      <main className="ml-16 flex flex-1 flex-col overflow-hidden">{children}</main>
       <Toaster position="bottom-right" richColors closeButton />
       <CommandPalette />
     </div>
