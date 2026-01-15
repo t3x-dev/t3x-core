@@ -23,10 +23,6 @@ export function generateDraftId(): string {
   return `draft_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
-export function generateMergeResultId(): string {
-  return `merge_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
-}
-
 // === Timestamps ===
 
 export function isoNow(): string {

@@ -81,16 +81,6 @@ export {
   updateDraft,
   updateDraftStatus,
 } from './drafts';
-// Merge Results
-export {
-  type CreateMergeResultInput,
-  deleteMergeResult,
-  findMergeResultByHashes,
-  findMergeResultById,
-  findMergeResultsByProject,
-  insertMergeResult,
-  type MergeStatus,
-} from './mergeResults';
 // Projects
 export {
   type CreateProjectInput,

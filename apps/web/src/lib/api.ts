@@ -349,64 +349,6 @@ export interface DiffResult {
   stats?: DiffResultRaw['stats'];
 }
 
-// Raw merge result from backend (camelCase)
-interface MergeResultRaw {
-  autoMerged: Array<{
-    facet: string;
-    mergedText: string | null;
-    source: 'base' | 'source' | 'target' | 'llm' | 'manual';
-    keywords: string[];
-  }>;
-  conflicts: Array<{
-    facet: string;
-    baseText: string | null;
-    sourceText: string | null;
-    targetText: string | null;
-    conflictType: 'divergent_edit' | 'delete_modify' | 'modify_delete';
-  }>;
-  status: 'clean' | 'conflicts';
-  stats: {
-    totalFacets: number;
-    autoMergedCount: number;
-    conflictCount: number;
-    llmResolvedCount: number;
-    bySource: {
-      base: number;
-      source: number;
-      target: number;
-      llm: number;
-      manual: number;
-    };
-  };
-}
-
-// Frontend-friendly merge result (snake_case)
-export interface MergeResult {
-  base_commit_hash: string;
-  source_commit_hash: string;
-  target_commit_hash: string;
-  status: 'clean' | 'conflicts';
-  auto_merged_facets: Array<{
-    facet: string;
-    merged_text: string | null;
-    source: 'base' | 'source' | 'target' | 'llm' | 'manual';
-    keywords: string[];
-  }>;
-  conflicts: Array<{
-    facet: string;
-    base_text: string | null;
-    source_text: string | null;
-    target_text: string | null;
-    conflict_type: 'divergent_edit' | 'delete_modify' | 'modify_delete';
-  }>;
-  stats: {
-    total_facets: number;
-    auto_merged_count: number;
-    conflict_count: number;
-    llm_resolved_count: number;
-  };
-}
-
 // List response types - CLI returns nested structure: { status, data: { items: [...], limit, offset } }
 export interface ProjectListData {
   projects: Project[];
@@ -1185,51 +1127,6 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
     },
     computed_at: new Date().toISOString(),
     stats: raw.stats,
-  };
-}
-
-export async function merge(
-  _projectId: string, // Not used by backend, kept for API compatibility
-  baseCommitHash: string,
-  sourceCommitHash: string,
-  targetCommitHash: string
-): Promise<MergeResult> {
-  const res = await fetchWithTimeout(`${API_V1}/merge`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      base_commit_hash: baseCommitHash,
-      source_commit_hash: sourceCommitHash,
-      target_commit_hash: targetCommitHash,
-    }),
-  });
-  const raw = await handleResponse<MergeResultRaw>(res);
-
-  // Transform backend camelCase to frontend snake_case
-  return {
-    base_commit_hash: baseCommitHash,
-    source_commit_hash: sourceCommitHash,
-    target_commit_hash: targetCommitHash,
-    status: raw.status,
-    auto_merged_facets: raw.autoMerged.map((f) => ({
-      facet: f.facet,
-      merged_text: f.mergedText,
-      source: f.source,
-      keywords: f.keywords,
-    })),
-    conflicts: raw.conflicts.map((c) => ({
-      facet: c.facet,
-      base_text: c.baseText,
-      source_text: c.sourceText,
-      target_text: c.targetText,
-      conflict_type: c.conflictType,
-    })),
-    stats: {
-      total_facets: raw.stats.totalFacets,
-      auto_merged_count: raw.stats.autoMergedCount,
-      conflict_count: raw.stats.conflictCount,
-      llm_resolved_count: raw.stats.llmResolvedCount,
-    },
   };
 }
 

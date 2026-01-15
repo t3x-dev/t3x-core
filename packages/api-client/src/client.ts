@@ -30,13 +30,10 @@ import type {
   ListDraftsResponse,
   ListProjectsResponse,
   ListTurnsResponse,
-  MergeInput,
-  MergeResult,
   PaginationParams,
   Project,
   ProjectWithStats,
   StatusResponse,
-  ThreeWayDiffInput,
   Turn,
   TwoWayDiffInput,
   UpdateProjectInput,
@@ -298,25 +295,6 @@ export class T3xClient {
 
   async twoWayDiff(input: TwoWayDiffInput): Promise<DiffResult> {
     return this.request<DiffResult>('POST', '/v1/diff/two-way', input);
-  }
-
-  async threeWayDiff(input: ThreeWayDiffInput): Promise<DiffResult> {
-    return this.request<DiffResult>('POST', '/v1/diff/three-way', input);
-  }
-
-  // ============================================
-  // Merge
-  // ============================================
-
-  async merge(input: MergeInput): Promise<MergeResult> {
-    return this.request<MergeResult>('POST', '/v1/merge', input);
-  }
-
-  async resolveMerge(projectId: string, resolution: Record<string, unknown>): Promise<MergeResult> {
-    return this.request<MergeResult>('POST', '/v1/merge/resolve', {
-      project_id: projectId,
-      resolution,
-    });
   }
 
   // ============================================

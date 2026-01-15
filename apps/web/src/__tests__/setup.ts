@@ -13,7 +13,6 @@ import {
   commits,
   conversations,
   drafts,
-  mergeResults,
   projects,
   segmentEmbeddings,
   turns,
@@ -31,7 +30,6 @@ const schema = {
   branches,
   commits,
   drafts,
-  mergeResults,
   segmentEmbeddings,
 };
 

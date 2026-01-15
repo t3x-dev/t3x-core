@@ -207,33 +207,6 @@ export interface TwoWayDiffInput {
   head_hash: string;
 }
 
-export interface ThreeWayDiffInput {
-  base_hash: string;
-  ours_hash: string;
-  theirs_hash: string;
-}
-
-// Merge types
-export interface MergeResult {
-  success: boolean;
-  commit_hash?: string;
-  conflicts?: MergeConflict[];
-}
-
-export interface MergeConflict {
-  path: string;
-  base: unknown;
-  ours: unknown;
-  theirs: unknown;
-}
-
-export interface MergeInput {
-  project_id: string;
-  source_branch: string;
-  target_branch: string;
-  message?: string;
-}
-
 // Export types
 export interface ExportCfpackInput {
   project_id: string;
