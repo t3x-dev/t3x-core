@@ -79,6 +79,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
           id: `e2e-test-${selectedVersion}`,
           type: 'eval',
           content: promptConfig.content,
+          rules_ref: 'weather-agent-eval',  // 使用 weather-agent 专用评估规则
         },
         inputs: {
           test: true,

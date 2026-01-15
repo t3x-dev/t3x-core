@@ -284,41 +284,6 @@ runsRoutes.get('/v1/runs', async (c) => {
 });
 
 /**
- * GET /runs/:id - Get a specific run
- */
-runsRoutes.get('/v1/runs/:id', async (c) => {
-  try {
-    const runId = c.req.param('id');
-    const db = await getDB();
-    const run = await getRun(db, runId);
-
-    if (!run) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'NOT_FOUND', message: `Run not found: ${runId}` },
-        },
-        404
-      );
-    }
-
-    return c.json({ success: true, data: run });
-  } catch (error) {
-    console.error('[runs] Error getting run:', error);
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      },
-      500
-    );
-  }
-});
-
-/**
  * GET /runs/by-runner-id/:runnerRunId - Get run by runner_run_id
  *
  * Used by Runner to look up run details when receiving n8n callback.
@@ -403,6 +368,44 @@ runsRoutes.get('/v1/runs/configurations', async (c) => {
     });
   } catch (error) {
     console.error('[runs] Error getting configurations:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /runs/:id - Get a specific run
+ *
+ * NOTE: This route MUST be after all specific /runs/xxx routes
+ * because :id would match "filters", "configurations", etc.
+ */
+runsRoutes.get('/v1/runs/:id', async (c) => {
+  try {
+    const runId = c.req.param('id');
+    const db = await getDB();
+    const run = await getRun(db, runId);
+
+    if (!run) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: `Run not found: ${runId}` },
+        },
+        404
+      );
+    }
+
+    return c.json({ success: true, data: run });
+  } catch (error) {
+    console.error('[runs] Error getting run:', error);
     return c.json(
       {
         success: false,

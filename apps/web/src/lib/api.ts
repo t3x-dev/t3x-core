@@ -1723,6 +1723,22 @@ export interface EngineRun {
     run_report?: Record<string, unknown>;
     assertions?: unknown[];
     evidence_pack?: Record<string, unknown>;
+    // Add trace_summary to result for backwards compatibility
+    trace_summary?: {
+      trajectory?: {
+        total_steps: number;
+        llm_calls: number;
+        tool_calls: number;
+        retrieval_calls: number;
+        failed_steps: number;
+      };
+      tokens?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+      };
+      latency_ms?: number;
+    };
   } | null;
   // v2.1: Metadata for A/B test filtering
   metadata: {
@@ -1742,6 +1758,7 @@ export interface CreateEngineRunInput {
     id: string;
     type: 'deploy' | 'eval';
     content?: string;
+    rules_ref?: string;  // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   };
   inputs?: Record<string, unknown>;
   workflow?: {
@@ -1777,16 +1794,13 @@ export async function createEngineRun(input: CreateEngineRunInput): Promise<{
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  const data =
-    await handleResponse<
-      ApiResponse<{
-        run_id: string;
-        status: string;
-        runner_run_id?: string;
-        warning?: string;
-      }>
-    >(res);
-  return data.data!;
+  // handleResponse already extracts .data from ApiResponse
+  return handleResponse<{
+    run_id: string;
+    status: string;
+    runner_run_id?: string;
+    warning?: string;
+  }>(res);
 }
 
 // Raw run from Engine API (camelCase with JSON strings)
@@ -1800,6 +1814,9 @@ interface EngineRunRaw {
   workflowJson: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed';
   resultJson: string | null;
+  // Trace data
+  traceSummaryJson: string | null;
+  fullTraceJson: string | null;
   // v2.1: Metadata for A/B test filtering
   metadataJson: string | null;
   createdAt: string;
@@ -1810,6 +1827,15 @@ interface EngineRunRaw {
  * Parse raw Engine run (camelCase + JSON strings) to frontend format (snake_case + parsed)
  */
 function parseEngineRun(raw: EngineRunRaw): EngineRun {
+  const result = safeJsonParse(raw.resultJson, null) as Record<string, unknown> | null;
+  const traceSummary = safeJsonParse(raw.traceSummaryJson, null);
+
+  // Merge trace_summary into result for UI compatibility
+  const mergedResult = result ? {
+    ...result,
+    trace_summary: traceSummary,
+  } : null;
+
   return {
     run_id: raw.runId,
     project_id: raw.projectId,
@@ -1819,7 +1845,7 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
     inputs: safeJsonParse(raw.inputsJson, null),
     workflow: safeJsonParse(raw.workflowJson, null),
     status: raw.status,
-    result: safeJsonParse(raw.resultJson, null),
+    result: mergedResult as EngineRun['result'],
     metadata: safeJsonParse(raw.metadataJson, null),
     created_at: raw.createdAt,
     updated_at: raw.updatedAt,
