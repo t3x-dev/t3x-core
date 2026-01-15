@@ -17,6 +17,7 @@ export {
   generateBranchId,
   generateConversationId,
   generateDraftId,
+  generateMergeDraftId,
   generateProjectId,
   isoNow,
 } from './utils';
