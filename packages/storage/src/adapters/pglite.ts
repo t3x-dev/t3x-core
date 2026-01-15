@@ -284,6 +284,23 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_v3_sentences ON commits_v3 USING GIN ((content->'sentences'));
     CREATE INDEX IF NOT EXISTS idx_commits_v3_constraints ON commits_v3 USING GIN ((content->'constraints'));
 
+    -- Merge Drafts table (for merge workspace PENDING state)
+    CREATE TABLE IF NOT EXISTS merge_drafts (
+      draft_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_hash TEXT NOT NULL,
+      target_hash TEXT NOT NULL,
+      source_branch TEXT,
+      target_branch TEXT,
+      prepared_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      message TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.
