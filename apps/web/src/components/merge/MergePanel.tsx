@@ -1,4 +1,5 @@
-import { useCanvasStore, selectCanExecuteMerge, selectUnresolvedCount, selectMergeCounts } from '@/store/canvasStore';
+import { useCanvasStore, selectCanExecuteMerge, selectUnresolvedCount } from '@/store/canvasStore';
+import { useShallow } from 'zustand/react/shallow';
 import { MergeIdenticalSection } from './MergeIdenticalSection';
 import { MergeSimilarPairCard } from './MergeSimilarPairCard';
 import { MergeCandidateList } from './MergeCandidateList';
@@ -23,7 +24,19 @@ export function MergePanel() {
   const mergeLoading = useCanvasStore((s) => s.mergeLoading);
   const canExecute = useCanvasStore(selectCanExecuteMerge);
   const unresolvedCount = useCanvasStore(selectUnresolvedCount);
-  const counts = useCanvasStore(selectMergeCounts);
+  const counts = useCanvasStore(
+    useShallow((state) => {
+      if (!state.mergeState) return null;
+      const { prepared } = state.mergeState;
+      return {
+        identical: prepared.identical.length,
+        similar: prepared.similarPairs.length,
+        resolved: prepared.similarPairs.filter((p) => p.resolution).length,
+        onlyInSource: prepared.onlyInSource.length,
+        onlyInTarget: prepared.onlyInTarget.length,
+      };
+    })
+  );
 
   const [message, setMessage] = useState('');
 
@@ -102,7 +115,11 @@ export function MergePanel() {
           </h3>
           <div className="space-y-3">
             {prepared.similarPairs.map((pair, index) => (
-              <MergeSimilarPairCard key={index} pair={pair} index={index} />
+              <MergeSimilarPairCard
+                key={`${pair.source.id}-${pair.target.id}`}
+                pair={pair}
+                index={index}
+              />
             ))}
           </div>
         </div>
