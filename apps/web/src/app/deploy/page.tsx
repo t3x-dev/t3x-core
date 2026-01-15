@@ -1,34 +1,37 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
-  Rocket,
-  Plus,
-  Play,
-  RefreshCw,
-  ExternalLink,
   AlertCircle,
+  ExternalLink,
+  GitCompare,
   Loader2,
+  Play,
+  Plus,
+  RefreshCw,
+  Rocket,
   Trash2,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { E2ETestCard } from '@/components/optimiser/E2ETestCard';
+import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
+import { RunsTable } from '@/components/optimiser/RunsTable';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
-import { RunsTable } from '@/components/optimiser/RunsTable';
 import {
   checkRunnerHealth,
-  listEngineRuns,
-  listDeployAgents,
   createDeployAgent,
-  updateDeployAgent,
-  deleteDeployAgent,
   createEngineRun,
   type DeployAgent,
+  deleteDeployAgent,
   type EngineRun,
+  listDeployAgents,
+  listEngineRuns,
+  updateDeployAgent,
 } from '@/lib/api';
+import { useOptimiserStore } from '@/store/optimiserStore';
 
 export default function DeployPage() {
   const router = useRouter();
@@ -216,7 +219,8 @@ export default function DeployPage() {
             <div>
               <p className="font-medium text-red-600">Runner not available</p>
               <p className="text-sm text-muted-foreground">
-                Start the runner with: <code className="rounded bg-muted px-1">pnpm docker:up:runner</code> or{' '}
+                Start the runner with:{' '}
+                <code className="rounded bg-muted px-1">pnpm docker:up:runner</code> or{' '}
                 <code className="rounded bg-muted px-1">pnpm dev:runner</code>
               </p>
             </div>
@@ -359,22 +363,90 @@ export default function DeployPage() {
         </CardContent>
       </Card>
 
+      {/* E2E Test Card */}
+      <E2ETestCard
+        agents={deployAgents}
+        runnerHealthy={runnerHealthy === true}
+        onRunComplete={async (runId) => {
+          // Refresh runs list after test completes
+          try {
+            const runsData = await listEngineRuns();
+            setRuns(runsData.runs);
+          } catch (err) {
+            console.warn('Failed to refresh runs:', err);
+          }
+          // Navigate to run detail page
+          router.push(`/deploy/${runId}`);
+        }}
+      />
+
       {/* Quick Stats */}
       <QuickStatsBar runs={runs} />
 
       {/* Recent Runs Section */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between border-b pb-4">
-          <CardTitle>Recent Runs</CardTitle>
+      <RecentRunsSection runs={runs} router={router} />
+    </div>
+  );
+}
+
+/**
+ * Recent Runs Section with Compare Mode
+ */
+function RecentRunsSection({
+  runs,
+  router,
+}: {
+  runs: EngineRun[];
+  router: ReturnType<typeof useRouter>;
+}) {
+  const { compareModeEnabled, toggleCompareMode, selectedRunIds, clearSelectedRuns } =
+    useOptimiserStore();
+
+  const selectedArray = Array.from(selectedRunIds);
+  const canCompare = selectedArray.length === 2;
+
+  const handleCompare = () => {
+    if (canCompare) {
+      router.push(`/deploy/compare?v1=${selectedArray[0]}&v2=${selectedArray[1]}`);
+      // Clear selections after navigating
+      clearSelectedRuns();
+      toggleCompareMode();
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between border-b pb-4">
+        <CardTitle>Recent Runs</CardTitle>
+        <div className="flex items-center gap-2">
+          {compareModeEnabled && (
+            <>
+              <span className="text-sm text-muted-foreground">
+                {selectedArray.length}/2 selected
+              </span>
+              <Button variant="default" size="sm" onClick={handleCompare} disabled={!canCompare}>
+                <GitCompare className="h-4 w-4" />
+                Compare
+              </Button>
+            </>
+          )}
+          <Button
+            variant={compareModeEnabled ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={toggleCompareMode}
+          >
+            <GitCompare className="h-4 w-4" />
+            {compareModeEnabled ? 'Cancel' : 'Compare Mode'}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <RunsTable runs={runs} maxRows={15} />
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <RunsTable runs={runs} maxRows={15} compareModeEnabled={compareModeEnabled} />
+      </CardContent>
+    </Card>
   );
 }

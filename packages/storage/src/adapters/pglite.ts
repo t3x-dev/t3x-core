@@ -248,6 +248,8 @@ async function initializeSchema(client: PGlite): Promise<void> {
       trace_summary_json TEXT,
       trace_policy TEXT DEFAULT 'on_failure',
       full_trace_json TEXT,
+      -- v2.1: Metadata for A/B test filtering
+      metadata_json TEXT,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );

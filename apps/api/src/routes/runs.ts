@@ -15,8 +15,11 @@ import {
   getRun,
   getRunByRunnerRunId,
   listRuns,
+  getRunFilterOptions,
+  getConfigurationStats,
   findProjectById,
 } from '@t3x/storage';
+import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 
 // Runner URL (t3x-runner service)
 const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
@@ -43,6 +46,12 @@ const CreateRunSchema = z.object({
   workflow: z.object({
     type: z.string(),
     webhook_id: z.string().optional(),
+  }).optional(),
+  // v2.1: Metadata for A/B test filtering
+  metadata: z.object({
+    model: z.string().optional(),           // 模型名称，如 "gpt-4", "claude-3"
+    prompt_version: z.string().optional(),  // prompt 版本，如 "v1.0", "v2.0"
+    test_case: z.string().optional(),       // 测试用例标识
   }).optional(),
 });
 
@@ -112,6 +121,8 @@ runsRoutes.post('/v1/runs', async (c) => {
       workflow_json: input.workflow ? JSON.stringify(input.workflow) : null,
       status: 'queued',
       result_json: null,
+      // v2.1: Metadata for A/B test filtering
+      metadata_json: input.metadata ? JSON.stringify(input.metadata) : null,
     });
 
     console.log(`[runs] Created run ${run_id}, forwarding to Runner`);
@@ -233,16 +244,21 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
 
 /**
  * GET /runs - List runs
+ *
+ * v2.1: Added model and prompt_version filters for A/B test comparison
  */
 runsRoutes.get('/v1/runs', async (c) => {
   try {
     const projectId = c.req.query('project_id');
     const status = c.req.query('status') as 'queued' | 'running' | 'completed' | 'failed' | undefined;
+    // v2.1: Metadata filters for A/B test
+    const model = c.req.query('model');
+    const prompt_version = c.req.query('prompt_version');
     const limit = parseInt(c.req.query('limit') || '50', 10);
     const offset = parseInt(c.req.query('offset') || '0', 10);
 
     const db = await getDB();
-    const result = await listRuns(db, { projectId, status, limit, offset });
+    const result = await listRuns(db, { projectId, status, model, prompt_version, limit, offset });
 
     return c.json({
       success: true,
@@ -336,6 +352,201 @@ runsRoutes.get('/v1/runs/by-runner-id/:runnerRunId', async (c) => {
         },
       },
       500
+    );
+  }
+});
+
+/**
+ * GET /runs/filters - Get available filter options
+ *
+ * v2.1: Returns distinct model and prompt_version values for filter dropdowns
+ */
+runsRoutes.get('/v1/runs/filters', async (c) => {
+  try {
+    const db = await getDB();
+    const options = await getRunFilterOptions(db);
+
+    return c.json({
+      success: true,
+      data: options,
+    });
+  } catch (error) {
+    console.error('[runs] Error getting filter options:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /runs/configurations - Get aggregated stats for all configurations
+ *
+ * v2.2: Returns statistics grouped by model + prompt_version
+ * for selecting which configurations to compare in A/B test.
+ */
+runsRoutes.get('/v1/runs/configurations', async (c) => {
+  try {
+    const projectId = c.req.query('project_id');
+    const db = await getDB();
+    const configurations = await getConfigurationStats(db, projectId || undefined);
+
+    return c.json({
+      success: true,
+      data: { configurations },
+    });
+  } catch (error) {
+    console.error('[runs] Error getting configurations:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
+// Request schema for A/B test comparison
+const CompareRunsSchema = z.object({
+  control: z.object({
+    model: z.string(),
+    prompt_version: z.string(),
+  }),
+  treatment: z.object({
+    model: z.string(),
+    prompt_version: z.string(),
+  }),
+  project_id: z.string().optional(),
+});
+
+/**
+ * POST /runs/compare - Compare two configurations with A/B test statistics
+ *
+ * v2.2: Performs statistical comparison between control (A) and treatment (B).
+ * Returns p-values and significance indicators for pass_rate and avg_score.
+ */
+runsRoutes.post('/v1/runs/compare', async (c) => {
+  try {
+    const body = await c.req.json();
+    const input = CompareRunsSchema.parse(body);
+
+    const db = await getDB();
+    const allStats = await getConfigurationStats(db, input.project_id || undefined);
+
+    // Find control and treatment configurations
+    const control = allStats.find(
+      (s) => s.model === input.control.model && s.prompt_version === input.control.prompt_version
+    );
+    const treatment = allStats.find(
+      (s) => s.model === input.treatment.model && s.prompt_version === input.treatment.prompt_version
+    );
+
+    if (!control) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Control configuration not found: ${input.control.model}/${input.control.prompt_version}`,
+        },
+      }, 404);
+    }
+
+    if (!treatment) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Treatment configuration not found: ${input.treatment.model}/${input.treatment.prompt_version}`,
+        },
+      }, 404);
+    }
+
+    // Perform statistical tests
+    const passRateComparison = twoProportionZTest(
+      control.pass_count,
+      control.run_count,
+      treatment.pass_count,
+      treatment.run_count
+    );
+
+    const avgScoreComparison = twoSampleTTest(
+      control.scores,
+      treatment.scores
+    );
+
+    // Calculate simple deltas for latency and tokens (no statistical test needed)
+    const latencyDelta = treatment.avg_latency_ms - control.avg_latency_ms;
+    const latencyDeltaPercent = control.avg_latency_ms > 0
+      ? (latencyDelta / control.avg_latency_ms) * 100
+      : 0;
+
+    const tokensDelta = treatment.avg_tokens - control.avg_tokens;
+    const tokensDeltaPercent = control.avg_tokens > 0
+      ? (tokensDelta / control.avg_tokens) * 100
+      : 0;
+
+    return c.json({
+      success: true,
+      data: {
+        control: {
+          model: control.model,
+          prompt_version: control.prompt_version,
+          run_count: control.run_count,
+          pass_count: control.pass_count,
+          pass_rate: control.pass_rate,
+          avg_score: control.avg_score,
+          avg_latency_ms: control.avg_latency_ms,
+          avg_tokens: control.avg_tokens,
+        },
+        treatment: {
+          model: treatment.model,
+          prompt_version: treatment.prompt_version,
+          run_count: treatment.run_count,
+          pass_count: treatment.pass_count,
+          pass_rate: treatment.pass_rate,
+          avg_score: treatment.avg_score,
+          avg_latency_ms: treatment.avg_latency_ms,
+          avg_tokens: treatment.avg_tokens,
+        },
+        comparison: {
+          pass_rate: passRateComparison,
+          avg_score: avgScoreComparison,
+          avg_latency: {
+            controlMean: control.avg_latency_ms,
+            treatmentMean: treatment.avg_latency_ms,
+            delta: latencyDelta,
+            deltaPercent: latencyDeltaPercent,
+          },
+          avg_tokens: {
+            controlMean: control.avg_tokens,
+            treatmentMean: treatment.avg_tokens,
+            delta: tokensDelta,
+            deltaPercent: tokensDeltaPercent,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[runs] Error comparing runs:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400
     );
   }
 });

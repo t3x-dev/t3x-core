@@ -51,7 +51,7 @@ describe('Commits V3 Storage', () => {
         author: { name: 'Test Author' },
         committedAt: new Date('2024-01-15T10:00:00Z'),
         content: {
-          sentences: [{ text: 'Hello world', startChar: 0, endChar: 11 }],
+          sentences: [{ id: 's1', text: 'Hello world', source: { turn_hash: 'sha256:test', start_char: 0, end_char: 11 } }],
         },
         projectId: testProjectId,
         message: 'Initial commit',
@@ -95,7 +95,7 @@ describe('Commits V3 Storage', () => {
         author: {
           name: 'Full Author',
           identity: 'user@example.com',
-          verification: 'oauth:google',
+          verification: 'verified' as const,
         },
         committedAt: new Date(),
         content: { sentences: [] },
@@ -107,7 +107,7 @@ describe('Commits V3 Storage', () => {
       expect(result.author).toEqual({
         name: 'Full Author',
         identity: 'user@example.com',
-        verification: 'oauth:google',
+        verification: 'verified',
       });
     });
 
@@ -117,8 +117,8 @@ describe('Commits V3 Storage', () => {
         author: { name: 'Constraint Author' },
         committedAt: new Date(),
         content: {
-          sentences: [{ text: 'Budget is $5000', startChar: 0, endChar: 15 }],
-          constraints: [{ type: 'must_have' as const, value: '5000' }],
+          sentences: [{ id: 's1', text: 'Budget is $5000', source: { turn_hash: 'sha256:budget', start_char: 0, end_char: 15 } }],
+          constraints: [{ type: 'require' as const, id: 'c1', value: '5000', match: 'exact' as const }],
         },
         projectId: testProjectId,
       };
@@ -127,7 +127,7 @@ describe('Commits V3 Storage', () => {
 
       expect(result.content.sentences).toHaveLength(1);
       expect(result.content.constraints).toHaveLength(1);
-      expect(result.content.constraints![0]).toEqual({ type: 'must_have', value: '5000' });
+      expect(result.content.constraints![0]).toEqual({ type: 'require', id: 'c1', value: '5000', match: 'exact' });
     });
 
     it('stores parents array', async () => {
