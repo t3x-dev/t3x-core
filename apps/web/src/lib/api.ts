@@ -1012,6 +1012,43 @@ export async function getCommitV3(commitHash: string): Promise<CommitV3> {
   return handleResponse<CommitV3>(res);
 }
 
+/**
+ * Create a V3 commit (sentence-based)
+ *
+ * V3 commits use sentences[] and constraints[] instead of V2's turn_window and facet_snapshot.
+ * This is the format required by the merge API.
+ */
+export async function createCommitV3(
+  projectId: string,
+  content: {
+    sentences: CommitV3Sentence[];
+    constraints?: CommitV3Constraint[];
+  },
+  options?: {
+    branch?: string;
+    message?: string;
+    parents?: string[];
+    position?: { x: number; y: number };
+    author?: CommitV3Author;
+  }
+): Promise<CommitV3> {
+  const res = await fetchWithTimeout(`${API_V1}/commits-v3`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_id: projectId,
+      content,
+      branch: options?.branch ?? 'main',
+      message: options?.message,
+      parents: options?.parents ?? [],
+      position_x: options?.position?.x,
+      position_y: options?.position?.y,
+      author: options?.author,
+    }),
+  });
+  return handleResponse<CommitV3>(res);
+}
+
 // Resolved facet for merge commit
 // source values: backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
 // UI adds 'custom' for user-provided text

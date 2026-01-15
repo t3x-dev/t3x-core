@@ -11,6 +11,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * Sentence schema
+ * Matches @t3x/core Sentence type from commit-v3.ts
  */
 export const SentenceSchema = z.object({
   id: z.string().openapi({
@@ -21,18 +22,22 @@ export const SentenceSchema = z.object({
     description: 'Sentence text content',
     example: 'Budget is $3000',
   }),
-  confidence: z.number().min(0).max(1).openapi({
-    description: 'Confidence score (0-1)',
+  confidence: z.number().min(0).max(1).optional().openapi({
+    description: 'Confidence score (0-1), optional',
     example: 1,
   }),
   source: z.object({
-    type: z.string().openapi({
-      description: 'Source type',
-      example: 'turn',
+    turn_hash: z.string().openapi({
+      description: 'Source turn hash',
+      example: 'sha256:abc123...',
     }),
-    id: z.string().openapi({
-      description: 'Source identifier',
-      example: 'turn_s1',
+    start_char: z.number().openapi({
+      description: 'Start character position in turn',
+      example: 0,
+    }),
+    end_char: z.number().openapi({
+      description: 'End character position in turn',
+      example: 17,
     }),
   }).openapi({
     description: 'Source reference for the sentence',
@@ -41,6 +46,7 @@ export const SentenceSchema = z.object({
 
 /**
  * Constraint schema
+ * Matches @t3x/core Constraint type (RequireConstraint | ExcludeConstraint)
  */
 export const ConstraintSchema = z.object({
   id: z.string().openapi({
@@ -55,21 +61,34 @@ export const ConstraintSchema = z.object({
     description: 'Constraint value',
     example: 'React',
   }),
+  match: z.enum(['exact', 'semantic']).openapi({
+    description: 'Match type',
+    example: 'exact',
+  }),
   source_sentence_id: z.string().optional().openapi({
-    description: 'Source sentence ID for this constraint',
+    description: 'Source sentence ID (for require constraints)',
     example: 's1',
+  }),
+  suggested: z.boolean().optional().openapi({
+    description: 'Whether this is a suggested constraint (for require)',
+    example: false,
+  }),
+  reason: z.string().optional().openapi({
+    description: 'Reason for exclusion (for exclude constraints)',
+    example: 'Outdated information',
   }),
 });
 
 /**
  * Word diff element schema
+ * Matches @t3x/core WordDiffSegment type
  */
 export const WordDiffSchema = z.object({
-  type: z.enum(['common', 'removed', 'added']).openapi({
+  type: z.enum(['unchanged', 'removed', 'added']).openapi({
     description: 'Type of diff element',
-    example: 'common',
+    example: 'unchanged',
   }),
-  value: z.string().openapi({
+  text: z.string().openapi({
     description: 'Word or phrase',
     example: 'Budget is',
   }),

@@ -1613,40 +1613,110 @@ export function NodeModal({
         }
       }
 
-      // 7. Create Commit directly (Ring data already extracted during turn creation)
+      // 7. Create Commit (V3 format for merge compatibility)
       // Get the current node position to save with the commit
       const currentPosition = node?.position;
-      const commit = await api.createCommit(
-        projectId,
-        { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
-        branch,
-        data.title,
-        {
-          sourceExcerpt,
-          mustHave,
-          mustntHave,
-          position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
-          sourceRefs,
-          anchors: anchorsParam,
-        }
-      );
 
-      // 7. Trigger convert to committed state BEFORE updating node ID
+      // Build V3 commit if we have sentence data, otherwise fall back to V2
+      let commitHash: string;
+
+      if (pendingSource?.sentences && pendingSource.sentences.length > 0) {
+        // V3 commit: Build sentences with source references
+        const v3Sentences: api.CommitV3Sentence[] = pendingSource.sentences.map((sentence) => ({
+          id: sentence.id,
+          text: sentence.text,
+          source: {
+            turn_hash: endTurnHash, // Use end turn as source reference
+            start_char: sentence.start,
+            end_char: sentence.end,
+          },
+        }));
+
+        // Build constraints from mustHave/mustntHave
+        const v3Constraints: api.CommitV3Constraint[] = [];
+        let constraintIdx = 0;
+
+        mustHave.forEach((value) => {
+          v3Constraints.push({
+            id: `c${constraintIdx++}`,
+            type: 'require',
+            value,
+            match: 'exact',
+          });
+        });
+
+        mustntHave.forEach((value) => {
+          v3Constraints.push({
+            id: `c${constraintIdx++}`,
+            type: 'exclude',
+            value,
+            match: 'exact',
+          });
+        });
+
+        console.log('[handleCommit] Creating V3 commit:', {
+          sentenceCount: v3Sentences.length,
+          constraintCount: v3Constraints.length,
+        });
+
+        // Determine parent commits for the DAG
+        const parentCommits: string[] = [];
+        if (data.sourceCommitHash) {
+          // This commit is derived from another commit (branch/continuation)
+          parentCommits.push(data.sourceCommitHash);
+        }
+
+        const commitV3 = await api.createCommitV3(
+          projectId,
+          {
+            sentences: v3Sentences,
+            constraints: v3Constraints.length > 0 ? v3Constraints : undefined,
+          },
+          {
+            branch,
+            message: data.title,
+            parents: parentCommits,
+            position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
+          }
+        );
+
+        commitHash = commitV3.hash;
+      } else {
+        // Fall back to V2 commit for legacy cases without sentence data
+        console.log('[handleCommit] No sentence data, creating V2 commit');
+        const commit = await api.createCommit(
+          projectId,
+          { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
+          branch,
+          data.title,
+          {
+            sourceExcerpt,
+            mustHave,
+            mustntHave,
+            position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
+            sourceRefs,
+            anchors: anchorsParam,
+          }
+        );
+        commitHash = commit.commit_hash;
+      }
+
+      // 8. Trigger convert to committed state BEFORE updating node ID
       // (onConvertDraft closure captures the old node.id, so must be called first)
       onConvertDraft?.();
 
-      // 8. Update local node ID to match API commit_hash (before refresh)
+      // 9. Update local node ID to match API commit_hash (before refresh)
       // This ensures edges are preserved when loadProjectData rebuilds the canvas
-      if (node && commit.commit_hash) {
-        useCanvasStore.getState().updateNodeId(node.id, commit.commit_hash);
+      if (node && commitHash) {
+        useCanvasStore.getState().updateNodeId(node.id, commitHash);
       }
 
-      // 9. Update local state with final values
+      // 10. Update local state with final values
       onUpdate({
         summary: resultText,
         bridgePrompt: template,
         isGenerated: true,
-        commitHash: commit.commit_hash,
+        commitHash: commitHash,
       });
 
       // 9. Refresh canvas data
