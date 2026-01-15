@@ -64,7 +64,7 @@ type CanvasState = {
   addConversationFromCommit: (commitId: string) => Promise<void>;
   addPendingCommitFromCommit: (commitId: string) => void;
   addUnitFromUnit: (unitId: string) => void;
-  createMergePendingCommit: (commitId: string) => void;
+  createMergePendingCommit: (commitId: string) => Promise<string | null>;
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
   canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -1371,7 +1371,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
    * Trigger two-way merge from a branch commit to latest main
    * Opens MergePanel with prepared merge results
    */
-  createMergePendingCommit: (commitId) => {
+  createMergePendingCommit: async (commitId) => {
     const state = get();
     const nodes = state.nodes;
     const edges = state.edges;
@@ -1385,48 +1385,73 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       branchCommit.data.branchType !== 'branch'
     ) {
       state.notifyCallback?.('Cannot merge: not a branch commit', 'error');
-      return;
+      return null;
     }
 
     // Get source commit hash (branch commit)
     const sourceHash = branchCommit.data.commitHash;
     if (!sourceHash) {
       state.notifyCallback?.('Cannot merge: branch commit has no hash', 'error');
-      return;
+      return null;
     }
+
+    // Get source branch name
+    const sourceBranch = branchCommit.data.branchName || 'branch';
 
     // Get target commit hash (latest main)
     const latestMainId = resolveLatestMainUnitId(nodes, state.latestMainCommitId);
     if (!latestMainId) {
       state.notifyCallback?.('Cannot merge: no main commits found', 'error');
-      return;
+      return null;
     }
     const latestMainCommit = nodeMap.get(latestMainId);
     if (!latestMainCommit) {
       state.notifyCallback?.('Cannot merge: main commit not found', 'error');
-      return;
+      return null;
     }
     const targetHash = latestMainCommit.data.commitHash;
     if (!targetHash) {
       state.notifyCallback?.('Cannot merge: main commit has no hash', 'error');
-      return;
+      return null;
     }
 
     // Check tone - only branch-latest can merge
     const tone = computeUnitTone(nodes, edges, state.latestMainCommitId, commitId);
     if (tone !== 'branch-latest') {
       state.notifyCallback?.('Cannot merge: only latest branch commit can be merged', 'error');
-      return;
+      return null;
     }
 
-    // Check if merge already in progress
-    if (state.mergeState) {
-      state.notifyCallback?.('A merge is already in progress', 'warning');
-      return;
-    }
+    // Create merge draft via API (redirects to Merge Workspace)
+    try {
+      const response = await fetch(`${API_V1}/merge/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: state.projectId,
+          source_hash: sourceHash,
+          target_hash: targetHash,
+          source_branch: sourceBranch,
+          target_branch: 'main',
+        }),
+      });
 
-    // Start two-way merge - this will open MergePanel
-    get().startMerge(sourceHash, targetHash);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error?.message || 'Failed to create merge draft');
+      }
+
+      // Return the draft ID for navigation
+      return json.data.draftId as string;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      state.notifyCallback?.(`Failed to create merge: ${errorMessage}`, 'error');
+      return null;
+    }
   },
 
   getPendingCommitBranchMode: (commitId) => determineStagingUnitBranchMode(get(), commitId),

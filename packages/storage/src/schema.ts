@@ -178,6 +178,37 @@ export const drafts = pgTable(
 );
 
 /**
+ * Merge Drafts - Pending merge operations with user decisions
+ *
+ * Stores the intermediate state of a merge operation, allowing users to:
+ * - Save and resume merge decisions
+ * - Preview final merge result before committing
+ * - Track merge history
+ */
+export const mergeDrafts = pgTable(
+  'merge_drafts',
+  {
+    draftId: text('draft_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    sourceHash: text('source_hash').notNull(),
+    targetHash: text('target_hash').notNull(),
+    sourceBranch: text('source_branch'),
+    targetBranch: text('target_branch'),
+    preparedJson: text('prepared_json').notNull(), // Merge2WayResult with user decisions
+    status: text('status').notNull().default('pending'), // 'pending' | 'committed' | 'cancelled'
+    message: text('message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_merge_drafts_project').on(table.projectId),
+    index('idx_merge_drafts_status').on(table.status),
+  ]
+);
+
+/**
  * Deploy Agents - Registered agents for deployment and evaluation
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
@@ -328,3 +359,6 @@ export type NewRun = typeof runs.$inferInsert;
 
 export type CommitV3 = typeof commitsV3.$inferSelect;
 export type NewCommitV3 = typeof commitsV3.$inferInsert;
+
+export type MergeDraft = typeof mergeDrafts.$inferSelect;
+export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
