@@ -40,6 +40,7 @@ export {
   type CommitV3Content,
   type CommitV3Output,
   type CommitV3Sentence,
+  type CommitV3SentenceSource,
   type CreateCommitV3Input,
   type CreateCommitV3Options,
   createCommitV3,
@@ -138,10 +139,13 @@ export {
 } from './deployAgents';
 // Runs (Engine → Runner → n8n flow)
 export {
+  type ConfigurationStats,
   type CreateRunInput,
   deleteRun,
+  getConfigurationStats,
   getRun,
   getRunByRunnerRunId,
+  getRunFilterOptions,
   getTimedOutRuns,
   insertRun,
   listRuns,

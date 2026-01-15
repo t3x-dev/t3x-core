@@ -145,7 +145,7 @@ export function Sidebar() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <aside className="flex h-screen w-16 flex-col items-center border-r border-border/50 bg-gradient-to-b from-background to-muted/30 py-4 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col items-center border-r border-border/50 bg-gradient-to-b from-background to-muted/30 py-4 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">
         {/* Logo */}
         <div className="mb-6 flex h-10 w-10 items-center justify-center">
           <LogoIcon />

@@ -2,9 +2,11 @@ import type { Node } from '@xyflow/react';
 import {
   AlertCircle,
   Check,
+  CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
   GitBranch,
   GitCommit,
   GitCompare,
@@ -38,7 +40,9 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type {
   AnchorCandidate,
   CanvasNodeData,
+  CommitV3Display,
   ConfirmedAnchor,
+  ConstraintDisplay,
   ConversationConstraints,
   DraftConstraintOverrides,
   SourceTextBlock,
@@ -89,6 +93,121 @@ interface SourceBox {
   content: string;
   expanded: boolean;
   phrases: Phrase[];
+}
+
+// ============================================
+// CommitV3 Full Display Components (for NodeModal)
+// ============================================
+
+function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
+  const isVerified = author.verification === 'verified';
+  return (
+    <span className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
+      isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {author.name}
+      {isVerified && ' ✓'}
+    </span>
+  );
+}
+
+function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
+  const isRequire = constraint.type === 'require';
+  return (
+    <span className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
+      isRequire
+        ? 'bg-green-100 text-green-700 border border-green-300'
+        : 'bg-red-100 text-red-700 border border-red-300 line-through'
+    }`}>
+      {isRequire ? '✓' : '✗'} {constraint.value}
+    </span>
+  );
+}
+
+function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; branchName?: string }) {
+  const [copiedHash, setCopiedHash] = useState(false);
+
+  const handleCopyHash = () => {
+    navigator.clipboard.writeText(commit.hash);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header with hash, branch and author */}
+      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center gap-2">
+          {/* Hash with copy */}
+          <button
+            type="button"
+            onClick={handleCopyHash}
+            className="inline-flex items-center gap-1 font-mono text-sm text-gray-500 bg-white hover:bg-gray-100 px-2 py-1 rounded border border-gray-200 transition-colors cursor-pointer"
+          >
+            {commit.hash.slice(0, 7)}
+            {copiedHash ? (
+              <CheckCircle size={14} className="text-green-500" />
+            ) : (
+              <Copy size={14} className="text-gray-400" />
+            )}
+          </button>
+          {/* Branch badge */}
+          {branchName && (
+            <span className={cn(
+              'text-xs font-semibold px-2 py-0.5 rounded',
+              branchName === 'main'
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-amber-100 text-amber-700'
+            )}>
+              {branchName}
+            </span>
+          )}
+        </div>
+        <CommitV3AuthorBadge author={commit.author} />
+      </div>
+
+      {/* Sentences - Full list */}
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+          <span className="text-xs text-gray-400">{commit.sentences.length} total</span>
+        </div>
+        <ul className="space-y-2">
+          {commit.sentences.map((s) => (
+            <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+              <span className="text-gray-400 font-bold shrink-0">•</span>
+              <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                {s.text}
+              </span>
+            </li>
+          ))}
+          {commit.sentences.length === 0 && (
+            <li className="text-center py-4 text-gray-400 text-sm">
+              No sentences
+            </li>
+          )}
+        </ul>
+      </div>
+
+      {/* Constraints - Full list */}
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm text-gray-700">Constraints</h3>
+          <span className="text-xs text-gray-400">{commit.constraints.length} total</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {commit.constraints.map((c) => (
+            <CommitV3ConstraintBadge key={c.id} constraint={c} />
+          ))}
+          {commit.constraints.length === 0 && (
+            <span className="text-center py-4 text-gray-400 text-sm w-full">
+              No constraints
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export type NodeQuickAction = {
@@ -3085,17 +3204,27 @@ export function NodeModal({
                 </div>
               </div>
 
-              {/* Generated Output - LLM generated content */}
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
-                </div>
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-[0.9rem] leading-relaxed text-gray-700">
-                  {data.summary || 'No generated content.'}
-                </div>
-              </div>
+              {/* CommitV3 Content - Sentences and Constraints */}
+              {data.commitV3 && (
+                <CommitV3FullSection
+                  commit={data.commitV3}
+                  branchName={data.branchName || (data.branchType === 'main' ? 'main' : undefined)}
+                />
+              )}
 
-              {data.status && (
+              {/* Generated Output - LLM generated content (only show if no commitV3) */}
+              {!data.commitV3 && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
+                  </div>
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-[0.9rem] leading-relaxed text-gray-700">
+                    {data.summary || 'No generated content.'}
+                  </div>
+                </div>
+              )}
+
+              {data.status && !data.commitV3 && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-gray-700">Intent</h3>
@@ -3106,7 +3235,8 @@ export function NodeModal({
                 </div>
               )}
 
-              {/* Facets - Extracted semantic data */}
+              {/* Facets - Extracted semantic data (only show if no commitV3) */}
+              {!data.commitV3 && (
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-gray-700">Facets</h3>
@@ -3202,6 +3332,7 @@ export function NodeModal({
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Right Divider */}

@@ -63,6 +63,41 @@ export interface EvalLeafConfig extends LeafNodeConfig {
 }
 
 // ============================================
+// CommitV3 Display Types
+// ============================================
+
+/**
+ * CommitV3 display data for canvas nodes
+ * Sentence-based semantic commits with constraints
+ */
+export interface CommitV3Display {
+  hash: string;
+  schema: 'commit/v3';
+  author: {
+    name: string;
+    verification?: 'none' | 'device' | 'verified';
+  };
+  committed_at: string;
+  sentences: SentenceDisplay[];
+  constraints: ConstraintDisplay[];
+  message?: string;
+  branch?: string;
+}
+
+export interface SentenceDisplay {
+  id: string;
+  text: string;
+}
+
+export interface ConstraintDisplay {
+  type: 'require' | 'exclude';
+  id: string;
+  value: string;
+  match: 'exact' | 'semantic';
+  source_sentence_id?: string;
+}
+
+// ============================================
 // Embedded Leaf (inside UnitNode)
 // ============================================
 
@@ -468,6 +503,12 @@ export interface CanvasNodeData {
    * @format SentenceWithAnchors[] with confirmed anchor spans
    */
   anchors?: CommitAnchors;
+
+  /**
+   * CommitV3 data for sentence-based commits
+   * @display UnitNode: Sentences list and constraint badges
+   */
+  commitV3?: CommitV3Display;
 
   // Merge commit configuration
   mergeConfig?: MergeConfig;
