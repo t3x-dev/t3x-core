@@ -290,6 +290,7 @@ function UnitNode(props: Props) {
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
+  const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Check if commit is in staging state
@@ -376,34 +377,28 @@ function UnitNode(props: Props) {
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
         {data.sources && data.sources.length > 0 && (
-          <div className="px-3 py-2 bg-slate-50/80 border-b border-slate-100 rounded-t-[11px]">
-            <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500 nodrag">
+          <div
+            className="px-3 py-2 bg-slate-50/80 border-b border-slate-100 rounded-t-[11px] cursor-pointer hover:bg-slate-100/80 transition-colors nodrag"
+            onClick={(e) => {
+              e.stopPropagation();
+              openNodeModal(id, 'conversation');
+            }}
+          >
+            <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500">
               <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
               <span className="text-slate-300">·</span>
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
-                  const href = source.type === 'conversation' && projectId
-                    ? `/project/${projectId}/conversation/${source.id}`
-                    : undefined;
-                  const content = (
-                    <span className="inline-flex items-center gap-0.5 hover:text-slate-700 transition-colors cursor-pointer">
-                      <Icon size={10} className="text-slate-400" />
-                      <span>{source.label}</span>
-                    </span>
-                  );
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
                       {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          {href ? (
-                            <Link href={href} className="hover:underline">
-                              {content}
-                            </Link>
-                          ) : (
-                            content
-                          )}
+                          <span className="inline-flex items-center gap-0.5">
+                            <Icon size={10} className="text-slate-400" />
+                            <span>{source.label}</span>
+                          </span>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs">
                           {source.title || source.label}

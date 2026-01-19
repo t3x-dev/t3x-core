@@ -48,6 +48,11 @@ type CanvasState = {
   // Leaf panel state
   leafPanelOpen: boolean;
   leafPanelCommitId?: string;
+  // Node modal state
+  openNodeId: string | null;
+  modalViewMode: 'conversation' | 'commit' | null;
+  openNodeModal: (nodeId: string, viewMode?: 'conversation' | 'commit') => void;
+  closeNodeModal: () => void;
   // Merge state (当前合并操作状态，如果有的话)
   mergeState: MergeState | null;
   mergeLoading: boolean;
@@ -674,6 +679,13 @@ const unitToNode = (
       timestamp: commit?.created_at || conv.created_at,
       tags: ['unit'],
       kind: 'unit',
+      // Sources section - conversation as primary source
+      sources: [{
+        id: conv.conversation_id,
+        type: 'conversation' as const,
+        label: `conv#${conv.conversation_id.slice(0, 4)}`,
+        title: conv.title || 'Conversation',
+      }],
       // Conversation data
       conversationId: conv.conversation_id,
       // Commit data
@@ -709,12 +721,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   notifyCallback: null,
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
+  openNodeId: null,
+  modalViewMode: null,
   deletionConfirmation: null,
   mergeState: null,
   mergeLoading: false,
   mergeError: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
+
+  openNodeModal: (nodeId, viewMode = 'commit') => set({ openNodeId: nodeId, modalViewMode: viewMode }),
+  closeNodeModal: () => set({ openNodeId: null, modalViewMode: null }),
 
   loadProjectData: async (projectId: string) => {
     // Skip if already loading the same project
@@ -742,7 +759,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         branch: v3.branch || 'main',
         message: v3.message,
         parent_hashes: v3.parents,
-        turn_window: null, // V3 doesn't have turn_window
+        // V3: derive turn_window from sentences[].source for conversation association
+        turn_window: v3.content.sentences[0]?.source ? {
+          start_turn_hash: v3.content.sentences[0].source.turn_hash,
+          end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source?.turn_hash || v3.content.sentences[0].source.turn_hash,
+        } : null,
         facet_snapshot: null, // V3 uses sentences/constraints instead
         pipeline_config: null,
         draft_id: null,
