@@ -40,6 +40,7 @@ import {
   type EngineRun,
 } from '@/lib/api';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 /**
  * 格式化配置为显示字符串
@@ -931,8 +932,10 @@ function ComparePageLoading() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<ComparePageLoading />}>
-      <ComparePageContent />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<ComparePageLoading />}>
+        <ComparePageContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
