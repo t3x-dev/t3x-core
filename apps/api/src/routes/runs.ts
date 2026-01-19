@@ -82,6 +82,10 @@ const IngestSchema = z.object({
     latency_ms: z.number(),
   }).optional(),
   full_trace: z.unknown().optional(),
+  // v2.1: 从 n8n 回传的 metadata（包含实际使用的 model）
+  metadata: z.object({
+    model: z.string().optional(),
+  }).optional(),
 });
 
 /**
@@ -210,6 +214,18 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
 
     // Update run in database
     const db = await getDB();
+
+    // v2.1: 合并 metadata（保留原有字段，如 prompt_version）
+    let mergedMetadataJson: string | null = null;
+    if (data.metadata) {
+      const existingRun = await getRun(db, data.run_id);
+      // 数据库返回的是 metadataJson 字符串，需要解析
+      const existingMetadataJson = existingRun?.metadataJson as string | null;
+      const existingMetadata = existingMetadataJson ? JSON.parse(existingMetadataJson) : {};
+      const mergedMetadata = { ...existingMetadata, ...data.metadata };
+      mergedMetadataJson = JSON.stringify(mergedMetadata);
+    }
+
     await updateRun(db, data.run_id, {
       status: data.status,
       result_json: JSON.stringify({
@@ -222,9 +238,11 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
       // v2.0: Trace data storage
       trace_summary_json: data.trace_summary ? JSON.stringify(data.trace_summary) : null,
       full_trace_json: data.full_trace ? JSON.stringify(data.full_trace) : null,
+      // v2.1: 合并后的 metadata（保留 prompt_version，添加 model）
+      ...(mergedMetadataJson && { metadata_json: mergedMetadataJson }),
     });
 
-    console.log(`[runs] Updated run ${data.run_id} to ${data.status}, trace_summary: ${!!data.trace_summary}, full_trace: ${!!data.full_trace}`);
+    console.log(`[runs] Updated run ${data.run_id} to ${data.status}, trace_summary: ${!!data.trace_summary}, full_trace: ${!!data.full_trace}, metadata: ${!!data.metadata}`);
 
     return c.json({ success: true, data: { ok: true } });
   } catch (error) {
