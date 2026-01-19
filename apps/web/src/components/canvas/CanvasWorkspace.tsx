@@ -59,7 +59,6 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 }
 
 function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspaceProps) {
-  const [openNodeId, setOpenNodeId] = useState<string>();
   const [isPanMode, setIsPanMode] = useState(false);
   const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
@@ -86,6 +85,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
     updatePendingCommitConstraintOverrides,
     hasDownstreamPendingCommits,
     loadDemoData,
+    openNodeId,
+    modalViewMode,
+    openNodeModal,
+    closeNodeModal,
   } = useCanvasStore();
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -725,7 +728,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDoubleClick={(_, node) => setOpenNodeId(node.id)}
+          onNodeDoubleClick={(_, node) => openNodeModal(node.id, 'commit')}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
           snapToGrid
@@ -781,15 +784,16 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       {modalNode && (
         <NodeModal
           node={modalNode}
-          onClose={() => setOpenNodeId(undefined)}
+          onClose={closeNodeModal}
           onUpdate={(patch) => updateNode(modalNode.id, patch)}
+          viewMode={modalViewMode || 'commit'}
           onConvertDraft={
             modalNode.data.kind === 'unit' &&
             modalNode.data.commitStatus === 'staging' &&
             pendingCommitBranchMode !== 'blocked'
               ? () => {
                   commitPendingCommit(modalNode.id);
-                  setOpenNodeId(undefined);
+                  closeNodeModal();
                   notify?.('Unit committed successfully', 'success');
                 }
               : undefined
