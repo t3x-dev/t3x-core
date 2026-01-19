@@ -39,6 +39,7 @@ export const N8nCallbackSchema = z.object({
     .object({
       latency_ms: z.number().optional(),
       tokens: z.number().optional(),
+      model: z.string().optional(), // n8n 使用的模型名称（如 "claude-3-5-sonnet"）
     })
     .optional(),
   error: z.string().nullable().optional(),

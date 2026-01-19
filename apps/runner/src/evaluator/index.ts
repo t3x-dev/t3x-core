@@ -151,8 +151,10 @@ function evaluateRule(record: RunRecord, rule: Rule): CheckResult {
   const actual = getByPath(record, rule.target);
 
   // Run the operator check
+  // Use rule.expected for expected_tools/no_unknown_tools, fallback to rule.value for equals/contains
   const options = buildOptions(rule);
-  const passed = runOperator(rule.check, actual, rule.value, options);
+  const expectedValue = rule.expected ?? rule.value;
+  const passed = runOperator(rule.check, actual, expectedValue, options);
 
   // Build check result
   const result: CheckResult = {
