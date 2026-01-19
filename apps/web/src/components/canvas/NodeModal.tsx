@@ -235,6 +235,8 @@ interface NodeModalProps {
   };
   onUpdateConstraintOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void;
   isConversationLocked?: boolean;
+  /** View mode: 'conversation' shows chat, 'commit' shows commit details (default) */
+  viewMode?: 'conversation' | 'commit';
 }
 
 // Stop words for keyword extraction
@@ -510,6 +512,7 @@ export function NodeModal({
   onBranchChange,
   onBranchNameChange,
   quickActions,
+  viewMode = 'commit',
 }: NodeModalProps) {
   // ========== ALL HOOKS MUST BE AT THE TOP - before any conditional returns ==========
 
@@ -702,11 +705,14 @@ export function NodeModal({
   // In Unit model:
   // - Staging units show conversation view by default, can switch to commit config view
   // - Committed units show committed commit view (facets, source excerpts, etc.)
+  // - When viewMode='conversation', show conversation view for any unit (Sources click)
   const _isCommit = isUnit;
-  // Show conversation view only for staging units not in commit config mode
-  const isConversation = isStagingUnit && !showCommitConfig;
-  const isPendingCommit = isStagingUnit && showCommitConfig;
-  const isCommittedCommit = isCommittedUnit;
+  // Show conversation view:
+  // 1. Staging units not in commit config mode (default behavior)
+  // 2. Any unit when viewMode is 'conversation' (from Sources badge click)
+  const isConversation = (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
+  const isPendingCommit = isStagingUnit && showCommitConfig && viewMode !== 'conversation';
+  const isCommittedCommit = isCommittedUnit && viewMode !== 'conversation';
   const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig;
   // Always show branch select for pending commits (except merge drafts)
   // Previously only shown for 'select' or 'branch-only' modes, but users want control
