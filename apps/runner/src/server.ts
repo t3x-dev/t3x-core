@@ -307,7 +307,7 @@ async function processN8nCallback(data: {
   run_id: string;
   execution_id?: string;
   output?: Record<string, unknown>;
-  meta?: { latency_ms?: number; tokens?: number };
+  meta?: { latency_ms?: number; tokens?: number; model?: string };
   error?: string | null;
 }) {
   logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'Starting async callback processing');
@@ -465,6 +465,8 @@ async function processN8nCallback(data: {
     run_id: runInfo.run_id,
     runner_run_id: data.runner_run_id,
     status,
+    // v2.1: 从 n8n 回调提取的 metadata（包含实际使用的 model）
+    metadata: data.meta?.model ? { model: data.meta.model } : undefined,
     run_report: {
       trace: runRecord,
       eval_result: evalResult,
