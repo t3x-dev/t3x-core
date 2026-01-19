@@ -334,6 +334,35 @@ async function processN8nCallback(data: {
     try {
       logger.info({ execution_id: data.execution_id }, 'Fetching n8n execution trace...');
       const execution = await n8nClient.getExecutionWithRetry(data.execution_id, 5, 1000);
+
+      // DEBUG: Log full n8n execution data to investigate tool call structure
+      const runData = execution.data?.resultData?.runData;
+      if (runData) {
+        logger.info({ run_id: runInfo.run_id }, '=== DEBUG: n8n execution runData keys ===');
+        for (const [nodeName, nodeRuns] of Object.entries(runData)) {
+          for (const [runIndex, nodeRun] of nodeRuns.entries()) {
+            const nodeRunAny = nodeRun as unknown as Record<string, unknown>;
+            const dataKeys = nodeRunAny.data ? Object.keys(nodeRunAny.data as object) : [];
+            logger.info({
+              node: nodeName,
+              run_index: runIndex,
+              data_keys: dataKeys,
+              has_ai_tool: dataKeys.includes('ai_tool'),
+              has_ai_languageModel: dataKeys.includes('ai_languageModel'),
+            }, 'Node run data structure');
+
+            // Log ai_tool data if present
+            const nodeData = nodeRunAny.data as Record<string, unknown> | undefined;
+            if (nodeData?.ai_tool) {
+              logger.info({
+                node: nodeName,
+                ai_tool_data: JSON.stringify(nodeData.ai_tool).slice(0, 2000),
+              }, 'DEBUG: ai_tool data found!');
+            }
+          }
+        }
+      }
+
       runRecord = mapN8nExecutionToRunRecord(execution, {
         runId: runInfo.run_id,
       });
@@ -357,6 +386,7 @@ async function processN8nCallback(data: {
   // Step 2: Deterministic evaluation
   // ═══════════════════════════════════════════════════
   logger.info({ run_id: runInfo.run_id, rules_ref: runInfo.leaf?.rules_ref }, 'Running deterministic evaluation...');
+
   const evalResult: EvalResult = evalEngine.evaluateWithLeaf(
     runRecord,
     runInfo.leaf ?? undefined  // null -> undefined，根据 rules_ref 加载规则文件
