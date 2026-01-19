@@ -21,6 +21,7 @@ import { getEngineRun, type EngineRun } from '@/lib/api';
 import { ChartToggle } from '@/components/optimiser/charts/ChartToggle';
 import { AssertionsSection, type Violation, type Suggestion } from '@/components/optimiser/AssertionsSection';
 import { TraceTimeline, type StepRecord } from '@/components/optimiser/trace';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Types for parsed result data
 interface DimensionScores {
@@ -55,10 +56,21 @@ interface EvalResult {
   suggestion?: Suggestion;
 }
 
+// LLM 生成的断言（来自 result.assertions）
+interface LLMAssertion {
+  id: string;                         // 断言ID，如 "assert_001"
+  type: 'pass' | 'fail' | 'warning';  // 断言类型
+  category: string;                   // 分类：correctness/coverage/efficiency/behavior/error
+  message: string;                    // 人类可读的断言消息
+  confidence: number;                 // 置信度 0-1
+  patch_suggestion?: string;          // 修复建议（仅失败时有）
+}
+
 interface ParsedRunData {
   evalResult: EvalResult | null;
   traceSummary: TraceSummary | null;
   steps: StepRecord[];
+  llmAssertions: LLMAssertion[];      // LLM 生成的断言数组
 }
 
 /**
@@ -67,7 +79,7 @@ interface ParsedRunData {
 function parseRunData(run: EngineRun): ParsedRunData {
   const result = run.result as Record<string, unknown> | null;
   if (!result) {
-    return { evalResult: null, traceSummary: null, steps: [] };
+    return { evalResult: null, traceSummary: null, steps: [], llmAssertions: [] };
   }
 
   // Parse eval result
@@ -103,12 +115,18 @@ function parseRunData(run: EngineRun): ParsedRunData {
     latency_ms: traceSummaryRaw.latency_ms as number,
   } : null;
 
-  // Parse steps from run_report or direct result
-  const runRecordRaw = runReport?.run_record as Record<string, unknown> | undefined;
-  const stepsRaw = (runRecordRaw?.steps || result.steps) as StepRecord[] | undefined;
+  // Parse steps from run_report.trace or full_trace (fallback)
+  // Runner returns: run_report.trace.steps (not run_record.steps)
+  const traceRaw = runReport?.trace as Record<string, unknown> | undefined;        // trace: 执行轨迹对象
+  const fullTraceRaw = result.full_trace as Record<string, unknown> | undefined;  // full_trace: 完整轨迹(条件存储)
+  const stepsRaw = (traceRaw?.steps || fullTraceRaw?.steps || result.steps) as StepRecord[] | undefined;
   const steps = stepsRaw || [];
 
-  return { evalResult, traceSummary, steps };
+  // Parse LLM assertions (来自 result.assertions)
+  const assertionsRaw = result.assertions as LLMAssertion[] | undefined;
+  const llmAssertions = assertionsRaw || [];
+
+  return { evalResult, traceSummary, steps, llmAssertions };
 }
 
 /**
@@ -186,7 +204,7 @@ export default function RunDetailPage() {
     );
   }
 
-  const { evalResult, traceSummary, steps } = parseRunData(run);
+  const { evalResult, traceSummary, steps, llmAssertions } = parseRunData(run);
   const passed = evalResult?.passed ?? run.status === 'completed';
   const score = evalResult?.score;
   const dimensionScores = evalResult?.dimension_scores;
@@ -194,6 +212,7 @@ export default function RunDetailPage() {
   const suggestion = evalResult?.suggestion;
 
   return (
+    <ErrorBoundary>
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
       {/* Header */}
       <header className="flex items-center justify-between">
@@ -276,7 +295,7 @@ export default function RunDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="trace">Trace</TabsTrigger>
-          <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
+          <TabsTrigger value="assertions">Assertions</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -370,19 +389,81 @@ export default function RunDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Suggestions Tab */}
-        <TabsContent value="suggestions" className="mt-4">
-          {suggestion ? (
-            <AssertionsSection violations={[]} suggestion={suggestion} />
+        {/* Assertions Tab - LLM 生成的断言 */}
+        <TabsContent value="assertions" className="mt-4">
+          {llmAssertions.length > 0 ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">LLM Assertions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {llmAssertions.map((assertion, i) => (
+                    <div
+                      key={assertion.id || `assertion-${i}`}
+                      className={cn(
+                        'rounded-lg border p-3',
+                        assertion.type === 'fail'
+                          ? 'border-red-500/30 bg-red-500/5'
+                          : assertion.type === 'warning'
+                            ? 'border-yellow-500/30 bg-yellow-500/5'
+                            : 'border-green-500/30 bg-green-500/5'
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        {assertion.type === 'fail' ? (
+                          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                        ) : assertion.type === 'warning' ? (
+                          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                        ) : (
+                          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs">
+                              {assertion.category}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-xs',
+                                assertion.type === 'fail'
+                                  ? 'border-red-500/30 text-red-600'
+                                  : assertion.type === 'warning'
+                                    ? 'border-yellow-500/30 text-yellow-600'
+                                    : 'border-green-500/30 text-green-600'
+                              )}
+                            >
+                              {assertion.type}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(assertion.confidence * 100)}% confidence
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm">{assertion.message}</p>
+                          {assertion.patch_suggestion && (
+                            <div className="mt-2 rounded bg-muted/50 p-2 text-xs">
+                              <span className="font-medium">Suggestion: </span>
+                              {assertion.patch_suggestion}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                No improvement suggestions available
+                No LLM assertions available
               </CardContent>
             </Card>
           )}
         </TabsContent>
       </Tabs>
     </div>
+    </ErrorBoundary>
   );
 }

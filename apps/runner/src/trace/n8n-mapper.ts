@@ -91,6 +91,10 @@ function mapNodeType(nodeName: string, nodeType?: string): string {
 
 /**
  * Infer span_kind from step type (v2.0)
+ *
+ * Note: LangChain tools are detected via ai_tool data in mapNodeRunsToSteps(),
+ * so we don't include http_request as 'tool' here to avoid false positives
+ * (e.g., Callback Runner HTTP requests should not be counted as AI tools).
  */
 function inferSpanKind(stepType: string): SpanKind {
   // LLM-related types
@@ -98,8 +102,9 @@ function inferSpanKind(stepType: string): SpanKind {
     return 'llm';
   }
 
-  // Tool-related types
-  if (['tool_call', 'http_request'].includes(stepType)) {
+  // Tool-related types (only explicit tool_call, not http_request)
+  // LangChain tools are detected via ai_tool data separately
+  if (stepType === 'tool_call') {
     return 'tool';
   }
 
@@ -113,7 +118,7 @@ function inferSpanKind(stepType: string): SpanKind {
     return 'workflow';
   }
 
-  // Default to chain
+  // Default to chain (includes http_request, transform, etc.)
   return 'chain';
 }
 
@@ -297,6 +302,38 @@ function extractOutput(nodeRun: N8nNodeRun, options: Required<MapperOptions>): u
 }
 
 /**
+ * Extract output from ai_tool data (for LangChain tool nodes)
+ *
+ * n8n stores LangChain tool output in nodeRun.data.ai_tool
+ * Format: [[{json: {response: "..."}}]]
+ */
+function extractAiToolOutput(nodeData: Record<string, unknown>): unknown {
+  const aiToolData = nodeData.ai_tool;
+  if (!aiToolData || !Array.isArray(aiToolData)) {
+    return undefined;
+  }
+
+  // Navigate: aiToolData[0][0]
+  const firstLevel = aiToolData[0];
+  if (!firstLevel || !Array.isArray(firstLevel)) {
+    return undefined;
+  }
+
+  const firstItem = firstLevel[0] as unknown;
+  if (!firstItem || typeof firstItem !== 'object') {
+    return firstItem;
+  }
+
+  const itemObj = firstItem as Record<string, unknown>;
+  if (!itemObj.json) {
+    return firstItem;
+  }
+
+  // Return the json content (which may contain the tool response)
+  return itemObj.json;
+}
+
+/**
  * Estimate token count from output (rough approximation)
  */
 function estimateTokens(data: unknown): { in: number; out: number } | undefined {
@@ -343,12 +380,19 @@ function mapNodeRunsToSteps(
     const nodeType = workflowNodes?.get(nodeName);
     const stepType = mapNodeType(nodeName, nodeType);
 
+    // Check if this is a LangChain tool node (has ai_tool data)
+    const runAny = run as unknown as Record<string, unknown>;
+    const nodeData = runAny.data as Record<string, unknown> | undefined;
+    const hasAiToolData = nodeData && 'ai_tool' in nodeData;
+
     // Infer span_kind from step type (v2.0)
-    const spanKind = inferSpanKind(stepType);
+    // Override to 'tool' if ai_tool data is present (LangChain tool nodes)
+    const spanKind: SpanKind = hasAiToolData ? 'tool' : inferSpanKind(stepType);
 
     // Extract input/output
     const input = extractInput(run);
-    const output = extractOutput(run, options);
+    // For tool nodes with ai_tool data, extract from ai_tool instead of main
+    const output = hasAiToolData ? extractAiToolOutput(nodeData) : extractOutput(run, options);
 
     const step: StepRecord = {
       step_id: `step_${nodeName.toLowerCase().replace(/\s+/g, '_')}_${runIndex}`,
