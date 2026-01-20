@@ -1688,23 +1688,8 @@ export function NodeModal({
 
         commitHash = commitV3.hash;
       } else {
-        // Fall back to V2 commit for legacy cases without sentence data
-        console.log('[handleCommit] No sentence data, creating V2 commit');
-        const commit = await api.createCommit(
-          projectId,
-          { start_turn_hash: startTurnHash, end_turn_hash: endTurnHash },
-          branch,
-          data.title,
-          {
-            sourceExcerpt,
-            mustHave,
-            mustntHave,
-            position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
-            sourceRefs,
-            anchors: anchorsParam,
-          }
-        );
-        commitHash = commit.commit_hash;
+        // V3-only: sentence data is required
+        throw new Error('Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.');
       }
 
       // 8. Trigger convert to committed state BEFORE updating node ID

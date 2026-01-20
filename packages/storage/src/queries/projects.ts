@@ -9,7 +9,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   branches,
-  commits,
+  commitsV3,
   conversations,
   drafts,
   type NewProject,
@@ -147,8 +147,8 @@ export async function findProjectWithStats(
 
   const [commitCount] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
+    .from(commitsV3)
+    .where(eq(commitsV3.projectId, projectId));
 
   const [branchCount] = await db
     .select({ count: sql<number>`count(*)` })

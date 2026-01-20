@@ -19,12 +19,10 @@ import {
   agentDraftRoutes,
   branchRoutes,
   chatRoutes,
-  commitRoutes,
   commitsV3Routes,
   conversationRoutes,
   curateRoutes,
   diffRoutes,
-  draftRoutes,
   exportRoutes,
   healthRoutes,
   runnerRoutes,
@@ -91,10 +89,8 @@ api.route('/', statusRoutes); // /v1/status
 api.route('/', projectRoutes); // /v1/projects (OpenAPI)
 api.route('/', conversationRoutes); // /v1/conversations
 api.route('/', turnRoutes); // /v1/turns
-api.route('/', commitRoutes); // /v1/commits
 api.route('/', commitsV3Routes); // /v1/commits-v3
 api.route('/', branchRoutes); // /v1/branches
-api.route('/', draftRoutes); // /v1/drafts
 api.route('/', agentDraftRoutes); // /v1/agent/drafts
 api.route('/', chatRoutes); // /v1/chat
 api.route('/', curateRoutes); // /v1/curate

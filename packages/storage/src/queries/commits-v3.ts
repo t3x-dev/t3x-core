@@ -350,6 +350,131 @@ export async function getCommitsV3ByHashes(
 }
 
 // ============================================================
+// History & Ancestry Functions
+// ============================================================
+
+/**
+ * Get commit history using BFS traversal
+ *
+ * Traverses the parent chain starting from the given commit hash.
+ * Returns commits in BFS order (breadth-first, newer commits first).
+ *
+ * Note: Missing parent commits (dangling references) are logged as warnings
+ * but don't fail the traversal. This can happen with imported commits that
+ * reference external parents.
+ */
+export async function findCommitV3History(
+  db: AnyDB,
+  commitHash: string,
+  limit = 50
+): Promise<CommitV3Output[]> {
+  const history: CommitV3Output[] = [];
+  const visited = new Set<string>();
+  const queue: string[] = [commitHash];
+  const missingHashes: string[] = [];
+
+  while (queue.length > 0 && history.length < limit) {
+    const currentHash = queue.shift()!;
+    if (visited.has(currentHash)) continue;
+    visited.add(currentHash);
+
+    const commit = await getCommitV3(db, currentHash);
+    if (!commit) {
+      // Track missing commits for logging (may be external references)
+      missingHashes.push(currentHash);
+      continue;
+    }
+
+    history.push(commit);
+
+    // Add parents to queue
+    queue.push(...commit.parents);
+  }
+
+  // Log warning if we encountered missing commits (data integrity issue or external refs)
+  if (missingHashes.length > 0) {
+    console.warn(
+      `[findCommitV3History] Skipped ${missingHashes.length} missing commit(s) during traversal: ` +
+      `${missingHashes.slice(0, 3).join(', ')}${missingHashes.length > 3 ? '...' : ''}`
+    );
+  }
+
+  return history;
+}
+
+/** Default depth limit for common ancestor search to prevent infinite loops on deep histories */
+const DEFAULT_ANCESTOR_DEPTH_LIMIT = 10000;
+
+/**
+ * Find common ancestor of two commits
+ *
+ * Collects all ancestors of the first commit, then finds the first
+ * ancestor of the second commit that exists in that set.
+ * Returns null if no common ancestor is found (disjoint histories).
+ *
+ * @param depthLimit Maximum number of commits to traverse (default 10000).
+ *                   Prevents memory/time issues on very deep histories.
+ */
+export async function findCommonAncestorV3(
+  db: AnyDB,
+  hash1: string,
+  hash2: string,
+  depthLimit = DEFAULT_ANCESTOR_DEPTH_LIMIT
+): Promise<CommitV3Output | null> {
+  // Collect all ancestors of hash1
+  const ancestors1 = new Set<string>();
+  const queue1: string[] = [hash1];
+  let depth1 = 0;
+
+  while (queue1.length > 0 && depth1 < depthLimit) {
+    const h = queue1.shift()!;
+    if (ancestors1.has(h)) continue;
+    ancestors1.add(h);
+    depth1++;
+
+    const commit = await getCommitV3(db, h);
+    if (commit) {
+      queue1.push(...commit.parents);
+    }
+  }
+
+  if (depth1 >= depthLimit) {
+    console.warn(
+      `[findCommonAncestorV3] Depth limit (${depthLimit}) reached while collecting ancestors of ${hash1.slice(0, 16)}...`
+    );
+  }
+
+  // Find first common ancestor from hash2
+  const queue2: string[] = [hash2];
+  const visited2 = new Set<string>();
+  let depth2 = 0;
+
+  while (queue2.length > 0 && depth2 < depthLimit) {
+    const h = queue2.shift()!;
+    if (visited2.has(h)) continue;
+    visited2.add(h);
+    depth2++;
+
+    if (ancestors1.has(h)) {
+      return getCommitV3(db, h);
+    }
+
+    const commit = await getCommitV3(db, h);
+    if (commit) {
+      queue2.push(...commit.parents);
+    }
+  }
+
+  if (depth2 >= depthLimit) {
+    console.warn(
+      `[findCommonAncestorV3] Depth limit (${depthLimit}) reached while searching ancestors of ${hash2.slice(0, 16)}...`
+    );
+  }
+
+  return null;
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
