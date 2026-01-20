@@ -39,7 +39,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useOptimiserStore } from '@/store/optimiserStore';
 
 export default function DeployPage() {
   const router = useRouter();
@@ -459,21 +458,6 @@ function RecentRunsSection({
   filterOptions: { models: string[]; prompt_versions: string[] };
   onFilterChange: (model: string | null, promptVersion: string | null) => void;
 }) {
-  const { compareModeEnabled, toggleCompareMode, selectedRunIds, clearSelectedRuns } =
-    useOptimiserStore();
-
-  const selectedArray = Array.from(selectedRunIds);
-  const canCompare = selectedArray.length === 2;
-
-  const handleCompare = () => {
-    if (canCompare) {
-      router.push(`/deploy/compare?v1=${selectedArray[0]}&v2=${selectedArray[1]}`);
-      // Clear selections after navigating
-      clearSelectedRuns();
-      toggleCompareMode();
-    }
-  };
-
   const handleModelChange = (value: string) => {
     const newModel = value === 'all' ? null : value;
     onFilterChange(newModel, filterPromptVersion);
@@ -520,24 +504,13 @@ function RecentRunsSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {compareModeEnabled && (
-            <>
-              <span className="text-sm text-muted-foreground">
-                {selectedArray.length}/2 selected
-              </span>
-              <Button variant="default" size="sm" onClick={handleCompare} disabled={!canCompare}>
-                <GitCompare className="h-4 w-4" />
-                Compare
-              </Button>
-            </>
-          )}
           <Button
-            variant={compareModeEnabled ? 'secondary' : 'outline'}
+            variant="outline"
             size="sm"
-            onClick={toggleCompareMode}
+            onClick={() => router.push('/deploy/compare')}
           >
             <GitCompare className="h-4 w-4" />
-            {compareModeEnabled ? 'Cancel' : 'Compare Mode'}
+            Compare
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4" />
@@ -546,7 +519,7 @@ function RecentRunsSection({
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        <RunsTable runs={runs} maxRows={15} compareModeEnabled={compareModeEnabled} />
+        <RunsTable runs={runs} maxRows={15} />
       </CardContent>
     </Card>
   );

@@ -351,13 +351,13 @@ async function processN8nCallback(data: {
               has_ai_languageModel: dataKeys.includes('ai_languageModel'),
             }, 'Node run data structure');
 
-            // Log ai_tool data if present
+            // Log ai_tool data if present (for debugging tool detection)
             const nodeData = nodeRunAny.data as Record<string, unknown> | undefined;
             if (nodeData?.ai_tool) {
-              logger.info({
+              logger.debug({
                 node: nodeName,
-                ai_tool_data: JSON.stringify(nodeData.ai_tool).slice(0, 2000),
-              }, 'DEBUG: ai_tool data found!');
+                ai_tool_data: JSON.stringify(nodeData.ai_tool).slice(0, 500),
+              }, 'ai_tool data found');
             }
           }
         }
@@ -461,12 +461,23 @@ async function processN8nCallback(data: {
     trajectory: traceSummary.trajectory,
   }, 'Trace storage decision');
 
+  // v2.2: 从 trace 中提取真实的 model（优先级高于 n8n callback 的硬编码值）
+  const llmStep = runRecord.steps.find(s => s.llm?.model && s.llm.model !== 'unknown');
+  const actualModel = llmStep?.llm?.model || data.meta?.model;
+
+  logger.debug({
+    run_id: runInfo.run_id,
+    model_from_trace: llmStep?.llm?.model,
+    model_from_callback: data.meta?.model,
+    actual_model: actualModel,
+  }, 'Model extraction');
+
   const ingestPayload = {
     run_id: runInfo.run_id,
     runner_run_id: data.runner_run_id,
     status,
-    // v2.1: 从 n8n 回调提取的 metadata（包含实际使用的 model）
-    metadata: data.meta?.model ? { model: data.meta.model } : undefined,
+    // v2.2: 从 trace 提取真实的 model（而非 n8n callback 硬编码值）
+    metadata: actualModel ? { model: actualModel } : undefined,
     run_report: {
       trace: runRecord,
       eval_result: evalResult,
