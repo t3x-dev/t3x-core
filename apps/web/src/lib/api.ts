@@ -133,31 +133,6 @@ export interface Branch {
   updated_at: string;
 }
 
-// Raw commit from API - contains JSON strings that need parsing
-// Aligned with @t3x/core CommitV2Record
-export interface CommitRaw {
-  commit_hash: string;
-  project_id: string;
-  branch: string;
-  message: string | null;
-  parents_json: string;
-  turn_window_json: string | null;
-  facet_snapshot_json: string | null;
-  pipeline_config_json: string | null;
-  draft_id: string | null;
-  draft_text_hash: string | null;
-  signature_json: string | null;
-  source_excerpt_json: string | null;
-  must_have_json: string | null;
-  mustnt_have_json: string | null;
-  position_x: number | null;
-  position_y: number | null;
-  source_refs_json: string | null;
-  /** v1.1: Confirmed anchors (JSON string) */
-  anchors_json: string | null;
-  created_at: string;
-}
-
 // Facet types from CLI aggregateFacets
 // Base fields that all facets have
 export interface FacetBase {
@@ -368,19 +343,6 @@ export interface TurnListData {
   offset: number;
 }
 
-// Internal: API returns raw JSON strings
-interface CommitListDataRaw {
-  commits: CommitRaw[];
-  limit: number;
-  offset: number;
-}
-
-export interface CommitListData {
-  commits: Commit[];
-  limit: number;
-  offset: number;
-}
-
 export interface BranchListData {
   branches: Branch[];
   limit: number;
@@ -478,35 +440,6 @@ function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors 
     console.warn('[api] Failed to parse anchors_json:', json?.slice(0, 100), err);
     return null;
   }
-}
-
-/**
- * Parse raw commit from API (with JSON string fields) into frontend Commit type
- * Aligned with @t3x/core CommitV2Record
- */
-function parseCommit(raw: CommitRaw): Commit {
-  return {
-    commit_hash: raw.commit_hash,
-    project_id: raw.project_id,
-    branch: raw.branch,
-    message: raw.message,
-    parent_hashes: safeJsonParse<string[]>(raw.parents_json, []),
-    turn_window: safeJsonParse(raw.turn_window_json, null),
-    facet_snapshot: safeJsonParse(raw.facet_snapshot_json, null),
-    pipeline_config: safeJsonParse(raw.pipeline_config_json, null),
-    draft_id: raw.draft_id,
-    draft_text_hash: raw.draft_text_hash,
-    signature: safeJsonParse(raw.signature_json, null),
-    source_excerpt: safeJsonParse<string[] | null>(raw.source_excerpt_json, null),
-    must_have: safeJsonParse<string[] | null>(raw.must_have_json, null),
-    mustnt_have: safeJsonParse<string[] | null>(raw.mustnt_have_json, null),
-    position_x: raw.position_x,
-    position_y: raw.position_y,
-    source_refs: raw.source_refs_json ? JSON.parse(raw.source_refs_json) : null,
-    // Use specialized parser to pre-compute global positions for anchors
-    anchors: parseAnchorsWithGlobalPositions(raw.anchors_json),
-    created_at: raw.created_at,
-  };
 }
 
 // ============================================================================
@@ -714,23 +647,6 @@ export async function updateConversation(
   return handleResponse<Conversation>(res);
 }
 
-export async function updateCommitPosition(
-  commitHash: string,
-  position: { x?: number; y?: number }
-): Promise<Commit> {
-  // Don't encode the colon in sha256:xxx - backend expects raw format
-  const res = await fetchWithTimeout(`${API_V1}/commits/${commitHash}/position`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      position_x: position.x,
-      position_y: position.y,
-    }),
-  });
-  const rawData = await handleResponse<CommitRaw>(res);
-  return parseCommit(rawData);
-}
-
 // ============================================================================
 // Turns
 // ============================================================================
@@ -867,76 +783,6 @@ export async function deleteBranch(projectId: string, name: string, force = fals
 }
 
 // ============================================================================
-// Commits
-// ============================================================================
-
-export async function listCommits(
-  projectId: string,
-  branch?: string,
-  limit = 50,
-  offset = 0
-): Promise<CommitListData> {
-  const query = buildQueryString({ project_id: projectId, branch, limit, offset });
-  const res = await fetchWithTimeout(`${API_V1}/commits?${query}`);
-  const response = await handleResponse<CommitListDataRaw>(res);
-  return {
-    commits: response.commits.map(parseCommit),
-    limit: response.limit,
-    offset: response.offset,
-  };
-}
-
-export async function getCommit(commitHash: string): Promise<Commit> {
-  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
-  const data = await handleResponse<CommitRaw>(res);
-  return parseCommit(data);
-}
-
-export async function createCommit(
-  projectId: string,
-  turnWindow: { start_turn_hash: string; end_turn_hash: string },
-  branch = 'main',
-  message?: string,
-  options?: {
-    draftId?: string;
-    draftTextHash?: string;
-    pipelineConfig?: unknown;
-    signature?: unknown;
-    sourceExcerpt?: string[];
-    mustHave?: string[];
-    mustntHave?: string[];
-    position?: { x: number; y: number };
-    sourceRefs?: SourceRef[];
-    /** v1.1: Confirmed anchors for this commit */
-    anchors?: ApiCommitAnchors;
-  }
-): Promise<Commit> {
-  const res = await fetchWithTimeout(`${API_V1}/commits`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: projectId,
-      branch,
-      message,
-      turn_window: turnWindow,
-      draft_id: options?.draftId,
-      draft_text_hash: options?.draftTextHash,
-      pipeline_config: options?.pipelineConfig,
-      signature: options?.signature,
-      source_excerpt: options?.sourceExcerpt,
-      must_have: options?.mustHave,
-      mustnt_have: options?.mustntHave,
-      position_x: options?.position?.x,
-      position_y: options?.position?.y,
-      source_refs: options?.sourceRefs,
-      anchors: options?.anchors,
-    }),
-  });
-  const data = await handleResponse<CommitRaw>(res);
-  return parseCommit(data);
-}
-
-// ============================================================================
 // Commits V3 (Sentence-based commits)
 // ============================================================================
 
@@ -1047,45 +893,6 @@ export async function createCommitV3(
     }),
   });
   return handleResponse<CommitV3>(res);
-}
-
-// Resolved facet for merge commit
-// source values: backend returns 'base' | 'source' | 'target' | 'llm' | 'manual'
-// UI adds 'custom' for user-provided text
-export interface ResolvedFacet {
-  facet: string;
-  text: string | null;
-  source: 'base' | 'source' | 'target' | 'llm' | 'manual' | 'custom';
-  keywords: string[];
-}
-
-// Create a merge commit from resolved merge results
-export async function createMergeCommit(
-  projectId: string,
-  sourceCommitHash: string,
-  targetCommitHash: string,
-  branch = 'main',
-  message?: string,
-  resolvedFacets?: ResolvedFacet[],
-  position?: { x: number; y: number }
-): Promise<Commit> {
-  const res = await fetchWithTimeout(`${API_V1}/commits`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: projectId,
-      branch,
-      message,
-      // Merge mode: specify parent commits instead of turn_window
-      merge_parents: [sourceCommitHash, targetCommitHash],
-      // Resolved facets from user decisions
-      facet_snapshot: resolvedFacets,
-      // Position for canvas display
-      ...(position && { position_x: position.x, position_y: position.y }),
-    }),
-  });
-  const data = await handleResponse<CommitRaw>(res);
-  return parseCommit(data);
 }
 
 // ============================================================================

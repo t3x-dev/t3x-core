@@ -6,7 +6,7 @@
  */
 
 import {
-  findCommitsByProject,
+  listCommitsV3,
   findConversationsByProject,
   findProjectById,
   findTurnsByProject,
@@ -251,29 +251,41 @@ exportRoutes.get('/v1/export/cfpack', async (c) => {
       }
     }
 
-    // Get all commits
-    const commitRows = await findCommitsByProject(db, { projectId, limit: 10000 });
+    // Get all commits (V3 format)
+    const commitRows = await listCommitsV3(db, { projectId, limit: 10000 });
 
     const commits: CfpackCommit[] = [];
     for (const row of commitRows) {
-      const turnWindow = row.turnWindowJson
-        ? (JSON.parse(row.turnWindowJson) as TurnWindow)
-        : { start_turn_hash: '', end_turn_hash: '' };
-      const facetSnapshotData = row.facetSnapshotJson
-        ? (JSON.parse(row.facetSnapshotJson) as FacetSnapshot[])
-        : [];
-      const pipelineConfig = row.pipelineConfigJson
-        ? (JSON.parse(row.pipelineConfigJson) as PipelineConfig)
-        : null;
+      // Derive turn_window from V3 sentences
+      const sentences = row.content.sentences || [];
+      const firstSentence = sentences[0];
+      const lastSentence = sentences[sentences.length - 1];
+      const turnWindow: TurnWindow = {
+        start_turn_hash: firstSentence?.source?.turn_hash || '',
+        end_turn_hash: lastSentence?.source?.turn_hash || firstSentence?.source?.turn_hash || '',
+      };
+
+      // V3 uses sentences/constraints instead of facet_snapshot
+      // Create simplified facet snapshot from sentences for export compatibility
+      const facetSnapshotData: FacetSnapshot[] = sentences.map((s, i) => ({
+        facet: `sentence_${i + 1}`,
+        text: s.text,
+        keywords: [],
+        evidence: s.source?.turn_hash ? [{
+          turn_hash: s.source.turn_hash,
+          segment_id: s.id,
+          similarity_score: 1.0,
+        }] : [],
+      }));
 
       commits.push({
-        commit_hash: row.commitHash,
-        parent_hashes: row.parentsJson ? JSON.parse(row.parentsJson) : [],
-        branch: row.branch,
+        commit_hash: row.hash,
+        parent_hashes: row.parents,
+        branch: row.branch || 'main',
         turn_window: turnWindow,
         facet_snapshot: facetSnapshotData,
-        pipeline_config: pipelineConfig,
-        created_at: row.createdAt.toISOString(),
+        pipeline_config: null, // V3 doesn't use pipeline_config
+        created_at: row.created_at,
       });
     }
 
@@ -407,23 +419,31 @@ exportRoutes.get('/v1/export/ledger', async (c) => {
       );
     }
 
-    // 4. Commits
-    const commits = await findCommitsByProject(db, { projectId, limit: 10000 });
+    // 4. Commits (V3 format)
+    const commits = await listCommitsV3(db, { projectId, limit: 10000 });
     for (const commit of commits) {
+      // Derive turn_window from V3 sentences for backward compatibility
+      const sentences = commit.content.sentences || [];
+      const firstSource = sentences[0]?.source;
+      const lastSource = sentences[sentences.length - 1]?.source || firstSource;
+
       lines.push(
         JSON.stringify({
           type: 'commit',
-          commit_hash: commit.commitHash,
-          project_id: commit.projectId,
-          branch: commit.branch,
+          schema: 't3x/commit/v3',
+          commit_hash: commit.hash,
+          project_id: commit.project_id,
+          branch: commit.branch || 'main',
           message: commit.message,
-          parent_hashes: commit.parentsJson ? JSON.parse(commit.parentsJson) : [],
-          turn_window: commit.turnWindowJson ? JSON.parse(commit.turnWindowJson) : null,
-          facet_snapshot: commit.facetSnapshotJson ? JSON.parse(commit.facetSnapshotJson) : [],
-          pipeline_config: commit.pipelineConfigJson ? JSON.parse(commit.pipelineConfigJson) : null,
-          draft_id: commit.draftId,
-          draft_text_hash: commit.draftTextHash,
-          created_at: commit.createdAt.toISOString(),
+          parent_hashes: commit.parents,
+          author: commit.author,
+          content: commit.content,
+          // Legacy fields for backward compatibility
+          turn_window: firstSource ? {
+            start_turn_hash: firstSource.turn_hash,
+            end_turn_hash: lastSource?.turn_hash || firstSource.turn_hash,
+          } : null,
+          created_at: commit.created_at,
         })
       );
     }
