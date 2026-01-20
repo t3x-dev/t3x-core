@@ -1,0 +1,337 @@
+/**
+ * T3X V4 Architecture Database Schema
+ *
+ * This defines the database tables for V4 architecture.
+ * All tables are additive - we don't modify existing V3 tables.
+ *
+ * Key tables:
+ * - commits_v4: Pure knowledge (sentences only, no constraints)
+ * - leaves: Application layer (owns constraints, output, validation)
+ * - pins: Source selection mechanism
+ * - conversation_contexts: Per-conversation context customization
+ *
+ * @see docs/specification/semantic-layer-architecture.md
+ * @see docs/specification/memory-pin-system-design.md
+ */
+
+import {
+  pgTable,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  uniqueIndex,
+  real,
+} from 'drizzle-orm/pg-core';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// commits_v4: Pure Knowledge Storage
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * CommitV4 stores pure knowledge (sentences only).
+ *
+ * Key difference from commits_v3:
+ * - content.sentences exists
+ * - content.constraints does NOT exist (moved to leaves)
+ *
+ * JSONB columns:
+ * - parents: string[]
+ * - author: { type: 'human' | 'agent', id?: string, name?: string }
+ * - content: { sentences: Sentence[] }
+ * - source_refs: CommitSourceRef[]
+ */
+export const commitsV4 = pgTable(
+  'commits_v4',
+  {
+    // ─────────────────────────────────────────────────────────────────────────
+    // First-class fields (participate in hash)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Content hash: "sha256:" + hex */
+    hash: text('hash').primaryKey(),
+
+    /** Schema version */
+    schema: text('schema').notNull().default('t3x/commit/v4'),
+
+    /** Parent commit hashes (DAG) */
+    parents: jsonb('parents').notNull().$type<string[]>().default([]),
+
+    /** Author info */
+    author: jsonb('author').notNull().$type<{
+      type: 'human' | 'agent';
+      id?: string;
+      name?: string;
+    }>(),
+
+    /** Commit timestamp */
+    committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
+
+    /**
+     * Content: { sentences: Sentence[] }
+     * NOTE: No constraints here - they belong to leaves now
+     */
+    content: jsonb('content').notNull().$type<{
+      sentences: Array<{
+        id: string;
+        text: string;
+        confidence?: number;
+        source_ref?: {
+          conversation_id: string;
+          turn_hash: string;
+        };
+      }>;
+    }>(),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Second-class fields (NOT in hash)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Project ID */
+    projectId: text('project_id'),
+
+    /** Commit message */
+    message: text('message'),
+
+    /** Branch name */
+    branch: text('branch'),
+
+    /**
+     * Source references (frozen at commit time)
+     * Records which pinned items contributed to this commit
+     */
+    sourceRefs: jsonb('source_refs').$type<
+      Array<{
+        type: 'conversation' | 'leaf';
+        id: string;
+        title?: string;
+        assertion_lessons?: string[];
+      }>
+    >(),
+
+    /** Canvas position */
+    positionX: real('position_x'),
+    positionY: real('position_y'),
+
+    /** Record creation time */
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('commits_v4_project_idx').on(table.projectId),
+    branchIdx: index('commits_v4_branch_idx').on(table.branch),
+    createdAtIdx: index('commits_v4_created_at_idx').on(table.createdAt),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// leaves: Application Layer (Owns Constraints)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Leaf stores application-layer data: constraints, output, validation.
+ *
+ * Key insight: Same commit can have multiple leaves with different constraints.
+ *
+ * JSONB columns:
+ * - constraints: Constraint[]
+ * - config: LeafConfig
+ * - assertions: Assertion[]
+ */
+export const leaves = pgTable(
+  'leaves',
+  {
+    /** Unique ID: "leaf_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** The commit this leaf uses for knowledge */
+    commitHash: text('commit_hash').notNull(),
+
+    /** Output type: 'deploy_agent' | 'tweet' | 'weibo' | etc. */
+    type: text('type').notNull(),
+
+    /** Human-readable title */
+    title: text('title'),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constraints (NOW OWNED BY LEAF)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Validation rules for output
+     * Array of RequireConstraint | ExcludeConstraint
+     */
+    constraints: jsonb('constraints')
+      .notNull()
+      .$type<
+        Array<{
+          id: string;
+          type: 'require' | 'exclude';
+          match_mode: 'exact' | 'semantic';
+          value: string;
+          description?: string;
+          source_sentence_id?: string;
+          reason?: string;
+        }>
+      >()
+      .default([]),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Configuration
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Leaf-specific config */
+    config: jsonb('config')
+      .notNull()
+      .$type<{
+        prompt_template?: string;
+        model?: string;
+        max_tokens?: number;
+        [key: string]: unknown;
+      }>()
+      .default({}),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Output
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Generated content */
+    output: text('output'),
+
+    /** When output was generated */
+    generatedAt: timestamp('generated_at', { withTimezone: true }),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Validation
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Validation results */
+    assertions: jsonb('assertions').$type<
+      Array<{
+        id: string;
+        constraint_id: string;
+        passed: boolean;
+        details: string;
+        lesson?: string;
+      }>
+    >(),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Metadata
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Project ID */
+    projectId: text('project_id').notNull(),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    /** Creator */
+    createdBy: text('created_by'),
+  },
+  (table) => ({
+    commitIdx: index('leaves_commit_idx').on(table.commitHash),
+    projectIdx: index('leaves_project_idx').on(table.projectId),
+    typeIdx: index('leaves_type_idx').on(table.type),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// pins: Source Selection Mechanism
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Pin marks items as selected for commit sources and conversation context.
+ *
+ * One mechanism, dual purpose:
+ * 1. Commit: pinned items become sources for next commit
+ * 2. Conversation: pinned items become LLM background context
+ */
+export const pins = pgTable(
+  'pins',
+  {
+    /** Unique ID: "pin_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Which project this pin belongs to */
+    projectId: text('project_id').notNull(),
+
+    /** Type of pinned item: 'conversation' | 'leaf' */
+    type: text('type').notNull(),
+
+    /** ID of the pinned item */
+    refId: text('ref_id').notNull(),
+
+    /**
+     * For leaf pins: which assertions to include
+     * null = include all assertions with lessons
+     */
+    selectedAssertionIds: jsonb('selected_assertion_ids').$type<string[]>(),
+
+    /** When pinned */
+    pinnedAt: timestamp('pinned_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    /** Who pinned it */
+    pinnedBy: text('pinned_by'),
+  },
+  (table) => ({
+    projectIdx: index('pins_project_idx').on(table.projectId),
+    /** Ensure unique pin per project + type + ref */
+    uniquePin: uniqueIndex('pins_unique_idx').on(
+      table.projectId,
+      table.type,
+      table.refId
+    ),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// conversation_contexts: Per-conversation Context Customization
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Stores per-conversation context configuration.
+ *
+ * Each conversation can customize which pins are included in its LLM context.
+ * Default (no row): use all project pins.
+ */
+export const conversationContexts = pgTable('conversation_contexts', {
+  /** The conversation this config belongs to */
+  conversationId: text('conversation_id').primaryKey(),
+
+  /**
+   * Which pins to include in context
+   * null = use all project pins (default)
+   * [] = no pins (fresh start)
+   * [...ids] = specific pins only
+   */
+  selectedPinIds: jsonb('selected_pin_ids').$type<string[] | null>(),
+
+  /** Last update time */
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Type Exports (for use in queries)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type CommitV4Record = typeof commitsV4.$inferSelect;
+export type CommitV4Insert = typeof commitsV4.$inferInsert;
+
+export type LeafRecord = typeof leaves.$inferSelect;
+export type LeafInsert = typeof leaves.$inferInsert;
+
+export type PinRecord = typeof pins.$inferSelect;
+export type PinInsert = typeof pins.$inferInsert;
+
+export type ConversationContextRecord =
+  typeof conversationContexts.$inferSelect;
+export type ConversationContextInsert =
+  typeof conversationContexts.$inferInsert;
