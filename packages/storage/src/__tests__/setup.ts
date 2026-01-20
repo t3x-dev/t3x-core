@@ -159,6 +159,40 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Leaves (application layer - owns constraints, output, validation)
+CREATE TABLE IF NOT EXISTS leaves (
+  id TEXT PRIMARY KEY,
+  commit_hash TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT,
+  constraints JSONB NOT NULL DEFAULT '[]',
+  config JSONB NOT NULL DEFAULT '{}',
+  output TEXT,
+  generated_at TIMESTAMPTZ,
+  assertions JSONB,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT
+);
+
+-- Pins (source selection for commit sources + conversation context)
+CREATE TABLE IF NOT EXISTS pins (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  ref_id TEXT NOT NULL,
+  selected_assertion_ids JSONB,
+  pinned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  pinned_by TEXT
+);
+
+-- Conversation Contexts (per-conversation context customization)
+CREATE TABLE IF NOT EXISTS conversation_contexts (
+  conversation_id TEXT PRIMARY KEY REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  selected_pin_ids JSONB,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
 CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
@@ -178,6 +212,11 @@ CREATE INDEX IF NOT EXISTS idx_commits_v3_committed_at ON commits_v3(committed_a
 CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
 CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
+CREATE INDEX IF NOT EXISTS idx_leaves_commit ON leaves(commit_hash);
+CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
+CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);
+CREATE INDEX IF NOT EXISTS idx_pins_project ON pins(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pins_unique ON pins(project_id, type, ref_id);
 `;
 
 /**
