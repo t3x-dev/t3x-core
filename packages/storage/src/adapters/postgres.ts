@@ -272,6 +272,84 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- V4 Architecture Tables
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    -- Commits V4 table (pure knowledge - sentences only, NO constraints)
+    CREATE TABLE IF NOT EXISTS commits_v4 (
+      -- First class (in hash)
+      hash TEXT PRIMARY KEY,
+      schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
+      parents JSONB NOT NULL DEFAULT '[]',
+      author JSONB NOT NULL,
+      committed_at TIMESTAMPTZ NOT NULL,
+      content JSONB NOT NULL,
+
+      -- Second class (not in hash)
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      message TEXT,
+      branch TEXT,
+      source_refs JSONB,
+      position_x REAL,
+      position_y REAL,
+
+      -- Timestamps
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
+    CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
+
+    -- Leaves table (application layer - owns constraints, output, validation)
+    CREATE TABLE IF NOT EXISTS leaves (
+      id TEXT PRIMARY KEY,
+      commit_hash TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT,
+
+      -- Constraints (REQUIRE/EXCLUDE rules)
+      constraints JSONB NOT NULL DEFAULT '[]',
+
+      -- Configuration
+      config JSONB NOT NULL DEFAULT '{}',
+
+      -- Output
+      output TEXT,
+      generated_at TIMESTAMPTZ,
+
+      -- Validation results
+      assertions JSONB,
+
+      -- Metadata
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_leaves_commit ON leaves(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
+    CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);
+
+    -- Pins table (source selection for commit sources + conversation context)
+    CREATE TABLE IF NOT EXISTS pins (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      ref_id TEXT NOT NULL,
+      selected_assertion_ids JSONB,
+      pinned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      pinned_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_pins_project ON pins(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pins_unique ON pins(project_id, type, ref_id);
+
+    -- Conversation Contexts table (per-conversation context customization)
+    CREATE TABLE IF NOT EXISTS conversation_contexts (
+      conversation_id TEXT PRIMARY KEY REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      selected_pin_ids JSONB,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.

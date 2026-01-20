@@ -23,6 +23,7 @@ import {
   uniqueIndex,
   real,
 } from 'drizzle-orm/pg-core';
+import { projects, conversations } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage
@@ -88,7 +89,9 @@ export const commitsV4 = pgTable(
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Project ID */
-    projectId: text('project_id'),
+    projectId: text('project_id').references(() => projects.projectId, {
+      onDelete: 'cascade',
+    }),
 
     /** Commit message */
     message: text('message'),
@@ -119,9 +122,9 @@ export const commitsV4 = pgTable(
       .defaultNow(),
   },
   (table) => ({
-    projectIdx: index('commits_v4_project_idx').on(table.projectId),
-    branchIdx: index('commits_v4_branch_idx').on(table.branch),
-    createdAtIdx: index('commits_v4_created_at_idx').on(table.createdAt),
+    projectIdx: index('idx_commits_v4_project').on(table.projectId),
+    branchIdx: index('idx_commits_v4_branch').on(table.branch),
+    createdAtIdx: index('idx_commits_v4_created_at').on(table.createdAt),
   })
 );
 
@@ -222,7 +225,9 @@ export const leaves = pgTable(
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Project ID */
-    projectId: text('project_id').notNull(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -233,9 +238,9 @@ export const leaves = pgTable(
     createdBy: text('created_by'),
   },
   (table) => ({
-    commitIdx: index('leaves_commit_idx').on(table.commitHash),
-    projectIdx: index('leaves_project_idx').on(table.projectId),
-    typeIdx: index('leaves_type_idx').on(table.type),
+    commitIdx: index('idx_leaves_commit').on(table.commitHash),
+    projectIdx: index('idx_leaves_project').on(table.projectId),
+    typeIdx: index('idx_leaves_type').on(table.type),
   })
 );
 
@@ -257,7 +262,9 @@ export const pins = pgTable(
     id: text('id').primaryKey(),
 
     /** Which project this pin belongs to */
-    projectId: text('project_id').notNull(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
 
     /** Type of pinned item: 'conversation' | 'leaf' */
     type: text('type').notNull(),
@@ -280,9 +287,9 @@ export const pins = pgTable(
     pinnedBy: text('pinned_by'),
   },
   (table) => ({
-    projectIdx: index('pins_project_idx').on(table.projectId),
+    projectIdx: index('idx_pins_project').on(table.projectId),
     /** Ensure unique pin per project + type + ref */
-    uniquePin: uniqueIndex('pins_unique_idx').on(
+    uniquePin: uniqueIndex('idx_pins_unique').on(
       table.projectId,
       table.type,
       table.refId
@@ -302,7 +309,9 @@ export const pins = pgTable(
  */
 export const conversationContexts = pgTable('conversation_contexts', {
   /** The conversation this config belongs to */
-  conversationId: text('conversation_id').primaryKey(),
+  conversationId: text('conversation_id')
+    .primaryKey()
+    .references(() => conversations.conversationId, { onDelete: 'cascade' }),
 
   /**
    * Which pins to include in context
