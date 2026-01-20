@@ -28,7 +28,7 @@ interface SelectableTextBlockProps {
    * Position handling:
    * - If anchor has globalStart/globalEnd, those are used directly (pre-computed)
    * - Otherwise, sentenceStartChar + start/end is used (requires sentence context)
-   * Note: API response anchors have globalStart/globalEnd pre-computed by parseCommit()
+   * Note: API response anchors have globalStart/globalEnd pre-computed during parsing
    */
   confirmedAnchors?: ConfirmedAnchor[];
   /**

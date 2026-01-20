@@ -743,17 +743,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations and both V2/V3 commits in parallel
-      const [convResponse, commitResponse, commitV3Response] = await Promise.all([
+      // Fetch conversations and V3 commits in parallel
+      const [convResponse, commitV3Response] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listCommits(projectId, undefined, 100, 0),
         api.listCommitsV3(projectId, undefined, 100, 0),
       ]);
 
       const conversations = convResponse.conversations;
 
       // Convert V3 commits to V2-compatible format for unitToNode
-      const v3AsV2Commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
+      const commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
         commit_hash: v3.hash,
         project_id: v3.project_id || projectId,
         branch: v3.branch || 'main',
@@ -783,11 +782,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source.turn_hash || v3.content.sentences[0].source.turn_hash,
         } : undefined,
       } as api.Commit));
-
-      // Merge V2 and V3 commits, preferring V3 if same hash exists
-      const v3Hashes = new Set(v3AsV2Commits.map((c) => c.commit_hash));
-      const v2OnlyCommits = commitResponse.commits.filter((c) => !v3Hashes.has(c.commit_hash));
-      const commits = [...v3AsV2Commits, ...v2OnlyCommits];
 
       // Preserve existing node positions
       const existingNodePositions = new Map<string, { x: number; y: number }>();
