@@ -129,7 +129,8 @@
       "WebFetch(domain:ui.reactflow.dev)",
       "Bash(pnpm test:*)",
       "Bash(pnpm -w run build:api:*)",
-      "Bash(timeout 10 pnpm dev:*)"
+      "Bash(timeout 10 pnpm dev:*)",
+      "Bash(git rev-parse:*)"
     ],
     "deny": [],
     "ask": []
