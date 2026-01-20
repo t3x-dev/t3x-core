@@ -339,9 +339,10 @@ export async function getConfigurationStats(
   db: AnyDB,
   projectId?: string
 ): Promise<ConfigurationStats[]> {
-  // Get all completed runs with metadata
+  // Get all finished runs (completed or failed) with metadata
+  // Note: 'failed' status means eval failed (score < threshold), not execution error
   const conditions: SQL[] = [
-    eq(runs.status, 'completed'),
+    sql`${runs.status} IN ('completed', 'failed')`,
     sql`${runs.metadataJson} IS NOT NULL`,
     sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`,
     sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`,
