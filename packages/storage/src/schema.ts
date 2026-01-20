@@ -113,6 +113,9 @@ export const branches = pgTable(
 
 /**
  * Commits V2 - Semantic snapshots with hash chain (DAG)
+ *
+ * @deprecated Use commits_v3 (commitsV3) instead. This table is kept for backward
+ * compatibility but should not be used for new commits. Migration to V3 is complete.
  */
 export const commits = pgTable(
   'commits_v2',

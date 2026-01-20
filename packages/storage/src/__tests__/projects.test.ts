@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertBranch } from '../queries/branches';
-import { insertCommit } from '../queries/commits';
+import { createCommitV3 } from '../queries/commits-v3';
 import { insertConversation } from '../queries/conversations';
 import { insertDraft } from '../queries/drafts';
 import {
@@ -238,14 +238,22 @@ describe('Projects Storage', () => {
         text: 'Draft text',
       });
 
-      // Create 1 commit
-      await insertCommit(db, {
-        projectId,
-        branch: 'main',
-        message: 'Initial',
-        turnWindow: null,
-        facetSnapshot: [],
-      });
+      // Create 1 commit (V3 format)
+      await createCommitV3(
+        db,
+        {
+          hash: `sha256:test_${Date.now()}`,
+          author: { name: 'Test User' },
+          committedAt: new Date(),
+          content: {
+            sentences: [{ id: 's1', text: 'Test sentence', source: { turn_hash: 'sha256:test', start_char: 0, end_char: 12 } }],
+          },
+          projectId,
+          branch: 'main',
+          message: 'Initial',
+        },
+        { strictParents: false }
+      );
 
       const result = await findProjectWithStats(db, projectId);
 

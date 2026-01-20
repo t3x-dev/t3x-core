@@ -12,6 +12,8 @@ import type { AnyDB } from '../adapters';
 import {
   createCommitV3,
   deleteCommitV3,
+  findCommitV3History,
+  findCommonAncestorV3,
   getCommitV3,
   getCommitV3Parents,
   getCommitsV3ByHashes,
@@ -792,6 +794,272 @@ describe('Commits V3 Storage', () => {
       expect(commit).not.toHaveProperty('project_id');
       expect(commit).not.toHaveProperty('created_at');
       expect(commit).not.toHaveProperty('updated_at');
+    });
+  });
+
+  describe('findCommitV3History', () => {
+    it('returns commit history using BFS traversal', async () => {
+      const newProject = await insertProject(db, testData.project({ name: 'History Test Project' }));
+
+      // Create a chain: root -> middle -> tip
+      const root = await createCommitV3(db, {
+        hash: 'sha256:history-root-001',
+        author: { name: 'Root' },
+        committedAt: new Date('2024-01-01'),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const middle = await createCommitV3(db, {
+        hash: 'sha256:history-middle-001',
+        parents: [root.hash],
+        author: { name: 'Middle' },
+        committedAt: new Date('2024-01-02'),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const tip = await createCommitV3(db, {
+        hash: 'sha256:history-tip-001',
+        parents: [middle.hash],
+        author: { name: 'Tip' },
+        committedAt: new Date('2024-01-03'),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const history = await findCommitV3History(db, tip.hash);
+
+      expect(history).toHaveLength(3);
+      expect(history[0].hash).toBe(tip.hash);
+      expect(history[1].hash).toBe(middle.hash);
+      expect(history[2].hash).toBe(root.hash);
+    });
+
+    it('respects limit parameter', async () => {
+      const newProject = await insertProject(db, testData.project({ name: 'History Limit Project' }));
+
+      const c1 = await createCommitV3(db, {
+        hash: 'sha256:limit-c1',
+        author: { name: 'C1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const c2 = await createCommitV3(db, {
+        hash: 'sha256:limit-c2',
+        parents: [c1.hash],
+        author: { name: 'C2' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const c3 = await createCommitV3(db, {
+        hash: 'sha256:limit-c3',
+        parents: [c2.hash],
+        author: { name: 'C3' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const history = await findCommitV3History(db, c3.hash, 2);
+
+      expect(history).toHaveLength(2);
+      expect(history[0].hash).toBe(c3.hash);
+      expect(history[1].hash).toBe(c2.hash);
+    });
+
+    it('handles DAG with multiple parents (merge commits)', async () => {
+      const newProject = await insertProject(db, testData.project({ name: 'History DAG Project' }));
+
+      const root = await createCommitV3(db, {
+        hash: 'sha256:dag-root-001',
+        author: { name: 'Root' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const branch1 = await createCommitV3(db, {
+        hash: 'sha256:dag-branch1-001',
+        parents: [root.hash],
+        author: { name: 'Branch1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const branch2 = await createCommitV3(db, {
+        hash: 'sha256:dag-branch2-001',
+        parents: [root.hash],
+        author: { name: 'Branch2' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const merge = await createCommitV3(db, {
+        hash: 'sha256:dag-merge-001',
+        parents: [branch1.hash, branch2.hash],
+        author: { name: 'Merge' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const history = await findCommitV3History(db, merge.hash);
+
+      expect(history).toHaveLength(4);
+      // BFS order: merge -> branch1 -> branch2 -> root
+      expect(history[0].hash).toBe(merge.hash);
+      expect(history.map(c => c.hash)).toContain(branch1.hash);
+      expect(history.map(c => c.hash)).toContain(branch2.hash);
+      expect(history[history.length - 1].hash).toBe(root.hash);
+    });
+
+    it('returns empty array for non-existent commit', async () => {
+      const history = await findCommitV3History(db, 'sha256:nonexistent');
+      expect(history).toHaveLength(0);
+    });
+  });
+
+  describe('findCommonAncestorV3', () => {
+    it('finds common ancestor of two branches', async () => {
+      const newProject = await insertProject(db, testData.project({ name: 'Ancestor Test Project' }));
+
+      const root = await createCommitV3(db, {
+        hash: 'sha256:ancestor-root-001',
+        author: { name: 'Root' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const branch1 = await createCommitV3(db, {
+        hash: 'sha256:ancestor-branch1-001',
+        parents: [root.hash],
+        author: { name: 'Branch1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const branch2 = await createCommitV3(db, {
+        hash: 'sha256:ancestor-branch2-001',
+        parents: [root.hash],
+        author: { name: 'Branch2' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const ancestor = await findCommonAncestorV3(db, branch1.hash, branch2.hash);
+
+      expect(ancestor).not.toBeNull();
+      expect(ancestor!.hash).toBe(root.hash);
+    });
+
+    it('finds common ancestor in deeper history', async () => {
+      const newProject = await insertProject(db, testData.project({ name: 'Deep Ancestor Project' }));
+
+      const root = await createCommitV3(db, {
+        hash: 'sha256:deep-root-001',
+        author: { name: 'Root' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      // Branch 1 chain: root -> b1c1 -> b1c2
+      const b1c1 = await createCommitV3(db, {
+        hash: 'sha256:deep-b1c1-001',
+        parents: [root.hash],
+        author: { name: 'B1C1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const b1c2 = await createCommitV3(db, {
+        hash: 'sha256:deep-b1c2-001',
+        parents: [b1c1.hash],
+        author: { name: 'B1C2' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      // Branch 2 chain: root -> b2c1
+      const b2c1 = await createCommitV3(db, {
+        hash: 'sha256:deep-b2c1-001',
+        parents: [root.hash],
+        author: { name: 'B2C1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject.projectId,
+      });
+
+      const ancestor = await findCommonAncestorV3(db, b1c2.hash, b2c1.hash);
+
+      expect(ancestor).not.toBeNull();
+      expect(ancestor!.hash).toBe(root.hash);
+    });
+
+    it('returns null for disjoint histories', async () => {
+      const newProject1 = await insertProject(db, testData.project({ name: 'Disjoint 1' }));
+      const newProject2 = await insertProject(db, testData.project({ name: 'Disjoint 2' }));
+
+      const commit1 = await createCommitV3(db, {
+        hash: 'sha256:disjoint-001',
+        author: { name: 'Disjoint1' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject1.projectId,
+      });
+
+      const commit2 = await createCommitV3(db, {
+        hash: 'sha256:disjoint-002',
+        author: { name: 'Disjoint2' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: newProject2.projectId,
+      });
+
+      const ancestor = await findCommonAncestorV3(db, commit1.hash, commit2.hash);
+
+      expect(ancestor).toBeNull();
+    });
+
+    it('returns the commit itself when both hashes are the same', async () => {
+      const commit = await createCommitV3(db, {
+        hash: 'sha256:same-commit-001',
+        author: { name: 'Same' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: testProjectId,
+      });
+
+      const ancestor = await findCommonAncestorV3(db, commit.hash, commit.hash);
+
+      expect(ancestor).not.toBeNull();
+      expect(ancestor!.hash).toBe(commit.hash);
+    });
+
+    it('returns null when first hash does not exist', async () => {
+      const commit = await createCommitV3(db, {
+        hash: 'sha256:exists-001',
+        author: { name: 'Exists' },
+        committedAt: new Date(),
+        content: { sentences: [] },
+        projectId: testProjectId,
+      });
+
+      const ancestor = await findCommonAncestorV3(db, 'sha256:nonexistent', commit.hash);
+
+      expect(ancestor).toBeNull();
     });
   });
 });
