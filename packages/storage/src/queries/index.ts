@@ -41,6 +41,21 @@ export {
   ParentNotFoundError,
   updateCommitV3Position,
 } from './commits-v3';
+// Commits V4 (pure knowledge - no constraints)
+export {
+  computeCommitV4Hash,
+  type CreateCommitV4Options,
+  createCommitV4,
+  deleteCommitV4,
+  findCommitV4ByHash,
+  findCommitsV4ByBranch,
+  findCommitsV4ByProject,
+  getCommitV4Parents,
+  getCommitsV4ByHashes,
+  type ListCommitsV4Options,
+  ParentNotFoundErrorV4,
+  updateCommitV4Position,
+} from './commits-v4';
 // Conversations
 export {
   type CreateConversationInput,
