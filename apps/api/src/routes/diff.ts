@@ -13,7 +13,7 @@ import {
   EmbeddingProviderError,
   type RingOutput,
 } from '@t3x/core';
-import { findCommitByHash, findSegmentEmbeddingsByTurn, findTurnByHash } from '@t3x/storage/pglite';
+import { getCommitV3, findSegmentEmbeddingsByTurn, findTurnByHash } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
@@ -129,10 +129,11 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
 
   const db = await getDB();
 
-  // Mode 1: commit_hash mode
+  // Mode 1: commit_hash mode (V3 commits)
+  // V3 commits can contain sentences from multiple turns, so we collect all unique turn_hashes
   if (body.base_commit_hash && body.target_commit_hash) {
-    const baseCommit = await findCommitByHash(db, body.base_commit_hash);
-    const targetCommit = await findCommitByHash(db, body.target_commit_hash);
+    const baseCommit = await getCommitV3(db, body.base_commit_hash);
+    const targetCommit = await getCommitV3(db, body.target_commit_hash);
 
     if (!baseCommit) {
       return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
@@ -141,66 +142,79 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
       return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
     }
 
-    // Parse turn_window from commits
-    let baseTurnWindow: { start_turn_hash: string; end_turn_hash: string } | null = null;
-    let targetTurnWindow: { start_turn_hash: string; end_turn_hash: string } | null = null;
-
-    try {
-      baseTurnWindow = baseCommit.turnWindowJson ? JSON.parse(baseCommit.turnWindowJson) : null;
-      targetTurnWindow = targetCommit.turnWindowJson
-        ? JSON.parse(targetCommit.turnWindowJson)
-        : null;
-    } catch {
-      return jsonError(c, 'DATA_CORRUPTED', 'Invalid turn_window_json in commit', 500);
+    // Collect all unique turn_hashes from all sentences in each commit
+    const baseTurnHashes = new Set<string>();
+    for (const sentence of baseCommit.content.sentences) {
+      if (sentence.source?.turn_hash) {
+        baseTurnHashes.add(sentence.source.turn_hash);
+      }
     }
 
-    if (!baseTurnWindow?.end_turn_hash) {
+    const targetTurnHashes = new Set<string>();
+    for (const sentence of targetCommit.content.sentences) {
+      if (sentence.source?.turn_hash) {
+        targetTurnHashes.add(sentence.source.turn_hash);
+      }
+    }
+
+    if (baseTurnHashes.size === 0) {
       return jsonError(
         c,
         'INVALID_REQUEST',
-        `Base commit ${body.base_commit_hash} has no turn_window (may be a merge commit)`,
+        `Base commit ${body.base_commit_hash} has no source turn_hash in any sentence`,
         400
       );
     }
-    if (!targetTurnWindow?.end_turn_hash) {
+    if (targetTurnHashes.size === 0) {
       return jsonError(
         c,
         'INVALID_REQUEST',
-        `Target commit ${body.target_commit_hash} has no turn_window (may be a merge commit)`,
+        `Target commit ${body.target_commit_hash} has no source turn_hash in any sentence`,
         400
       );
     }
 
-    const baseTurnHash = baseTurnWindow.end_turn_hash;
-    const targetTurnHash = targetTurnWindow.end_turn_hash;
-
-    const baseResult = await extractSegmentsFromTurn(db, baseTurnHash);
-    const targetResult = await extractSegmentsFromTurn(db, targetTurnHash);
-
-    if (!baseResult.ok) {
-      return jsonError(
-        c,
-        getErrorCode(baseResult.error),
-        baseResult.message,
-        getErrorStatus(baseResult.error)
-      );
-    }
-    if (!targetResult.ok) {
-      return jsonError(
-        c,
-        getErrorCode(targetResult.error),
-        targetResult.message,
-        getErrorStatus(targetResult.error)
-      );
+    // Fetch and aggregate segments from all turns
+    const baseSegmentsAll: DiffSegment[] = [];
+    for (const turnHash of baseTurnHashes) {
+      const result = await extractSegmentsFromTurn(db, turnHash);
+      if (!result.ok) {
+        return jsonError(
+          c,
+          getErrorCode(result.error),
+          `Base commit turn ${turnHash}: ${result.message}`,
+          getErrorStatus(result.error)
+        );
+      }
+      baseSegmentsAll.push(...result.segments);
     }
 
-    baseId = baseResult.id;
-    baseSegments = baseResult.segments;
-    targetId = targetResult.id;
-    targetSegments = targetResult.segments;
-    baseTurnHashForCache = baseTurnHash;
-    targetTurnHashForCache = targetTurnHash;
-    usedCache = true;
+    const targetSegmentsAll: DiffSegment[] = [];
+    for (const turnHash of targetTurnHashes) {
+      const result = await extractSegmentsFromTurn(db, turnHash);
+      if (!result.ok) {
+        return jsonError(
+          c,
+          getErrorCode(result.error),
+          `Target commit turn ${turnHash}: ${result.message}`,
+          getErrorStatus(result.error)
+        );
+      }
+      targetSegmentsAll.push(...result.segments);
+    }
+
+    baseId = body.base_commit_hash;
+    baseSegments = baseSegmentsAll;
+    targetId = body.target_commit_hash;
+    targetSegments = targetSegmentsAll;
+
+    // For single-turn commits, enable embedding cache
+    if (baseTurnHashes.size === 1 && targetTurnHashes.size === 1) {
+      baseTurnHashForCache = Array.from(baseTurnHashes)[0];
+      targetTurnHashForCache = Array.from(targetTurnHashes)[0];
+      usedCache = true;
+    }
+    // Multi-turn commits: disable embedding cache (too complex to manage)
   }
   // Mode 2: turn_hash mode
   else if (body.baseTurnHash && body.targetTurnHash) {
