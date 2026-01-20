@@ -1,0 +1,702 @@
+/**
+ * Leaves Storage Tests
+ *
+ * Tests all leaf CRUD operations and verifies database effects.
+ * Leaves own constraints, output, and validation results.
+ *
+ * @see docs/specification/semantic-layer-architecture.md
+ */
+
+import type { PGlite } from '@electric-sql/pglite';
+import type { Assertion, ConstraintV4 as Constraint, CreateLeafInput } from '@t3x/core';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
+import { createCommitV4 } from '../queries/commits-v4';
+import {
+  createLeaf,
+  deleteLeaf,
+  findLeafById,
+  findLeavesByCommit,
+  findLeavesByProject,
+  getLeavesByIds,
+  updateLeaf,
+  updateLeafAssertions,
+  updateLeafOutput,
+} from '../queries/leaves';
+import { insertProject } from '../queries/projects';
+import { leaves } from '../schema-v4';
+import { createTestDB, testData } from './setup';
+
+describe('Leaves Storage', () => {
+  let db: AnyDB;
+  let _client: PGlite;
+  let cleanup: () => Promise<void>;
+  let testProjectId: string;
+  let testCommitHash: string;
+
+  beforeAll(async () => {
+    const setup = await createTestDB();
+    db = setup.db;
+    _client = setup.client;
+    cleanup = setup.cleanup;
+
+    // Create a test project
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Leaves Test Project' })
+    );
+    testProjectId = project.projectId;
+
+    // Create a test commit (leaves require a commit hash)
+    const commit = await createCommitV4(db, {
+      parents: [],
+      author: { type: 'human', name: 'Test Author' },
+      sentences: [{ id: 's_1', text: 'Test sentence' }],
+      project_id: testProjectId,
+    });
+    testCommitHash = commit.hash;
+  });
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  describe('createLeaf', () => {
+    it('creates a leaf with all required fields', async () => {
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result).toBeDefined();
+      expect(result.id).toMatch(/^leaf_/);
+      expect(result.commit_hash).toBe(testCommitHash);
+      expect(result.type).toBe('tweet');
+      expect(result.project_id).toBe(testProjectId);
+      expect(result.constraints).toEqual([]);
+      expect(result.config).toEqual({});
+      expect(result.created_at).toBeDefined();
+    });
+
+    it('creates a leaf with title', async () => {
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        title: 'My Tweet',
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result.title).toBe('My Tweet');
+    });
+
+    it('creates a leaf with constraints and generates IDs', async () => {
+      const constraints: Constraint[] = [
+        { id: '', type: 'require', match_mode: 'exact', value: 'hello' },
+        { id: '', type: 'exclude', match_mode: 'semantic', value: 'goodbye' },
+      ];
+
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'email',
+        constraints,
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result.constraints).toHaveLength(2);
+      expect(result.constraints[0].id).toMatch(/^cst_/);
+      expect(result.constraints[1].id).toMatch(/^cst_/);
+      expect(result.constraints[0].type).toBe('require');
+      expect(result.constraints[1].type).toBe('exclude');
+    });
+
+    it('preserves existing constraint IDs', async () => {
+      const constraints: Constraint[] = [
+        { id: 'cst_existing123', type: 'require', match_mode: 'exact', value: 'test' },
+      ];
+
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'article',
+        constraints,
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result.constraints[0].id).toBe('cst_existing123');
+    });
+
+    it('creates a leaf with config', async () => {
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'deploy_agent',
+        config: {
+          prompt_template: 'Generate a {{type}} about {{topic}}',
+          model: 'claude-3-opus',
+          max_tokens: 1000,
+        },
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result.config.prompt_template).toBe('Generate a {{type}} about {{topic}}');
+      expect(result.config.model).toBe('claude-3-opus');
+      expect(result.config.max_tokens).toBe(1000);
+    });
+
+    it('creates a leaf with created_by', async () => {
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'slack',
+        project_id: testProjectId,
+        created_by: 'user_123',
+      };
+
+      const result = await createLeaf(db, input);
+
+      expect(result.created_by).toBe('user_123');
+    });
+
+    it('stores the leaf in the database', async () => {
+      const input: CreateLeafInput = {
+        commit_hash: testCommitHash,
+        type: 'weibo',
+        project_id: testProjectId,
+      };
+
+      const result = await createLeaf(db, input);
+
+      // Verify database effect
+      const rows = await db
+        .select()
+        .from(leaves)
+        .where(eq(leaves.id, result.id));
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(result.id);
+      expect(rows[0].type).toBe('weibo');
+    });
+  });
+
+  describe('findLeafById', () => {
+    it('returns the leaf when it exists', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        title: 'Find Me',
+        project_id: testProjectId,
+      });
+
+      const found = await findLeafById(db, created.id);
+
+      expect(found).toBeDefined();
+      expect(found!.id).toBe(created.id);
+      expect(found!.title).toBe('Find Me');
+    });
+
+    it('returns null when leaf does not exist', async () => {
+      const found = await findLeafById(db, 'leaf_nonexistent');
+
+      expect(found).toBeNull();
+    });
+  });
+
+  describe('findLeavesByCommit', () => {
+    it('returns leaves for a specific commit', async () => {
+      // Create a new commit to avoid pollution from other tests
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Commit Author' },
+        sentences: [{ id: 's_commit', text: 'Commit sentence' }],
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        project_id: testProjectId,
+      });
+
+      const results = await findLeavesByCommit(db, commit.hash);
+
+      expect(results).toHaveLength(2);
+      expect(results.every((l) => l.commit_hash === commit.hash)).toBe(true);
+    });
+
+    it('orders by createdAt descending', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Order Author' },
+        sentences: [{ id: 's_order', text: 'Order sentence' }],
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        title: 'First',
+        project_id: testProjectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 10));
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        title: 'Second',
+        project_id: testProjectId,
+      });
+
+      const results = await findLeavesByCommit(db, commit.hash);
+
+      expect(results[0].title).toBe('Second'); // Newer first
+      expect(results[1].title).toBe('First');
+    });
+
+    it('respects limit option', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Limit Author' },
+        sentences: [{ id: 's_limit', text: 'Limit sentence' }],
+        project_id: testProjectId,
+      });
+
+      for (let i = 0; i < 5; i++) {
+        await createLeaf(db, {
+          commit_hash: commit.hash,
+          type: 'tweet',
+          project_id: testProjectId,
+        });
+      }
+
+      const results = await findLeavesByCommit(db, commit.hash, { limit: 2 });
+
+      expect(results).toHaveLength(2);
+    });
+
+    it('returns empty array when no leaves exist for commit', async () => {
+      const results = await findLeavesByCommit(db, 'sha256:nonexistent');
+
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('findLeavesByProject', () => {
+    it('returns leaves for a specific project', async () => {
+      const project = await insertProject(
+        db,
+        testData.project({ name: 'Project Leaves Test' })
+      );
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Project Author' },
+        sentences: [{ id: 's_proj', text: 'Project sentence' }],
+        project_id: project.projectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: project.projectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        project_id: project.projectId,
+      });
+
+      const results = await findLeavesByProject(db, project.projectId);
+
+      expect(results).toHaveLength(2);
+      expect(results.every((l) => l.project_id === project.projectId)).toBe(true);
+    });
+
+    it('respects limit and offset options', async () => {
+      const project = await insertProject(
+        db,
+        testData.project({ name: 'Pagination Leaves Test' })
+      );
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Page Author' },
+        sentences: [{ id: 's_page', text: 'Page sentence' }],
+        project_id: project.projectId,
+      });
+
+      for (let i = 0; i < 5; i++) {
+        await createLeaf(db, {
+          commit_hash: commit.hash,
+          type: 'tweet',
+          title: `Leaf ${i}`,
+          project_id: project.projectId,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page1 = await findLeavesByProject(db, project.projectId, { limit: 2 });
+      const page2 = await findLeavesByProject(db, project.projectId, { limit: 2, offset: 2 });
+
+      expect(page1).toHaveLength(2);
+      expect(page2).toHaveLength(2);
+    });
+  });
+
+  describe('updateLeaf', () => {
+    it('updates leaf title', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        title: 'Original',
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeaf(db, created.id, { title: 'Updated' });
+
+      expect(updated).toBeDefined();
+      expect(updated!.title).toBe('Updated');
+    });
+
+    it('updates leaf constraints and generates IDs', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const constraints: Constraint[] = [
+        { id: '', type: 'require', match_mode: 'exact', value: 'new value' },
+      ];
+
+      const updated = await updateLeaf(db, created.id, { constraints });
+
+      expect(updated!.constraints).toHaveLength(1);
+      expect(updated!.constraints[0].id).toMatch(/^cst_/);
+      expect(updated!.constraints[0].value).toBe('new value');
+    });
+
+    it('updates leaf config', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'deploy_agent',
+        config: { model: 'old-model' },
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeaf(db, created.id, {
+        config: { model: 'new-model', max_tokens: 500 },
+      });
+
+      expect(updated!.config.model).toBe('new-model');
+      expect(updated!.config.max_tokens).toBe(500);
+    });
+
+    it('updates output and sets generated_at', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeaf(db, created.id, { output: 'Generated content' });
+
+      expect(updated!.output).toBe('Generated content');
+      expect(updated!.generated_at).toBeDefined();
+    });
+
+    it('updates assertions and generates IDs', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        constraints: [{ id: 'cst_abc', type: 'require', match_mode: 'exact', value: 'test' }],
+        project_id: testProjectId,
+      });
+
+      const assertions: Assertion[] = [
+        { id: '', constraint_id: 'cst_abc', passed: true, details: 'Found' },
+      ];
+
+      const updated = await updateLeaf(db, created.id, { assertions });
+
+      expect(updated!.assertions).toHaveLength(1);
+      expect(updated!.assertions![0].id).toMatch(/^ast_/);
+      expect(updated!.assertions![0].passed).toBe(true);
+    });
+
+    it('returns null when leaf does not exist', async () => {
+      const updated = await updateLeaf(db, 'leaf_nonexistent', { title: 'New' });
+
+      expect(updated).toBeNull();
+    });
+
+    it('returns existing leaf when no updates provided', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        title: 'No Change',
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeaf(db, created.id, {});
+
+      expect(updated).toBeDefined();
+      expect(updated!.title).toBe('No Change');
+    });
+  });
+
+  describe('updateLeafOutput', () => {
+    it('updates output and sets generated_at', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeafOutput(db, created.id, 'New output content');
+
+      expect(updated).toBeDefined();
+      expect(updated!.output).toBe('New output content');
+      expect(updated!.generated_at).toBeDefined();
+    });
+
+    it('returns null when leaf does not exist', async () => {
+      const updated = await updateLeafOutput(db, 'leaf_nonexistent', 'Content');
+
+      expect(updated).toBeNull();
+    });
+  });
+
+  describe('updateLeafAssertions', () => {
+    it('updates assertions with generated IDs', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        constraints: [{ id: 'cst_test', type: 'require', match_mode: 'exact', value: 'test' }],
+        project_id: testProjectId,
+      });
+
+      const assertions: Assertion[] = [
+        { id: '', constraint_id: 'cst_test', passed: true, details: 'Found in output' },
+        { id: '', constraint_id: 'cst_test', passed: false, details: 'Not found', lesson: 'Check formatting' },
+      ];
+
+      const updated = await updateLeafAssertions(db, created.id, assertions);
+
+      expect(updated).toBeDefined();
+      expect(updated!.assertions).toHaveLength(2);
+      expect(updated!.assertions![0].id).toMatch(/^ast_/);
+      expect(updated!.assertions![1].id).toMatch(/^ast_/);
+      expect(updated!.assertions![1].lesson).toBe('Check formatting');
+    });
+
+    it('preserves existing assertion IDs', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'email',
+        project_id: testProjectId,
+      });
+
+      const assertions: Assertion[] = [
+        { id: 'ast_existing', constraint_id: 'cst_1', passed: true, details: 'OK' },
+      ];
+
+      const updated = await updateLeafAssertions(db, created.id, assertions);
+
+      expect(updated!.assertions![0].id).toBe('ast_existing');
+    });
+
+    it('returns null when leaf does not exist', async () => {
+      const updated = await updateLeafAssertions(db, 'leaf_nonexistent', []);
+
+      expect(updated).toBeNull();
+    });
+  });
+
+  describe('deleteLeaf', () => {
+    it('deletes a leaf', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const deleted = await deleteLeaf(db, created.id);
+      expect(deleted).toBe(true);
+
+      const found = await findLeafById(db, created.id);
+      expect(found).toBeNull();
+    });
+
+    it('returns false when leaf does not exist', async () => {
+      const deleted = await deleteLeaf(db, 'leaf_nonexistent');
+      expect(deleted).toBe(false);
+    });
+  });
+
+  describe('getLeavesByIds', () => {
+    it('returns multiple leaves in single query', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Batch Author' },
+        sentences: [{ id: 's_batch', text: 'Batch sentence' }],
+        project_id: testProjectId,
+      });
+
+      const leaf1 = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const leaf2 = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        project_id: testProjectId,
+      });
+
+      const results = await getLeavesByIds(db, [leaf1.id, leaf2.id]);
+
+      expect(results).toHaveLength(2);
+      const ids = results.map((l) => l.id);
+      expect(ids).toContain(leaf1.id);
+      expect(ids).toContain(leaf2.id);
+    });
+
+    it('returns empty array for empty input', async () => {
+      const results = await getLeavesByIds(db, []);
+      expect(results).toHaveLength(0);
+    });
+
+    it('returns only existing leaves when some IDs are invalid', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const results = await getLeavesByIds(db, [
+        created.id,
+        'leaf_nonexistent1',
+        'leaf_nonexistent2',
+      ]);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe(created.id);
+    });
+
+    it('preserves input order', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Order Author' },
+        sentences: [{ id: 's_order2', text: 'Order sentence' }],
+        project_id: testProjectId,
+      });
+
+      const leaf1 = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        title: 'First',
+        project_id: testProjectId,
+      });
+
+      const leaf2 = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        title: 'Second',
+        project_id: testProjectId,
+      });
+
+      const leaf3 = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'article',
+        title: 'Third',
+        project_id: testProjectId,
+      });
+
+      // Request in specific order: 3, 1, 2
+      const results = await getLeavesByIds(db, [leaf3.id, leaf1.id, leaf2.id]);
+
+      expect(results).toHaveLength(3);
+      expect(results[0].id).toBe(leaf3.id);
+      expect(results[1].id).toBe(leaf1.id);
+      expect(results[2].id).toBe(leaf2.id);
+    });
+  });
+
+  describe('output format', () => {
+    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        title: 'Format Test',
+        project_id: testProjectId,
+        created_by: 'user_123',
+      });
+
+      // Verify snake_case keys exist
+      expect(created).toHaveProperty('commit_hash');
+      expect(created).toHaveProperty('project_id');
+      expect(created).toHaveProperty('created_at');
+      expect(created).toHaveProperty('created_by');
+
+      // Verify camelCase keys don't exist
+      expect(created).not.toHaveProperty('commitHash');
+      expect(created).not.toHaveProperty('projectId');
+      expect(created).not.toHaveProperty('createdAt');
+      expect(created).not.toHaveProperty('createdBy');
+    });
+
+    it('converts generated_at to ISO string', async () => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      const updated = await updateLeafOutput(db, created.id, 'Test output');
+
+      expect(updated!.generated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    });
+  });
+
+  describe('leaf types', () => {
+    it.each([
+      'deploy_agent',
+      'tweet',
+      'weibo',
+      'wechat',
+      'email',
+      'article',
+      'slack',
+      'eval',
+    ] as const)('supports leaf type: %s', async (type) => {
+      const created = await createLeaf(db, {
+        commit_hash: testCommitHash,
+        type,
+        project_id: testProjectId,
+      });
+
+      expect(created.type).toBe(type);
+
+      const found = await findLeafById(db, created.id);
+      expect(found!.type).toBe(type);
+    });
+  });
+});
