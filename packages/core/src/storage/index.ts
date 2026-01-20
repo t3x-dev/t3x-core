@@ -14,10 +14,17 @@ export {
   computeJCSHash,
   computeTextHash,
   computeTurnHash,
+  // V3 ID generation
   generateBranchId,
   generateConversationId,
   generateDraftId,
   generateMergeDraftId,
   generateProjectId,
+  // V4 ID generation
+  generateAssertionId,
+  generateConstraintId,
+  generateLeafId,
+  generatePinId,
+  generateSentenceId,
   isoNow,
 } from './utils';
