@@ -142,3 +142,43 @@ export {
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 export * from './storage';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V4 Architecture Types
+// @see docs/specification/semantic-layer-architecture.md
+// @see docs/specification/memory-pin-system-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  // ID Prefixes
+  ID_PREFIXES,
+  // Sentence
+  type Sentence as SentenceV4,
+  type SentenceSourceRef,
+  // CommitV4 (pure knowledge, no constraints)
+  type CommitV4,
+  type CommitV4Content,
+  type CommitAuthor as CommitAuthorV4,
+  type CommitSourceRef,
+  // Constraint (now belongs to Leaf)
+  type Constraint as ConstraintV4,
+  type RequireConstraint as RequireConstraintV4,
+  type ExcludeConstraint as ExcludeConstraintV4,
+  // Assertion
+  type Assertion,
+  // Leaf (owns constraints)
+  type Leaf,
+  type LeafType,
+  type LeafConfig,
+  // Pin (source selection)
+  type Pin,
+  type PinType,
+  // Conversation Context
+  type ConversationContext,
+  // Built Context
+  type BuiltContext,
+  type ContextSource,
+  // Input types
+  type CreateCommitV4Input,
+  type CreateLeafInput,
+  type CreatePinInput,
+} from './types/v4';
