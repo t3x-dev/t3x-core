@@ -114,7 +114,7 @@ T3X uses PostgreSQL (via Drizzle ORM):
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
-Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `commits_v3`, `segment_embeddings`
+Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `commits_v3`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
 
 ### Hash Chains
 
@@ -127,6 +127,41 @@ Semantic extraction happens in three rings:
 - **Ring 1**: Keywords, entities, temporal anchors, preference tags
 - **Ring 2**: Intent seeds, relations, facets
 - **Ring 3**: Sentence-level segments
+
+### Diff Engine (t3x-core)
+
+Semantic diff engine for comparing commits:
+- **Two-way diff**: Compare Draft vs parent Commit (self-check scenario)
+- **Three-way diff**: Merge preview with conflict detection (merge scenario)
+
+Algorithm: Encodes sentences as vectors, calculates cosine similarity, classifies as SAME/MODIFIED/ADDED/REMOVED/CONFLICT based on threshold (default 0.70).
+
+### Merge System (t3x-core)
+
+Two-phase merge process:
+1. **prepareMerge**: Analyzes source/target commits, returns `Merge2WayResult` with:
+   - `identical`: Auto-kept sentences (no user action)
+   - `similarPairs`: User must choose source or target
+   - `onlyInSource`/`onlyInTarget`: User can keep or discard
+2. **executeMerge**: Applies user decisions, generates merged commit
+
+### Runner (apps/runner)
+
+Grey-box agent evaluation engine:
+- **Observer**: Captures agent I/O traces (LLM calls, tool invocations)
+- **EvalEngine**: Runs test steps against traces using rule-based assertions
+- **n8n Integration**: Workflow execution and trace collection
+
+```typescript
+// Usage pattern
+import { observer, evalEngine } from '@t3x/runner';
+
+observer.registerAgent({ id: 'my-agent', endpoint: 'http://...', type: 'http' });
+const runId = observer.startRun('my-agent', { input: { query: 'hello' } });
+observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
+const trace = observer.completeRun(runId, output, 'completed');
+const result = await evalEngine.evaluate({ trace, test_steps: [...] });
+```
 
 ## WebUI Architecture (apps/web)
 
@@ -186,7 +221,34 @@ vi.mock('@/lib/db', () => ({
 }
 ```
 
-### Commit Record
+### CommitV3 Record (Current)
+```json
+{
+  "hash": "sha256:...",
+  "schema": "commit/v3",
+  "parents": ["sha256:..."],
+  "author": { "name": "user", "identity": "...", "verification": "none|device|verified" },
+  "committed_at": "ISO8601",
+  "content": {
+    "sentences": [
+      { "id": "s1", "text": "...", "source": { "turn_hash": "...", "start_char": 0, "end_char": 50 } }
+    ],
+    "constraints": [
+      { "type": "require", "id": "c1", "value": "...", "match": "exact|semantic", "source_sentence_id": "s1" },
+      { "type": "exclude", "id": "c2", "value": "...", "match": "exact|semantic", "reason": "..." }
+    ]
+  },
+  "project_id": "proj_...",
+  "message": "...",
+  "branch": "main"
+}
+```
+
+**Field Classification:**
+- **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
+- **Second-class (not in hash)**: `project_id`, `message`, `branch`, `positionX`, `positionY`
+
+### Legacy Commit Record (V2)
 ```json
 {
   "commit_hash": "sha256:...",
@@ -213,3 +275,82 @@ Copy `.env.example` to `.env`:
 - `DATABASE_URL`: PostgreSQL connection string (production/Docker)
 - `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
 - `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
+- `N8N_BASE_URL`: n8n workflow engine URL (default: http://localhost:5678)
+- `RUNNER_BASE_URL`: Runner service URL (default: http://localhost:8080)
+
+## ID Conventions
+
+T3X uses prefixed IDs for type safety:
+- `proj_` - Project IDs
+- `conv_` - Conversation IDs
+- `s_` or `s1`, `s2` - Sentence IDs (within commits)
+- `c_` or `c1`, `c2` - Constraint IDs (within commits)
+- `mc1`, `mc2` - Merged constraint IDs (generated during merge)
+
+## API Naming Conventions
+
+- **API/Database/TypeScript types**: `snake_case` (e.g., `turn_hash`, `project_id`, `committed_at`)
+- **JavaScript variables**: `camelCase` (e.g., `turnHash`, `projectId`, `committedAt`)
+- **API responses**: Return `null` for absent optional fields
+- **TypeScript interfaces**: Use `?` for optional fields (maps to `undefined`)
+
+## V4 Architecture Parallel Development Rules
+
+> Status: Active (Phase 1 in progress)
+> Related docs: docs/specification/semantic-layer-architecture.md, docs/specification/memory-pin-system-design.md
+
+### Contract Files (Single Source of Truth)
+
+| File | Purpose | Can Modify Alone? |
+|------|---------|-------------------|
+| packages/core/src/types/v4/index.ts | TypeScript types | ❌ No |
+| packages/storage/src/schema-v4.ts | Database schema | ❌ No |
+| apps/api/src/schemas/v4-contracts.ts | API contracts | ❌ No |
+
+Rule: Contract = Law, Implementation = Freedom
+
+- ✅ Implement according to contracts freely
+- ❌ Do NOT modify contract files without team agreement
+- If contract needs change → discuss first → modify together → both review PR
+
+### Import Rules
+
+```typescript
+// ✅ Correct: Import from @t3x/core
+import { CommitV4, Leaf, Pin, Constraint } from '@t3x/core';
+
+// ❌ Wrong: Redefine types locally
+interface Leaf { ... }  // DON'T DO THIS
+```
+
+### Naming Conventions
+
+| Layer | Convention | Example |
+|-------|------------|---------|
+| TypeScript types | snake_case | commit_hash, selected_pin_ids |
+| DB columns | snake_case | commit_hash, selected_pin_ids |
+| API JSON | snake_case | { "commit_hash": "..." } |
+| JS variables | camelCase | const commitHash = ... |
+
+### ID Prefixes
+
+| Entity | Prefix | Example |
+|--------|--------|---------|
+| Sentence | s_ | s_abc123 |
+| Constraint | cst_ | cst_def456 |
+| Assertion | ast_ | ast_ghi789 |
+| Leaf | leaf_ | leaf_jkl012 |
+| Pin | pin_ | pin_mno345 |
+
+### V4 Architecture Summary
+
+```
+CommitV4 = Sentences only (pure knowledge, NO constraints)
+Leaf = Constraints + Output + Validation (application layer)
+Pin = Source selection (for commit sources + conversation context)
+```
+
+### Track Assignment
+
+- Track A (Storage/Core): commits-v4.ts, leaves.ts, pins.ts queries, context builder
+- Track B (API/UI): /v1/leaves, /v1/pins routes, WebUI stores, components
