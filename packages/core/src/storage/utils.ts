@@ -27,6 +27,28 @@ export function generateMergeDraftId(): string {
   return `mdraft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+// === V4 ID Generation (12-char IDs per V4 spec) ===
+
+export function generateLeafId(): string {
+  return `leaf_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generateConstraintId(): string {
+  return `cst_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generateAssertionId(): string {
+  return `ast_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generatePinId(): string {
+  return `pin_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generateSentenceId(): string {
+  return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
 // === Timestamps ===
 
 export function isoNow(): string {

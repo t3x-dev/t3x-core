@@ -173,3 +173,17 @@ export {
   type UpdateMergeDraftInput,
   updateMergeDraft,
 } from './merge-drafts';
+// Leaves (V4 - owns constraints, output, validation)
+export {
+  createLeaf,
+  deleteLeaf,
+  findLeafById,
+  findLeavesByCommit,
+  findLeavesByProject,
+  getLeavesByIds,
+  type ListLeavesOptions,
+  type UpdateLeafInput,
+  updateLeaf,
+  updateLeafAssertions,
+  updateLeafOutput,
+} from './leaves';
