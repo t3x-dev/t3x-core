@@ -23,21 +23,22 @@ import { cn } from '@/lib/utils';
 const PROMPT_VERSIONS = {
   v1: {
     label: 'V1 (Baseline)',
-    description: 'Initial prompt with room for improvement',
-    content: `You are a weather assistant. Users will ask weather-related questions.
-Please answer user questions as comprehensively as possible. You can use the following tools:
-- WeatherTool: Query weather
-- SearchTool: Web search
-- CalculatorTool: Math calculations
-Make sure your answers are thorough and professional.`,
+    description: 'Initial prompt - encourages using multiple tools',
+    content: `You are a comprehensive weather research assistant.
+For ANY weather question, you MUST:
+1. First use SearchTool to find background information about the location
+2. Then use WeatherTool to get current weather data
+3. Use CalculatorTool if any numbers need conversion or calculation
+Always gather information from multiple sources before answering.
+Provide detailed, thorough responses with all available context.`,
     rulesRef: 'weather-agent-eval',
   },
   v2: {
     label: 'V2 (Optimized)',
-    description: 'Optimized prompt for better performance',
+    description: 'Optimized prompt - focused and efficient',
     content: `You are a weather assistant.
-Please answer user weather questions concisely. Prioritize using WeatherTool to query weather, only use other tools when clearly needed.
-Keep responses under 100 words.`,
+For weather questions, use ONLY the WeatherTool. Do not use SearchTool or CalculatorTool.
+Answer concisely in under 100 words.`,
     rulesRef: 'weather-agent-eval',
   },
 } as const;
