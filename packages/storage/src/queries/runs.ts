@@ -388,18 +388,22 @@ export async function getConfigurationStats(
     let passCount = 0;
 
     for (const run of groupRuns) {
-      // Parse result JSON for score
+      // Parse result JSON for score and passed status
       if (run.resultJson) {
         try {
           const result = JSON.parse(run.resultJson);
-          // Try to get score from eval_metrics or run_report
-          const score = result.eval_metrics?.overall_score
+          // v2.2 fix: Get score from run_report.eval_result.score (actual data structure)
+          const evalResult = result.run_report?.eval_result;
+          const score = evalResult?.score
+            ?? result.eval_metrics?.overall_score
             ?? result.run_report?.overall_score
             ?? result.overall_score;
           if (typeof score === 'number') {
             scores.push(score);
-            if (score >= 0.6) passCount++; // Consider >= 60% as pass
           }
+          // Use eval_result.passed if available, otherwise fallback to score >= 0.6
+          const passed = evalResult?.passed ?? (typeof score === 'number' && score >= 0.6);
+          if (passed) passCount++;
         } catch {
           // Ignore parse errors
         }
