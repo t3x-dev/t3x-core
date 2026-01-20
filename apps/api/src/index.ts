@@ -30,6 +30,7 @@ import {
   turnRoutes,
   deployAgentRoutes,
   runsRoutes,
+  leavesRoutes,
 } from './routes';
 import { projectRoutes } from './routes/projects.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
@@ -100,6 +101,7 @@ api.route('/', mergeRoutes); // /v1/merge
 api.route('/', runnerRoutes); // /v1/runner/*
 api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', runsRoutes); // /v1/runs
+api.route('/', leavesRoutes); // /v1/leaves
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -127,6 +129,7 @@ api.doc('/openapi.json', {
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
     { name: 'Runner', description: 'Grey-box agent evaluation' },
+    { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
   ],
 });
 

@@ -20,6 +20,7 @@
     "@t3x/runner": "workspace:*",
     "@t3x/storage": "workspace:*",
     "hono": "^4.7.10",
+    "nanoid": "^5.1.6",
     "undici": "^7.16.0",
     "zod": "^4.2.1"
   },
