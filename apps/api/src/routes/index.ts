@@ -5,12 +5,10 @@
 export { agentDraftRoutes } from './agent-drafts';
 export { branchRoutes } from './branches';
 export { chatRoutes } from './chat';
-export { commitRoutes } from './commits';
 export { commitsV3Routes } from './commits-v3.openapi';
 export { conversationRoutes } from './conversations';
 export { curateRoutes } from './curate';
 export { diffRoutes } from './diff';
-export { draftRoutes } from './drafts';
 export { exportRoutes } from './export';
 export { healthRoutes } from './health';
 export { mergeRoutes } from './merge';

@@ -19,20 +19,6 @@ export {
   switchBranch,
   updateBranchHead,
 } from './branches';
-// Commits
-export {
-  CommitError,
-  type CreateCommitInput,
-  findCommitByHash,
-  findCommitHistory,
-  findCommitParents,
-  findCommitsByProject,
-  findCommonAncestor,
-  insertCommit,
-  type ListCommitsOptions,
-  type TurnWindow,
-  updateCommitPosition,
-} from './commits';
 // Commits V3
 export {
   type CommitV3Author,
@@ -45,6 +31,8 @@ export {
   type CreateCommitV3Options,
   createCommitV3,
   deleteCommitV3,
+  findCommitV3History,
+  findCommonAncestorV3,
   getCommitV3,
   getCommitV3Parents,
   getCommitsV3ByHashes,
@@ -53,6 +41,21 @@ export {
   ParentNotFoundError,
   updateCommitV3Position,
 } from './commits-v3';
+// Commits V4 (pure knowledge - no constraints)
+export {
+  computeCommitV4Hash,
+  type CreateCommitV4Options,
+  createCommitV4,
+  deleteCommitV4,
+  findCommitV4ByHash,
+  findCommitsV4ByBranch,
+  findCommitsV4ByProject,
+  getCommitV4Parents,
+  getCommitsV4ByHashes,
+  type ListCommitsV4Options,
+  ParentNotFoundErrorV4,
+  updateCommitV4Position,
+} from './commits-v4';
 // Conversations
 export {
   type CreateConversationInput,
