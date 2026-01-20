@@ -137,6 +137,28 @@ CREATE TABLE IF NOT EXISTS commits_v3 (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Commits V4 (pure knowledge - no constraints)
+CREATE TABLE IF NOT EXISTS commits_v4 (
+  -- First class (in hash)
+  hash TEXT PRIMARY KEY,
+  schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
+  parents JSONB NOT NULL DEFAULT '[]',
+  author JSONB NOT NULL,
+  committed_at TIMESTAMPTZ NOT NULL,
+  content JSONB NOT NULL,
+
+  -- Second class (not in hash)
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  message TEXT,
+  branch TEXT,
+  source_refs JSONB,
+  position_x REAL,
+  position_y REAL,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
 CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
@@ -153,6 +175,9 @@ CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(em
 CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_branch ON commits_v3(branch);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_committed_at ON commits_v3(committed_at);
+CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
+CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
+CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
 `;
 
 /**
