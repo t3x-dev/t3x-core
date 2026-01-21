@@ -194,7 +194,14 @@ export const ListLeavesResponse = SuccessResponse(z.array(LeafResponse));
 export const UpdateLeafRequest = z.object({
   title: z.string().optional(),
   constraints: z.array(ConstraintSchema).optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z
+    .object({
+      prompt_template: z.string().optional(),
+      model: z.string().optional(),
+      max_tokens: z.number().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 export const UpdateLeafResponse = SuccessResponse(LeafResponse);
