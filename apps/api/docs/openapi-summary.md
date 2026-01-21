@@ -15,6 +15,11 @@ The T3X Merge API has been fully documented using OpenAPI 3.1 specification.
 2. **`src/routes/merge.openapi.ts`** - OpenAPI-enabled merge routes
    - `POST /v1/merge/prepare` - Two-way merge preparation
    - `POST /v1/merge/execute` - Merge execution with user resolutions
+   - `POST /v1/merge/drafts` - Create merge draft (NEW)
+   - `GET /v1/merge/drafts/:id` - Get merge draft (NEW)
+   - `PATCH /v1/merge/drafts/:id` - Update merge draft decisions (NEW)
+   - `POST /v1/merge/drafts/:id/commit` - Commit merge draft (NEW)
+   - `DELETE /v1/merge/drafts/:id` - Delete merge draft (NEW)
    - Complete request/response documentation
    - Detailed descriptions and examples
 
@@ -129,10 +134,11 @@ The merge routes follow the same OpenAPI pattern as other routes (e.g., projects
 ### Verification
 
 ✅ **Build**: Successfully compiled with all OpenAPI routes
-✅ **Tests**: All 8 merge API tests passing
+✅ **Tests**: All merge API tests passing
 ✅ **OpenAPI JSON**: Accessible at `/api/openapi.json`
 ✅ **Merge Prepare**: `/v1/merge/prepare` documented
 ✅ **Merge Execute**: `/v1/merge/execute` documented
+✅ **Merge Drafts**: `/v1/merge/drafts/*` documented (NEW)
 
 ### Developer Usage
 
