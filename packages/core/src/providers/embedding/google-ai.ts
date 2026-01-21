@@ -84,8 +84,20 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
     }
 
     try {
-      // Use batch API for efficiency (single HTTP request)
-      return await this.embedBatch(texts);
+      // Google AI API limits batch to 100 requests
+      const BATCH_SIZE = 100;
+      if (texts.length <= BATCH_SIZE) {
+        return await this.embedBatch(texts);
+      }
+
+      // Split into chunks and process sequentially
+      const results: number[][] = [];
+      for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+        const chunk = texts.slice(i, i + BATCH_SIZE);
+        const embeddings = await this.embedBatch(chunk);
+        results.push(...embeddings);
+      }
+      return results;
     } catch (error) {
       throw new EmbeddingProviderError(
         this.id,
