@@ -17,8 +17,10 @@ import {
 } from '@t3x/core';
 import {
   deleteConversation,
+  findCommitV4ByHash,
   findConversationById,
   findConversationsByProject,
+  findCurrentBranch,
   findPinsByProject,
   findProjectById,
   findTurnsByConversation,
@@ -340,7 +342,15 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
     // 3. Get project pins
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
-    // 4. Load pinned conversations data
+    // 4. Get current commit from branch HEAD (reuse existing branch system)
+    let currentCommit = undefined;
+    const currentBranch = await findCurrentBranch(db, conversation.projectId);
+    if (currentBranch?.headCommitHash) {
+      // Try V4 commit first, fallback gracefully if not found
+      currentCommit = await findCommitV4ByHash(db, currentBranch.headCommitHash) ?? undefined;
+    }
+
+    // 5. Load pinned conversations data
     const conversationPins = projectPins.filter((p) => p.type === 'conversation');
     const conversations = new Map<string, ConversationData>();
 
@@ -362,16 +372,15 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
       });
     }
 
-    // 5. Load pinned leaves data
+    // 6. Load pinned leaves data
     const leafPins = projectPins.filter((p) => p.type === 'leaf');
     const leafIds = leafPins.map((p) => p.ref_id);
     const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
     const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
 
-    // 6. Build context using Track A's buildConversationContext
-    // Note: currentCommit is not included for now (would need branch HEAD logic)
+    // 7. Build context using Track A's buildConversationContext
     const builtContext = buildConversationContext({
-      currentCommit: undefined, // TODO: Add when we have branch HEAD logic
+      currentCommit,
       projectPins,
       contextConfig,
       conversations,

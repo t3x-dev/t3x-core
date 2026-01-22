@@ -26,12 +26,14 @@ import {
 import { CreateCommitV4Request, CommitV4Response } from '../schemas/v4-contracts';
 import {
   createCommitV4,
-  findCommitV4ByHash,
-  findCommitsV4ByProject,
-  findCommitsV4ByBranch,
-  updateCommitV4Position,
   deleteCommitV4,
+  ensureMainBranch,
+  findCommitV4ByHash,
+  findCommitsV4ByBranch,
+  findCommitsV4ByProject,
   ParentNotFoundErrorV4,
+  updateBranchHead,
+  updateCommitV4Position,
 } from '@t3x/storage/pglite';
 import type { CommitV4 } from '@t3x/core';
 
@@ -306,6 +308,24 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       position_x: body.position_x,
       position_y: body.position_y,
     });
+
+    // Update branch HEAD to point to the new commit
+    if (body.branch && body.project_id) {
+      // Ensure main branch exists (idempotent)
+      if (body.branch === 'main') {
+        await ensureMainBranch(db, body.project_id);
+      }
+
+      const updated = await updateBranchHead(db, body.project_id, body.branch, commit.hash);
+
+      // Warn if non-main branch doesn't exist
+      if (!updated && body.branch !== 'main') {
+        console.warn(
+          `[commits-v4] Branch "${body.branch}" not found for project ${body.project_id}. ` +
+            'HEAD not updated. Create the branch first or use "main".'
+        );
+      }
+    }
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
   } catch (err) {
