@@ -182,3 +182,17 @@ export {
   type CreateLeafInput,
   type CreatePinInput,
 } from './types/v4';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Context Builder (V4)
+// @see docs/specification/memory-pin-system-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  buildConversationContext,
+  buildLeafContext,
+  buildMemoryFromPins,
+  type ContextBuildInput,
+  type ConversationData,
+  estimateTokens,
+  filterActivePins,
+} from './context';
