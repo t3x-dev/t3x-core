@@ -187,3 +187,16 @@ export {
   updateLeafAssertions,
   updateLeafOutput,
 } from './leaves';
+// Pins (V4 - source selection for commits and context)
+export {
+  createPin,
+  deletePin,
+  deletePinByRef,
+  findPinById,
+  findPinByRef,
+  findPinsByProject,
+  findPinsByType,
+  getPinsByIds,
+  type ListPinsOptions,
+  updatePinAssertions,
+} from './pins';
