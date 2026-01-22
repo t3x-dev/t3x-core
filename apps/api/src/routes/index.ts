@@ -20,3 +20,4 @@ export { deployAgentRoutes } from './deploy-agents';
 export { runsRoutes } from './runs';
 export { leavesRoutes } from './leaves.openapi';
 export { pinsRoutes } from './pins.openapi';
+export { commitsV4Routes } from './commits-v4.openapi';
