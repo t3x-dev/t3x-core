@@ -396,6 +396,19 @@ export interface ContextSource {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * First-class fields of CommitV4 that participate in hash calculation.
+ *
+ * Used by computeCommitV4Hash() to ensure only these fields are hashed.
+ *
+ * NOT included (second-class):
+ * - project_id, message, branch, source_refs, position_x, position_y
+ */
+export type CommitV4FirstClass = Pick<
+  CommitV4,
+  'schema' | 'parents' | 'author' | 'committed_at' | 'content'
+>;
+
+/**
  * Input for creating a new CommitV4.
  */
 export interface CreateCommitV4Input {

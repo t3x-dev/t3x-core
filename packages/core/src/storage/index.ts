@@ -28,3 +28,6 @@ export {
   generateSentenceId,
   isoNow,
 } from './utils';
+
+// V4 Hash computation
+export { computeCommitV4Hash, type CommitV4FirstClass } from './hash-v4';
