@@ -200,3 +200,9 @@ export {
   type ListPinsOptions,
   updatePinAssertions,
 } from './pins';
+// Conversation Contexts (per-conversation context customization)
+export {
+  deleteConversationContext,
+  getConversationContext,
+  setConversationContext,
+} from './conversation-contexts';
