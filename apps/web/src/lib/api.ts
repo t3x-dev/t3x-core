@@ -13,6 +13,7 @@ import type {
   AnchorType,
   AnchorConstraint,
 } from '@/types/nodes';
+import type { Pin } from '@t3x/core';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -1822,7 +1823,8 @@ export async function compareConfigurations(
 
 export type PinType = 'conversation' | 'leaf';
 
-export interface Pin {
+/** API response format for Pin (uses null for absent values) */
+interface ApiPin {
   id: string;
   project_id: string;
   type: PinType;
@@ -1831,6 +1833,21 @@ export interface Pin {
   pinned_at: string;
   pinned_by: string | null;
 }
+
+/** Convert API Pin response to core Pin type (null → undefined) */
+function toPin(apiPin: ApiPin): Pin {
+  return {
+    id: apiPin.id,
+    project_id: apiPin.project_id,
+    type: apiPin.type,
+    ref_id: apiPin.ref_id,
+    selected_assertion_ids: apiPin.selected_assertion_ids ?? undefined,
+    pinned_at: apiPin.pinned_at,
+    pinned_by: apiPin.pinned_by ?? undefined,
+  };
+}
+
+export type { Pin } from '@t3x/core';
 
 export interface PinListData {
   pins: Pin[];
@@ -1847,7 +1864,8 @@ export async function listPins(
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pins${query ? `?${query}` : ''}`
   );
-  return handleResponse<Pin[]>(res);
+  const apiPins = await handleResponse<ApiPin[]>(res);
+  return apiPins.map(toPin);
 }
 
 /**
@@ -1871,7 +1889,8 @@ export async function createPinApi(
       }),
     }
   );
-  return handleResponse<Pin>(res);
+  const apiPin = await handleResponse<ApiPin>(res);
+  return toPin(apiPin);
 }
 
 /**
@@ -1901,7 +1920,8 @@ export async function updatePinAssertionsApi(
       }),
     }
   );
-  return handleResponse<Pin>(res);
+  const apiPin = await handleResponse<ApiPin>(res);
+  return toPin(apiPin);
 }
 
 export async function* chatStream(

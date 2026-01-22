@@ -5,7 +5,7 @@
  * Tests cover all CRUD operations and error handling.
  */
 
-import { insertProject } from '@t3x/storage';
+import { findBranchByName, findCurrentBranch, insertProject } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -509,6 +509,105 @@ describe('Commits V4 Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('Branch HEAD Integration', () => {
+    it('creates main branch automatically when creating first V4 commit', async () => {
+      // Create a new project with no branches
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Branch Integration Test Project' })
+      );
+
+      // Verify no main branch exists yet
+      const branchBefore = await findBranchByName(mockDB, project.projectId, 'main');
+      expect(branchBefore).toBeNull();
+
+      // Create V4 commit with branch: "main"
+      const res = await app.request('/v1/commits-v4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: { type: 'human', name: 'Branch Test' },
+          sentences: [{ id: 's_1', text: 'Testing branch integration.' }],
+          project_id: project.projectId,
+          branch: 'main',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+
+      // Verify main branch was created and HEAD is updated
+      const branchAfter = await findBranchByName(mockDB, project.projectId, 'main');
+      expect(branchAfter).not.toBeNull();
+      expect(branchAfter!.headCommitHash).toBe(data.data.hash);
+    });
+
+    it('updates branch HEAD when creating subsequent commits', async () => {
+      // Create a new project
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Branch HEAD Update Test' })
+      );
+
+      // Create first commit
+      const res1 = await app.request('/v1/commits-v4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: { type: 'human' },
+          sentences: [{ id: 's_1', text: 'First commit.' }],
+          project_id: project.projectId,
+          branch: 'main',
+        }),
+      });
+      const data1: ApiResponse = await res1.json();
+
+      // Create second commit
+      const res2 = await app.request('/v1/commits-v4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: { type: 'human' },
+          sentences: [{ id: 's_1', text: 'Second commit.' }],
+          project_id: project.projectId,
+          branch: 'main',
+          parents: [data1.data.hash],
+        }),
+      });
+      const data2: ApiResponse = await res2.json();
+
+      // Verify HEAD points to second commit
+      const branch = await findBranchByName(mockDB, project.projectId, 'main');
+      expect(branch!.headCommitHash).toBe(data2.data.hash);
+    });
+
+    it('sets main branch as current branch', async () => {
+      // Create a new project
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Current Branch Test' })
+      );
+
+      // Create commit with branch: "main"
+      await app.request('/v1/commits-v4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: { type: 'human' },
+          sentences: [{ id: 's_1', text: 'Test current branch.' }],
+          project_id: project.projectId,
+          branch: 'main',
+        }),
+      });
+
+      // Verify main is the current branch
+      const currentBranch = await findCurrentBranch(mockDB, project.projectId);
+      expect(currentBranch).not.toBeNull();
+      expect(currentBranch!.name).toBe('main');
     });
   });
 });

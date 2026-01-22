@@ -8,8 +8,8 @@
  */
 
 import { create } from 'zustand';
+import type { Pin, PinType } from '@t3x/core';
 import * as api from '@/lib/api';
-import type { Pin, PinType } from '@/lib/api';
 
 type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void;
 
