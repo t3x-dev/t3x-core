@@ -105,6 +105,9 @@ export interface CommitV4 {
 
   /** Canvas position Y */
   position_y?: number;
+
+  /** Database record creation timestamp, ISO8601 */
+  created_at?: string;
 }
 
 export interface CommitV4Content {
@@ -401,7 +404,7 @@ export interface ContextSource {
  * Used by computeCommitV4Hash() to ensure only these fields are hashed.
  *
  * NOT included (second-class):
- * - project_id, message, branch, source_refs, position_x, position_y
+ * - project_id, message, branch, source_refs, position_x, position_y, created_at
  */
 export type CommitV4FirstClass = Pick<
   CommitV4,
