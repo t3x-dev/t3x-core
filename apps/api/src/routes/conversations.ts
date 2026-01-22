@@ -6,15 +6,27 @@
  * GET    /v1/conversations/:id - Get conversation with turn count
  * PUT    /v1/conversations/:id - Update conversation
  * DELETE /v1/conversations/:id - Delete conversation
+ * GET    /v1/conversations/:id/context - Get context config
+ * PUT    /v1/conversations/:id/context - Update context config
+ * GET    /v1/conversations/:id/memory - Get built memory string (requires Track A)
  */
 
+import {
+  buildConversationContext,
+  type ConversationData,
+} from '@t3x/core';
 import {
   deleteConversation,
   findConversationById,
   findConversationsByProject,
+  findPinsByProject,
   findProjectById,
+  findTurnsByConversation,
+  getConversationContext,
   getConversationTurnCount,
+  getLeavesByIds,
   insertConversation,
+  setConversationContext,
   updateConversation,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
@@ -225,5 +237,150 @@ conversationRoutes.delete('/v1/conversations/:id', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'DELETE_FAILED', message, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Conversation Context Endpoints (V4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /v1/conversations/:id/context - Get context config
+ *
+ * Returns the conversation's context configuration.
+ * null response means using default (all project pins).
+ */
+conversationRoutes.get('/v1/conversations/:id/context', async (c) => {
+  const conversationId = c.req.param('id');
+
+  try {
+    const db = await getDB();
+
+    // Verify conversation exists
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return jsonError(c, 'NOT_FOUND', `Conversation ${conversationId} not found`, 404);
+    }
+
+    // Get context config (null = using default, all pins)
+    const context = await getConversationContext(db, conversationId);
+
+    // Return null if no custom context configured (using default)
+    return jsonSuccess(c, context);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'GET_CONTEXT_FAILED', message, 500);
+  }
+});
+
+/**
+ * PUT /v1/conversations/:id/context - Update context config
+ *
+ * Sets which pins to include in this conversation's context.
+ * - null: use all project pins (default)
+ * - []: no pins (fresh start)
+ * - [...ids]: specific pins only
+ */
+conversationRoutes.put('/v1/conversations/:id/context', async (c) => {
+  const conversationId = c.req.param('id');
+
+  let body: { selected_pin_ids?: string[] | null } | null = null;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  // Validate request body
+  if (body === null || !('selected_pin_ids' in body)) {
+    return jsonError(c, 'INVALID_REQUEST', 'selected_pin_ids is required', 400);
+  }
+
+  try {
+    const db = await getDB();
+
+    // Verify conversation exists
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return jsonError(c, 'NOT_FOUND', `Conversation ${conversationId} not found`, 404);
+    }
+
+    // Set context config (upsert)
+    const context = await setConversationContext(db, conversationId, body.selected_pin_ids ?? null);
+
+    return jsonSuccess(c, context);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'SET_CONTEXT_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/conversations/:id/memory - Get built memory string
+ *
+ * Returns the assembled context string for LLM consumption.
+ * Includes text, token estimate, and sources.
+ */
+conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
+  const conversationId = c.req.param('id');
+
+  try {
+    const db = await getDB();
+
+    // 1. Verify conversation exists and get project_id
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return jsonError(c, 'NOT_FOUND', `Conversation ${conversationId} not found`, 404);
+    }
+
+    // 2. Get context config (null = use all pins)
+    const contextConfig = await getConversationContext(db, conversationId);
+
+    // 3. Get project pins
+    const projectPins = await findPinsByProject(db, conversation.projectId);
+
+    // 4. Load pinned conversations data
+    const conversationPins = projectPins.filter((p) => p.type === 'conversation');
+    const conversations = new Map<string, ConversationData>();
+
+    for (const pin of conversationPins) {
+      // Skip if this is the current conversation (avoid circular reference)
+      if (pin.ref_id === conversationId) continue;
+
+      const conv = await findConversationById(db, pin.ref_id);
+      if (!conv) continue;
+
+      const turns = await findTurnsByConversation(db, pin.ref_id, { limit: 50 });
+      conversations.set(pin.ref_id, {
+        id: conv.conversationId,
+        title: conv.title ?? 'Untitled',
+        turns: turns.map((t) => ({
+          role: t.role,
+          content: t.content,
+        })),
+      });
+    }
+
+    // 5. Load pinned leaves data
+    const leafPins = projectPins.filter((p) => p.type === 'leaf');
+    const leafIds = leafPins.map((p) => p.ref_id);
+    const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
+    const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
+
+    // 6. Build context using Track A's buildConversationContext
+    // Note: currentCommit is not included for now (would need branch HEAD logic)
+    const builtContext = buildConversationContext({
+      currentCommit: undefined, // TODO: Add when we have branch HEAD logic
+      projectPins,
+      contextConfig,
+      conversations,
+      leaves,
+    });
+
+    return jsonSuccess(c, builtContext);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'GET_MEMORY_FAILED', message, 500);
   }
 });
