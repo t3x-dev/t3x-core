@@ -107,7 +107,7 @@ export function ContextPanel({
         onOpenChange={setIsDialogOpen}
         projectId={projectId}
         conversationId={conversationId}
-        currentSelection={contextConfig?.selected_pin_ids}
+        currentSelection={contextConfig?.selected_pin_ids ?? null}
         onSave={onContextChange}
       />
     </div>
