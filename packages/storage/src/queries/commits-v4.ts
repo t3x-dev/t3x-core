@@ -75,7 +75,7 @@ export class ParentNotFoundErrorV4 extends Error {
  * - content: { sentences: Sentence[] }
  *
  * Second-class fields (NOT in hash):
- * - project_id, message, branch, source_refs, position_x, position_y
+ * - project_id, message, branch, source_refs, position_x, position_y, created_at
  */
 export function computeCommitV4Hash(data: {
   schema: 't3x/commit/v4';
@@ -333,5 +333,6 @@ function rowToCommitV4(row: CommitV4Record): CommitV4 {
     source_refs: row.sourceRefs as CommitSourceRef[] | undefined,
     position_x: row.positionX ?? undefined,
     position_y: row.positionY ?? undefined,
+    created_at: row.createdAt.toISOString(),
   };
 }

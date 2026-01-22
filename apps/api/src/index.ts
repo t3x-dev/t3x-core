@@ -20,6 +20,7 @@ import {
   branchRoutes,
   chatRoutes,
   commitsV3Routes,
+  commitsV4Routes,
   conversationRoutes,
   curateRoutes,
   diffRoutes,
@@ -104,6 +105,7 @@ api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
+api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -133,6 +135,7 @@ api.doc('/openapi.json', {
     { name: 'Runner', description: 'Grey-box agent evaluation' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
+    { name: 'Commits V4', description: 'Commits v4 (pure knowledge, sentences only, no constraints)' },
   ],
 });
 
