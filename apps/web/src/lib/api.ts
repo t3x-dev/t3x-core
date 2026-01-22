@@ -1816,6 +1816,94 @@ export async function compareConfigurations(
   return handleResponse<ComparisonResult>(res);
 }
 
+// ============================================================================
+// Pins (V4 - source selection for commits and context)
+// ============================================================================
+
+export type PinType = 'conversation' | 'leaf';
+
+export interface Pin {
+  id: string;
+  project_id: string;
+  type: PinType;
+  ref_id: string;
+  selected_assertion_ids: string[] | null;
+  pinned_at: string;
+  pinned_by: string | null;
+}
+
+export interface PinListData {
+  pins: Pin[];
+}
+
+/**
+ * List pins by project
+ */
+export async function listPins(
+  projectId: string,
+  type?: PinType
+): Promise<Pin[]> {
+  const query = buildQueryString({ type });
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pins${query ? `?${query}` : ''}`
+  );
+  return handleResponse<Pin[]>(res);
+}
+
+/**
+ * Create a new pin
+ */
+export async function createPinApi(
+  projectId: string,
+  type: PinType,
+  refId: string,
+  selectedAssertionIds?: string[]
+): Promise<Pin> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pins`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type,
+        ref_id: refId,
+        selected_assertion_ids: selectedAssertionIds,
+      }),
+    }
+  );
+  return handleResponse<Pin>(res);
+}
+
+/**
+ * Delete a pin by ID
+ */
+export async function deletePinApi(pinId: string): Promise<{ deleted: boolean; id: string }> {
+  const res = await fetchWithTimeout(`${API_V1}/pins/${encodeURIComponent(pinId)}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<{ deleted: boolean; id: string }>(res);
+}
+
+/**
+ * Update pin's selected assertion IDs
+ */
+export async function updatePinAssertionsApi(
+  pinId: string,
+  selectedAssertionIds: string[]
+): Promise<Pin> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/pins/${encodeURIComponent(pinId)}/assertions`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        selected_assertion_ids: selectedAssertionIds,
+      }),
+    }
+  );
+  return handleResponse<Pin>(res);
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
