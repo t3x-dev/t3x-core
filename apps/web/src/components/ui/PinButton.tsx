@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { usePinsStore } from '@/store/pinsStore';
-import type { PinType } from '@/lib/api';
+import type { PinType } from '@t3x/core';
 import { cn } from '@/lib/utils';
 
 interface PinButtonProps {
