@@ -1904,6 +1904,100 @@ export async function updatePinAssertionsApi(
   return handleResponse<Pin>(res);
 }
 
+// ============================================================================
+// Leaves (V4 - constraints, output, validation)
+// ============================================================================
+
+export type LeafType =
+  | 'deploy_agent'
+  | 'tweet'
+  | 'weibo'
+  | 'wechat'
+  | 'email'
+  | 'article'
+  | 'slack'
+  | 'eval';
+
+export interface RequireConstraint {
+  id: string;
+  type: 'require';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  source_sentence_id?: string;
+}
+
+export interface ExcludeConstraint {
+  id: string;
+  type: 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  reason?: string;
+}
+
+export type Constraint = RequireConstraint | ExcludeConstraint;
+
+export interface Assertion {
+  id: string;
+  constraint_id: string;
+  passed: boolean;
+  details: string;
+  lesson?: string;
+}
+
+export interface LeafConfig {
+  prompt_template?: string;
+  model?: string;
+  max_tokens?: number;
+  [key: string]: unknown;
+}
+
+export interface Leaf {
+  id: string;
+  commit_hash: string;
+  type: LeafType;
+  title: string | null;
+  constraints: Constraint[];
+  config: LeafConfig;
+  output: string | null;
+  generated_at: string | null;
+  assertions: Assertion[] | null;
+  project_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+/**
+ * Get leaf by ID
+ */
+export async function getLeaf(leafId: string): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`);
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Update leaf (title, constraints, config)
+ */
+export async function updateLeaf(
+  leafId: string,
+  updates: {
+    title?: string;
+    constraints?: Constraint[];
+    config?: LeafConfig;
+  }
+): Promise<Leaf> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+  return handleResponse<Leaf>(res);
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
