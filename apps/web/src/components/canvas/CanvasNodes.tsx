@@ -43,17 +43,18 @@ import type { CanvasNodeData, CommitV3Display, CommitV4Display, ConstraintDispla
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
 
 // Leaf type definitions with icons and labels
+// Must match @t3x/core LeafType from V4 schema
 export const LEAF_TYPES: {
   type: LeafType;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
   category?: 'output' | 'runner';
 }[] = [
-  // Runner category - deploy and eval
-  { type: 'deploy', label: 'Deploy', icon: Rocket, category: 'runner' },
+  // Runner category - deploy_agent and eval
+  { type: 'deploy_agent', label: 'Deploy', icon: Rocket, category: 'runner' },
   { type: 'eval', label: 'Eval', icon: FlaskConical, category: 'runner' },
   // Output category - social and content
-  { type: 'twitter', label: 'Twitter', icon: Twitter, category: 'output' },
+  { type: 'tweet', label: 'Twitter', icon: Twitter, category: 'output' },
   {
     type: 'weibo',
     label: '微博',
@@ -445,7 +446,7 @@ function UnitNode(props: Props) {
 
   // Navigate to leaf detail page
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (leaf.type === 'deploy') {
+    if (leaf.type === 'deploy_agent') {
       return '/deploy';
     }
     if (leaf.type === 'eval' && leaf.id) {
@@ -661,7 +662,7 @@ function UnitNode(props: Props) {
                   <div className="px-3 pb-2 space-y-1 nodrag">
                     {data.leaves.map((leaf) => {
                       const LeafIcon = getLeafIcon(leaf.type);
-                      const isRunner = leaf.type === 'deploy' || leaf.type === 'eval';
+                      const isRunner = leaf.type === 'deploy_agent' || leaf.type === 'eval';
                       const leafHref = getLeafHref(leaf);
                       const leafContent = (
                         <>
@@ -787,7 +788,7 @@ function LeafStatusIndicator({ leafType, data }: { leafType: LeafType; data: Can
   const baseClasses =
     'inline-flex items-center gap-1 text-[0.65rem] font-medium px-1.5 py-0.5 rounded';
 
-  if (leafType === 'deploy') {
+  if (leafType === 'deploy_agent') {
     const status = (data.leafConfig as { status?: string })?.status || 'idle';
     switch (status) {
       case 'running':
@@ -844,7 +845,7 @@ function LeafNode(props: Props) {
   const { data, selected } = props;
   const leafTypeInfo = LEAF_TYPES.find((l) => l.type === data.leafType) || LEAF_TYPES[0];
   const Icon = leafTypeInfo.icon;
-  const isRunnerLeaf = data.leafType === 'deploy' || data.leafType === 'eval';
+  const isRunnerLeaf = data.leafType === 'deploy_agent' || data.leafType === 'eval';
 
   return (
     <>
