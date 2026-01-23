@@ -3,17 +3,27 @@
  *
  * Grey-box agent evaluation endpoints.
  * Uses @t3x/runner for evaluation logic.
+ *
+ * Updated for Runner v0.2.0:
+ * - Uses RunRecord + EvalRules instead of legacy TestStep format
+ * - evalEngine.evaluate(runRecord, rules) instead of evalEngine.evaluate(request)
  */
 
 import {
   AgentConfigSchema,
   AgentInputSchema,
-  EvalRequestSchema,
+  RunRecordSchema,
+  RuleSchema,
+  EvalRulesSchema,
   evalEngine,
   observer,
-  TestStepSchema,
+  parseRulesFromLeaf,
+  DEFAULT_RULES,
+  type RunRecord,
+  type EvalRules,
 } from '@t3x/runner';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 export const runnerRoutes = new Hono();
 
@@ -92,7 +102,7 @@ runnerRoutes.post('/runner/run', async (c) => {
       const latencyMs = Date.now() - startTime;
 
       // Complete the run
-      const trace = observer.completeRun(runId, output, 'completed');
+      const record = observer.completeRun(runId, output, 'completed');
       console.log(`[runner] Run completed: ${runId} in ${latencyMs}ms`);
 
       return c.json({
@@ -100,20 +110,20 @@ runnerRoutes.post('/runner/run', async (c) => {
         data: {
           run_id: runId,
           output,
-          trace,
+          record,
         },
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       observer.recordError(runId, errorMsg);
-      const trace = observer.completeRun(runId, null, 'failed');
+      const record = observer.completeRun(runId, null, 'failed');
 
       console.error(`[runner] Run failed: ${runId}`, errorMsg);
       return c.json(
         {
           success: false,
           error: errorMsg,
-          data: { run_id: runId, trace },
+          data: { run_id: runId, record },
         },
         500
       );
@@ -148,49 +158,77 @@ runnerRoutes.post('/runner/run/:id/event', async (c) => {
 });
 
 /**
- * GET /runner/run/:id - Get run trace
+ * GET /runner/run/:id - Get run record
  */
 runnerRoutes.get('/runner/run/:id', (c) => {
-  const trace = observer.getTrace(c.req.param('id'));
-  if (!trace) {
+  const record = observer.getRun(c.req.param('id'));
+  if (!record) {
     return c.json({ success: false, error: 'Run not found' }, 404);
   }
-  return c.json({ success: true, data: trace });
+  return c.json({ success: true, data: record });
 });
 
 /**
  * GET /runner/runs - List runs
  */
 runnerRoutes.get('/runner/runs', (c) => {
-  const agentId = c.req.query('agent_id');
-  const traces = observer.listTraces(agentId);
-  return c.json({ success: true, data: { runs: traces } });
+  const runs = observer.listRuns();
+  return c.json({ success: true, data: { runs } });
 });
 
 // ============================================
-// Evaluation
+// Evaluation (v2.0 - RunRecord + EvalRules)
 // ============================================
 
+// Request schema for /runner/eval
+const EvalRequestSchema = z.object({
+  // Option 1: Provide run_id to fetch from observer
+  run_id: z.string().optional(),
+  // Option 2: Provide run_record directly
+  run_record: RunRecordSchema.optional(),
+  // Rules: inline rules or reference to rules file
+  rules: EvalRulesSchema.optional(),
+  rules_ref: z.string().optional(),
+});
+
 /**
- * POST /runner/eval - Run evaluation against a trace
+ * POST /runner/eval - Run evaluation against a RunRecord
+ *
+ * v2.0: Uses RunRecord + EvalRules instead of legacy TestStep format
  */
 runnerRoutes.post('/runner/eval', async (c) => {
   try {
     const body = await c.req.json();
     const request = EvalRequestSchema.parse(body);
 
-    // If run_id provided but no trace, fetch it
-    if (request.run_id && !request.trace) {
-      const trace = observer.getTrace(request.run_id);
-      if (!trace) {
+    // Get RunRecord: from request or fetch by run_id
+    let runRecord: RunRecord | undefined = request.run_record;
+
+    if (!runRecord && request.run_id) {
+      runRecord = observer.getRun(request.run_id);
+      if (!runRecord) {
         return c.json({ success: false, error: `Run not found: ${request.run_id}` }, 404);
       }
-      request.trace = trace;
     }
 
-    const result = await evalEngine.evaluate(request);
+    if (!runRecord) {
+      return c.json({ success: false, error: 'Either run_id or run_record is required' }, 400);
+    }
+
+    // Get rules: from request or use default
+    let rules: EvalRules;
+    if (request.rules) {
+      rules = request.rules;
+    } else if (request.rules_ref) {
+      rules = parseRulesFromLeaf({ rules_ref: request.rules_ref });
+    } else {
+      rules = DEFAULT_RULES;
+    }
+
+    // Run evaluation
+    const result = evalEngine.evaluate(runRecord, rules);
     console.log(
-      `[runner] Eval completed: ${result.run_id}, passed=${result.passed}, ${result.passed_steps}/${result.total_steps} steps`
+      `[runner] Eval completed: ${result.run_id}, passed=${result.passed}, score=${result.score.toFixed(2)}`
     );
 
     return c.json({ success: true, data: result });
@@ -200,22 +238,29 @@ runnerRoutes.post('/runner/eval', async (c) => {
 });
 
 /**
- * POST /runner/eval/validate - Validate test steps
+ * POST /runner/eval/validate - Validate evaluation rules
+ *
+ * v2.0: Validates Rule objects instead of legacy TestStep format
  */
 runnerRoutes.post('/runner/eval/validate', async (c) => {
   try {
     const body = await c.req.json();
-    const steps = body.test_steps;
-    const validated = steps.map((step: unknown, i: number) => {
+    const rules = body.rules || body.test_steps; // Support both new and legacy field names
+
+    if (!Array.isArray(rules)) {
+      return c.json({ success: false, error: 'rules must be an array' }, 400);
+    }
+
+    const validated = rules.map((rule: unknown, i: number) => {
       try {
-        TestStepSchema.parse(step);
+        RuleSchema.parse(rule);
         return { index: i, valid: true };
       } catch (error) {
         return { index: i, valid: false, error: String(error) };
       }
     });
 
-    return c.json({ success: true, data: { steps: validated } });
+    return c.json({ success: true, data: { rules: validated } });
   } catch (error) {
     return c.json({ success: false, error: String(error) }, 400);
   }
@@ -226,11 +271,13 @@ runnerRoutes.post('/runner/eval/validate', async (c) => {
 // ============================================
 
 /**
- * POST /runner/webhook/run - Webhook trigger for agent run
+ * POST /runner/webhook/run - Webhook trigger for agent run with auto-eval
+ *
+ * v2.0: Uses EvalRules instead of legacy TestStep format
  */
 runnerRoutes.post('/runner/webhook/run', async (c) => {
   try {
-    const { agent_id, input, test_steps, auto_eval } = await c.req.json();
+    const { agent_id, input, rules, rules_ref, auto_eval } = await c.req.json();
 
     // Run agent
     const agent = observer.getAgent(agent_id);
@@ -247,16 +294,22 @@ runnerRoutes.post('/runner/webhook/run', async (c) => {
     });
 
     const output = await response.json();
-    const trace = observer.completeRun(runId, output, 'completed');
+    const runRecord = observer.completeRun(runId, output, 'completed');
 
-    // Auto-eval if test steps provided
+    // Auto-eval if enabled
     let evalResult = null;
-    if (auto_eval && test_steps?.length > 0) {
-      evalResult = await evalEngine.evaluate({
-        trace,
-        test_steps,
-        options: { stop_on_first_failure: false, generate_suggestions: true },
-      });
+    if (auto_eval) {
+      // Get rules: from request or use default
+      let evalRules: EvalRules;
+      if (rules) {
+        evalRules = EvalRulesSchema.parse(rules);
+      } else if (rules_ref) {
+        evalRules = parseRulesFromLeaf({ rules_ref });
+      } else {
+        evalRules = DEFAULT_RULES;
+      }
+
+      evalResult = evalEngine.evaluate(runRecord, evalRules);
     }
 
     return c.json({
@@ -264,7 +317,7 @@ runnerRoutes.post('/runner/webhook/run', async (c) => {
       data: {
         run_id: runId,
         output,
-        trace,
+        record: runRecord,
         eval_result: evalResult,
       },
     });
