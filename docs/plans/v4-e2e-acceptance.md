@@ -119,6 +119,8 @@
 
 ## V4 Commit Schema Reference
 
+> **IMPORTANT**: This schema must match `packages/core/src/types/v4/index.ts` (single source of truth)
+
 ```typescript
 interface CommitV4 {
   // First-class fields (included in hash)
@@ -126,19 +128,19 @@ interface CommitV4 {
   schema: 't3x/commit/v4';
   parents: string[];               // Parent commit hashes
   author: {
-    name: string;
-    identity: string;
-    verification?: 'none' | 'device' | 'verified';
+    type: 'human' | 'agent';       // Author type
+    id?: string;                   // Optional author ID
+    name?: string;                 // Optional display name
   };
   committed_at: string;            // ISO8601
   content: {
     sentences: Array<{
-      id: string;                  // s_xxx
+      id: string;                  // s_xxx (prefix: s_)
       text: string;
-      source?: {
-        turn_hash?: string;
-        start_char?: number;
-        end_char?: number;
+      confidence?: number;         // 0-1 extraction confidence
+      source_ref?: {
+        conversation_id: string;
+        turn_hash: string;
       };
     }>;
   };
@@ -150,10 +152,12 @@ interface CommitV4 {
   position_x?: number;
   position_y?: number;
   source_refs?: Array<{
-    type: 'conversation' | 'turn';
-    conversation_id?: string;
-    turn_hash?: string;
+    type: 'conversation' | 'leaf';
+    id: string;
+    title?: string;
+    assertion_lessons?: string[];  // For leaf sources
   }>;
+  created_at?: string;
 }
 ```
 
@@ -161,28 +165,59 @@ interface CommitV4 {
 
 ## Leaf Schema Reference
 
+> **IMPORTANT**: This schema must match `packages/core/src/types/v4/index.ts` (single source of truth)
+
 ```typescript
+type LeafType = 'deploy_agent' | 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack' | 'eval';
+
 interface Leaf {
-  id: string;                      // leaf_xxx
+  id: string;                      // leaf_xxx (prefix: leaf_)
   commit_hash: string;
-  type: 'system_prompt' | 'user_prompt' | 'evaluation' | 'custom';
+  type: LeafType;
   title?: string;
   project_id: string;
-  constraints: Array<{
-    id: string;                    // cst_xxx (auto-generated)
-    type: 'require' | 'exclude' | 'prefer';
-    value: string;
-    match_mode: 'exact' | 'semantic';
-    weight?: number;
-  }>;
-  assertions: Array<{
-    id: string;                    // ast_xxx (auto-generated)
-    type: 'contains' | 'excludes' | 'matches';
-    value: string;
-    description?: string;
-  }>;
+  constraints: Array<Constraint>;  // See Constraint type below
+  config: {
+    prompt_template?: string;
+    model?: string;
+    max_tokens?: number;
+    [key: string]: unknown;
+  };
+  output?: string;
+  generated_at?: string;
+  assertions?: Array<Assertion>;   // See Assertion type below
   created_at: string;
-  updated_at: string;
+  created_by?: string;
+}
+
+// Constraint types (owned by Leaf, NOT Commit)
+type Constraint = RequireConstraint | ExcludeConstraint;
+
+interface RequireConstraint {
+  id: string;                      // cst_xxx (prefix: cst_)
+  type: 'require';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  source_sentence_id?: string;
+}
+
+interface ExcludeConstraint {
+  id: string;                      // cst_xxx (prefix: cst_)
+  type: 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  reason?: string;                 // Why excluded (policy/compliance)
+}
+
+// Assertion = Validation result
+interface Assertion {
+  id: string;                      // ast_xxx (prefix: ast_)
+  constraint_id: string;           // Which constraint was checked
+  passed: boolean;                 // Did the output pass?
+  details: string;                 // What was found/not found
+  lesson?: string;                 // Human-readable feedback
 }
 ```
 
@@ -190,14 +225,19 @@ interface Leaf {
 
 ## Pin Schema Reference
 
+> **IMPORTANT**: This schema must match `packages/core/src/types/v4/index.ts` (single source of truth)
+
 ```typescript
+type PinType = 'conversation' | 'leaf';
+
 interface Pin {
-  id: string;                      // pin_xxx
+  id: string;                      // pin_xxx (prefix: pin_)
   project_id: string;
-  type: 'conversation' | 'leaf';
+  type: PinType;
   ref_id: string;                  // conversation_id or leaf_id
-  selected_assertion_ids?: string[]; // For leaf pins
-  created_at: string;
+  selected_assertion_ids?: string[] | null; // For leaf pins (null = all)
+  pinned_at: string;               // ISO8601
+  pinned_by?: string;
 }
 ```
 
