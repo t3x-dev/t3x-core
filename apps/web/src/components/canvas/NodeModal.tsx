@@ -20,6 +20,7 @@ import {
   Lock,
   MessageSquarePlus,
   Pin,
+  Plus,
   RotateCcw,
   Send,
   Settings,
@@ -66,6 +67,7 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
 const bridgeTemplates = [
@@ -255,6 +257,7 @@ function CommitFullSection({
   projectId?: string;
 }) {
   const [copiedHash, setCopiedHash] = useState(false);
+  const [showCreateLeaf, setShowCreateLeaf] = useState(false);
   const isV4 = isCommitV4(commit);
 
   // Get sentences - V4 uses content.sentences, V3Display uses top-level sentences
@@ -342,9 +345,23 @@ function CommitFullSection({
         </ul>
       </div>
 
-      {/* Constraints - V3 only, or info message for V4 */}
+      {/* Constraints - V3 only, or info message + Create Leaf button for V4 */}
       {isV4 ? (
-        <V4ConstraintInfoMessage />
+        <div className="space-y-3">
+          <V4ConstraintInfoMessage />
+          {/* Create Leaf button - V4 only */}
+          {projectId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreateLeaf(true)}
+              className="w-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
+            >
+              <Plus size={16} className="mr-1" />
+              Create Leaf from This Commit
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between mb-3">
@@ -385,7 +402,7 @@ function CommitFullSection({
                     <span className={cn(
                       'text-xs font-medium px-1.5 py-0.5 rounded',
                       leaf.type === 'eval' ? 'bg-purple-100 text-purple-600' :
-                      leaf.type === 'deploy' ? 'bg-emerald-100 text-emerald-600' :
+                      leaf.type === 'deploy_agent' ? 'bg-emerald-100 text-emerald-600' :
                       'bg-blue-100 text-blue-600'
                     )}>
                       {leaf.type}
@@ -398,6 +415,16 @@ function CommitFullSection({
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Leaf Creation Dialog - V4 only */}
+      {isV4 && projectId && (
+        <LeafCreationDialog
+          open={showCreateLeaf}
+          onOpenChange={setShowCreateLeaf}
+          commitHash={commit.hash}
+          projectId={projectId}
+        />
       )}
     </div>
   );
