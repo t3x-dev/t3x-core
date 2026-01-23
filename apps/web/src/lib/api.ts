@@ -633,6 +633,15 @@ export async function deleteConversation(
   return handleResponse<{ deleted: boolean; conversation_id: string }>(res);
 }
 
+export async function getConversation(
+  conversationId: string
+): Promise<Conversation & { turns_count?: number }> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}`
+  );
+  return handleResponse<Conversation & { turns_count?: number }>(res);
+}
+
 export async function updateConversation(
   conversationId: string,
   updates: { title?: string; position_x?: number; position_y?: number }
@@ -1941,6 +1950,21 @@ export async function getConversationContext(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context`
   );
   return handleResponse<ConversationContext | null>(res);
+}
+
+export async function updateConversationContext(
+  conversationId: string,
+  selectedPinIds: string[] | null
+): Promise<ConversationContext> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_pin_ids: selectedPinIds }),
+    }
+  );
+  return handleResponse<ConversationContext>(res);
 }
 
 // ============================================================================
