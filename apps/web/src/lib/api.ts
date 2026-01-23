@@ -1527,7 +1527,7 @@ export interface EngineRun {
   commit_ref: string | null;
   leaf: {
     id: string;
-    type: 'deploy' | 'eval';
+    type: 'deploy_agent' | 'eval';  // V4 LeafType
     content?: string;
   } | null;
   inputs: Record<string, unknown> | null;
@@ -1573,7 +1573,7 @@ export interface CreateEngineRunInput {
   commit_ref?: string;
   leaf?: {
     id: string;
-    type: 'deploy' | 'eval';
+    type: 'deploy_agent' | 'eval';  // V4 LeafType (runner-related types only)
     content?: string;
     rules_ref?: string;  // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   };
@@ -2058,6 +2058,27 @@ export async function updateLeaf(
       body: JSON.stringify(updates),
     }
   );
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Create a new leaf
+ */
+export interface CreateLeafInput {
+  commit_hash: string;
+  type: LeafType;
+  title?: string;
+  project_id: string;
+  constraints?: Constraint[];
+  config?: LeafConfig;
+}
+
+export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
   return handleResponse<Leaf>(res);
 }
 

@@ -15,14 +15,15 @@ export type NodeKind = 'unit' | 'leaf';
 export type CommitStatus = 'staging' | 'committed';
 
 // Leaf node types for output destinations
+// Must match @t3x/core LeafType from V4 schema
 export type LeafType =
-  | 'twitter'
+  | 'deploy_agent'  // was 'deploy'
+  | 'tweet'         // was 'twitter'
   | 'weibo'
   | 'wechat'
-  | 'article'
   | 'email'
+  | 'article'
   | 'slack'
-  | 'deploy'
   | 'eval';
 
 // Deploy status for leaf nodes connected to runner
@@ -38,7 +39,7 @@ export interface LeafNodeConfig {
 
 // Deploy leaf configuration
 export interface DeployLeafConfig extends LeafNodeConfig {
-  leafType: 'deploy';
+  leafType: 'deploy_agent';
   agentId?: string;
   agentName?: string;
   agentEndpoint?: string;

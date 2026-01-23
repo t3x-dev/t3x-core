@@ -90,8 +90,8 @@ const createLeafNode = (
     summary: '',
     status: 'pending',
     timestamp: 'just now',
-    tags: ['leaf', 'deploy'],
-    leafType: 'deploy',
+    tags: ['leaf', 'deploy_agent'],
+    leafType: 'deploy_agent',
     ...overrides,
   },
 });
@@ -354,13 +354,13 @@ describe('Canvas Store - Unit Node Model', () => {
         leafPanelCommitId: 'unit-1',
       });
 
-      useCanvasStore.getState().addLeafNode('deploy');
+      useCanvasStore.getState().addLeafNode('deploy_agent');
 
       const state = useCanvasStore.getState();
       expect(state.nodes.length).toBe(2);
       const leafNode = state.nodes.find((n) => n.data.kind === 'leaf');
       expect(leafNode).toBeDefined();
-      expect(leafNode?.data.leafType).toBe('deploy');
+      expect(leafNode?.data.leafType).toBe('deploy_agent');
       // Edge should be created
       expect(state.edges.length).toBe(1);
       expect(state.edges[0].source).toBe('unit-1');
@@ -374,7 +374,7 @@ describe('Canvas Store - Unit Node Model', () => {
         leafPanelCommitId: undefined,
       });
 
-      useCanvasStore.getState().addLeafNode('deploy');
+      useCanvasStore.getState().addLeafNode('deploy_agent');
 
       const state = useCanvasStore.getState();
       expect(state.nodes).toEqual([]);
