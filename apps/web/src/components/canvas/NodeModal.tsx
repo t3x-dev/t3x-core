@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react';
 import {
   AlertCircle,
+  Bot,
   Check,
   CheckCircle,
   ChevronDown,
@@ -11,14 +12,17 @@ import {
   GitCommit,
   GitCompare,
   GitMerge,
+  Info,
   Link2,
   Loader2,
   Lock,
   MessageSquarePlus,
+  Pin,
   RotateCcw,
   Send,
   Settings,
   Tag,
+  User,
   X,
 } from 'lucide-react';
 import {
@@ -40,7 +44,10 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type {
   AnchorCandidate,
   CanvasNodeData,
+  CommitDisplay,
+  CommitSourceRef,
   CommitV3Display,
+  CommitV4Display,
   ConfirmedAnchor,
   ConstraintDisplay,
   ConversationConstraints,
@@ -96,9 +103,20 @@ interface SourceBox {
 }
 
 // ============================================
-// CommitV3 Full Display Components (for NodeModal)
+// Commit Full Display Components (for NodeModal)
+// Supports both V3 and V4 commits
 // ============================================
 
+/**
+ * Helper to determine if commit is V4 based on schema
+ */
+function isCommitV4(commit: CommitDisplay): commit is CommitV4Display {
+  return commit.schema === 't3x/commit/v4';
+}
+
+/**
+ * Author badge for V3 commits (with verification)
+ */
 function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
   const isVerified = author.verification === 'verified';
   return (
@@ -111,6 +129,24 @@ function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) 
   );
 }
 
+/**
+ * Author badge for V4 commits (with type indicator)
+ */
+function CommitV4AuthorBadge({ author }: { author: CommitV4Display['author'] }) {
+  const isAgent = author.type === 'agent';
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded ${
+      isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {isAgent ? <Bot size={14} /> : <User size={14} />}
+      {author.name || author.id || 'Unknown'}
+    </span>
+  );
+}
+
+/**
+ * Constraint badge for V3 commits
+ */
 function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
   const isRequire = constraint.type === 'require';
   return (
@@ -124,8 +160,92 @@ function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay
   );
 }
 
-function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; branchName?: string }) {
+/**
+ * Pinned Sources section for V4 commits
+ * Uses CommitSourceRef from @t3x/core contract
+ */
+function PinnedSourcesSection({ sourceRefs }: { sourceRefs: CommitSourceRef[] }) {
+  if (sourceRefs.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Pin size={14} className="text-blue-600" />
+          <h3 className="font-semibold text-sm text-blue-700">Pinned Sources</h3>
+        </div>
+        <span className="text-xs text-blue-400">{sourceRefs.length} source{sourceRefs.length !== 1 ? 's' : ''}</span>
+      </div>
+      <ul className="space-y-2">
+        {sourceRefs.map((ref, idx) => (
+          <li
+            key={ref.id || idx}
+            className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100"
+          >
+            <span className={cn(
+              'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
+              ref.type === 'conversation'
+                ? 'bg-blue-100 text-blue-600'
+                : 'bg-purple-100 text-purple-600'
+            )}>
+              {ref.type === 'conversation' ? 'conv' : 'leaf'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[0.875rem] text-gray-700 break-words">
+                {ref.title || ref.id}
+              </span>
+              {ref.assertion_lessons && ref.assertion_lessons.length > 0 && (
+                <div className="mt-1 text-xs text-gray-500">
+                  <span className="font-medium">Lessons:</span>{' '}
+                  {ref.assertion_lessons.join(', ')}
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Info message explaining V4 constraint architecture
+ */
+function V4ConstraintInfoMessage() {
+  return (
+    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+      <div className="flex items-start gap-3">
+        <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
+        <div>
+          <h3 className="font-semibold text-sm text-amber-800 mb-1">V4 Architecture</h3>
+          <p className="text-sm text-amber-700">
+            In V4, constraints are defined at the <strong>Leaf</strong> level, not the Commit level.
+            This allows the same knowledge (commit) to be applied with different constraints for different outputs.
+            Create a Leaf from this commit to define constraints for your specific use case.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Unified Commit Full Section - handles both V3 and V4 commits
+ *
+ * Key difference in sentence structure:
+ * - V3Display: sentences at top level (commit.sentences)
+ * - V4: sentences nested in content (commit.content.sentences)
+ */
+function CommitFullSection({ commit, branchName }: { commit: CommitDisplay; branchName?: string }) {
   const [copiedHash, setCopiedHash] = useState(false);
+  const isV4 = isCommitV4(commit);
+
+  // Get sentences - V4 uses content.sentences, V3Display uses top-level sentences
+  const sentences = isV4
+    ? commit.content.sentences
+    : (commit as CommitV3Display).sentences;
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(commit.hash);
@@ -151,6 +271,13 @@ function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; 
               <Copy size={14} className="text-gray-400" />
             )}
           </button>
+          {/* Schema version badge */}
+          <span className={cn(
+            'text-xs font-medium px-1.5 py-0.5 rounded',
+            isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+          )}>
+            {isV4 ? 'V4' : 'V3'}
+          </span>
           {/* Branch badge */}
           {branchName && (
             <span className={cn(
@@ -163,17 +290,26 @@ function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; 
             </span>
           )}
         </div>
-        <CommitV3AuthorBadge author={commit.author} />
+        {isV4 ? (
+          <CommitV4AuthorBadge author={commit.author} />
+        ) : (
+          <CommitV3AuthorBadge author={(commit as CommitV3Display).author} />
+        )}
       </div>
+
+      {/* Pinned Sources - V4 only */}
+      {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
+        <PinnedSourcesSection sourceRefs={commit.source_refs} />
+      )}
 
       {/* Sentences - Full list */}
       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
-          <span className="text-xs text-gray-400">{commit.sentences.length} total</span>
+          <span className="text-xs text-gray-400">{sentences.length} total</span>
         </div>
         <ul className="space-y-2">
-          {commit.sentences.map((s) => (
+          {sentences.map((s) => (
             <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
               <span className="text-gray-400 font-bold shrink-0">•</span>
               <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
@@ -181,7 +317,7 @@ function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; 
               </span>
             </li>
           ))}
-          {commit.sentences.length === 0 && (
+          {sentences.length === 0 && (
             <li className="text-center py-4 text-gray-400 text-sm">
               No sentences
             </li>
@@ -189,25 +325,37 @@ function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; 
         </ul>
       </div>
 
-      {/* Constraints - Full list */}
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-gray-700">Constraints</h3>
-          <span className="text-xs text-gray-400">{commit.constraints.length} total</span>
+      {/* Constraints - V3 only, or info message for V4 */}
+      {isV4 ? (
+        <V4ConstraintInfoMessage />
+      ) : (
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm text-gray-700">Constraints</h3>
+            <span className="text-xs text-gray-400">{(commit as CommitV3Display).constraints.length} total</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(commit as CommitV3Display).constraints.map((c) => (
+              <CommitV3ConstraintBadge key={c.id} constraint={c} />
+            ))}
+            {(commit as CommitV3Display).constraints.length === 0 && (
+              <span className="text-center py-4 text-gray-400 text-sm w-full">
+                No constraints
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {commit.constraints.map((c) => (
-            <CommitV3ConstraintBadge key={c.id} constraint={c} />
-          ))}
-          {commit.constraints.length === 0 && (
-            <span className="text-center py-4 text-gray-400 text-sm w-full">
-              No constraints
-            </span>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Legacy component name for backwards compatibility
+ * @deprecated Use CommitFullSection instead
+ */
+function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; branchName?: string }) {
+  return <CommitFullSection commit={commit} branchName={branchName} />;
 }
 
 export type NodeQuickAction = {
@@ -3265,16 +3413,16 @@ export function NodeModal({
                 </div>
               </div>
 
-              {/* CommitV3 Content - Sentences and Constraints */}
-              {data.commitV3 && (
-                <CommitV3FullSection
-                  commit={data.commitV3}
+              {/* Commit Content - Sentences and Constraints (V3) or Sentences only (V4) */}
+              {(data.commitV3 || data.commitV4) && (
+                <CommitFullSection
+                  commit={(data.commitV4 || data.commitV3) as CommitDisplay}
                   branchName={data.branchName || (data.branchType === 'main' ? 'main' : undefined)}
                 />
               )}
 
-              {/* Generated Output - LLM generated content (only show if no commitV3) */}
-              {!data.commitV3 && (
+              {/* Generated Output - LLM generated content (only show if no commit data) */}
+              {!data.commitV3 && !data.commitV4 && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
@@ -3285,7 +3433,7 @@ export function NodeModal({
                 </div>
               )}
 
-              {data.status && !data.commitV3 && (
+              {data.status && !data.commitV3 && !data.commitV4 && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-gray-700">Intent</h3>
@@ -3296,8 +3444,8 @@ export function NodeModal({
                 </div>
               )}
 
-              {/* Facets - Extracted semantic data (only show if no commitV3) */}
-              {!data.commitV3 && (
+              {/* Facets - Extracted semantic data (only show if no commit data) */}
+              {!data.commitV3 && !data.commitV4 && (
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-gray-700">Facets</h3>
