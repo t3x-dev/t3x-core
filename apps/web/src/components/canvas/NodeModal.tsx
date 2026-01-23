@@ -8,11 +8,13 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  ExternalLink,
   GitBranch,
   GitCommit,
   GitCompare,
   GitMerge,
   Info,
+  Leaf,
   Link2,
   Loader2,
   Lock,
@@ -25,6 +27,8 @@ import {
   User,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
@@ -52,6 +56,7 @@ import type {
   ConstraintDisplay,
   ConversationConstraints,
   DraftConstraintOverrides,
+  EmbeddedLeaf,
   SourceTextBlock,
   TurnBoundary,
 } from '@/types/nodes';
@@ -238,7 +243,17 @@ function V4ConstraintInfoMessage() {
  * - V3Display: sentences at top level (commit.sentences)
  * - V4: sentences nested in content (commit.content.sentences)
  */
-function CommitFullSection({ commit, branchName }: { commit: CommitDisplay; branchName?: string }) {
+function CommitFullSection({
+  commit,
+  branchName,
+  leaves,
+  projectId,
+}: {
+  commit: CommitDisplay;
+  branchName?: string;
+  leaves?: EmbeddedLeaf[];
+  projectId?: string;
+}) {
   const [copiedHash, setCopiedHash] = useState(false);
   const isV4 = isCommitV4(commit);
 
@@ -302,7 +317,7 @@ function CommitFullSection({ commit, branchName }: { commit: CommitDisplay; bran
         <PinnedSourcesSection sourceRefs={commit.source_refs} />
       )}
 
-      {/* Sentences - Full list */}
+      {/* Sentences - Full list with IDs */}
       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
@@ -311,7 +326,9 @@ function CommitFullSection({ commit, branchName }: { commit: CommitDisplay; bran
         <ul className="space-y-2">
           {sentences.map((s) => (
             <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
-              <span className="text-gray-400 font-bold shrink-0">•</span>
+              <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                {s.id}
+              </span>
               <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
                 {s.text}
               </span>
@@ -344,6 +361,42 @@ function CommitFullSection({ commit, branchName }: { commit: CommitDisplay; bran
               </span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Associated Leaves - V4 only, shows links to leaf detail pages */}
+      {isV4 && leaves && leaves.length > 0 && projectId && (
+        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Leaf size={14} className="text-green-600" />
+              <h3 className="font-semibold text-sm text-green-700">Associated Leaves</h3>
+            </div>
+            <span className="text-xs text-green-400">{leaves.length} leaf{leaves.length !== 1 ? 's' : ''}</span>
+          </div>
+          <ul className="space-y-2">
+            {leaves.map((leaf) => (
+              <li key={leaf.id}>
+                <Link
+                  href={`/project/${projectId}/leaf/${leaf.id}`}
+                  className="flex items-center justify-between p-2 bg-white rounded border border-green-100 hover:border-green-300 hover:bg-green-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={cn(
+                      'text-xs font-medium px-1.5 py-0.5 rounded',
+                      leaf.type === 'eval' ? 'bg-purple-100 text-purple-600' :
+                      leaf.type === 'deploy' ? 'bg-emerald-100 text-emerald-600' :
+                      'bg-blue-100 text-blue-600'
+                    )}>
+                      {leaf.type}
+                    </span>
+                    <span className="text-sm text-gray-700 truncate">{leaf.title}</span>
+                  </div>
+                  <ExternalLink size={14} className="text-green-400 shrink-0" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
@@ -663,6 +716,10 @@ export function NodeModal({
   viewMode = 'commit',
 }: NodeModalProps) {
   // ========== ALL HOOKS MUST BE AT THE TOP - before any conditional returns ==========
+
+  // Get projectId from route params for leaf links
+  const params = useParams();
+  const routeProjectId = params?.projectId as string | undefined;
 
   // ========== Single View Two Zones State ==========
   // Config state (STEP 1)
@@ -3418,6 +3475,8 @@ export function NodeModal({
                 <CommitFullSection
                   commit={(data.commitV4 || data.commitV3) as CommitDisplay}
                   branchName={data.branchName || (data.branchType === 'main' ? 'main' : undefined)}
+                  leaves={data.leaves}
+                  projectId={routeProjectId || projectId || undefined}
                 />
               )}
 
