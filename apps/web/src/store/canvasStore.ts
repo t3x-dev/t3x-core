@@ -1880,7 +1880,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         ],
         // Leaves section - 2 outputs
         leaves: [
-          { id: 'leaf-1', type: 'deploy', title: 'Production Agent', status: 'running' },
+          { id: 'leaf-1', type: 'deploy_agent', title: 'Production Agent', status: 'running' },
           { id: 'leaf-2', type: 'eval', title: 'Compliance Check', status: 'passed', passedCount: 18, failedCount: 2 },
         ],
       },
@@ -2083,13 +2083,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
       const newNodeId = nextNodeId();
       const leafLabels: Record<LeafType, string> = {
-        twitter: 'Twitter',
+        deploy_agent: 'Deploy',
+        tweet: 'Twitter',
         weibo: '微博',
         wechat: '朋友圈',
-        article: '文章',
         email: 'Email',
+        article: '文章',
         slack: 'Slack',
-        deploy: 'Deploy',
         eval: 'Eval',
       };
 

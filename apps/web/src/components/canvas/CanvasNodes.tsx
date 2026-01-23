@@ -18,6 +18,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   PenSquare,
+  Pin,
   Plus,
   Rocket,
   Twitter,
@@ -27,30 +28,33 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { nodeEnter, springConfig } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
+import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, CommitV3Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
+import { getConversationContext, type ConversationContext } from '@/lib/api';
+import type { CanvasNodeData, CommitV3Display, CommitV4Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
 
 // Define custom node type for React Flow v12
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
 
 // Leaf type definitions with icons and labels
+// Must match @t3x/core LeafType from V4 schema
 export const LEAF_TYPES: {
   type: LeafType;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
   category?: 'output' | 'runner';
 }[] = [
-  // Runner category - deploy and eval
-  { type: 'deploy', label: 'Deploy', icon: Rocket, category: 'runner' },
+  // Runner category - deploy_agent and eval
+  { type: 'deploy_agent', label: 'Deploy', icon: Rocket, category: 'runner' },
   { type: 'eval', label: 'Eval', icon: FlaskConical, category: 'runner' },
   // Output category - social and content
-  { type: 'twitter', label: 'Twitter', icon: Twitter, category: 'output' },
+  { type: 'tweet', label: 'Twitter', icon: Twitter, category: 'output' },
   {
     type: 'weibo',
     label: '微博',
@@ -180,10 +184,13 @@ function getLeafIcon(type: LeafType) {
 }
 
 // ============================================
-// CommitV3 Display Components
+// Commit Display Components (V3 and V4)
 // ============================================
 
-function AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
+/**
+ * Author badge for V3 commits (with verification status)
+ */
+function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
   const isVerified = author.verification === 'verified';
   return (
     <span className={`text-xs px-1.5 py-0.5 rounded ${
@@ -191,6 +198,21 @@ function AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
     }`}>
       {author.name}
       {isVerified && ' ✓'}
+    </span>
+  );
+}
+
+/**
+ * Author badge for V4 commits (with type indicator)
+ */
+function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
+  const isAgent = author.type === 'agent';
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
+      isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {author.name || author.id || 'Unknown'}
+      {isAgent && <span className="text-[0.5rem]">AI</span>}
     </span>
   );
 }
@@ -213,7 +235,7 @@ const PREVIEW_MAX_SENTENCES = 3;
 const PREVIEW_MAX_CONSTRAINTS = 3;
 
 /**
- * CommitV3 content section - only shows sentences and constraints
+ * CommitV3 content section - shows sentences and constraints
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  */
 function CommitV3Content({ commit }: { commit: CommitV3Display }) {
@@ -228,7 +250,7 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-[0.65rem] text-slate-400">by</span>
-        <AuthorBadge author={commit.author} />
+        <AuthorBadgeV3 author={commit.author} />
       </div>
 
       {/* Sentences (preview) */}
@@ -276,6 +298,61 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
   );
 }
 
+/**
+ * CommitV4 content section - shows sentences only (constraints are in Leaves)
+ * Header (title, branch, hash, status) is rendered by parent UnitNode
+ */
+function CommitV4Content({ commit }: { commit: CommitV4Display }) {
+  const sentences = commit.content.sentences;
+  const displaySentences = sentences.slice(0, PREVIEW_MAX_SENTENCES);
+  const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
+
+  return (
+    <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100">
+      {/* Author badge */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-[0.65rem] text-slate-400">by</span>
+        <AuthorBadgeV4 author={commit.author} />
+        {/* V4 badge */}
+        <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
+          V4
+        </span>
+      </div>
+
+      {/* Sentences (preview) */}
+      <div>
+        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+          Sentences ({sentences.length})
+        </div>
+        {sentences.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            {displaySentences.map((s) => (
+              <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
+                <span className="text-slate-400 font-mono text-[0.6rem] mr-1">{s.id}</span>
+                {s.text}
+              </li>
+            ))}
+            {remainingSentences > 0 && (
+              <li className="text-[0.65rem] text-slate-400">
+                +{remainingSentences} more
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      {/* V4: Constraints notice */}
+      <div className="mt-2 px-2 py-1.5 bg-amber-50 rounded border border-amber-200">
+        <p className="text-[0.6rem] text-amber-700">
+          Constraints are defined in Leaves
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
@@ -292,6 +369,34 @@ function UnitNode(props: Props) {
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
+
+  // Pin store
+  const { isPinned } = usePinsStore();
+
+  // Context config state
+  const [contextConfig, setContextConfig] = useState<ConversationContext | null>(null);
+
+  // Fetch context config on mount
+  useEffect(() => {
+    if (!data.conversationId) return;
+
+    getConversationContext(data.conversationId)
+      .then(setContextConfig)
+      .catch(() => {}); // Silent fail - context indicator just won't show
+  }, [data.conversationId]);
+
+  // Context label helper
+  const getContextLabel = (): string | null => {
+    if (!contextConfig) return null;
+    if (contextConfig.selected_pin_ids === null) return '[all]';
+    if (contextConfig.selected_pin_ids.length === 0) return '[none]';
+    return `[${contextConfig.selected_pin_ids.length} context]`;
+  };
+
+  // Assertion totals for leaves header
+  const totalPassed = data.leaves?.reduce((sum, l) => sum + (l.passedCount || 0), 0) || 0;
+  const totalFailed = data.leaves?.reduce((sum, l) => sum + (l.failedCount || 0), 0) || 0;
+  const totalAssertions = totalPassed + totalFailed;
 
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
@@ -329,10 +434,10 @@ function UnitNode(props: Props) {
     openLeafPanel(id);
   };
 
-  // Copy commit hash to clipboard (V3 hash takes priority)
+  // Copy commit hash to clipboard (V4/V3 hash takes priority)
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash = data.commitV3?.hash || data.commitHash || data.entryId || '';
+    const hash = data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard.writeText(hash);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
@@ -341,7 +446,7 @@ function UnitNode(props: Props) {
 
   // Navigate to leaf detail page
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (leaf.type === 'deploy') {
+    if (leaf.type === 'deploy_agent') {
       return '/deploy';
     }
     if (leaf.type === 'eval' && leaf.id) {
@@ -386,13 +491,24 @@ function UnitNode(props: Props) {
           >
             <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500">
               <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
+              {/* Context indicator */}
+              {getContextLabel() && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-400 font-medium">{getContextLabel()}</span>
+                </>
+              )}
               <span className="text-slate-300">·</span>
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
+                  const sourceIsPinned = source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
                       {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
+                      {sourceIsPinned && (
+                        <Pin size={10} className="text-amber-500 fill-amber-500" />
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="inline-flex items-center gap-0.5">
@@ -443,11 +559,13 @@ function UnitNode(props: Props) {
                     onClick={handleCopyHash}
                     className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[0.6rem] transition-colors cursor-pointer"
                   >
-                    {data.commitV3?.hash
-                      ? data.commitV3.hash.slice(0, 7)
-                      : data.commitHash
-                        ? data.commitHash.slice(0, 7)
-                        : data.entryId?.slice(0, 7)}
+                    {data.commitV4?.hash
+                      ? data.commitV4.hash.slice(0, 7)
+                      : data.commitV3?.hash
+                        ? data.commitV3.hash.slice(0, 7)
+                        : data.commitHash
+                          ? data.commitHash.slice(0, 7)
+                          : data.entryId?.slice(0, 7)}
                     {copiedHash ? (
                       <CheckCircle size={10} className="text-green-500" />
                     ) : (
@@ -499,8 +617,9 @@ function UnitNode(props: Props) {
             )}
           </div>
 
-          {/* V3: Sentences and Constraints content */}
-          {data.commitV3 && <CommitV3Content commit={data.commitV3} />}
+          {/* V3/V4: Sentences and Constraints content */}
+          {data.commitV4 && <CommitV4Content commit={data.commitV4} />}
+          {data.commitV3 && !data.commitV4 && <CommitV3Content commit={data.commitV3} />}
         </div>
 
         {/* ═══════════════════════════════════════════
@@ -515,6 +634,13 @@ function UnitNode(props: Props) {
             >
               <span className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
                 Leaves ({data.leaves.length})
+                {totalAssertions > 0 && (
+                  <span className="ml-1.5 normal-case font-normal">
+                    <span className="text-green-600">{totalPassed}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-500">{totalAssertions}</span>
+                  </span>
+                )}
               </span>
               <ChevronRight
                 size={12}
@@ -536,7 +662,7 @@ function UnitNode(props: Props) {
                   <div className="px-3 pb-2 space-y-1 nodrag">
                     {data.leaves.map((leaf) => {
                       const LeafIcon = getLeafIcon(leaf.type);
-                      const isRunner = leaf.type === 'deploy' || leaf.type === 'eval';
+                      const isRunner = leaf.type === 'deploy_agent' || leaf.type === 'eval';
                       const leafHref = getLeafHref(leaf);
                       const leafContent = (
                         <>
@@ -662,7 +788,7 @@ function LeafStatusIndicator({ leafType, data }: { leafType: LeafType; data: Can
   const baseClasses =
     'inline-flex items-center gap-1 text-[0.65rem] font-medium px-1.5 py-0.5 rounded';
 
-  if (leafType === 'deploy') {
+  if (leafType === 'deploy_agent') {
     const status = (data.leafConfig as { status?: string })?.status || 'idle';
     switch (status) {
       case 'running':
@@ -719,7 +845,7 @@ function LeafNode(props: Props) {
   const { data, selected } = props;
   const leafTypeInfo = LEAF_TYPES.find((l) => l.type === data.leafType) || LEAF_TYPES[0];
   const Icon = leafTypeInfo.icon;
-  const isRunnerLeaf = data.leafType === 'deploy' || data.leafType === 'eval';
+  const isRunnerLeaf = data.leafType === 'deploy_agent' || data.leafType === 'eval';
 
   return (
     <>
