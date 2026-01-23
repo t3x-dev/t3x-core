@@ -18,6 +18,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   PenSquare,
+  Pin,
   Plus,
   Rocket,
   Twitter,
@@ -27,13 +28,15 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { nodeEnter, springConfig } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
+import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { getConversationContext, type ConversationContext } from '@/lib/api';
 import type { CanvasNodeData, CommitV3Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
 
 // Define custom node type for React Flow v12
@@ -293,6 +296,34 @@ function UnitNode(props: Props) {
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
+  // Pin store
+  const { isPinned } = usePinsStore();
+
+  // Context config state
+  const [contextConfig, setContextConfig] = useState<ConversationContext | null>(null);
+
+  // Fetch context config on mount
+  useEffect(() => {
+    if (!data.conversationId) return;
+
+    getConversationContext(data.conversationId)
+      .then(setContextConfig)
+      .catch(() => {}); // Silent fail - context indicator just won't show
+  }, [data.conversationId]);
+
+  // Context label helper
+  const getContextLabel = (): string | null => {
+    if (!contextConfig) return null;
+    if (contextConfig.selected_pin_ids === null) return '[all]';
+    if (contextConfig.selected_pin_ids.length === 0) return '[none]';
+    return `[${contextConfig.selected_pin_ids.length} context]`;
+  };
+
+  // Assertion totals for leaves header
+  const totalPassed = data.leaves?.reduce((sum, l) => sum + (l.passedCount || 0), 0) || 0;
+  const totalFailed = data.leaves?.reduce((sum, l) => sum + (l.failedCount || 0), 0) || 0;
+  const totalAssertions = totalPassed + totalFailed;
+
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
@@ -386,13 +417,24 @@ function UnitNode(props: Props) {
           >
             <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500">
               <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
+              {/* Context indicator */}
+              {getContextLabel() && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-400 font-medium">{getContextLabel()}</span>
+                </>
+              )}
               <span className="text-slate-300">·</span>
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
+                  const sourceIsPinned = source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
                       {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
+                      {sourceIsPinned && (
+                        <Pin size={10} className="text-amber-500 fill-amber-500" />
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="inline-flex items-center gap-0.5">
@@ -515,6 +557,13 @@ function UnitNode(props: Props) {
             >
               <span className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
                 Leaves ({data.leaves.length})
+                {totalAssertions > 0 && (
+                  <span className="ml-1.5 normal-case font-normal">
+                    <span className="text-green-600">{totalPassed}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-500">{totalAssertions}</span>
+                  </span>
+                )}
               </span>
               <ChevronRight
                 size={12}
