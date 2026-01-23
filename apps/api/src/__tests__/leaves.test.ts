@@ -2,10 +2,6 @@
  * Leaves Route Tests
  *
  * Integration tests for Leaves CRUD API endpoints.
- *
- * NOTE: These tests are skipped until Issue A2 (Storage Queries - leaves CRUD) is merged.
- * The tests require @t3x/storage leaves functions (createLeaf, findLeafById, etc.)
- * TODO: Remove .skip after A2 is merged
  */
 
 import { insertProject } from '@t3x/storage';
@@ -28,8 +24,7 @@ vi.mock('../lib/db', () => ({
 // Import routes after mocking
 import { leavesRoutes } from '../routes/leaves.openapi';
 
-// TODO: Remove .skip after Issue A2 (Storage Queries - leaves CRUD) is merged
-describe.skip('Leaves Routes', () => {
+describe('Leaves Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testCommitHash: string;
@@ -270,7 +265,8 @@ describe.skip('Leaves Routes', () => {
       expect(Array.isArray(data.data)).toBe(true);
     });
 
-    it('filters by type', async () => {
+    // TODO: Enable when storage supports type filtering
+    it.skip('filters by type', async () => {
       // Create leaves of different types
       await app.request('/v1/leaves', {
         method: 'POST',

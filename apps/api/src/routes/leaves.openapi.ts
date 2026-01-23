@@ -23,9 +23,7 @@ import {
   LeafResponse,
   UpdateLeafRequest,
 } from '../schemas/v4-contracts';
-// Storage functions (provided by @t3x/storage, implemented by Track A - Issue A2)
-// TODO: Remove @ts-expect-error after Issue A2 (Storage Queries - leaves CRUD) is merged
-// @ts-expect-error - Waiting for Track A to implement leaves queries
+// Storage functions (provided by @t3x/storage)
 import {
   createLeaf,
   findLeafById,
@@ -33,9 +31,8 @@ import {
   findLeavesByProject,
   updateLeaf,
   deleteLeaf,
-  type LeafRecord,
 } from '@t3x/storage/pglite';
-import { nanoid } from 'nanoid';
+import type { Leaf } from '@t3x/core';
 
 export const leavesRoutes = new OpenAPIHono();
 
@@ -44,23 +41,23 @@ export const leavesRoutes = new OpenAPIHono();
 // ============================================================
 
 /**
- * Convert storage output to API response format
- * Storage uses camelCase, API uses snake_case
+ * Convert storage Leaf to API response format
+ * Storage returns Leaf (snake_case), API uses snake_case with null for missing values
  */
-function toApiLeaf(leaf: LeafRecord) {
+function toApiLeaf(leaf: Leaf) {
   return {
     id: leaf.id,
-    commit_hash: leaf.commitHash,
+    commit_hash: leaf.commit_hash,
     type: leaf.type,
     title: leaf.title ?? null,
     constraints: leaf.constraints ?? [],
     config: leaf.config ?? {},
     output: leaf.output ?? null,
-    generated_at: leaf.generatedAt?.toISOString() ?? null,
+    generated_at: leaf.generated_at ?? null,
     assertions: leaf.assertions ?? null,
-    project_id: leaf.projectId,
-    created_at: leaf.createdAt.toISOString(),
-    created_by: leaf.createdBy ?? null,
+    project_id: leaf.project_id,
+    created_at: leaf.created_at,
+    created_by: leaf.created_by ?? null,
   };
 }
 
@@ -326,24 +323,14 @@ leavesRoutes.openapi(createLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Generate leaf ID
-    const leafId = `leaf_${nanoid(12)}`;
-
-    // Generate IDs for constraints that don't have one
-    const constraintsWithIds = (body.constraints ?? []).map((constraint) => ({
-      ...constraint,
-      id: constraint.id ?? `cst_${nanoid(12)}`,
-    }));
-
-    // Create leaf in database
+    // Create leaf in database (storage generates IDs for leaf and constraints)
     const leaf = await createLeaf(db, {
-      id: leafId,
-      commitHash: body.commit_hash,
+      commit_hash: body.commit_hash,
       type: body.type,
       title: body.title,
-      constraints: constraintsWithIds,
+      constraints: body.constraints,
       config: body.config ?? {},
-      projectId: body.project_id,
+      project_id: body.project_id,
     });
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 201);
@@ -407,11 +394,12 @@ leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 // GET /v1/projects/:projectId/leaves - List leaves by project
 leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type: _type, limit, offset } = c.req.valid('query');
 
   try {
     const db = await getDB();
-    const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
+    // Note: type filtering not yet supported by storage, using limit/offset only
+    const leaves = await findLeavesByProject(db, projectId, { limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
@@ -428,22 +416,12 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Generate IDs for new constraints that don't have one
-    const updates: Record<string, unknown> = {};
-    if (body.title !== undefined) {
-      updates.title = body.title;
-    }
-    if (body.constraints !== undefined) {
-      updates.constraints = body.constraints.map((constraint) => ({
-        ...constraint,
-        id: constraint.id ?? `cst_${nanoid(12)}`,
-      }));
-    }
-    if (body.config !== undefined) {
-      updates.config = body.config;
-    }
-
-    const leaf = await updateLeaf(db, id, updates);
+    // Storage handles constraint ID generation
+    const leaf = await updateLeaf(db, id, {
+      title: body.title,
+      constraints: body.constraints,
+      config: body.config,
+    });
 
     if (!leaf) {
       return c.json(

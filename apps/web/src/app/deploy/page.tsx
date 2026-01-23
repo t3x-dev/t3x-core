@@ -189,7 +189,7 @@ export default function DeployPage() {
       const result = await createEngineRun({
         leaf: {
           id: agent.deploy_agent_id,
-          type: 'deploy',
+          type: 'deploy_agent',
         },
         inputs: { test: true },
         workflow: {

@@ -15,14 +15,15 @@ export type NodeKind = 'unit' | 'leaf';
 export type CommitStatus = 'staging' | 'committed';
 
 // Leaf node types for output destinations
+// Must match @t3x/core LeafType from V4 schema
 export type LeafType =
-  | 'twitter'
+  | 'deploy_agent'  // was 'deploy'
+  | 'tweet'         // was 'twitter'
   | 'weibo'
   | 'wechat'
-  | 'article'
   | 'email'
+  | 'article'
   | 'slack'
-  | 'deploy'
   | 'eval';
 
 // Deploy status for leaf nodes connected to runner
@@ -38,7 +39,7 @@ export interface LeafNodeConfig {
 
 // Deploy leaf configuration
 export interface DeployLeafConfig extends LeafNodeConfig {
-  leafType: 'deploy';
+  leafType: 'deploy_agent';
   agentId?: string;
   agentName?: string;
   agentEndpoint?: string;
@@ -96,6 +97,41 @@ export interface ConstraintDisplay {
   match: 'exact' | 'semantic';
   source_sentence_id?: string;
 }
+
+// ============================================
+// CommitV4 Display Types
+// Re-export from @t3x/core contract types
+// ============================================
+
+// Import contract types from @t3x/core (single source of truth)
+import type {
+  CommitAuthorV4,
+  CommitSourceRef,
+  CommitV4,
+  CommitV4Content,
+  SentenceSourceRef,
+  SentenceV4,
+} from '@t3x/core';
+
+// Re-export contract types for convenience
+export type { CommitAuthorV4, CommitSourceRef, CommitV4, CommitV4Content, SentenceSourceRef, SentenceV4 };
+
+/**
+ * CommitV4 display data for canvas nodes
+ * Uses Pick to select only the fields needed for display from the contract type.
+ * Maintains contract compliance while allowing UI-specific field selection.
+ *
+ * Note: parents field is intentionally omitted as it's not needed for display.
+ */
+export type CommitV4Display = Pick<
+  CommitV4,
+  'hash' | 'schema' | 'author' | 'committed_at' | 'content' | 'message' | 'branch' | 'source_refs'
+>;
+
+/**
+ * Union type for commit display - supports both V3 and V4
+ */
+export type CommitDisplay = CommitV3Display | CommitV4Display;
 
 // ============================================
 // Embedded Leaf (inside UnitNode)
@@ -509,6 +545,12 @@ export interface CanvasNodeData {
    * @display UnitNode: Sentences list and constraint badges
    */
   commitV3?: CommitV3Display;
+
+  /**
+   * CommitV4 data for V4 architecture (sentences only, no constraints)
+   * @display UnitNode: Sentences list with info about Leaf constraints
+   */
+  commitV4?: CommitV4Display;
 
   // Merge commit configuration
   mergeConfig?: MergeConfig;

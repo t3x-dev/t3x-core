@@ -13,6 +13,7 @@ import type {
   AnchorType,
   AnchorConstraint,
 } from '@/types/nodes';
+import type { Pin } from '@t3x/core';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -630,6 +631,15 @@ export async function deleteConversation(
     }
   );
   return handleResponse<{ deleted: boolean; conversation_id: string }>(res);
+}
+
+export async function getConversation(
+  conversationId: string
+): Promise<Conversation & { turns_count?: number }> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}`
+  );
+  return handleResponse<Conversation & { turns_count?: number }>(res);
 }
 
 export async function updateConversation(
@@ -1501,7 +1511,7 @@ export interface EngineRun {
   commit_ref: string | null;
   leaf: {
     id: string;
-    type: 'deploy' | 'eval';
+    type: 'deploy_agent' | 'eval';  // V4 LeafType
     content?: string;
   } | null;
   inputs: Record<string, unknown> | null;
@@ -1547,7 +1557,7 @@ export interface CreateEngineRunInput {
   commit_ref?: string;
   leaf?: {
     id: string;
-    type: 'deploy' | 'eval';
+    type: 'deploy_agent' | 'eval';  // V4 LeafType (runner-related types only)
     content?: string;
     rules_ref?: string;  // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   };
@@ -1798,6 +1808,262 @@ export async function compareConfigurations(
     }),
   });
   return handleResponse<ComparisonResult>(res);
+}
+
+// ============================================================================
+// Pins (V4 - source selection for commits and context)
+// ============================================================================
+
+export type PinType = 'conversation' | 'leaf';
+
+/** API response format for Pin (uses null for absent values) */
+interface ApiPin {
+  id: string;
+  project_id: string;
+  type: PinType;
+  ref_id: string;
+  selected_assertion_ids: string[] | null;
+  pinned_at: string;
+  pinned_by: string | null;
+}
+
+/** Convert API Pin response to core Pin type (null → undefined) */
+function toPin(apiPin: ApiPin): Pin {
+  return {
+    id: apiPin.id,
+    project_id: apiPin.project_id,
+    type: apiPin.type,
+    ref_id: apiPin.ref_id,
+    selected_assertion_ids: apiPin.selected_assertion_ids ?? undefined,
+    pinned_at: apiPin.pinned_at,
+    pinned_by: apiPin.pinned_by ?? undefined,
+  };
+}
+
+export type { Pin } from '@t3x/core';
+
+export interface PinListData {
+  pins: Pin[];
+}
+
+/**
+ * List pins by project
+ */
+export async function listPins(
+  projectId: string,
+  type?: PinType
+): Promise<Pin[]> {
+  const query = buildQueryString({ type });
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pins${query ? `?${query}` : ''}`
+  );
+  const apiPins = await handleResponse<ApiPin[]>(res);
+  return apiPins.map(toPin);
+}
+
+/**
+ * Create a new pin
+ */
+export async function createPinApi(
+  projectId: string,
+  type: PinType,
+  refId: string,
+  selectedAssertionIds?: string[]
+): Promise<Pin> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pins`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type,
+        ref_id: refId,
+        selected_assertion_ids: selectedAssertionIds,
+      }),
+    }
+  );
+  const apiPin = await handleResponse<ApiPin>(res);
+  return toPin(apiPin);
+}
+
+/**
+ * Delete a pin by ID
+ */
+export async function deletePinApi(pinId: string): Promise<{ deleted: boolean; id: string }> {
+  const res = await fetchWithTimeout(`${API_V1}/pins/${encodeURIComponent(pinId)}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<{ deleted: boolean; id: string }>(res);
+}
+
+/**
+ * Update pin's selected assertion IDs
+ */
+export async function updatePinAssertionsApi(
+  pinId: string,
+  selectedAssertionIds: string[]
+): Promise<Pin> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/pins/${encodeURIComponent(pinId)}/assertions`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        selected_assertion_ids: selectedAssertionIds,
+      }),
+    }
+  );
+  const apiPin = await handleResponse<ApiPin>(res);
+  return toPin(apiPin);
+}
+
+// ============================================================================
+// Conversation Context
+// ============================================================================
+
+export interface ConversationContext {
+  conversation_id: string;
+  selected_pin_ids: string[] | null;
+  updated_at: string;
+}
+
+export async function getConversationContext(
+  conversationId: string
+): Promise<ConversationContext | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context`
+  );
+  return handleResponse<ConversationContext | null>(res);
+}
+
+export async function updateConversationContext(
+  conversationId: string,
+  selectedPinIds: string[] | null
+): Promise<ConversationContext> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_pin_ids: selectedPinIds }),
+    }
+  );
+  return handleResponse<ConversationContext>(res);
+}
+
+// ============================================================================
+// Leaves (V4 - constraints, output, validation)
+// ============================================================================
+
+export type LeafType =
+  | 'deploy_agent'
+  | 'tweet'
+  | 'weibo'
+  | 'wechat'
+  | 'email'
+  | 'article'
+  | 'slack'
+  | 'eval';
+
+export interface RequireConstraint {
+  id: string;
+  type: 'require';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  source_sentence_id?: string;
+}
+
+export interface ExcludeConstraint {
+  id: string;
+  type: 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  reason?: string;
+}
+
+export type Constraint = RequireConstraint | ExcludeConstraint;
+
+export interface Assertion {
+  id: string;
+  constraint_id: string;
+  passed: boolean;
+  details: string;
+  lesson?: string;
+}
+
+export interface LeafConfig {
+  prompt_template?: string;
+  model?: string;
+  max_tokens?: number;
+  [key: string]: unknown;
+}
+
+export interface Leaf {
+  id: string;
+  commit_hash: string;
+  type: LeafType;
+  title: string | null;
+  constraints: Constraint[];
+  config: LeafConfig;
+  output: string | null;
+  generated_at: string | null;
+  assertions: Assertion[] | null;
+  project_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+/**
+ * Get leaf by ID
+ */
+export async function getLeaf(leafId: string): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`);
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Update leaf (title, constraints, config)
+ */
+export async function updateLeaf(
+  leafId: string,
+  updates: {
+    title?: string;
+    constraints?: Constraint[];
+    config?: LeafConfig;
+  }
+): Promise<Leaf> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Create a new leaf
+ */
+export interface CreateLeafInput {
+  commit_hash: string;
+  type: LeafType;
+  title?: string;
+  project_id: string;
+  constraints?: Constraint[];
+  config?: LeafConfig;
+}
+
+export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<Leaf>(res);
 }
 
 export async function* chatStream(
