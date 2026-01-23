@@ -10,8 +10,8 @@ export const EngineRunRequestSchema = z.object({
     .object({
       id: z.string(),
       type: z.enum(['deploy', 'eval']),
-      content: z.string().optional(),      // prompt（给 n8n AI Agent 使用）
-      rules_ref: z.string().optional(),    // 规则文件引用名（指向 resources/rules/ 目录）
+      content: z.string().optional(),      // prompt for n8n AI Agent
+      rules_ref: z.string().optional(),    // rules file reference (from resources/rules/)
     })
     .optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),
@@ -39,7 +39,7 @@ export const N8nCallbackSchema = z.object({
     .object({
       latency_ms: z.number().optional(),
       tokens: z.number().optional(),
-      model: z.string().optional(), // n8n 使用的模型名称（如 "claude-3-5-sonnet"）
+      model: z.string().optional(), // model name used by n8n (e.g. "claude-3-5-sonnet")
     })
     .optional(),
   error: z.string().nullable().optional(),

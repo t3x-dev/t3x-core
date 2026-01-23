@@ -156,8 +156,8 @@
     },
     {
       "parameters": {
-        "description": "查询指定城市的天气信息。输入城市名称，返回当前天气。",
-        "jsCode": "const weatherData = {\n    \"北京\": { temp: 5, condition: \"晴\", humidity: 30, wind: \"北风3级\" },\n    \"上海\": { temp: 12, condition: \"多云\", humidity: 65, wind: \"东风2级\" },\n  };\n  const city = $input.item.json.city || \"北京\";\n  const weather = weatherData[city] || { temp: 15, condition: \"未知\", humidity: 50, wind: \"微风\" };\n\n  return JSON.stringify({ city, ...weather, updated_at: new Date().toISOString() });"
+        "description": "Query weather information for a specified city. Input city name, return current weather.",
+        "jsCode": "const weatherData = {\n    \"Beijing\": { temp: 5, condition: \"Sunny\", humidity: 30, wind: \"North 3\" },\n    \"Shanghai\": { temp: 12, condition: \"Cloudy\", humidity: 65, wind: \"East 2\" },\n  };\n  const city = $input.item.json.city || \"Beijing\";\n  const weather = weatherData[city] || { temp: 15, condition: \"Unknown\", humidity: 50, wind: \"Breeze\" };\n\n  return JSON.stringify({ city, ...weather, updated_at: new Date().toISOString() });"
       },
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.3,

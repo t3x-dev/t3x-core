@@ -279,14 +279,14 @@ export class EvalEngine {
   }
 
   /**
-   * 使用 leaf 对象进行评测（推荐）
+   * Evaluate using leaf object (recommended)
    *
-   * 根据 leaf.rules_ref 从 resources/rules/ 目录加载规则文件
-   * leaf.content 是给 n8n 的 prompt，不参与规则解析
+   * Loads rules from resources/rules/ based on leaf.rules_ref
+   * leaf.content is the prompt for n8n, not used for rule parsing
    *
-   * @param record - 运行记录（来自 n8n 执行结果）
-   * @param leaf - Leaf 对象，包含 rules_ref 字段
-   * @returns 评测结果
+   * @param record - Run record (from n8n execution result)
+   * @param leaf - Leaf object containing rules_ref field
+   * @returns Evaluation result
    */
   evaluateWithLeaf(
     record: RunRecord,
@@ -297,12 +297,12 @@ export class EvalEngine {
   }
 
   /**
-   * @deprecated 请使用 evaluateWithLeaf() 代替
+   * @deprecated Use evaluateWithLeaf() instead
    *
-   * 保留此方法是为了向后兼容，新代码请使用 evaluateWithLeaf()
+   * Kept for backward compatibility, new code should use evaluateWithLeaf()
    */
   evaluateWithLeafRules(record: RunRecord, _leafContent?: string): EvalResult {
-    // 向后兼容：不再尝试解析 leafContent，直接使用默认规则
+    // Backward compatibility: use default rules instead of parsing leafContent
     return this.evaluateWithLeaf(record, undefined);
   }
 }
