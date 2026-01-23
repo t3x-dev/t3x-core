@@ -61,12 +61,32 @@ export default function DeployPage() {
     prompt_versions: string[];
   }>({ models: [], prompt_versions: [] });
 
-  // Load deploy agents from database
+  // Load deploy agents from database and sync running status
   const loadDeployAgents = useCallback(async () => {
     try {
       const data = await listDeployAgents();
-      setDeployAgents(data.deploy_agents);
-      return data.deploy_agents;
+      const agents = data.deploy_agents;
+
+      // Check if any agents are stuck in 'running' status
+      // If their last run is completed/failed, reset status to idle
+      for (const agent of agents) {
+        if (agent.status === 'running' && agent.last_run_id) {
+          try {
+            const runsData = await listEngineRuns();
+            const lastRun = runsData.runs.find((r) => r.run_id === agent.last_run_id);
+            if (lastRun && (lastRun.status === 'completed' || lastRun.status === 'failed')) {
+              // Run completed, reset agent status
+              await updateDeployAgent(agent.deploy_agent_id, { status: 'idle' });
+              agent.status = 'idle';
+            }
+          } catch (err) {
+            console.warn(`Failed to check run status for agent ${agent.deploy_agent_id}:`, err);
+          }
+        }
+      }
+
+      setDeployAgents(agents);
+      return agents;
     } catch (err) {
       console.warn('Failed to load deploy agents from database:', err);
     }

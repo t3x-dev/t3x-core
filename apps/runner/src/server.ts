@@ -416,7 +416,7 @@ async function processN8nCallback(data: {
 
   const evalResult: EvalResult = evalEngine.evaluateWithLeaf(
     runRecord,
-    runInfo.leaf ?? undefined  // null -> undefined，根据 rules_ref 加载规则文件
+    runInfo.leaf ?? undefined  // null -> undefined, load rules based on rules_ref
   );
 
   logger.info({
@@ -488,7 +488,7 @@ async function processN8nCallback(data: {
     trajectory: traceSummary.trajectory,
   }, 'Trace storage decision');
 
-  // v2.2: 从 trace 中提取真实的 model（优先级高于 n8n callback 的硬编码值）
+  // v2.2: Extract actual model from trace (takes priority over n8n callback hardcoded value)
   const llmStep = runRecord.steps.find(s => s.llm?.model && s.llm.model !== 'unknown');
   const actualModel = llmStep?.llm?.model || data.meta?.model;
 
@@ -503,7 +503,7 @@ async function processN8nCallback(data: {
     run_id: runInfo.run_id,
     runner_run_id: data.runner_run_id,
     status,
-    // v2.2: 从 trace 提取真实的 model（而非 n8n callback 硬编码值）
+    // v2.2: Extract actual model from trace (instead of n8n callback hardcoded value)
     metadata: actualModel ? { model: actualModel } : undefined,
     run_report: {
       trace: runRecord,
