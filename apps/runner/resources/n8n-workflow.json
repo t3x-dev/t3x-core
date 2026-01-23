@@ -8,11 +8,12 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-node",
+      "id": "7f2c7eea-3ce3-41ad-a627-500210d37121",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300]
+      "position": [208, -192],
+      "webhookId": "b424bac0-ddd5-4c31-9fe3-8b8eb4be5e04"
     },
     {
       "parameters": {
@@ -21,31 +22,31 @@
             {
               "id": "1",
               "name": "run_id",
-              "value": "={{ $json.run_id }}",
+              "value": "={{ $json.body.run_id }}",
               "type": "string"
             },
             {
               "id": "2",
               "name": "runner_run_id",
-              "value": "={{ $json.runner_run_id }}",
+              "value": "={{ $json.body.runner_run_id }}",
               "type": "string"
             },
             {
               "id": "3",
               "name": "system_prompt",
-              "value": "={{ $json.leaf.content }}",
+              "value": "={{ $json.body.leaf.content }}",
               "type": "string"
             },
             {
               "id": "4",
               "name": "user_query",
-              "value": "={{ $json.inputs.query }}",
+              "value": "={{ $json.body.inputs.user_message }}",
               "type": "string"
             },
             {
               "id": "5",
               "name": "callback_url",
-              "value": "={{ $json.callback_url }}",
+              "value": "={{ $json.body.callback_url }}",
               "type": "string"
             },
             {
@@ -58,73 +59,265 @@
         },
         "options": {}
       },
-      "id": "set-node",
+      "id": "b4f0d7e1-6bf8-455f-906f-e157e4b20ea0",
       "name": "Set",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [450, 300]
+      "position": [400, -192]
     },
     {
       "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Set').item.json.user_query }}",
         "options": {
-          "systemMessage": "={{ $('Set').item.json.system_prompt }}"
-        },
-        "text": "={{ $('Set').item.json.user_query }}"
+          "systemMessage": "={{ $('Set').item.json.system_prompt }}",
+          "returnIntermediateSteps": false
+        }
       },
-      "id": "ai-agent-node",
+      "id": "1a5b7c91-9f02-4cfe-9c9c-8af722eee13c",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
-      "position": [650, 300]
+      "position": [576, -192]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://t3x-runner:8080/callbacks/n8n",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"runner_run_id\": \"{{ $('Set').item.json.runner_run_id }}\",\n  \"run_id\": \"{{ $('Set').item.json.run_id }}\",\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"output\": {\n    \"response\": \"{{ $json.output }}\"\n  },\n  \"meta\": {\n    \"latency_ms\": {{ Date.now() - $('Set').item.json.start_time }}\n  }\n}",
-        "options": {}
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "runner_run_id",
+              "value": "={{ $('Set').item.json.runner_run_id }}"
+            },
+            {
+              "name": "run_id",
+              "value": "={{ $('Set').item.json.run_id }}"
+            },
+            {
+              "name": "execution_id",
+              "value": "={{ $execution.id }}"
+            },
+            {
+              "name": "output",
+              "value": "={{ { response: $json.output } }}"
+            },
+            {
+              "name": "meta",
+              "value": "={{ { latency_ms: Date.now() - $('Set').item.json.start_time } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
       },
-      "id": "callback-node",
+      "id": "6ffa0153-5915-4b5d-aba4-445e4556b749",
       "name": "Callback Runner",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [850, 300]
+      "position": [992, -192],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"success\": true, \"message\": \"Callback sent\" } }}",
+        "responseBody": "={{ $('AI Agent').item.json }}",
         "options": {}
       },
-      "id": "respond-node",
+      "id": "cabb461c-c330-4a35-97e7-67433349984f",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1050, 300]
+      "position": [1216, -192]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-opus-4-5-20251101",
+          "mode": "list",
+          "cachedResultName": "Claude Opus 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [448, 48],
+      "id": "c638d769-bab6-4d61-b05a-064f933ea361",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "",
+          "name": "Your Anthropic Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "查询指定城市的天气信息。输入城市名称，返回当前天气。",
+        "jsCode": "const weatherData = {\n    \"北京\": { temp: 5, condition: \"晴\", humidity: 30, wind: \"北风3级\" },\n    \"上海\": { temp: 12, condition: \"多云\", humidity: 65, wind: \"东风2级\" },\n  };\n  const city = $input.item.json.city || \"北京\";\n  const weather = weatherData[city] || { temp: 15, condition: \"未知\", humidity: 50, wind: \"微风\" };\n\n  return JSON.stringify({ city, ...weather, updated_at: new Date().toISOString() });"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [960, 64],
+      "id": "0750d052-ce43-4c35-9d13-63f32dbb186e",
+      "name": "WeatherTool"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [576, 48],
+      "id": "a7d18cbc-9412-40c3-828a-25d7558e36c9",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "",
+          "name": "Your OpenAI Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Search the web for information. Input should be a search query.",
+        "jsCode": "const query = $input.first().json.input || $input.first().json.query || \"unknown\";                   \n                                                                                                       \n  return {                                                                                             \n    json: {                                                                                            \n      response: JSON.stringify({                                                                       \n        query: query,                                                                                  \n        results: [                                                                                     \n          { title: \"Search result 1\", snippet: \"This is a simulated search result for: \" + query },    \n          { title: \"Search result 2\", snippet: \"Another result about: \" + query }                      \n        ],                                                                                             \n        note: \"This is a simulated search - not real web results\"                                      \n      })                                                                                               \n    }                                                                                                  \n  };"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [848, 64],
+      "id": "acd0a6ad-15bf-408f-afec-61a699ee00c8",
+      "name": "SearchTool"
+    },
+    {
+      "parameters": {
+        "description": "Perform mathematical calculations. Input should be a math expression.",
+        "jsCode": "const expression = $input.first().json.input || $input.first().json.expression || \"0\";                                                                                                                    \nlet result;                                                                                          \ntry {                                                                                                \n                                                       \n  result = eval(expression);                                                                         \n} catch (e) {                                                                                        \n  result = \"Error: Invalid expression\";                                                              \n}                                                                                                    \n                                                                                                       \nreturn {                                                                                             \n  json: {                                                                                            \n    response: JSON.stringify({                                                                       \n      expression: expression,                                                                        \n      result: result                                                                                 \n    })                                                                                               \n  }                                                                                                  \n};"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [736, 64],
+      "id": "73af8153-0737-4166-b18d-13e9684dacda",
+      "name": "CalculatorTool"
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
-        [{ "node": "Set", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Set": {
       "main": [
-        [{ "node": "AI Agent", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "AI Agent": {
       "main": [
-        [{ "node": "Callback Runner", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Callback Runner",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Callback Runner": {
       "main": [
-        [{ "node": "Respond", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "WeatherTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond": {
+      "main": [
+        []
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SearchTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CalculatorTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
       ]
     }
-  }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
 }
