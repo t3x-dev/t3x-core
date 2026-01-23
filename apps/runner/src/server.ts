@@ -3,7 +3,6 @@ import { randomUUID } from 'crypto';
 import express, { type Express } from 'express';
 import pino from 'pino';
 import { llmAsserter, type GenerateAssertionsResult } from './asserter.js';
-import { evalEngine as legacyEvalEngine } from './eval.js';
 import {
   getRunByRunnerRunId,
   getEngineCallbackUrl,
@@ -26,10 +25,8 @@ import {
   AgentConfigSchema,
   AgentInputSchema,
   EngineRunRequestSchema,
-  EvalRequestSchema,
   N8nCallbackSchema,
-  TestStepSchema,
-} from './types.js';
+} from './schemas/index.js';
 
 const logger = pino({
   transport: {
@@ -55,14 +52,13 @@ app.get('/', (_req, res) => {
     success: true,
     data: {
       service: 't3x-runner',
-      version: '0.1.0',
+      version: '0.2.0',
       endpoints: {
         health: 'GET /health',
         agents: 'POST /agents',
         run: 'POST /run',
-        eval: 'POST /eval',
-        commit: 'POST /commit',
-        webhook: 'POST /webhook/run',
+        runs: 'POST /runs (Engine → n8n flow)',
+        callbacks: 'POST /callbacks/n8n',
       },
       docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
     },
@@ -104,13 +100,14 @@ app.get('/agents/:id', (req, res) => {
 });
 
 // ============================================
-// Run Management
+// Run Management (SDK Proxy Mode)
 // ============================================
 
 /**
  * POST /run - Execute an agent run (proxy mode)
  *
- * Receives input, forwards to agent, captures I/O
+ * Receives input, forwards to agent, captures I/O.
+ * Returns RunRecord format.
  */
 app.post('/run', async (req, res) => {
   try {
@@ -147,23 +144,23 @@ app.post('/run', async (req, res) => {
       const latencyMs = Date.now() - startTime;
 
       // Complete the run
-      const trace = observer.completeRun(runId, output, 'completed');
+      const record = observer.completeRun(runId, output, 'completed');
       logger.info({ run_id: runId, latency_ms: latencyMs }, 'Run completed');
 
       res.json({
         success: true,
-        data: { run_id: runId, output, trace },
+        data: { run_id: runId, output, record },
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       observer.recordError(runId, errorMsg);
-      const trace = observer.completeRun(runId, null, 'failed');
+      const record = observer.completeRun(runId, null, 'failed');
 
       logger.error({ run_id: runId, error: errorMsg }, 'Run failed');
       res.status(500).json({
         success: false,
         error: { code: 'RUN_FAILED', message: errorMsg },
-        data: { run_id: runId, trace },
+        data: { run_id: runId, record },
       });
     }
   } catch (error) {
@@ -172,9 +169,39 @@ app.post('/run', async (req, res) => {
 });
 
 /**
- * POST /run/:id/event - Add event to a running trace
+ * POST /run/:id/step - Add step to a running run
  *
- * For SDK integration - agent reports events directly
+ * For SDK integration - agent reports steps directly
+ */
+app.post('/run/:id/step', (req, res) => {
+  try {
+    const runId = req.params.id;
+    const { type, data } = req.body;
+
+    if (type === 'llm_call') {
+      observer.recordLLMCall(
+        runId,
+        data.input,
+        data.output,
+        data.model,
+        data.latency_ms,
+        data.tokens
+      );
+    } else if (type === 'tool_call') {
+      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
+    } else if (type === 'error') {
+      observer.recordError(runId, data.error, data.step_id);
+    }
+
+    res.json({ success: true, data: {} });
+  } catch (error) {
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+  }
+});
+
+/**
+ * POST /run/:id/event - Add event to a running trace (legacy alias)
+ * @deprecated Use POST /run/:id/step instead
  */
 app.post('/run/:id/event', (req, res) => {
   try {
@@ -196,23 +223,23 @@ app.post('/run/:id/event', (req, res) => {
 });
 
 /**
- * GET /run/:id - Get run trace
+ * GET /run/:id - Get run record
  */
 app.get('/run/:id', (req, res) => {
-  const trace = observer.getTrace(req.params.id);
-  if (!trace) {
+  const record = observer.getRun(req.params.id);
+  if (!record) {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Run not found' } });
   }
-  res.json({ success: true, data: trace });
+  res.json({ success: true, data: record });
 });
 
 /**
  * GET /runs - List runs
  */
 app.get('/runs', (req, res) => {
-  const agentId = req.query.agent_id as string | undefined;
-  const traces = observer.listTraces(agentId);
-  res.json({ success: true, data: { runs: traces } });
+  const system = req.query.system as 'n8n' | 'langchain' | 'custom' | undefined;
+  const runs = observer.listRuns(system);
+  res.json({ success: true, data: { runs } });
 });
 
 // ============================================
@@ -389,7 +416,7 @@ async function processN8nCallback(data: {
 
   const evalResult: EvalResult = evalEngine.evaluateWithLeaf(
     runRecord,
-    runInfo.leaf ?? undefined  // null -> undefined，根据 rules_ref 加载规则文件
+    runInfo.leaf ?? undefined  // null -> undefined, load rules based on rules_ref
   );
 
   logger.info({
@@ -461,7 +488,7 @@ async function processN8nCallback(data: {
     trajectory: traceSummary.trajectory,
   }, 'Trace storage decision');
 
-  // v2.2: 从 trace 中提取真实的 model（优先级高于 n8n callback 的硬编码值）
+  // v2.2: Extract actual model from trace (takes priority over n8n callback hardcoded value)
   const llmStep = runRecord.steps.find(s => s.llm?.model && s.llm.model !== 'unknown');
   const actualModel = llmStep?.llm?.model || data.meta?.model;
 
@@ -476,7 +503,7 @@ async function processN8nCallback(data: {
     run_id: runInfo.run_id,
     runner_run_id: data.runner_run_id,
     status,
-    // v2.2: 从 trace 提取真实的 model（而非 n8n callback 硬编码值）
+    // v2.2: Extract actual model from trace (instead of n8n callback hardcoded value)
     metadata: actualModel ? { model: actualModel } : undefined,
     run_report: {
       trace: runRecord,
@@ -578,165 +605,68 @@ function buildRunRecordFromCallback(
 }
 
 // ============================================
-// Evaluation
+// Webhook Run (Reserved for Future Use)
 // ============================================
 
 /**
- * POST /eval - Run evaluation against a trace (legacy API)
+ * POST /webhook/run - Run agent with auto-eval (webhook mode)
  *
- * @deprecated Use the new evaluator via /callbacks/n8n flow
+ * RESERVED: This endpoint is planned for future implementation.
+ * It will provide a combined run + eval flow for webhook integrations.
+ *
+ * Planned functionality:
+ * - Receive agent_id, input, and test_steps in one request
+ * - Execute agent run via observer (SDK proxy mode)
+ * - Automatically run evaluation after completion
+ * - Return combined results: { run_id, output, trace, eval_result }
+ *
+ * See RUNNER_PLAN.md for implementation roadmap.
+ */
+app.post('/webhook/run', (_req, res) => {
+  res.status(501).json({
+    success: false,
+    error: {
+      code: 'NOT_IMPLEMENTED',
+      message: 'POST /webhook/run is reserved for future implementation. See RUNNER_PLAN.md for roadmap.',
+    },
+  });
+});
+
+// ============================================
+// Evaluation (Direct API)
+// ============================================
+
+/**
+ * POST /eval - Run evaluation on a RunRecord
+ *
+ * Direct evaluation endpoint for testing purposes.
+ * Production flow goes through /callbacks/n8n.
  */
 app.post('/eval', async (req, res) => {
   try {
-    const request = EvalRequestSchema.parse(req.body);
+    const { run_record, rules_ref, rules } = req.body;
 
-    // If run_id provided but no trace, fetch it
-    if (request.run_id && !request.trace) {
-      const trace = observer.getTrace(request.run_id);
-      if (!trace) {
-        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Run not found: ${request.run_id}` } });
-      }
-      request.trace = trace;
-    }
-
-    // Use legacy eval engine for backward compatibility
-    const result = await legacyEvalEngine.evaluate(request);
-    logger.info({
-      run_id: result.run_id,
-      passed: result.passed,
-      passed_steps: result.passed_steps,
-      failed_steps: result.failed_steps,
-    }, 'Legacy eval completed');
-
-    res.json({ success: true, data: result });
-  } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
-  }
-});
-
-/**
- * POST /eval/validate - Validate test steps
- */
-app.post('/eval/validate', (req, res) => {
-  try {
-    const steps = req.body.test_steps;
-    const validated = steps.map((step: unknown, i: number) => {
-      try {
-        TestStepSchema.parse(step);
-        return { index: i, valid: true };
-      } catch (error) {
-        return { index: i, valid: false, error: String(error) };
-      }
-    });
-
-    res.json({ success: true, data: { steps: validated } });
-  } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
-  }
-});
-
-// ============================================
-// T3X Integration
-// ============================================
-
-/**
- * POST /commit - Create t3x commit from eval results
- *
- * Sends eval trace to t3x-core for semantic analysis
- */
-app.post('/commit', async (req, res) => {
-  const t3xCoreUrl = process.env.T3X_CORE_URL || 'http://localhost:8000';
-
-  try {
-    const { run_id, eval_result, message } = req.body;
-
-    const trace = observer.getTrace(run_id);
-    if (!trace) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Run not found: ${run_id}` } });
-    }
-
-    // Convert trace to t3x conversation format
-    const conversation = {
-      id: run_id,
-      messages: trace.events.map((event) => ({
-        id: event.id,
-        role: event.type === 'agent_input' ? 'user' : 'assistant',
-        content: JSON.stringify(event.data),
-        timestamp: event.timestamp,
-      })),
-    };
-
-    // Send to t3x-core for commit
-    const response = await fetch(`${t3xCoreUrl}/api/v1/commits`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        conversation,
-        message: message || `Eval run: ${run_id}`,
-        metadata: {
-          eval_result,
-          trace_metrics: trace.metrics,
-        },
-      }),
-    });
-
-    const commit: unknown = await response.json();
-    const commitId =
-      typeof commit === 'object' && commit !== null && 'id' in commit
-        ? (commit as { id?: unknown }).id
-        : undefined;
-    logger.info({ run_id, commit_id: commitId }, 'T3X commit created');
-
-    res.json({ success: true, data: { commit } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: String(error) } });
-  }
-});
-
-// ============================================
-// Webhook for external integrations (n8n, etc.)
-// ============================================
-
-/**
- * POST /webhook/run - Webhook trigger for agent run
- */
-app.post('/webhook/run', async (req, res) => {
-  try {
-    const { agent_id, input, test_steps, auto_eval } = req.body;
-
-    // Run agent
-    const agent = observer.getAgent(agent_id);
-    if (!agent) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Agent not found: ${agent_id}` } });
-    }
-
-    const runId = observer.startRun(agent_id, { agent_id, input });
-
-    const response = await fetch(agent.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-
-    const output = await response.json();
-    const trace = observer.completeRun(runId, output, 'completed');
-
-    // Auto-eval if test steps provided (using legacy engine)
-    let evalResult = null;
-    if (auto_eval && test_steps?.length > 0) {
-      evalResult = await legacyEvalEngine.evaluate({
-        trace,
-        test_steps,
-        options: { stop_on_first_failure: false, generate_suggestions: true },
+    if (!run_record) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'run_record is required' }
       });
     }
 
-    res.json({
-      success: true,
-      data: { run_id: runId, output, trace, eval_result: evalResult },
-    });
+    // Build leaf-like object for evaluation
+    const leaf = rules_ref ? { rules_ref } : rules ? { rules_ref: undefined } : undefined;
+
+    const evalResult = evalEngine.evaluateWithLeaf(run_record, leaf);
+
+    logger.info({
+      run_id: run_record.run_id,
+      passed: evalResult.passed,
+      score: evalResult.score.toFixed(2),
+    }, 'Direct eval completed');
+
+    res.json({ success: true, data: evalResult });
   } catch (error) {
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: String(error) } });
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -749,11 +679,12 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   logger.info({ port: PORT }, 'T3X Runner started');
   logger.info('Endpoints:');
-  logger.info('  POST /agents      - Register agent');
-  logger.info('  POST /run         - Execute agent run');
-  logger.info('  POST /eval        - Run evaluation');
-  logger.info('  POST /commit      - Create t3x commit');
-  logger.info('  POST /webhook/run - Webhook trigger');
+  logger.info('  POST /agents        - Register agent');
+  logger.info('  POST /run           - Execute agent run (SDK proxy)');
+  logger.info('  POST /run/:id/step  - Add step to running run');
+  logger.info('  POST /runs          - Engine triggers n8n workflow');
+  logger.info('  POST /callbacks/n8n - n8n callback');
+  logger.info('  POST /eval          - Direct evaluation');
 });
 
 export { app };

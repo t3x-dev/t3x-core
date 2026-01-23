@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/eval-rules.schema.json",
+  "title": "T3X Runner EvalRules",
+  "description": "Evaluation rules configuration for T3X Runner",
+  "type": "object",
+  "required": ["version", "rules", "pass_threshold"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version (e.g. '1.0', '2.0')"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name for this rule set"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of what this rule set evaluates"
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" },
+      "description": "List of evaluation rules"
+    },
+    "pass_threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Minimum weighted score (0-1) required to pass"
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["id", "target", "check", "weight"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["basic", "tool_use", "trajectory", "cost", "performance"],
+          "default": "basic",
+          "description": "Rule type for dimension scoring"
+        },
+        "target": {
+          "type": "string",
+          "description": "What to check: 'output', 'steps', or JSON path like 'output.result'"
+        },
+        "check": {
+          "type": "string",
+          "enum": [
+            "exists",
+            "not_empty",
+            "equals",
+            "not_equals",
+            "contains",
+            "not_contains",
+            "regex",
+            "range",
+            "some",
+            "all",
+            "none",
+            "expected_tools",
+            "no_unknown_tools",
+            "step_count",
+            "no_repeated_steps",
+            "total_tokens",
+            "total_latency_ms"
+          ],
+          "description": "Check operator to apply"
+        },
+        "value": {
+          "description": "Expected value for equals/contains checks"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern for regex check"
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value for range check"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value for range/step_count/total_tokens/total_latency_ms checks"
+        },
+        "condition": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Condition object for some/all/none checks"
+        },
+        "expected": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Expected tool names for expected_tools/no_unknown_tools checks"
+        },
+        "skip_if_empty": {
+          "type": "boolean",
+          "description": "Skip this rule if target data is empty"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Rule weight for scoring (0-1)"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning"],
+          "default": "error",
+          "description": "Severity level when rule fails"
+        }
+      }
+    }
+  }
+}

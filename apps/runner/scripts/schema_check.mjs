@@ -3,11 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import yaml from 'js-yaml';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const runnerRoot = path.resolve(scriptDir, '..');
-const schemaPath = path.join(runnerRoot, 'resources', 'json-schemas', 'suite.schema.json');
-const suitesRoot = path.join(runnerRoot, 'resources', 'suites');
+
+const evalRulesSchemaPath = path.join(runnerRoot, 'resources', 'json-schemas', 'eval-rules.schema.json');
+const rulesRoot = path.join(runnerRoot, 'resources', 'rules');
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -15,22 +17,27 @@ const ajv = new Ajv2020({
 });
 addFormats(ajv);
 
-const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-const validate = ajv.compile(schema);
-
-async function listJsonFiles(rootDir) {
+async function listYamlFiles(rootDir) {
   const results = [];
 
   async function walk(dir) {
-    const entries = await readdir(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         await walk(fullPath);
         continue;
       }
-      if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) {
-        results.push(fullPath);
+      if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (ext === '.yaml' || ext === '.yml') {
+          results.push(fullPath);
+        }
       }
     }
   }
@@ -52,23 +59,26 @@ function formatAjvErrors(errors) {
 }
 
 let failed = false;
+let validCount = 0;
 
-let files;
-try {
-  files = await listJsonFiles(suitesRoot);
-} catch (err) {
-  console.error(`[schema:check] Failed to read suites directory: ${suitesRoot}`);
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
+const schema = JSON.parse(await readFile(evalRulesSchemaPath, 'utf8'));
+const validate = ajv.compile(schema);
+
+const files = await listYamlFiles(rulesRoot);
+
+if (files.length === 0) {
+  console.log('[schema:check] No YAML files found in rules/');
+  process.exit(0);
 }
 
 for (const file of files) {
   let data;
   try {
-    data = JSON.parse(await readFile(file, 'utf8'));
+    const content = await readFile(file, 'utf8');
+    data = yaml.load(content);
   } catch (err) {
     failed = true;
-    console.error(`[schema:check] ${path.relative(runnerRoot, file)}: invalid JSON`);
+    console.error(`[schema:check] ${path.relative(runnerRoot, file)}: parse error`);
     console.error(err instanceof Error ? err.message : String(err));
     continue;
   }
@@ -78,6 +88,8 @@ for (const file of files) {
     failed = true;
     console.error(`[schema:check] ${path.relative(runnerRoot, file)}: schema validation failed`);
     console.error(formatAjvErrors(validate.errors));
+  } else {
+    validCount++;
   }
 }
 
@@ -85,4 +97,4 @@ if (failed) {
   process.exit(1);
 }
 
-console.log(`[schema:check] OK (${files.length} file(s))`);
+console.log(`[schema:check] OK (${validCount} file(s))`);
