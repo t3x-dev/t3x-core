@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Lightbulb,
   Play,
-  GitCommit,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -34,7 +33,6 @@ import {
   getRunTrace,
   getEngineRun,
   runEval,
-  createCommitFromEval,
   type RunTrace,
   type TestStep,
   type TestResult,
@@ -70,7 +68,6 @@ export default function EvalPage() {
   const [testSteps] = useState<TestStep[]>(DEFAULT_TEST_STEPS);
   const [loading, setLoading] = useState(true);
   const [evaluating, setEvaluating] = useState(false);
-  const [committing, setCommitting] = useState(false);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   // Load run (try Engine first, fall back to Runner)
@@ -215,24 +212,6 @@ export default function EvalPage() {
       console.error('Failed to run eval:', err);
     } finally {
       setEvaluating(false);
-    }
-  };
-
-  const handleCreateCommit = async () => {
-    if (!runId || !evalResult) return;
-
-    setCommitting(true);
-    try {
-      const result = await createCommitFromEval(
-        runId,
-        evalResult,
-        `Eval run: ${runId} - ${evalResult.passed ? 'passed' : 'failed'}`
-      );
-      router.push(`/project/${result.commit.project_id}`);
-    } catch (err) {
-      console.error('Failed to create commit:', err);
-    } finally {
-      setCommitting(false);
     }
   };
 
@@ -490,26 +469,6 @@ export default function EvalPage() {
                 </>
               )}
             </Button>
-            {evalResult && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateCommit}
-                disabled={committing}
-              >
-                {committing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <GitCommit className="h-4 w-4" />
-                    Create Commit
-                  </>
-                )}
-              </Button>
-            )}
             <Button variant="outline" size="icon-sm" onClick={() => window.location.reload()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
