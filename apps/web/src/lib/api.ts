@@ -1925,6 +1925,25 @@ export async function updatePinAssertionsApi(
 }
 
 // ============================================================================
+// Conversation Context
+// ============================================================================
+
+export interface ConversationContext {
+  conversation_id: string;
+  selected_pin_ids: string[] | null;
+  updated_at: string;
+}
+
+export async function getConversationContext(
+  conversationId: string
+): Promise<ConversationContext | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context`
+  );
+  return handleResponse<ConversationContext | null>(res);
+}
+
+// ============================================================================
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 
