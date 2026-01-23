@@ -605,6 +605,34 @@ function buildRunRecordFromCallback(
 }
 
 // ============================================
+// Webhook Run (Reserved for Future Use)
+// ============================================
+
+/**
+ * POST /webhook/run - Run agent with auto-eval (webhook mode)
+ *
+ * RESERVED: This endpoint is planned for future implementation.
+ * It will provide a combined run + eval flow for webhook integrations.
+ *
+ * Planned functionality:
+ * - Receive agent_id, input, and test_steps in one request
+ * - Execute agent run via observer (SDK proxy mode)
+ * - Automatically run evaluation after completion
+ * - Return combined results: { run_id, output, trace, eval_result }
+ *
+ * See RUNNER_PLAN.md for implementation roadmap.
+ */
+app.post('/webhook/run', (_req, res) => {
+  res.status(501).json({
+    success: false,
+    error: {
+      code: 'NOT_IMPLEMENTED',
+      message: 'POST /webhook/run is reserved for future implementation. See RUNNER_PLAN.md for roadmap.',
+    },
+  });
+});
+
+// ============================================
 // Evaluation (Direct API)
 // ============================================
 
