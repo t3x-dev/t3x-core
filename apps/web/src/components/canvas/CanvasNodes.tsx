@@ -37,7 +37,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { getConversationContext, type ConversationContext } from '@/lib/api';
-import type { CanvasNodeData, CommitV3Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
+import type { CanvasNodeData, CommitV3Display, CommitV4Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
 
 // Define custom node type for React Flow v12
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
@@ -183,10 +183,13 @@ function getLeafIcon(type: LeafType) {
 }
 
 // ============================================
-// CommitV3 Display Components
+// Commit Display Components (V3 and V4)
 // ============================================
 
-function AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
+/**
+ * Author badge for V3 commits (with verification status)
+ */
+function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
   const isVerified = author.verification === 'verified';
   return (
     <span className={`text-xs px-1.5 py-0.5 rounded ${
@@ -194,6 +197,21 @@ function AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
     }`}>
       {author.name}
       {isVerified && ' ✓'}
+    </span>
+  );
+}
+
+/**
+ * Author badge for V4 commits (with type indicator)
+ */
+function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
+  const isAgent = author.type === 'agent';
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
+      isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {author.name || author.id || 'Unknown'}
+      {isAgent && <span className="text-[0.5rem]">AI</span>}
     </span>
   );
 }
@@ -216,7 +234,7 @@ const PREVIEW_MAX_SENTENCES = 3;
 const PREVIEW_MAX_CONSTRAINTS = 3;
 
 /**
- * CommitV3 content section - only shows sentences and constraints
+ * CommitV3 content section - shows sentences and constraints
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  */
 function CommitV3Content({ commit }: { commit: CommitV3Display }) {
@@ -231,7 +249,7 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-[0.65rem] text-slate-400">by</span>
-        <AuthorBadge author={commit.author} />
+        <AuthorBadgeV3 author={commit.author} />
       </div>
 
       {/* Sentences (preview) */}
@@ -275,6 +293,61 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * CommitV4 content section - shows sentences only (constraints are in Leaves)
+ * Header (title, branch, hash, status) is rendered by parent UnitNode
+ */
+function CommitV4Content({ commit }: { commit: CommitV4Display }) {
+  const sentences = commit.content.sentences;
+  const displaySentences = sentences.slice(0, PREVIEW_MAX_SENTENCES);
+  const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
+
+  return (
+    <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100">
+      {/* Author badge */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-[0.65rem] text-slate-400">by</span>
+        <AuthorBadgeV4 author={commit.author} />
+        {/* V4 badge */}
+        <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
+          V4
+        </span>
+      </div>
+
+      {/* Sentences (preview) */}
+      <div>
+        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+          Sentences ({sentences.length})
+        </div>
+        {sentences.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            {displaySentences.map((s) => (
+              <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
+                <span className="text-slate-400 font-mono text-[0.6rem] mr-1">{s.id}</span>
+                {s.text}
+              </li>
+            ))}
+            {remainingSentences > 0 && (
+              <li className="text-[0.65rem] text-slate-400">
+                +{remainingSentences} more
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      {/* V4: Constraints notice */}
+      <div className="mt-2 px-2 py-1.5 bg-amber-50 rounded border border-amber-200">
+        <p className="text-[0.6rem] text-amber-700">
+          Constraints are defined in Leaves
+        </p>
+      </div>
     </div>
   );
 }
@@ -360,10 +433,10 @@ function UnitNode(props: Props) {
     openLeafPanel(id);
   };
 
-  // Copy commit hash to clipboard (V3 hash takes priority)
+  // Copy commit hash to clipboard (V4/V3 hash takes priority)
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash = data.commitV3?.hash || data.commitHash || data.entryId || '';
+    const hash = data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard.writeText(hash);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
@@ -485,11 +558,13 @@ function UnitNode(props: Props) {
                     onClick={handleCopyHash}
                     className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[0.6rem] transition-colors cursor-pointer"
                   >
-                    {data.commitV3?.hash
-                      ? data.commitV3.hash.slice(0, 7)
-                      : data.commitHash
-                        ? data.commitHash.slice(0, 7)
-                        : data.entryId?.slice(0, 7)}
+                    {data.commitV4?.hash
+                      ? data.commitV4.hash.slice(0, 7)
+                      : data.commitV3?.hash
+                        ? data.commitV3.hash.slice(0, 7)
+                        : data.commitHash
+                          ? data.commitHash.slice(0, 7)
+                          : data.entryId?.slice(0, 7)}
                     {copiedHash ? (
                       <CheckCircle size={10} className="text-green-500" />
                     ) : (
@@ -541,8 +616,9 @@ function UnitNode(props: Props) {
             )}
           </div>
 
-          {/* V3: Sentences and Constraints content */}
-          {data.commitV3 && <CommitV3Content commit={data.commitV3} />}
+          {/* V3/V4: Sentences and Constraints content */}
+          {data.commitV4 && <CommitV4Content commit={data.commitV4} />}
+          {data.commitV3 && !data.commitV4 && <CommitV3Content commit={data.commitV3} />}
         </div>
 
         {/* ═══════════════════════════════════════════
