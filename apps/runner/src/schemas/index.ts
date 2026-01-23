@@ -12,33 +12,35 @@ export {
   type AgentInput,
 } from './agent.js';
 
-// Trace schemas (legacy)
+// Run record schemas
 export {
-  TraceEventSchema,
-  RunTraceSchema,
-  type TraceEvent,
-  type RunTrace,
-} from './trace.js';
-
-// Run record schemas (new)
-export {
+  SpanKindSchema,
+  LLMDataSchema,
+  ToolDataSchema,
+  RetrievalDataSchema,
   StepRecordSchema,
   RunRecordSchema,
+  type SpanKind,
+  type LLMData,
+  type ToolData,
+  type RetrievalData,
   type StepRecord,
   type RunRecord,
 } from './run-record.js';
 
-// Eval rules schemas (new)
+// Eval rules schemas
 export {
   RuleOperatorSchema,
+  RuleTypeSchema,
   RuleSchema,
   EvalRulesSchema,
   type RuleOperator,
+  type RuleType,
   type Rule,
   type EvalRules,
 } from './eval-rules.js';
 
-// Eval result schemas (new)
+// Eval result schemas
 export {
   CheckResultSchema,
   ViolationSchema,
@@ -47,22 +49,6 @@ export {
   type Violation,
   type EvalResult,
 } from './eval-result.js';
-
-// Test step schemas (legacy)
-export {
-  TestStepSchema,
-  TestResultSchema,
-  type TestStep,
-  type TestResult,
-} from './test-step.js';
-
-// Eval schemas (legacy)
-export {
-  EvalRequestSchema,
-  EvalResponseSchema,
-  type EvalRequest,
-  type EvalResponse,
-} from './eval.js';
 
 // Engine integration schemas
 export {
