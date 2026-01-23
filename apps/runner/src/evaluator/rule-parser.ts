@@ -16,10 +16,10 @@ import yaml from 'js-yaml';
 import { EvalRulesSchema, type EvalRules } from '../schemas/eval-rules.js';
 
 /**
- * Leaf 对象类型（用于规则解析）
+ * Leaf object type (for rule parsing)
  *
- * content: prompt 内容，给 n8n AI Agent 使用，不参与规则解析
- * rules_ref: 规则文件引用名，指向 resources/rules/ 目录下的文件
+ * content: prompt content for n8n AI Agent, not used for rule parsing
+ * rules_ref: rules file reference name, points to files in resources/rules/
  */
 export interface LeafForRules {
   content?: string;
@@ -155,26 +155,26 @@ export function loadRulesFromFile(filePath: string): EvalRules {
 /**
  * Parse rules from leaf object
  *
- * 优先级:
- * 1. leaf.rules_ref → 从 resources/rules/ 目录加载对应文件
- * 2. 默认规则 (default.yml 或内置 DEFAULT_RULES)
+ * Priority:
+ * 1. leaf.rules_ref -> load from resources/rules/ directory
+ * 2. Default rules (default.yml or built-in DEFAULT_RULES)
  *
- * 注意: leaf.content 是给 n8n AI Agent 的 prompt，不参与规则解析
+ * Note: leaf.content is the prompt for n8n AI Agent, not used for rule parsing
  *
- * @param leaf - Leaf 对象，包含 rules_ref 字段
+ * @param leaf - Leaf object containing rules_ref field
  * @returns EvalRules
  */
 export function parseRulesFromLeaf(leaf?: LeafForRules): EvalRules {
-  // 1. 如果有 rules_ref，从文件加载
+  // 1. If rules_ref is provided, load from file
   if (leaf?.rules_ref) {
     const rulesDir = join(process.cwd(), 'resources', 'rules');
 
-    // 尝试多种扩展名
+    // Try multiple extensions
     const candidates = [
       join(rulesDir, `${leaf.rules_ref}.yaml`),
       join(rulesDir, `${leaf.rules_ref}.yml`),
       join(rulesDir, `${leaf.rules_ref}.json`),
-      join(rulesDir, leaf.rules_ref), // 完整文件名（如 "custom.yaml"）
+      join(rulesDir, leaf.rules_ref), // Full filename (e.g. "custom.yaml")
     ];
 
     for (const filePath of candidates) {
@@ -191,7 +191,7 @@ export function parseRulesFromLeaf(leaf?: LeafForRules): EvalRules {
     logger.warn({ rules_ref: leaf.rules_ref }, 'Rules file not found, falling back to defaults');
   }
 
-  // 2. 没有 rules_ref，用默认规则
+  // 2. No rules_ref, use default rules
   logger.debug('No rules_ref provided, using default rules');
   return loadDefaultRules();
 }

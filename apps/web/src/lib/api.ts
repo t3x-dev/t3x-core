@@ -1495,25 +1495,9 @@ export async function runAgentWithEval(
   return handleResponse(res);
 }
 
-/**
- * Create t3x commit from eval results
- */
-export async function createCommitFromEval(
-  runId: string,
-  evalResult: EvalResponse,
-  message?: string
-): Promise<{ commit: Commit }> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/commit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      run_id: runId,
-      eval_result: evalResult,
-      message,
-    }),
-  });
-  return handleResponse(res);
-}
+// NOTE: createCommitFromEval was removed in Runner cleanup v0.2.0
+// The /commit endpoint was deprecated as part of the unified RunRecord architecture.
+// See RUNNER_CLEANUP_PLAN.md for details.
 
 // ============================================================================
 // Engine Run API (Engine → Runner → n8n flow)
