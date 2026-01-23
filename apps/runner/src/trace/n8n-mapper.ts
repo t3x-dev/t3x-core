@@ -148,12 +148,12 @@ function extractLLMData(nodeRun: N8nNodeRun, output: unknown): LLMData | undefin
     const lmOutput = (Array.isArray(aiLmData[0][0]) ? null : aiLmData[0][0]) as Record<string, unknown> | null;
     const json = lmOutput?.json as Record<string, unknown> | undefined;
 
-    // n8n uses tokenUsageEstimate
-    const tokenUsageEstimate = json?.tokenUsageEstimate as Record<string, number> | undefined;
-    if (tokenUsageEstimate) {
-      promptTokens = tokenUsageEstimate.promptTokens || 0;
-      completionTokens = tokenUsageEstimate.completionTokens || 0;
-      totalTokens = tokenUsageEstimate.totalTokens || 0;
+    // n8n uses tokenUsage (not tokenUsageEstimate)
+    const tokenUsage = (json?.tokenUsage || json?.tokenUsageEstimate) as Record<string, number> | undefined;
+    if (tokenUsage) {
+      promptTokens = tokenUsage.promptTokens || 0;
+      completionTokens = tokenUsage.completionTokens || 0;
+      totalTokens = tokenUsage.totalTokens || 0;
     }
   }
 
