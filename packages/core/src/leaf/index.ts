@@ -1,0 +1,56 @@
+/**
+ * Leaf Module - Generation and Validation for Leaf Outputs
+ *
+ * This module provides functionality for:
+ * - Building prompts from commits and leaves
+ * - Generating leaf outputs via LLM
+ * - Validating outputs against constraints
+ *
+ * File Ownership:
+ * ┌─────────────────────────────┬─────────────┬─────────────┐
+ * │ File                        │ GEN-* Owner │ VAL-* Owner │
+ * ├─────────────────────────────┼─────────────┼─────────────┤
+ * │ types.ts                    │ SHARED      │ SHARED      │
+ * │ build-prompt.ts             │ ✓           │ ✗           │
+ * │ generate.ts                 │ ✓           │ ✗           │
+ * │ validate-constraints.ts     │ ✗           │ ✓           │
+ * │ index.ts                    │ Add exports │ Add exports │
+ * └─────────────────────────────┴─────────────┴─────────────┘
+ *
+ * @see docs/plans/parallel-dev-guidelines.md
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Type Exports (SHARED - frozen contract)
+// ═══════════════════════════════════════════════════════════════════════════
+export type {
+  // Generation types
+  BuildPromptOptions,
+  BuiltPrompt,
+  GenerateOptions,
+  GenerateResult,
+  // Validation types
+  ValidateOptions,
+  ValidationResult,
+  ConstraintCheckResult,
+} from './types';
+
+export {
+  // Shared constants
+  SEMANTIC_REQUIRE_THRESHOLD,
+  SEMANTIC_EXCLUDE_THRESHOLD,
+  DEFAULT_MODEL,
+  DEFAULT_TEMPERATURE,
+} from './types';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Generation Exports (GEN-* adds here)
+// ═══════════════════════════════════════════════════════════════════════════
+// TODO (GEN-1): export { buildPrompt } from './build-prompt';
+// TODO (GEN-2): export { generate } from './generate';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Validation Exports (VAL-* adds here)
+// ═══════════════════════════════════════════════════════════════════════════
+// TODO (VAL-1): export { validateConstraints } from './validate-constraints';
+// TODO (VAL-2): export { checkConstraint } from './validate-constraints';
