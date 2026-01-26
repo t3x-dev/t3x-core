@@ -229,4 +229,99 @@ describe('Conversation Context Routes', () => {
       expect(data.error.code).toBe('NOT_FOUND');
     });
   });
+
+  describe('GET /v1/conversations/:id/context-export', () => {
+    it('returns JSON format by default', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export`);
+      expect(res.status).toBe(200);
+
+      // Check headers
+      expect(res.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
+      expect(res.headers.get('Content-Disposition')).toContain('attachment');
+      expect(res.headers.get('Content-Disposition')).toContain('.json');
+
+      // Check body is valid JSON
+      const data = await res.json();
+      expect(data).toHaveProperty('metadata');
+      expect(data).toHaveProperty('context');
+      expect(data.metadata.format).toBe('json');
+      expect(data.metadata.conversation_id).toBe(testConversationId);
+    });
+
+    it('returns JSON format with ?format=json', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=json`);
+      expect(res.status).toBe(200);
+
+      expect(res.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
+
+      const data = await res.json();
+      expect(data.metadata.format).toBe('json');
+    });
+
+    it('returns Markdown format with ?format=markdown', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=markdown`);
+      expect(res.status).toBe(200);
+
+      // Check headers
+      expect(res.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
+      expect(res.headers.get('Content-Disposition')).toContain('attachment');
+      expect(res.headers.get('Content-Disposition')).toContain('.md');
+
+      // Check body is markdown
+      const text = await res.text();
+      expect(text).toContain('# Context Export');
+      expect(text).toContain('**Conversation ID:**');
+      expect(text).toContain('**Token estimate:**');
+      expect(text).toContain('## Sources');
+    });
+
+    it('returns 404 for non-existent conversation', async () => {
+      const res = await app.request('/v1/conversations/conv_nonexistent/context-export');
+      expect(res.status).toBe(404);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('NOT_FOUND');
+    });
+
+    it('includes correct filename in Content-Disposition', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export`);
+      expect(res.status).toBe(200);
+
+      const disposition = res.headers.get('Content-Disposition');
+      expect(disposition).toContain(`filename="${testConversationId}-context.json"`);
+    });
+
+    it('includes correct filename for markdown format', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=markdown`);
+      expect(res.status).toBe(200);
+
+      const disposition = res.headers.get('Content-Disposition');
+      expect(disposition).toContain(`filename="${testConversationId}-context.md"`);
+    });
+
+    it('JSON export includes context with text, token_estimate, and sources', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export`);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.context).toHaveProperty('text');
+      expect(data.context).toHaveProperty('token_estimate');
+      expect(data.context).toHaveProperty('sources');
+      expect(typeof data.context.text).toBe('string');
+      expect(typeof data.context.token_estimate).toBe('number');
+      expect(Array.isArray(data.context.sources)).toBe(true);
+    });
+
+    it('exports with metadata including exported_at timestamp', async () => {
+      const res = await app.request(`/v1/conversations/${testConversationId}/context-export`);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.metadata.exported_at).toBeDefined();
+      // Check it's a valid ISO date string
+      const exportedAt = new Date(data.metadata.exported_at);
+      expect(exportedAt.toISOString()).toBe(data.metadata.exported_at);
+    });
+  });
 });

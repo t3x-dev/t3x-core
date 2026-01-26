@@ -451,9 +451,110 @@ curl "http://localhost:8000/v1/pins/$PIN_ID"
 
 ---
 
-## Step 7: Cleanup
+## Step 7: Context Export
 
-### 7.1 Delete Resources (Optional)
+Test the context export functionality for conversations.
+
+### 7.1 Create a Conversation
+
+**API:**
+```bash
+curl -X POST http://localhost:8000/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'$PROJECT_ID'",
+    "title": "Test Conversation for Export"
+  }'
+```
+
+**Save the conversation_id:**
+```bash
+export CONV_ID="conv_xxxxxxxxx"
+```
+
+### 7.2 Export Context as JSON (Default)
+
+**API:**
+```bash
+curl -o context-export.json \
+  "http://localhost:8000/v1/conversations/$CONV_ID/context-export"
+```
+
+**Verify the downloaded file:**
+```bash
+cat context-export.json
+```
+
+**Expected content:**
+```json
+{
+  "metadata": {
+    "conversation_id": "conv_...",
+    "exported_at": "2024-...",
+    "format": "json"
+  },
+  "context": {
+    "text": "...",
+    "token_estimate": 123,
+    "sources": [...]
+  }
+}
+```
+
+### 7.3 Export Context as Markdown
+
+**API:**
+```bash
+curl -o context-export.md \
+  "http://localhost:8000/v1/conversations/$CONV_ID/context-export?format=markdown"
+```
+
+**Verify the downloaded file:**
+```bash
+cat context-export.md
+```
+
+**Expected content:**
+```markdown
+# Context Export
+
+**Conversation ID:** conv_...
+**Exported at:** 2024-...
+**Token estimate:** 123
+
+---
+
+## Content
+
+(context text here)
+
+---
+
+## Sources
+
+- [commit] sha256:... - Initial user preferences commit
+```
+
+### 7.4 Verify Headers
+
+**Check Content-Type and Content-Disposition:**
+```bash
+curl -I "http://localhost:8000/v1/conversations/$CONV_ID/context-export"
+# Expected: Content-Type: application/json; charset=utf-8
+# Expected: Content-Disposition: attachment; filename="conv_...-context.json"
+
+curl -I "http://localhost:8000/v1/conversations/$CONV_ID/context-export?format=markdown"
+# Expected: Content-Type: text/markdown; charset=utf-8
+# Expected: Content-Disposition: attachment; filename="conv_...-context.md"
+```
+
+> If files download correctly with proper headers, context export is working.
+
+---
+
+## Step 8: Cleanup
+
+### 8.1 Delete Resources (Optional)
 
 **Delete Pin:**
 ```bash
@@ -503,10 +604,10 @@ curl -X DELETE "http://localhost:8000/v1/commits-v4/$COMMIT_HASH"
 }
 ```
 
-### 7.2 Clear Environment Variables
+### 8.2 Clear Environment Variables
 
 ```bash
-unset PROJECT_ID COMMIT_HASH LEAF_ID PIN_ID
+unset PROJECT_ID COMMIT_HASH LEAF_ID PIN_ID CONV_ID
 ```
 
 ---
@@ -556,6 +657,8 @@ After completing this runbook, you should have verified:
 - [ ] Duplicate pins are rejected with `DUPLICATE_PIN`
 - [ ] List operations (commits, leaves, pins) work
 - [ ] Get by ID operations work
+- [ ] Context export as JSON works with correct headers
+- [ ] Context export as Markdown works with correct headers
 - [ ] Delete operations work
 - [ ] Leaf deletion cleans up associated pins
 

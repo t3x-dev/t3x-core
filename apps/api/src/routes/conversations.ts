@@ -9,6 +9,7 @@
  * GET    /v1/conversations/:id/context - Get context config
  * PUT    /v1/conversations/:id/context - Update context config
  * GET    /v1/conversations/:id/memory - Get built memory string (requires Track A)
+ * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
 import {
@@ -34,6 +35,7 @@ import {
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
+import { formatContextForExport } from '../lib/context-formatter';
 
 export const conversationRoutes = new Hono();
 
@@ -391,5 +393,102 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'GET_MEMORY_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/conversations/:id/context-export - Export context as file
+ *
+ * Exports the built context as a downloadable file (JSON or Markdown).
+ *
+ * Query params:
+ * - format: 'json' (default) | 'markdown'
+ *
+ * Response headers:
+ * - Content-Type: application/json or text/markdown
+ * - Content-Disposition: attachment; filename="..."
+ */
+conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
+  const conversationId = c.req.param('id');
+  const format = c.req.query('format') === 'markdown' ? 'markdown' : 'json';
+
+  try {
+    const db = await getDB();
+
+    // 1. Verify conversation exists and get project_id
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return jsonError(c, 'NOT_FOUND', `Conversation ${conversationId} not found`, 404);
+    }
+
+    // 2. Get context config (null = use all pins)
+    const contextConfig = await getConversationContext(db, conversationId);
+
+    // 3. Get project pins
+    const projectPins = await findPinsByProject(db, conversation.projectId);
+
+    // 4. Get current commit from branch HEAD
+    let currentCommit = undefined;
+    const currentBranch = await findCurrentBranch(db, conversation.projectId);
+    if (currentBranch?.headCommitHash) {
+      currentCommit = await findCommitV4ByHash(db, currentBranch.headCommitHash) ?? undefined;
+    }
+
+    // 5. Load pinned conversations data
+    const conversationPins = projectPins.filter((p) => p.type === 'conversation');
+    const conversations = new Map<string, ConversationData>();
+
+    for (const pin of conversationPins) {
+      if (pin.ref_id === conversationId) continue;
+
+      const conv = await findConversationById(db, pin.ref_id);
+      if (!conv) continue;
+
+      const turns = await findTurnsByConversation(db, pin.ref_id, { limit: 50 });
+      conversations.set(pin.ref_id, {
+        id: conv.conversationId,
+        title: conv.title ?? 'Untitled',
+        turns: turns.map((t) => ({
+          role: t.role,
+          content: t.content,
+        })),
+      });
+    }
+
+    // 6. Load pinned leaves data
+    const leafPins = projectPins.filter((p) => p.type === 'leaf');
+    const leafIds = leafPins.map((p) => p.ref_id);
+    const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
+    const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
+
+    // 7. Build context
+    const builtContext = buildConversationContext({
+      currentCommit,
+      projectPins,
+      contextConfig,
+      conversations,
+      leaves,
+    });
+
+    // 8. Format for export
+    const { content, contentType, fileExtension } = formatContextForExport(
+      builtContext,
+      conversationId,
+      format
+    );
+
+    // 9. Return as downloadable file
+    const filename = `${conversationId}-context.${fileExtension}`;
+
+    return new Response(content, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'EXPORT_FAILED', message, 500);
   }
 });
