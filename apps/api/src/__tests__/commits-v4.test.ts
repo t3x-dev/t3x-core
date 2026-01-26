@@ -129,6 +129,70 @@ describe('Commits V4 Routes', () => {
         expect(data.success).toBe(false);
         expect(data.error.code).toBe('INVALID_REQUEST');
       });
+
+      it('rejects payload with constraints at commit level', async () => {
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: { type: 'human' },
+            sentences: [{ id: 's_1', text: 'Test sentence.' }],
+            project_id: testProjectId,
+            constraints: [
+              { type: 'require', value: 'test', match_mode: 'exact' },
+            ],
+          }),
+        });
+
+        expect(res.status).toBe(400);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('INVALID_REQUEST');
+        expect(data.error.message).toContain('constraints');
+        expect(data.error.message).toContain('Leaves');
+      });
+
+      it('rejects payload with constraints inside content object', async () => {
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: { type: 'human' },
+            sentences: [{ id: 's_1', text: 'Test sentence.' }],
+            project_id: testProjectId,
+            content: {
+              constraints: [
+                { type: 'require', value: 'test', match_mode: 'exact' },
+              ],
+            },
+          }),
+        });
+
+        expect(res.status).toBe(400);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('INVALID_REQUEST');
+        expect(data.error.message).toContain('constraints');
+      });
+
+      it('rejects V3 payload with turn_window field', async () => {
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: { type: 'human' },
+            sentences: [{ id: 's_1', text: 'Test sentence.' }],
+            project_id: testProjectId,
+            turn_window: { start_turn_hash: 'sha256:abc', end_turn_hash: 'sha256:def' },
+          }),
+        });
+
+        expect(res.status).toBe(400);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('COMMIT_VERSION_UNSUPPORTED');
+        expect(data.error.message).toContain('turn_window');
+      });
     });
 
     it('creates a commit with valid input', async () => {
