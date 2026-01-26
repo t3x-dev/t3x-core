@@ -354,3 +354,150 @@ Pin = Source selection (for commit sources + conversation context)
 
 - Track A (Storage/Core): commits-v4.ts, leaves.ts, pins.ts queries, context builder
 - Track B (API/UI): /v1/leaves, /v1/pins routes, WebUI stores, components
+
+## 文档索引
+
+新对话开始时，根据任务类型阅读相关文档：
+
+| 任务类型 | 应阅读的文档 |
+|---------|-------------|
+| V4 架构开发 | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
+| API 开发 | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts` |
+| WebUI 开发 | `apps/web/README.md`, `apps/web/src/store/` |
+| Core 算法 | `packages/core/README.md`, `packages/core/src/types/` |
+| Storage 层 | `packages/storage/README.md`, `packages/storage/src/schema-v4.ts` |
+| Runner/Eval | `apps/runner/README.md` |
+
+## 开发工作流
+
+用户可能不熟悉代码细节。Claude 应主动探索，用户只做决策：
+
+1. **收到需求后**：先搜索相似代码/组件，找到现有模式
+2. **修改前**：分析影响面，列出会改动的文件/接口
+3. **有多种方案时**：列出选项，问用户选哪个
+4. **不确定时**：问具体的决策问题，而不是让用户解释代码
+
+用户只需要：描述目标 → 回答决策问题 → 验收结果
+
+### 代码复用原则
+
+**优先级：复用 > 修改 > 新建**
+
+1. **优先复用**：先搜索项目中是否已有类似功能/组件/工具函数，能复用就直接用
+2. **其次修改**：如果现有代码不完全匹配，考虑在原有版本上扩展或修改
+3. **最后新建**：只有当复用和修改都不可行时，才考虑新创造
+
+在动手写代码前，必须先回答：项目里有没有类似的东西？
+
+## 已知陷阱
+
+| 问题 | 原因 | 正确做法 |
+|------|------|----------|
+| DELETE 路由 404 | `index.ts` import 了 `projects.ts` 而非 `projects.openapi.ts` | 检查 import 路径是否指向正确文件 |
+| API 调用失败 | 假设 API 在 Next.js 中（旧架构） | API 在 `apps/api`（端口 8000），WebUI 在 `apps/web`（端口 3000） |
+| 测试找不到模块 | 没有先 build 依赖包 | 先跑 `pnpm build:core && pnpm build:storage` |
+| Tailwind 样式不生效 | `globals.css` 中全局样式（如 `button { background: none }`）不在 `@layer` 中，优先级高于 Tailwind 工具类 | 全局 reset 样式必须放在 `@layer base` 中，或删除冲突属性 |
+| PGLite 重启后数据丢失 | 直接关闭终端或 `kill -9` 导致数据库非正常关闭，文件损坏 | 用 `pnpm stop:api` 优雅停止，或 `kill -TERM $(lsof -ti:8000)` |
+
+## 禁止事项
+
+- **不要猜测代码位置**：先用 Grep/Glob 搜索
+- **不要假设架构**：2025-12 迁移后 API 和 WebUI 分离
+- **不要急于修改**：先读代码、理解上下文、确认影响面
+- **不要跳过验证**：改完必须跑相关测试
+
+## Commit Message 规范
+
+项目使用 Conventional Commits 格式：
+
+```
+<type>(<scope>): <description> [Track].(#issue)
+
+# 示例
+feat(api): add V4 leaves endpoint [B1].(#123)
+fix(web): resolve canvas node drag issue [B2].(#124)
+test(storage): add commits-v4 query tests [A1].(#125)
+docs: update CLAUDE.md with workflow rules
+```
+
+| type | 用途 |
+|------|------|
+| feat | 新功能 |
+| fix | Bug 修复 |
+| test | 测试相关 |
+| docs | 文档更新 |
+| refactor | 重构（不改变行为） |
+| chore | 构建/工具链变更 |
+
+Track 标记：`[A1]`, `[A2]` = Track A (Storage/Core)，`[B1]`, `[B2]` = Track B (API/UI)
+
+## 快速调试命令
+
+```bash
+# 检查端口占用
+lsof -i :8000                    # API 端口
+lsof -i :3000                    # WebUI 端口
+
+# 查看 API 日志（实时）
+pnpm dev:api 2>&1 | tee api.log
+
+# 数据库状态（PGLite 文件）
+ls -la .t3x/database/
+
+# 清理重建
+pnpm clean && pnpm install && pnpm build
+
+# 单独测试一个文件
+cd apps/api && pnpm vitest run src/__tests__/leaves.test.ts
+
+# 测试特定用例
+cd apps/api && pnpm vitest run -t "should create leaf"
+```
+
+## 依赖构建顺序
+
+修改底层包后，需要重新构建依赖链：
+
+```
+@t3x/core 改动后：
+  pnpm build:core && pnpm build:storage && pnpm build:api
+
+@t3x/storage 改动后：
+  pnpm build:storage && pnpm build:api
+
+apps/api 改动后：
+  pnpm build:api（或直接 pnpm dev:api 热重载）
+```
+
+**测试依赖 build**：跑测试前确保相关包已构建
+
+## PR 提交检查清单
+
+提交 PR 前确认：
+
+- [ ] `pnpm check` 通过（lint + format）
+- [ ] 相关测试通过（`pnpm test:xxx`）
+- [ ] 新增代码有对应测试
+- [ ] 没有引入 `console.log`（调试用的删掉）
+- [ ] 类型正确（没有 `any` 逃逸）
+- [ ] API 变更更新了 OpenAPI schema
+- [ ] 破坏性变更在 PR 描述中说明
+
+## 常用搜索模式
+
+```bash
+# 找某个 API 路由的实现
+Grep: "router.post.*leaves"  glob: "apps/api/**/*.ts"
+
+# 找某个类型的定义
+Grep: "interface.*Leaf"  glob: "packages/core/**/*.ts"
+
+# 找某个函数的所有调用
+Grep: "createLeaf\\("  （不限 glob）
+
+# 找数据库 schema
+Grep: "export const.*Table"  glob: "packages/storage/**/*.ts"
+
+# 找 Zustand store
+Grep: "create\\(.*\\).*=>"  glob: "apps/web/src/store/**/*.ts"
+```
