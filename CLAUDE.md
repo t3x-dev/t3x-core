@@ -1,0 +1,356 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+T3X is "Git for Meaning" — a semantic version control system for AI conversations. It provides evidence-backed, deterministic semantic extraction with versioning, branching, and merging capabilities similar to Git.
+
+**Key philosophy**: The core deterministic layer never depends on LLMs. LLMs are optional plugins for enhancement (SummaryAgent, MergeAgent).
+
+## Repository Structure
+
+This is a pnpm monorepo managed by Turborepo:
+
+```
+t3x/
+├── packages/
+│   ├── core/           # @t3x/core - Deterministic semantic engine
+│   ├── storage/        # @t3x/storage - PostgreSQL persistence (Drizzle ORM)
+│   └── api-client/     # @t3x/api-client - TypeScript API client
+├── apps/
+│   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
+│   ├── api/            # @t3x/api - Hono API server with OpenAPI
+│   ├── runner/         # @t3x/runner - Grey-box agent evaluation engine
+│   ├── cli/            # @t3x/cli - Command line interface
+│   └── agent-demo/     # Demo agent for testing
+├── biome.json          # Linting and formatting config
+├── turbo.json          # Turborepo task config
+└── docker-compose.yml
+```
+
+## Build Commands
+
+### Monorepo (from root)
+```bash
+pnpm install                    # Install all dependencies
+pnpm build                      # Build all packages
+pnpm test                       # Run all tests
+pnpm lint                       # Biome lint
+pnpm lint:fix                   # Biome lint + auto-fix
+pnpm check                      # Biome check (lint + format)
+pnpm check:fix                  # Biome check + auto-fix
+```
+
+### Package-specific builds
+```bash
+pnpm build:core                 # Build @t3x/core
+pnpm build:storage              # Build @t3x/storage
+pnpm build:webui                # Build t3x-webui
+pnpm build:api                  # Build @t3x/api
+pnpm build:runner               # Build @t3x/runner
+
+pnpm test:core                  # Test @t3x/core
+pnpm test:storage               # Test @t3x/storage
+pnpm test:webui                 # Test t3x-webui
+```
+
+### Development servers
+```bash
+pnpm dev:webui                  # Next.js dev server (port 3000)
+pnpm dev:api                    # Hono API server (port 8000)
+pnpm dev:agent                  # Demo agent (port 9000)
+```
+
+### Run single test
+```bash
+# From package directory
+vitest run src/__tests__/some.test.ts           # Specific file
+vitest run -t "creates a new project"           # By test name
+```
+
+### Docker
+```bash
+docker compose up -d --build               # Default: postgres + api + webui
+docker compose --profile runner up -d      # Include runner
+docker compose --profile n8n up -d         # Include n8n workflow engine
+docker compose down
+```
+
+Ports: WebUI (3000), API (8000), PostgreSQL (5432), Runner (8080), Agent Demo (9000), n8n (5678)
+
+## Architecture
+
+### Package Dependencies
+
+```
+apps/web (t3x-webui)
+  └─► packages/storage (@t3x/storage)
+        └─► packages/core (@t3x/core)
+
+apps/api (@t3x/api)
+  ├─► packages/storage
+  ├─► packages/core
+  └─► apps/runner (@t3x/runner)
+
+apps/cli (@t3x/cli)
+  ├─► packages/core
+  └─► packages/api-client (@t3x/api-client)
+```
+
+### Three-Layer Design
+
+| Layer | Package | LLM Required? |
+|-------|---------|---------------|
+| **Framework Core** | `@t3x/core` | No (deterministic) |
+| **Storage Layer** | `@t3x/storage` | No |
+| **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
+| **Product Layer** | `t3x-webui`, `@t3x/api`, `@t3x/runner` | No |
+
+### Storage Architecture
+
+T3X uses PostgreSQL (via Drizzle ORM):
+- **PGLite** for local development (PostgreSQL WASM, data in `.t3x/database/`)
+- **Postgres** for Docker/production
+- **Supabase** adapter available
+
+Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `commits_v3`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
+
+### Hash Chains
+
+- **Turn chain**: `parent_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized JSON)
+- **Commit chain**: DAG with `parent_hashes[]`, supports branching and merging
+
+### Extractor Rings (t3x-core)
+
+Semantic extraction happens in three rings:
+- **Ring 1**: Keywords, entities, temporal anchors, preference tags
+- **Ring 2**: Intent seeds, relations, facets
+- **Ring 3**: Sentence-level segments
+
+### Diff Engine (t3x-core)
+
+Semantic diff engine for comparing commits:
+- **Two-way diff**: Compare Draft vs parent Commit (self-check scenario)
+- **Three-way diff**: Merge preview with conflict detection (merge scenario)
+
+Algorithm: Encodes sentences as vectors, calculates cosine similarity, classifies as SAME/MODIFIED/ADDED/REMOVED/CONFLICT based on threshold (default 0.70).
+
+### Merge System (t3x-core)
+
+Two-phase merge process:
+1. **prepareMerge**: Analyzes source/target commits, returns `Merge2WayResult` with:
+   - `identical`: Auto-kept sentences (no user action)
+   - `similarPairs`: User must choose source or target
+   - `onlyInSource`/`onlyInTarget`: User can keep or discard
+2. **executeMerge**: Applies user decisions, generates merged commit
+
+### Runner (apps/runner)
+
+Grey-box agent evaluation engine:
+- **Observer**: Captures agent I/O traces (LLM calls, tool invocations)
+- **EvalEngine**: Runs test steps against traces using rule-based assertions
+- **n8n Integration**: Workflow execution and trace collection
+
+```typescript
+// Usage pattern
+import { observer, evalEngine } from '@t3x/runner';
+
+observer.registerAgent({ id: 'my-agent', endpoint: 'http://...', type: 'http' });
+const runId = observer.startRun('my-agent', { input: { query: 'hello' } });
+observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
+const trace = observer.completeRun(runId, output, 'completed');
+const result = await evalEngine.evaluate({ trace, test_steps: [...] });
+```
+
+## WebUI Architecture (apps/web)
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/v1/            # REST API routes (snake_case JSON)
+│   └── project/[projectId]/ # Project canvas page
+├── components/            # React components
+├── store/                 # Zustand state management
+│   └── canvasStore.ts     # Canvas nodes/edges state
+├── hooks/                 # React hooks
+├── lib/
+│   ├── api.ts             # API client functions
+│   └── db.ts              # Database singleton
+└── __tests__/             # API route tests
+```
+
+### API Response Format
+```json
+{ "success": true, "data": {...} }
+{ "success": false, "error": { "code": "...", "message": "..." } }
+```
+
+API uses snake_case for JSON fields, internal code uses camelCase.
+
+### Canvas State (Zustand)
+- **Nodes**: Conversations, commits (pending/committed), leaf nodes
+- **Edges**: Data flow connections
+- **Locking**: Committed commits and upstream nodes are immutable
+
+## Testing
+
+All packages use **vitest** with PGLite for isolated test databases:
+
+```typescript
+// Test setup pattern
+import { setupTestDB, testData } from '../setup';
+
+vi.mock('@/lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+```
+
+## Key Data Formats
+
+### Turn Record
+```json
+{
+  "turn_hash": "sha256:...",
+  "parent_turn_hash": "sha256:...",
+  "project_id": "proj_...",
+  "conversation_id": "conv_...",
+  "role": "user|assistant|system|tool",
+  "content": "...",
+  "created_at": "ISO8601"
+}
+```
+
+### CommitV3 Record (Current)
+```json
+{
+  "hash": "sha256:...",
+  "schema": "commit/v3",
+  "parents": ["sha256:..."],
+  "author": { "name": "user", "identity": "...", "verification": "none|device|verified" },
+  "committed_at": "ISO8601",
+  "content": {
+    "sentences": [
+      { "id": "s1", "text": "...", "source": { "turn_hash": "...", "start_char": 0, "end_char": 50 } }
+    ],
+    "constraints": [
+      { "type": "require", "id": "c1", "value": "...", "match": "exact|semantic", "source_sentence_id": "s1" },
+      { "type": "exclude", "id": "c2", "value": "...", "match": "exact|semantic", "reason": "..." }
+    ]
+  },
+  "project_id": "proj_...",
+  "message": "...",
+  "branch": "main"
+}
+```
+
+**Field Classification:**
+- **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
+- **Second-class (not in hash)**: `project_id`, `message`, `branch`, `positionX`, `positionY`
+
+### Legacy Commit Record (V2)
+```json
+{
+  "commit_hash": "sha256:...",
+  "parent_hashes": ["sha256:..."],
+  "branch": "main",
+  "turn_window": { "start_turn_hash": "...", "end_turn_hash": "..." },
+  "facet_snapshot": [...],
+  "source_refs": [{ "type": "conversation", "conversation_id": "..." }]
+}
+```
+
+## Important Design Constraints
+
+1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
+2. **Append-only**: Hash chains are immutable; any modification breaks integrity
+3. **Plugin architecture**: Extractors and embedders are pluggable
+4. **Evidence-backed**: Every semantic finding traces to source turns with confidence scores
+
+## Environment Variables
+
+Copy `.env.example` to `.env`:
+
+- `NEXT_PUBLIC_API_URL`: T3X API server URL (default: http://localhost:8000)
+- `DATABASE_URL`: PostgreSQL connection string (production/Docker)
+- `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
+- `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
+- `N8N_BASE_URL`: n8n workflow engine URL (default: http://localhost:5678)
+- `RUNNER_BASE_URL`: Runner service URL (default: http://localhost:8080)
+
+## ID Conventions
+
+T3X uses prefixed IDs for type safety:
+- `proj_` - Project IDs
+- `conv_` - Conversation IDs
+- `s_` or `s1`, `s2` - Sentence IDs (within commits)
+- `c_` or `c1`, `c2` - Constraint IDs (within commits)
+- `mc1`, `mc2` - Merged constraint IDs (generated during merge)
+
+## API Naming Conventions
+
+- **API/Database/TypeScript types**: `snake_case` (e.g., `turn_hash`, `project_id`, `committed_at`)
+- **JavaScript variables**: `camelCase` (e.g., `turnHash`, `projectId`, `committedAt`)
+- **API responses**: Return `null` for absent optional fields
+- **TypeScript interfaces**: Use `?` for optional fields (maps to `undefined`)
+
+## V4 Architecture Parallel Development Rules
+
+> Status: Active (Phase 1 in progress)
+> Related docs: docs/specification/semantic-layer-architecture.md, docs/specification/memory-pin-system-design.md
+
+### Contract Files (Single Source of Truth)
+
+| File | Purpose | Can Modify Alone? |
+|------|---------|-------------------|
+| packages/core/src/types/v4/index.ts | TypeScript types | ❌ No |
+| packages/storage/src/schema-v4.ts | Database schema | ❌ No |
+| apps/api/src/schemas/v4-contracts.ts | API contracts | ❌ No |
+
+Rule: Contract = Law, Implementation = Freedom
+
+- ✅ Implement according to contracts freely
+- ❌ Do NOT modify contract files without team agreement
+- If contract needs change → discuss first → modify together → both review PR
+
+### Import Rules
+
+```typescript
+// ✅ Correct: Import from @t3x/core
+import { CommitV4, Leaf, Pin, Constraint } from '@t3x/core';
+
+// ❌ Wrong: Redefine types locally
+interface Leaf { ... }  // DON'T DO THIS
+```
+
+### Naming Conventions
+
+| Layer | Convention | Example |
+|-------|------------|---------|
+| TypeScript types | snake_case | commit_hash, selected_pin_ids |
+| DB columns | snake_case | commit_hash, selected_pin_ids |
+| API JSON | snake_case | { "commit_hash": "..." } |
+| JS variables | camelCase | const commitHash = ... |
+
+### ID Prefixes
+
+| Entity | Prefix | Example |
+|--------|--------|---------|
+| Sentence | s_ | s_abc123 |
+| Constraint | cst_ | cst_def456 |
+| Assertion | ast_ | ast_ghi789 |
+| Leaf | leaf_ | leaf_jkl012 |
+| Pin | pin_ | pin_mno345 |
+
+### V4 Architecture Summary
+
+```
+CommitV4 = Sentences only (pure knowledge, NO constraints)
+Leaf = Constraints + Output + Validation (application layer)
+Pin = Source selection (for commit sources + conversation context)
+```
+
+### Track Assignment
+
+- Track A (Storage/Core): commits-v4.ts, leaves.ts, pins.ts queries, context builder
+- Track B (API/UI): /v1/leaves, /v1/pins routes, WebUI stores, components
