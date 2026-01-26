@@ -64,6 +64,10 @@ export const ErrorCodes = {
   GENERATION_FAILED: 'GENERATION_FAILED',
   RATE_LIMITED: 'RATE_LIMITED',
   AUTH_ERROR: 'AUTH_ERROR',
+
+  // Validation errors (VAL-2)
+  NO_OUTPUT: 'NO_OUTPUT',
+  SEMANTIC_NOT_SUPPORTED: 'SEMANTIC_NOT_SUPPORTED',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -117,6 +121,10 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   GENERATION_FAILED: 500,
   RATE_LIMITED: 429,
   AUTH_ERROR: 401,
+
+  // Validation errors (VAL-2)
+  NO_OUTPUT: 400,
+  SEMANTIC_NOT_SUPPORTED: 400,
 };
 
 /**
