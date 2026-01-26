@@ -69,7 +69,8 @@ coverage.xml
 .next/
 next-env.d.ts
 
-# Development planning (wyx personal notes)
-RUNNER_PLAN.md
-AGENT_OPTIMISER_PLAN.md
-RUNNER_CLEANUP_PLAN.md
+# Development planning and documentation (local only)
+*.md
+docs/
+!packages/**/README.md
+!apps/**/README.md
