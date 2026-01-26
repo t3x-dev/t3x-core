@@ -225,4 +225,8 @@ export {
   buildSystemPrompt,
   getTypeInstructions,
   formatConstraints,
+  // Generation (GEN-2)
+  generateLeafOutput,
+  isGenerationConfigured,
+  GenerationError,
 } from './leaf';
