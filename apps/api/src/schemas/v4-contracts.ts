@@ -79,19 +79,34 @@ export const AssertionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════
 
 // POST /v1/commits-v4
-// Use passthrough() to preserve unknown fields for V3 detection
+// Use passthrough() to preserve unknown fields for V3/invalid field detection
+//
+// V4 Validation Rules:
+// 1. If `schema` provided, must be 't3x/commit/v4'
+// 2. `sentences` required and must be non-empty array
+// 3. `author` required with type ('human' | 'agent')
+// 4. `constraints` NOT allowed at commit level (use Leaves instead)
+// 5. V3 fields (turn_window, facet_snapshot) NOT allowed
 export const CreateCommitV4Request = z
   .object({
-    parents: z.array(z.string()).default([]),
-    author: z.object({
-      type: z.enum(['human', 'agent']),
-      id: z.string().optional(),
-      name: z.string().optional(),
-    }),
-    sentences: z.array(SentenceSchema).min(1),
-    project_id: z.string(),
-    message: z.string().optional(),
-    branch: z.string().optional(),
+    // Required fields
+    author: z
+      .object({
+        type: z.enum(['human', 'agent']),
+        id: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .describe('Author information. type is required.'),
+    sentences: z
+      .array(SentenceSchema)
+      .min(1, 'At least one sentence is required')
+      .describe('Array of sentences (knowledge units). Must not be empty.'),
+    project_id: z.string().min(1, 'project_id is required'),
+
+    // Optional fields
+    parents: z.array(z.string()).default([]).describe('Parent commit hashes (empty for root commit)'),
+    message: z.string().optional().describe('Human-readable commit message'),
+    branch: z.string().optional().describe('Branch name (defaults to main)'),
     source_refs: z
       .array(
         z.object({
@@ -101,13 +116,23 @@ export const CreateCommitV4Request = z
           assertion_lessons: z.array(z.string()).optional(),
         })
       )
-      .optional(),
-    position_x: z.number().optional(),
-    position_y: z.number().optional(),
-    // V3 detection fields (optional, for error handling)
-    schema: z.string().optional(),
-    turn_window: z.unknown().optional(),
-    facet_snapshot: z.unknown().optional(),
+      .optional()
+      .describe('References to source conversations or leaves'),
+    position_x: z.number().optional().describe('Canvas X position'),
+    position_y: z.number().optional().describe('Canvas Y position'),
+
+    // V3/V4 detection fields (for validation error handling)
+    schema: z.string().optional().describe('If provided, must be t3x/commit/v4'),
+    turn_window: z.unknown().optional().describe('V3 field - not allowed in V4'),
+    facet_snapshot: z.unknown().optional().describe('V3 field - not allowed in V4'),
+    constraints: z.unknown().optional().describe('Not allowed at commit level - use Leaves'),
+    content: z
+      .object({
+        constraints: z.unknown().optional(),
+      })
+      .passthrough()
+      .optional()
+      .describe('V3 content structure - constraints not allowed'),
   })
   .passthrough();
 

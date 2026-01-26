@@ -78,8 +78,23 @@ const createCommitV4Route = createRoute({
   path: '/v1/commits-v4',
   tags: ['Commits V4'],
   summary: 'Create a new commit v4',
-  description:
-    'Creates a semantic commit with sentences only (no constraints). Constraints should be stored in Leaves.',
+  description: `Creates a semantic commit with sentences only (no constraints).
+
+**V4 Schema Requirements:**
+- \`sentences\`: Required, non-empty array of sentence objects
+- \`author\`: Required, must have \`type\` ('human' or 'agent')
+- \`project_id\`: Required
+
+**V4 Restrictions:**
+- \`constraints\`: NOT allowed at commit level (use POST /v1/leaves instead)
+- \`turn_window\`, \`facet_snapshot\`: V3 fields, not allowed
+- If \`schema\` is provided, must be 't3x/commit/v4'
+
+**Error Codes:**
+- \`COMMIT_VERSION_UNSUPPORTED\`: V3 payload or non-V4 schema detected
+- \`INVALID_REQUEST\`: Missing required fields or constraints at commit level
+- \`PARENT_NOT_FOUND\`: Referenced parent commit does not exist
+- \`PROJECT_NOT_FOUND\`: Referenced project does not exist`,
   request: {
     body: {
       content: {
@@ -99,7 +114,8 @@ const createCommitV4Route = createRoute({
       },
     },
     400: {
-      description: 'Invalid request or parent not found',
+      description:
+        'Invalid request. Possible error codes: COMMIT_VERSION_UNSUPPORTED (V3 payload), INVALID_REQUEST (missing fields or constraints at commit level), PARENT_NOT_FOUND',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -107,7 +123,7 @@ const createCommitV4Route = createRoute({
       },
     },
     404: {
-      description: 'Project not found',
+      description: 'Project not found (PROJECT_NOT_FOUND)',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -297,21 +313,40 @@ const deleteCommitV4Route = createRoute({
 commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   const body = c.req.valid('json');
 
-  // Check for V3 schema field or V3-specific fields (turn_window, facet_snapshot)
+  // ============================================================
+  // V4-only validation
+  // ============================================================
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawBody = body as any;
+
+  // Rule 1: If schema field provided, must be t3x/commit/v4
   if (rawBody.schema && rawBody.schema !== 't3x/commit/v4') {
     return errorResponse(
       c,
       'COMMIT_VERSION_UNSUPPORTED',
-      `Only V4 commits supported on this endpoint. Received: ${rawBody.schema}`
+      `Only V4 commits supported on this endpoint. Received schema: ${rawBody.schema}. ` +
+        'Use /v1/commits-v3 for legacy commits.'
     );
   }
+
+  // Rule 2: Reject V3-specific fields (turn_window, facet_snapshot)
   if (rawBody.turn_window || rawBody.facet_snapshot) {
     return errorResponse(
       c,
       'COMMIT_VERSION_UNSUPPORTED',
-      'Only V4 commits supported. V3 fields (turn_window, facet_snapshot) detected.'
+      'V4 commits do not support turn_window or facet_snapshot. ' +
+        'These are V3 fields. Use sentences array instead.'
+    );
+  }
+
+  // Rule 3: Reject constraints at commit level (V4 stores constraints in Leaves)
+  if (rawBody.constraints || rawBody.content?.constraints) {
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      'V4 commits do not support constraints at the commit level. ' +
+        'Constraints should be stored in Leaves (POST /v1/leaves). ' +
+        'See docs/specification/semantic-layer-architecture.md for V4 design.'
     );
   }
 
