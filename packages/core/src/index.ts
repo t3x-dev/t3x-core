@@ -201,3 +201,23 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Leaf Module (Generation + Validation)
+// @see docs/plans/parallel-dev-guidelines.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  // Types
+  type BuildPromptOptions,
+  type BuiltPrompt,
+  type GenerateOptions,
+  type GenerateResult,
+  type ValidateOptions,
+  type ValidationResult,
+  type ConstraintCheckResult,
+  // Constants
+  SEMANTIC_REQUIRE_THRESHOLD,
+  SEMANTIC_EXCLUDE_THRESHOLD,
+  DEFAULT_MODEL,
+  DEFAULT_TEMPERATURE,
+} from './leaf';
