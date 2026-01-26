@@ -16,6 +16,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreatePinRequest,
@@ -33,7 +34,9 @@ import {
 } from '@t3x/storage/pglite';
 import type { Pin } from '@t3x/core';
 
-export const pinsRoutes = new OpenAPIHono();
+export const pinsRoutes = new OpenAPIHono({
+  defaultHook: zodErrorHook,
+});
 
 // ============================================================
 // Response helpers
@@ -300,29 +303,18 @@ pinsRoutes.openapi(createPinRoute, async (c) => {
   } catch (err) {
     // Handle PostgreSQL unique constraint violation (duplicate pin)
     if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23505') {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'DUPLICATE_PIN',
-            message: `Pin already exists for this item in project ${projectId}`,
-          },
-        },
-        409
+      return errorResponse(
+        c,
+        'DUPLICATE_PIN',
+        `Pin already exists for this item in project ${projectId}`
       );
     }
     // Handle PostgreSQL foreign key violation (project not found)
     if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'PROJECT_NOT_FOUND', message: 'Project not found' },
-        },
-        404
-      );
+      return errorResponse(c, 'PROJECT_NOT_FOUND', 'Project not found');
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'CREATE_FAILED', message } }, 500);
+    return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
 
@@ -341,7 +333,7 @@ pinsRoutes.openapi(listPinsByProjectRoute, async (c) => {
     return c.json({ success: true as const, data: pins.map(toApiPin) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
+    return errorResponse(c, 'LIST_FAILED', message);
   }
 });
 
@@ -354,19 +346,13 @@ pinsRoutes.openapi(getPinRoute, async (c) => {
     const pin = await findPinById(db, id);
 
     if (!pin) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Pin ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
     }
 
     return c.json({ success: true as const, data: toApiPin(pin) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'GET_FAILED', message } }, 500);
+    return errorResponse(c, 'GET_FAILED', message);
   }
 });
 
@@ -380,19 +366,13 @@ pinsRoutes.openapi(updatePinAssertionsRoute, async (c) => {
     const pin = await updatePinAssertions(db, id, body.selected_assertion_ids);
 
     if (!pin) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Pin ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
     }
 
     return c.json({ success: true as const, data: toApiPin(pin) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
+    return errorResponse(c, 'UPDATE_FAILED', message);
   }
 });
 
@@ -405,19 +385,13 @@ pinsRoutes.openapi(deletePinRoute, async (c) => {
     const deleted = await deletePin(db, id);
 
     if (!deleted) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Pin ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
     }
 
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);
+    return errorResponse(c, 'DELETE_FAILED', message);
   }
 });
 

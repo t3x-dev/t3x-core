@@ -17,6 +17,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   ErrorResponseSchema,
   HashParamSchema,
@@ -38,20 +39,7 @@ import {
 import type { CommitV4 } from '@t3x/core';
 
 export const commitsV4Routes = new OpenAPIHono({
-  defaultHook: (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-          },
-        },
-        400
-      );
-    }
-  },
+  defaultHook: zodErrorHook,
 });
 
 // ============================================================
@@ -313,27 +301,17 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawBody = body as any;
   if (rawBody.schema && rawBody.schema !== 't3x/commit/v4') {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'COMMIT_VERSION_UNSUPPORTED',
-          message: `Only V4 commits supported on this endpoint. Received: ${rawBody.schema}`,
-        },
-      },
-      400
+    return errorResponse(
+      c,
+      'COMMIT_VERSION_UNSUPPORTED',
+      `Only V4 commits supported on this endpoint. Received: ${rawBody.schema}`
     );
   }
   if (rawBody.turn_window || rawBody.facet_snapshot) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'COMMIT_VERSION_UNSUPPORTED',
-          message: 'Only V4 commits supported. V3 fields (turn_window, facet_snapshot) detected.',
-        },
-      },
-      400
+    return errorResponse(
+      c,
+      'COMMIT_VERSION_UNSUPPORTED',
+      'Only V4 commits supported. V3 fields (turn_window, facet_snapshot) detected.'
     );
   }
 
@@ -374,31 +352,20 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   } catch (err) {
     // Handle parent not found error
     if (err instanceof ParentNotFoundErrorV4) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'PARENT_NOT_FOUND',
-            message: `Parent commits not found: ${err.missingParents.join(', ')}`,
-          },
-        },
-        400
+      return errorResponse(
+        c,
+        'PARENT_NOT_FOUND',
+        `Parent commits not found: ${err.missingParents.join(', ')}`
       );
     }
 
     // Handle PostgreSQL foreign key violation (project not found)
     if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'PROJECT_NOT_FOUND', message: 'Referenced project not found' },
-        },
-        404
-      );
+      return errorResponse(c, 'PROJECT_NOT_FOUND', 'Referenced project not found');
     }
 
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'CREATE_FAILED', message } }, 500);
+    return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
 
@@ -412,19 +379,13 @@ commitsV4Routes.openapi(getCommitV4Route, async (c) => {
     const commit = await findCommitV4ByHash(db, decodedHash);
 
     if (!commit) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Commit ${decodedHash} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'GET_FAILED', message } }, 500);
+    return errorResponse(c, 'GET_FAILED', message);
   }
 });
 
@@ -446,7 +407,7 @@ commitsV4Routes.openapi(listCommitsV4ByProjectRoute, async (c) => {
     return c.json({ success: true as const, data: commits.map(toApiCommit) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
+    return errorResponse(c, 'LIST_FAILED', message);
   }
 });
 
@@ -461,19 +422,13 @@ commitsV4Routes.openapi(updateCommitV4PositionRoute, async (c) => {
     const commit = await updateCommitV4Position(db, decodedHash, body.position_x, body.position_y);
 
     if (!commit) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Commit ${decodedHash} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
+    return errorResponse(c, 'UPDATE_FAILED', message);
   }
 });
 
@@ -487,13 +442,7 @@ commitsV4Routes.openapi(deleteCommitV4Route, async (c) => {
     const deleted = await deleteCommitV4(db, decodedHash);
 
     if (!deleted) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Commit ${decodedHash} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
     return c.json(
@@ -502,7 +451,7 @@ commitsV4Routes.openapi(deleteCommitV4Route, async (c) => {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);
+    return errorResponse(c, 'DELETE_FAILED', message);
   }
 });
 

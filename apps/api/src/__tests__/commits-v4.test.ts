@@ -375,7 +375,7 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('COMMIT_NOT_FOUND');
     });
   });
 
@@ -522,7 +522,7 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('COMMIT_NOT_FOUND');
     });
 
     it('returns 400 for missing position fields', async () => {
@@ -593,7 +593,7 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('COMMIT_NOT_FOUND');
     });
   });
 

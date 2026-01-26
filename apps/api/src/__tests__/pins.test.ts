@@ -279,7 +279,7 @@ describe('Pins Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('PIN_NOT_FOUND');
     });
   });
 
@@ -347,7 +347,7 @@ describe('Pins Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('PIN_NOT_FOUND');
     });
 
     it('returns 400 for missing selected_assertion_ids', async () => {
@@ -406,7 +406,7 @@ describe('Pins Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('PIN_NOT_FOUND');
     });
   });
 });
