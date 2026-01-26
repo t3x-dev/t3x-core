@@ -380,3 +380,56 @@ export type UpdateConversationContextRequestType = z.infer<
 export type ConversationContextResponseType = z.infer<
   typeof ConversationContextResponse
 >;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Merge V4 API
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WordDiffSegmentSchema = z.object({
+  type: z.enum(['equal', 'insert', 'delete']),
+  text: z.string(),
+});
+
+const MergeV4SimilarPairSchema = z.object({
+  source: SentenceSchema,
+  target: SentenceSchema,
+  word_diff: z.array(WordDiffSegmentSchema),
+  resolution: z.enum(['source', 'target']).optional(),
+});
+
+const MergeV4CandidateSchema = z.object({
+  sentence: SentenceSchema,
+  keep: z.boolean(),
+});
+
+export const MergeV4ResultSchema = z.object({
+  identical: z.array(SentenceSchema),
+  similar_pairs: z.array(MergeV4SimilarPairSchema),
+  only_in_source: z.array(MergeV4CandidateSchema),
+  only_in_target: z.array(MergeV4CandidateSchema),
+});
+
+// POST /v1/merge-v4/prepare
+export const PrepareMergeV4Request = z.object({
+  source_hash: z.string().min(1),
+  target_hash: z.string().min(1),
+});
+
+export const PrepareMergeV4Response = SuccessResponse(MergeV4ResultSchema);
+
+// POST /v1/merge-v4/execute
+export const ExecuteMergeV4Request = z.object({
+  source_hash: z.string().min(1),
+  target_hash: z.string().min(1),
+  prepared: MergeV4ResultSchema,
+  message: z.string().min(1),
+  branch: z.string().optional(),
+  project_id: z.string().min(1),
+});
+
+export const ExecuteMergeV4Response = SuccessResponse(CommitV4Response);
+
+// Type exports
+export type MergeV4ResultType = z.infer<typeof MergeV4ResultSchema>;
+export type PrepareMergeV4RequestType = z.infer<typeof PrepareMergeV4Request>;
+export type ExecuteMergeV4RequestType = z.infer<typeof ExecuteMergeV4Request>;
