@@ -79,30 +79,37 @@ export const AssertionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════
 
 // POST /v1/commits-v4
-export const CreateCommitV4Request = z.object({
-  parents: z.array(z.string()).default([]),
-  author: z.object({
-    type: z.enum(['human', 'agent']),
-    id: z.string().optional(),
-    name: z.string().optional(),
-  }),
-  sentences: z.array(SentenceSchema).min(1),
-  project_id: z.string(),
-  message: z.string().optional(),
-  branch: z.string().optional(),
-  source_refs: z
-    .array(
-      z.object({
-        type: z.enum(['conversation', 'leaf']),
-        id: z.string(),
-        title: z.string().optional(),
-        assertion_lessons: z.array(z.string()).optional(),
-      })
-    )
-    .optional(),
-  position_x: z.number().optional(),
-  position_y: z.number().optional(),
-});
+// Use passthrough() to preserve unknown fields for V3 detection
+export const CreateCommitV4Request = z
+  .object({
+    parents: z.array(z.string()).default([]),
+    author: z.object({
+      type: z.enum(['human', 'agent']),
+      id: z.string().optional(),
+      name: z.string().optional(),
+    }),
+    sentences: z.array(SentenceSchema).min(1),
+    project_id: z.string(),
+    message: z.string().optional(),
+    branch: z.string().optional(),
+    source_refs: z
+      .array(
+        z.object({
+          type: z.enum(['conversation', 'leaf']),
+          id: z.string(),
+          title: z.string().optional(),
+          assertion_lessons: z.array(z.string()).optional(),
+        })
+      )
+      .optional(),
+    position_x: z.number().optional(),
+    position_y: z.number().optional(),
+    // V3 detection fields (optional, for error handling)
+    schema: z.string().optional(),
+    turn_window: z.unknown().optional(),
+    facet_snapshot: z.unknown().optional(),
+  })
+  .passthrough();
 
 export const CommitV4Response = z.object({
   hash: z.string(),

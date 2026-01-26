@@ -31,6 +31,7 @@ import {
   findLeavesByProject,
   updateLeaf,
   deleteLeaf,
+  deletePinByRef,
 } from '@t3x/storage/pglite';
 import type { Leaf } from '@t3x/core';
 
@@ -446,6 +447,20 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // First, get the leaf to find its project_id for pin cleanup
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Leaf ${id} not found` },
+        },
+        404
+      );
+    }
+
+    // Delete the leaf
     const deleted = await deleteLeaf(db, id);
 
     if (!deleted) {
@@ -457,6 +472,9 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
         404
       );
     }
+
+    // Clean up associated pins (leaf pins that reference this leaf)
+    await deletePinByRef(db, leaf.project_id, 'leaf', id);
 
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {

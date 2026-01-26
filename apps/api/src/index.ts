@@ -85,7 +85,22 @@ app.use('*', loggerMiddleware);
 app.route('/', healthRoutes); // /health
 
 // Create OpenAPI-enabled API router for all v1 routes
-const api = new OpenAPIHono();
+const api = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+          },
+        },
+        400
+      );
+    }
+  },
+});
 
 // Mount routes
 api.route('/', statusRoutes); // /v1/status
