@@ -37,7 +37,22 @@ import {
 } from '@t3x/storage/pglite';
 import type { CommitV4 } from '@t3x/core';
 
-export const commitsV4Routes = new OpenAPIHono();
+export const commitsV4Routes = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+          },
+        },
+        400
+      );
+    }
+  },
+});
 
 // ============================================================
 // Response helpers
@@ -293,6 +308,34 @@ const deleteCommitV4Route = createRoute({
 // POST /v1/commits-v4 - Create commit
 commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   const body = c.req.valid('json');
+
+  // Check for V3 schema field or V3-specific fields (turn_window, facet_snapshot)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawBody = body as any;
+  if (rawBody.schema && rawBody.schema !== 't3x/commit/v4') {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'COMMIT_VERSION_UNSUPPORTED',
+          message: `Only V4 commits supported on this endpoint. Received: ${rawBody.schema}`,
+        },
+      },
+      400
+    );
+  }
+  if (rawBody.turn_window || rawBody.facet_snapshot) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'COMMIT_VERSION_UNSUPPORTED',
+          message: 'Only V4 commits supported. V3 fields (turn_window, facet_snapshot) detected.',
+        },
+      },
+      400
+    );
+  }
 
   try {
     const db = await getDB();
