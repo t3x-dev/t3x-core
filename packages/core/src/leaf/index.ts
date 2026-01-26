@@ -52,7 +52,11 @@ export {
   getTypeInstructions,
   formatConstraints,
 } from './build-prompt';
-// TODO (GEN-2): export { generate } from './generate';
+export {
+  generateLeafOutput,
+  isGenerationConfigured,
+  GenerationError,
+} from './generate';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Validation Exports (VAL-* adds here)
