@@ -22,8 +22,9 @@ build/
 *.swp
 *.swo
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code
+.claude/
+CLAUDE.md
 
 # OS files
 .DS_Store
