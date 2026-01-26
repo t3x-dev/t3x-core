@@ -119,6 +119,10 @@ export {
   SEMANTIC_REQUIRE_THRESHOLD,
   type ValidateOptions,
   type ValidationResult,
+  // Validation (VAL-1, VAL-2)
+  validateConstraints,
+  validateConstraintsExactOnly,
+  generateAssertionId,
 } from './leaf';
 // LLM Provider (interface)
 export {
