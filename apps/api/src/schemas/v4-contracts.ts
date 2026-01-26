@@ -259,16 +259,18 @@ export const GenerateLeafOutputResponse = SuccessResponse(
 // POST /v1/leaves/:id/validate
 export const ValidateLeafOutputRequest = z
   .object({
-    // Future: custom validation options
+    use_semantic: z.boolean().default(false),
   })
   .optional();
 
 export const ValidateLeafOutputResponse = SuccessResponse(
   z.object({
-    assertions: z.array(AssertionSchema),
-    passed_count: z.number(),
-    failed_count: z.number(),
-    total_count: z.number(),
+    leaf: LeafResponse,
+    validation: z.object({
+      all_passed: z.boolean(),
+      passed_count: z.number(),
+      failed_count: z.number(),
+    }),
   })
 );
 
