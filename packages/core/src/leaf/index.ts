@@ -61,5 +61,12 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 // Validation Exports (VAL-* adds here)
 // ═══════════════════════════════════════════════════════════════════════════
-// TODO (VAL-1): export { validateConstraints } from './validate-constraints';
-// TODO (VAL-2): export { checkConstraint } from './validate-constraints';
+export {
+  validateConstraints,
+  validateConstraintsExactOnly,
+  generateAssertionId,
+  validateRequireExact,
+  validateExcludeExact,
+  validateRequireSemantic,
+  validateExcludeSemantic,
+} from './validate-constraints';
