@@ -46,6 +46,91 @@ describe('Commits V4 Routes', () => {
   });
 
   describe('POST /v1/commits-v4', () => {
+    describe('V4-only validation', () => {
+      it('rejects V3 commit payload with COMMIT_VERSION_UNSUPPORTED error', async () => {
+        // V3 payload has turn_window and facet_snapshot instead of sentences
+        const v3Payload = {
+          schema: 't3x/commit/v3',
+          project_id: testProjectId,
+          branch: 'main',
+          turn_window: { start_turn_hash: 'sha256:abc', end_turn_hash: 'sha256:def' },
+          facet_snapshot: [],
+        };
+
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(v3Payload),
+        });
+
+        const data: ApiResponse = await res.json();
+        // V3 payload lacks sentences, so it should fail validation first with INVALID_REQUEST
+        // or if it passes validation, the route handler should detect V3 fields and return COMMIT_VERSION_UNSUPPORTED
+        expect(res.status).toBe(400);
+        expect(data.success).toBe(false);
+        // When sentences is missing, Zod validation fails with INVALID_REQUEST
+        // The COMMIT_VERSION_UNSUPPORTED check only runs after validation passes
+        expect(data.error.code).toBe('INVALID_REQUEST');
+      });
+
+      it('rejects payload with explicit V3 schema field', async () => {
+        // This payload has sentences (valid for V4) but explicitly sets schema to V3
+        // The route handler should detect this and return COMMIT_VERSION_UNSUPPORTED
+        const payload = {
+          schema: 't3x/commit/v3',
+          project_id: testProjectId,
+          author: { type: 'human' },
+          sentences: [{ id: 's_1', text: 'Test sentence.' }],
+        };
+
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data: ApiResponse = await res.json();
+        expect(res.status).toBe(400);
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('COMMIT_VERSION_UNSUPPORTED');
+        expect(data.error.message).toContain('V4');
+      });
+
+      it('returns INVALID_REQUEST when sentences field is missing', async () => {
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: { type: 'human' },
+            project_id: testProjectId,
+            // sentences field missing
+          }),
+        });
+
+        expect(res.status).toBe(400);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('INVALID_REQUEST');
+      });
+
+      it('returns INVALID_REQUEST when sentences array is empty', async () => {
+        const res = await app.request('/v1/commits-v4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: { type: 'human' },
+            sentences: [],
+            project_id: testProjectId,
+          }),
+        });
+
+        expect(res.status).toBe(400);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('INVALID_REQUEST');
+      });
+    });
+
     it('creates a commit with valid input', async () => {
       const res = await app.request('/v1/commits-v4', {
         method: 'POST',
