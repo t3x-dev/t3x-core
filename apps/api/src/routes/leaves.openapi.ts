@@ -11,14 +11,19 @@
  * - GET    /v1/projects/:projectId/leaves - List leaves by project
  * - PATCH  /v1/leaves/:id                 - Update leaf
  * - DELETE /v1/leaves/:id                 - Delete leaf
- * - POST   /v1/leaves/:id/generate        - Generate output (future)
- * - POST   /v1/leaves/:id/validate        - Validate output (future)
+ * - POST   /v1/leaves/:id/generate        - Generate output
+ * - POST   /v1/leaves/:id/validate        - Validate output
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Leaf } from '@t3x/core';
 // Generation functions (provided by @t3x/core)
-import { GenerationError, generateLeafOutput, isGenerationConfigured } from '@t3x/core';
+import {
+  GenerationError,
+  generateLeafOutput,
+  isGenerationConfigured,
+  validateConstraintsExactOnly,
+} from '@t3x/core';
 // Storage functions (provided by @t3x/storage)
 import {
   createLeaf,
@@ -40,6 +45,8 @@ import {
   GenerateLeafOutputResponse,
   LeafResponse,
   UpdateLeafRequest,
+  ValidateLeafOutputRequest,
+  ValidateLeafOutputResponse,
 } from '../schemas/v4-contracts';
 
 export const leavesRoutes = new OpenAPIHono({
@@ -576,7 +583,139 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
   }
 });
 
-// TODO (VAL-2): POST /v1/leaves/:id/validate - Validate output
+// POST /v1/leaves/:id/validate - Validate output
+const validateLeafRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/validate',
+  tags: ['Leaves'],
+  summary: 'Validate leaf output',
+  description: 'Validates the generated output against the leaf constraints.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: ValidateLeafOutputRequest,
+        },
+      },
+      required: false,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Validation completed successfully',
+      content: {
+        'application/json': {
+          schema: ValidateLeafOutputResponse,
+        },
+      },
+    },
+    400: {
+      description: 'No output to validate',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Leaf not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Validation failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// POST /v1/leaves/:id/validate - Validate output handler
+leavesRoutes.openapi(validateLeafRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const useSemantic = body?.use_semantic ?? false;
+
+  try {
+    const db = await getDB();
+
+    // 1. Get leaf by ID
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // 2. Check if output exists
+    if (!leaf.output) {
+      return errorResponse(c, 'NO_OUTPUT', 'Leaf has no generated output to validate');
+    }
+
+    // 3. Handle empty constraints case
+    if (!leaf.constraints || leaf.constraints.length === 0) {
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            leaf: toApiLeaf(leaf),
+            validation: {
+              all_passed: true,
+              passed_count: 0,
+              failed_count: 0,
+            },
+          },
+        },
+        200
+      );
+    }
+
+    // 4. Run validation
+    let validationResult;
+    if (useSemantic) {
+      return errorResponse(
+        c,
+        'SEMANTIC_NOT_SUPPORTED',
+        'Semantic validation is not yet supported. Use exact matching only.'
+      );
+    } else {
+      validationResult = validateConstraintsExactOnly(leaf.output, leaf.constraints);
+    }
+
+    // 5. Update leaf with assertions
+    const updatedLeaf = await updateLeaf(db, id, {
+      assertions: validationResult.assertions,
+    });
+
+    if (!updatedLeaf) {
+      return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with assertions');
+    }
+
+    // 6. Return response
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          leaf: toApiLeaf(updatedLeaf),
+          validation: {
+            all_passed: validationResult.allPassed,
+            passed_count: validationResult.passedCount,
+            failed_count: validationResult.failedCount,
+          },
+        },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'VALIDATION_FAILED', message);
+  }
+});
 
 // DELETE /v1/leaves/:id - Delete leaf
 leavesRoutes.openapi(deleteLeafRoute, async (c) => {
