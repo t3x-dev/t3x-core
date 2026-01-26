@@ -26,9 +26,6 @@ build/
 .claude/
 CLAUDE.md
 
-# Documentation (local only)
-docs/
-
 # OS files
 .DS_Store
 Thumbs.db
