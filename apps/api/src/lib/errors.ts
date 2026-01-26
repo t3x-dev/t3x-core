@@ -58,6 +58,12 @@ export const ErrorCodes = {
   // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   DATABASE_ERROR: 'DATABASE_ERROR',
+
+  // Generation errors
+  GENERATION_NOT_CONFIGURED: 'GENERATION_NOT_CONFIGURED',
+  GENERATION_FAILED: 'GENERATION_FAILED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  AUTH_ERROR: 'AUTH_ERROR',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -105,6 +111,12 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   LIST_FAILED: 500,
   INTERNAL_ERROR: 500,
   DATABASE_ERROR: 500,
+
+  // Generation errors
+  GENERATION_NOT_CONFIGURED: 400,
+  GENERATION_FAILED: 500,
+  RATE_LIMITED: 429,
+  AUTH_ERROR: 401,
 };
 
 /**
@@ -161,7 +173,9 @@ export function errorResponse(
  * @param issues - Array of Zod validation issues
  * @returns Formatted error message string
  */
-export function formatZodErrors(issues: Array<{ path: (string | number)[]; message: string }>): string {
+export function formatZodErrors(
+  issues: Array<{ path: (string | number)[]; message: string }>
+): string {
   return issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
 }
 
@@ -172,13 +186,13 @@ export function formatZodErrors(issues: Array<{ path: (string | number)[]; messa
  * const app = new OpenAPIHono({ defaultHook: zodErrorHook });
  */
 export function zodErrorHook(
-  result: { success: boolean; error?: { issues: Array<{ path: (string | number)[]; message: string }> } },
+  result: {
+    success: boolean;
+    error?: { issues: Array<{ path: (string | number)[]; message: string }> };
+  },
   c: Context
 ) {
   if (!result.success && result.error) {
-    return c.json(
-      createError('INVALID_REQUEST', formatZodErrors(result.error.issues)),
-      400
-    );
+    return c.json(createError('INVALID_REQUEST', formatZodErrors(result.error.issues)), 400);
   }
 }
