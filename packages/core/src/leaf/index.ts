@@ -46,7 +46,12 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Exports (GEN-* adds here)
 // ═══════════════════════════════════════════════════════════════════════════
-// TODO (GEN-1): export { buildPrompt } from './build-prompt';
+export {
+  buildLeafPrompt,
+  buildSystemPrompt,
+  getTypeInstructions,
+  formatConstraints,
+} from './build-prompt';
 // TODO (GEN-2): export { generate } from './generate';
 
 // ═══════════════════════════════════════════════════════════════════════════
