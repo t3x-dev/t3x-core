@@ -537,21 +537,21 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       leaf,
     });
 
-    // Update leaf with output and generated_at
-    const generatedAt = new Date().toISOString();
-    const updatedLeaf = await updateLeafOutput(db, id, result.output, generatedAt);
+    // Update leaf with output (storage sets generated_at automatically)
+    const updatedLeaf = await updateLeafOutput(db, id, result.output);
 
     if (!updatedLeaf) {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
     }
 
     // Return response according to contract (v4-contracts.ts)
+    // Use the generated_at from the updated leaf for consistency
     return c.json(
       {
         success: true as const,
         data: {
           output: result.output,
-          generated_at: generatedAt,
+          generated_at: updatedLeaf.generated_at!,
         },
       },
       200

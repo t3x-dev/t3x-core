@@ -419,7 +419,7 @@ export type CommitV4FirstClass = Pick<
  * Input for creating a new CommitV4.
  */
 export interface CreateCommitV4Input {
-  parents: string[];
+  parents?: string[];
   author: CommitAuthor;
   sentences: Sentence[];
   project_id: string;
