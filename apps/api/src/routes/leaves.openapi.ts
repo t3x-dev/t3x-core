@@ -17,6 +17,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreateLeafRequest,
@@ -35,7 +36,9 @@ import {
 } from '@t3x/storage/pglite';
 import type { Leaf } from '@t3x/core';
 
-export const leavesRoutes = new OpenAPIHono();
+export const leavesRoutes = new OpenAPIHono({
+  defaultHook: zodErrorHook,
+});
 
 // ============================================================
 // Response helpers
@@ -338,16 +341,10 @@ leavesRoutes.openapi(createLeafRoute, async (c) => {
   } catch (err) {
     // Handle PostgreSQL foreign key violation (commit or project not found)
     if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'REFERENCE_NOT_FOUND', message: 'Referenced commit or project not found' },
-        },
-        404
-      );
+      return errorResponse(c, 'REFERENCE_NOT_FOUND', 'Referenced commit or project not found');
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'CREATE_FAILED', message } }, 500);
+    return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
 
@@ -360,19 +357,13 @@ leavesRoutes.openapi(getLeafRoute, async (c) => {
     const leaf = await findLeafById(db, id);
 
     if (!leaf) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Leaf ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'GET_FAILED', message } }, 500);
+    return errorResponse(c, 'GET_FAILED', message);
   }
 });
 
@@ -388,7 +379,7 @@ leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
+    return errorResponse(c, 'LIST_FAILED', message);
   }
 });
 
@@ -405,7 +396,7 @@ leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
+    return errorResponse(c, 'LIST_FAILED', message);
   }
 });
 
@@ -425,19 +416,13 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
     });
 
     if (!leaf) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Leaf ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
+    return errorResponse(c, 'UPDATE_FAILED', message);
   }
 });
 
@@ -451,26 +436,14 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
     // First, get the leaf to find its project_id for pin cleanup
     const leaf = await findLeafById(db, id);
     if (!leaf) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Leaf ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
     // Delete the leaf
     const deleted = await deleteLeaf(db, id);
 
     if (!deleted) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Leaf ${id} not found` },
-        },
-        404
-      );
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
     // Clean up associated pins (leaf pins that reference this leaf)
@@ -479,7 +452,7 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);
+    return errorResponse(c, 'DELETE_FAILED', message);
   }
 });
 
