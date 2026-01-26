@@ -74,6 +74,7 @@ docs/*
 !docs/plans/
 docs/plans/*
 !docs/plans/v4-e2e-runbook.md
+!docs/plans/v4-webui-checklist.md
 
 # Root-level markdown files (local only)
 /*.md
