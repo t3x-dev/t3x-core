@@ -181,6 +181,11 @@ export {
   type CreateCommitV4Input,
   type CreateLeafInput,
   type CreatePinInput,
+  // Merge V4 types
+  type MergeV4Result,
+  type MergeV4SimilarPair,
+  type MergeV4Candidate,
+  type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════

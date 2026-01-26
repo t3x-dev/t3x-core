@@ -449,3 +449,68 @@ export interface CreatePinInput {
   selected_assertion_ids?: string[];
   pinned_by?: string;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Merge V4 Types (Sentence-only merge, NO constraints)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * V4 merge operates on sentences only.
+ * Constraints belong to Leaf, not Commit, so merge doesn't handle them.
+ */
+
+/**
+ * Word-level diff segment for UI display.
+ */
+export interface WordDiffSegment {
+  type: 'equal' | 'insert' | 'delete';
+  text: string;
+}
+
+/**
+ * A pair of similar sentences from source and target commits.
+ * User must choose which one to keep.
+ */
+export interface MergeV4SimilarPair {
+  /** Source sentence */
+  source: Sentence;
+
+  /** Target sentence */
+  target: Sentence;
+
+  /** Word-level diff for UI display */
+  word_diff: WordDiffSegment[];
+
+  /** User's resolution: pick source or target */
+  resolution?: 'source' | 'target';
+}
+
+/**
+ * A sentence that exists in only one commit (source or target).
+ * User can choose to keep or discard it.
+ */
+export interface MergeV4Candidate {
+  /** The unique sentence */
+  sentence: Sentence;
+
+  /** Whether to keep in merged result (default: true) */
+  keep: boolean;
+}
+
+/**
+ * Result of preparing a V4 merge.
+ * Contains all information needed for user to make merge decisions.
+ */
+export interface MergeV4Result {
+  /** Sentences identical in both commits - auto-kept */
+  identical: Sentence[];
+
+  /** Similar pairs requiring user decision */
+  similar_pairs: MergeV4SimilarPair[];
+
+  /** Sentences only in source commit */
+  only_in_source: MergeV4Candidate[];
+
+  /** Sentences only in target commit */
+  only_in_target: MergeV4Candidate[];
+}
