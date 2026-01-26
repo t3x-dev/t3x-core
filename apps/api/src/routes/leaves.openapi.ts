@@ -426,6 +426,12 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
   }
 });
 
+// ============================================================
+// Generation & Validation Routes (GEN-* / VAL-* adds here)
+// ============================================================
+// TODO (GEN-3): POST /v1/leaves/:id/generate - Generate output
+// TODO (VAL-2): POST /v1/leaves/:id/validate - Validate output
+
 // DELETE /v1/leaves/:id - Delete leaf
 leavesRoutes.openapi(deleteLeafRoute, async (c) => {
   const { id } = c.req.valid('param');
