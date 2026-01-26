@@ -206,7 +206,7 @@ describe('Leaves Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('LEAF_NOT_FOUND');
     });
   });
 
@@ -384,7 +384,7 @@ describe('Leaves Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('LEAF_NOT_FOUND');
     });
   });
 
@@ -431,7 +431,7 @@ describe('Leaves Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('NOT_FOUND');
+      expect(data.error.code).toBe('LEAF_NOT_FOUND');
     });
 
     it('cleans up associated pins when leaf is deleted', async () => {
