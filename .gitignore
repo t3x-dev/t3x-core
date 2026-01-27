@@ -67,9 +67,3 @@ coverage.xml
 # Next.js
 .next/
 next-env.d.ts
-
-# Development planning and documentation (local only)
-*.md
-docs/
-!packages/**/README.md
-!apps/**/README.md
