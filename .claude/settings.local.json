@@ -132,7 +132,10 @@
       "Bash(timeout 10 pnpm dev:*)",
       "Bash(git rev-parse:*)",
       "Bash(for branch in remotes/origin/feature/polish_ui_v1 remotes/origin/feature/polish_ui_v2 remotes/origin/staging)",
-      "Bash(do echo '=== $branch ===' git show $branch:CLAUDE.md)"
+      "Bash(do echo '=== $branch ===' git show $branch:CLAUDE.md)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm vitest run:*)",
+      "Bash(pnpm check:*)"
     ],
     "deny": [],
     "ask": []
