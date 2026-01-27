@@ -12,24 +12,24 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 
-import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { prepareMerge, executeMerge, type Merge2WayResult } from '@t3x/core';
+import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
 import {
-  getCommitV3,
-  createCommitV3,
-  updateBranchHead,
-  createMergeDraft,
-  getMergeDraft,
-  updateMergeDraft,
-  deleteMergeDraft,
   commitMergeDraft,
+  createCommitV3,
+  createMergeDraft,
+  deleteMergeDraft,
   findPendingMergeDraft,
+  getCommitV3,
+  getMergeDraft,
+  updateBranchHead,
+  updateMergeDraft,
 } from '@t3x/storage';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
-import { getAuthorFromContext } from '../lib/auth';
 
 // ============================================================================
 // Routes
@@ -79,8 +79,8 @@ mergeRoutes.post('/v1/merge/prepare', zValidator('json', prepareSchema), async (
     return jsonError(c, 'NOT_FOUND', `Target commit not found: ${target_hash}`, 404);
   }
 
-  // Prepare merge
-  const prepared = prepareMerge(sourceCommit.content, targetCommit.content);
+  // Prepare merge - V4 API accepts DiffableSentence[] (only id + text needed)
+  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   return jsonSuccess(c, prepared);
 });
@@ -89,29 +89,36 @@ mergeRoutes.post('/v1/merge/prepare', zValidator('json', prepareSchema), async (
 // POST /v1/merge/execute
 // ============================================================================
 
+// V4 Schema: No constraints (they belong to Leaf)
 const executeSchema = z.object({
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
+  project_id: z.string().min(1),
   prepared: z.object({
     identical: z.array(z.any()),
-    similarPairs: z.array(z.object({
-      source: z.any(),
-      target: z.any(),
-      wordDiff: z.array(z.any()),
-      resolution: z.enum(['source', 'target']).optional(),
-      sourceConstraints: z.array(z.any()),
-      targetConstraints: z.array(z.any()),
-    })),
-    onlyInSource: z.array(z.object({
-      sentence: z.any(),
-      constraints: z.array(z.any()),
-      keep: z.boolean(),
-    })),
-    onlyInTarget: z.array(z.object({
-      sentence: z.any(),
-      constraints: z.array(z.any()),
-      keep: z.boolean(),
-    })),
+    similarPairs: z.array(
+      z.object({
+        source: z.any(),
+        target: z.any(),
+        wordDiff: z.array(z.any()),
+        resolution: z.enum(['source', 'target']).optional(),
+        // V4: No sourceConstraints, targetConstraints
+      })
+    ),
+    onlyInSource: z.array(
+      z.object({
+        sentence: z.any(),
+        keep: z.boolean(),
+        // V4: No constraints
+      })
+    ),
+    onlyInTarget: z.array(
+      z.object({
+        sentence: z.any(),
+        keep: z.boolean(),
+        // V4: No constraints
+      })
+    ),
   }),
   message: z.string(),
   branch: z.string().optional(),
@@ -134,10 +141,10 @@ const executeSchema = z.object({
  *   { "success": true, "data": { CommitV3 } }
  */
 mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (c) => {
-  const { source_hash, target_hash, prepared, message, branch } = c.req.valid('json');
+  const { source_hash, target_hash, project_id, prepared, message, branch } = c.req.valid('json');
 
   // Validate all similar pairs are resolved
-  const unresolved = prepared.similarPairs.filter(p => !p.resolution);
+  const unresolved = prepared.similarPairs.filter((p) => !p.resolution);
   if (unresolved.length > 0) {
     return jsonError(
       c,
@@ -147,18 +154,20 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
     );
   }
 
-  // Get author from context
-  const author = getAuthorFromContext(c);
+  // Get author from context (convert to V4 format)
+  const authorV3 = getAuthorFromContext(c);
+  const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
   const db = await getDB();
 
   try {
-    // Execute merge
+    // Execute merge - V4 API requires projectId
     const mergeCommit = executeMerge(
       prepared as Merge2WayResult,
       source_hash,
       target_hash,
       author,
-      message
+      message,
+      project_id
     );
 
     // Set branch if provided
@@ -166,12 +175,12 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
       mergeCommit.branch = branch;
     }
 
-    // Convert to CreateCommitV3Input format
+    // Convert CommitV4 to CreateCommitV3Input format for storage compatibility
     const commitInput = {
       hash: mergeCommit.hash,
-      schema: mergeCommit.schema,
+      schema: 'commit/v3' as const, // Store as V3 for now
       parents: mergeCommit.parents,
-      author: mergeCommit.author,
+      author: authorV3,
       committedAt: new Date(mergeCommit.committed_at),
       content: {
         sentences: mergeCommit.content.sentences.map((s) => ({
@@ -179,11 +188,14 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
           startChar: 0,
           endChar: s.text.length,
           id: s.id,
-          confidence: s.confidence,
-          source: s.source,
+          confidence: s.confidence ?? 1,
+          source: s.source_ref
+            ? { type: 'turn', id: s.source_ref.turn_hash }
+            : { type: 'merge', id: 'merged' },
         })),
-        constraints: mergeCommit.content.constraints || [],
+        constraints: [], // V4: No constraints in commit
       },
+      projectId: project_id,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
     };
@@ -193,11 +205,7 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
 
     // Update branch head if branch specified
     if (branch) {
-      // Get project_id from source commit
-      const sourceCommit = await getCommitV3(db, source_hash);
-      if (sourceCommit?.projectId) {
-        await updateBranchHead(db, sourceCommit.projectId, branch, mergeCommit.hash);
-      }
+      await updateBranchHead(db, project_id, branch, mergeCommit.hash);
     }
 
     return jsonSuccess(c, mergeCommit);
@@ -229,7 +237,8 @@ const createDraftSchema = z.object({
  * If a pending draft already exists for the same source/target, returns that instead.
  */
 mergeRoutes.post('/v1/merge/drafts', zValidator('json', createDraftSchema), async (c) => {
-  const { project_id, source_hash, target_hash, source_branch, target_branch } = c.req.valid('json');
+  const { project_id, source_hash, target_hash, source_branch, target_branch } =
+    c.req.valid('json');
   const db = await getDB();
 
   // Check if pending draft already exists
@@ -253,8 +262,8 @@ mergeRoutes.post('/v1/merge/drafts', zValidator('json', createDraftSchema), asyn
     return jsonError(c, 'NOT_FOUND', `Target commit not found: ${target_hash}`, 404);
   }
 
-  // Prepare merge
-  const prepared = prepareMerge(sourceCommit.content, targetCommit.content);
+  // Prepare merge - V4 API accepts DiffableSentence[] (only id + text needed)
+  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   // Create draft
   const draft = await createMergeDraft(db, {
@@ -266,11 +275,15 @@ mergeRoutes.post('/v1/merge/drafts', zValidator('json', createDraftSchema), asyn
     prepared,
   });
 
-  return jsonSuccess(c, {
-    ...draft,
-    prepared: JSON.parse(draft.preparedJson),
-    preparedJson: undefined,
-  }, 201);
+  return jsonSuccess(
+    c,
+    {
+      ...draft,
+      prepared: JSON.parse(draft.preparedJson),
+      preparedJson: undefined,
+    },
+    201
+  );
 });
 
 /**
@@ -334,91 +347,105 @@ const commitDraftSchema = z.object({
 /**
  * Commit a merge draft (finalize the merge)
  */
-mergeRoutes.post('/v1/merge/drafts/:id/commit', zValidator('json', commitDraftSchema), async (c) => {
-  const draftId = c.req.param('id');
-  const { message, branch } = c.req.valid('json');
-  const db = await getDB();
+mergeRoutes.post(
+  '/v1/merge/drafts/:id/commit',
+  zValidator('json', commitDraftSchema),
+  async (c) => {
+    const draftId = c.req.param('id');
+    const { message, branch } = c.req.valid('json');
+    const db = await getDB();
 
-  const draft = await getMergeDraft(db, draftId);
-  if (!draft) {
-    return jsonError(c, 'NOT_FOUND', `Merge draft not found: ${draftId}`, 404);
+    const draft = await getMergeDraft(db, draftId);
+    if (!draft) {
+      return jsonError(c, 'NOT_FOUND', `Merge draft not found: ${draftId}`, 404);
+    }
+
+    if (draft.status !== 'pending') {
+      return jsonError(
+        c,
+        'INVALID_STATUS',
+        `Cannot commit draft with status: ${draft.status}`,
+        400
+      );
+    }
+
+    const prepared = JSON.parse(draft.preparedJson) as Merge2WayResult;
+
+    // Validate all similar pairs are resolved
+    const unresolved = prepared.similarPairs.filter((p) => !p.resolution);
+    if (unresolved.length > 0) {
+      return jsonError(
+        c,
+        'UNRESOLVED_PAIRS',
+        `${unresolved.length} similar pair(s) have no resolution`,
+        400
+      );
+    }
+
+    // Get author from context (convert to V4 format)
+    const authorV3 = getAuthorFromContext(c);
+    const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
+
+    try {
+      // Execute merge - V4 API requires projectId
+      const mergeCommit = executeMerge(
+        prepared,
+        draft.sourceHash,
+        draft.targetHash,
+        author,
+        message,
+        draft.projectId
+      );
+
+      // Set branch
+      const targetBranch = branch || draft.targetBranch || 'main';
+      mergeCommit.branch = targetBranch;
+
+      // Convert CommitV4 to CreateCommitV3Input format for storage compatibility
+      const commitInput = {
+        hash: mergeCommit.hash,
+        schema: 'commit/v3' as const, // Store as V3 for now
+        parents: mergeCommit.parents,
+        author: authorV3,
+        committedAt: new Date(mergeCommit.committed_at),
+        content: {
+          sentences: mergeCommit.content.sentences.map((s) => ({
+            text: s.text,
+            startChar: 0,
+            endChar: s.text.length,
+            id: s.id,
+            confidence: s.confidence ?? 1,
+            source: s.source_ref
+              ? { type: 'turn', id: s.source_ref.turn_hash }
+              : { type: 'merge', id: 'merged' },
+          })),
+          constraints: [], // V4: No constraints in commit
+        },
+        projectId: draft.projectId,
+        message: mergeCommit.message,
+        branch: mergeCommit.branch,
+      };
+
+      // Save to storage
+      await createCommitV3(db, commitInput, { strictParents: false });
+
+      // Update branch head
+      await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
+
+      // Mark draft as committed
+      await commitMergeDraft(db, draftId);
+
+      return jsonSuccess(c, mergeCommit);
+    } catch (error) {
+      return jsonError(
+        c,
+        'MERGE_FAILED',
+        error instanceof Error ? error.message : 'Unknown error',
+        500
+      );
+    }
   }
-
-  if (draft.status !== 'pending') {
-    return jsonError(c, 'INVALID_STATUS', `Cannot commit draft with status: ${draft.status}`, 400);
-  }
-
-  const prepared = JSON.parse(draft.preparedJson) as Merge2WayResult;
-
-  // Validate all similar pairs are resolved
-  const unresolved = prepared.similarPairs.filter(p => !p.resolution);
-  if (unresolved.length > 0) {
-    return jsonError(
-      c,
-      'UNRESOLVED_PAIRS',
-      `${unresolved.length} similar pair(s) have no resolution`,
-      400
-    );
-  }
-
-  const author = getAuthorFromContext(c);
-
-  try {
-    // Execute merge
-    const mergeCommit = executeMerge(
-      prepared,
-      draft.sourceHash,
-      draft.targetHash,
-      author,
-      message
-    );
-
-    // Set branch
-    const targetBranch = branch || draft.targetBranch || 'main';
-    mergeCommit.branch = targetBranch;
-
-    // Convert to CreateCommitV3Input format
-    const commitInput = {
-      hash: mergeCommit.hash,
-      schema: mergeCommit.schema,
-      parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      committedAt: new Date(mergeCommit.committed_at),
-      content: {
-        sentences: mergeCommit.content.sentences.map((s) => ({
-          text: s.text,
-          startChar: 0,
-          endChar: s.text.length,
-          id: s.id,
-          confidence: s.confidence,
-          source: s.source,
-        })),
-        constraints: mergeCommit.content.constraints || [],
-      },
-      projectId: draft.projectId,
-      message: mergeCommit.message,
-      branch: mergeCommit.branch,
-    };
-
-    // Save to storage
-    await createCommitV3(db, commitInput, { strictParents: false });
-
-    // Update branch head
-    await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
-
-    // Mark draft as committed
-    await commitMergeDraft(db, draftId);
-
-    return jsonSuccess(c, mergeCommit);
-  } catch (error) {
-    return jsonError(
-      c,
-      'MERGE_FAILED',
-      error instanceof Error ? error.message : 'Unknown error',
-      500
-    );
-  }
-});
+);
 
 /**
  * Delete (cancel) a merge draft

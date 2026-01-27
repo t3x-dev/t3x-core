@@ -4,10 +4,10 @@
  * Types for semantic diff operations.
  */
 
-import type { Sentence } from '../types/commit';
+// Note: No longer imports Sentence - uses DiffableSentence for V4 compatibility
 
 // ============================================================================
-// Minimal Interface for V4 Migration (Issue #196)
+// Minimal Interface for V4 Migration (Issue #196, #203)
 // ============================================================================
 
 /**
@@ -15,6 +15,8 @@ import type { Sentence } from '../types/commit';
  *
  * Only id and text are needed for diff algorithms.
  * Both V4 Sentence and any object with these fields can be used directly.
+ *
+ * FROZEN - Do not modify without team agreement.
  */
 export interface DiffableSentence {
   /** Unique sentence identifier */
@@ -172,30 +174,33 @@ export interface WordDiffSegment {
 }
 
 /**
- * A pair of similar sentences with their word-level diff
+ * A pair of similar sentences with their word-level diff.
+ *
+ * FROZEN - Do not modify without team agreement.
  */
 export interface SentencePair {
-  /** Source sentence */
-  source: Sentence;
-  /** Target sentence */
-  target: Sentence;
-  /** Jaccard similarity score (0-1) */
+  /** Source sentence (源句子) */
+  source: DiffableSentence;
+  /** Target sentence (目标句子) */
+  target: DiffableSentence;
+  /** Jaccard similarity score (0-1) (相似度分数) */
   similarity: number;
-  /** Word-level diff segments */
+  /** Word-level diff segments (词级差异片段) */
   wordDiff: WordDiffSegment[];
 }
 
 /**
- * Result of comparing two commits
+ * Result of comparing two commits.
+ *
+ * FROZEN - Do not modify without team agreement.
  */
 export interface CommitDiff {
-  /** Sentences with identical text in both commits */
-  identical: Sentence[];
-  /** Sentences that are similar (Jaccard >= 0.3) with word diffs */
+  /** Sentences with identical text in both commits (两边完全相同的句子) */
+  identical: DiffableSentence[];
+  /** Sentences that are similar (Jaccard >= 0.3) with word diffs (相似句子对) */
   similar: SentencePair[];
-  /** Sentences only in source commit (removed/old) */
-  onlyInSource: Sentence[];
-  /** Sentences only in target commit (added/new) */
-  onlyInTarget: Sentence[];
+  /** Sentences only in source commit (removed/old) (仅在源 commit 中) */
+  onlyInSource: DiffableSentence[];
+  /** Sentences only in target commit (added/new) (仅在目标 commit 中) */
+  onlyInTarget: DiffableSentence[];
 }
-
