@@ -116,13 +116,9 @@ describe('Merge Routes', () => {
     });
 
     it('returns identical sentences', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Same sentence' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Same sentence' }]);
 
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Same sentence' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Same sentence' }]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -140,13 +136,9 @@ describe('Merge Routes', () => {
     });
 
     it('returns similar pairs for similar sentences', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Budget is $3000' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Budget is $3000' }]);
 
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Budget is $5000' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -166,9 +158,7 @@ describe('Merge Routes', () => {
     });
 
     it('returns 404 for missing source commit', async () => {
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Test' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Test' }]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -186,9 +176,7 @@ describe('Merge Routes', () => {
     });
 
     it('returns 404 for missing target commit', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Test' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Test' }]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -212,13 +200,9 @@ describe('Merge Routes', () => {
 
   describe('POST /v1/merge/execute', () => {
     it('creates merge commit with 2 parents', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Source sentence' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Source sentence' }]);
 
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Target sentence' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Target sentence' }]);
 
       // Prepare first
       const prepareRes = await app.request('/v1/merge/prepare', {
@@ -240,13 +224,14 @@ describe('Merge Routes', () => {
         }
       }
 
-      // Execute merge
+      // Execute merge - V4 API requires project_id
       const res = await app.request('/v1/merge/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
+          project_id: testProjectId,
           prepared,
           message: 'Merge test',
         }),
@@ -262,14 +247,11 @@ describe('Merge Routes', () => {
     });
 
     it('returns 400 for unresolved pairs', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Budget is $3000' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Budget is $3000' }]);
 
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Budget is $5000' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
 
+      // V4: No sourceConstraints, targetConstraints
       const prepared = {
         identical: [],
         similarPairs: [
@@ -278,8 +260,6 @@ describe('Merge Routes', () => {
             target: { id: 't1', text: 'Budget is $5000' },
             wordDiff: [],
             resolution: undefined, // Not resolved!
-            sourceConstraints: [],
-            targetConstraints: [],
           },
         ],
         onlyInSource: [],
@@ -292,6 +272,7 @@ describe('Merge Routes', () => {
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
+          project_id: testProjectId,
           prepared,
           message: 'Merge',
         }),
@@ -304,21 +285,16 @@ describe('Merge Routes', () => {
     });
 
     it('updates branch pointer when branch specified', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Test' },
-      ]);
+      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Test' }]);
 
-      const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Test' },
-      ]);
+      const targetCommit = await createTestCommit([{ id: 't1', text: 'Test' }]);
 
+      // V4: DiffableSentence only needs id + text
       const prepared = {
         identical: [
           {
             id: 's1',
             text: 'Test',
-            confidence: 1,
-            source: { type: 'turn', id: 'turn_s1' },
           },
         ],
         similarPairs: [],
@@ -332,6 +308,7 @@ describe('Merge Routes', () => {
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
+          project_id: testProjectId,
           prepared,
           message: 'Merge',
           branch: 'main',

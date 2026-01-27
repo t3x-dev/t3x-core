@@ -15,23 +15,22 @@
  * Performance: Handles up to 1000 sentences efficiently (~200ms).
  */
 
-import type { Sentence } from '../types/commit';
 import { buildSimilarityMatrix, hungarian } from './hungarian';
 import { JACCARD_THRESHOLD, jaccard } from './jaccard';
 import { wordDiff } from './lcs';
 import { tokenize } from './tokenize';
-import type { CommitDiff, SentencePair } from './types';
+import type { CommitDiff, DiffableSentence, SentencePair } from './types';
 
 /**
  * Result of Stage 1: Exact text matching
  */
 interface ExactMatchResult {
   /** Sentences with identical text in both */
-  identical: Sentence[];
+  identical: DiffableSentence[];
   /** Source sentences not matched */
-  unmatchedA: Sentence[];
+  unmatchedA: DiffableSentence[];
   /** Target sentences not matched */
-  unmatchedB: Sentence[];
+  unmatchedB: DiffableSentence[];
 }
 
 /**
@@ -39,7 +38,10 @@ interface ExactMatchResult {
  *
  * O(N+M) using hash sets for fast lookup.
  */
-function findExactMatches(sentencesA: Sentence[], sentencesB: Sentence[]): ExactMatchResult {
+function findExactMatches(
+  sentencesA: DiffableSentence[],
+  sentencesB: DiffableSentence[]
+): ExactMatchResult {
   const textsB = new Set(sentencesB.map((s) => s.text));
   const textsA = new Set(sentencesA.map((s) => s.text));
 
@@ -51,20 +53,22 @@ function findExactMatches(sentencesA: Sentence[], sentencesB: Sentence[]): Exact
 }
 
 /**
- * Compare two commits and produce a structured diff
+ * Compare two commits and produce a structured diff.
+ *
+ * V4 Change: Accepts DiffableSentence[] (only id + text needed).
  *
  * @param source - Sentences from source commit (old/base version)
  * @param target - Sentences from target commit (new version)
  * @returns CommitDiff with identical, similar, onlyInSource, onlyInTarget arrays
  *
  * @example
- * const source = [{ id: 's1', text: 'Budget is $3000', confidence: 1, source: { type: 'turn', id: 't1' } }];
- * const target = [{ id: 't1', text: 'Budget is $3500', confidence: 1, source: { type: 'turn', id: 't2' } }];
+ * const source = [{ id: 's1', text: 'Budget is $3000' }];
+ * const target = [{ id: 't1', text: 'Budget is $3500' }];
  * const result = diffCommits(source, target);
  * // result.similar[0].similarity >= 0.3
  * // result.similar[0].wordDiff shows the $3000 → $3500 change
  */
-export function diffCommits(source: Sentence[], target: Sentence[]): CommitDiff {
+export function diffCommits(source: DiffableSentence[], target: DiffableSentence[]): CommitDiff {
   // Stage 1: Exact match - find identical sentences
   const { identical, unmatchedA, unmatchedB } = findExactMatches(source, target);
 

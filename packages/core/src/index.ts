@@ -131,9 +131,9 @@ export {
   LLMProviderError,
 } from './llm';
 // Merge (Two-way merge for combining two commits - Issue #71)
+// V4: No constraint handling, prepareMerge accepts DiffableSentence[]
 export {
   executeMerge,
-  groupConstraintsBySentence,
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
