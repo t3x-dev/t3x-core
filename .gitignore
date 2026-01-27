@@ -22,9 +22,8 @@ build/
 *.swp
 *.swo
 
-# Claude Code
-.claude/
-CLAUDE.md
+# Claude Code local settings
+.claude/settings.local.json
 
 # OS files
 .DS_Store
@@ -68,19 +67,3 @@ coverage.xml
 # Next.js
 .next/
 next-env.d.ts
-
-# Development planning and documentation (local only)
-docs/*
-!docs/plans/
-docs/plans/*
-!docs/plans/v4-e2e-runbook.md
-!docs/plans/v4-webui-checklist.md
-!docs/plans/parallel-dev-guidelines.md
-
-# Root-level markdown files (local only)
-/*.md
-!README.md
-
-# Keep package README files
-!packages/**/README.md
-!apps/**/README.md
