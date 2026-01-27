@@ -6,6 +6,23 @@
 
 import type { Sentence } from '../types/commit';
 
+// ============================================================================
+// Minimal Interface for V4 Migration (Issue #196)
+// ============================================================================
+
+/**
+ * Minimal interface for diff/merge operations.
+ *
+ * Only id and text are needed for diff algorithms.
+ * Both V4 Sentence and any object with these fields can be used directly.
+ */
+export interface DiffableSentence {
+  /** Unique sentence identifier */
+  id: string;
+  /** Sentence text content */
+  text: string;
+}
+
 /**
  * Diff type enumeration
  */
