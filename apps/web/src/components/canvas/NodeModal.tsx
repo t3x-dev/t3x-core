@@ -70,6 +70,9 @@ import {
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
+// Default keyword threshold value (same as Leaf detail page)
+const DEFAULT_KEYWORD_THRESHOLD = 0.6;
+
 const bridgeTemplates = [
   { id: 'prose', name: 'prose', description: 'General prose extraction' },
   { id: 'plan', name: 'plan', description: 'Extract action items and planning structure' },
@@ -752,7 +755,11 @@ export function NodeModal({
   // Config state (STEP 1)
   const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose');
   const [cosineThreshold, setCosineThreshold] = useState(0.75);
-  const [keywordsThreshold, setKeywordsThreshold] = useState(0.6);
+  const [keywordsThreshold, setKeywordsThreshold] = useState(DEFAULT_KEYWORD_THRESHOLD);
+
+  // Leaf config state - loaded from associated Leaf when available
+  const [leafConfig, setLeafConfig] = useState<api.LeafConfig | null>(null);
+  const [leafConfigLoading, setLeafConfigLoading] = useState(false);
 
   // Extract intent - user describes what to extract (initialized from first user message)
   const [extractIntent, setExtractIntent] = useState('');
@@ -951,6 +958,39 @@ export function NodeModal({
   const shouldShowBranchSelect = isPendingCommit && !isMergeDraft;
   // Show branch name input when user selects "+ New branch..." (pendingBranch === 'branch')
   const requireBranchName = !isMergeDraft && isPendingCommit && data?.pendingBranch === 'branch';
+
+  // Load Leaf config when there's an associated Leaf
+  // This fetches keyword_threshold from the Leaf's config
+  useEffect(() => {
+    const leaves = node?.data?.leaves;
+    if (!leaves || leaves.length === 0) {
+      setLeafConfig(null);
+      return;
+    }
+
+    // Use the first associated Leaf
+    const leafId = leaves[0].id;
+
+    const loadLeafConfig = async () => {
+      setLeafConfigLoading(true);
+      try {
+        const leaf = await api.getLeaf(leafId);
+        setLeafConfig(leaf.config);
+        // Update keywordsThreshold from Leaf config if available
+        if (typeof leaf.config.keyword_threshold === 'number') {
+          setKeywordsThreshold(leaf.config.keyword_threshold);
+        }
+      } catch (err) {
+        console.error('Failed to load leaf config:', err);
+        // Keep using default threshold on error
+        setLeafConfig(null);
+      } finally {
+        setLeafConfigLoading(false);
+      }
+    };
+
+    loadLeafConfig();
+  }, [node?.data?.leaves]);
 
   // Load branches from API when opening pending commit modal
   useEffect(() => {
@@ -2927,21 +2967,40 @@ export function NodeModal({
 
                     {/* Keywords Threshold */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
                         Keywords
+                        {leafConfigLoading && (
+                          <Loader2 size={10} className="animate-spin text-gray-400" />
+                        )}
                       </label>
                       <input
                         type="range"
-                        className="w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500 cursor-pointer"
+                        className={cn(
+                          "w-full h-1.5 rounded-sm bg-gray-200 accent-indigo-500",
+                          leafConfig ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                        )}
                         min="0"
                         max="1"
                         step="0.05"
                         value={keywordsThreshold}
-                        onChange={(e) => setKeywordsThreshold(parseFloat(e.target.value))}
+                        onChange={(e) => !leafConfig && setKeywordsThreshold(parseFloat(e.target.value))}
+                        disabled={!!leafConfig}
                       />
-                      <span className="text-[0.85rem] font-semibold text-gray-600 text-right">
-                        {keywordsThreshold.toFixed(2)}
-                      </span>
+                      <div className="flex items-center justify-between">
+                        {leafConfig && node?.data?.leaves?.[0] ? (
+                          <Link
+                            href={`/project/${routeProjectId}/leaf/${node.data.leaves[0].id}`}
+                            className="text-xs text-indigo-500 hover:text-indigo-600 hover:underline"
+                          >
+                            from Leaf
+                          </Link>
+                        ) : (
+                          <span />
+                        )}
+                        <span className="text-[0.85rem] font-semibold text-gray-600">
+                          {keywordsThreshold.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Curate Preview Status */}
