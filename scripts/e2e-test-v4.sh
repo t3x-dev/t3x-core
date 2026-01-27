@@ -47,12 +47,12 @@ HAS_OUTPUT=false
 # ========================================
 pass() {
     echo -e "   ${GREEN}✓${NC} $1"
-    ((PASSED++))
+    ((++PASSED))
 }
 
 fail() {
     echo -e "   ${RED}✗${NC} $1"
-    ((FAILED++))
+    ((++FAILED))
     echo -e "${RED}Test failed. Aborting.${NC}"
     cleanup
     exit 1
@@ -60,7 +60,7 @@ fail() {
 
 skip() {
     echo -e "   ${YELLOW}○${NC} $1"
-    ((SKIPPED++))
+    ((++SKIPPED))
 }
 
 info() {
