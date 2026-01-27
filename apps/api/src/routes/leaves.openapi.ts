@@ -11,30 +11,43 @@
  * - GET    /v1/projects/:projectId/leaves - List leaves by project
  * - PATCH  /v1/leaves/:id                 - Update leaf
  * - DELETE /v1/leaves/:id                 - Delete leaf
- * - POST   /v1/leaves/:id/generate        - Generate output (future)
- * - POST   /v1/leaves/:id/validate        - Validate output (future)
+ * - POST   /v1/leaves/:id/generate        - Generate output
+ * - POST   /v1/leaves/:id/validate        - Validate output
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { Leaf } from '@t3x/core';
+// Generation functions (provided by @t3x/core)
+import {
+  GenerationError,
+  generateLeafOutput,
+  isGenerationConfigured,
+  validateConstraintsExactOnly,
+} from '@t3x/core';
+// Storage functions (provided by @t3x/storage)
+import {
+  createLeaf,
+  deleteLeaf,
+  deletePinByRef,
+  findCommitV4ByHash,
+  findLeafById,
+  findLeavesByCommit,
+  findLeavesByProject,
+  updateLeaf,
+  updateLeafOutput,
+} from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreateLeafRequest,
+  GenerateLeafOutputRequest,
+  GenerateLeafOutputResponse,
   LeafResponse,
   UpdateLeafRequest,
+  ValidateLeafOutputRequest,
+  ValidateLeafOutputResponse,
 } from '../schemas/v4-contracts';
-// Storage functions (provided by @t3x/storage)
-import {
-  createLeaf,
-  findLeafById,
-  findLeavesByCommit,
-  findLeavesByProject,
-  updateLeaf,
-  deleteLeaf,
-  deletePinByRef,
-} from '@t3x/storage/pglite';
-import type { Leaf } from '@t3x/core';
 
 export const leavesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -429,8 +442,280 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
 // ============================================================
 // Generation & Validation Routes (GEN-* / VAL-* adds here)
 // ============================================================
-// TODO (GEN-3): POST /v1/leaves/:id/generate - Generate output
-// TODO (VAL-2): POST /v1/leaves/:id/validate - Validate output
+
+// POST /v1/leaves/:id/generate - Generate output
+// Note: Using contract schemas from v4-contracts.ts
+const generateLeafRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/generate',
+  tags: ['Leaves'],
+  summary: 'Generate leaf output',
+  description:
+    'Generates output for a leaf using the Claude API based on commit sentences and constraints.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: GenerateLeafOutputRequest,
+        },
+      },
+      required: false,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Output generated successfully',
+      content: {
+        'application/json': {
+          schema: GenerateLeafOutputResponse,
+        },
+      },
+    },
+    400: {
+      description: 'Generation not configured (ANTHROPIC_API_KEY not set)',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Leaf or commit not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    429: {
+      description: 'Rate limited by Anthropic API',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Generation failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// POST /v1/leaves/:id/generate - Generate output handler
+leavesRoutes.openapi(generateLeafRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  // Note: Request body per contract is empty object (future: additional options)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _body = c.req.valid('json');
+
+  try {
+    // Check if generation is configured
+    if (!isGenerationConfigured()) {
+      return errorResponse(
+        c,
+        'GENERATION_NOT_CONFIGURED',
+        'ANTHROPIC_API_KEY environment variable is not set'
+      );
+    }
+
+    const db = await getDB();
+
+    // Get leaf by ID
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // Get source commit by hash
+    const commit = await findCommitV4ByHash(db, leaf.commit_hash);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
+    }
+
+    // Call generateLeafOutput (uses defaults per contract)
+    const result = await generateLeafOutput({
+      commit,
+      leaf,
+    });
+
+    // Update leaf with output (storage sets generated_at automatically)
+    const updatedLeaf = await updateLeafOutput(db, id, result.output);
+
+    if (!updatedLeaf) {
+      return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
+    }
+
+    // Return response according to contract (v4-contracts.ts)
+    // Use the generated_at from the updated leaf for consistency
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          output: result.output,
+          generated_at: updatedLeaf.generated_at!,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof GenerationError) {
+      // Map generation error codes to HTTP status codes
+      switch (err.code) {
+        case 'RATE_LIMIT':
+          return errorResponse(c, 'RATE_LIMITED', err.message);
+        case 'AUTH_ERROR':
+          return errorResponse(c, 'AUTH_ERROR', err.message);
+        case 'NOT_CONFIGURED':
+          return errorResponse(c, 'GENERATION_NOT_CONFIGURED', err.message);
+        default:
+          return errorResponse(c, 'GENERATION_FAILED', err.message);
+      }
+    }
+
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GENERATION_FAILED', message);
+  }
+});
+
+// POST /v1/leaves/:id/validate - Validate output
+const validateLeafRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/validate',
+  tags: ['Leaves'],
+  summary: 'Validate leaf output',
+  description: 'Validates the generated output against the leaf constraints.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: ValidateLeafOutputRequest,
+        },
+      },
+      required: false,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Validation completed successfully',
+      content: {
+        'application/json': {
+          schema: ValidateLeafOutputResponse,
+        },
+      },
+    },
+    400: {
+      description: 'No output to validate',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Leaf not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Validation failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// POST /v1/leaves/:id/validate - Validate output handler
+leavesRoutes.openapi(validateLeafRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const useSemantic = body?.use_semantic ?? false;
+
+  try {
+    const db = await getDB();
+
+    // 1. Get leaf by ID
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // 2. Check if output exists
+    if (!leaf.output) {
+      return errorResponse(c, 'NO_OUTPUT', 'Leaf has no generated output to validate');
+    }
+
+    // 3. Handle empty constraints case
+    if (!leaf.constraints || leaf.constraints.length === 0) {
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            leaf: toApiLeaf(leaf),
+            validation: {
+              all_passed: true,
+              passed_count: 0,
+              failed_count: 0,
+            },
+          },
+        },
+        200
+      );
+    }
+
+    // 4. Run validation
+    let validationResult;
+    if (useSemantic) {
+      return errorResponse(
+        c,
+        'SEMANTIC_NOT_SUPPORTED',
+        'Semantic validation is not yet supported. Use exact matching only.'
+      );
+    } else {
+      validationResult = validateConstraintsExactOnly(leaf.output, leaf.constraints);
+    }
+
+    // 5. Update leaf with assertions
+    const updatedLeaf = await updateLeaf(db, id, {
+      assertions: validationResult.assertions,
+    });
+
+    if (!updatedLeaf) {
+      return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with assertions');
+    }
+
+    // 6. Return response
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          leaf: toApiLeaf(updatedLeaf),
+          validation: {
+            all_passed: validationResult.allPassed,
+            passed_count: validationResult.passedCount,
+            failed_count: validationResult.failedCount,
+          },
+        },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'VALIDATION_FAILED', message);
+  }
+});
 
 // DELETE /v1/leaves/:id - Delete leaf
 leavesRoutes.openapi(deleteLeafRoute, async (c) => {

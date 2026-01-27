@@ -347,6 +347,9 @@ importers:
       json-canonicalize:
         specifier: ^2.0.0
         version: 2.0.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
       undici:
         specifier: ^7.2.0
         version: 7.16.0

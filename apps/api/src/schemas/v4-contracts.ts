@@ -12,6 +12,7 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
+import { LEAF_TYPES } from '@t3x/core';
 import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -104,7 +105,10 @@ export const CreateCommitV4Request = z
     project_id: z.string().min(1, 'project_id is required'),
 
     // Optional fields
-    parents: z.array(z.string()).default([]).describe('Parent commit hashes (empty for root commit)'),
+    parents: z
+      .array(z.string())
+      .default([])
+      .describe('Parent commit hashes (empty for root commit)'),
     message: z.string().optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
     source_refs: z
@@ -175,16 +179,8 @@ export const ListCommitsV4Response = SuccessResponse(z.array(CommitV4Response));
 // Leaves API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const LeafTypeEnum = z.enum([
-  'deploy_agent',
-  'tweet',
-  'weibo',
-  'wechat',
-  'email',
-  'article',
-  'slack',
-  'eval',
-]);
+// Use LEAF_TYPES from @t3x/core as single source of truth
+const LeafTypeEnum = z.enum(LEAF_TYPES);
 
 // POST /v1/leaves
 export const CreateLeafRequest = z.object({
@@ -263,16 +259,18 @@ export const GenerateLeafOutputResponse = SuccessResponse(
 // POST /v1/leaves/:id/validate
 export const ValidateLeafOutputRequest = z
   .object({
-    // Future: custom validation options
+    use_semantic: z.boolean().default(false),
   })
   .optional();
 
 export const ValidateLeafOutputResponse = SuccessResponse(
   z.object({
-    assertions: z.array(AssertionSchema),
-    passed_count: z.number(),
-    failed_count: z.number(),
-    total_count: z.number(),
+    leaf: LeafResponse,
+    validation: z.object({
+      all_passed: z.boolean(),
+      passed_count: z.number(),
+      failed_count: z.number(),
+    }),
   })
 );
 
@@ -338,9 +336,7 @@ export const UpdateConversationContextRequest = z.object({
   selected_pin_ids: z.array(z.string()).nullable(), // null = use all pins
 });
 
-export const UpdateConversationContextResponse = SuccessResponse(
-  ConversationContextResponse
-);
+export const UpdateConversationContextResponse = SuccessResponse(ConversationContextResponse);
 
 // GET /v1/conversations/:id/memory
 export const GetConversationMemoryResponse = SuccessResponse(
@@ -370,16 +366,10 @@ export type LeafResponseType = z.infer<typeof LeafResponse>;
 
 export type CreatePinRequestType = z.infer<typeof CreatePinRequest>;
 export type PinResponseType = z.infer<typeof PinResponse>;
-export type UpdatePinAssertionsRequestType = z.infer<
-  typeof UpdatePinAssertionsRequest
->;
+export type UpdatePinAssertionsRequestType = z.infer<typeof UpdatePinAssertionsRequest>;
 
-export type UpdateConversationContextRequestType = z.infer<
-  typeof UpdateConversationContextRequest
->;
-export type ConversationContextResponseType = z.infer<
-  typeof ConversationContextResponse
->;
+export type UpdateConversationContextRequestType = z.infer<typeof UpdateConversationContextRequest>;
+export type ConversationContextResponseType = z.infer<typeof ConversationContextResponse>;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Merge V4 API

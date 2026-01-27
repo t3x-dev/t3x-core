@@ -213,16 +213,20 @@ export interface Assertion {
 
 /**
  * Leaf types represent different output formats/channels.
+ * Single source of truth - used by both TypeScript types and Zod schemas.
  */
-export type LeafType =
-  | 'deploy_agent'
-  | 'tweet'
-  | 'weibo'
-  | 'wechat'
-  | 'email'
-  | 'article'
-  | 'slack'
-  | 'eval';
+export const LEAF_TYPES = [
+  'deploy_agent',
+  'tweet',
+  'weibo',
+  'wechat',
+  'email',
+  'article',
+  'slack',
+  'eval',
+] as const;
+
+export type LeafType = (typeof LEAF_TYPES)[number];
 
 /**
  * A Leaf is an application of committed knowledge with specific constraints.
@@ -415,7 +419,7 @@ export type CommitV4FirstClass = Pick<
  * Input for creating a new CommitV4.
  */
 export interface CreateCommitV4Input {
-  parents: string[];
+  parents?: string[];
   author: CommitAuthor;
   sentences: Sentence[];
   project_id: string;
