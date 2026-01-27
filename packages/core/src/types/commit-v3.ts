@@ -1,6 +1,20 @@
 /**
  * CommitV3 Types
  *
+ * @deprecated V3 types are being replaced by V4 types.
+ * Use types from './v4' instead:
+ * - CommitV4 replaces CommitV3 (no constraints in commit)
+ * - Constraints now belong to Leaf, not Commit
+ * - For diff/merge, use DiffableSentence from '../diff/types'
+ *
+ * V3 类型已弃用，正在被 V4 类型取代。
+ * - CommitV4 取代 CommitV3（commit 不含 constraints）
+ * - Constraints 现属于 Leaf，而非 Commit
+ * - diff/merge 操作使用 DiffableSentence
+ *
+ * This file is kept for backward compatibility with existing commit builders.
+ * New code should use V4 types.
+ *
  * Defines the schema for CommitV3 with explicit separation between
  * first-class (hashed) and second-class (non-hashed) fields.
  */
