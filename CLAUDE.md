@@ -355,149 +355,149 @@ Pin = Source selection (for commit sources + conversation context)
 - Track A (Storage/Core): commits-v4.ts, leaves.ts, pins.ts queries, context builder
 - Track B (API/UI): /v1/leaves, /v1/pins routes, WebUI stores, components
 
-## 文档索引
+## Documentation Index
 
-新对话开始时，根据任务类型阅读相关文档：
+At the start of a new conversation, read relevant documentation based on task type:
 
-| 任务类型 | 应阅读的文档 |
-|---------|-------------|
-| V4 架构开发 | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
-| API 开发 | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts` |
-| WebUI 开发 | `apps/web/README.md`, `apps/web/src/store/` |
-| Core 算法 | `packages/core/README.md`, `packages/core/src/types/` |
-| Storage 层 | `packages/storage/README.md`, `packages/storage/src/schema-v4.ts` |
+| Task Type | Documentation to Read |
+|-----------|----------------------|
+| V4 Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
+| API Development | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts` |
+| WebUI Development | `apps/web/README.md`, `apps/web/src/store/` |
+| Core Algorithms | `packages/core/README.md`, `packages/core/src/types/` |
+| Storage Layer | `packages/storage/README.md`, `packages/storage/src/schema-v4.ts` |
 | Runner/Eval | `apps/runner/README.md` |
 
-## 开发工作流
+## Development Workflow
 
-用户可能不熟悉代码细节。Claude 应主动探索，用户只做决策：
+Users may not be familiar with code details. Claude should proactively explore; users only make decisions:
 
-1. **收到需求后**：先搜索相似代码/组件，找到现有模式
-2. **修改前**：分析影响面，列出会改动的文件/接口
-3. **有多种方案时**：列出选项，问用户选哪个
-4. **不确定时**：问具体的决策问题，而不是让用户解释代码
+1. **After receiving requirements**: First search for similar code/components, find existing patterns
+2. **Before modifying**: Analyze impact scope, list files/interfaces that will change
+3. **When multiple approaches exist**: List options, ask user which to choose
+4. **When uncertain**: Ask specific decision questions, rather than asking user to explain code
 
-用户只需要：描述目标 → 回答决策问题 → 验收结果
+User only needs to: Describe goal → Answer decision questions → Accept results
 
-### 代码复用原则
+### Code Reuse Principles
 
-**优先级：复用 > 修改 > 新建**
+**Priority: Reuse > Modify > Create New**
 
-1. **优先复用**：先搜索项目中是否已有类似功能/组件/工具函数，能复用就直接用
-2. **其次修改**：如果现有代码不完全匹配，考虑在原有版本上扩展或修改
-3. **最后新建**：只有当复用和修改都不可行时，才考虑新创造
+1. **Prefer reuse**: First search if similar functionality/components/utility functions already exist in the project; reuse directly if possible
+2. **Then modify**: If existing code doesn't fully match, consider extending or modifying the original version
+3. **Last resort - create new**: Only create new code when reuse and modification are not feasible
 
-在动手写代码前，必须先回答：项目里有没有类似的东西？
+Before writing code, must first answer: Does the project already have something similar?
 
-## 已知陷阱
+## Known Pitfalls
 
-| 问题 | 原因 | 正确做法 |
-|------|------|----------|
-| DELETE 路由 404 | `index.ts` import 了 `projects.ts` 而非 `projects.openapi.ts` | 检查 import 路径是否指向正确文件 |
-| API 调用失败 | 假设 API 在 Next.js 中（旧架构） | API 在 `apps/api`（端口 8000），WebUI 在 `apps/web`（端口 3000） |
-| 测试找不到模块 | 没有先 build 依赖包 | 先跑 `pnpm build:core && pnpm build:storage` |
-| Tailwind 样式不生效 | `globals.css` 中全局样式（如 `button { background: none }`）不在 `@layer` 中，优先级高于 Tailwind 工具类 | 全局 reset 样式必须放在 `@layer base` 中，或删除冲突属性 |
-| PGLite 重启后数据丢失 | 直接关闭终端或 `kill -9` 导致数据库非正常关闭，文件损坏 | 用 `pnpm stop:api` 优雅停止，或 `kill -TERM $(lsof -ti:8000)` |
+| Problem | Cause | Correct Approach |
+|---------|-------|------------------|
+| DELETE route 404 | `index.ts` imports `projects.ts` instead of `projects.openapi.ts` | Check if import path points to correct file |
+| API call fails | Assuming API is in Next.js (old architecture) | API is in `apps/api` (port 8000), WebUI is in `apps/web` (port 3000) |
+| Tests can't find module | Dependency packages not built first | Run `pnpm build:core && pnpm build:storage` first |
+| Tailwind styles not working | Global styles in `globals.css` (e.g., `button { background: none }`) not in `@layer`, takes precedence over Tailwind utility classes | Global reset styles must be in `@layer base`, or remove conflicting properties |
+| PGLite data lost after restart | Closing terminal directly or `kill -9` causes improper database shutdown, file corruption | Use `pnpm stop:api` for graceful stop, or `kill -TERM $(lsof -ti:8000)` |
 
-## 禁止事项
+## Prohibited Actions
 
-- **不要猜测代码位置**：先用 Grep/Glob 搜索
-- **不要假设架构**：2025-12 迁移后 API 和 WebUI 分离
-- **不要急于修改**：先读代码、理解上下文、确认影响面
-- **不要跳过验证**：改完必须跑相关测试
+- **Don't guess code locations**: Use Grep/Glob to search first
+- **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
+- **Don't rush to modify**: Read code first, understand context, confirm impact scope
+- **Don't skip verification**: Must run related tests after changes
 
-## Commit Message 规范
+## Commit Message Standards
 
-项目使用 Conventional Commits 格式：
+Project uses Conventional Commits format:
 
 ```
 <type>(<scope>): <description> [Track].(#issue)
 
-# 示例
+# Examples
 feat(api): add V4 leaves endpoint [B1].(#123)
 fix(web): resolve canvas node drag issue [B2].(#124)
 test(storage): add commits-v4 query tests [A1].(#125)
 docs: update CLAUDE.md with workflow rules
 ```
 
-| type | 用途 |
-|------|------|
-| feat | 新功能 |
-| fix | Bug 修复 |
-| test | 测试相关 |
-| docs | 文档更新 |
-| refactor | 重构（不改变行为） |
-| chore | 构建/工具链变更 |
+| type | Purpose |
+|------|---------|
+| feat | New feature |
+| fix | Bug fix |
+| test | Test related |
+| docs | Documentation update |
+| refactor | Refactoring (no behavior change) |
+| chore | Build/toolchain changes |
 
-Track 标记：`[A1]`, `[A2]` = Track A (Storage/Core)，`[B1]`, `[B2]` = Track B (API/UI)
+Track markers: `[A1]`, `[A2]` = Track A (Storage/Core), `[B1]`, `[B2]` = Track B (API/UI)
 
-## 快速调试命令
+## Quick Debug Commands
 
 ```bash
-# 检查端口占用
-lsof -i :8000                    # API 端口
-lsof -i :3000                    # WebUI 端口
+# Check port usage
+lsof -i :8000                    # API port
+lsof -i :3000                    # WebUI port
 
-# 查看 API 日志（实时）
+# View API logs (real-time)
 pnpm dev:api 2>&1 | tee api.log
 
-# 数据库状态（PGLite 文件）
+# Database status (PGLite files)
 ls -la .t3x/database/
 
-# 清理重建
+# Clean rebuild
 pnpm clean && pnpm install && pnpm build
 
-# 单独测试一个文件
+# Test a single file
 cd apps/api && pnpm vitest run src/__tests__/leaves.test.ts
 
-# 测试特定用例
+# Test specific case
 cd apps/api && pnpm vitest run -t "should create leaf"
 ```
 
-## 依赖构建顺序
+## Dependency Build Order
 
-修改底层包后，需要重新构建依赖链：
+After modifying lower-level packages, rebuild the dependency chain:
 
 ```
-@t3x/core 改动后：
+After @t3x/core changes:
   pnpm build:core && pnpm build:storage && pnpm build:api
 
-@t3x/storage 改动后：
+After @t3x/storage changes:
   pnpm build:storage && pnpm build:api
 
-apps/api 改动后：
-  pnpm build:api（或直接 pnpm dev:api 热重载）
+After apps/api changes:
+  pnpm build:api (or just pnpm dev:api for hot reload)
 ```
 
-**测试依赖 build**：跑测试前确保相关包已构建
+**Tests depend on build**: Ensure related packages are built before running tests
 
-## PR 提交检查清单
+## PR Submission Checklist
 
-提交 PR 前确认：
+Confirm before submitting PR:
 
-- [ ] `pnpm check` 通过（lint + format）
-- [ ] 相关测试通过（`pnpm test:xxx`）
-- [ ] 新增代码有对应测试
-- [ ] 没有引入 `console.log`（调试用的删掉）
-- [ ] 类型正确（没有 `any` 逃逸）
-- [ ] API 变更更新了 OpenAPI schema
-- [ ] 破坏性变更在 PR 描述中说明
+- [ ] `pnpm check` passes (lint + format)
+- [ ] Related tests pass (`pnpm test:xxx`)
+- [ ] New code has corresponding tests
+- [ ] No `console.log` introduced (remove debug logs)
+- [ ] Types are correct (no `any` escapes)
+- [ ] API changes updated OpenAPI schema
+- [ ] Breaking changes documented in PR description
 
-## 常用搜索模式
+## Common Search Patterns
 
 ```bash
-# 找某个 API 路由的实现
+# Find API route implementation
 Grep: "router.post.*leaves"  glob: "apps/api/**/*.ts"
 
-# 找某个类型的定义
+# Find type definition
 Grep: "interface.*Leaf"  glob: "packages/core/**/*.ts"
 
-# 找某个函数的所有调用
-Grep: "createLeaf\\("  （不限 glob）
+# Find all calls to a function
+Grep: "createLeaf\\("  (no glob restriction)
 
-# 找数据库 schema
+# Find database schema
 Grep: "export const.*Table"  glob: "packages/storage/**/*.ts"
 
-# 找 Zustand store
+# Find Zustand store
 Grep: "create\\(.*\\).*=>"  glob: "apps/web/src/store/**/*.ts"
 ```
