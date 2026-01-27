@@ -12,9 +12,15 @@
  * - No constraint handling (constraints belong to Leaf)
  */
 
+import { sha256 } from '../common/hash';
 import type { DiffableSentence } from '../diff/types';
 import { computeCommitV4Hash } from '../storage/hash-v4';
-import type { CommitAuthor, CommitV4, Sentence as SentenceV4 } from '../types/v4';
+import {
+  type CommitAuthor,
+  type CommitV4,
+  ID_PREFIXES,
+  type Sentence as SentenceV4,
+} from '../types/v4';
 import type { Merge2WayResult } from './types';
 
 /**
@@ -31,7 +37,7 @@ import type { Merge2WayResult } from './types';
  * Creates a new commit with:
  * - parents: [sourceHash, targetHash]
  * - content: merged sentences (no constraints - they belong to Leaf)
- * - New IDs: sentences get 'm1', 'm2', ...
+ * - New IDs: deterministic V4 format 's_' + sha256(parentHashes + originalId).slice(0,12)
  *
  * @throws Error if any similarPair has no resolution
  *
@@ -59,12 +65,14 @@ export function executeMerge(
   projectId: string
 ): CommitV4 {
   const sentences: SentenceV4[] = [];
-  let sentenceId = 1;
 
-  // Helper to convert DiffableSentence to SentenceV4 with new ID
-  // 辅助函数：将 DiffableSentence 转换为 SentenceV4，使用新ID
+  // Helper to convert DiffableSentence to SentenceV4 with deterministic V4 ID
+  // 辅助函数：将 DiffableSentence 转换为 SentenceV4，使用确定性 V4 格式 ID
+  // ID = s_ + sha256(sourceHash:targetHash:originalId).slice(0,12)
+  // Benefits: deterministic, traceable, unique within/across merges
   const addSentence = (s: DiffableSentence) => {
-    const newId = `m${sentenceId++}`;
+    const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
+    const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
     sentences.push({
       id: newId,
       text: s.text,

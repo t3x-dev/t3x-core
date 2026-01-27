@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
+import { sha256 } from '../../common/hash';
 import type { DiffableSentence } from '../../diff/types';
 import { executeMerge, prepareMerge } from '../../merge';
 import type { CommitAuthor } from '../../types/v4';
@@ -264,7 +265,7 @@ describe('executeMerge', () => {
     expect(result.content.sentences[0].text).toBe('Keep me');
   });
 
-  test('regenerates sentence IDs', () => {
+  test('regenerates sentence IDs with deterministic V4 format', () => {
     const prepared = {
       identical: [createSentence('old-id-1', 'Keep me')],
       similarPairs: [],
@@ -274,7 +275,12 @@ describe('executeMerge', () => {
 
     const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
 
-    expect(result.content.sentences[0].id).toBe('m1');
+    // Verify V4 format: s_ prefix + 12 hex chars
+    expect(result.content.sentences[0].id).toMatch(/^s_[a-f0-9]{12}$/);
+
+    // Verify deterministic: same inputs → same ID
+    const expectedId = `s_${sha256('a:b:old-id-1').slice(0, 12)}`;
+    expect(result.content.sentences[0].id).toBe(expectedId);
   });
 
   test('merge commit hash is deterministic (same inputs → same hash)', () => {
