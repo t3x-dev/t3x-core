@@ -12,8 +12,6 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 
-// Common utilities
-export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
 // Commit Builders
 export {
   buildConstraints,
@@ -23,41 +21,45 @@ export {
   getLocalAuthor,
   getWebAuthor,
 } from './commit';
-// CommitV3 types
-export type {
-  CommitAuthor,
-  CommitContent,
-  CommitV3,
-  Constraint,
-  ExcludeConstraint,
-  RequireConstraint,
-  Sentence,
-  SentenceSource,
-} from './types';
+// Common utilities
+export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// ═══════════════════════════════════════════════════════════════════════════
+// Context Builder (V4)
+// @see docs/specification/memory-pin-system-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  buildConversationContext,
+  buildLeafContext,
+  buildMemoryFromPins,
+  type ContextBuildInput,
+  type ConversationData,
+  estimateTokens,
+  filterActivePins,
+} from './context';
 // Diff Engine
 export {
   buildSimilarityMatrix,
-  calculateDiffStats,
   type CommitDiff,
+  calculateDiffStats,
   createDiffEngine,
   DiffEngine,
   type DiffEngineConfig,
-  diffCommits,
   type DiffResult,
   type DiffSegment,
   type DiffStats,
   DiffType,
+  diffCommits,
   hungarian,
-  jaccard,
   JACCARD_THRESHOLD,
+  jaccard,
   lcs,
   type MatchPair,
   type SegmentDiff,
   type SegmentMatch,
   type SentencePair,
   tokenize,
-  wordDiff,
   type WordDiffSegment,
+  wordDiff,
 } from './diff';
 // Extractors (Ring 1/2/3)
 export {
@@ -90,6 +92,38 @@ export {
   type RingOutput,
   type Segment,
 } from './extractors';
+// ═══════════════════════════════════════════════════════════════════════════
+// Leaf Module (Generation + Validation)
+// @see docs/plans/parallel-dev-guidelines.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  // Types
+  type BuildPromptOptions,
+  type BuiltPrompt,
+  // Generation (GEN-1)
+  buildLeafPrompt,
+  buildSystemPrompt,
+  type ConstraintCheckResult,
+  DEFAULT_MODEL,
+  DEFAULT_TEMPERATURE,
+  formatConstraints,
+  type GenerateOptions,
+  type GenerateResult,
+  GenerationError,
+  // Generation (GEN-2)
+  generateLeafOutput,
+  getTypeInstructions,
+  isGenerationConfigured,
+  SEMANTIC_EXCLUDE_THRESHOLD,
+  // Constants
+  SEMANTIC_REQUIRE_THRESHOLD,
+  type ValidateOptions,
+  type ValidationResult,
+  // Validation (VAL-1, VAL-2)
+  validateConstraints,
+  validateConstraintsExactOnly,
+  generateAssertionId,
+} from './leaf';
 // LLM Provider (interface)
 export {
   type LLMGenerateOptions,
@@ -123,9 +157,9 @@ export {
   type EmbeddingProvider,
   EmbeddingProviderError,
   type GoogleAIEmbeddingConfig,
-  type GoogleCloudNLPConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
+  type GoogleCloudNLPConfig,
   // NLP Provider (implementations)
   GoogleCloudNLPProvider,
   type NLPAnalysis,
@@ -138,95 +172,62 @@ export {
   normalizePosTag,
   POS_TAG_MAPPING,
 } from './providers';
-
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 export * from './storage';
-
+// CommitV3 types
+export type {
+  CommitAuthor,
+  CommitContent,
+  CommitV3,
+  Constraint,
+  ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
+  SentenceSource,
+} from './types';
 // ═══════════════════════════════════════════════════════════════════════════
 // V4 Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
-  // ID Prefixes
-  ID_PREFIXES,
-  // Sentence
-  type Sentence as SentenceV4,
-  type SentenceSourceRef,
+  // Assertion
+  type Assertion,
+  // Built Context
+  type BuiltContext,
+  type CommitAuthor as CommitAuthorV4,
+  type CommitSourceRef,
   // CommitV4 (pure knowledge, no constraints)
   type CommitV4,
   type CommitV4Content,
-  type CommitAuthor as CommitAuthorV4,
-  type CommitSourceRef,
   // Constraint (now belongs to Leaf)
   type Constraint as ConstraintV4,
-  type RequireConstraint as RequireConstraintV4,
-  type ExcludeConstraint as ExcludeConstraintV4,
-  // Assertion
-  type Assertion,
-  // Leaf (owns constraints)
-  type Leaf,
-  type LeafType,
-  type LeafConfig,
-  // Pin (source selection)
-  type Pin,
-  type PinType,
+  type ContextSource,
   // Conversation Context
   type ConversationContext,
-  // Built Context
-  type BuiltContext,
-  type ContextSource,
   // Input types
   type CreateCommitV4Input,
   type CreateLeafInput,
   type CreatePinInput,
+  type ExcludeConstraint as ExcludeConstraintV4,
+  // ID Prefixes
+  ID_PREFIXES,
+  // Leaf (owns constraints)
+  type Leaf,
+  type LeafConfig,
+  type LeafType,
+  LEAF_TYPES,
+  type MergeV4Candidate,
   // Merge V4 types
   type MergeV4Result,
   type MergeV4SimilarPair,
-  type MergeV4Candidate,
+  // Pin (source selection)
+  type Pin,
+  type PinType,
+  type RequireConstraint as RequireConstraintV4,
+  // Sentence
+  type Sentence as SentenceV4,
+  type SentenceSourceRef,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Context Builder (V4)
-// @see docs/specification/memory-pin-system-design.md
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  buildConversationContext,
-  buildLeafContext,
-  buildMemoryFromPins,
-  type ContextBuildInput,
-  type ConversationData,
-  estimateTokens,
-  filterActivePins,
-} from './context';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Leaf Module (Generation + Validation)
-// @see docs/plans/parallel-dev-guidelines.md
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  // Types
-  type BuildPromptOptions,
-  type BuiltPrompt,
-  type GenerateOptions,
-  type GenerateResult,
-  type ValidateOptions,
-  type ValidationResult,
-  type ConstraintCheckResult,
-  // Constants
-  SEMANTIC_REQUIRE_THRESHOLD,
-  SEMANTIC_EXCLUDE_THRESHOLD,
-  DEFAULT_MODEL,
-  DEFAULT_TEMPERATURE,
-  // Generation (GEN-1)
-  buildLeafPrompt,
-  buildSystemPrompt,
-  getTypeInstructions,
-  formatConstraints,
-  // Generation (GEN-2)
-  generateLeafOutput,
-  isGenerationConfigured,
-  GenerationError,
-} from './leaf';
