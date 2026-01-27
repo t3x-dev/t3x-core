@@ -42,6 +42,7 @@ export {
   type CommitDiff,
   calculateDiffStats,
   createDiffEngine,
+  type DiffableSentence,
   DiffEngine,
   type DiffEngineConfig,
   type DiffResult,
@@ -110,6 +111,7 @@ export {
   type GenerateOptions,
   type GenerateResult,
   GenerationError,
+  generateAssertionId,
   // Generation (GEN-2)
   generateLeafOutput,
   getTypeInstructions,
@@ -122,7 +124,6 @@ export {
   // Validation (VAL-1, VAL-2)
   validateConstraints,
   validateConstraintsExactOnly,
-  generateAssertionId,
 } from './leaf';
 // LLM Provider (interface)
 export {
@@ -213,11 +214,11 @@ export {
   type ExcludeConstraint as ExcludeConstraintV4,
   // ID Prefixes
   ID_PREFIXES,
+  LEAF_TYPES,
   // Leaf (owns constraints)
   type Leaf,
   type LeafConfig,
   type LeafType,
-  LEAF_TYPES,
   type MergeV4Candidate,
   // Merge V4 types
   type MergeV4Result,

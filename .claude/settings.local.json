@@ -135,7 +135,8 @@
       "Bash(do echo '=== $branch ===' git show $branch:CLAUDE.md)",
       "Bash(pnpm tsc:*)",
       "Bash(pnpm vitest run:*)",
-      "Bash(pnpm check:*)"
+      "Bash(pnpm check:*)",
+      "Bash(pnpm turbo run build:*)"
     ],
     "deny": [],
     "ask": []

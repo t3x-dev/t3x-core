@@ -104,6 +104,46 @@ describe('prepareMerge', () => {
     expect(result.onlyInSource).toHaveLength(1);
     expect(result.onlyInTarget).toHaveLength(1);
   });
+
+  // V4 type contract tests
+  test('DiffableSentence only requires id and text (minimal interface)', () => {
+    // V4 契约：DiffableSentence 只需要 id 和 text
+    const minimal: DiffableSentence = { id: 's1', text: 'Test' };
+    const result = prepareMerge([minimal], []);
+
+    expect(result.onlyInSource).toHaveLength(1);
+    expect(result.onlyInSource[0].sentence).toEqual(minimal);
+  });
+
+  test('MergeCandidate has no constraints field (V4)', () => {
+    // V4 契约：MergeCandidate 不含 constraints 字段
+    const source: DiffableSentence[] = [createSentence('s1', 'Unique source sentence here')];
+    const target: DiffableSentence[] = [];
+
+    const result = prepareMerge(source, target);
+
+    expect(result.onlyInSource).toHaveLength(1);
+    const candidate = result.onlyInSource[0];
+    expect(candidate).toHaveProperty('sentence');
+    expect(candidate).toHaveProperty('keep');
+    expect(candidate).not.toHaveProperty('constraints');
+  });
+
+  test('MergeSimilarPair has no constraint fields (V4)', () => {
+    // V4 契约：MergeSimilarPair 不含 sourceConstraints/targetConstraints 字段
+    const source: DiffableSentence[] = [createSentence('s1', 'Budget is $3000')];
+    const target: DiffableSentence[] = [createSentence('t1', 'Budget is $5000')];
+
+    const result = prepareMerge(source, target);
+
+    expect(result.similarPairs).toHaveLength(1);
+    const pair = result.similarPairs[0];
+    expect(pair).toHaveProperty('source');
+    expect(pair).toHaveProperty('target');
+    expect(pair).toHaveProperty('wordDiff');
+    expect(pair).not.toHaveProperty('sourceConstraints');
+    expect(pair).not.toHaveProperty('targetConstraints');
+  });
 });
 
 // ============================================================================
