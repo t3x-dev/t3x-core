@@ -1,14 +1,16 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Check, X, Plus, Trash2, Play, CheckCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Check, X, Trash2, Play, CheckCircle, Settings } from 'lucide-react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { getLeaf, updateLeaf } from '@/lib/api';
-import type { Leaf, Constraint, Assertion } from '@/lib/api';
+import type { Leaf, Constraint, Assertion, LeafConfig } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+const DEFAULT_KEYWORD_THRESHOLD = 0.6;
 
 export default function LeafDetailPage() {
   const params = useParams();
@@ -61,6 +63,21 @@ export default function LeafDetailPage() {
     if (!leaf) return;
     const updated = leaf.constraints.filter(c => c.id !== constraintId);
     handleUpdateConstraints(updated);
+  };
+
+  // Handle config update
+  const handleUpdateConfig = async (config: LeafConfig) => {
+    if (!leaf) return;
+
+    try {
+      setSaving(true);
+      const updated = await updateLeaf(leafId, { config });
+      setLeaf(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to update config'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -135,6 +152,13 @@ export default function LeafDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
+          {/* Config Section */}
+          <ConfigSection
+            config={leaf.config}
+            onUpdateConfig={handleUpdateConfig}
+            saving={saving}
+          />
+
           {/* Constraints Section */}
           <ConstraintsSection
             constraints={leaf.constraints}
@@ -153,6 +177,99 @@ export default function LeafDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================================================
+// Config Section
+// ============================================================================
+
+interface ConfigSectionProps {
+  config: LeafConfig;
+  onUpdateConfig: (config: LeafConfig) => Promise<void>;
+  saving: boolean;
+}
+
+function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
+  const keywordThreshold = typeof config.keyword_threshold === 'number'
+    ? config.keyword_threshold
+    : DEFAULT_KEYWORD_THRESHOLD;
+
+  const [localThreshold, setLocalThreshold] = useState(keywordThreshold);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync local state when config changes from server
+  useEffect(() => {
+    const serverThreshold = typeof config.keyword_threshold === 'number'
+      ? config.keyword_threshold
+      : DEFAULT_KEYWORD_THRESHOLD;
+    setLocalThreshold(serverThreshold);
+  }, [config.keyword_threshold]);
+
+  // Debounced update handler
+  const handleThresholdChange = useCallback((value: number) => {
+    setLocalThreshold(value);
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set new debounced update
+    debounceTimerRef.current = setTimeout(() => {
+      onUpdateConfig({ ...config, keyword_threshold: value });
+    }, 300);
+  }, [config, onUpdateConfig]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Config</h2>
+        </div>
+        {saving && (
+          <span className="text-xs text-muted-foreground">Saving...</span>
+        )}
+      </div>
+      <div className="p-4 space-y-4">
+        {/* Keywords Threshold */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label htmlFor="keyword-threshold" className="text-sm font-medium text-muted-foreground">
+              Keywords Threshold
+            </label>
+            <span className="text-sm font-semibold tabular-nums">
+              {localThreshold.toFixed(2)}
+            </span>
+          </div>
+          <input
+            id="keyword-threshold"
+            type="range"
+            className="w-full h-2 rounded-lg bg-muted accent-primary cursor-pointer"
+            min="0"
+            max="1"
+            step="0.05"
+            value={localThreshold}
+            onChange={(e) => handleThresholdChange(parseFloat(e.target.value))}
+            disabled={saving}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Less sensitive</span>
+            <span>More sensitive</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
