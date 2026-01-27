@@ -403,6 +403,7 @@ Before writing code, must first answer: Does the project already have something 
 
 - **Don't commit without asking**: Always ask the user for confirmation before running `git commit` or `git push`
 - **Don't add Co-Authored-By**: Never include `Co-Authored-By` tag or Claude's email in commit messages
+- **Use English only**: All commit messages, PR titles, and PR descriptions must be in English
 - **Don't guess code locations**: Use Grep/Glob to search first
 - **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
 - **Don't rush to modify**: Read code first, understand context, confirm impact scope
