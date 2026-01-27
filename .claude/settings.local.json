@@ -136,7 +136,8 @@
       "Bash(pnpm tsc:*)",
       "Bash(pnpm vitest run:*)",
       "Bash(pnpm check:*)",
-      "Bash(pnpm turbo run build:*)"
+      "Bash(pnpm turbo run build:*)",
+      "Bash(pnpm next build:*)"
     ],
     "deny": [],
     "ask": []
