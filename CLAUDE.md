@@ -401,6 +401,7 @@ Before writing code, must first answer: Does the project already have something 
 
 ## Prohibited Actions
 
+- **Don't commit without asking**: Always ask the user for confirmation before running `git commit` or `git push`
 - **Don't guess code locations**: Use Grep/Glob to search first
 - **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
 - **Don't rush to modify**: Read code first, understand context, confirm impact scope
