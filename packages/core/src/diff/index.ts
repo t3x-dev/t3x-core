@@ -13,6 +13,7 @@ export {
 export {
   calculateDiffStats,
   type CommitDiff,
+  type DiffableSentence,
   type DiffResult,
   type DiffSegment,
   type DiffStats,
