@@ -43,6 +43,10 @@ export const ErrorCodes = {
   LEAF_NOT_FOUND: 'LEAF_NOT_FOUND',
   PIN_NOT_FOUND: 'PIN_NOT_FOUND',
   CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+  HISTORY_NOT_FOUND: 'HISTORY_NOT_FOUND',
+
+  // Mismatch errors
+  HISTORY_MISMATCH: 'HISTORY_MISMATCH',
 
   // Conflict errors
   DUPLICATE_PIN: 'DUPLICATE_PIN',
@@ -102,6 +106,10 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   LEAF_NOT_FOUND: 404,
   PIN_NOT_FOUND: 404,
   CONVERSATION_NOT_FOUND: 404,
+  HISTORY_NOT_FOUND: 404,
+
+  // 400 Bad Request (Mismatch)
+  HISTORY_MISMATCH: 400,
 
   // 409 Conflict
   DUPLICATE_PIN: 409,

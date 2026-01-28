@@ -275,6 +275,48 @@ export const ValidateLeafOutputResponse = SuccessResponse(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Leaf History API
+// ═══════════════════════════════════════════════════════════════════════════
+
+// LeafConfig schema (matches LeafConfig type from @t3x/core)
+const LeafConfigSchema = z
+  .object({
+    prompt_template: z.string().optional(),
+    model: z.string().optional(),
+    max_tokens: z.number().optional(),
+  })
+  .passthrough();
+
+// GET /v1/leaves/:id/history
+export const LeafHistoryResponse = z.object({
+  id: z.string(), // lhist_xxx
+  leaf_id: z.string(), // 关联的 Leaf ID
+  output: z.string(), // 生成的输出内容
+  config: LeafConfigSchema, // 生成时使用的配置
+  model: z.string(), // 使用的 LLM 模型
+  generated_at: z.string(), // 生成时间 ISO8601
+  created_by: z.string().nullable(), // 触发生成的用户/系统
+});
+
+export const GetLeafHistoryResponse = SuccessResponse(LeafHistoryResponse);
+export const ListLeafHistoryResponse = SuccessResponse(z.array(LeafHistoryResponse));
+
+// POST /v1/leaves/:id/restore
+export const RestoreLeafOutputRequest = z.object({
+  history_id: z.string(), // 要恢复的历史记录 ID
+});
+
+export const RestoreLeafOutputResponse = SuccessResponse(LeafResponse);
+
+// DELETE /v1/leaf-history/:id
+export const DeleteLeafHistoryResponse = SuccessResponse(
+  z.object({
+    deleted: z.literal(true),
+    id: z.string(),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -423,3 +465,6 @@ export const ExecuteMergeV4Response = SuccessResponse(CommitV4Response);
 export type MergeV4ResultType = z.infer<typeof MergeV4ResultSchema>;
 export type PrepareMergeV4RequestType = z.infer<typeof PrepareMergeV4Request>;
 export type ExecuteMergeV4RequestType = z.infer<typeof ExecuteMergeV4Request>;
+
+export type LeafHistoryResponseType = z.infer<typeof LeafHistoryResponse>;
+export type RestoreLeafOutputRequestType = z.infer<typeof RestoreLeafOutputRequest>;
