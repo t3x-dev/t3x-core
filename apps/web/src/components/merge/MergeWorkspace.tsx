@@ -131,6 +131,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
             onResolvePair={resolvePair}
             onToggleKeep={toggleKeep}
             onSourceClick={openContext}
+            sourceBranch={sourceBranch || 'A'}
+            targetBranch={targetBranch || 'B'}
           />
         </div>
 
