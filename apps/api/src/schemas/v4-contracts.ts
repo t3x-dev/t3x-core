@@ -317,6 +317,52 @@ export const DeleteLeafHistoryResponse = SuccessResponse(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Batch Generation API
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /v1/commits/{hash}/leaves/batch
+// 单个 leaf 的配置（批量创建时使用）
+export const BatchLeafConfig = z.object({
+  type: LeafTypeEnum, // leaf 类型 (tweet, weibo, email 等)
+  title: z.string().optional(), // 可选标题
+  constraints: z.array(ConstraintSchema).default([]), // 约束条件
+  config: LeafConfigSchema.default({}), // 生成配置
+});
+
+// 批量生成请求
+export const BatchGenerateRequest = z.object({
+  project_id: z.string().min(1), // 项目 ID
+  leaves: z
+    .array(BatchLeafConfig)
+    .min(1, 'At least one leaf config is required')
+    .max(10, 'Maximum 10 leaves per batch'), // leaf 配置数组 (1-10 个)
+  skip_generation: z.boolean().default(false), // 是否跳过生成，仅创建 leaves
+});
+
+// 单个 leaf 的结果
+export const BatchLeafResult = z.object({
+  leaf: LeafResponse.nullable(), // 成功时返回 leaf 数据
+  error: z
+    .object({
+      code: z.string(), // 错误码
+      message: z.string(), // 错误信息
+    })
+    .nullable(), // 失败时返回错误信息
+});
+
+// 批量生成响应
+export const BatchGenerateResponse = SuccessResponse(
+  z.object({
+    results: z.array(BatchLeafResult), // 每个 leaf 的结果
+    summary: z.object({
+      total: z.number(), // 总数
+      succeeded: z.number(), // 成功数
+      failed: z.number(), // 失败数
+    }),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -468,3 +514,8 @@ export type ExecuteMergeV4RequestType = z.infer<typeof ExecuteMergeV4Request>;
 
 export type LeafHistoryResponseType = z.infer<typeof LeafHistoryResponse>;
 export type RestoreLeafOutputRequestType = z.infer<typeof RestoreLeafOutputRequest>;
+
+export type BatchLeafConfigType = z.infer<typeof BatchLeafConfig>;
+export type BatchGenerateRequestType = z.infer<typeof BatchGenerateRequest>;
+export type BatchLeafResultType = z.infer<typeof BatchLeafResult>;
+export type BatchGenerateResponseType = z.infer<typeof BatchGenerateResponse>;
