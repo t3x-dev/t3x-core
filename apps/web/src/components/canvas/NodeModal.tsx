@@ -1884,50 +1884,31 @@ export function NodeModal({
         }
       }
 
-      // 7. Create Commit (V3 format for merge compatibility)
+      // 7. Create Commit (V4 format - pure knowledge, no constraints)
       // Get the current node position to save with the commit
       const currentPosition = node?.position;
 
-      // Build V3 commit if we have sentence data, otherwise fall back to V2
+      // Build V4 commit if we have sentence data
       let commitHash: string;
 
       if (pendingSource?.sentences && pendingSource.sentences.length > 0) {
-        // V3 commit: Build sentences with source references
-        const v3Sentences: api.CommitV3Sentence[] = pendingSource.sentences.map((sentence) => ({
+        // V4 commit: Build sentences with source references
+        // Note: V4 sentences use source_ref instead of source, and don't include char offsets
+        const v4Sentences: api.CommitV4Sentence[] = pendingSource.sentences.map((sentence) => ({
           id: sentence.id,
           text: sentence.text,
-          source: {
-            turn_hash: endTurnHash, // Use end turn as source reference
-            start_char: sentence.start,
-            end_char: sentence.end,
-          },
+          source_ref: data.conversationId ? {
+            conversation_id: data.conversationId,
+            turn_hash: endTurnHash,
+          } : undefined,
         }));
 
-        // Build constraints from mustHave/mustntHave
-        const v3Constraints: api.CommitV3Constraint[] = [];
-        let constraintIdx = 0;
+        // Note: Constraints are now stored in Leaf, not Commit (V4 architecture)
+        // mustHave/mustntHave will be passed to Leaf creation when user creates a leaf
 
-        mustHave.forEach((value) => {
-          v3Constraints.push({
-            id: `c${constraintIdx++}`,
-            type: 'require',
-            value,
-            match: 'exact',
-          });
-        });
-
-        mustntHave.forEach((value) => {
-          v3Constraints.push({
-            id: `c${constraintIdx++}`,
-            type: 'exclude',
-            value,
-            match: 'exact',
-          });
-        });
-
-        console.log('[handleCommit] Creating V3 commit:', {
-          sentenceCount: v3Sentences.length,
-          constraintCount: v3Constraints.length,
+        console.log('[handleCommit] Creating V4 commit:', {
+          sentenceCount: v4Sentences.length,
+          // Constraints removed from commit - they go to Leaf now
         });
 
         // Determine parent commits for the DAG
@@ -1937,23 +1918,24 @@ export function NodeModal({
           parentCommits.push(data.sourceCommitHash);
         }
 
-        const commitV3 = await api.createCommitV3(
+        const commitV4 = await api.createCommitV4(
           projectId,
-          {
-            sentences: v3Sentences,
-            constraints: v3Constraints.length > 0 ? v3Constraints : undefined,
-          },
+          v4Sentences,
           {
             branch,
             message: data.title,
             parents: parentCommits,
             position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
+            source_refs: data.conversationId ? [{
+              type: 'conversation',
+              id: data.conversationId,
+            }] : undefined,
           }
         );
 
-        commitHash = commitV3.hash;
+        commitHash = commitV4.hash;
       } else {
-        // V3-only: sentence data is required
+        // V4-only: sentence data is required
         throw new Error('Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.');
       }
 
