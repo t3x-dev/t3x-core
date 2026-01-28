@@ -1,13 +1,13 @@
 'use client';
 
+import { ArrowLeft, Check, CheckCircle, Loader2, Play, Settings, Trash2, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, X, Trash2, Play, CheckCircle, Settings } from 'lucide-react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
-import { getLeaf, updateLeaf } from '@/lib/api';
-import type { Leaf, Constraint, Assertion, LeafConfig } from '@/lib/api';
+import type { Assertion, Constraint, Leaf, LeafConfig } from '@/lib/api';
+import { ApiError, generateLeafOutput, getLeaf, updateLeaf } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
@@ -22,6 +22,8 @@ export default function LeafDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   // Load leaf data
   useEffect(() => {
@@ -61,7 +63,7 @@ export default function LeafDetailPage() {
   // Remove constraint
   const handleRemoveConstraint = (constraintId: string) => {
     if (!leaf) return;
-    const updated = leaf.constraints.filter(c => c.id !== constraintId);
+    const updated = leaf.constraints.filter((c) => c.id !== constraintId);
     handleUpdateConstraints(updated);
   };
 
@@ -77,6 +79,33 @@ export default function LeafDetailPage() {
       setError(err instanceof Error ? err : new Error('Failed to update config'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Handle generate output
+  const handleGenerate = async () => {
+    if (!leaf) return;
+
+    setIsGenerating(true);
+    setGenerateError(null);
+
+    try {
+      const result = await generateLeafOutput(leafId);
+      // Update local leaf data with generated output
+      setLeaf((prev) =>
+        prev
+          ? {
+              ...prev,
+              output: result.output,
+              generated_at: result.generated_at,
+            }
+          : prev
+      );
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Generation failed';
+      setGenerateError(message);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -98,7 +127,7 @@ export default function LeafDetailPage() {
             setLoading(true);
             getLeaf(leafId)
               .then(setLeaf)
-              .catch(err => setError(err instanceof Error ? err : new Error(String(err))))
+              .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
               .finally(() => setLoading(false));
           }}
         />
@@ -119,11 +148,7 @@ export default function LeafDetailPage() {
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-4">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push(`/project/${projectId}`)}
-          >
+          <Button variant="ghost" size="icon" onClick={() => router.push(`/project/${projectId}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -137,11 +162,16 @@ export default function LeafDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
-          {/* Future buttons */}
-          <Button variant="outline" size="sm" disabled title="Coming soon">
-            <Play className="mr-1 h-3 w-3" />
-            Generate
+          {/* Generate button */}
+          <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
+            {isGenerating ? (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <Play className="mr-1 h-3 w-3" />
+            )}
+            {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
+          {/* Validate button - coming soon */}
           <Button variant="outline" size="sm" disabled title="Coming soon">
             <CheckCircle className="mr-1 h-3 w-3" />
             Validate
@@ -149,15 +179,18 @@ export default function LeafDetailPage() {
         </div>
       </header>
 
+      {/* Generate error message */}
+      {generateError && (
+        <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {generateError}
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
           {/* Config Section */}
-          <ConfigSection
-            config={leaf.config}
-            onUpdateConfig={handleUpdateConfig}
-            saving={saving}
-          />
+          <ConfigSection config={leaf.config} onUpdateConfig={handleUpdateConfig} saving={saving} />
 
           {/* Constraints Section */}
           <ConstraintsSection
@@ -170,10 +203,7 @@ export default function LeafDetailPage() {
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
 
           {/* Assertions Section */}
-          <AssertionsSection
-            assertions={leaf.assertions}
-            constraints={leaf.constraints}
-          />
+          <AssertionsSection assertions={leaf.assertions} constraints={leaf.constraints} />
         </div>
       </div>
     </div>
@@ -191,35 +221,40 @@ interface ConfigSectionProps {
 }
 
 function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
-  const keywordThreshold = typeof config.keyword_threshold === 'number'
-    ? config.keyword_threshold
-    : DEFAULT_KEYWORD_THRESHOLD;
+  const keywordThreshold =
+    typeof config.keyword_threshold === 'number'
+      ? config.keyword_threshold
+      : DEFAULT_KEYWORD_THRESHOLD;
 
   const [localThreshold, setLocalThreshold] = useState(keywordThreshold);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync local state when config changes from server
   useEffect(() => {
-    const serverThreshold = typeof config.keyword_threshold === 'number'
-      ? config.keyword_threshold
-      : DEFAULT_KEYWORD_THRESHOLD;
+    const serverThreshold =
+      typeof config.keyword_threshold === 'number'
+        ? config.keyword_threshold
+        : DEFAULT_KEYWORD_THRESHOLD;
     setLocalThreshold(serverThreshold);
   }, [config.keyword_threshold]);
 
   // Debounced update handler
-  const handleThresholdChange = useCallback((value: number) => {
-    setLocalThreshold(value);
+  const handleThresholdChange = useCallback(
+    (value: number) => {
+      setLocalThreshold(value);
 
-    // Clear existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+      // Clear existing timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
 
-    // Set new debounced update
-    debounceTimerRef.current = setTimeout(() => {
-      onUpdateConfig({ ...config, keyword_threshold: value });
-    }, 300);
-  }, [config, onUpdateConfig]);
+      // Set new debounced update
+      debounceTimerRef.current = setTimeout(() => {
+        onUpdateConfig({ ...config, keyword_threshold: value });
+      }, 300);
+    },
+    [config, onUpdateConfig]
+  );
 
   // Cleanup on unmount
   useEffect(() => {
@@ -237,20 +272,19 @@ function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
           <Settings className="h-4 w-4 text-muted-foreground" />
           <h2 className="font-semibold">Config</h2>
         </div>
-        {saving && (
-          <span className="text-xs text-muted-foreground">Saving...</span>
-        )}
+        {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
       </div>
       <div className="p-4 space-y-4">
         {/* Keywords Threshold */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label htmlFor="keyword-threshold" className="text-sm font-medium text-muted-foreground">
+            <label
+              htmlFor="keyword-threshold"
+              className="text-sm font-medium text-muted-foreground"
+            >
               Keywords Threshold
             </label>
-            <span className="text-sm font-semibold tabular-nums">
-              {localThreshold.toFixed(2)}
-            </span>
+            <span className="text-sm font-semibold tabular-nums">{localThreshold.toFixed(2)}</span>
           </div>
           <input
             id="keyword-threshold"
@@ -284,16 +318,14 @@ interface ConstraintsSectionProps {
 }
 
 function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectionProps) {
-  const requireConstraints = constraints.filter(c => c.type === 'require');
-  const excludeConstraints = constraints.filter(c => c.type === 'exclude');
+  const requireConstraints = constraints.filter((c) => c.type === 'require');
+  const excludeConstraints = constraints.filter((c) => c.type === 'exclude');
 
   return (
     <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Constraints</h2>
-        <span className="text-sm text-muted-foreground">
-          {constraints.length} total
-        </span>
+        <span className="text-sm text-muted-foreground">{constraints.length} total</span>
       </div>
       <div className="p-4 space-y-4">
         {/* Require constraints */}
@@ -303,7 +335,7 @@ function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectio
               Must Have ({requireConstraints.length})
             </h3>
             <div className="space-y-2">
-              {requireConstraints.map(c => (
+              {requireConstraints.map((c) => (
                 <ConstraintItem
                   key={c.id}
                   constraint={c}
@@ -322,7 +354,7 @@ function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectio
               Must Not Have ({excludeConstraints.length})
             </h3>
             <div className="space-y-2">
-              {excludeConstraints.map(c => (
+              {excludeConstraints.map((c) => (
                 <ConstraintItem
                   key={c.id}
                   constraint={c}
@@ -335,9 +367,7 @@ function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectio
         )}
 
         {constraints.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No constraints defined
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-4">No constraints defined</p>
         )}
       </div>
     </section>
@@ -373,14 +403,10 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
           </span>
         </div>
         {constraint.description && (
-          <p className="text-xs text-muted-foreground mt-1 ml-6">
-            {constraint.description}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1 ml-6">{constraint.description}</p>
         )}
         {constraint.type === 'exclude' && constraint.reason && (
-          <p className="text-xs text-red-600 mt-1 ml-6">
-            Reason: {constraint.reason}
-          </p>
+          <p className="text-xs text-red-600 mt-1 ml-6">Reason: {constraint.reason}</p>
         )}
       </div>
       <Button
@@ -418,9 +444,7 @@ function OutputSection({ output, generatedAt }: OutputSectionProps) {
       </div>
       <div className="p-4">
         {output ? (
-          <div className="whitespace-pre-wrap rounded-md bg-muted p-4 text-sm">
-            {output}
-          </div>
+          <div className="whitespace-pre-wrap rounded-md bg-muted p-4 text-sm">{output}</div>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-8">
             No output generated yet. Click &quot;Generate&quot; to create output.
@@ -456,12 +480,12 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
     );
   }
 
-  const passedCount = assertions.filter(a => a.passed).length;
+  const passedCount = assertions.filter((a) => a.passed).length;
   const failedCount = assertions.length - passedCount;
   const allPassed = failedCount === 0;
 
   // Create a map of constraint ID to constraint for quick lookup
-  const constraintMap = new Map(constraints.map(c => [c.id, c]));
+  const constraintMap = new Map(constraints.map((c) => [c.id, c]));
 
   return (
     <section className="rounded-lg border bg-card">
@@ -492,15 +516,9 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
         </div>
       </div>
       <div className="p-4 space-y-2">
-        {assertions.map(assertion => {
+        {assertions.map((assertion) => {
           const constraint = constraintMap.get(assertion.constraint_id);
-          return (
-            <AssertionItem
-              key={assertion.id}
-              assertion={assertion}
-              constraint={constraint}
-            />
-          );
+          return <AssertionItem key={assertion.id} assertion={assertion} constraint={constraint} />;
         })}
       </div>
     </section>
@@ -517,9 +535,7 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
     <div
       className={cn(
         'rounded-md border p-3',
-        assertion.passed
-          ? 'border-green-200 bg-green-50'
-          : 'border-red-200 bg-red-50'
+        assertion.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
       )}
     >
       <div className="flex items-start gap-2">
@@ -544,9 +560,7 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">{assertion.details}</p>
           {assertion.lesson && (
-            <p className="text-xs text-blue-600 mt-1">
-              Lesson: {assertion.lesson}
-            </p>
+            <p className="text-xs text-blue-600 mt-1">Lesson: {assertion.lesson}</p>
           )}
         </div>
       </div>
