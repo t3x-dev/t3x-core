@@ -209,6 +209,7 @@ export {
   type ConversationContext,
   // Input types
   type CreateCommitV4Input,
+  type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
   type ExcludeConstraint as ExcludeConstraintV4,
@@ -218,6 +219,8 @@ export {
   // Leaf (owns constraints)
   type Leaf,
   type LeafConfig,
+  // Leaf History
+  type LeafHistory,
   type LeafType,
   type MergeV4Candidate,
   // Merge V4 types

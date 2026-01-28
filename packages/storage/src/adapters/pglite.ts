@@ -379,6 +379,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Leaf History table (generation history for leaves)
+    CREATE TABLE IF NOT EXISTS leaf_history (
+      id TEXT PRIMARY KEY,
+      leaf_id TEXT NOT NULL REFERENCES leaves(id) ON DELETE CASCADE,
+      output TEXT NOT NULL,
+      config JSONB NOT NULL,
+      model TEXT NOT NULL,
+      generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
+    CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.

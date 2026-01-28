@@ -187,6 +187,16 @@ export {
   updateLeafAssertions,
   updateLeafOutput,
 } from './leaves';
+// Leaf History (generation history for leaves)
+export {
+  countHistoryByLeafId,
+  createLeafHistory,
+  deleteHistoryByLeafId,
+  deleteLeafHistory,
+  findHistoryByLeafId,
+  findLeafHistoryById,
+  type ListLeafHistoryOptions,
+} from './leaf-history';
 // Pins (V4 - source selection for commits and context)
 export {
   createPin,
