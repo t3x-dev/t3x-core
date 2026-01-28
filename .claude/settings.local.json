@@ -139,7 +139,8 @@
       "Bash(pnpm turbo run build:*)",
       "Bash(pnpm next build:*)",
       "Bash(pnpm --filter t3x-webui exec tsc --noEmit)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "Bash(pnpm --filter @t3x/api exec tsc:*)"
     ],
     "deny": [],
     "ask": []
