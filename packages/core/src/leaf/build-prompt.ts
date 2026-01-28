@@ -2,13 +2,14 @@
  * Leaf Prompt Builder
  *
  * Constructs LLM prompts from commit sentences and leaf constraints.
+ * Supports both legacy string concatenation and template-based rendering.
  *
  * Owner: GEN-* track
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { LeafType, Constraint } from '../types/v4';
-import type { BuildPromptOptions, BuiltPrompt } from './types';
+import type { Constraint, LeafType } from '../types/v4';
+import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Type-specific Instructions
@@ -197,7 +198,9 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
 
   // Add generation instruction
   userPromptParts.push('## Task\n');
-  userPromptParts.push(`Generate the ${leaf.type} content based on the above source knowledge and constraints.`);
+  userPromptParts.push(
+    `Generate the ${leaf.type} content based on the above source knowledge and constraints.`
+  );
 
   const userPrompt = userPromptParts.join('\n');
 
@@ -210,4 +213,90 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
       excludeCount,
     },
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Template-based Prompt Builder
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Lazy import to avoid circular dependency
+let templateModule: typeof import('./template') | null = null;
+
+async function getTemplateModule() {
+  if (!templateModule) {
+    templateModule = await import('./template');
+  }
+  return templateModule;
+}
+
+/**
+ * Options for template-based prompt building.
+ */
+export interface BuildPromptWithTemplateOptions extends BuildPromptOptions {
+  /** Custom template to use (optional, defaults to type's default template) */
+  template?: LeafTemplate;
+}
+
+/**
+ * Build a prompt using the template system.
+ *
+ * This function uses the template rendering engine to build prompts,
+ * allowing for customizable prompt structures via templates.
+ *
+ * @param options - Build prompt options with optional custom template
+ * @returns Built prompt with system prompt, user prompt, and metadata
+ */
+export async function buildLeafPromptWithTemplate(
+  options: BuildPromptWithTemplateOptions
+): Promise<BuiltPrompt> {
+  const { commit, leaf, additionalInstructions, template: customTemplate } = options;
+
+  const { renderTemplate } = await getTemplateModule();
+
+  // Render using template system
+  const rendered = renderTemplate({
+    commit,
+    leaf,
+    additionalInstructions,
+    template: customTemplate,
+  });
+
+  // Calculate metadata
+  const { requires, excludes } = formatConstraints(leaf.constraints);
+
+  return {
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    metadata: {
+      sentenceCount: commit.content.sentences.length,
+      requireCount: requires.length,
+      excludeCount: excludes.length,
+    },
+  };
+}
+
+/**
+ * Build a prompt, optionally using templates.
+ *
+ * This is a convenience function that chooses between legacy and template modes:
+ * - If `leaf.config.use_template` is true, uses template system
+ * - Otherwise, uses legacy string concatenation (backward compatible)
+ *
+ * For explicit template control, use `buildLeafPromptWithTemplate()` directly.
+ *
+ * @param options - Build prompt options
+ * @param useTemplate - Force template mode (overrides leaf.config.use_template)
+ * @returns Built prompt (Promise if using templates, sync otherwise)
+ */
+export function buildLeafPromptAuto(
+  options: BuildPromptOptions,
+  useTemplate?: boolean
+): BuiltPrompt | Promise<BuiltPrompt> {
+  const shouldUseTemplate = useTemplate ?? options.leaf.config?.use_template === true;
+
+  if (shouldUseTemplate) {
+    return buildLeafPromptWithTemplate(options);
+  }
+
+  return buildLeafPrompt(options);
 }
