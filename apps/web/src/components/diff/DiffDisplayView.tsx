@@ -21,7 +21,7 @@ import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
 import type { CommitV3Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
-import { type CommitDiff, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
+import { type CommitDiff, type DiffableSentence, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
 
 import { DiffSourceContextModal } from './DiffSourceContextModal';

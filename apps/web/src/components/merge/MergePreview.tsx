@@ -7,7 +7,7 @@
  * commit will contain.
  */
 
-import { ChevronUp, ChevronDown, FileText } from 'lucide-react';
+import { ChevronUp, ChevronDown, FileText, Layers, Edit3 } from 'lucide-react';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
 interface MergePreviewProps {
@@ -16,12 +16,13 @@ interface MergePreviewProps {
 }
 
 export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
-  const { getPreviewSentences, prepared } = useMergeWorkspaceStore();
+  const { getPreviewSentences, prepared, getResolutionStats } = useMergeWorkspaceStore();
   const sentences = getPreviewSentences();
 
-  // Count stats
+  // Count stats including extended resolutions
   const identicalCount = prepared?.identical.length || 0;
-  const resolvedCount = prepared?.similarPairs.filter((p) => p.resolution).length || 0;
+  const stats = getResolutionStats();
+
   const keptSourceCount = prepared?.onlyInSource.filter((c) => c.keep).length || 0;
   const keptTargetCount = prepared?.onlyInTarget.filter((c) => c.keep).length || 0;
 
@@ -41,9 +42,21 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="text-xs text-muted-foreground space-x-3">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="text-green-600">{identicalCount} identical</span>
-            <span className="text-yellow-600">{resolvedCount} resolved</span>
+            <span className="text-yellow-600">{stats.standard} resolved</span>
+            {stats.both > 0 && (
+              <span className="text-blue-600 flex items-center gap-0.5">
+                <Layers className="h-3 w-3" />
+                {stats.both} both
+              </span>
+            )}
+            {stats.edit > 0 && (
+              <span className="text-purple-600 flex items-center gap-0.5">
+                <Edit3 className="h-3 w-3" />
+                {stats.edit} edited
+              </span>
+            )}
             <span className="text-blue-600">{keptSourceCount + keptTargetCount} unique kept</span>
           </div>
           {expanded ? (
@@ -64,17 +77,29 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
               </p>
             ) : (
               <div className="space-y-2">
-                {sentences.map((sentence, idx) => (
-                  <div
-                    key={sentence.id || idx}
-                    className="flex items-start gap-3 text-sm"
-                  >
-                    <span className="shrink-0 w-6 text-muted-foreground text-right">
-                      {idx + 1}.
-                    </span>
-                    <span className="flex-1">{sentence.text}</span>
-                  </div>
-                ))}
+                {sentences.map((sentence, idx) => {
+                  // Check if this is a merged/edited sentence
+                  const isMerged = sentence.id.startsWith('merged-');
+                  return (
+                    <div
+                      key={sentence.id || idx}
+                      className="flex items-start gap-3 text-sm"
+                    >
+                      <span className="shrink-0 w-6 text-muted-foreground text-right">
+                        {idx + 1}.
+                      </span>
+                      <span className="flex-1">
+                        {isMerged && (
+                          <span className="inline-flex items-center gap-0.5 text-xs text-purple-600 mr-1.5">
+                            <Edit3 className="h-3 w-3" />
+                            edited:
+                          </span>
+                        )}
+                        {sentence.text}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
