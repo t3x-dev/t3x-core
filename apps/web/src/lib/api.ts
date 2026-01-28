@@ -980,6 +980,109 @@ export async function createCommitV3(
 }
 
 // ============================================================================
+// Commits V4 (Pure knowledge - sentences only, no constraints)
+// ============================================================================
+
+// CommitV4 sentence source reference
+export interface CommitV4SentenceSourceRef {
+  conversation_id: string;
+  turn_hash: string;
+  start_char: number;
+  end_char: number;
+}
+
+// CommitV4 sentence from API
+export interface CommitV4Sentence {
+  id: string;
+  text: string;
+  confidence?: number;
+  source_ref?: CommitV4SentenceSourceRef;
+}
+
+// CommitV4 author from API
+export interface CommitV4Author {
+  type: 'human' | 'agent';
+  name?: string;
+  id?: string;
+}
+
+// CommitV4 from API response
+export interface CommitV4 {
+  hash: string;
+  schema: 't3x/commit/v4';
+  parents: string[];
+  author: CommitV4Author;
+  committed_at: string;
+  content: {
+    sentences: CommitV4Sentence[];
+  };
+  project_id: string | null;
+  message: string | null;
+  branch: string | null;
+  source_refs: SourceRef[] | null;
+  position_x: number | null;
+  position_y: number | null;
+  created_at: string;
+}
+
+/**
+ * List V4 commits by project
+ * Returns array of CommitV4 directly
+ */
+export async function listCommitsV4(
+  projectId: string,
+  branch?: string,
+  limit = 50,
+  offset = 0
+): Promise<CommitV4[]> {
+  const query = buildQueryString({ branch, limit, offset });
+  const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits-v4?${query}`);
+  return handleResponse<CommitV4[]>(res);
+}
+
+/**
+ * Get a V4 commit by hash
+ */
+export async function getCommitV4(commitHash: string): Promise<CommitV4> {
+  const res = await fetchWithTimeout(`${API_V1}/commits-v4/${commitHash}`);
+  return handleResponse<CommitV4>(res);
+}
+
+/**
+ * Create a V4 commit (pure knowledge - sentences only)
+ *
+ * V4 commits use sentences[] only. Constraints belong to Leaves.
+ * source_ref in each sentence enables source context display with highlights.
+ */
+export async function createCommitV4(
+  projectId: string,
+  sentences: CommitV4Sentence[],
+  options?: {
+    branch?: string;
+    message?: string;
+    parents?: string[];
+    position?: { x: number; y: number };
+    author?: CommitV4Author;
+  }
+): Promise<CommitV4> {
+  const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_id: projectId,
+      sentences,
+      branch: options?.branch ?? 'main',
+      message: options?.message,
+      parents: options?.parents ?? [],
+      position_x: options?.position?.x,
+      position_y: options?.position?.y,
+      author: options?.author ?? { type: 'human', name: 'User' },
+    }),
+  });
+  return handleResponse<CommitV4>(res);
+}
+
+// ============================================================================
 // Diff & Merge
 // ============================================================================
 
@@ -2242,6 +2345,12 @@ export interface CurateChunk {
   score: number;
   selected: boolean;
   cos_intent?: number;
+  /** v1.3: Turn hash this chunk belongs to (for source context display) */
+  turn_hash?: string;
+  /** v1.3: Start position relative to turn.content (without [role]: prefix) */
+  turn_start?: number;
+  /** v1.3: End position relative to turn.content (without [role]: prefix) */
+  turn_end?: number;
 }
 
 /** Anchor candidate in API response (snake_case) */

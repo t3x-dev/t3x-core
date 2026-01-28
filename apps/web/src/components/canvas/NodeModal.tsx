@@ -325,44 +325,69 @@ function CommitFullSection({
         <PinnedSourcesSection sourceRefs={commit.source_refs} />
       )}
 
-      {/* Sentences with Source Context - only for V3 commits with source info */}
-      {!isV4 && (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash) ? (
-        <CommitSourceContext
-          sentences={(commit as CommitV3Display).sentences.map((s) => ({
-            id: s.id,
-            text: s.text,
-            source: {
-              turn_hash: s.source?.turn_hash || '',
-              start_char: s.source?.start_char || 0,
-              end_char: s.source?.end_char || s.text.length,
-            },
-          }))}
-        />
-      ) : (
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
-            <span className="text-xs text-gray-400">{sentences.length} total</span>
+      {/* Sentences with Source Context - supports both V3 and V4 */}
+      {(() => {
+        // Check if sentences have source info (V4: content.sentences with source_ref, V3: sentences with source)
+        const hasSourceInfo = isV4
+          ? (commit as CommitV4Display).content.sentences.some((s) => s.source_ref?.turn_hash)
+          : (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash);
+
+        if (hasSourceInfo) {
+          // Map to CommitSourceContext format
+          const mappedSentences = isV4
+            ? (commit as CommitV4Display).content.sentences.map((s) => ({
+                id: s.id,
+                text: s.text,
+                source: s.source_ref
+                  ? {
+                      turn_hash: s.source_ref.turn_hash,
+                      start_char: s.source_ref.start_char,
+                      end_char: s.source_ref.end_char,
+                    }
+                  : undefined,
+              }))
+            : (commit as CommitV3Display).sentences.map((s) => ({
+                id: s.id,
+                text: s.text,
+                source: s.source
+                  ? {
+                      turn_hash: s.source.turn_hash,
+                      start_char: s.source.start_char || 0,
+                      end_char: s.source.end_char || s.text.length,
+                    }
+                  : undefined,
+              }));
+
+          return <CommitSourceContext sentences={mappedSentences} />;
+        }
+
+        // Fallback to simple sentence list
+        return (
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+              <span className="text-xs text-gray-400">{sentences.length} total</span>
+            </div>
+            <ul className="space-y-2">
+              {sentences.map((s) => (
+                <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+                  <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                    {s.id}
+                  </span>
+                  <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                    {s.text}
+                  </span>
+                </li>
+              ))}
+              {sentences.length === 0 && (
+                <li className="text-center py-4 text-gray-400 text-sm">
+                  No sentences
+                </li>
+              )}
+            </ul>
           </div>
-          <ul className="space-y-2">
-            {sentences.map((s) => (
-              <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
-                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-                  {s.id}
-                </span>
-                <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
-                  {s.text}
-                </span>
-              </li>
-            ))}
-            {sentences.length === 0 && (
-              <li className="text-center py-4 text-gray-400 text-sm">
-                No sentences
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Constraints - V3 only, or info message + Create Leaf button for V4 */}
       {isV4 ? (
@@ -1424,6 +1449,10 @@ export function NodeModal({
             text: chunk.text,
             start: chunk.start,
             end: chunk.end,
+            // v1.3: Include turn-specific data for source context display
+            turn_hash: chunk.turn_hash,
+            turn_start: chunk.turn_start,
+            turn_end: chunk.turn_end,
           })),
         },
       });
@@ -1874,50 +1903,35 @@ export function NodeModal({
         }
       }
 
-      // 7. Create Commit (V3 format for merge compatibility)
+      // 7. Create Commit (V4 format - pure knowledge, no constraints)
       // Get the current node position to save with the commit
       const currentPosition = node?.position;
 
-      // Build V3 commit if we have sentence data, otherwise fall back to V2
+      // Build V4 commit if we have sentence data
       let commitHash: string;
 
       if (pendingSource?.sentences && pendingSource.sentences.length > 0) {
-        // V3 commit: Build sentences with source references
-        const v3Sentences: api.CommitV3Sentence[] = pendingSource.sentences.map((sentence) => ({
+        // V4 commit: Build sentences with source_ref for context display
+        // v1.3: Use turn-specific turn_hash and positions for accurate source context
+        const v4Sentences: api.CommitV4Sentence[] = pendingSource.sentences.map((sentence) => ({
           id: sentence.id,
           text: sentence.text,
-          source: {
-            turn_hash: endTurnHash, // Use end turn as source reference
-            start_char: sentence.start,
-            end_char: sentence.end,
+          source_ref: {
+            conversation_id: sourceConversationId || '',
+            // Use sentence's own turn_hash if available (v1.3), fallback to endTurnHash for compatibility
+            turn_hash: sentence.turn_hash || endTurnHash,
+            // Use turn-relative positions (v1.3) for correct highlighting in CommitSourceContext
+            // Fallback to global positions for backward compatibility with old curate data
+            start_char: sentence.turn_start ?? sentence.start,
+            end_char: sentence.turn_end ?? sentence.end,
           },
         }));
 
-        // Build constraints from mustHave/mustntHave
-        const v3Constraints: api.CommitV3Constraint[] = [];
-        let constraintIdx = 0;
-
-        mustHave.forEach((value) => {
-          v3Constraints.push({
-            id: `c${constraintIdx++}`,
-            type: 'require',
-            value,
-            match: 'exact',
-          });
-        });
-
-        mustntHave.forEach((value) => {
-          v3Constraints.push({
-            id: `c${constraintIdx++}`,
-            type: 'exclude',
-            value,
-            match: 'exact',
-          });
-        });
-
-        console.log('[handleCommit] Creating V3 commit:', {
-          sentenceCount: v3Sentences.length,
-          constraintCount: v3Constraints.length,
+        console.log('[handleCommit] Creating V4 commit:', {
+          sentenceCount: v4Sentences.length,
+          // Note: V4 commits don't store constraints - they go to Leaves
+          mustHaveCount: mustHave.length,
+          mustntHaveCount: mustntHave.length,
         });
 
         // Determine parent commits for the DAG
@@ -1927,12 +1941,9 @@ export function NodeModal({
           parentCommits.push(data.sourceCommitHash);
         }
 
-        const commitV3 = await api.createCommitV3(
+        const commitV4 = await api.createCommitV4(
           projectId,
-          {
-            sentences: v3Sentences,
-            constraints: v3Constraints.length > 0 ? v3Constraints : undefined,
-          },
+          v4Sentences,
           {
             branch,
             message: data.title,
@@ -1941,9 +1952,9 @@ export function NodeModal({
           }
         );
 
-        commitHash = commitV3.hash;
+        commitHash = commitV4.hash;
       } else {
-        // V3-only: sentence data is required
+        // V4: sentence data is required
         throw new Error('Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.');
       }
 
@@ -2010,28 +2021,53 @@ export function NodeModal({
     setDiffTargetSentences([]);
 
     try {
-      // Get source sentences from current commit (V3 only for now)
-      const sourceCommit = data.commitV3;
-      if (!sourceCommit) {
-        setDiffError('Diff is only supported for V3 commits');
+      // Get source sentences from current commit (V4 or V3)
+      const sourceCommitV4 = data.commitV4;
+      const sourceCommitV3 = data.commitV3;
+
+      if (!sourceCommitV4 && !sourceCommitV3) {
+        setDiffError('Diff requires commit data');
         return;
       }
-      const sourceSentences: api.CommitV3Sentence[] = sourceCommit.sentences.map((s) => ({
-        id: s.id,
-        text: s.text,
-        source: {
-          turn_hash: s.source?.turn_hash || '',
-          start_char: s.source?.start_char || 0,
-          end_char: s.source?.end_char || s.text.length,
-        },
-      }));
+
+      // Convert to V3 sentence format for diff API
+      const sourceSentences: api.CommitV3Sentence[] = sourceCommitV4
+        ? sourceCommitV4.content.sentences.map((s) => ({
+            id: s.id,
+            text: s.text,
+            source: {
+              turn_hash: s.source_ref?.turn_hash || '',
+              start_char: s.source_ref?.start_char || 0,
+              end_char: s.source_ref?.end_char || s.text.length,
+            },
+          }))
+        : sourceCommitV3!.sentences.map((s) => ({
+            id: s.id,
+            text: s.text,
+            source: {
+              turn_hash: s.source?.turn_hash || '',
+              start_char: s.source?.start_char || 0,
+              end_char: s.source?.end_char || s.text.length,
+            },
+          }));
 
       // Find target commit from canvas nodes or fetch from API
       const targetNode = allCommittedCommits.find((n) => n.data.commitHash === diffTargetCommit);
       let targetSentences: api.CommitV3Sentence[] = [];
 
-      if (targetNode?.data.commitV3) {
-        // Use cached data from canvas
+      if (targetNode?.data.commitV4) {
+        // Use cached V4 data from canvas
+        targetSentences = targetNode.data.commitV4.content.sentences.map((s) => ({
+          id: s.id,
+          text: s.text,
+          source: {
+            turn_hash: s.source_ref?.turn_hash || '',
+            start_char: s.source_ref?.start_char || 0,
+            end_char: s.source_ref?.end_char || s.text.length,
+          },
+        }));
+      } else if (targetNode?.data.commitV3) {
+        // Use cached V3 data from canvas
         targetSentences = targetNode.data.commitV3.sentences.map((s) => ({
           id: s.id,
           text: s.text,
@@ -2042,9 +2078,23 @@ export function NodeModal({
           },
         }));
       } else {
-        // Fetch from API
-        const fetchedCommit = await api.getCommitV3(diffTargetCommit);
-        targetSentences = fetchedCommit.content.sentences;
+        // Fetch from API (try V4 first, fallback to V3)
+        try {
+          const fetchedCommitV4 = await api.getCommitV4(diffTargetCommit);
+          targetSentences = fetchedCommitV4.content.sentences.map((s) => ({
+            id: s.id,
+            text: s.text,
+            source: {
+              turn_hash: s.source_ref?.turn_hash || '',
+              start_char: s.source_ref?.start_char || 0,
+              end_char: s.source_ref?.end_char || s.text.length,
+            },
+          }));
+        } catch {
+          // Fallback to V3 API
+          const fetchedCommit = await api.getCommitV3(diffTargetCommit);
+          targetSentences = fetchedCommit.content.sentences;
+        }
       }
 
       setDiffSourceSentences(sourceSentences);
@@ -2055,7 +2105,7 @@ export function NodeModal({
     } finally {
       setIsDiffLoading(false);
     }
-  }, [data?.commitHash, data?.commitV3, diffTargetCommit, allCommittedCommits]);
+  }, [data?.commitHash, data?.commitV3, data?.commitV4, diffTargetCommit, allCommittedCommits]);
 
   // Legacy three-way merge analysis removed - use MergePanel for two-way merge
 
