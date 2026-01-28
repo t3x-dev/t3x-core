@@ -22,6 +22,7 @@ import {
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
+  validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x/core';
 // Storage functions (provided by @t3x/storage)
@@ -37,6 +38,7 @@ import {
   updateLeafOutput,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
+import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -678,11 +680,21 @@ leavesRoutes.openapi(validateLeafRoute, async (c) => {
     // 4. Run validation
     let validationResult;
     if (useSemantic) {
-      return errorResponse(
-        c,
-        'SEMANTIC_NOT_SUPPORTED',
-        'Semantic validation is not yet supported. Use exact matching only.'
-      );
+      // Check if semantic validation is configured
+      if (!isSemanticValidationConfigured()) {
+        return errorResponse(
+          c,
+          'SEMANTIC_NOT_CONFIGURED',
+          'Semantic validation requires GOOGLE_AI_STUDIO_KEY environment variable'
+        );
+      }
+      const embedder = getEmbedder();
+      // Use async validation with embedder
+      validationResult = await validateConstraints({
+        output: leaf.output,
+        constraints: leaf.constraints,
+        embedder: embedder!,
+      });
     } else {
       validationResult = validateConstraintsExactOnly(leaf.output, leaf.constraints);
     }
