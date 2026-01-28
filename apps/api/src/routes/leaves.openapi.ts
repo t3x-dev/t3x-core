@@ -185,6 +185,11 @@ const listLeavesByCommitRoute = createRoute({
     params: z.object({
       hash: z.string().min(1),
     }),
+    query: z.object({
+      type: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(1000).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+    }),
   },
   responses: {
     200: {
@@ -385,11 +390,12 @@ leavesRoutes.openapi(getLeafRoute, async (c) => {
 // GET /v1/commits/:hash/leaves - List leaves by commit
 leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { type, limit, offset } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
 
   try {
     const db = await getDB();
-    const leaves = await findLeavesByCommit(db, decodedHash);
+    const leaves = await findLeavesByCommit(db, decodedHash, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
@@ -401,12 +407,11 @@ leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 // GET /v1/projects/:projectId/leaves - List leaves by project
 leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { type: _type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset } = c.req.valid('query');
 
   try {
     const db = await getDB();
-    // Note: type filtering not yet supported by storage, using limit/offset only
-    const leaves = await findLeavesByProject(db, projectId, { limit, offset });
+    const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
