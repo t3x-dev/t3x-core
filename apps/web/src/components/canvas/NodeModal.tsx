@@ -67,6 +67,7 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { DiffDisplayView } from '@/components/diff/DiffDisplayView';
 import { CommitSourceContext } from './CommitSourceContext';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
@@ -829,6 +830,9 @@ export function NodeModal({
   const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+  // New: Sentence-level diff data for DiffDisplayView
+  const [diffSourceSentences, setDiffSourceSentences] = useState<api.CommitV3Sentence[]>([]);
+  const [diffTargetSentences, setDiffTargetSentences] = useState<api.CommitV3Sentence[]>([]);
 
   // Legacy three-way merge state removed - use MergePanel for two-way merge
 
@@ -1989,7 +1993,7 @@ export function NodeModal({
     pendingAnchors,
   ]);
 
-  // Handle Diff - compare two commits
+  // Handle Diff - compare two commits using sentence-level diff
   const handleDiff = useCallback(async () => {
     if (!data?.commitHash || !diffTargetCommit) {
       setDiffError('Please select a commit to compare with');
@@ -2004,8 +2008,51 @@ export function NodeModal({
     setIsDiffLoading(true);
     setDiffError(null);
     setDiffResult(null);
+    setDiffSourceSentences([]);
+    setDiffTargetSentences([]);
 
     try {
+      // Get source sentences from current commit (V3 only for now)
+      const sourceCommit = data.commitV3;
+      if (!sourceCommit) {
+        setDiffError('Diff is only supported for V3 commits');
+        return;
+      }
+      const sourceSentences: api.CommitV3Sentence[] = sourceCommit.sentences.map((s) => ({
+        id: s.id,
+        text: s.text,
+        source: {
+          turn_hash: s.source?.turn_hash || '',
+          start_char: s.source?.start_char || 0,
+          end_char: s.source?.end_char || s.text.length,
+        },
+      }));
+
+      // Find target commit from canvas nodes or fetch from API
+      const targetNode = allCommittedCommits.find((n) => n.data.commitHash === diffTargetCommit);
+      let targetSentences: api.CommitV3Sentence[] = [];
+
+      if (targetNode?.data.commitV3) {
+        // Use cached data from canvas
+        targetSentences = targetNode.data.commitV3.sentences.map((s) => ({
+          id: s.id,
+          text: s.text,
+          source: {
+            turn_hash: s.source?.turn_hash || '',
+            start_char: s.source?.start_char || 0,
+            end_char: s.source?.end_char || s.text.length,
+          },
+        }));
+      } else {
+        // Fetch from API
+        const fetchedCommit = await api.getCommitV3(diffTargetCommit);
+        targetSentences = fetchedCommit.content.sentences;
+      }
+
+      setDiffSourceSentences(sourceSentences);
+      setDiffTargetSentences(targetSentences);
+
+      // Also fetch legacy diff result for backwards compatibility
       const result = await api.diff(data.commitHash, diffTargetCommit);
       setDiffResult(result);
     } catch (err) {
@@ -2014,7 +2061,7 @@ export function NodeModal({
     } finally {
       setIsDiffLoading(false);
     }
-  }, [data?.commitHash, diffTargetCommit]);
+  }, [data?.commitHash, data?.commitV3, diffTargetCommit, allCommittedCommits]);
 
   // Legacy three-way merge analysis removed - use MergePanel for two-way merge
 
@@ -3751,6 +3798,8 @@ export function NodeModal({
                           setDiffTargetCommit('');
                           setDiffResult(null);
                           setDiffError(null);
+                          setDiffSourceSentences([]);
+                          setDiffTargetSentences([]);
                         }}
                       >
                         Cancel
@@ -3764,91 +3813,19 @@ export function NodeModal({
                       </div>
                     )}
 
-                    {diffResult && (
-                      <div className="mt-3 p-3 bg-white border border-gray-200 rounded-md">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-600">Facet Changes:</span>
-                          <Badge variant="outline" className="text-xs">
-                            {diffResult.diff.facet_changes.length}
-                          </Badge>
-                        </div>
-
-                        {diffResult.diff.facet_changes.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            {diffResult.diff.facet_changes.map((change, idx) => (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  'p-2 rounded border text-sm',
-                                  change.change_type === 'added' && 'bg-green-50 border-green-200',
-                                  change.change_type === 'removed' && 'bg-red-50 border-red-200',
-                                  change.change_type === 'modified' &&
-                                    'bg-amber-50 border-amber-200'
-                                )}
-                              >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[0.6rem]',
-                                      change.change_type === 'added' &&
-                                        'text-green-600 border-green-300',
-                                      change.change_type === 'removed' &&
-                                        'text-red-600 border-red-300',
-                                      change.change_type === 'modified' &&
-                                        'text-amber-600 border-amber-300'
-                                    )}
-                                  >
-                                    {change.change_type}
-                                  </Badge>
-                                  <span className="font-medium text-gray-700">{change.facet}</span>
-                                </div>
-                                {change.base_text && (
-                                  <div className="text-red-600 text-xs font-mono bg-red-100/50 px-2 py-1 rounded">
-                                    - {change.base_text}
-                                  </div>
-                                )}
-                                {change.target_text && (
-                                  <div className="text-green-600 text-xs font-mono bg-green-100/50 px-2 py-1 rounded mt-1">
-                                    + {change.target_text}
-                                  </div>
-                                )}
-                                {change.added_keywords.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1 mt-2">
-                                    <span className="text-xs text-gray-500">Added:</span>
-                                    {change.added_keywords.map((kw, i) => (
-                                      <Badge
-                                        key={i}
-                                        className="text-[0.6rem] bg-green-100 text-green-700"
-                                      >
-                                        {kw}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                                {change.removed_keywords.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1 mt-2">
-                                    <span className="text-xs text-gray-500">Removed:</span>
-                                    {change.removed_keywords.map((kw, i) => (
-                                      <Badge
-                                        key={i}
-                                        className="text-[0.6rem] bg-red-100 text-red-700"
-                                      >
-                                        {kw}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {diffResult.diff.facet_changes.length === 0 && (
-                          <div className="text-center py-4 text-sm text-gray-400">
-                            No facet changes detected
-                          </div>
-                        )}
+                    {/* Sentence-level Diff Display */}
+                    {diffSourceSentences.length > 0 && diffTargetSentences.length > 0 && (
+                      <div className="mt-3">
+                        <DiffDisplayView
+                          sourceSentences={diffSourceSentences}
+                          targetSentences={diffTargetSentences}
+                          sourceCommitHash={data.commitHash}
+                          targetCommitHash={diffTargetCommit}
+                          sourceLabel="This Commit"
+                          targetLabel="Compare Target"
+                          showContextToggle={true}
+                          initialViewMode="unified"
+                        />
                       </div>
                     )}
                   </div>
