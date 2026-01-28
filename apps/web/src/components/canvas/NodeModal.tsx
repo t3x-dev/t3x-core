@@ -827,10 +827,9 @@ export function NodeModal({
   // Diff state for committed commit comparison
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [diffTargetCommit, setDiffTargetCommit] = useState<string>('');
-  const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
-  // New: Sentence-level diff data for DiffDisplayView
+  // Sentence-level diff data for DiffDisplayView
   const [diffSourceSentences, setDiffSourceSentences] = useState<api.CommitV3Sentence[]>([]);
   const [diffTargetSentences, setDiffTargetSentences] = useState<api.CommitV3Sentence[]>([]);
 
@@ -2007,7 +2006,6 @@ export function NodeModal({
 
     setIsDiffLoading(true);
     setDiffError(null);
-    setDiffResult(null);
     setDiffSourceSentences([]);
     setDiffTargetSentences([]);
 
@@ -2051,10 +2049,6 @@ export function NodeModal({
 
       setDiffSourceSentences(sourceSentences);
       setDiffTargetSentences(targetSentences);
-
-      // Also fetch legacy diff result for backwards compatibility
-      const result = await api.diff(data.commitHash, diffTargetCommit);
-      setDiffResult(result);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setDiffError(error.message);
@@ -3758,8 +3752,9 @@ export function NodeModal({
                         value={diffTargetCommit}
                         onChange={(e) => {
                           setDiffTargetCommit(e.target.value);
-                          setDiffResult(null);
                           setDiffError(null);
+                          setDiffSourceSentences([]);
+                          setDiffTargetSentences([]);
                         }}
                       >
                         <option value="">Select a commit...</option>
@@ -3796,7 +3791,6 @@ export function NodeModal({
                         onClick={() => {
                           setShowDiffPanel(false);
                           setDiffTargetCommit('');
-                          setDiffResult(null);
                           setDiffError(null);
                           setDiffSourceSentences([]);
                           setDiffTargetSentences([]);
@@ -3814,7 +3808,7 @@ export function NodeModal({
                     )}
 
                     {/* Sentence-level Diff Display */}
-                    {diffSourceSentences.length > 0 && diffTargetSentences.length > 0 && (
+                    {(diffSourceSentences.length > 0 || diffTargetSentences.length > 0) && (
                       <div className="mt-3">
                         <DiffDisplayView
                           sourceSentences={diffSourceSentences}
