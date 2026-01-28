@@ -10,10 +10,15 @@
  * - "+N more sentences" indicator when truncated
  * - "View full" action to expand
  *
+ * Edge Case Handling (Issue #222):
+ * - Legacy data (no source): Shows sentence text directly
+ * - Source unavailable: Shows gray badge with fallback text
+ *
  * @see https://github.com/t3x-dev/T3X/issues/219
+ * @see https://github.com/t3x-dev/T3X/issues/222
  */
 
-import { AlertCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
@@ -25,7 +30,8 @@ import * as api from '@/lib/api';
 interface CommitSentence {
   id: string;
   text: string;
-  source: {
+  /** Source is optional for legacy data */
+  source?: {
     turn_hash: string;
     start_char: number;
     end_char: number;
@@ -224,24 +230,32 @@ interface TurnWithHighlights {
 }
 
 /**
- * Group sentences by turn_hash
+ * Group sentences by turn_hash, separating legacy data
  */
-function groupSentencesByTurn(sentences: CommitSentence[]): Map<string, HighlightRange[]> {
-  const groups = new Map<string, HighlightRange[]>();
+function groupSentencesByTurn(sentences: CommitSentence[]): {
+  byTurn: Map<string, HighlightRange[]>;
+  legacySentences: CommitSentence[];
+} {
+  const byTurn = new Map<string, HighlightRange[]>();
+  const legacySentences: CommitSentence[] = [];
 
   for (const sentence of sentences) {
-    const turnHash = sentence.source.turn_hash;
-    if (!turnHash) continue;
+    // Handle legacy data without source field
+    if (!sentence.source?.turn_hash) {
+      legacySentences.push(sentence);
+      continue;
+    }
 
-    const highlights = groups.get(turnHash) || [];
+    const turnHash = sentence.source.turn_hash;
+    const highlights = byTurn.get(turnHash) || [];
     highlights.push({
       start: sentence.source.start_char,
       end: sentence.source.end_char,
     });
-    groups.set(turnHash, highlights);
+    byTurn.set(turnHash, highlights);
   }
 
-  return groups;
+  return { byTurn, legacySentences };
 }
 
 export function TruncatedCommitView({
@@ -254,16 +268,23 @@ export function TruncatedCommitView({
   const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
-  // Group sentences by turn
-  const sentencesByTurn = useMemo(() => groupSentencesByTurn(sentences), [sentences]);
+  // Group sentences by turn, separating legacy data
+  const { byTurn: sentencesByTurn, legacySentences } = useMemo(
+    () => groupSentencesByTurn(sentences),
+    [sentences]
+  );
+
+  // Check if all sentences are legacy (no source info)
+  const allLegacy = legacySentences.length === sentences.length;
 
   // Get ordered list of unique turn hashes
   const turnHashes = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
     for (const sentence of sentences) {
+      if (!sentence.source?.turn_hash) continue;
       const hash = sentence.source.turn_hash;
-      if (hash && !seen.has(hash)) {
+      if (!seen.has(hash)) {
         seen.add(hash);
         ordered.push(hash);
       }
@@ -284,8 +305,12 @@ export function TruncatedCommitView({
       const highlights = sentencesByTurn.get(turnHash) || [];
       count += Math.min(highlights.length, maxHighlights);
     }
+    // Include legacy sentences if we have room
+    if (legacySentences.length > 0 && turnHashes.length < 2) {
+      count += Math.min(legacySentences.length, maxHighlights);
+    }
     return count;
-  }, [turnHashes, sentencesByTurn, maxHighlights]);
+  }, [turnHashes, sentencesByTurn, maxHighlights, legacySentences]);
 
   const hiddenCount = totalHighlightsCount - visibleHighlightsCount;
 
@@ -359,6 +384,42 @@ export function TruncatedCommitView({
     return <div className="px-2 py-1.5 text-xs text-slate-400 italic">No sentences</div>;
   }
 
+  // All legacy data - show simple sentence list with legacy badge
+  if (allLegacy) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500">
+          <span className="px-1 py-0.5 bg-slate-200 rounded text-[0.6rem]">Legacy</span>
+        </div>
+        {sentences.slice(0, maxHighlights).map((s) => (
+          <div
+            key={s.id}
+            className="text-xs text-slate-700 bg-green-100 px-1.5 py-1 rounded line-clamp-2"
+          >
+            {s.text}
+          </div>
+        ))}
+        {hiddenCount > 0 && (
+          <div className="text-[0.65rem] text-slate-400">
+            +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
+          </div>
+        )}
+        {onViewFull && (
+          <div className="pt-1 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onViewFull}
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              View full
+              <ChevronRight size={10} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Loading state
   if (isLoading || externalLoading) {
     return (
@@ -376,9 +437,8 @@ export function TruncatedCommitView({
   if (!hasAnyContext) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1 text-[0.65rem] text-amber-600">
-          <AlertCircle size={10} />
-          <span>Context unavailable</span>
+        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500">
+          <span className="px-1 py-0.5 bg-slate-300 rounded text-[0.6rem]">Source unavailable</span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
@@ -391,6 +451,18 @@ export function TruncatedCommitView({
         {hiddenCount > 0 && (
           <div className="text-[0.65rem] text-slate-400">
             +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
+          </div>
+        )}
+        {onViewFull && (
+          <div className="pt-1 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onViewFull}
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              View full
+              <ChevronRight size={10} />
+            </button>
           </div>
         )}
       </div>
