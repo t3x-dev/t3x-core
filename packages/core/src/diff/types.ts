@@ -16,13 +16,20 @@
  * Only id and text are needed for diff algorithms.
  * Both V4 Sentence and any object with these fields can be used directly.
  *
- * FROZEN - Do not modify without team agreement.
+ * source_ref is optional but preserved through merge for source context display.
  */
 export interface DiffableSentence {
   /** Unique sentence identifier */
   id: string;
   /** Sentence text content */
   text: string;
+  /** Optional: Source reference for context display (preserved through merge) */
+  source_ref?: {
+    conversation_id: string;
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
 }
 
 /**

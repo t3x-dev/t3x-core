@@ -45,6 +45,8 @@ export const SentenceSchema = z.object({
     .object({
       conversation_id: z.string(),
       turn_hash: z.string(),
+      start_char: z.number(),
+      end_char: z.number(),
     })
     .optional(),
 });
