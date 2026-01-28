@@ -314,6 +314,9 @@ export function TruncatedCommitView({
 
   const hiddenCount = totalHighlightsCount - visibleHighlightsCount;
 
+  // Create stable key for effect dependency (avoid re-fetching on every render)
+  const turnHashesKey = useMemo(() => turnHashes.slice(0, 2).join(','), [turnHashes]);
+
   // Fetch context for first 2 turns only
   useEffect(() => {
     if (turnHashes.length === 0) {
@@ -377,7 +380,8 @@ export function TruncatedCommitView({
     return () => {
       cancelled = true;
     };
-  }, [turnHashes, sentencesByTurn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Use stable key instead of Map reference
+  }, [turnHashesKey]);
 
   // Handle empty sentences
   if (sentences.length === 0) {
