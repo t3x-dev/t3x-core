@@ -7,7 +7,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import type { Assertion, Constraint, Leaf, LeafConfig } from '@/lib/api';
-import { ApiError, generateLeafOutput, getLeaf, updateLeaf } from '@/lib/api';
+import { ApiError, generateLeafOutput, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
@@ -24,6 +24,9 @@ export default function LeafDetailPage() {
   const [saving, setSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [semanticWarning, setSemanticWarning] = useState(false);
 
   // Load leaf data
   useEffect(() => {
@@ -109,6 +112,32 @@ export default function LeafDetailPage() {
     }
   };
 
+  // Handle validate output
+  const handleValidate = async () => {
+    if (!leaf || !leaf.output) return;
+
+    setIsValidating(true);
+    setValidateError(null);
+    setSemanticWarning(false);
+
+    try {
+      const result = await validateLeafOutput(leafId);
+      // Update local leaf data with validation results
+      setLeaf(result.leaf);
+
+      // Check if any constraints use semantic matching and show warning
+      const hasSemanticConstraints = leaf.constraints.some((c) => c.match_mode === 'semantic');
+      if (hasSemanticConstraints) {
+        setSemanticWarning(true);
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Validation failed';
+      setValidateError(message);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full flex-col">
@@ -171,10 +200,20 @@ export default function LeafDetailPage() {
             )}
             {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
-          {/* Validate button - coming soon */}
-          <Button variant="outline" size="sm" disabled title="Coming soon">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            Validate
+          {/* Validate button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleValidate}
+            disabled={isValidating || !leaf.output}
+            title={!leaf.output ? 'Generate output first' : undefined}
+          >
+            {isValidating ? (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <CheckCircle className="mr-1 h-3 w-3" />
+            )}
+            {isValidating ? 'Validating...' : 'Validate'}
           </Button>
         </div>
       </header>
@@ -183,6 +222,20 @@ export default function LeafDetailPage() {
       {generateError && (
         <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {generateError}
+        </div>
+      )}
+
+      {/* Validate error message */}
+      {validateError && (
+        <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {validateError}
+        </div>
+      )}
+
+      {/* Semantic validation warning */}
+      {semanticWarning && (
+        <div className="mx-4 mt-2 rounded-md bg-yellow-100 px-4 py-2 text-sm text-yellow-800">
+          Note: Semantic validation is not yet supported. Only exact match was used for validation.
         </div>
       )}
 
