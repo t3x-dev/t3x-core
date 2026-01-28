@@ -2066,6 +2066,37 @@ export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
   return handleResponse<Leaf>(res);
 }
 
+/**
+ * Generate output result
+ * 生成输出的结果
+ */
+export interface GenerateLeafOutputResult {
+  output: string;        // 生成的输出内容
+  generated_at: string;  // 生成时间 (ISO8601)
+}
+
+/**
+ * Generate output for a leaf
+ * 调用 LLM 为 Leaf 生成输出内容
+ *
+ * @param leafId - Leaf ID
+ * @returns Generated output and timestamp
+ * @throws ApiError - GENERATION_NOT_CONFIGURED (API key not set)
+ * @throws ApiError - LEAF_NOT_FOUND
+ * @throws ApiError - GENERATION_FAILED
+ */
+export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOutputResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }
+  );
+  return handleResponse<GenerateLeafOutputResult>(res);
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
