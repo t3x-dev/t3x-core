@@ -5,14 +5,15 @@
  * Leaves contain constraints, output, and validation results.
  *
  * Endpoints:
- * - POST   /v1/leaves                     - Create a new leaf
- * - GET    /v1/leaves/:id                 - Get leaf by ID
- * - GET    /v1/commits/:hash/leaves       - List leaves by commit
- * - GET    /v1/projects/:projectId/leaves - List leaves by project
- * - PATCH  /v1/leaves/:id                 - Update leaf
- * - DELETE /v1/leaves/:id                 - Delete leaf
- * - POST   /v1/leaves/:id/generate        - Generate output
- * - POST   /v1/leaves/:id/validate        - Validate output
+ * - POST   /v1/leaves                        - Create a new leaf
+ * - GET    /v1/leaves/:id                    - Get leaf by ID
+ * - GET    /v1/commits/:hash/leaves          - List leaves by commit
+ * - GET    /v1/projects/:projectId/leaves    - List leaves by project
+ * - PATCH  /v1/leaves/:id                    - Update leaf
+ * - DELETE /v1/leaves/:id                    - Delete leaf
+ * - POST   /v1/leaves/:id/generate           - Generate output
+ * - POST   /v1/leaves/:id/validate           - Validate output
+ * - POST   /v1/commits/:hash/leaves/batch    - Batch create and generate leaves
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -46,6 +47,9 @@ import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
+  BatchGenerateRequest,
+  BatchGenerateResponse,
+  BatchLeafResult,
   CreateLeafRequest,
   DeleteLeafHistoryResponse,
   GenerateLeafOutputRequest,
@@ -219,6 +223,62 @@ const listLeavesByCommitRoute = createRoute({
       content: {
         'application/json': {
           schema: SuccessResponseSchema(z.array(LeafResponse)),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// POST /v1/commits/:hash/leaves/batch - Batch create and generate leaves
+const batchGenerateRoute = createRoute({
+  method: 'post',
+  path: '/v1/commits/{hash}/leaves/batch',
+  tags: ['Leaves'],
+  summary: 'Batch create and generate leaves',
+  description:
+    'Creates multiple leaf nodes from a commit and optionally generates output for each. Maximum 10 leaves per batch.',
+  request: {
+    params: z.object({
+      hash: z.string().min(1),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: BatchGenerateRequest,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Batch operation completed (may have partial failures)',
+      content: {
+        'application/json': {
+          schema: BatchGenerateResponse,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid request or generation not configured',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Commit not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -560,6 +620,130 @@ leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'LIST_FAILED', message);
+  }
+});
+
+// POST /v1/commits/:hash/leaves/batch - Batch create and generate leaves
+leavesRoutes.openapi(batchGenerateRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const decodedHash = decodeURIComponent(hash);
+
+  // Result tracking
+  const results: Array<{
+    leaf: ReturnType<typeof toApiLeaf> | null;
+    error: { code: string; message: string } | null;
+  }> = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  try {
+    const db = await getDB();
+
+    // 1. Verify commit exists
+    const commit = await findCommitV4ByHash(db, decodedHash);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
+    }
+
+    // 2. Check generation configuration if generation is needed
+    const needsGeneration = !body.skip_generation;
+    if (needsGeneration && !isGenerationConfigured()) {
+      return errorResponse(
+        c,
+        'GENERATION_NOT_CONFIGURED',
+        'ANTHROPIC_API_KEY environment variable is not set. Use skip_generation=true to create leaves without generating output.'
+      );
+    }
+
+    // 3. Process each leaf config sequentially (avoid rate limiting)
+    for (const leafConfig of body.leaves) {
+      try {
+        // 3a. Create leaf
+        const leaf = await createLeaf(db, {
+          commit_hash: decodedHash,
+          type: leafConfig.type,
+          title: leafConfig.title,
+          constraints: leafConfig.constraints,
+          config: leafConfig.config ?? {},
+          project_id: body.project_id,
+        });
+
+        // 3b. Generate output if not skipped
+        if (needsGeneration) {
+          try {
+            const result = await generateLeafOutput({
+              commit,
+              leaf,
+            });
+
+            // Update leaf with output
+            const updatedLeaf = await updateLeafOutput(db, leaf.id, result.output);
+
+            // Save to history (non-blocking)
+            try {
+              await createLeafHistory(db, {
+                leaf_id: leaf.id,
+                output: result.output,
+                config: leaf.config ?? {},
+                model: result.model,
+              });
+            } catch {
+              // Log but don't fail - history is supplementary
+            }
+
+            results.push({
+              leaf: updatedLeaf ? toApiLeaf(updatedLeaf) : toApiLeaf(leaf),
+              error: null,
+            });
+            succeeded++;
+          } catch (genErr) {
+            // Generation failed, but leaf was created
+            const genMessage = genErr instanceof Error ? genErr.message : 'Generation failed';
+            results.push({
+              leaf: toApiLeaf(leaf),
+              error: { code: 'GENERATION_FAILED', message: genMessage },
+            });
+            // Count as partial success - leaf created but generation failed
+            succeeded++;
+          }
+        } else {
+          // No generation needed
+          results.push({
+            leaf: toApiLeaf(leaf),
+            error: null,
+          });
+          succeeded++;
+        }
+      } catch (leafErr) {
+        // Leaf creation failed
+        const message = leafErr instanceof Error ? leafErr.message : 'Unknown error';
+        results.push({
+          leaf: null,
+          error: { code: 'CREATE_FAILED', message },
+        });
+        failed++;
+      }
+    }
+
+    // 4. Return results
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          results,
+          summary: {
+            total: body.leaves.length,
+            succeeded,
+            failed,
+          },
+        },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'INTERNAL_ERROR', message);
   }
 });
 
