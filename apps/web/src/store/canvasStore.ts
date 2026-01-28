@@ -101,7 +101,7 @@ type CanvasState = {
   // Leaf panel methods
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
-  addLeafNode: (leafType: LeafType) => void;
+  addLeafNode: (leafType: LeafType) => Promise<void>;
   // Deletion confirmation methods
   confirmDeletion: () => void;
   cancelDeletion: () => void;
@@ -743,16 +743,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations and V3 commits in parallel
-      const [convResponse, commitV3Response] = await Promise.all([
+      // Fetch conversations, V3 commits, and V4 commits in parallel
+      const [convResponse, commitV3Response, commitV4List] = await Promise.all([
         api.listConversations(projectId, 100, 0),
         api.listCommitsV3(projectId, undefined, 100, 0),
+        api.listCommitsV4(projectId, undefined, 100, 0).catch(() => [] as api.CommitV4[]), // Graceful fallback if V4 not available
       ]);
 
       const conversations = convResponse.conversations;
 
       // Convert V3 commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
+      const v3Commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
         commit_hash: v3.hash,
         project_id: v3.project_id || projectId,
         branch: v3.branch || 'main',
@@ -782,6 +783,59 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source.turn_hash || v3.content.sentences[0].source.turn_hash,
         } : undefined,
       } as api.Commit));
+
+      // Convert V4 commits to V2-compatible format for unitToNode
+      const v4Commits: api.Commit[] = commitV4List.map((v4) => ({
+        commit_hash: v4.hash,
+        project_id: v4.project_id || projectId,
+        branch: v4.branch || 'main',
+        message: v4.message,
+        parent_hashes: v4.parents,
+        // V4: derive turn_window from source_ref if available
+        turn_window: v4.content.sentences[0]?.source_ref ? {
+          start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
+          end_turn_hash: v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash || v4.content.sentences[0].source_ref.turn_hash,
+        } : null,
+        facet_snapshot: null,
+        pipeline_config: null,
+        draft_id: null,
+        draft_text_hash: null,
+        signature: null,
+        source_excerpt: v4.content.sentences.map((s) => s.text),
+        must_have: null, // V4 commits don't have constraints (they're in Leaf)
+        mustnt_have: null,
+        position_x: v4.position_x ?? null,
+        position_y: v4.position_y ?? null,
+        source_refs: v4.source_refs?.map(ref => ({
+          type: ref.type,
+          conversation_id: ref.type === 'conversation' ? ref.id : undefined,
+          commit_hash: ref.type === 'leaf' ? ref.id : undefined,
+        })) ?? null,
+        anchors: null,
+        created_at: v4.created_at,
+        // Store V4 marker
+        isV4: true,
+      } as api.Commit));
+
+      // Combine V3 and V4 commits, avoiding duplicates by hash
+      const seenHashes = new Set<string>();
+      const commits: api.Commit[] = [];
+
+      // Add V4 commits first (newer format takes priority)
+      for (const commit of v4Commits) {
+        if (!seenHashes.has(commit.commit_hash)) {
+          seenHashes.add(commit.commit_hash);
+          commits.push(commit);
+        }
+      }
+
+      // Add V3 commits that aren't already in V4
+      for (const commit of v3Commits) {
+        if (!seenHashes.has(commit.commit_hash)) {
+          seenHashes.add(commit.commit_hash);
+          commits.push(commit);
+        }
+      }
 
       // Preserve existing node positions
       const existingNodePositions = new Map<string, { x: number; y: number }>();
@@ -1010,7 +1064,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     // For leaf nodes: must be created via LeafPanel from a commit
     // Direct creation would create a fake node without backend data
     if (kind === 'leaf') {
-      throw new Error('Cannot create leaf directly. Use the Leaf Panel from a committed commit.');
+      // Use warning instead of error - this is an expected user flow issue, not a bug
+      const notify = get().notifyCallback;
+      notify?.('To create a Leaf, click "Add output" on a committed Unit node.', 'warning');
+      return;
     }
 
     // Fallback for any unknown kinds - should not happen
@@ -2057,7 +2114,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
   closeLeafPanel: () => set({ leafPanelOpen: false, leafPanelCommitId: undefined }),
 
-  addLeafNode: (leafType) => {
+  addLeafNode: async (leafType) => {
     const state = get();
     const notify = state.notifyCallback;
 
@@ -2073,66 +2130,100 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return;
     }
 
-    set((state) => {
-      // Count existing leaf nodes connected to this commit to offset position
-      const existingLeafCount = state.edges.filter((edge) => {
-        if (edge.source !== commitId) return false;
-        const targetNode = state.nodes.find((n) => n.id === edge.target);
-        return targetNode?.data.kind === 'leaf';
-      }).length;
+    // Get commit hash from unit node - required for creating leaf
+    const commitHash = unitNode.data.commitHash;
+    if (!commitHash) {
+      notify?.('Commit not saved yet. Please commit first before adding output.', 'error');
+      return;
+    }
 
-      const newNodeId = nextNodeId();
-      const leafLabels: Record<LeafType, string> = {
-        deploy_agent: 'Deploy',
-        tweet: 'Twitter',
-        weibo: '微博',
-        wechat: '朋友圈',
-        email: 'Email',
-        article: '文章',
-        slack: 'Slack',
-        eval: 'Eval',
-      };
+    const projectId = state.projectId;
+    if (!projectId) {
+      notify?.('Project not found', 'error');
+      return;
+    }
 
-      // Position leaf above the unit node
-      const newNode: Node<CanvasNodeData> = {
-        id: newNodeId,
-        type: 'leaf',
-        position: snapPosition({
-          x: unitNode.position.x + commitQuickOffset,
-          y:
-            unitNode.position.y -
-            leafNodeHeight -
-            leafNodeOffset -
-            existingLeafCount * (leafNodeHeight + 20),
-        }),
-        data: {
-          entryId: `LEAF-${getNumericId(newNodeId)}`,
-          title: leafLabels[leafType],
-          summary: '',
-          status: 'pending',
-          timestamp: 'just now',
-          tags: ['leaf', leafType],
-          kind: 'leaf',
-          leafType,
-        },
-      };
+    const leafLabels: Record<LeafType, string> = {
+      deploy_agent: 'Deploy',
+      tweet: 'Twitter',
+      weibo: '微博',
+      wechat: '朋友圈',
+      email: 'Email',
+      article: '文章',
+      slack: 'Slack',
+      eval: 'Eval',
+    };
 
-      const newEdge: Edge = {
-        id: nextEdgeId(),
-        source: commitId,
-        target: newNodeId,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-      };
+    // Close panel immediately
+    set({ leafPanelOpen: false, leafPanelCommitId: undefined });
 
-      return {
-        nodes: [...state.nodes, newNode],
-        edges: [...state.edges, newEdge],
-        leafPanelOpen: false,
-        leafPanelCommitId: undefined,
-      };
-    });
+    try {
+      // Call API to create leaf
+      const leaf = await api.createLeaf({
+        commit_hash: commitHash,
+        type: leafType,
+        title: leafLabels[leafType],
+        project_id: projectId,
+        constraints: [],
+        config: {},
+      });
+
+      // Add leaf node to canvas with the backend leafId
+      set((state) => {
+        // Count existing leaf nodes connected to this commit to offset position
+        const existingLeafCount = state.edges.filter((edge) => {
+          if (edge.source !== commitId) return false;
+          const targetNode = state.nodes.find((n) => n.id === edge.target);
+          return targetNode?.data.kind === 'leaf';
+        }).length;
+
+        const newNodeId = nextNodeId();
+
+        // Position leaf above the unit node
+        const newNode: Node<CanvasNodeData> = {
+          id: newNodeId,
+          type: 'leaf',
+          position: snapPosition({
+            x: unitNode.position.x + commitQuickOffset,
+            y:
+              unitNode.position.y -
+              leafNodeHeight -
+              leafNodeOffset -
+              existingLeafCount * (leafNodeHeight + 20),
+          }),
+          data: {
+            entryId: `LEAF-${getNumericId(newNodeId)}`,
+            title: leafLabels[leafType],
+            summary: '',
+            status: 'pending',
+            timestamp: 'just now',
+            tags: ['leaf', leafType],
+            kind: 'leaf',
+            leafType,
+            leafId: leaf.id, // Store backend leaf ID
+          },
+        };
+
+        const newEdge: Edge = {
+          id: nextEdgeId(),
+          source: commitId,
+          target: newNodeId,
+          type: edgeType,
+          animated: false,
+          style: edgeStyle,
+        };
+
+        return {
+          nodes: [...state.nodes, newNode],
+          edges: [...state.edges, newEdge],
+        };
+      });
+
+      notify?.(`${leafLabels[leafType]} created successfully`, 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create leaf';
+      notify?.(message, 'error');
+    }
   },
 
   // Deletion confirmation methods

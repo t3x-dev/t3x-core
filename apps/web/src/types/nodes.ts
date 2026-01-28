@@ -580,10 +580,12 @@ export interface CanvasNodeData {
   leaves?: EmbeddedLeaf[];
 
   // ============================================
-  // Leaf node specific (for standalone LeafNode - deprecated)
+  // Leaf node specific (for standalone LeafNode)
   // ============================================
   leafType?: LeafType;
   leafConfig?: LeafNodeConfig;
+  /** Backend leaf ID (from API) */
+  leafId?: string;
 
   // ============================================
   // Deprecated fields (keep for migration)

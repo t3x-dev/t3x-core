@@ -882,7 +882,7 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    // Get source commit by hash
+    // Get source commit by hash (V4 only)
     const commit = await findCommitV4ByHash(db, leaf.commit_hash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
