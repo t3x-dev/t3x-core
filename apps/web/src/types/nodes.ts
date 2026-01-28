@@ -88,6 +88,12 @@ export interface CommitV3Display {
 export interface SentenceDisplay {
   id: string;
   text: string;
+  /** Source reference for tracing back to original turn */
+  source?: {
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
 }
 
 export interface ConstraintDisplay {

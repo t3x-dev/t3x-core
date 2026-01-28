@@ -647,7 +647,8 @@ function saveNodePosition(nodeId: string, kind: NodeKind, position: { x: number;
 const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
-  index: number
+  index: number,
+  originalV3?: api.CommitV3 // Original V3 data for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -703,6 +704,30 @@ const unitToNode = (
       sourceTurnWindow: commit?.turn_window ?? undefined,
       // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
       anchors: commit?.anchors ? api.parseApiCommitAnchors(commit.anchors) ?? undefined : undefined,
+      // V3 commit data for source context display
+      commitV3: originalV3 ? {
+        hash: originalV3.hash,
+        schema: 'commit/v3' as const,
+        author: {
+          name: originalV3.author.name,
+          verification: originalV3.author.verification,
+        },
+        committed_at: originalV3.committed_at,
+        sentences: originalV3.content.sentences.map((s) => ({
+          id: s.id,
+          text: s.text,
+          source: s.source,
+        })),
+        constraints: (originalV3.content.constraints ?? []).map((c) => ({
+          type: c.type,
+          id: c.id,
+          value: c.value,
+          match: c.match,
+          source_sentence_id: c.source_sentence_id,
+        })),
+        message: originalV3.message ?? undefined,
+        branch: originalV3.branch ?? undefined,
+      } : undefined,
     },
   };
 };
@@ -844,6 +869,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         }
       });
 
+      // Build a map: commit_hash -> original V3 data (for source context display)
+      const commitV3Map = new Map<string, api.CommitV3>();
+      commitV3Response.commits.forEach((v3) => {
+        commitV3Map.set(v3.hash, v3);
+      });
+
       // Build a map: conversation_id -> commit (for pairing into units)
       const convToCommitMap = new Map<string, api.Commit>();
       commits.forEach((commit) => {
@@ -869,7 +900,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       let nodeIndex = 0;
       conversations.forEach((conv) => {
         const commit = convToCommitMap.get(conv.conversation_id);
-        const node = unitToNode(conv, commit || null, nodeIndex++);
+        const originalV3 = commit ? commitV3Map.get(commit.commit_hash) : undefined;
+        const node = unitToNode(conv, commit || null, nodeIndex++, originalV3);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
@@ -895,7 +927,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           position_y: undefined,
           created_at: commit.created_at,
         };
-        const node = unitToNode(virtualConv, commit, nodeIndex++);
+        const originalV3 = commitV3Map.get(commit.commit_hash);
+        const node = unitToNode(virtualConv, commit, nodeIndex++, originalV3);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;

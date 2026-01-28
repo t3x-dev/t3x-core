@@ -67,6 +67,7 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { CommitSourceContext } from './CommitSourceContext';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
@@ -323,30 +324,44 @@ function CommitFullSection({
         <PinnedSourcesSection sourceRefs={commit.source_refs} />
       )}
 
-      {/* Sentences - Full list with IDs */}
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
-          <span className="text-xs text-gray-400">{sentences.length} total</span>
+      {/* Sentences with Source Context - only for V3 commits with source info */}
+      {!isV4 && (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash) ? (
+        <CommitSourceContext
+          sentences={(commit as CommitV3Display).sentences.map((s) => ({
+            id: s.id,
+            text: s.text,
+            source: {
+              turn_hash: s.source?.turn_hash || '',
+              start_char: s.source?.start_char || 0,
+              end_char: s.source?.end_char || s.text.length,
+            },
+          }))}
+        />
+      ) : (
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+            <span className="text-xs text-gray-400">{sentences.length} total</span>
+          </div>
+          <ul className="space-y-2">
+            {sentences.map((s) => (
+              <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                  {s.id}
+                </span>
+                <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                  {s.text}
+                </span>
+              </li>
+            ))}
+            {sentences.length === 0 && (
+              <li className="text-center py-4 text-gray-400 text-sm">
+                No sentences
+              </li>
+            )}
+          </ul>
         </div>
-        <ul className="space-y-2">
-          {sentences.map((s) => (
-            <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
-              <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-                {s.id}
-              </span>
-              <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
-                {s.text}
-              </span>
-            </li>
-          ))}
-          {sentences.length === 0 && (
-            <li className="text-center py-4 text-gray-400 text-sm">
-              No sentences
-            </li>
-          )}
-        </ul>
-      </div>
+      )}
 
       {/* Constraints - V3 only, or info message + Create Leaf button for V4 */}
       {isV4 ? (

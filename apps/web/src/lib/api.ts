@@ -720,6 +720,80 @@ export async function createTurn(
 }
 
 // ============================================================================
+// Turn Context (for source tracing)
+// ============================================================================
+
+/**
+ * Turn with context highlight information (from /turns/:hash/context API)
+ */
+export interface TurnWithContext {
+  turn_hash: string;
+  parent_turn_hash: string | null;
+  project_id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  language?: string | null;
+  rings?: unknown;
+  created_at: string;
+  is_target: boolean;
+  highlight?: {
+    start: number;
+    end: number;
+  };
+}
+
+/**
+ * Turn context data from API (for source tracing)
+ */
+export interface TurnContextData {
+  target_turn: TurnWithContext;
+  context: TurnWithContext[];
+  conversation_id: string;
+  conversation_title: string | null;
+}
+
+/**
+ * Fetch turn with surrounding context for source tracing
+ *
+ * @param turnHash - The turn hash to fetch context for
+ * @param options - Optional parameters for context window and highlight
+ * @returns Turn context data including surrounding turns
+ */
+export async function fetchTurnContext(
+  turnHash: string,
+  options?: {
+    before?: number;
+    after?: number;
+    highlightStart?: number;
+    highlightEnd?: number;
+  }
+): Promise<TurnContextData> {
+  if (!turnHash || turnHash === 'undefined') {
+    throw new Error('fetchTurnContext: turnHash is required');
+  }
+
+  const params = new URLSearchParams();
+  if (options?.before !== undefined) {
+    params.set('before', String(options.before));
+  }
+  if (options?.after !== undefined) {
+    params.set('after', String(options.after));
+  }
+  if (options?.highlightStart !== undefined) {
+    params.set('highlight_start', String(options.highlightStart));
+  }
+  if (options?.highlightEnd !== undefined) {
+    params.set('highlight_end', String(options.highlightEnd));
+  }
+
+  const queryString = params.toString();
+  const url = `${API_V1}/turns/${turnHash}/context${queryString ? `?${queryString}` : ''}`;
+  const res = await fetchWithTimeout(url);
+  return handleResponse<TurnContextData>(res);
+}
+
+// ============================================================================
 // Branches
 // ============================================================================
 
