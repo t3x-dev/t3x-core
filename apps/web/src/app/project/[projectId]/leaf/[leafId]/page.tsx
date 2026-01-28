@@ -1,13 +1,33 @@
 'use client';
 
-import { ArrowLeft, Check, CheckCircle, Loader2, Play, Settings, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle,
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  Loader2,
+  Play,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import type { Assertion, Constraint, Leaf, LeafConfig } from '@/lib/api';
 import { ApiError, generateLeafOutput, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
+import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
@@ -27,6 +47,7 @@ export default function LeafDetailPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [validateError, setValidateError] = useState<string | null>(null);
   const [semanticWarning, setSemanticWarning] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load leaf data
   useEffect(() => {
@@ -138,6 +159,22 @@ export default function LeafDetailPage() {
     }
   };
 
+  // Handle export
+  const handleExport = async (format: ExportFormat) => {
+    if (!leaf) return;
+
+    const result = await exportLeaf(leaf, format);
+    setExportMessage({
+      type: result.success ? 'success' : 'error',
+      text: result.message,
+    });
+
+    // Auto-clear success message after 3 seconds
+    if (result.success) {
+      setTimeout(() => setExportMessage(null), 3000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full flex-col">
@@ -215,6 +252,32 @@ export default function LeafDetailPage() {
             )}
             {isValidating ? 'Validating...' : 'Validate'}
           </Button>
+          {/* Export dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="mr-1 h-3 w-3" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => handleExport('clipboard')}
+                disabled={!leaf.output}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Output
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('markdown')}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('json')}>
+                <FileJson className="mr-2 h-4 w-4" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -236,6 +299,20 @@ export default function LeafDetailPage() {
       {semanticWarning && (
         <div className="mx-4 mt-2 rounded-md bg-yellow-100 px-4 py-2 text-sm text-yellow-800">
           Note: Semantic validation is not yet supported. Only exact match was used for validation.
+        </div>
+      )}
+
+      {/* Export message */}
+      {exportMessage && (
+        <div
+          className={cn(
+            'mx-4 mt-2 rounded-md px-4 py-2 text-sm',
+            exportMessage.type === 'success'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-destructive/10 text-destructive'
+          )}
+        >
+          {exportMessage.text}
         </div>
       )}
 
