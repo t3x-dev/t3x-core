@@ -21,52 +21,90 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Generation Exports (GEN-* adds here)
+// ═══════════════════════════════════════════════════════════════════════════
+export type { BuildPromptWithTemplateOptions } from './build-prompt';
+export {
+  buildLeafPrompt,
+  buildLeafPromptAuto,
+  buildLeafPromptWithTemplate,
+  buildSystemPrompt,
+  formatConstraints,
+  getTypeInstructions,
+} from './build-prompt';
+export {
+  GenerationError,
+  generateLeafOutput,
+  isGenerationConfigured,
+} from './generate';
+export type { RenderTemplateOptions } from './template';
+export {
+  buildTemplateContext,
+  // Template utilities
+  parseTemplateVariables,
+  previewTemplate,
+  // Template rendering
+  renderTemplate,
+  renderTemplateString,
+  validateTemplateSyntax,
+} from './template';
+// ═══════════════════════════════════════════════════════════════════════════
+// Template Exports (Template System)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  articleDefaultTemplate,
+  // Registry and helpers
+  DEFAULT_TEMPLATES,
+  deployAgentDefaultTemplate,
+  emailDefaultTemplate,
+  evalDefaultTemplate,
+  getAllDefaultTemplates,
+  getDefaultTemplate,
+  slackDefaultTemplate,
+  // Individual default templates
+  tweetDefaultTemplate,
+  wechatDefaultTemplate,
+  weiboDefaultTemplate,
+} from './templates';
+// ═══════════════════════════════════════════════════════════════════════════
 // Type Exports (SHARED - frozen contract)
 // ═══════════════════════════════════════════════════════════════════════════
 export type {
   // Generation types
   BuildPromptOptions,
   BuiltPrompt,
+  ConstraintCheckResult,
   GenerateOptions,
   GenerateResult,
+  LeafTemplate,
+  RenderedTemplate,
+  TemplateContext,
+  TemplateVariable,
+  // Template types
+  TemplateVariableName,
   // Validation types
   ValidateOptions,
   ValidationResult,
-  ConstraintCheckResult,
 } from './types';
-
 export {
-  // Shared constants
-  SEMANTIC_REQUIRE_THRESHOLD,
-  SEMANTIC_EXCLUDE_THRESHOLD,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
+  SEMANTIC_EXCLUDE_THRESHOLD,
+  // Shared constants
+  SEMANTIC_REQUIRE_THRESHOLD,
+  // Template constants
+  TEMPLATE_VARIABLE_NAMES,
+  TEMPLATE_VARIABLES,
 } from './types';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Generation Exports (GEN-* adds here)
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  buildLeafPrompt,
-  buildSystemPrompt,
-  getTypeInstructions,
-  formatConstraints,
-} from './build-prompt';
-export {
-  generateLeafOutput,
-  isGenerationConfigured,
-  GenerationError,
-} from './generate';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Validation Exports (VAL-* adds here)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  generateAssertionId,
   validateConstraints,
   validateConstraintsExactOnly,
-  generateAssertionId,
-  validateRequireExact,
   validateExcludeExact,
-  validateRequireSemantic,
   validateExcludeSemantic,
+  validateRequireExact,
+  validateRequireSemantic,
 } from './validate-constraints';
