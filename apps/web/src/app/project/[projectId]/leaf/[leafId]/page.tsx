@@ -10,6 +10,7 @@ import {
   FileText,
   Loader2,
   Play,
+  Plus,
   Settings,
   Trash2,
   X,
@@ -89,6 +90,18 @@ export default function LeafDetailPage() {
     if (!leaf) return;
     const updated = leaf.constraints.filter((c) => c.id !== constraintId);
     handleUpdateConstraints(updated);
+  };
+
+  // Add new constraint
+  const handleAddConstraint = (type: 'require' | 'exclude', value: string, matchMode: 'exact' | 'semantic' = 'exact') => {
+    if (!leaf || !value.trim()) return;
+    const newConstraint: Constraint = {
+      id: `cst_${Date.now().toString(36)}`,
+      type,
+      value: value.trim(),
+      match_mode: matchMode,
+    };
+    handleUpdateConstraints([...leaf.constraints, newConstraint]);
   };
 
   // Handle config update
@@ -230,11 +243,13 @@ export default function LeafDetailPage() {
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
           {/* Generate button */}
           <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
-            {isGenerating ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Play className="mr-1 h-3 w-3" />
-            )}
+            <span className="mr-1 inline-flex h-3 w-3">
+              {isGenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+            </span>
             {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
           {/* Validate button */}
@@ -245,11 +260,13 @@ export default function LeafDetailPage() {
             disabled={isValidating || !leaf.output}
             title={!leaf.output ? 'Generate output first' : undefined}
           >
-            {isValidating ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <CheckCircle className="mr-1 h-3 w-3" />
-            )}
+            <span className="mr-1 inline-flex h-3 w-3">
+              {isValidating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle className="h-3 w-3" />
+              )}
+            </span>
             {isValidating ? 'Validating...' : 'Validate'}
           </Button>
           {/* Export dropdown */}
@@ -326,6 +343,7 @@ export default function LeafDetailPage() {
           <ConstraintsSection
             constraints={leaf.constraints}
             onRemove={handleRemoveConstraint}
+            onAdd={handleAddConstraint}
             saving={saving}
           />
 
@@ -444,20 +462,76 @@ function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
 interface ConstraintsSectionProps {
   constraints: Constraint[];
   onRemove: (id: string) => void;
+  onAdd: (type: 'require' | 'exclude', value: string, matchMode?: 'exact' | 'semantic') => void;
   saving: boolean;
 }
 
-function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectionProps) {
+function ConstraintsSection({ constraints, onRemove, onAdd, saving }: ConstraintsSectionProps) {
+  const [newConstraintValue, setNewConstraintValue] = useState('');
+  const [newConstraintType, setNewConstraintType] = useState<'require' | 'exclude'>('require');
+  const [showAddForm, setShowAddForm] = useState(false);
+
   const requireConstraints = constraints.filter((c) => c.type === 'require');
   const excludeConstraints = constraints.filter((c) => c.type === 'exclude');
+
+  const handleAdd = () => {
+    if (!newConstraintValue.trim()) return;
+    onAdd(newConstraintType, newConstraintValue, 'exact');
+    setNewConstraintValue('');
+    setShowAddForm(false);
+  };
 
   return (
     <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Constraints</h2>
-        <span className="text-sm text-muted-foreground">{constraints.length} total</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{constraints.length} total</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddForm(!showAddForm)}
+            disabled={saving}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add
+          </Button>
+        </div>
       </div>
       <div className="p-4 space-y-4">
+        {/* Add constraint form */}
+        {showAddForm && (
+          <div className="rounded-md border border-dashed p-3 space-y-3">
+            <div className="flex gap-2">
+              <select
+                className="rounded-md border bg-background px-3 py-1.5 text-sm"
+                value={newConstraintType}
+                onChange={(e) => setNewConstraintType(e.target.value as 'require' | 'exclude')}
+              >
+                <option value="require">Must Have</option>
+                <option value="exclude">Must Not Have</option>
+              </select>
+              <input
+                type="text"
+                className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
+                placeholder="Enter constraint value..."
+                value={newConstraintValue}
+                onChange={(e) => setNewConstraintValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              />
+              <Button size="sm" onClick={handleAdd} disabled={!newConstraintValue.trim() || saving}>
+                Add
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Add keywords or phrases that must (or must not) appear in the generated output.
+            </p>
+          </div>
+        )}
+
         {/* Require constraints */}
         {requireConstraints.length > 0 && (
           <div>
@@ -496,8 +570,10 @@ function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectio
           </div>
         )}
 
-        {constraints.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">No constraints defined</p>
+        {constraints.length === 0 && !showAddForm && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No constraints defined. Click &quot;Add&quot; to create constraints.
+          </p>
         )}
       </div>
     </section>

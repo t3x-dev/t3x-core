@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
+import { Leaf, MessageSquare } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import type { NodeKind } from '@/types/nodes';
@@ -18,6 +18,12 @@ const paletteItems: PaletteItem[] = [
     label: 'Unit',
     description: 'Conversation unit',
     icon: <MessageSquare className="h-4 w-4" />,
+  },
+  {
+    kind: 'leaf',
+    label: 'Leaf',
+    description: 'Output generator',
+    icon: <Leaf className="h-4 w-4" />,
   },
 ];
 

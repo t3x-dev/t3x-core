@@ -10,6 +10,7 @@ import { GitCommit, LayoutGrid, Loader2, MessageSquarePlus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
+import { useRouter } from 'next/navigation';
 import { AnimatedEdge } from './AnimatedEdge';
 import { canvasNodeTypes } from './CanvasNodes';
 import { NodePalette } from './NodePalette';
@@ -89,8 +90,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
     modalViewMode,
     openNodeModal,
     closeNodeModal,
+    projectId,
   } = useCanvasStore();
   const notify = useProjectStore((state) => state.notifyCallback);
+  const router = useRouter();
 
   // Auto-layout handler
   const handleAutoLayout = useCallback(async () => {
@@ -728,7 +731,19 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDoubleClick={(_, node) => openNodeModal(node.id, 'commit')}
+          onNodeDoubleClick={(_, node) => {
+            const nodeData = node.data as CanvasNodeData;
+            // For leaf nodes, navigate to leaf detail page instead of opening modal
+            if (nodeData.kind === 'leaf' && nodeData.leafId && projectId) {
+              router.push(`/project/${projectId}/leaf/${nodeData.leafId}`);
+            } else if (nodeData.kind === 'leaf') {
+              // Leaf node without leafId (not yet saved to backend)
+              notify?.('This leaf has not been saved yet. Please save the project first.', 'warning');
+            } else {
+              // For other nodes, open the modal
+              openNodeModal(node.id, 'commit');
+            }
+          }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
           snapToGrid
