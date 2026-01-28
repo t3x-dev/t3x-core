@@ -26,6 +26,17 @@ vi.mock('@/lib/api', () => ({
   listBranches: vi.fn(),
   getProject: vi.fn(),
   getTurn: vi.fn(),
+  createLeaf: vi.fn().mockResolvedValue({
+    id: 'leaf_mock123',
+    commit_hash: 'sha256:abc123',
+    type: 'deploy_agent',
+    title: 'Deploy',
+    constraints: [],
+    config: {},
+    output: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }),
 }));
 
 // Helper to create a mock staging unit node
@@ -119,7 +130,8 @@ describe('Canvas Store - Unit Node Model', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // Don't use vi.restoreAllMocks() as it removes mock implementations
+    // vi.clearAllMocks() in beforeEach is sufficient
   });
 
   // ===========================================================================
@@ -345,16 +357,17 @@ describe('Canvas Store - Unit Node Model', () => {
   // addLeafNode Tests
   // ===========================================================================
   describe('addLeafNode', () => {
-    it('adds a leaf node connected to the selected unit', () => {
+    it('adds a leaf node connected to the selected unit', async () => {
       const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
       useCanvasStore.setState({
         nodes: [committedUnit],
         edges: [],
         leafPanelOpen: true,
         leafPanelCommitId: 'unit-1',
+        projectId: 'proj_test123',
       });
 
-      useCanvasStore.getState().addLeafNode('deploy_agent');
+      await useCanvasStore.getState().addLeafNode('deploy_agent');
 
       const state = useCanvasStore.getState();
       expect(state.nodes.length).toBe(2);
@@ -366,7 +379,7 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(state.edges[0].source).toBe('unit-1');
     });
 
-    it('does nothing when leafPanelCommitId is not set', () => {
+    it('does nothing when leafPanelCommitId is not set', async () => {
       useCanvasStore.setState({
         nodes: [],
         edges: [],
@@ -374,7 +387,7 @@ describe('Canvas Store - Unit Node Model', () => {
         leafPanelCommitId: undefined,
       });
 
-      useCanvasStore.getState().addLeafNode('deploy_agent');
+      await useCanvasStore.getState().addLeafNode('deploy_agent');
 
       const state = useCanvasStore.getState();
       expect(state.nodes).toEqual([]);
