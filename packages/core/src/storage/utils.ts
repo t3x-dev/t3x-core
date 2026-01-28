@@ -45,6 +45,10 @@ export function generatePinId(): string {
   return `pin_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+export function generateLeafHistoryId(): string {
+  return `lhist_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
 export function generateSentenceId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
