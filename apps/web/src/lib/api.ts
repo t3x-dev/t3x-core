@@ -2097,6 +2097,45 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
   return handleResponse<GenerateLeafOutputResult>(res);
 }
 
+/**
+ * Validate output result
+ * 验证输出的结果
+ */
+export interface ValidateLeafOutputResult {
+  leaf: Leaf;              // 更新后的 Leaf（包含新的 assertions）
+  validation: {
+    all_passed: boolean;   // 是否全部通过
+    passed_count: number;  // 通过的断言数量
+    failed_count: number;  // 失败的断言数量
+  };
+}
+
+/**
+ * Validate output for a leaf
+ * 验证 Leaf 的输出是否满足约束条件
+ *
+ * @param leafId - Leaf ID
+ * @param useSemantic - 是否使用语义匹配（默认 false，当前仅支持精确匹配）
+ * @returns Validation result with updated leaf and statistics
+ * @throws ApiError - LEAF_NOT_FOUND
+ * @throws ApiError - NO_OUTPUT (output is null)
+ * @throws ApiError - NO_CONSTRAINTS (no constraints to validate)
+ */
+export async function validateLeafOutput(
+  leafId: string,
+  useSemantic = false
+): Promise<ValidateLeafOutputResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ use_semantic: useSemantic }),
+    }
+  );
+  return handleResponse<ValidateLeafOutputResult>(res);
+}
+
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
