@@ -140,7 +140,16 @@
       "Bash(pnpm next build:*)",
       "Bash(pnpm --filter t3x-webui exec tsc --noEmit)",
       "Bash(git diff:*)",
-      "Bash(pnpm --filter @t3x/api exec tsc:*)"
+      "Bash(pnpm --filter @t3x/api exec tsc:*)",
+      "Bash(pnpm stop:api:*)",
+      "Bash(export PROJECT_ID=\"proj_29e4d716\")",
+      "Bash(LEAF_ID=\"leaf_961a633dc068\" __NEW_LINE_4aa2c0491038bc23__ echo \"=== Raw API Response ===\" curl -s \"http://localhost:8000/api/v1/leaves/$LEAF_ID\")",
+      "Bash(LEAF_ID=\"leaf_e5b962de02b9\" curl -s \"http://localhost:8000/api/v1/leaves/$LEAF_ID\")",
+      "Bash(jq:*)",
+      "Bash(SOURCE=\"sha256:030f5867313699be367a876e3d36682f5a81ecac774c0ca6702aa231a273c2ea\" TARGET=\"sha256:60f36e582c6a7ea81675a90a1fcbe491944f292c6b4d082eb22e491ab87c58db\" curl -s -X POST \"http://localhost:8000/api/v1/merge/prepare\" -H \"Content-Type: application/json\" -d \"{\"\"source_hash\"\": \"\"$SOURCE\"\", \"\"target_hash\"\": \"\"$TARGET\"\"}\")",
+      "Bash(SOURCE=\"sha256:030f5867313699be367a876e3d36682f5a81ecac774c0ca6702aa231a273c2ea\")",
+      "Bash(TARGET=\"sha256:60f36e582c6a7ea81675a90a1fcbe491944f292c6b4d082eb22e491ab87c58db\")",
+      "Bash(SOURCE=\"sha256:030f5867313699be367a876e3d36682f5a81ecac774c0ca6702aa231a273c2ea\" TARGET=\"sha256:5ef6af385fda7078140156213b4ee08fff23b0524afa5bbed6d936447b0f731e\" curl -s -X POST \"http://localhost:8000/api/v1/merge/prepare\" -H \"Content-Type: application/json\" -d \"{\"\"source_hash\"\": \"\"$SOURCE\"\", \"\"target_hash\"\": \"\"$TARGET\"\"}\")"
     ],
     "deny": [],
     "ask": []
