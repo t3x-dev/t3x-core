@@ -253,6 +253,29 @@ describe('Leaves Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data).toEqual([]);
     });
+
+    it('filters by type', async () => {
+      // beforeEach creates tweet and weibo leaves
+      const tweetRes = await app.request(
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves?type=tweet`
+      );
+      expect(tweetRes.status).toBe(200);
+
+      const tweetData: ApiResponse = await tweetRes.json();
+      expect(tweetData.success).toBe(true);
+      expect(tweetData.data.length).toBeGreaterThan(0);
+      expect(tweetData.data.every((leaf: ApiResponse) => leaf.type === 'tweet')).toBe(true);
+
+      const weiboRes = await app.request(
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves?type=weibo`
+      );
+      expect(weiboRes.status).toBe(200);
+
+      const weiboData: ApiResponse = await weiboRes.json();
+      expect(weiboData.success).toBe(true);
+      expect(weiboData.data.length).toBeGreaterThan(0);
+      expect(weiboData.data.every((leaf: ApiResponse) => leaf.type === 'weibo')).toBe(true);
+    });
   });
 
   describe('GET /v1/projects/:projectId/leaves', () => {
@@ -265,8 +288,7 @@ describe('Leaves Routes', () => {
       expect(Array.isArray(data.data)).toBe(true);
     });
 
-    // TODO: Enable when storage supports type filtering
-    it.skip('filters by type', async () => {
+    it('filters by type', async () => {
       // Create leaves of different types
       await app.request('/v1/leaves', {
         method: 'POST',
@@ -278,11 +300,22 @@ describe('Leaves Routes', () => {
         }),
       });
 
+      await app.request('/v1/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: testCommitHash,
+          type: 'wechat',
+          project_id: testProjectId,
+        }),
+      });
+
       const res = await app.request(`/v1/projects/${testProjectId}/leaves?type=slack`);
       expect(res.status).toBe(200);
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
+      expect(data.data.length).toBeGreaterThan(0);
       expect(data.data.every((leaf: ApiResponse) => leaf.type === 'slack')).toBe(true);
     });
 

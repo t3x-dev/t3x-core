@@ -22,7 +22,7 @@ import type {
   LeafConfig,
   LeafType,
 } from '@t3x/core';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type LeafRecord, leaves } from '../schema-v4';
 
@@ -33,6 +33,7 @@ import { type LeafRecord, leaves } from '../schema-v4';
 export interface ListLeavesOptions {
   limit?: number;
   offset?: number;
+  type?: LeafType;
 }
 
 /**
@@ -108,6 +109,7 @@ export async function findLeafById(
  * Find all Leaves for a commit
  *
  * Returns leaves ordered by createdAt descending.
+ * Optionally filter by leaf type.
  */
 export async function findLeavesByCommit(
   db: AnyDB,
@@ -117,10 +119,15 @@ export async function findLeavesByCommit(
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
+  const conditions = [eq(leaves.commitHash, commitHash)];
+  if (options.type) {
+    conditions.push(eq(leaves.type, options.type));
+  }
+
   const rows = await db
     .select()
     .from(leaves)
-    .where(eq(leaves.commitHash, commitHash))
+    .where(and(...conditions))
     .orderBy(desc(leaves.createdAt), leaves.id)
     .limit(limit)
     .offset(offset);
@@ -132,6 +139,7 @@ export async function findLeavesByCommit(
  * Find all Leaves for a project
  *
  * Returns leaves ordered by createdAt descending.
+ * Optionally filter by leaf type.
  */
 export async function findLeavesByProject(
   db: AnyDB,
@@ -141,10 +149,15 @@ export async function findLeavesByProject(
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
+  const conditions = [eq(leaves.projectId, projectId)];
+  if (options.type) {
+    conditions.push(eq(leaves.type, options.type));
+  }
+
   const rows = await db
     .select()
     .from(leaves)
-    .where(eq(leaves.projectId, projectId))
+    .where(and(...conditions))
     .orderBy(desc(leaves.createdAt), leaves.id)
     .limit(limit)
     .offset(offset);
