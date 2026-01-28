@@ -1,7 +1,7 @@
 /**
  * Google AI Studio Embedding Provider
  *
- * Uses the text-embedding-004 model by default (768 dimensions).
+ * Uses the gemini-embedding-001 model by default (768 dimensions).
  */
 
 import { cosineSimilarity, type EmbeddingProvider, EmbeddingProviderError } from './base';
@@ -20,9 +20,15 @@ export interface GoogleAIEmbeddingConfig {
 
   /**
    * Model to use for embeddings
-   * @default "text-embedding-004"
+   * @default "gemini-embedding-001"
    */
   model?: string;
+
+  /**
+   * Output embedding dimensions (gemini-embedding-001 supports 128-3072)
+   * @default 768
+   */
+  outputDimensionality?: number;
 
   /**
    * Request timeout in milliseconds
@@ -46,7 +52,7 @@ interface GoogleAIBatchEmbedResponse {
 /**
  * Google AI Studio Embedding Provider
  *
- * Uses the text-embedding-004 model by default (768 dimensions).
+ * Uses the gemini-embedding-001 model by default (768 dimensions).
  */
 export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
   readonly id: string;
@@ -54,6 +60,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
 
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly outputDimensionality: number;
   private readonly timeout: number;
   private readonly fetchFn: typeof fetch;
 
@@ -67,15 +74,13 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
     }
 
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'text-embedding-004';
+    this.model = config.model ?? 'gemini-embedding-001';
+    this.outputDimensionality = config.outputDimensionality ?? 768;
     this.timeout = config.timeout ?? 30000;
     this.fetchFn = config.fetch ?? globalThis.fetch;
 
     this.id = `google-ai:${this.model}`;
-
-    // Model dimensions
-    // text-embedding-004: 768 dimensions
-    this.dim = 768;
+    this.dim = this.outputDimensionality;
   }
 
   async encode(texts: string[]): Promise<number[][]> {
@@ -128,6 +133,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
             content: {
               parts: [{ text }],
             },
+            outputDimensionality: this.outputDimensionality,
           })),
         }),
         signal: controller.signal,

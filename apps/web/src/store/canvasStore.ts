@@ -648,7 +648,7 @@ const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalV3?: api.CommitV3 // Original V3 data for source context display
+  originalV4?: api.CommitV4 // Original V4 data for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -704,29 +704,25 @@ const unitToNode = (
       sourceTurnWindow: commit?.turn_window ?? undefined,
       // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
       anchors: commit?.anchors ? api.parseApiCommitAnchors(commit.anchors) ?? undefined : undefined,
-      // V3 commit data for source context display
-      commitV3: originalV3 ? {
-        hash: originalV3.hash,
-        schema: 'commit/v3' as const,
+      // V4 commit data for source context display
+      commitV4: originalV4 ? {
+        hash: originalV4.hash,
+        schema: 't3x/commit/v4' as const,
         author: {
-          name: originalV3.author.name,
-          verification: originalV3.author.verification,
+          type: originalV4.author.type,
+          name: originalV4.author.name,
+          id: originalV4.author.id,
         },
-        committed_at: originalV3.committed_at,
-        sentences: originalV3.content.sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-          source: s.source,
-        })),
-        constraints: (originalV3.content.constraints ?? []).map((c) => ({
-          type: c.type,
-          id: c.id,
-          value: c.value,
-          match: c.match,
-          source_sentence_id: c.source_sentence_id,
-        })),
-        message: originalV3.message ?? undefined,
-        branch: originalV3.branch ?? undefined,
+        committed_at: originalV4.committed_at,
+        content: {
+          sentences: originalV4.content.sentences.map((s) => ({
+            id: s.id,
+            text: s.text,
+            source_ref: s.source_ref,
+          })),
+        },
+        message: originalV4.message ?? undefined,
+        branch: originalV4.branch ?? undefined,
       } : undefined,
     },
   };
@@ -768,43 +764,43 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations and V3 commits in parallel
-      const [convResponse, commitV3Response] = await Promise.all([
+      // Fetch conversations and V4 commits in parallel
+      const [convResponse, commitsV4] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listCommitsV3(projectId, undefined, 100, 0),
+        api.listCommitsV4(projectId, undefined, 100, 0),
       ]);
 
       const conversations = convResponse.conversations;
 
-      // Convert V3 commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = commitV3Response.commits.map((v3) => ({
-        commit_hash: v3.hash,
-        project_id: v3.project_id || projectId,
-        branch: v3.branch || 'main',
-        message: v3.message,
-        parent_hashes: v3.parents,
-        // V3: derive turn_window from sentences[].source for conversation association
-        turn_window: v3.content.sentences[0]?.source ? {
-          start_turn_hash: v3.content.sentences[0].source.turn_hash,
-          end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source?.turn_hash || v3.content.sentences[0].source.turn_hash,
+      // Convert V4 commits to V2-compatible format for unitToNode
+      const commits: api.Commit[] = commitsV4.map((v4) => ({
+        commit_hash: v4.hash,
+        project_id: v4.project_id || projectId,
+        branch: v4.branch || 'main',
+        message: v4.message,
+        parent_hashes: v4.parents,
+        // V4: derive turn_window from sentences[].source_ref for conversation association
+        turn_window: v4.content.sentences[0]?.source_ref ? {
+          start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
+          end_turn_hash: v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash || v4.content.sentences[0].source_ref.turn_hash,
         } : null,
-        facet_snapshot: null, // V3 uses sentences/constraints instead
+        facet_snapshot: null, // V4 uses sentences only, constraints in Leaves
         pipeline_config: null,
         draft_id: null,
         draft_text_hash: null,
         signature: null,
-        source_excerpt: v3.content.sentences.map((s) => s.text), // Convert sentences to source_excerpt
-        must_have: v3.content.constraints?.filter((c) => c.type === 'require').map((c) => c.value) || null,
-        mustnt_have: v3.content.constraints?.filter((c) => c.type === 'exclude').map((c) => c.value) || null,
-        position_x: v3.position?.x ?? null,
-        position_y: v3.position?.y ?? null,
+        source_excerpt: v4.content.sentences.map((s) => s.text), // Convert sentences to source_excerpt
+        must_have: null, // V4 doesn't have constraints at commit level
+        mustnt_have: null,
+        position_x: v4.position_x ?? null,
+        position_y: v4.position_y ?? null,
         source_refs: null,
         anchors: null,
-        created_at: v3.created_at,
-        // Store original V3 data for merge compatibility
-        sourceTurnWindow: v3.content.sentences[0]?.source ? {
-          start_turn_hash: v3.content.sentences[0].source.turn_hash,
-          end_turn_hash: v3.content.sentences[v3.content.sentences.length - 1]?.source.turn_hash || v3.content.sentences[0].source.turn_hash,
+        created_at: v4.created_at,
+        // Store original V4 data for merge compatibility
+        sourceTurnWindow: v4.content.sentences[0]?.source_ref ? {
+          start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
+          end_turn_hash: v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash || v4.content.sentences[0].source_ref.turn_hash,
         } : undefined,
       } as api.Commit));
 
@@ -869,10 +865,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         }
       });
 
-      // Build a map: commit_hash -> original V3 data (for source context display)
-      const commitV3Map = new Map<string, api.CommitV3>();
-      commitV3Response.commits.forEach((v3) => {
-        commitV3Map.set(v3.hash, v3);
+      // Build a map: commit_hash -> original V4 data (for source context display)
+      const commitV4Map = new Map<string, api.CommitV4>();
+      commitsV4.forEach((v4) => {
+        commitV4Map.set(v4.hash, v4);
       });
 
       // Build a map: conversation_id -> commit (for pairing into units)
@@ -900,8 +896,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       let nodeIndex = 0;
       conversations.forEach((conv) => {
         const commit = convToCommitMap.get(conv.conversation_id);
-        const originalV3 = commit ? commitV3Map.get(commit.commit_hash) : undefined;
-        const node = unitToNode(conv, commit || null, nodeIndex++, originalV3);
+        const originalV4 = commit ? commitV4Map.get(commit.commit_hash) : undefined;
+        const node = unitToNode(conv, commit || null, nodeIndex++, originalV4);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
@@ -927,8 +923,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
           position_y: undefined,
           created_at: commit.created_at,
         };
-        const originalV3 = commitV3Map.get(commit.commit_hash);
-        const node = unitToNode(virtualConv, commit, nodeIndex++, originalV3);
+        const originalV4 = commitV4Map.get(commit.commit_hash);
+        const node = unitToNode(virtualConv, commit, nodeIndex++, originalV4);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;

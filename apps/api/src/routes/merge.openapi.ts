@@ -14,8 +14,8 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { prepareMerge, executeMerge, type Merge2WayResult } from '@t3x/core';
 import {
-  getCommitV3,
-  createCommitV3,
+  findCommitV4ByHash,
+  createCommitV4,
   updateBranchHead,
   createMergeDraft,
   getMergeDraft,
@@ -98,7 +98,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   const db = await getDB();
 
   // Load commits
-  const sourceCommit = await getCommitV3(db, source_hash);
+  const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
     return c.json(
       {
@@ -112,7 +112,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
     );
   }
 
-  const targetCommit = await getCommitV3(db, target_hash);
+  const targetCommit = await findCommitV4ByHash(db, target_hash);
   if (!targetCommit) {
     return c.json(
       {
@@ -217,14 +217,19 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const author = getAuthorFromContext(c);
   const db = await getDB();
 
+  // Get project_id from source commit
+  const sourceCommit = await findCommitV4ByHash(db, source_hash);
+  const projectId = sourceCommit?.projectId || project_id;
+
   try {
-    // Execute merge
+    // Execute merge - V4 requires projectId
     const mergeCommit = executeMerge(
       prepared as Merge2WayResult,
       source_hash,
       target_hash,
-      author,
-      message
+      { type: 'human' as const, name: author.name, id: author.identity },
+      message,
+      projectId
     );
 
     // Set branch if provided
@@ -232,38 +237,21 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       mergeCommit.branch = branch;
     }
 
-    // Convert to CreateCommitV3Input format
-    const commitInput = {
+    // Save as V4 commit directly (source_ref preserved)
+    await createCommitV4(db, {
       hash: mergeCommit.hash,
-      schema: mergeCommit.schema,
       parents: mergeCommit.parents,
       author: mergeCommit.author,
       committedAt: new Date(mergeCommit.committed_at),
-      content: {
-        sentences: mergeCommit.content.sentences.map((s) => ({
-          text: s.text,
-          startChar: 0,
-          endChar: s.text.length,
-          id: s.id,
-          confidence: s.confidence,
-          source: s.source,
-        })),
-        constraints: mergeCommit.content.constraints || [],
-      },
+      content: mergeCommit.content,
+      projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-    };
-
-    // Save to storage
-    await createCommitV3(db, commitInput, { strictParents: false });
+    });
 
     // Update branch head if branch specified
-    if (branch) {
-      // Get project_id from source commit
-      const sourceCommit = await getCommitV3(db, source_hash);
-      if (sourceCommit?.projectId) {
-        await updateBranchHead(db, sourceCommit.projectId, branch, mergeCommit.hash);
-      }
+    if (branch && projectId) {
+      await updateBranchHead(db, projectId, branch, mergeCommit.hash);
     }
 
     return c.json({ success: true as const, data: mergeCommit }, 200);
@@ -358,7 +346,7 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
   }
 
   // Load commits
-  const sourceCommit = await getCommitV3(db, source_hash);
+  const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
     return c.json({
       success: false as const,
@@ -366,7 +354,7 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     }, 404);
   }
 
-  const targetCommit = await getCommitV3(db, target_hash);
+  const targetCommit = await findCommitV4ByHash(db, target_hash);
   if (!targetCommit) {
     return c.json({
       success: false as const,
@@ -575,47 +563,35 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     }, 400);
   }
 
-  const author = getAuthorFromContext(c);
+  const authorV3 = getAuthorFromContext(c);
+  const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
 
   try {
-    // Execute merge
+    // Execute merge - V4 requires projectId
     const mergeCommit = executeMerge(
       prepared,
       draft.sourceHash,
       draft.targetHash,
       author,
-      message
+      message,
+      draft.projectId
     );
 
     // Set branch
     const targetBranch = branch || draft.targetBranch || 'main';
     mergeCommit.branch = targetBranch;
 
-    // Convert to CreateCommitV3Input format
-    const commitInput = {
+    // Save as V4 commit directly (source_ref preserved)
+    await createCommitV4(db, {
       hash: mergeCommit.hash,
-      schema: mergeCommit.schema,
       parents: mergeCommit.parents,
       author: mergeCommit.author,
       committedAt: new Date(mergeCommit.committed_at),
-      content: {
-        sentences: mergeCommit.content.sentences.map((s) => ({
-          text: s.text,
-          startChar: 0,
-          endChar: s.text.length,
-          id: s.id,
-          confidence: s.confidence,
-          source: s.source,
-        })),
-        constraints: mergeCommit.content.constraints || [],
-      },
+      content: mergeCommit.content,
       projectId: draft.projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-    };
-
-    // Save to storage
-    await createCommitV3(db, commitInput, { strictParents: false });
+    });
 
     // Update branch head
     await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
