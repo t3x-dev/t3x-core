@@ -1,0 +1,465 @@
+'use client';
+
+/**
+ * TruncatedCommitView - Compact commit display with smart truncation
+ *
+ * Features:
+ * - Prioritizes showing highlighted (selected) content
+ * - Shows ~50 chars context around highlights
+ * - Word-boundary aware truncation
+ * - "+N more sentences" indicator when truncated
+ * - "View full" action to expand
+ *
+ * @see https://github.com/t3x-dev/T3X/issues/219
+ */
+
+import { AlertCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import type { TurnContextData } from '@/lib/api';
+import * as api from '@/lib/api';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface CommitSentence {
+  id: string;
+  text: string;
+  source: {
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
+}
+
+interface TruncatedCommitViewProps {
+  /** Sentences from commit content */
+  sentences: CommitSentence[];
+  /** Maximum number of highlights to show fully (default: 2) */
+  maxHighlights?: number;
+  /** Context chars around each highlight (default: 50) */
+  contextChars?: number;
+  /** Callback when "View full" is clicked */
+  onViewFull?: () => void;
+  /** Show loading state */
+  loading?: boolean;
+}
+
+interface HighlightRange {
+  start: number;
+  end: number;
+}
+
+interface TruncatedSegment {
+  type: 'text' | 'highlight' | 'ellipsis';
+  content: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Truncation Algorithm
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Find word boundary - expands position to nearest word boundary
+ * Returns position that doesn't break mid-word
+ */
+function findWordBoundary(text: string, pos: number, direction: 'left' | 'right'): number {
+  if (pos <= 0) return 0;
+  if (pos >= text.length) return text.length;
+
+  if (direction === 'left') {
+    // Move left to find start of word or whitespace
+    while (pos > 0 && !/\s/.test(text[pos - 1])) {
+      pos--;
+    }
+    return pos;
+  }
+  // direction === 'right'
+  // Move right to find end of word or whitespace
+  while (pos < text.length && !/\s/.test(text[pos])) {
+    pos++;
+  }
+  return pos;
+}
+
+/**
+ * Merge overlapping or adjacent highlight ranges
+ */
+function mergeHighlightRanges(ranges: HighlightRange[]): HighlightRange[] {
+  if (ranges.length === 0) return [];
+
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  const merged: HighlightRange[] = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+
+    // Merge if overlapping or adjacent (within 1 char)
+    if (current.start <= last.end + 1) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push({ ...current });
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Smart truncation algorithm that preserves highlights
+ *
+ * Rules:
+ * 1. Always show first N highlights fully
+ * 2. Show ~contextChars before/after each highlight
+ * 3. Use "..." for truncated portions
+ * 4. Never break mid-word
+ */
+function truncateWithHighlights(
+  text: string,
+  highlights: HighlightRange[],
+  maxHighlights: number,
+  contextChars: number
+): TruncatedSegment[] {
+  if (text.length === 0) return [];
+
+  // If no highlights, show truncated text
+  if (highlights.length === 0) {
+    const maxLen = contextChars * 2;
+    if (text.length <= maxLen) {
+      return [{ type: 'text', content: text }];
+    }
+    const endPos = findWordBoundary(text, maxLen, 'right');
+    return [
+      { type: 'text', content: text.slice(0, endPos) },
+      { type: 'ellipsis', content: '...' },
+    ];
+  }
+
+  // Merge and limit highlights
+  const merged = mergeHighlightRanges(highlights);
+  const visibleHighlights = merged.slice(0, maxHighlights);
+
+  // Build visible ranges (highlight + context)
+  const visibleRanges: HighlightRange[] = [];
+
+  for (const hl of visibleHighlights) {
+    // Calculate context boundaries with word-aware truncation
+    let contextStart = Math.max(0, hl.start - contextChars);
+    let contextEnd = Math.min(text.length, hl.end + contextChars);
+
+    // Adjust to word boundaries (don't break mid-word)
+    if (contextStart > 0) {
+      contextStart = findWordBoundary(text, contextStart, 'right');
+    }
+    if (contextEnd < text.length) {
+      contextEnd = findWordBoundary(text, contextEnd, 'left');
+    }
+
+    // Ensure highlight is still fully visible
+    contextStart = Math.min(contextStart, hl.start);
+    contextEnd = Math.max(contextEnd, hl.end);
+
+    visibleRanges.push({ start: contextStart, end: contextEnd });
+  }
+
+  // Merge adjacent visible ranges
+  const mergedRanges = mergeHighlightRanges(visibleRanges);
+
+  // Build segments
+  const segments: TruncatedSegment[] = [];
+  let lastEnd = 0;
+
+  for (const range of mergedRanges) {
+    // Add ellipsis if there's a gap (either at start or between ranges)
+    if (range.start > lastEnd) {
+      segments.push({ type: 'ellipsis', content: '...' });
+    }
+
+    // Add text before first highlight in this range
+    const rangeHighlights = visibleHighlights.filter(
+      (hl) => hl.start >= range.start && hl.end <= range.end
+    );
+
+    let pos = range.start;
+    for (const hl of rangeHighlights) {
+      // Text before highlight
+      if (hl.start > pos) {
+        segments.push({ type: 'text', content: text.slice(pos, hl.start) });
+      }
+      // Highlight
+      segments.push({ type: 'highlight', content: text.slice(hl.start, hl.end) });
+      pos = hl.end;
+    }
+
+    // Text after last highlight in range
+    if (pos < range.end) {
+      segments.push({ type: 'text', content: text.slice(pos, range.end) });
+    }
+
+    lastEnd = range.end;
+  }
+
+  // Add trailing ellipsis if needed
+  if (lastEnd < text.length) {
+    segments.push({ type: 'ellipsis', content: '...' });
+  }
+
+  return segments;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Component
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Turn data with highlights and context
+ */
+interface TurnWithHighlights {
+  turnHash: string;
+  context: TurnContextData | null;
+  highlights: HighlightRange[];
+  loading: boolean;
+  error: string | null;
+}
+
+/**
+ * Group sentences by turn_hash
+ */
+function groupSentencesByTurn(sentences: CommitSentence[]): Map<string, HighlightRange[]> {
+  const groups = new Map<string, HighlightRange[]>();
+
+  for (const sentence of sentences) {
+    const turnHash = sentence.source.turn_hash;
+    if (!turnHash) continue;
+
+    const highlights = groups.get(turnHash) || [];
+    highlights.push({
+      start: sentence.source.start_char,
+      end: sentence.source.end_char,
+    });
+    groups.set(turnHash, highlights);
+  }
+
+  return groups;
+}
+
+export function TruncatedCommitView({
+  sentences,
+  maxHighlights = 2,
+  contextChars = 50,
+  onViewFull,
+  loading: externalLoading,
+}: TruncatedCommitViewProps) {
+  const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Group sentences by turn
+  const sentencesByTurn = useMemo(() => groupSentencesByTurn(sentences), [sentences]);
+
+  // Get ordered list of unique turn hashes
+  const turnHashes = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const sentence of sentences) {
+      const hash = sentence.source.turn_hash;
+      if (hash && !seen.has(hash)) {
+        seen.add(hash);
+        ordered.push(hash);
+      }
+    }
+    return ordered;
+  }, [sentences]);
+
+  // Count total sentences for "+N more" indicator
+  const totalHighlightsCount = useMemo(() => {
+    return sentences.length;
+  }, [sentences]);
+
+  // Visible highlights count (across all turns, up to maxHighlights per turn)
+  const visibleHighlightsCount = useMemo(() => {
+    let count = 0;
+    for (const turnHash of turnHashes.slice(0, 2)) {
+      // Show max 2 turns
+      const highlights = sentencesByTurn.get(turnHash) || [];
+      count += Math.min(highlights.length, maxHighlights);
+    }
+    return count;
+  }, [turnHashes, sentencesByTurn, maxHighlights]);
+
+  const hiddenCount = totalHighlightsCount - visibleHighlightsCount;
+
+  // Fetch context for first 2 turns only
+  useEffect(() => {
+    if (turnHashes.length === 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchContexts = async () => {
+      setIsLoading(true);
+
+      const newData = new Map<string, TurnWithHighlights>();
+      const hashesToFetch = turnHashes.slice(0, 2); // Max 2 turns in compact view
+
+      await Promise.all(
+        hashesToFetch.map(async (turnHash) => {
+          const highlights = sentencesByTurn.get(turnHash) || [];
+
+          try {
+            const context = await api.fetchTurnContext(turnHash, {
+              before: 0,
+              after: 0,
+            });
+
+            newData.set(turnHash, {
+              turnHash,
+              context,
+              highlights,
+              loading: false,
+              error: null,
+            });
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(
+                `[TruncatedCommitView] Failed to fetch turn context for ${turnHash}:`,
+                err
+              );
+            }
+            newData.set(turnHash, {
+              turnHash,
+              context: null,
+              highlights,
+              loading: false,
+              error: errorMsg,
+            });
+          }
+        })
+      );
+
+      // Only update state if component is still mounted
+      if (!cancelled) {
+        setTurnData(newData);
+        setIsLoading(false);
+      }
+    };
+
+    fetchContexts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [turnHashes, sentencesByTurn]);
+
+  // Handle empty sentences
+  if (sentences.length === 0) {
+    return <div className="px-2 py-1.5 text-xs text-slate-400 italic">No sentences</div>;
+  }
+
+  // Loading state
+  if (isLoading || externalLoading) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-2">
+        <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
+        <span className="text-xs text-slate-400">Loading...</span>
+      </div>
+    );
+  }
+
+  // Check if any context was loaded
+  const hasAnyContext = Array.from(turnData.values()).some((data) => data.context !== null);
+
+  // Fallback to simple sentence list if no context loaded
+  if (!hasAnyContext) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1 text-[0.65rem] text-amber-600">
+          <AlertCircle size={10} />
+          <span>Context unavailable</span>
+        </div>
+        {sentences.slice(0, maxHighlights).map((s) => (
+          <div
+            key={s.id}
+            className="text-xs text-slate-700 bg-green-100 px-1.5 py-1 rounded line-clamp-2"
+          >
+            {s.text}
+          </div>
+        ))}
+        {hiddenCount > 0 && (
+          <div className="text-[0.65rem] text-slate-400">
+            +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render truncated view
+  return (
+    <div className="space-y-2">
+      {turnHashes.slice(0, 2).map((turnHash) => {
+        const data = turnData.get(turnHash);
+        if (!data || data.error || !data.context?.target_turn) {
+          return null;
+        }
+
+        const turn = data.context.target_turn;
+        const segments = truncateWithHighlights(
+          turn.content,
+          data.highlights,
+          maxHighlights,
+          contextChars
+        );
+
+        return (
+          <div key={turnHash} className="text-xs leading-relaxed">
+            {/* Role indicator */}
+            <span className="text-[0.6rem] font-medium text-slate-400 uppercase tracking-wider">
+              {turn.role}
+            </span>
+            {/* Truncated content with highlights */}
+            <div className="mt-0.5 text-slate-700">
+              {segments.map((seg, idx) => {
+                if (seg.type === 'ellipsis') {
+                  return (
+                    <span key={idx} className="text-slate-400">
+                      {seg.content}
+                    </span>
+                  );
+                }
+                if (seg.type === 'highlight') {
+                  return (
+                    <mark key={idx} className="bg-green-200 text-green-900 px-0.5 rounded-sm">
+                      {seg.content}
+                    </mark>
+                  );
+                }
+                return <span key={idx}>{seg.content}</span>;
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Footer: +N more + View full */}
+      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+        <span className="text-[0.65rem] text-slate-400">
+          {hiddenCount > 0 && `+${hiddenCount} sentence${hiddenCount !== 1 ? 's' : ''}`}
+        </span>
+        {onViewFull && (
+          <button
+            type="button"
+            onClick={onViewFull}
+            className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+          >
+            View full
+            <ChevronRight size={10} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
