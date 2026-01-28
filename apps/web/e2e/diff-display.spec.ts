@@ -57,7 +57,7 @@ test.describe('DiffDisplayView Integration', () => {
         project_id: projectId,
         branch: 'main',
         message: 'Updated commit',
-        parent_hashes: [commitHash1],
+        parents: [commitHash1],
         content: {
           sentences: [
             { id: 's1', text: 'User prefers dark mode', source: { turn_hash: fakeTurnHash, start_char: 0, end_char: 22 } },
@@ -188,13 +188,17 @@ test.describe('DiffDisplayView Integration', () => {
   // Test 4: UI loads project page (soft assertion)
   // ─────────────────────────────────────────────────────────────────────────
   test('UI loads project page', async ({ page }) => {
-    // Navigate to project canvas
-    await page.goto(`/project/${projectId}`);
+    // Visit homepage first
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(3000);
 
-    // Wait for page to load
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {
-      console.log('Network idle timeout, continuing...');
-    });
+    // Click on the project using exact text match
+    await page.getByText(TEST_PROJECT_NAME, { exact: true }).click();
+
+    // Wait for navigation and canvas
+    await page.waitForURL(/\/project\//, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(3000);
 
     // Take screenshot for debugging
     await page.screenshot({ path: `test-results/project-page-${projectId}.png` });
@@ -215,13 +219,15 @@ test.describe('DiffDisplayView Integration', () => {
 
       console.log(`  - Base commit visible: ${hasBaseCommit}`);
       console.log(`  - Updated commit visible: ${hasUpdatedCommit}`);
+
+      // Verify canvas actually loaded with real assertions
+      expect(hasCanvas).toBe(true);
     } else {
       console.log('⚠ Canvas not visible - may need manual verification');
       console.log(`  Project URL: http://localhost:3000/project/${projectId}`);
+      // Fail if canvas doesn't load
+      expect(hasCanvas).toBe(true);
     }
-
-    // This test is informational - always pass
-    expect(true).toBe(true);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
