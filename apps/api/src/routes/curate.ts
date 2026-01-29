@@ -81,6 +81,12 @@ interface Chunk {
   cos_intent?: number;
   /** v1.1: Anchor candidates within this chunk (for inline highlighting) */
   anchor_candidates?: ChunkAnchorCandidate[];
+  /** v1.3: Turn hash this chunk belongs to (for source context display) */
+  turn_hash?: string;
+  /** v1.3: Start position relative to turn.content (without [role]: prefix) */
+  turn_start?: number;
+  /** v1.3: End position relative to turn.content (without [role]: prefix) */
+  turn_end?: number;
 }
 
 /**
@@ -171,7 +177,18 @@ interface Ring1Output {
 }
 
 interface ExtractedData {
-  chunks: Array<{ id: string; start: number; end: number; text: string }>;
+  chunks: Array<{
+    id: string;
+    start: number;
+    end: number;
+    text: string;
+    /** v1.3: Turn hash this chunk belongs to */
+    turn_hash?: string;
+    /** v1.3: Start position relative to turn.content */
+    turn_start?: number;
+    /** v1.3: End position relative to turn.content */
+    turn_end?: number;
+  }>;
   sourceText: string;
   /** v1.1: All anchor candidates with global positions */
   anchorCandidates: AnchorCandidate[];
@@ -191,6 +208,7 @@ function extractChunksFromTurns(
   turns: Array<{
     role: string;
     content: string;
+    turn_hash?: string; // v1.3: Turn hash for source context
     rings?: {
       // Support both formats: { rings: { ring1, ring3 } } and { ring1, ring3 }
       rings?: {
@@ -203,7 +221,7 @@ function extractChunksFromTurns(
   }>,
   computeHash: (text: string) => string
 ): ExtractedData {
-  const chunks: Array<{ id: string; start: number; end: number; text: string }> = [];
+  const chunks: ExtractedData['chunks'] = [];
   const allAnchorCandidates: AnchorCandidate[] = [];
   const warnings: string[] = [];
   const textParts: string[] = [];
@@ -285,6 +303,10 @@ function extractChunksFromTurns(
           start: globalOffset + prefix.length + seg.startChar,
           end: globalOffset + prefix.length + seg.endChar,
           text: seg.text,
+          // v1.3: Include turn_hash and turn-relative positions for source context
+          turn_hash: turn.turn_hash,
+          turn_start: seg.startChar,
+          turn_end: seg.endChar,
         });
       }
     }
@@ -586,6 +608,7 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
         turns.map((t) => ({
           role: t.role,
           content: t.content,
+          turn_hash: t.turnHash, // v1.3: Include turn_hash for source context
           rings: t.ringsJson ? JSON.parse(t.ringsJson) : undefined,
         })),
         sha256
@@ -716,6 +739,10 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
         cos_intent: x.cos_intent,
         // v1.1: Include anchor candidates if any exist
         ...(chunkAnchors.length > 0 ? { anchor_candidates: chunkAnchors } : {}),
+        // v1.3: Include turn_hash and turn-relative positions for source context
+        ...(x.turn_hash ? { turn_hash: x.turn_hash } : {}),
+        ...(x.turn_start !== undefined ? { turn_start: x.turn_start } : {}),
+        ...(x.turn_end !== undefined ? { turn_end: x.turn_end } : {}),
       };
     });
 

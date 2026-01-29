@@ -73,12 +73,15 @@ export function executeMerge(
   const addSentence = (s: DiffableSentence) => {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
     const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    sentences.push({
+    const sentence: SentenceV4 = {
       id: newId,
       text: s.text,
-      // Note: source_ref and confidence are not preserved in merge
-      // as DiffableSentence only has id and text
-    });
+    };
+    // Preserve source_ref for source context display
+    if (s.source_ref) {
+      sentence.source_ref = s.source_ref;
+    }
+    sentences.push(sentence);
   };
 
   // 1. Add identical sentences (from source, arbitrary choice)
