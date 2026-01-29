@@ -278,7 +278,7 @@ export interface Draft {
 }
 
 // Raw diff response from backend
-interface DiffResultRaw {
+export interface DiffResultRaw {
   baseId: string;
   targetId: string;
   segmentDiffs: Array<{
@@ -286,7 +286,9 @@ interface DiffResultRaw {
     text: string;
     diffType: 'same' | 'added' | 'removed' | 'modified';
     matchedSegmentId?: string;
+    matchedText?: string;
     similarity?: number;
+    wordDiff?: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
   }>;
   threshold: number;
   stats: {
@@ -1276,6 +1278,7 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
     segment_id: seg.segmentId,
     change_type: seg.diffType as 'added' | 'removed' | 'modified' | 'same',
     text: seg.text,
+    matched_text: seg.matchedText,
     similarity_to_base: seg.similarity,
   }));
 
@@ -1317,7 +1320,7 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
       facet: `modified_${idx + 1}`,
       change_type: 'modified',
       base_text: seg.text,
-      target_text: seg.text,
+      target_text: seg.matched_text ?? seg.text,
       added_keywords: [],
       removed_keywords: [],
     });
@@ -1333,6 +1336,24 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
     computed_at: new Date().toISOString(),
     stats: raw.stats,
   };
+}
+
+/**
+ * Raw diff - returns the unprocessed API response for full-screen diff view
+ */
+export async function diffRaw(
+  baseCommitHash: string,
+  targetCommitHash: string
+): Promise<DiffResultRaw> {
+  const res = await fetchWithTimeout(`${API_V1}/diff/two-way`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      base_commit_hash: baseCommitHash,
+      target_commit_hash: targetCommitHash,
+    }),
+  });
+  return handleResponse<DiffResultRaw>(res);
 }
 
 // ============================================================================

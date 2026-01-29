@@ -9,11 +9,21 @@ import {
   createCachedEmbeddingProvider,
   createDiffEngine,
   createGoogleAIEmbeddingProvider,
+  diffCommits,
+  DiffType,
+  calculateDiffStats,
   type DiffSegment,
+  type SegmentDiff,
+  type WordDiffSegment,
   EmbeddingProviderError,
   type RingOutput,
 } from '@t3x/core';
-import { getCommitV3, findSegmentEmbeddingsByTurn, findTurnByHash } from '@t3x/storage/pglite';
+import {
+  getCommitV3,
+  findCommitV4ByHash,
+  findSegmentEmbeddingsByTurn,
+  findTurnByHash,
+} from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
@@ -129,92 +139,126 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
 
   const db = await getDB();
 
-  // Mode 1: commit_hash mode (V3 commits)
-  // V3 commits can contain sentences from multiple turns, so we collect all unique turn_hashes
+  // Mode 1: commit_hash mode (V4 first, fallback to V3)
   if (body.base_commit_hash && body.target_commit_hash) {
-    const baseCommit = await getCommitV3(db, body.base_commit_hash);
-    const targetCommit = await getCommitV3(db, body.target_commit_hash);
+    // Try V4 commits first
+    const baseV4 = await findCommitV4ByHash(db, body.base_commit_hash);
+    const targetV4 = await findCommitV4ByHash(db, body.target_commit_hash);
 
-    if (!baseCommit) {
-      return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
-    }
-    if (!targetCommit) {
-      return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
-    }
-
-    // Collect all unique turn_hashes from all sentences in each commit
-    const baseTurnHashes = new Set<string>();
-    for (const sentence of baseCommit.content.sentences) {
-      if (sentence.source?.turn_hash) {
-        baseTurnHashes.add(sentence.source.turn_hash);
-      }
-    }
-
-    const targetTurnHashes = new Set<string>();
-    for (const sentence of targetCommit.content.sentences) {
-      if (sentence.source?.turn_hash) {
-        targetTurnHashes.add(sentence.source.turn_hash);
-      }
-    }
-
-    if (baseTurnHashes.size === 0) {
-      return jsonError(
-        c,
-        'INVALID_REQUEST',
-        `Base commit ${body.base_commit_hash} has no source turn_hash in any sentence`,
-        400
+    if (baseV4 && targetV4) {
+      // V4 path: use local Jaccard + Hungarian diff (no embedding API needed)
+      const commitDiff = diffCommits(
+        baseV4.content.sentences.map((s) => ({ id: s.id, text: s.text })),
+        targetV4.content.sentences.map((s) => ({ id: s.id, text: s.text }))
       );
-    }
-    if (targetTurnHashes.size === 0) {
-      return jsonError(
-        c,
-        'INVALID_REQUEST',
-        `Target commit ${body.target_commit_hash} has no source turn_hash in any sentence`,
-        400
-      );
-    }
 
-    // Fetch and aggregate segments from all turns
-    const baseSegmentsAll: DiffSegment[] = [];
-    for (const turnHash of baseTurnHashes) {
-      const result = await extractSegmentsFromTurn(db, turnHash);
-      if (!result.ok) {
+      // Convert CommitDiff → response format for frontend compatibility
+      const segmentDiffs: (SegmentDiff & { wordDiff?: WordDiffSegment[] })[] = [];
+      for (const s of commitDiff.identical) {
+        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.SAME });
+      }
+      for (const pair of commitDiff.similar) {
+        segmentDiffs.push({
+          segmentId: pair.source.id,
+          text: pair.source.text,
+          diffType: DiffType.MODIFIED,
+          similarity: pair.similarity,
+          matchedSegmentId: pair.target.id,
+          matchedText: pair.target.text,
+          wordDiff: pair.wordDiff,
+        });
+      }
+      for (const s of commitDiff.onlyInSource) {
+        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.REMOVED });
+      }
+      for (const s of commitDiff.onlyInTarget) {
+        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.ADDED });
+      }
+
+      return jsonSuccess(c, {
+        baseId: body.base_commit_hash,
+        targetId: body.target_commit_hash,
+        segmentDiffs,
+        threshold: 0.3, // Jaccard threshold
+        stats: calculateDiffStats(segmentDiffs),
+        method: 'jaccard',
+        usedCache: false,
+        cacheStats: null,
+      });
+    } else {
+      // Fallback to V3
+      const baseCommit = baseV4 ? null : await getCommitV3(db, body.base_commit_hash);
+      const targetCommit = targetV4 ? null : await getCommitV3(db, body.target_commit_hash);
+
+      if (!baseV4 && !baseCommit) {
+        return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
+      }
+      if (!targetV4 && !targetCommit) {
         return jsonError(
           c,
-          getErrorCode(result.error),
-          `Base commit turn ${turnHash}: ${result.message}`,
-          getErrorStatus(result.error)
+          'NOT_FOUND',
+          `Target commit ${body.target_commit_hash} not found`,
+          404
         );
       }
-      baseSegmentsAll.push(...result.segments);
-    }
 
-    const targetSegmentsAll: DiffSegment[] = [];
-    for (const turnHash of targetTurnHashes) {
-      const result = await extractSegmentsFromTurn(db, turnHash);
-      if (!result.ok) {
-        return jsonError(
-          c,
-          getErrorCode(result.error),
-          `Target commit turn ${turnHash}: ${result.message}`,
-          getErrorStatus(result.error)
-        );
+      // Helper: extract segments from a V3 or V4 commit
+      const extractFromCommit = async (
+        commitV4: typeof baseV4,
+        commitV3: typeof baseCommit,
+        label: string
+      ) => {
+        if (commitV4) {
+          return {
+            segments: commitV4.content.sentences.map((s) => ({
+              segmentId: s.id,
+              text: s.text,
+            })),
+            turnHashes: new Set<string>(),
+          };
+        }
+        // V3 path: collect turn hashes and extract Ring3 segments
+        const turnHashes = new Set<string>();
+        for (const sentence of commitV3!.content.sentences) {
+          if (sentence.source?.turn_hash) {
+            turnHashes.add(sentence.source.turn_hash);
+          }
+        }
+        if (turnHashes.size === 0) {
+          throw new Error(
+            `${label} commit has no source turn_hash in any sentence`
+          );
+        }
+        const segments: DiffSegment[] = [];
+        for (const turnHash of turnHashes) {
+          const result = await extractSegmentsFromTurn(db, turnHash);
+          if (!result.ok) {
+            throw new Error(`${label} commit turn ${turnHash}: ${result.message}`);
+          }
+          segments.push(...result.segments);
+        }
+        return { segments, turnHashes };
+      };
+
+      try {
+        const baseResult = await extractFromCommit(baseV4, baseCommit, 'Base');
+        const targetResult = await extractFromCommit(targetV4, targetCommit, 'Target');
+
+        baseId = body.base_commit_hash;
+        baseSegments = baseResult.segments;
+        targetId = body.target_commit_hash;
+        targetSegments = targetResult.segments;
+
+        // Enable embedding cache only for single-turn V3 commits
+        if (baseResult.turnHashes.size === 1 && targetResult.turnHashes.size === 1) {
+          baseTurnHashForCache = Array.from(baseResult.turnHashes)[0];
+          targetTurnHashForCache = Array.from(targetResult.turnHashes)[0];
+          usedCache = true;
+        }
+      } catch (err) {
+        return jsonError(c, 'INVALID_REQUEST', (err as Error).message, 400);
       }
-      targetSegmentsAll.push(...result.segments);
     }
-
-    baseId = body.base_commit_hash;
-    baseSegments = baseSegmentsAll;
-    targetId = body.target_commit_hash;
-    targetSegments = targetSegmentsAll;
-
-    // For single-turn commits, enable embedding cache
-    if (baseTurnHashes.size === 1 && targetTurnHashes.size === 1) {
-      baseTurnHashForCache = Array.from(baseTurnHashes)[0];
-      targetTurnHashForCache = Array.from(targetTurnHashes)[0];
-      usedCache = true;
-    }
-    // Multi-turn commits: disable embedding cache (too complex to manage)
   }
   // Mode 2: turn_hash mode
   else if (body.baseTurnHash && body.targetTurnHash) {

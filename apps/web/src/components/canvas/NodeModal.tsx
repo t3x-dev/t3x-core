@@ -44,7 +44,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import * as api from '@/lib/api';
+import type { DiffResultRaw } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   AnchorCandidate,
@@ -67,8 +69,9 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
-import { DiffDisplayView } from '@/components/diff/DiffDisplayView';
 import { CommitSourceContext } from './CommitSourceContext';
+import { PinButton } from '@/components/ui/PinButton';
+import { usePinsStore } from '@/store/pinsStore';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
@@ -176,7 +179,7 @@ function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay
  * Pinned Sources section for V4 commits
  * Uses CommitSourceRef from @t3x/core contract
  */
-function PinnedSourcesSection({ sourceRefs }: { sourceRefs: CommitSourceRef[] }) {
+function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSourceRef[]; projectId?: string }) {
   if (sourceRefs.length === 0) {
     return null;
   }
@@ -215,10 +218,64 @@ function PinnedSourcesSection({ sourceRefs }: { sourceRefs: CommitSourceRef[] })
                 </div>
               )}
             </div>
+            {projectId && ref.id && (
+              <PinButton
+                projectId={projectId}
+                type={ref.type === 'conversation' ? 'conversation' : 'leaf'}
+                refId={ref.id}
+                className="shrink-0"
+              />
+            )}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Memory Context sidebar section for committed view.
+ * Shows pin counts and allows opening EditContextDialog.
+ */
+function MemoryContextSidebar({ projectId, conversationId }: { projectId?: string; conversationId?: string }) {
+  const pins = usePinsStore((state) => state.pins);
+
+  const convCount = pins.filter((p) => p.type === 'conversation').length;
+  const leafCount = pins.filter((p) => p.type === 'leaf').length;
+  const totalCount = convCount + leafCount;
+
+  if (!projectId) return null;
+
+  return (
+    <>
+      <div className="h-px bg-gray-200 my-4" />
+      <div className="mb-5">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Memory Context
+        </h4>
+        <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+          <Pin size={14} className="text-gray-400 shrink-0" />
+          <span>
+            {totalCount === 0
+              ? 'No pins'
+              : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
+          </span>
+        </div>
+        {conversationId && (
+          <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
+            <span className="text-xs text-gray-600 truncate mr-2">
+              conv#{conversationId.slice(0, 6)}
+            </span>
+            <PinButton
+              projectId={projectId}
+              type="conversation"
+              refId={conversationId}
+              className="h-7 w-7"
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -322,7 +379,7 @@ function CommitFullSection({
 
       {/* Pinned Sources - V4 only */}
       {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
-        <PinnedSourcesSection sourceRefs={commit.source_refs} />
+        <PinnedSourcesSection sourceRefs={commit.source_refs} projectId={projectId} />
       )}
 
       {/* Sentences with Source Context - supports both V3 and V4 */}
@@ -858,9 +915,8 @@ export function NodeModal({
   const [diffTargetCommit, setDiffTargetCommit] = useState<string>('');
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
-  // Sentence-level diff data for DiffDisplayView
-  const [diffSourceSentences, setDiffSourceSentences] = useState<api.CommitV3Sentence[]>([]);
-  const [diffTargetSentences, setDiffTargetSentences] = useState<api.CommitV3Sentence[]>([]);
+  const [diffRawData, setDiffRawData] = useState<DiffResultRaw | null>(null);
+  const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
 
   // Legacy three-way merge state removed - use MergePanel for two-way merge
 
@@ -2049,88 +2105,16 @@ export function NodeModal({
 
     setIsDiffLoading(true);
     setDiffError(null);
-    setDiffSourceSentences([]);
-    setDiffTargetSentences([]);
+    setDiffResult(null);
+    setDiffRawData(null);
 
     try {
-      // Get source sentences from current commit (V4 or V3)
-      const sourceCommitV4 = data.commitV4;
-      const sourceCommitV3 = data.commitV3;
-
-      if (!sourceCommitV4 && !sourceCommitV3) {
-        setDiffError('Diff requires commit data');
-        return;
-      }
-
-      // Convert to V3 sentence format for diff API
-      const sourceSentences: api.CommitV3Sentence[] = sourceCommitV4
-        ? sourceCommitV4.content.sentences.map((s) => ({
-            id: s.id,
-            text: s.text,
-            source: {
-              turn_hash: s.source_ref?.turn_hash || '',
-              start_char: s.source_ref?.start_char || 0,
-              end_char: s.source_ref?.end_char || s.text.length,
-            },
-          }))
-        : sourceCommitV3!.sentences.map((s) => ({
-            id: s.id,
-            text: s.text,
-            source: {
-              turn_hash: s.source?.turn_hash || '',
-              start_char: s.source?.start_char || 0,
-              end_char: s.source?.end_char || s.text.length,
-            },
-          }));
-
-      // Find target commit from canvas nodes or fetch from API
-      const targetNode = allCommittedCommits.find((n) => n.data.commitHash === diffTargetCommit);
-      let targetSentences: api.CommitV3Sentence[] = [];
-
-      if (targetNode?.data.commitV4) {
-        // Use cached V4 data from canvas
-        targetSentences = targetNode.data.commitV4.content.sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-          source: {
-            turn_hash: s.source_ref?.turn_hash || '',
-            start_char: s.source_ref?.start_char || 0,
-            end_char: s.source_ref?.end_char || s.text.length,
-          },
-        }));
-      } else if (targetNode?.data.commitV3) {
-        // Use cached V3 data from canvas
-        targetSentences = targetNode.data.commitV3.sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-          source: {
-            turn_hash: s.source?.turn_hash || '',
-            start_char: s.source?.start_char || 0,
-            end_char: s.source?.end_char || s.text.length,
-          },
-        }));
-      } else {
-        // Fetch from API (try V4 first, fallback to V3)
-        try {
-          const fetchedCommitV4 = await api.getCommitV4(diffTargetCommit);
-          targetSentences = fetchedCommitV4.content.sentences.map((s) => ({
-            id: s.id,
-            text: s.text,
-            source: {
-              turn_hash: s.source_ref?.turn_hash || '',
-              start_char: s.source_ref?.start_char || 0,
-              end_char: s.source_ref?.end_char || s.text.length,
-            },
-          }));
-        } catch {
-          // Fallback to V3 API
-          const fetchedCommit = await api.getCommitV3(diffTargetCommit);
-          targetSentences = fetchedCommit.content.sentences;
-        }
-      }
-
-      setDiffSourceSentences(sourceSentences);
-      setDiffTargetSentences(targetSentences);
+      const [result, raw] = await Promise.all([
+        api.diff(data.commitHash, diffTargetCommit),
+        api.diffRaw(data.commitHash, diffTargetCommit),
+      ]);
+      setDiffResult(result);
+      setDiffRawData(raw);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setDiffError(error.message);
@@ -3476,6 +3460,7 @@ export function NodeModal({
     );
 
     return (
+    <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         role="dialog"
@@ -3574,6 +3559,8 @@ export function NodeModal({
                   )}
                 </div>
               </div>
+
+              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} />
             </aside>
 
             {/* Left Divider */}
@@ -3889,19 +3876,103 @@ export function NodeModal({
                       </div>
                     )}
 
-                    {/* Sentence-level Diff Display */}
-                    {(diffSourceSentences.length > 0 || diffTargetSentences.length > 0) && (
-                      <div className="mt-3">
-                        <DiffDisplayView
-                          sourceSentences={diffSourceSentences}
-                          targetSentences={diffTargetSentences}
-                          sourceCommitHash={data.commitHash}
-                          targetCommitHash={diffTargetCommit}
-                          sourceLabel="This Commit"
-                          targetLabel="Compare Target"
-                          showContextToggle={true}
-                          initialViewMode="unified"
-                        />
+                    {diffResult && (
+                      <div className="mt-3 p-3 bg-white border border-gray-200 rounded-md">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-600">Facet Changes:</span>
+                          <Badge variant="outline" className="text-xs">
+                            {diffResult.diff.facet_changes.length}
+                          </Badge>
+                        </div>
+
+                        {diffRawData && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mb-3 gap-1.5"
+                            onClick={() => setShowDiffFullScreen(true)}
+                          >
+                            <GitCompare size={14} />
+                            Open Full Diff
+                          </Button>
+                        )}
+
+                        {diffResult.diff.facet_changes.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {diffResult.diff.facet_changes.map((change, idx) => (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  'p-2 rounded border text-sm',
+                                  change.change_type === 'added' && 'bg-green-50 border-green-200',
+                                  change.change_type === 'removed' && 'bg-red-50 border-red-200',
+                                  change.change_type === 'modified' &&
+                                    'bg-amber-50 border-amber-200'
+                                )}
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-[0.6rem]',
+                                      change.change_type === 'added' &&
+                                        'text-green-600 border-green-300',
+                                      change.change_type === 'removed' &&
+                                        'text-red-600 border-red-300',
+                                      change.change_type === 'modified' &&
+                                        'text-amber-600 border-amber-300'
+                                    )}
+                                  >
+                                    {change.change_type}
+                                  </Badge>
+                                  <span className="font-medium text-gray-700">{change.facet}</span>
+                                </div>
+                                {change.base_text && (
+                                  <div className="text-red-600 text-xs font-mono bg-red-100/50 px-2 py-1 rounded">
+                                    - {change.base_text}
+                                  </div>
+                                )}
+                                {change.target_text && (
+                                  <div className="text-green-600 text-xs font-mono bg-green-100/50 px-2 py-1 rounded mt-1">
+                                    + {change.target_text}
+                                  </div>
+                                )}
+                                {change.added_keywords.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                                    <span className="text-xs text-gray-500">Added:</span>
+                                    {change.added_keywords.map((kw, i) => (
+                                      <Badge
+                                        key={i}
+                                        className="text-[0.6rem] bg-green-100 text-green-700"
+                                      >
+                                        {kw}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                {change.removed_keywords.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                                    <span className="text-xs text-gray-500">Removed:</span>
+                                    {change.removed_keywords.map((kw, i) => (
+                                      <Badge
+                                        key={i}
+                                        className="text-[0.6rem] bg-red-100 text-red-700"
+                                      >
+                                        {kw}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {diffResult.diff.facet_changes.length === 0 && (
+                          <div className="text-center py-4 text-sm text-gray-400">
+                            No facet changes detected
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3911,6 +3982,17 @@ export function NodeModal({
           </div>
         </div>
       </div>
+
+      {diffRawData && data?.commitHash && (
+        <DiffFullScreen
+          open={showDiffFullScreen}
+          onClose={() => setShowDiffFullScreen(false)}
+          baseCommitHash={data.commitHash}
+          targetCommitHash={diffTargetCommit}
+          diffData={diffRawData}
+        />
+      )}
+    </>
     );
   }
 
