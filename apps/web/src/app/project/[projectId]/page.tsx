@@ -6,6 +6,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
+import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
@@ -26,6 +27,13 @@ export default function ProjectDetailPage() {
       useCanvasStore.getState().loadProjectData(projectId);
     }
   }, [projectId, loadedProjectId]);
+
+  // Initialize pins store for the project
+  useEffect(() => {
+    if (projectId) {
+      usePinsStore.getState().fetchPins(projectId);
+    }
+  }, [projectId]);
 
   if (!project) {
     redirect('/');
