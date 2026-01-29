@@ -431,7 +431,7 @@ export function DiffDisplayView({
     setContextLoading(true);
 
     try {
-      const data = await api.fetchTurnContext(sentence.source.turn_hash, {
+      const data = await api.fetchTurnContextCached(sentence.source.turn_hash, {
         before: 2,
         after: 2,
         highlightStart: sentence.source.start_char,
