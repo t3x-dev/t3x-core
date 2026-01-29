@@ -589,9 +589,9 @@ export function DiffDisplayView({
       {/* Source Context Modal */}
       <DiffSourceContextModal
         open={contextModalOpen}
-        onOpenChange={(open) => !open && closeContextModal()}
+        onClose={closeContextModal}
         sentence={contextSentence}
-        contextData={contextData}
+        data={contextData}
         loading={contextLoading}
       />
     </div>

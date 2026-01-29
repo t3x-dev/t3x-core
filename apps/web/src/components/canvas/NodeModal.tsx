@@ -3860,8 +3860,6 @@ export function NodeModal({
                           setShowDiffPanel(false);
                           setDiffTargetCommit('');
                           setDiffError(null);
-                          setDiffSourceSentences([]);
-                          setDiffTargetSentences([]);
                         }}
                       >
                         Cancel
