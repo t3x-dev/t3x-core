@@ -44,7 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import * as api from '@/lib/api';
-import type { DiffResultRaw } from '@/lib/api';
+import type { DiffResult, DiffResultRaw } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -915,6 +915,7 @@ export function NodeModal({
   const [diffTargetCommit, setDiffTargetCommit] = useState<string>('');
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
   const [diffRawData, setDiffRawData] = useState<DiffResultRaw | null>(null);
   const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
 
