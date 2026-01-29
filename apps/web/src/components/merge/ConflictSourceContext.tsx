@@ -4,15 +4,21 @@
  * ConflictSourceContext - Truncated turn display for conflict sides
  *
  * Shows conversation context with highlighted sentence.
- * Reuses the truncation algorithm concept from TruncatedCommitView.
+ * Uses shared truncation utilities from lib/truncationUtils.
  */
 
-import { Loader2, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
+
+import { truncateWithHighlights } from '@/lib/truncationUtils';
 import type { TurnContextData } from '@/types/merge';
+import type { HighlightRange } from '@/types/sourceContext';
 
 /** Minimum content length to show expand/collapse button */
 const EXPAND_THRESHOLD = 150;
+
+/** Default context chars for conflict context */
+const CONFLICT_CONTEXT_CHARS = 50;
 
 interface ConflictSourceContextProps {
   turnHash: string | undefined;
@@ -24,106 +30,9 @@ interface ConflictSourceContextProps {
   error?: string;
 }
 
-interface HighlightRange {
-  start: number;
-  end: number;
-}
-
-interface TruncatedSegment {
-  type: 'text' | 'highlight' | 'ellipsis';
-  content: string;
-}
-
-/**
- * Find word boundary - expands position to nearest word boundary
- */
-function findWordBoundary(text: string, pos: number, direction: 'left' | 'right'): number {
-  if (pos <= 0) return 0;
-  if (pos >= text.length) return text.length;
-
-  if (direction === 'left') {
-    while (pos > 0 && !/\s/.test(text[pos - 1])) {
-      pos--;
-    }
-    return pos;
-  }
-  while (pos < text.length && !/\s/.test(text[pos])) {
-    pos++;
-  }
-  return pos;
-}
-
-/**
- * Smart truncation algorithm that preserves highlights
- */
-function truncateWithHighlight(
-  text: string,
-  highlight: HighlightRange | null,
-  contextChars = 50
-): TruncatedSegment[] {
-  if (text.length === 0) return [];
-
-  // If no highlight or short text, show full text (maybe truncated)
-  if (!highlight || text.length <= contextChars * 2 + 20) {
-    if (text.length <= contextChars * 3) {
-      return [{ type: 'text', content: text }];
-    }
-    // Truncate long text without highlight
-    const endPos = findWordBoundary(text, contextChars * 2, 'right');
-    return [
-      { type: 'text', content: text.slice(0, endPos) },
-      { type: 'ellipsis', content: '...' },
-    ];
-  }
-
-  // Calculate context boundaries with word-aware truncation
-  let contextStart = Math.max(0, highlight.start - contextChars);
-  let contextEnd = Math.min(text.length, highlight.end + contextChars);
-
-  // Adjust to word boundaries
-  if (contextStart > 0) {
-    contextStart = findWordBoundary(text, contextStart, 'right');
-  }
-  if (contextEnd < text.length) {
-    contextEnd = findWordBoundary(text, contextEnd, 'left');
-  }
-
-  // Ensure highlight is still fully visible
-  contextStart = Math.min(contextStart, highlight.start);
-  contextEnd = Math.max(contextEnd, highlight.end);
-
-  // Build segments
-  const segments: TruncatedSegment[] = [];
-
-  // Leading ellipsis
-  if (contextStart > 0) {
-    segments.push({ type: 'ellipsis', content: '...' });
-  }
-
-  // Text before highlight
-  if (highlight.start > contextStart) {
-    segments.push({ type: 'text', content: text.slice(contextStart, highlight.start) });
-  }
-
-  // Highlight
-  segments.push({ type: 'highlight', content: text.slice(highlight.start, highlight.end) });
-
-  // Text after highlight
-  if (contextEnd > highlight.end) {
-    segments.push({ type: 'text', content: text.slice(highlight.end, contextEnd) });
-  }
-
-  // Trailing ellipsis
-  if (contextEnd < text.length) {
-    segments.push({ type: 'ellipsis', content: '...' });
-  }
-
-  return segments;
-}
-
 export function ConflictSourceContext({
   turnHash,
-  sentenceText,
+  sentenceText: _sentenceText, // Reserved for future fallback display
   startChar,
   endChar,
   contextData,
@@ -135,9 +44,7 @@ export function ConflictSourceContext({
   // No turn hash - show unavailable state
   if (!turnHash) {
     return (
-      <div className="text-xs text-muted-foreground italic mt-2">
-        Source context unavailable
-      </div>
+      <div className="text-xs text-muted-foreground italic mt-2">Source context unavailable</div>
     );
   }
 
@@ -153,11 +60,7 @@ export function ConflictSourceContext({
 
   // Error state
   if (error) {
-    return (
-      <div className="text-xs text-amber-600 mt-2">
-        {error}
-      </div>
-    );
+    return <div className="text-xs text-amber-600 mt-2">{error}</div>;
   }
 
   // No context data - show fallback
@@ -168,14 +71,14 @@ export function ConflictSourceContext({
   const targetTurn = contextData.target_turn;
   if (!targetTurn) return null;
 
-  // Build highlight range
-  const highlight: HighlightRange | null =
-    startChar !== undefined && endChar !== undefined
-      ? { start: startChar, end: endChar }
-      : null;
+  // Build highlight ranges array (truncateWithHighlights expects array)
+  const highlights: HighlightRange[] =
+    startChar !== undefined && endChar !== undefined ? [{ start: startChar, end: endChar }] : [];
 
-  // Get truncated segments
-  const segments = truncateWithHighlight(targetTurn.content, highlight);
+  // Get truncated segments using shared utility
+  const segments = truncateWithHighlights(targetTurn.content, highlights, {
+    contextChars: CONFLICT_CONTEXT_CHARS,
+  });
 
   // Role label
   const roleLabel = targetTurn.role === 'user' ? 'User' : 'Assistant';
@@ -194,19 +97,17 @@ export function ConflictSourceContext({
       <div className="text-xs leading-relaxed text-muted-foreground bg-muted/30 rounded px-2 py-1.5">
         {expanded ? (
           // Full content
-          <>
-            {highlight ? (
-              <>
-                {targetTurn.content.slice(0, highlight.start)}
-                <mark className="bg-yellow-200 text-yellow-900 px-0.5 rounded-sm">
-                  {targetTurn.content.slice(highlight.start, highlight.end)}
-                </mark>
-                {targetTurn.content.slice(highlight.end)}
-              </>
-            ) : (
-              targetTurn.content
-            )}
-          </>
+          highlights.length > 0 ? (
+            <>
+              {targetTurn.content.slice(0, highlights[0].start)}
+              <mark className="bg-yellow-200 text-yellow-900 px-0.5 rounded-sm">
+                {targetTurn.content.slice(highlights[0].start, highlights[0].end)}
+              </mark>
+              {targetTurn.content.slice(highlights[0].end)}
+            </>
+          ) : (
+            targetTurn.content
+          )
         ) : (
           // Truncated content
           segments.map((seg, idx) => {

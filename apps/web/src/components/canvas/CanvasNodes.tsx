@@ -255,9 +255,11 @@ const PREVIEW_MAX_CONSTRAINTS = 3;
 function CommitV3Content({
   commit,
   onViewFull,
+  projectId,
 }: {
   commit: CommitV3Display;
   onViewFull?: () => void;
+  projectId?: string;
 }) {
   // Check if we have source context for truncated view
   const sentencesWithSource = commit.sentences.filter((s) => s.source?.turn_hash);
@@ -298,6 +300,7 @@ function CommitV3Content({
             maxHighlights={2}
             contextChars={50}
             onViewFull={onViewFull}
+            projectId={projectId}
           />
         ) : (
           <ul className="space-y-0.5">
@@ -345,9 +348,11 @@ function CommitV3Content({
 function CommitV4Content({
   commit,
   onViewFull,
+  projectId: _projectId, // Reserved for future TruncatedCommitView integration
 }: {
   commit: CommitV4Display;
   onViewFull?: () => void;
+  projectId?: string;
 }) {
   const sentences = commit.content.sentences;
   const displaySentences = sentences.slice(0, PREVIEW_MAX_SENTENCES);
@@ -691,12 +696,14 @@ function UnitNode(props: Props) {
             <CommitV4Content
               commit={data.commitV4}
               onViewFull={() => openNodeModal(id, 'commit')}
+              projectId={projectId}
             />
           )}
           {data.commitV3 && !data.commitV4 && (
             <CommitV3Content
               commit={data.commitV3}
               onViewFull={() => openNodeModal(id, 'commit')}
+              projectId={projectId}
             />
           )}
         </div>

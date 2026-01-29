@@ -20,23 +20,18 @@
 
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { ViewSourceLink } from '@/components/shared/ViewSourceLink';
 import type { TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
+import { truncateWithHighlights } from '@/lib/truncationUtils';
+import type { HighlightRange, SentenceWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Types
+// Types (using shared types)
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface CommitSentence {
-  id: string;
-  text: string;
-  /** Source is optional for legacy data */
-  source?: {
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
-}
+/** Sentence from commit content - alias for SentenceWithSource */
+type CommitSentence = SentenceWithSource;
 
 interface TruncatedCommitViewProps {
   /** Sentences from commit content */
@@ -49,169 +44,8 @@ interface TruncatedCommitViewProps {
   onViewFull?: () => void;
   /** Show loading state */
   loading?: boolean;
-}
-
-interface HighlightRange {
-  start: number;
-  end: number;
-}
-
-interface TruncatedSegment {
-  type: 'text' | 'highlight' | 'ellipsis';
-  content: string;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Truncation Algorithm
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Find word boundary - expands position to nearest word boundary
- * Returns position that doesn't break mid-word
- */
-function findWordBoundary(text: string, pos: number, direction: 'left' | 'right'): number {
-  if (pos <= 0) return 0;
-  if (pos >= text.length) return text.length;
-
-  if (direction === 'left') {
-    // Move left to find start of word or whitespace
-    while (pos > 0 && !/\s/.test(text[pos - 1])) {
-      pos--;
-    }
-    return pos;
-  }
-  // direction === 'right'
-  // Move right to find end of word or whitespace
-  while (pos < text.length && !/\s/.test(text[pos])) {
-    pos++;
-  }
-  return pos;
-}
-
-/**
- * Merge overlapping or adjacent highlight ranges
- */
-function mergeHighlightRanges(ranges: HighlightRange[]): HighlightRange[] {
-  if (ranges.length === 0) return [];
-
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
-  const merged: HighlightRange[] = [{ ...sorted[0] }];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-
-    // Merge if overlapping or adjacent (within 1 char)
-    if (current.start <= last.end + 1) {
-      last.end = Math.max(last.end, current.end);
-    } else {
-      merged.push({ ...current });
-    }
-  }
-
-  return merged;
-}
-
-/**
- * Smart truncation algorithm that preserves highlights
- *
- * Rules:
- * 1. Always show first N highlights fully
- * 2. Show ~contextChars before/after each highlight
- * 3. Use "..." for truncated portions
- * 4. Never break mid-word
- */
-function truncateWithHighlights(
-  text: string,
-  highlights: HighlightRange[],
-  maxHighlights: number,
-  contextChars: number
-): TruncatedSegment[] {
-  if (text.length === 0) return [];
-
-  // If no highlights, show truncated text
-  if (highlights.length === 0) {
-    const maxLen = contextChars * 2;
-    if (text.length <= maxLen) {
-      return [{ type: 'text', content: text }];
-    }
-    const endPos = findWordBoundary(text, maxLen, 'right');
-    return [
-      { type: 'text', content: text.slice(0, endPos) },
-      { type: 'ellipsis', content: '...' },
-    ];
-  }
-
-  // Merge and limit highlights
-  const merged = mergeHighlightRanges(highlights);
-  const visibleHighlights = merged.slice(0, maxHighlights);
-
-  // Build visible ranges (highlight + context)
-  const visibleRanges: HighlightRange[] = [];
-
-  for (const hl of visibleHighlights) {
-    // Calculate context boundaries with word-aware truncation
-    let contextStart = Math.max(0, hl.start - contextChars);
-    let contextEnd = Math.min(text.length, hl.end + contextChars);
-
-    // Adjust to word boundaries (don't break mid-word)
-    if (contextStart > 0) {
-      contextStart = findWordBoundary(text, contextStart, 'right');
-    }
-    if (contextEnd < text.length) {
-      contextEnd = findWordBoundary(text, contextEnd, 'left');
-    }
-
-    // Ensure highlight is still fully visible
-    contextStart = Math.min(contextStart, hl.start);
-    contextEnd = Math.max(contextEnd, hl.end);
-
-    visibleRanges.push({ start: contextStart, end: contextEnd });
-  }
-
-  // Merge adjacent visible ranges
-  const mergedRanges = mergeHighlightRanges(visibleRanges);
-
-  // Build segments
-  const segments: TruncatedSegment[] = [];
-  let lastEnd = 0;
-
-  for (const range of mergedRanges) {
-    // Add ellipsis if there's a gap (either at start or between ranges)
-    if (range.start > lastEnd) {
-      segments.push({ type: 'ellipsis', content: '...' });
-    }
-
-    // Add text before first highlight in this range
-    const rangeHighlights = visibleHighlights.filter(
-      (hl) => hl.start >= range.start && hl.end <= range.end
-    );
-
-    let pos = range.start;
-    for (const hl of rangeHighlights) {
-      // Text before highlight
-      if (hl.start > pos) {
-        segments.push({ type: 'text', content: text.slice(pos, hl.start) });
-      }
-      // Highlight
-      segments.push({ type: 'highlight', content: text.slice(hl.start, hl.end) });
-      pos = hl.end;
-    }
-
-    // Text after last highlight in range
-    if (pos < range.end) {
-      segments.push({ type: 'text', content: text.slice(pos, range.end) });
-    }
-
-    lastEnd = range.end;
-  }
-
-  // Add trailing ellipsis if needed
-  if (lastEnd < text.length) {
-    segments.push({ type: 'ellipsis', content: '...' });
-  }
-
-  return segments;
+  /** Project ID for View Source links (optional) */
+  projectId?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -264,6 +98,7 @@ export function TruncatedCommitView({
   contextChars = 50,
   onViewFull,
   loading: externalLoading,
+  projectId,
 }: TruncatedCommitViewProps) {
   const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
@@ -337,7 +172,7 @@ export function TruncatedCommitView({
           const highlights = sentencesByTurn.get(turnHash) || [];
 
           try {
-            const context = await api.fetchTurnContext(turnHash, {
+            const context = await api.fetchTurnContextCached(turnHash, {
               before: 0,
               after: 0,
             });
@@ -483,19 +318,35 @@ export function TruncatedCommitView({
         }
 
         const turn = data.context.target_turn;
-        const segments = truncateWithHighlights(
-          turn.content,
-          data.highlights,
+        const segments = truncateWithHighlights(turn.content, data.highlights, {
+          contextChars,
           maxHighlights,
-          contextChars
-        );
+        });
+
+        // Get first highlight for View Source link
+        const firstHighlight = data.highlights[0];
+        const conversationId = data.context.conversation_id;
 
         return (
           <div key={turnHash} className="text-xs leading-relaxed">
-            {/* Role indicator */}
-            <span className="text-[0.6rem] font-medium text-slate-400 uppercase tracking-wider">
-              {turn.role}
-            </span>
+            {/* Role indicator + View Source link */}
+            <div className="flex items-center justify-between">
+              <span className="text-[0.6rem] font-medium text-slate-400 uppercase tracking-wider">
+                {turn.role}
+              </span>
+              {projectId && conversationId && (
+                <ViewSourceLink
+                  projectId={projectId}
+                  conversationId={conversationId}
+                  turnHash={turnHash}
+                  startChar={firstHighlight?.start}
+                  endChar={firstHighlight?.end}
+                  className="text-[0.6rem] text-blue-500 hover:text-blue-600"
+                >
+                  View Source
+                </ViewSourceLink>
+              )}
+            </div>
             {/* Truncated content with highlights */}
             <div className="mt-0.5 text-slate-700">
               {segments.map((seg, idx) => {

@@ -794,6 +794,118 @@ export async function fetchTurnContext(
 }
 
 // ============================================================================
+// Turn Context Cache & Batch
+// ============================================================================
+
+/** Cache for turn context data to avoid redundant requests */
+const turnContextCache = new Map<string, { data: TurnContextData; timestamp: number }>();
+
+/** Cache TTL in milliseconds (5 minutes) */
+const TURN_CONTEXT_CACHE_TTL = 5 * 60 * 1000;
+
+/** In-flight requests to dedupe concurrent requests */
+const inflightRequests = new Map<string, Promise<TurnContextData>>();
+
+/**
+ * Build cache key for turn context
+ */
+function buildTurnContextCacheKey(
+  turnHash: string,
+  options?: { before?: number; after?: number }
+): string {
+  return `${turnHash}:${options?.before ?? 1}:${options?.after ?? 1}`;
+}
+
+/**
+ * Fetch turn context with caching and request deduplication
+ *
+ * @param turnHash - The turn hash to fetch
+ * @param options - Context window options
+ * @returns Turn context data (from cache or fresh)
+ */
+export async function fetchTurnContextCached(
+  turnHash: string,
+  options?: { before?: number; after?: number }
+): Promise<TurnContextData> {
+  const cacheKey = buildTurnContextCacheKey(turnHash, options);
+
+  // Check cache first
+  const cached = turnContextCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < TURN_CONTEXT_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Check if request is already in flight
+  const inflight = inflightRequests.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  // Make the request
+  const requestPromise = fetchTurnContext(turnHash, options)
+    .then((data) => {
+      // Cache the result
+      turnContextCache.set(cacheKey, { data, timestamp: Date.now() });
+      return data;
+    })
+    .finally(() => {
+      // Remove from in-flight
+      inflightRequests.delete(cacheKey);
+    });
+
+  // Track in-flight request
+  inflightRequests.set(cacheKey, requestPromise);
+
+  return requestPromise;
+}
+
+/**
+ * Batch fetch turn contexts with caching
+ *
+ * Fetches multiple turn contexts in parallel, utilizing cache and
+ * deduplicating concurrent requests for the same turn.
+ *
+ * @param turnHashes - Array of turn hashes to fetch
+ * @param options - Context window options (applied to all)
+ * @returns Map of turnHash to TurnContextData (or null on error)
+ */
+export async function fetchTurnContextBatch(
+  turnHashes: string[],
+  options?: { before?: number; after?: number }
+): Promise<Map<string, TurnContextData | null>> {
+  const results = new Map<string, TurnContextData | null>();
+
+  // Dedupe input
+  const uniqueHashes = [...new Set(turnHashes)];
+
+  // Fetch all in parallel with caching
+  await Promise.all(
+    uniqueHashes.map(async (turnHash) => {
+      try {
+        const data = await fetchTurnContextCached(turnHash, options);
+        results.set(turnHash, data);
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`[fetchTurnContextBatch] Failed for ${turnHash}:`, err);
+        }
+        results.set(turnHash, null);
+      }
+    })
+  );
+
+  return results;
+}
+
+/**
+ * Clear the turn context cache
+ * Useful when data may have changed
+ */
+export function clearTurnContextCache(): void {
+  turnContextCache.clear();
+  inflightRequests.clear();
+}
+
+// ============================================================================
 // Branches
 // ============================================================================
 

@@ -11,30 +11,17 @@
 import { Bot, Settings, Terminal, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-/**
- * Highlight range within turn content
- */
-export interface TurnHighlight {
-  start: number;
-  end: number;
-}
+import { mergeHighlightRanges } from '@/lib/highlightUtils';
+import type {
+  HighlightColor,
+  HighlightRange,
+  TurnBubbleData,
+  TurnBubbleProps,
+} from '@/types/sourceContext';
 
-/**
- * Turn data for TurnBubble rendering
- */
-export interface TurnBubbleData {
-  turn_hash: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  created_at: string;
-  is_target?: boolean;
-  /** Single highlight (legacy support) */
-  highlight?: TurnHighlight;
-  /** Multiple highlights (for multiple sentences from same turn) */
-  highlights?: TurnHighlight[];
-}
-
-export type HighlightColor = 'yellow' | 'green';
+// Re-export types for backward compatibility
+export type { HighlightColor, TurnBubbleData, TurnBubbleProps };
+export type TurnHighlight = HighlightRange;
 
 const roleIcons: Record<string, ReactNode> = {
   user: <User className="h-4 w-4" />,
@@ -54,40 +41,6 @@ const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-yellow-200',
   green: 'bg-green-200',
 };
-
-/**
- * Merge overlapping or adjacent highlight ranges
- */
-function mergeHighlights(highlights: TurnHighlight[]): TurnHighlight[] {
-  if (highlights.length === 0) return [];
-
-  // Sort by start position
-  const sorted = [...highlights].sort((a, b) => a.start - b.start);
-
-  const merged: TurnHighlight[] = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-
-    // Merge if overlapping or adjacent (within 1 char)
-    if (current.start <= last.end + 1) {
-      last.end = Math.max(last.end, current.end);
-    } else {
-      merged.push(current);
-    }
-  }
-
-  return merged;
-}
-
-interface TurnBubbleProps {
-  turn: TurnBubbleData;
-  /** Highlight color: 'yellow' for merge UI, 'green' for commit display */
-  highlightColor?: HighlightColor;
-  /** Whether to show ring around target turn */
-  showTargetRing?: boolean;
-}
 
 export function TurnBubble({
   turn,
@@ -112,7 +65,7 @@ export function TurnBubble({
     }
 
     // Merge overlapping highlights
-    const merged = mergeHighlights(allHighlights);
+    const merged = mergeHighlightRanges(allHighlights);
     const highlightClass = `${highlightColors[highlightColor]} px-0.5 rounded`;
 
     // Build segments

@@ -203,7 +203,7 @@ describe('computeCommitV4Hash', () => {
           sentences: [{
             id: 's_1',
             text: 'Test',
-            source_ref: { conversation_id: 'conv_1', turn_hash: 'sha256:abc' },
+            source_ref: { conversation_id: 'conv_1', turn_hash: 'sha256:abc', start_char: 0, end_char: 4 },
           }],
         },
       });

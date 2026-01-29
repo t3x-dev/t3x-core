@@ -30,39 +30,39 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  TurnBubble,
-  type TurnBubbleData,
-  type TurnHighlight,
-} from '@/components/shared/TurnBubble';
+
+import { TurnBubble } from '@/components/shared/TurnBubble';
 import type { TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
+import {
+  adjustHighlightsForTruncation,
+  checkContentIntegrity,
+  DEFAULT_CONTEXT_CHARS,
+  DEFAULT_MAX_LENGTH,
+  truncateLongContent,
+} from '@/lib/truncationUtils';
+import type {
+  ContentIntegrityStatus,
+  HighlightRange,
+  SentenceWithSource,
+  TurnBubbleData,
+} from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Maximum turn content length before truncation */
-const MAX_TURN_LENGTH = 2000;
+const MAX_TURN_LENGTH = DEFAULT_MAX_LENGTH;
 /** Context chars to show around highlights in long turns */
-const TRUNCATION_CONTEXT = 100;
+const TRUNCATION_CONTEXT = DEFAULT_CONTEXT_CHARS;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Types
+// Types (using shared types, keep local aliases for backward compatibility)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Sentence from commit content - source is optional for legacy data
- */
-interface CommitSentence {
-  id: string;
-  text: string;
-  source?: {
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
-}
+/** Sentence from commit content - alias for SentenceWithSource */
+type CommitSentence = SentenceWithSource;
 
 interface CommitSourceContextProps {
   /** Sentences from commit content */
@@ -74,27 +74,22 @@ interface CommitSourceContextProps {
 }
 
 /**
- * Content integrity status
- */
-type ContentIntegrityStatus = 'valid' | 'mismatch' | 'unknown';
-
-/**
  * Sentence with source info and the expected text at that position
  */
-interface SentenceWithSource {
+interface SentenceWithHighlight {
   sentence: CommitSentence;
   turnHash: string;
-  highlight: TurnHighlight;
+  highlight: HighlightRange;
 }
 
 /**
  * Group sentences by turn_hash, tracking which sentences have valid source info
  */
 function groupSentencesByTurn(sentences: CommitSentence[]): {
-  byTurn: Map<string, SentenceWithSource[]>;
+  byTurn: Map<string, SentenceWithHighlight[]>;
   withoutSource: CommitSentence[];
 } {
-  const byTurn = new Map<string, SentenceWithSource[]>();
+  const byTurn = new Map<string, SentenceWithHighlight[]>();
   const withoutSource: CommitSentence[] = [];
 
   for (const sentence of sentences) {
@@ -121,84 +116,13 @@ function groupSentencesByTurn(sentences: CommitSentence[]): {
 }
 
 /**
- * Check if the sentence text matches the content at the source position
- */
-function checkContentIntegrity(
-  sentenceText: string,
-  turnContent: string,
-  startChar: number,
-  endChar: number
-): ContentIntegrityStatus {
-  // Comprehensive boundary validation
-  if (
-    startChar < 0 ||
-    endChar < 0 ||
-    startChar >= endChar ||
-    startChar >= turnContent.length ||
-    endChar > turnContent.length
-  ) {
-    return 'mismatch';
-  }
-
-  const actualText = turnContent.slice(startChar, endChar);
-  // Normalize whitespace for comparison
-  const normalizedSentence = sentenceText.trim().replace(/\s+/g, ' ');
-  const normalizedActual = actualText.trim().replace(/\s+/g, ' ');
-
-  if (normalizedSentence === normalizedActual) {
-    return 'valid';
-  }
-
-  // Check if it's a close match (>90% similar) - could be minor edits
-  const similarity = calculateSimilarity(normalizedSentence, normalizedActual);
-  if (similarity > 0.9) {
-    return 'valid';
-  }
-
-  return 'mismatch';
-}
-
-/**
- * Simple similarity calculation (Jaccard-like)
- * Note: Case-insensitive comparison for semantic similarity
- */
-function calculateSimilarity(a: string, b: string): number {
-  if (a === b) return 1;
-  if (a.length === 0 || b.length === 0) return 0;
-
-  const wordsA = new Set(
-    a
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
-  );
-  const wordsB = new Set(
-    b
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
-  );
-
-  // Handle whitespace-only strings
-  if (wordsA.size === 0 || wordsB.size === 0) return 0;
-
-  const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
-  const union = new Set([...wordsA, ...wordsB]).size;
-
-  // Avoid division by zero (shouldn't happen after above checks, but defensive)
-  if (union === 0) return 0;
-
-  return intersection / union;
-}
-
-/**
  * Turn data with fetched context and highlights
  */
 interface TurnWithHighlights {
   turnHash: string;
   context: TurnContextData | null;
-  highlights: TurnHighlight[];
-  sentences: SentenceWithSource[];
+  highlights: HighlightRange[];
+  sentences: SentenceWithHighlight[];
   loading: boolean;
   error: string | null;
   /** Content integrity check results per sentence */
@@ -296,7 +220,7 @@ export function CommitSourceContext({
 
           try {
             // Fetch with minimal context window (just the target turn)
-            const context = await api.fetchTurnContext(turnHash, {
+            const context = await api.fetchTurnContextCached(turnHash, {
               before: 0,
               after: 0,
             });
@@ -572,11 +496,15 @@ export function CommitSourceContext({
           const shouldTruncate = isLongTurn && (compact || !expandedTurns.has(turnHash));
 
           // Convert to TurnBubbleData with highlights
+          const truncationOptions = {
+            maxLength: MAX_TURN_LENGTH,
+            contextChars: TRUNCATION_CONTEXT,
+          };
           const turnBubbleData: TurnBubbleData = {
             turn_hash: targetTurn.turn_hash,
             role: targetTurn.role,
             content: shouldTruncate
-              ? truncateLongContent(targetTurn.content, data.highlights, TRUNCATION_CONTEXT)
+              ? truncateLongContent(targetTurn.content, data.highlights, truncationOptions)
               : targetTurn.content,
             created_at: targetTurn.created_at,
             is_target: true,
@@ -584,7 +512,7 @@ export function CommitSourceContext({
               ? adjustHighlightsForTruncation(
                   data.highlights,
                   targetTurn.content,
-                  TRUNCATION_CONTEXT
+                  truncationOptions
                 )
               : data.highlights,
           };
@@ -699,64 +627,4 @@ export function CommitSourceContext({
       </div>
     </div>
   );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Helper Functions for Long Turn Truncation
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Truncate long content while preserving highlighted sections
- */
-function truncateLongContent(
-  content: string,
-  highlights: TurnHighlight[],
-  contextChars: number
-): string {
-  if (content.length <= MAX_TURN_LENGTH) return content;
-  if (highlights.length === 0) {
-    return content.slice(0, MAX_TURN_LENGTH) + '...';
-  }
-
-  // Find the range that covers all highlights with context
-  const minStart = Math.min(...highlights.map((h) => h.start));
-  const maxEnd = Math.max(...highlights.map((h) => h.end));
-
-  const visibleStart = Math.max(0, minStart - contextChars);
-  const visibleEnd = Math.min(content.length, maxEnd + contextChars);
-
-  let result = '';
-
-  if (visibleStart > 0) {
-    result += '...';
-  }
-
-  result += content.slice(visibleStart, visibleEnd);
-
-  if (visibleEnd < content.length) {
-    result += '...';
-  }
-
-  return result;
-}
-
-/**
- * Adjust highlight positions after truncation
- */
-function adjustHighlightsForTruncation(
-  highlights: TurnHighlight[],
-  content: string,
-  contextChars: number
-): TurnHighlight[] {
-  if (content.length <= MAX_TURN_LENGTH) return highlights;
-  if (highlights.length === 0) return highlights;
-
-  const minStart = Math.min(...highlights.map((h) => h.start));
-  const visibleStart = Math.max(0, minStart - contextChars);
-  const offset = visibleStart > 0 ? visibleStart - 3 : 0; // -3 for "..."
-
-  return highlights.map((h) => ({
-    start: h.start - offset,
-    end: h.end - offset,
-  }));
 }

@@ -164,6 +164,8 @@ describe('Commits V4 Storage', () => {
           source_ref: {
             conversation_id: 'conv_123',
             turn_hash: 'sha256:abc',
+            start_char: 0,
+            end_char: 19,
           },
         },
       ];
