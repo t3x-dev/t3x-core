@@ -5,20 +5,24 @@
  *
  * Shows merge conflicts and changes in a familiar Git diff format:
  * - Identical sentences (auto-kept)
- * - Conflicts (need resolution)
+ * - Conflicts (need resolution) - uses MergeConflictView for inline context
  * - Source-only sentences
  * - Target-only sentences
  */
 
 import type { Merge2WayResult, Sentence } from '@/types/merge';
+import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeDiffSection } from './MergeDiffSection';
 import { MergeDiffLine } from './MergeDiffLine';
+import { MergeConflictView } from './MergeConflictView';
 
 interface UnifiedDiffViewProps {
   prepared: Merge2WayResult;
   onResolvePair: (index: number, pick: 'source' | 'target') => void;
   onToggleKeep: (side: 'source' | 'target', index: number) => void;
   onSourceClick: (sentence: Sentence) => void;
+  sourceBranch?: string;
+  targetBranch?: string;
 }
 
 export function UnifiedDiffView({
@@ -26,8 +30,11 @@ export function UnifiedDiffView({
   onResolvePair,
   onToggleKeep,
   onSourceClick,
+  sourceBranch = 'A',
+  targetBranch = 'B',
 }: UnifiedDiffViewProps) {
   const { identical, similarPairs, onlyInSource, onlyInTarget } = prepared;
+  const { getUnresolvedCount } = useMergeWorkspaceStore();
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -52,75 +59,22 @@ export function UnifiedDiffView({
         </MergeDiffSection>
       )}
 
-      {/* Conflicts (Similar Pairs) */}
+      {/* Conflicts (Similar Pairs) - Using MergeConflictView with inline context */}
       {similarPairs.length > 0 && (
         <MergeDiffSection
           title="Conflicts"
-          subtitle={`${similarPairs.length} pairs need resolution`}
-          variant={similarPairs.some(p => !p.resolution) ? 'warning' : 'success'}
+          subtitle={`${getUnresolvedCount()} of ${similarPairs.length} need resolution`}
+          variant={getUnresolvedCount() > 0 ? 'warning' : 'success'}
         >
           <div className="space-y-4">
             {similarPairs.map((pair, idx) => (
-              <div
-                key={`pair-${idx}`}
-                className={`rounded-lg border p-4 ${
-                  pair.resolution
-                    ? 'border-green-200 bg-green-50/50'
-                    : 'border-yellow-200 bg-yellow-50/50'
-                }`}
-              >
-                {/* Pair Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    @@ Pair {idx + 1} @@
-                  </span>
-                  {pair.resolution && (
-                    <span className="text-xs text-green-600 font-medium">
-                      Resolved: {pair.resolution}
-                    </span>
-                  )}
-                </div>
-
-                {/* Word Diff Display */}
-                {pair.wordDiff && pair.wordDiff.length > 0 && (
-                  <div className="mb-3 font-mono text-sm bg-muted/50 rounded p-2">
-                    {pair.wordDiff.map((seg, segIdx) => (
-                      <span
-                        key={segIdx}
-                        className={
-                          seg.type === 'removed'
-                            ? 'bg-red-100 text-red-800 line-through px-0.5'
-                            : seg.type === 'added'
-                            ? 'bg-green-100 text-green-800 px-0.5'
-                            : ''
-                        }
-                      >
-                        {seg.text}{' '}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Source Option */}
-                <MergeDiffLine
-                  type="removed"
-                  sentence={pair.source}
-                  isSelected={pair.resolution === 'source'}
-                  onSelect={() => onResolvePair(idx, 'source')}
-                  onSourceClick={() => onSourceClick(pair.source)}
-                  selectable
-                />
-
-                {/* Target Option */}
-                <MergeDiffLine
-                  type="added"
-                  sentence={pair.target}
-                  isSelected={pair.resolution === 'target'}
-                  onSelect={() => onResolvePair(idx, 'target')}
-                  onSourceClick={() => onSourceClick(pair.target)}
-                  selectable
-                />
-              </div>
+              <MergeConflictView
+                key={`conflict-${idx}`}
+                pair={pair}
+                index={idx}
+                sourceBranch={sourceBranch}
+                targetBranch={targetBranch}
+              />
             ))}
           </div>
         </MergeDiffSection>

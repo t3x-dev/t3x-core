@@ -14,6 +14,7 @@ import type {
   CommitV3,
 } from '@/types/merge';
 import { useCanvasStore } from './canvasStore';
+import * as api from '@/lib/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_V1 = `${API_BASE}/api/v1`;
@@ -23,6 +24,56 @@ const API_V1 = `${API_BASE}/api/v1`;
 // ============================================================================
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+/**
+ * Extended resolution types for WebUI layer
+ * Core MergeSimilarPair.resolution only supports 'source' | 'target'
+ * We store extended resolutions separately and map at commit time
+ */
+export type ExtendedResolutionType = 'both' | 'edit';
+
+export interface ExtendedResolutionData {
+  type: ExtendedResolutionType;
+  customText?: string; // For 'edit' type
+}
+
+/**
+ * Check if a conflict at given index is resolved
+ * Shared logic for UI and store methods
+ */
+export function isConflictResolved(
+  pair: { resolution?: 'source' | 'target' },
+  extRes: ExtendedResolutionData | undefined
+): boolean {
+  // Standard resolution
+  if (pair.resolution) return true;
+
+  // Extended resolution
+  if (extRes) {
+    if (extRes.type === 'both') return true;
+    if (extRes.type === 'edit' && extRes.customText?.trim()) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Resolution statistics for display
+ */
+export interface ResolutionStats {
+  standard: number; // source or target
+  both: number;
+  edit: number;
+  unresolved: number;
+}
+
+/**
+ * Cached turn context data for inline display
+ */
+export interface CachedTurnContext {
+  data: TurnContextData;
+  loadedAt: Date;
+}
 
 interface MergeWorkspaceState {
   // Draft data
@@ -52,6 +103,14 @@ interface MergeWorkspaceState {
   // Preview state
   previewExpanded: boolean;
 
+  // Extended resolution state (WebUI layer only)
+  // Key: pair index as string, Value: extended resolution data
+  extendedResolutions: Record<string, ExtendedResolutionData>;
+  // Key: turn_hash, Value: cached context data
+  contextCache: Record<string, CachedTurnContext>;
+  // Key: turn_hash, Value: loading state
+  contextLoadingStates: Record<string, boolean>;
+
   // Actions
   loadDraft: (draftId: string) => Promise<void>;
   createDraft: (
@@ -76,8 +135,15 @@ interface MergeWorkspaceState {
   // Preview actions
   togglePreview: () => void;
 
+  // Extended resolution actions
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => void;
+  setCustomText: (index: number, text: string) => void;
+  fetchSourceContext: (turnHash: string, sentence: Sentence) => Promise<TurnContextData | null>;
+  getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | 'edit' | null;
+
   // Computed getters
   getUnresolvedCount: () => number;
+  getResolutionStats: () => ResolutionStats;
   canCommit: () => boolean;
   getPreviewSentences: () => Sentence[];
 }
@@ -156,6 +222,9 @@ const initialState = {
   contextData: null,
   contextLoading: false,
   previewExpanded: false,
+  extendedResolutions: {} as Record<string, ExtendedResolutionData>,
+  contextCache: {} as Record<string, CachedTurnContext>,
+  contextLoadingStates: {} as Record<string, boolean>,
 };
 
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
@@ -242,7 +311,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   resolvePair: (index: number, pick: 'source' | 'target') => {
-    const { prepared } = get();
+    const { prepared, extendedResolutions } = get();
     if (!prepared) return;
 
     const newPrepared = { ...prepared };
@@ -252,7 +321,15 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       resolution: pick,
     };
 
-    set({ prepared: newPrepared, isDirty: true });
+    // Clear any extended resolution for this index
+    const key = String(index);
+    if (extendedResolutions[key]) {
+      const newExtended = { ...extendedResolutions };
+      delete newExtended[key];
+      set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
+    } else {
+      set({ prepared: newPrepared, isDirty: true });
+    }
   },
 
   toggleKeep: (side: 'source' | 'target', index: number) => {
@@ -430,9 +507,43 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // ============================================================================
 
   getUnresolvedCount: () => {
-    const { prepared } = get();
+    const { prepared, extendedResolutions } = get();
     if (!prepared) return 0;
-    return prepared.similarPairs.filter((p) => !p.resolution).length;
+
+    let count = 0;
+    for (let i = 0; i < prepared.similarPairs.length; i++) {
+      const pair = prepared.similarPairs[i];
+      const extRes = extendedResolutions[String(i)];
+
+      if (!isConflictResolved(pair, extRes)) {
+        count++;
+      }
+    }
+    return count;
+  },
+
+  getResolutionStats: (): ResolutionStats => {
+    const { prepared, extendedResolutions } = get();
+    if (!prepared) return { standard: 0, both: 0, edit: 0, unresolved: 0 };
+
+    const stats: ResolutionStats = { standard: 0, both: 0, edit: 0, unresolved: 0 };
+
+    for (let i = 0; i < prepared.similarPairs.length; i++) {
+      const pair = prepared.similarPairs[i];
+      const extRes = extendedResolutions[String(i)];
+
+      if (pair.resolution === 'source' || pair.resolution === 'target') {
+        stats.standard++;
+      } else if (extRes?.type === 'both') {
+        stats.both++;
+      } else if (extRes?.type === 'edit' && extRes.customText?.trim()) {
+        stats.edit++;
+      } else {
+        stats.unresolved++;
+      }
+    }
+
+    return stats;
   },
 
   canCommit: () => {
@@ -440,12 +551,12 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (!prepared || status !== 'pending') return false;
     if (!message.trim()) return false;
 
-    const unresolvedCount = prepared.similarPairs.filter((p) => !p.resolution).length;
-    return unresolvedCount === 0;
+    // Use getUnresolvedCount which handles extended resolutions
+    return get().getUnresolvedCount() === 0;
   },
 
   getPreviewSentences: () => {
-    const { prepared } = get();
+    const { prepared, extendedResolutions } = get();
     if (!prepared) return [];
 
     const sentences: Sentence[] = [];
@@ -453,12 +564,30 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     // Add identical sentences
     sentences.push(...prepared.identical);
 
-    // Add resolved similar pairs
-    for (const pair of prepared.similarPairs) {
+    // Add resolved similar pairs (including extended resolutions)
+    for (let i = 0; i < prepared.similarPairs.length; i++) {
+      const pair = prepared.similarPairs[i];
+      const key = String(i);
+      const extRes = extendedResolutions[key];
+
       if (pair.resolution === 'source') {
         sentences.push(pair.source);
       } else if (pair.resolution === 'target') {
         sentences.push(pair.target);
+      } else if (extRes) {
+        // Handle extended resolutions
+        if (extRes.type === 'both') {
+          // Include both sentences
+          sentences.push(pair.source);
+          sentences.push(pair.target);
+        } else if (extRes.type === 'edit' && extRes.customText?.trim()) {
+          // Include custom edited sentence
+          sentences.push({
+            id: `merged-${i}`,
+            text: extRes.customText.trim(),
+            source: pair.source.source, // Keep source reference from original
+          });
+        }
       }
     }
 
@@ -477,5 +606,157 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     }
 
     return sentences;
+  },
+
+  // ============================================================================
+  // Extended Resolution Actions
+  // ============================================================================
+
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => {
+    const { prepared, extendedResolutions } = get();
+    if (!prepared) return;
+
+    const key = String(index);
+
+    if (resolution === 'source' || resolution === 'target') {
+      // Standard resolution - update prepared and clear extended
+      const newPrepared = { ...prepared };
+      newPrepared.similarPairs = [...prepared.similarPairs];
+      newPrepared.similarPairs[index] = {
+        ...newPrepared.similarPairs[index],
+        resolution,
+      };
+
+      const newExtended = { ...extendedResolutions };
+      delete newExtended[key];
+      set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
+    } else {
+      // Extended resolution - clear standard and set extended
+      const newPrepared = { ...prepared };
+      newPrepared.similarPairs = [...prepared.similarPairs];
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { resolution: _, ...pairWithoutResolution } = newPrepared.similarPairs[index];
+      newPrepared.similarPairs[index] = pairWithoutResolution as typeof newPrepared.similarPairs[number];
+
+      const newExtended = { ...extendedResolutions };
+      if (resolution === 'both') {
+        newExtended[key] = { type: 'both' };
+      } else {
+        // 'edit' - preserve existing custom text if any
+        newExtended[key] = {
+          type: 'edit',
+          customText: extendedResolutions[key]?.customText || '',
+        };
+      }
+      set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
+    }
+  },
+
+  setCustomText: (index: number, text: string) => {
+    const { extendedResolutions } = get();
+    const key = String(index);
+
+    const current = extendedResolutions[key];
+    if (!current || current.type !== 'edit') {
+      // Should only be called when resolution is 'edit'
+      // Auto-set to edit mode if not already (defensive programming)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(
+          `[MergeWorkspace] setCustomText called at index ${index} without edit resolution. ` +
+          `Current resolution: ${current?.type ?? 'none'}. Auto-setting to edit mode.`
+        );
+      }
+      set({
+        extendedResolutions: {
+          ...extendedResolutions,
+          [key]: { type: 'edit', customText: text },
+        },
+        isDirty: true,
+      });
+      return;
+    }
+
+    set({
+      extendedResolutions: {
+        ...extendedResolutions,
+        [key]: { ...current, customText: text },
+      },
+      isDirty: true,
+    });
+  },
+
+  fetchSourceContext: async (turnHash: string, sentence: Sentence) => {
+    const { contextCache, contextLoadingStates } = get();
+
+    // Check cache first
+    if (contextCache[turnHash]) {
+      return contextCache[turnHash].data;
+    }
+
+    // Skip if already loading
+    if (contextLoadingStates[turnHash]) {
+      return null;
+    }
+
+    // Mark as loading
+    set({
+      contextLoadingStates: { ...contextLoadingStates, [turnHash]: true },
+    });
+
+    try {
+      const contextData = await api.fetchTurnContext(turnHash, {
+        before: 1,
+        after: 1,
+        highlightStart: sentence.source.start_char,
+        highlightEnd: sentence.source.end_char,
+      });
+
+      // Cache the result
+      set((state) => ({
+        contextCache: {
+          ...state.contextCache,
+          [turnHash]: { data: contextData, loadedAt: new Date() },
+        },
+        contextLoadingStates: {
+          ...state.contextLoadingStates,
+          [turnHash]: false,
+        },
+      }));
+
+      return contextData;
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[MergeWorkspace] Failed to fetch context for', turnHash, err);
+      }
+      // Mark as not loading on error
+      set((state) => ({
+        contextLoadingStates: {
+          ...state.contextLoadingStates,
+          [turnHash]: false,
+        },
+      }));
+      return null;
+    }
+  },
+
+  getEffectiveResolution: (index: number) => {
+    const { prepared, extendedResolutions } = get();
+    if (!prepared || index >= prepared.similarPairs.length) return null;
+
+    const pair = prepared.similarPairs[index];
+    const key = String(index);
+    const extRes = extendedResolutions[key];
+
+    // Standard resolution takes precedence if set
+    if (pair.resolution) {
+      return pair.resolution;
+    }
+
+    // Check extended resolution
+    if (extRes) {
+      return extRes.type;
+    }
+
+    return null;
   },
 }));

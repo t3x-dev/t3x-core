@@ -4,7 +4,7 @@
  * Tests for POST /v1/merge/prepare and POST /v1/merge/execute
  */
 
-import { createCommitV3, insertProject } from '@t3x/storage';
+import { createCommitV4, insertProject } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,37 +47,24 @@ describe('Merge Routes', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper to create test commits
+  // Helper to create test commits (V4 format)
   const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
-    const hash = `sha256:${Math.random().toString(36).substring(2, 15)}`;
-    const commit = {
-      hash,
-      schema: 'commit/v3',
-      parents: [],
-      author: {
-        name: 'Test User',
-        identity: 'test@example.com',
-        verification: 'verified',
-      },
-      committedAt: new Date(),
-      content: {
+    const commit = await createCommitV4(
+      mockDB,
+      {
+        parents: [],
+        author: { type: 'human', name: 'Test User' },
         sentences: sentences.map((s) => ({
-          text: s.text,
-          startChar: 0,
-          endChar: s.text.length,
           id: s.id,
-          confidence: 1,
-          source: { type: 'turn', id: `turn_${s.id}` },
+          text: s.text,
         })),
-        constraints: [],
+        project_id: testProjectId,
+        message: 'Test commit',
+        branch: 'main',
       },
-      message: 'Test commit',
-      branch: 'main',
-      projectId: testProjectId,
-    };
-
-    await createCommitV3(mockDB, commit, { strictParents: false });
-    return { ...commit, hash };
+      { strictParents: false }
+    );
+    return commit;
   };
 
   // ============================================================================

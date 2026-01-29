@@ -50,6 +50,10 @@ export interface Sentence {
 export interface SentenceSourceRef {
   conversation_id: string;
   turn_hash: string;
+  /** Character offset where the sentence starts in the turn content */
+  start_char: number;
+  /** Character offset where the sentence ends in the turn content */
+  end_char: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

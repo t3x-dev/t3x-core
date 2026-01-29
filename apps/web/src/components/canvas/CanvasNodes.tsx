@@ -1,14 +1,13 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Handle, NodeToolbar, Position } from '@xyflow/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle,
-  ChevronDown,
   ChevronRight,
   Copy,
   ExternalLink,
-  FileText,
   FilePlus,
+  FileText,
   FlaskConical,
   GitCommit,
   GitMerge,
@@ -31,13 +30,22 @@ import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, springConfig } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import { getConversationContext, type ConversationContext } from '@/lib/api';
-import type { CanvasNodeData, CommitV3Display, CommitV4Display, ConstraintDisplay, EmbeddedLeaf, LeafType, SourceReference, SourceType } from '@/types/nodes';
+import type {
+  CanvasNodeData,
+  CommitV3Display,
+  CommitV4Display,
+  ConstraintDisplay,
+  EmbeddedLeaf,
+  LeafType,
+  SourceType,
+} from '@/types/nodes';
+import { TruncatedCommitView } from './TruncatedCommitView';
 
 // Define custom node type for React Flow v12
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
@@ -193,9 +201,11 @@ function getLeafIcon(type: LeafType) {
 function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
   const isVerified = author.verification === 'verified';
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded ${
-      isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-    }`}>
+    <span
+      className={`text-xs px-1.5 py-0.5 rounded ${
+        isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+      }`}
+    >
       {author.name}
       {isVerified && ' ✓'}
     </span>
@@ -208,9 +218,11 @@ function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
 function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
   const isAgent = author.type === 'agent';
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
-      isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
-    }`}>
+    <span
+      className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
+        isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+      }`}
+    >
       {author.name || author.id || 'Unknown'}
       {isAgent && <span className="text-[0.5rem]">AI</span>}
     </span>
@@ -220,11 +232,13 @@ function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
 function ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
   const isRequire = constraint.type === 'require';
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded ${
-      isRequire
-        ? 'bg-green-100 text-green-700 border border-green-300'
-        : 'bg-red-100 text-red-700 border border-red-300 line-through'
-    }`}>
+    <span
+      className={`text-xs px-1.5 py-0.5 rounded ${
+        isRequire
+          ? 'bg-green-100 text-green-700 border border-green-300'
+          : 'bg-red-100 text-red-700 border border-red-300 line-through'
+      }`}
+    >
       {isRequire ? '✓' : '✗'} {constraint.value}
     </span>
   );
@@ -238,7 +252,19 @@ const PREVIEW_MAX_CONSTRAINTS = 3;
  * CommitV3 content section - shows sentences and constraints
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  */
-function CommitV3Content({ commit }: { commit: CommitV3Display }) {
+function CommitV3Content({
+  commit,
+  onViewFull,
+  projectId,
+}: {
+  commit: CommitV3Display;
+  onViewFull?: () => void;
+  projectId?: string;
+}) {
+  // Check if we have source context for truncated view
+  const sentencesWithSource = commit.sentences.filter((s) => s.source?.turn_hash);
+  const hasSourceContext = sentencesWithSource.length > 0;
+
   // Preview mode: limit sentences and constraints
   const displaySentences = commit.sentences.slice(0, PREVIEW_MAX_SENTENCES);
   const remainingSentences = commit.sentences.length - PREVIEW_MAX_SENTENCES;
@@ -253,24 +279,38 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
         <AuthorBadgeV3 author={commit.author} />
       </div>
 
-      {/* Sentences (preview) */}
+      {/* Sentences - use TruncatedCommitView if source context available */}
       <div>
-        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider mb-1">
           Sentences ({commit.sentences.length})
         </div>
         {commit.sentences.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
+          <p className="text-xs text-slate-400 italic">No sentences</p>
+        ) : hasSourceContext ? (
+          <TruncatedCommitView
+            sentences={sentencesWithSource.map((s) => ({
+              id: s.id,
+              text: s.text,
+              source: {
+                turn_hash: s.source!.turn_hash,
+                start_char: s.source!.start_char,
+                end_char: s.source!.end_char,
+              },
+            }))}
+            maxHighlights={2}
+            contextChars={50}
+            onViewFull={onViewFull}
+            projectId={projectId}
+          />
         ) : (
-          <ul className="mt-1 space-y-0.5">
+          <ul className="space-y-0.5">
             {displaySentences.map((s) => (
               <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
                 • {s.text}
               </li>
             ))}
             {remainingSentences > 0 && (
-              <li className="text-[0.65rem] text-slate-400">
-                +{remainingSentences} more
-              </li>
+              <li className="text-[0.65rem] text-slate-400">+{remainingSentences} more</li>
             )}
           </ul>
         )}
@@ -301,8 +341,19 @@ function CommitV3Content({ commit }: { commit: CommitV3Display }) {
 /**
  * CommitV4 content section - shows sentences only (constraints are in Leaves)
  * Header (title, branch, hash, status) is rendered by parent UnitNode
+ *
+ * Note: V4 sentences use source_ref (conversation_id + turn_hash) without
+ * character positions, so we show a compact list with View full link.
  */
-function CommitV4Content({ commit }: { commit: CommitV4Display }) {
+function CommitV4Content({
+  commit,
+  onViewFull,
+  projectId: _projectId, // Reserved for future TruncatedCommitView integration
+}: {
+  commit: CommitV4Display;
+  onViewFull?: () => void;
+  projectId?: string;
+}) {
   const sentences = commit.content.sentences;
   const displaySentences = sentences.slice(0, PREVIEW_MAX_SENTENCES);
   const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
@@ -327,27 +378,42 @@ function CommitV4Content({ commit }: { commit: CommitV4Display }) {
         {sentences.length === 0 ? (
           <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
         ) : (
-          <ul className="mt-1 space-y-0.5">
-            {displaySentences.map((s) => (
-              <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
-                <span className="text-slate-400 font-mono text-[0.6rem] mr-1">{s.id}</span>
-                {s.text}
-              </li>
-            ))}
-            {remainingSentences > 0 && (
-              <li className="text-[0.65rem] text-slate-400">
-                +{remainingSentences} more
-              </li>
-            )}
-          </ul>
+          <>
+            <ul className="mt-1 space-y-0.5">
+              {displaySentences.map((s) => (
+                <li key={s.id} className="text-xs text-slate-700 line-clamp-2">
+                  <span className="text-slate-400 font-mono text-[0.6rem] mr-1">{s.id}</span>
+                  {s.text}
+                </li>
+              ))}
+            </ul>
+            {/* Footer with +N more and View full */}
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100">
+              {remainingSentences > 0 ? (
+                <span className="text-[0.65rem] text-slate-400">
+                  +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                <span />
+              )}
+              {onViewFull && (
+                <button
+                  type="button"
+                  onClick={onViewFull}
+                  className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  View full
+                  <ChevronRight size={10} />
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
 
       {/* V4: Constraints notice */}
       <div className="mt-2 px-2 py-1.5 bg-amber-50 rounded border border-amber-200">
-        <p className="text-[0.6rem] text-amber-700">
-          Constraints are defined in Leaves
-        </p>
+        <p className="text-[0.6rem] text-amber-700">Constraints are defined in Leaves</p>
       </div>
     </div>
   );
@@ -437,7 +503,8 @@ function UnitNode(props: Props) {
   // Copy commit hash to clipboard (V4/V3 hash takes priority)
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash = data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
+    const hash =
+      data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard.writeText(hash);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
@@ -473,8 +540,10 @@ function UnitNode(props: Props) {
           styles.shadow,
           styles.zIndex,
           selected && 'shadow-[0_0_0_2px_rgba(79,70,229,0.5),0_0_16px_rgba(79,70,229,0.1)]',
-          data.highlightMode === 'main' && 'shadow-[0_0_0_2px_rgba(59,130,246,0.5),0_0_16px_rgba(59,130,246,0.1)]',
-          data.highlightMode === 'branch' && 'shadow-[0_0_0_2px_rgba(245,158,11,0.5),0_0_16px_rgba(245,158,11,0.1)]'
+          data.highlightMode === 'main' &&
+            'shadow-[0_0_0_2px_rgba(59,130,246,0.5),0_0_16px_rgba(59,130,246,0.1)]',
+          data.highlightMode === 'branch' &&
+            'shadow-[0_0_0_2px_rgba(245,158,11,0.5),0_0_16px_rgba(245,158,11,0.1)]'
         )}
         style={{ willChange: 'transform' }}
       >
@@ -502,7 +571,8 @@ function UnitNode(props: Props) {
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
-                  const sourceIsPinned = source.type === 'conversation' && isPinned('conversation', source.id);
+                  const sourceIsPinned =
+                    source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
                       {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
@@ -596,19 +666,23 @@ function UnitNode(props: Props) {
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                  <GitCommit size={12} className={data.branchType === 'main' ? 'text-blue-500' : 'text-amber-500'} />
+                  <GitCommit
+                    size={12}
+                    className={data.branchType === 'main' ? 'text-blue-500' : 'text-amber-500'}
+                  />
                   <span>Committed</span>
                 </span>
               )}
             </div>
             {/* V2: mustHave/mustntHave counts for staging */}
-            {!data.commitV3 && isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
-              <span className="text-[0.65rem] font-medium">
-                <span className="text-green-600">{data.mustHave?.length || 0}✓</span>
-                {' '}
-                <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
-              </span>
-            )}
+            {!data.commitV3 &&
+              isStaging &&
+              (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
+                <span className="text-[0.65rem] font-medium">
+                  <span className="text-green-600">{data.mustHave?.length || 0}✓</span>{' '}
+                  <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
+                </span>
+              )}
             {/* V2: summary for committed */}
             {!data.commitV3 && !isStaging && data.summary && (
               <span className="text-[0.65rem] text-slate-400 truncate max-w-[100px]">
@@ -618,8 +692,20 @@ function UnitNode(props: Props) {
           </div>
 
           {/* V3/V4: Sentences and Constraints content */}
-          {data.commitV4 && <CommitV4Content commit={data.commitV4} />}
-          {data.commitV3 && !data.commitV4 && <CommitV3Content commit={data.commitV3} />}
+          {data.commitV4 && (
+            <CommitV4Content
+              commit={data.commitV4}
+              onViewFull={() => openNodeModal(id, 'commit')}
+              projectId={projectId}
+            />
+          )}
+          {data.commitV3 && !data.commitV4 && (
+            <CommitV3Content
+              commit={data.commitV3}
+              onViewFull={() => openNodeModal(id, 'commit')}
+              projectId={projectId}
+            />
+          )}
         </div>
 
         {/* ═══════════════════════════════════════════
@@ -669,12 +755,16 @@ function UnitNode(props: Props) {
                           <div
                             className={cn(
                               'w-5 h-5 rounded flex items-center justify-center',
-                              isRunner ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
+                              isRunner
+                                ? 'bg-emerald-100 text-emerald-600'
+                                : 'bg-indigo-100 text-indigo-600'
                             )}
                           >
                             <LeafIcon size={12} />
                           </div>
-                          <span className="text-xs text-slate-700 flex-1 truncate">{leaf.title}</span>
+                          <span className="text-xs text-slate-700 flex-1 truncate">
+                            {leaf.title}
+                          </span>
                           {leaf.status && (
                             <span
                               className={cn(
@@ -692,7 +782,10 @@ function UnitNode(props: Props) {
                             </span>
                           )}
                           {leafHref && (
-                            <ExternalLink size={10} className="text-slate-300 group-hover/leaf:text-slate-500 transition-colors" />
+                            <ExternalLink
+                              size={10}
+                              className="text-slate-300 group-hover/leaf:text-slate-500 transition-colors"
+                            />
                           )}
                         </>
                       );
@@ -858,13 +951,14 @@ function LeafNode(props: Props) {
         whileHover={{
           scale: 1.03,
           boxShadow: '0 4px 16px -4px rgba(99,102,241,0.2), 0 0 0 1px rgba(99,102,241,0.1)',
-          transition: springConfig.smooth
+          transition: springConfig.smooth,
         }}
         whileTap={{ scale: 0.98 }}
         className={cn(
           'w-40 bg-white border border-slate-200 rounded-xl',
           'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)]',
-          selected && 'border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.3),0_0_16px_rgba(99,102,241,0.15)]'
+          selected &&
+            'border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.3),0_0_16px_rgba(99,102,241,0.15)]'
         )}
         style={{ willChange: 'transform' }}
       >

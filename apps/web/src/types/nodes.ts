@@ -88,6 +88,12 @@ export interface CommitV3Display {
 export interface SentenceDisplay {
   id: string;
   text: string;
+  /** Source reference for tracing back to original turn */
+  source?: {
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
 }
 
 export interface ConstraintDisplay {
@@ -375,8 +381,14 @@ export interface SourceTextBlock {
 export interface PendingCommitSentence {
   id: string;      // Sentence/chunk ID
   text: string;    // Sentence text
-  start: number;   // Global start char position
-  end: number;     // Global end char position
+  start: number;   // Global start char position (in source_text)
+  end: number;     // Global end char position (in source_text)
+  /** v1.3: Turn hash this sentence belongs to (for source context display) */
+  turn_hash?: string;
+  /** v1.3: Start position relative to turn.content (without [role]: prefix) */
+  turn_start?: number;
+  /** v1.3: End position relative to turn.content (without [role]: prefix) */
+  turn_end?: number;
 }
 
 // Pending commit source data - replaces old clause-based system for pending commits

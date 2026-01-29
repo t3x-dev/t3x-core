@@ -16,11 +16,11 @@ import { zValidator } from '@hono/zod-validator';
 import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
 import {
   commitMergeDraft,
-  createCommitV3,
+  createCommitV4,
   createMergeDraft,
   deleteMergeDraft,
+  findCommitV4ByHash,
   findPendingMergeDraft,
-  getCommitV3,
   getMergeDraft,
   updateBranchHead,
   updateMergeDraft,
@@ -68,18 +68,18 @@ mergeRoutes.post('/v1/merge/prepare', zValidator('json', prepareSchema), async (
   const { source_hash, target_hash } = c.req.valid('json');
   const db = await getDB();
 
-  // Load commits
-  const sourceCommit = await getCommitV3(db, source_hash);
+  // Load V4 commits
+  const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
     return jsonError(c, 'NOT_FOUND', `Source commit not found: ${source_hash}`, 404);
   }
 
-  const targetCommit = await getCommitV3(db, target_hash);
+  const targetCommit = await findCommitV4ByHash(db, target_hash);
   if (!targetCommit) {
     return jsonError(c, 'NOT_FOUND', `Target commit not found: ${target_hash}`, 404);
   }
 
-  // Prepare merge - V4 API accepts DiffableSentence[] (only id + text needed)
+  // Prepare merge - V4 sentences with source_ref preserved
   const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   return jsonSuccess(c, prepared);
@@ -175,33 +175,17 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
       mergeCommit.branch = branch;
     }
 
-    // Convert CommitV4 to CreateCommitV3Input format for storage compatibility
-    const commitInput = {
+    // Save as V4 commit directly (source_ref preserved)
+    await createCommitV4(db, {
       hash: mergeCommit.hash,
-      schema: 'commit/v3' as const, // Store as V3 for now
       parents: mergeCommit.parents,
-      author: authorV3,
+      author: mergeCommit.author,
       committedAt: new Date(mergeCommit.committed_at),
-      content: {
-        sentences: mergeCommit.content.sentences.map((s) => ({
-          text: s.text,
-          startChar: 0,
-          endChar: s.text.length,
-          id: s.id,
-          confidence: s.confidence ?? 1,
-          source: s.source_ref
-            ? { type: 'turn', id: s.source_ref.turn_hash }
-            : { type: 'merge', id: 'merged' },
-        })),
-        constraints: [], // V4: No constraints in commit
-      },
+      content: mergeCommit.content,
       projectId: project_id,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-    };
-
-    // Save to storage
-    await createCommitV3(db, commitInput, { strictParents: false });
+    });
 
     // Update branch head if branch specified
     if (branch) {
@@ -251,18 +235,18 @@ mergeRoutes.post('/v1/merge/drafts', zValidator('json', createDraftSchema), asyn
     });
   }
 
-  // Load commits
-  const sourceCommit = await getCommitV3(db, source_hash);
+  // Load V4 commits
+  const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
     return jsonError(c, 'NOT_FOUND', `Source commit not found: ${source_hash}`, 404);
   }
 
-  const targetCommit = await getCommitV3(db, target_hash);
+  const targetCommit = await findCommitV4ByHash(db, target_hash);
   if (!targetCommit) {
     return jsonError(c, 'NOT_FOUND', `Target commit not found: ${target_hash}`, 404);
   }
 
-  // Prepare merge - V4 API accepts DiffableSentence[] (only id + text needed)
+  // Prepare merge - V4 sentences with source_ref preserved
   const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   // Create draft
@@ -401,33 +385,17 @@ mergeRoutes.post(
       const targetBranch = branch || draft.targetBranch || 'main';
       mergeCommit.branch = targetBranch;
 
-      // Convert CommitV4 to CreateCommitV3Input format for storage compatibility
-      const commitInput = {
+      // Save as V4 commit directly (source_ref preserved)
+      await createCommitV4(db, {
         hash: mergeCommit.hash,
-        schema: 'commit/v3' as const, // Store as V3 for now
         parents: mergeCommit.parents,
-        author: authorV3,
+        author: mergeCommit.author,
         committedAt: new Date(mergeCommit.committed_at),
-        content: {
-          sentences: mergeCommit.content.sentences.map((s) => ({
-            text: s.text,
-            startChar: 0,
-            endChar: s.text.length,
-            id: s.id,
-            confidence: s.confidence ?? 1,
-            source: s.source_ref
-              ? { type: 'turn', id: s.source_ref.turn_hash }
-              : { type: 'merge', id: 'merged' },
-          })),
-          constraints: [], // V4: No constraints in commit
-        },
+        content: mergeCommit.content,
         projectId: draft.projectId,
         message: mergeCommit.message,
         branch: mergeCommit.branch,
-      };
-
-      // Save to storage
-      await createCommitV3(db, commitInput, { strictParents: false });
+      });
 
       // Update branch head
       await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);

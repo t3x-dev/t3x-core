@@ -78,7 +78,7 @@ export function LeafCreationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[90vw] max-w-[540px] bg-white overflow-hidden z-[60]" overlayClassName="z-[60]">
         <DialogHeader>
           <DialogTitle>Create Leaf from Commit</DialogTitle>
           <DialogDescription>
@@ -113,16 +113,16 @@ export function LeafCreationDialog({
                     onClick={() => setSelectedType(leafType.type)}
                     disabled={isCreating}
                     className={cn(
-                      'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors',
+                      'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',
                       isSelected
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
                       isCreating && 'opacity-50 cursor-not-allowed'
                     )}
                   >
-                    <Icon size={16} className={isSelected ? 'text-indigo-600' : 'text-gray-500'} />
-                    <div>
-                      <div className="font-medium text-sm">{leafType.label}</div>
+                    <Icon size={16} className={cn('shrink-0', isSelected ? 'text-indigo-600' : 'text-gray-500')} />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{leafType.label}</div>
                       <div className="text-xs text-gray-500">
                         {leafType.category === 'runner' ? 'Runner' : 'Output'}
                       </div>
@@ -136,15 +136,15 @@ export function LeafCreationDialog({
           {/* Commit hash display (read-only) */}
           <div className="space-y-2">
             <Label>From Commit</Label>
-            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border border-gray-200">
-              <code className="text-xs font-mono text-gray-600 truncate flex-1">
+            <div className="p-2 bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+              <code className="text-xs font-mono text-gray-600 block truncate">
                 {commitHash}
               </code>
             </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -152,16 +152,16 @@ export function LeafCreationDialog({
           >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={isCreating}>
+          <Button onClick={handleCreate} disabled={isCreating} className="shrink-0">
             {isCreating ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Creating...
+                <span>Creating...</span>
               </>
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                Create Leaf
+                <span>Create Leaf</span>
               </>
             )}
           </Button>

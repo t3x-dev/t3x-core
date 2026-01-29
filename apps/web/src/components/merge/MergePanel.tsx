@@ -59,7 +59,7 @@ export function MergePanel() {
   };
 
   return (
-    <div className="fixed right-0 top-0 h-full w-96 bg-white shadow-lg border-l overflow-y-auto p-6">
+    <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white shadow-lg border-l overflow-y-auto p-4 sm:p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Merge Review</h2>

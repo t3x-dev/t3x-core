@@ -722,6 +722,197 @@ export async function createTurn(
 }
 
 // ============================================================================
+// Turn Context (for source tracing)
+// ============================================================================
+
+/**
+ * Turn with context highlight information (from /turns/:hash/context API)
+ */
+export interface TurnWithContext {
+  turn_hash: string;
+  parent_turn_hash: string | null;
+  project_id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  language?: string | null;
+  rings?: unknown;
+  created_at: string;
+  is_target: boolean;
+  highlight?: {
+    start: number;
+    end: number;
+  };
+}
+
+/**
+ * Turn context data from API (for source tracing)
+ */
+export interface TurnContextData {
+  target_turn: TurnWithContext;
+  context: TurnWithContext[];
+  conversation_id: string;
+  conversation_title: string | null;
+}
+
+/**
+ * Fetch turn with surrounding context for source tracing
+ *
+ * @param turnHash - The turn hash to fetch context for
+ * @param options - Optional parameters for context window and highlight
+ * @returns Turn context data including surrounding turns
+ */
+export async function fetchTurnContext(
+  turnHash: string,
+  options?: {
+    before?: number;
+    after?: number;
+    highlightStart?: number;
+    highlightEnd?: number;
+  }
+): Promise<TurnContextData> {
+  if (!turnHash || turnHash === 'undefined') {
+    throw new Error('fetchTurnContext: turnHash is required');
+  }
+
+  const params = new URLSearchParams();
+  if (options?.before !== undefined) {
+    params.set('before', String(options.before));
+  }
+  if (options?.after !== undefined) {
+    params.set('after', String(options.after));
+  }
+  if (options?.highlightStart !== undefined) {
+    params.set('highlight_start', String(options.highlightStart));
+  }
+  if (options?.highlightEnd !== undefined) {
+    params.set('highlight_end', String(options.highlightEnd));
+  }
+
+  const queryString = params.toString();
+  const url = `${API_V1}/turns/${turnHash}/context${queryString ? `?${queryString}` : ''}`;
+  const res = await fetchWithTimeout(url);
+  return handleResponse<TurnContextData>(res);
+}
+
+// ============================================================================
+// Turn Context Cache & Batch
+// ============================================================================
+
+/** Cache for turn context data to avoid redundant requests */
+const turnContextCache = new Map<string, { data: TurnContextData; timestamp: number }>();
+
+/** Cache TTL in milliseconds (5 minutes) */
+const TURN_CONTEXT_CACHE_TTL = 5 * 60 * 1000;
+
+/** In-flight requests to dedupe concurrent requests */
+const inflightRequests = new Map<string, Promise<TurnContextData>>();
+
+/**
+ * Build cache key for turn context
+ */
+function buildTurnContextCacheKey(
+  turnHash: string,
+  options?: { before?: number; after?: number }
+): string {
+  return `${turnHash}:${options?.before ?? 1}:${options?.after ?? 1}`;
+}
+
+/**
+ * Fetch turn context with caching and request deduplication
+ *
+ * @param turnHash - The turn hash to fetch
+ * @param options - Context window options and optional highlight positions
+ * @returns Turn context data (from cache or fresh)
+ */
+export async function fetchTurnContextCached(
+  turnHash: string,
+  options?: {
+    before?: number;
+    after?: number;
+    highlightStart?: number;
+    highlightEnd?: number;
+  }
+): Promise<TurnContextData> {
+  const cacheKey = buildTurnContextCacheKey(turnHash, options);
+
+  // Check cache first
+  const cached = turnContextCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < TURN_CONTEXT_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Check if request is already in flight
+  const inflight = inflightRequests.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  // Make the request
+  const requestPromise = fetchTurnContext(turnHash, options)
+    .then((data) => {
+      // Cache the result
+      turnContextCache.set(cacheKey, { data, timestamp: Date.now() });
+      return data;
+    })
+    .finally(() => {
+      // Remove from in-flight
+      inflightRequests.delete(cacheKey);
+    });
+
+  // Track in-flight request
+  inflightRequests.set(cacheKey, requestPromise);
+
+  return requestPromise;
+}
+
+/**
+ * Batch fetch turn contexts with caching
+ *
+ * Fetches multiple turn contexts in parallel, utilizing cache and
+ * deduplicating concurrent requests for the same turn.
+ *
+ * @param turnHashes - Array of turn hashes to fetch
+ * @param options - Context window options (applied to all)
+ * @returns Map of turnHash to TurnContextData (or null on error)
+ */
+export async function fetchTurnContextBatch(
+  turnHashes: string[],
+  options?: { before?: number; after?: number }
+): Promise<Map<string, TurnContextData | null>> {
+  const results = new Map<string, TurnContextData | null>();
+
+  // Dedupe input
+  const uniqueHashes = [...new Set(turnHashes)];
+
+  // Fetch all in parallel with caching
+  await Promise.all(
+    uniqueHashes.map(async (turnHash) => {
+      try {
+        const data = await fetchTurnContextCached(turnHash, options);
+        results.set(turnHash, data);
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`[fetchTurnContextBatch] Failed for ${turnHash}:`, err);
+        }
+        results.set(turnHash, null);
+      }
+    })
+  );
+
+  return results;
+}
+
+/**
+ * Clear the turn context cache
+ * Useful when data may have changed
+ */
+export function clearTurnContextCache(): void {
+  turnContextCache.clear();
+  inflightRequests.clear();
+}
+
+// ============================================================================
 // Branches
 // ============================================================================
 
@@ -854,58 +1045,6 @@ export interface CommitV3ListData {
   offset: number;
 }
 
-// ============================================================================
-// CommitV4 Types (Pure knowledge, no constraints)
-// ============================================================================
-
-// CommitV4 sentence - pure knowledge unit
-export interface CommitV4Sentence {
-  id: string;
-  text: string;
-  confidence?: number;
-  source_ref?: {
-    conversation_id: string;
-    turn_hash: string;
-  };
-}
-
-// CommitV4 author
-export interface CommitV4Author {
-  type: 'human' | 'agent';
-  id?: string;
-  name?: string;
-}
-
-// CommitV4 source reference
-export interface CommitV4SourceRef {
-  type: 'conversation' | 'leaf';
-  id: string;
-  title?: string;
-  assertion_lessons?: string[];
-}
-
-// CommitV4 from API response
-export interface CommitV4 {
-  hash: string;
-  schema: 't3x/commit/v4';
-  parents: string[];
-  author: CommitV4Author;
-  committed_at: string;
-  content: {
-    sentences: CommitV4Sentence[];
-  };
-  project_id: string | null;
-  message: string | null;
-  branch: string | null;
-  source_refs: CommitV4SourceRef[] | null;
-  position_x: number | null;
-  position_y: number | null;
-  created_at: string;
-}
-
-// Note: V4 API returns array directly, unlike V3 which returns { commits: [...] }
-export type CommitV4ListData = CommitV4[];
-
 export async function listCommitsV3(
   projectId: string,
   branch?: string,
@@ -960,30 +1099,87 @@ export async function createCommitV3(
 }
 
 // ============================================================================
-// CommitV4 API Functions
+// Commits V4 (Pure knowledge - sentences only, no constraints)
 // ============================================================================
 
+// CommitV4 sentence source reference (with char positions for highlighting)
+export interface CommitV4SentenceSourceRef {
+  conversation_id: string;
+  turn_hash: string;
+  start_char: number;
+  end_char: number;
+}
+
+// CommitV4 sentence from API
+export interface CommitV4Sentence {
+  id: string;
+  text: string;
+  confidence?: number;
+  source_ref?: CommitV4SentenceSourceRef;
+}
+
+// CommitV4 author from API
+export interface CommitV4Author {
+  type: 'human' | 'agent';
+  name?: string;
+  id?: string;
+}
+
+// CommitV4 commit-level source reference
+export interface CommitV4SourceRef {
+  type: 'conversation' | 'leaf';
+  id: string;
+  title?: string;
+  assertion_lessons?: string[];
+}
+
+// CommitV4 from API response
+export interface CommitV4 {
+  hash: string;
+  schema: 't3x/commit/v4';
+  parents: string[];
+  author: CommitV4Author;
+  committed_at: string;
+  content: {
+    sentences: CommitV4Sentence[];
+  };
+  project_id: string | null;
+  message: string | null;
+  branch: string | null;
+  source_refs: CommitV4SourceRef[] | null;
+  position_x: number | null;
+  position_y: number | null;
+  created_at: string;
+}
+
+/**
+ * List V4 commits by project
+ * Returns array of CommitV4 directly
+ */
 export async function listCommitsV4(
   projectId: string,
   branch?: string,
-  limit = 100,
+  limit = 50,
   offset = 0
-): Promise<CommitV4ListData> {
-  const query = buildQueryString({ project_id: projectId, branch, limit, offset });
+): Promise<CommitV4[]> {
+  const query = buildQueryString({ branch, limit, offset });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits-v4?${query}`);
-  return handleResponse<CommitV4ListData>(res);
+  return handleResponse<CommitV4[]>(res);
 }
 
+/**
+ * Get a V4 commit by hash
+ */
 export async function getCommitV4(commitHash: string): Promise<CommitV4> {
   const res = await fetchWithTimeout(`${API_V1}/commits-v4/${encodeURIComponent(commitHash)}`);
   return handleResponse<CommitV4>(res);
 }
 
 /**
- * Create a V4 commit (pure knowledge, no constraints)
+ * Create a V4 commit (pure knowledge - sentences only)
  *
- * V4 commits store sentences only. Constraints are stored in Leaves.
- * This is the current commit format for the Leaf system.
+ * V4 commits use sentences[] only. Constraints belong to Leaves.
+ * source_ref in each sentence enables source context display with highlights.
  */
 export async function createCommitV4(
   projectId: string,
@@ -1008,7 +1204,7 @@ export async function createCommitV4(
       parents: options?.parents ?? [],
       position_x: options?.position?.x,
       position_y: options?.position?.y,
-      author: options?.author ?? { type: 'human' },
+      author: options?.author ?? { type: 'human', name: 'User' },
       source_refs: options?.source_refs,
     }),
   });
@@ -2337,6 +2533,12 @@ export interface CurateChunk {
   score: number;
   selected: boolean;
   cos_intent?: number;
+  /** v1.3: Turn hash this chunk belongs to (for source context display) */
+  turn_hash?: string;
+  /** v1.3: Start position relative to turn.content (without [role]: prefix) */
+  turn_start?: number;
+  /** v1.3: End position relative to turn.content (without [role]: prefix) */
+  turn_end?: number;
 }
 
 /** Anchor candidate in API response (snake_case) */

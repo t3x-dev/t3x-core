@@ -25,6 +25,12 @@ export interface GoogleAIEmbeddingConfig {
   model?: string;
 
   /**
+   * Output embedding dimensions (gemini-embedding-001 supports 128-3072)
+   * @default 768
+   */
+  outputDimensionality?: number;
+
+  /**
    * Request timeout in milliseconds
    * @default 30000
    */
@@ -54,6 +60,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
 
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly outputDimensionality: number;
   private readonly timeout: number;
   private readonly fetchFn: typeof fetch;
 
@@ -68,14 +75,12 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
 
     this.apiKey = config.apiKey;
     this.model = config.model ?? 'gemini-embedding-001';
+    this.outputDimensionality = config.outputDimensionality ?? 768;
     this.timeout = config.timeout ?? 30000;
     this.fetchFn = config.fetch ?? globalThis.fetch;
 
     this.id = `google-ai:${this.model}`;
-
-    // Model dimensions
-    // gemini-embedding-001: 768 dimensions
-    this.dim = 768;
+    this.dim = this.outputDimensionality;
   }
 
   async encode(texts: string[]): Promise<number[][]> {
@@ -128,6 +133,7 @@ export class GoogleAIEmbeddingProvider implements EmbeddingProvider {
             content: {
               parts: [{ text }],
             },
+            outputDimensionality: this.outputDimensionality,
           })),
         }),
         signal: controller.signal,

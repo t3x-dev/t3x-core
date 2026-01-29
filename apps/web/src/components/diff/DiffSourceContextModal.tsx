@@ -67,9 +67,20 @@ function TurnBubble({ turn }: { turn: TurnWithContext }) {
   );
 }
 
+/** Flexible sentence type that accepts both required and optional source */
+interface SentenceWithOptionalSource {
+  id: string;
+  text: string;
+  source?: {
+    turn_hash?: string;
+    start_char?: number;
+    end_char?: number;
+  };
+}
+
 interface DiffSourceContextModalProps {
   open: boolean;
-  sentence: Sentence | null;
+  sentence: SentenceWithOptionalSource | Sentence | null;
   data: TurnContextData | null;
   loading: boolean;
   onClose: () => void;
@@ -113,7 +124,7 @@ export function DiffSourceContextModal({
           {!loading && !data && sentence && (
             <div className="text-center py-12 text-muted-foreground">
               <p>Could not load conversation context.</p>
-              {sentence.source.turn_hash && (
+              {sentence.source?.turn_hash && (
                 <p className="mt-2 text-sm font-mono break-all">
                   Turn: {sentence.source.turn_hash}
                 </p>

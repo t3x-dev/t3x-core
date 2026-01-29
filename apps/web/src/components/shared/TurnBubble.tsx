@@ -1,0 +1,138 @@
+'use client';
+
+/**
+ * TurnBubble - Renders a conversation turn with optional highlights
+ *
+ * Used for displaying turns with highlighted text in:
+ * - SourceContextModal (merge UI) - yellow highlights
+ * - CommitSourceContext (commit display) - green highlights
+ */
+
+import { Bot, Settings, Terminal, User } from 'lucide-react';
+import type { ReactNode } from 'react';
+
+import { mergeHighlightRanges } from '@/lib/highlightUtils';
+import type {
+  HighlightColor,
+  HighlightRange,
+  TurnBubbleData,
+  TurnBubbleProps,
+} from '@/types/sourceContext';
+
+// Re-export types for backward compatibility
+export type { HighlightColor, TurnBubbleData, TurnBubbleProps };
+export type TurnHighlight = HighlightRange;
+
+const roleIcons: Record<string, ReactNode> = {
+  user: <User className="h-4 w-4" />,
+  assistant: <Bot className="h-4 w-4" />,
+  system: <Settings className="h-4 w-4" />,
+  tool: <Terminal className="h-4 w-4" />,
+};
+
+const roleLabels: Record<string, string> = {
+  user: 'User',
+  assistant: 'Assistant',
+  system: 'System',
+  tool: 'Tool',
+};
+
+const highlightColors: Record<HighlightColor, string> = {
+  yellow: 'bg-yellow-200',
+  green: 'bg-green-200',
+};
+
+export function TurnBubble({
+  turn,
+  highlightColor = 'yellow',
+  showTargetRing = true,
+}: TurnBubbleProps) {
+  const isUser = turn.role === 'user';
+
+  // Collect all highlights (from both single and multiple sources)
+  const allHighlights: TurnHighlight[] = [];
+  if (turn.highlight && turn.is_target) {
+    allHighlights.push(turn.highlight);
+  }
+  if (turn.highlights) {
+    allHighlights.push(...turn.highlights);
+  }
+
+  // Render content with highlights
+  const renderContent = () => {
+    if (allHighlights.length === 0) {
+      return turn.content;
+    }
+
+    // Merge overlapping highlights
+    const merged = mergeHighlightRanges(allHighlights);
+    const highlightClass = `${highlightColors[highlightColor]} px-0.5 rounded`;
+
+    // Build segments
+    const segments: ReactNode[] = [];
+    let lastEnd = 0;
+
+    for (let i = 0; i < merged.length; i++) {
+      const { start, end } = merged[i];
+
+      // Add text before highlight
+      if (start > lastEnd) {
+        segments.push(turn.content.slice(lastEnd, start));
+      }
+
+      // Add highlighted text
+      segments.push(
+        <mark key={i} className={highlightClass}>
+          {turn.content.slice(start, end)}
+        </mark>
+      );
+
+      lastEnd = end;
+    }
+
+    // Add remaining text after last highlight
+    if (lastEnd < turn.content.length) {
+      segments.push(turn.content.slice(lastEnd));
+    }
+
+    return <>{segments}</>;
+  };
+
+  const ringClass =
+    showTargetRing && turn.is_target
+      ? highlightColor === 'yellow'
+        ? 'ring-2 ring-yellow-400 ring-offset-2'
+        : 'ring-2 ring-green-400 ring-offset-2'
+      : '';
+
+  return (
+    <div
+      className={`
+        flex gap-3 p-3 rounded-lg
+        ${ringClass}
+        ${isUser ? 'bg-blue-50' : 'bg-muted'}
+      `}
+    >
+      {/* Role Icon */}
+      <div
+        className={`
+          shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+          ${isUser ? 'bg-blue-100 text-blue-600' : 'bg-muted-foreground/20 text-muted-foreground'}
+        `}
+      >
+        {roleIcons[turn.role] || <User className="h-4 w-4" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="font-medium text-sm">{roleLabels[turn.role] || turn.role}</span>
+          <span className="text-xs text-muted-foreground">
+            {new Date(turn.created_at).toLocaleTimeString()}
+          </span>
+        </div>
+        <p className="text-sm whitespace-pre-wrap break-words">{renderContent()}</p>
+      </div>
+    </div>
+  );
+}

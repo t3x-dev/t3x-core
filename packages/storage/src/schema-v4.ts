@@ -80,6 +80,8 @@ export const commitsV4 = pgTable(
         source_ref?: {
           conversation_id: string;
           turn_hash: string;
+          start_char: number;
+          end_char: number;
         };
       }>;
     }>(),
