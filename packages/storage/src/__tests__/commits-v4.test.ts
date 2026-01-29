@@ -182,6 +182,8 @@ describe('Commits V4 Storage', () => {
       expect(result.content.sentences[0].source_ref).toEqual({
         conversation_id: 'conv_123',
         turn_hash: 'sha256:abc',
+        start_char: 0,
+        end_char: 19,
       });
     });
 
