@@ -294,6 +294,43 @@ describe('Leaves Storage', () => {
 
       expect(results).toHaveLength(0);
     });
+
+    it('filters by type', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Type Filter Author' },
+        sentences: [{ id: 's_type_filter', text: 'Type filter sentence' }],
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'email',
+        project_id: testProjectId,
+      });
+
+      const tweetResults = await findLeavesByCommit(db, commit.hash, { type: 'tweet' });
+      const emailResults = await findLeavesByCommit(db, commit.hash, { type: 'email' });
+      const allResults = await findLeavesByCommit(db, commit.hash);
+
+      expect(tweetResults).toHaveLength(2);
+      expect(tweetResults.every((l) => l.type === 'tweet')).toBe(true);
+      expect(emailResults).toHaveLength(1);
+      expect(emailResults[0].type).toBe('email');
+      expect(allResults).toHaveLength(3);
+    });
   });
 
   describe('findLeavesByProject', () => {
@@ -356,6 +393,48 @@ describe('Leaves Storage', () => {
 
       expect(page1).toHaveLength(2);
       expect(page2).toHaveLength(2);
+    });
+
+    it('filters by type', async () => {
+      const project = await insertProject(
+        db,
+        testData.project({ name: 'Type Filter Project Test' })
+      );
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Type Filter Project Author' },
+        sentences: [{ id: 's_type_proj', text: 'Type filter project sentence' }],
+        project_id: project.projectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'slack',
+        project_id: project.projectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'slack',
+        project_id: project.projectId,
+      });
+
+      await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'article',
+        project_id: project.projectId,
+      });
+
+      const slackResults = await findLeavesByProject(db, project.projectId, { type: 'slack' });
+      const articleResults = await findLeavesByProject(db, project.projectId, { type: 'article' });
+      const allResults = await findLeavesByProject(db, project.projectId);
+
+      expect(slackResults).toHaveLength(2);
+      expect(slackResults.every((l) => l.type === 'slack')).toBe(true);
+      expect(articleResults).toHaveLength(1);
+      expect(articleResults[0].type).toBe('article');
+      expect(allResults).toHaveLength(3);
     });
   });
 

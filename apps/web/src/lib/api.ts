@@ -1038,6 +1038,58 @@ export interface CommitV3ListData {
   offset: number;
 }
 
+// ============================================================================
+// CommitV4 Types (Pure knowledge, no constraints)
+// ============================================================================
+
+// CommitV4 sentence - pure knowledge unit
+export interface CommitV4Sentence {
+  id: string;
+  text: string;
+  confidence?: number;
+  source_ref?: {
+    conversation_id: string;
+    turn_hash: string;
+  };
+}
+
+// CommitV4 author
+export interface CommitV4Author {
+  type: 'human' | 'agent';
+  id?: string;
+  name?: string;
+}
+
+// CommitV4 source reference
+export interface CommitV4SourceRef {
+  type: 'conversation' | 'leaf';
+  id: string;
+  title?: string;
+  assertion_lessons?: string[];
+}
+
+// CommitV4 from API response
+export interface CommitV4 {
+  hash: string;
+  schema: 't3x/commit/v4';
+  parents: string[];
+  author: CommitV4Author;
+  committed_at: string;
+  content: {
+    sentences: CommitV4Sentence[];
+  };
+  project_id: string | null;
+  message: string | null;
+  branch: string | null;
+  source_refs: CommitV4SourceRef[] | null;
+  position_x: number | null;
+  position_y: number | null;
+  created_at: string;
+}
+
+// Note: V4 API returns array directly, unlike V3 which returns { commits: [...] }
+export type CommitV4ListData = CommitV4[];
+
 export async function listCommitsV3(
   projectId: string,
   branch?: string,
@@ -1095,7 +1147,7 @@ export async function createCommitV3(
 // Commits V4 (Pure knowledge - sentences only, no constraints)
 // ============================================================================
 
-// CommitV4 sentence source reference
+// CommitV4 sentence source reference (with char positions for highlighting)
 export interface CommitV4SentenceSourceRef {
   conversation_id: string;
   turn_hash: string;
@@ -1118,6 +1170,14 @@ export interface CommitV4Author {
   id?: string;
 }
 
+// CommitV4 commit-level source reference
+export interface CommitV4SourceRef {
+  type: 'conversation' | 'leaf';
+  id: string;
+  title?: string;
+  assertion_lessons?: string[];
+}
+
 // CommitV4 from API response
 export interface CommitV4 {
   hash: string;
@@ -1131,7 +1191,7 @@ export interface CommitV4 {
   project_id: string | null;
   message: string | null;
   branch: string | null;
-  source_refs: SourceRef[] | null;
+  source_refs: CommitV4SourceRef[] | null;
   position_x: number | null;
   position_y: number | null;
   created_at: string;
@@ -1156,7 +1216,7 @@ export async function listCommitsV4(
  * Get a V4 commit by hash
  */
 export async function getCommitV4(commitHash: string): Promise<CommitV4> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v4/${commitHash}`);
+  const res = await fetchWithTimeout(`${API_V1}/commits-v4/${encodeURIComponent(commitHash)}`);
   return handleResponse<CommitV4>(res);
 }
 
@@ -1175,6 +1235,7 @@ export async function createCommitV4(
     parents?: string[];
     position?: { x: number; y: number };
     author?: CommitV4Author;
+    source_refs?: CommitV4SourceRef[];
   }
 ): Promise<CommitV4> {
   const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
@@ -1189,6 +1250,7 @@ export async function createCommitV4(
       position_x: options?.position?.x,
       position_y: options?.position?.y,
       author: options?.author ?? { type: 'human', name: 'User' },
+      source_refs: options?.source_refs,
     }),
   });
   return handleResponse<CommitV4>(res);
@@ -2381,9 +2443,49 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-    }
+    },
+    60000 // 60 seconds timeout for LLM generation
   );
   return handleResponse<GenerateLeafOutputResult>(res);
+}
+
+/**
+ * Validate output result
+ * 验证输出的结果
+ */
+export interface ValidateLeafOutputResult {
+  leaf: Leaf;              // 更新后的 Leaf（包含新的 assertions）
+  validation: {
+    all_passed: boolean;   // 是否全部通过
+    passed_count: number;  // 通过的断言数量
+    failed_count: number;  // 失败的断言数量
+  };
+}
+
+/**
+ * Validate output for a leaf
+ * 验证 Leaf 的输出是否满足约束条件
+ *
+ * @param leafId - Leaf ID
+ * @param useSemantic - 是否使用语义匹配（默认 false，当前仅支持精确匹配）
+ * @returns Validation result with updated leaf and statistics
+ * @throws ApiError - LEAF_NOT_FOUND
+ * @throws ApiError - NO_OUTPUT (output is null)
+ * @throws ApiError - NO_CONSTRAINTS (no constraints to validate)
+ */
+export async function validateLeafOutput(
+  leafId: string,
+  useSemantic = false
+): Promise<ValidateLeafOutputResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ use_semantic: useSemantic }),
+    }
+  );
+  return handleResponse<ValidateLeafOutputResult>(res);
 }
 
 export async function* chatStream(

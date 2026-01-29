@@ -22,6 +22,7 @@ export const ID_PREFIXES = {
   constraint: 'cst_',
   assertion: 'ast_',
   leaf: 'leaf_',
+  leaf_history: 'lhist_',
   pin: 'pin_',
 } as const;
 
@@ -308,6 +309,59 @@ export interface LeafConfig {
 
   /** Allow extension */
   [key: string]: unknown;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LeafHistory (Generation History)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * LeafHistory stores a snapshot of each generation for a Leaf.
+ *
+ * Each time a Leaf generates output, a history entry is created.
+ * This allows viewing and restoring previous outputs.
+ */
+export interface LeafHistory {
+  /** Unique ID, format: "lhist_" + nanoid(12) (历史记录唯一标识) */
+  id: string;
+
+  /** The leaf this history belongs to (关联的 Leaf ID) */
+  leaf_id: string;
+
+  /** Generated output content (生成的输出内容) */
+  output: string;
+
+  /** Configuration used for this generation (生成时使用的配置) */
+  config: LeafConfig;
+
+  /** LLM model used for generation (使用的 LLM 模型) */
+  model: string;
+
+  /** When this output was generated, ISO8601 (生成时间) */
+  generated_at: string;
+
+  /** Who triggered this generation (触发生成的用户/系统) */
+  created_by?: string;
+}
+
+/**
+ * Input for creating a new LeafHistory entry.
+ */
+export interface CreateLeafHistoryInput {
+  /** The leaf this history belongs to */
+  leaf_id: string;
+
+  /** Generated output content */
+  output: string;
+
+  /** Configuration used for this generation */
+  config: LeafConfig;
+
+  /** LLM model used for generation */
+  model: string;
+
+  /** Who triggered this generation */
+  created_by?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -12,27 +12,28 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { prepareMerge, executeMerge, type Merge2WayResult } from '@t3x/core';
+import type { CreateCommitV4Input } from '@t3x/core';
+import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
 import {
-  findCommitV4ByHash,
-  createCommitV4,
-  updateBranchHead,
-  createMergeDraft,
-  getMergeDraft,
-  updateMergeDraft,
-  deleteMergeDraft,
   commitMergeDraft,
+  createCommitV4,
+  createMergeDraft,
+  deleteMergeDraft,
+  findCommitV4ByHash,
   findPendingMergeDraft,
+  getMergeDraft,
+  updateBranchHead,
+  updateMergeDraft,
 } from '@t3x/storage';
+import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
-  PrepareMergeRequestSchema,
   ExecuteMergeRequestSchema,
-  PrepareMergeResponseSchema,
   ExecuteMergeResponseSchema,
+  PrepareMergeRequestSchema,
+  PrepareMergeResponseSchema,
 } from '../schemas/merge';
-import { getAuthorFromContext } from '../lib/auth';
 
 export const mergeRoutes = new OpenAPIHono();
 
@@ -97,7 +98,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   const { source_hash, target_hash } = c.req.valid('json');
   const db = await getDB();
 
-  // Load commits
+  // Load V4 commits
   const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
     return c.json(
@@ -126,8 +127,8 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
     );
   }
 
-  // Prepare merge
-  const prepared = prepareMerge(sourceCommit.content, targetCommit.content);
+  // Prepare merge using V4 sentences (DiffableSentence[])
+  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   return c.json({ success: true as const, data: prepared }, 200);
 });
@@ -217,17 +218,30 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const author = getAuthorFromContext(c);
   const db = await getDB();
 
-  // Get project_id from source commit
-  const sourceCommit = await findCommitV4ByHash(db, source_hash);
-  const projectId = sourceCommit?.projectId || project_id;
-
   try {
-    // Execute merge - V4 requires projectId
+    // Get project_id from source commit for executeMerge
+    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    if (!sourceCommit) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NOT_FOUND',
+            message: `Source commit not found: ${source_hash}`,
+          },
+        },
+        404
+      );
+    }
+
+    const projectId = sourceCommit.project_id || '';
+
+    // Execute merge - returns CommitV4
     const mergeCommit = executeMerge(
       prepared as Merge2WayResult,
       source_hash,
       target_hash,
-      { type: 'human' as const, name: author.name, id: author.identity },
+      author,
       message,
       projectId
     );
@@ -237,17 +251,18 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       mergeCommit.branch = branch;
     }
 
-    // Save as V4 commit directly (source_ref preserved)
-    await createCommitV4(db, {
-      hash: mergeCommit.hash,
+    // Convert to CreateCommitV4Input format
+    const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
       author: mergeCommit.author,
-      committedAt: new Date(mergeCommit.committed_at),
-      content: mergeCommit.content,
-      projectId,
+      sentences: mergeCommit.content.sentences,
+      project_id: projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-    });
+    };
+
+    // Save to storage as V4 commit
+    await createCommitV4(db, commitInput, { strictParents: false });
 
     // Update branch head if branch specified
     if (branch && projectId) {
@@ -302,7 +317,8 @@ const createDraftRoute = createRoute({
   path: '/v1/merge/drafts',
   tags: ['Merge'],
   summary: 'Create a new merge draft',
-  description: 'Creates a merge draft for the workspace. If a pending draft already exists for the same source/target, returns that instead.',
+  description:
+    'Creates a merge draft for the workspace. If a pending draft already exists for the same source/target, returns that instead.',
   request: {
     body: {
       content: {
@@ -329,41 +345,51 @@ const createDraftRoute = createRoute({
 });
 
 mergeRoutes.openapi(createDraftRoute, async (c) => {
-  const { project_id, source_hash, target_hash, source_branch, target_branch } = c.req.valid('json');
+  const { project_id, source_hash, target_hash, source_branch, target_branch } =
+    c.req.valid('json');
   const db = await getDB();
 
   // Check if pending draft already exists
   const existingDraft = await findPendingMergeDraft(db, project_id, source_hash, target_hash);
   if (existingDraft) {
-    return c.json({
-      success: true as const,
-      data: {
-        ...existingDraft,
-        prepared: JSON.parse(existingDraft.preparedJson),
-        preparedJson: undefined,
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          ...existingDraft,
+          prepared: JSON.parse(existingDraft.preparedJson),
+          preparedJson: undefined,
+        },
       },
-    }, 200);
+      200
+    );
   }
 
-  // Load commits
+  // Load V4 commits
   const sourceCommit = await findCommitV4ByHash(db, source_hash);
   if (!sourceCommit) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Source commit not found: ${source_hash}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Source commit not found: ${source_hash}` },
+      },
+      404
+    );
   }
 
   const targetCommit = await findCommitV4ByHash(db, target_hash);
   if (!targetCommit) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Target commit not found: ${target_hash}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Target commit not found: ${target_hash}` },
+      },
+      404
+    );
   }
 
-  // Prepare merge
-  const prepared = prepareMerge(sourceCommit.content, targetCommit.content);
+  // Prepare merge using V4 sentences
+  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
 
   // Create draft
   const draft = await createMergeDraft(db, {
@@ -375,14 +401,17 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     prepared,
   });
 
-  return c.json({
-    success: true as const,
-    data: {
-      ...draft,
-      prepared: JSON.parse(draft.preparedJson),
-      preparedJson: undefined,
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        ...draft,
+        prepared: JSON.parse(draft.preparedJson),
+        preparedJson: undefined,
+      },
     },
-  }, 201);
+    201
+  );
 });
 
 // GET /v1/merge/drafts/:id - Get a merge draft
@@ -412,20 +441,26 @@ mergeRoutes.openapi(getDraftRoute, async (c) => {
 
   const draft = await getMergeDraft(db, id);
   if (!draft) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
   }
 
-  return c.json({
-    success: true as const,
-    data: {
-      ...draft,
-      prepared: JSON.parse(draft.preparedJson),
-      preparedJson: undefined,
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        ...draft,
+        prepared: JSON.parse(draft.preparedJson),
+        preparedJson: undefined,
+      },
     },
-  }, 200);
+    200
+  );
 });
 
 // PATCH /v1/merge/drafts/:id - Update merge draft decisions
@@ -468,35 +503,50 @@ mergeRoutes.openapi(updateDraftRoute, async (c) => {
 
   const draft = await getMergeDraft(db, id);
   if (!draft) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
   }
 
   if (draft.status !== 'pending') {
-    return c.json({
-      success: false as const,
-      error: { code: 'INVALID_STATUS', message: `Cannot update draft with status: ${draft.status}` },
-    }, 400);
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_STATUS',
+          message: `Cannot update draft with status: ${draft.status}`,
+        },
+      },
+      400
+    );
   }
 
   const updated = await updateMergeDraft(db, id, { prepared, message });
   if (!updated) {
-    return c.json({
-      success: false as const,
-      error: { code: 'UPDATE_FAILED', message: 'Failed to update merge draft' },
-    }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'UPDATE_FAILED', message: 'Failed to update merge draft' },
+      },
+      500
+    );
   }
 
-  return c.json({
-    success: true as const,
-    data: {
-      ...updated,
-      prepared: JSON.parse(updated.preparedJson),
-      preparedJson: undefined,
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        ...updated,
+        prepared: JSON.parse(updated.preparedJson),
+        preparedJson: undefined,
+      },
     },
-  }, 200);
+    200
+  );
 });
 
 // POST /v1/merge/drafts/:id/commit - Commit a merge draft
@@ -505,7 +555,7 @@ const commitDraftRoute = createRoute({
   path: '/v1/merge/drafts/{id}/commit',
   tags: ['Merge'],
   summary: 'Commit a merge draft',
-  description: 'Finalizes the merge by creating a CommitV3.',
+  description: 'Finalizes the merge by creating a CommitV4.',
   request: {
     params: DraftIdParamSchema,
     body: {
@@ -539,35 +589,49 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
   const draft = await getMergeDraft(db, id);
   if (!draft) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
   }
 
   if (draft.status !== 'pending') {
-    return c.json({
-      success: false as const,
-      error: { code: 'INVALID_STATUS', message: `Cannot commit draft with status: ${draft.status}` },
-    }, 400);
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_STATUS',
+          message: `Cannot commit draft with status: ${draft.status}`,
+        },
+      },
+      400
+    );
   }
 
   const prepared = JSON.parse(draft.preparedJson) as Merge2WayResult;
 
   // Validate all similar pairs are resolved
-  const unresolved = prepared.similarPairs.filter(p => !p.resolution);
+  const unresolved = prepared.similarPairs.filter((p) => !p.resolution);
   if (unresolved.length > 0) {
-    return c.json({
-      success: false as const,
-      error: { code: 'UNRESOLVED_PAIRS', message: `${unresolved.length} similar pair(s) have no resolution` },
-    }, 400);
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'UNRESOLVED_PAIRS',
+          message: `${unresolved.length} similar pair(s) have no resolution`,
+        },
+      },
+      400
+    );
   }
 
-  const authorV3 = getAuthorFromContext(c);
-  const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
+  const author = getAuthorFromContext(c);
 
   try {
-    // Execute merge - V4 requires projectId
+    // Execute merge - returns CommitV4
     const mergeCommit = executeMerge(
       prepared,
       draft.sourceHash,
@@ -581,17 +645,18 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     const targetBranch = branch || draft.targetBranch || 'main';
     mergeCommit.branch = targetBranch;
 
-    // Save as V4 commit directly (source_ref preserved)
-    await createCommitV4(db, {
-      hash: mergeCommit.hash,
+    // Convert to CreateCommitV4Input format
+    const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
       author: mergeCommit.author,
-      committedAt: new Date(mergeCommit.committed_at),
-      content: mergeCommit.content,
-      projectId: draft.projectId,
+      sentences: mergeCommit.content.sentences,
+      project_id: draft.projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-    });
+    };
+
+    // Save to storage as V4 commit
+    await createCommitV4(db, commitInput, { strictParents: false });
 
     // Update branch head
     await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
@@ -601,10 +666,16 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
     return c.json({ success: true as const, data: mergeCommit }, 200);
   } catch (error) {
-    return c.json({
-      success: false as const,
-      error: { code: 'MERGE_FAILED', message: error instanceof Error ? error.message : 'Unknown error' },
-    }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'MERGE_FAILED',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      },
+      500
+    );
   }
 });
 
@@ -635,18 +706,24 @@ mergeRoutes.openapi(deleteDraftRoute, async (c) => {
 
   const draft = await getMergeDraft(db, id);
   if (!draft) {
-    return c.json({
-      success: false as const,
-      error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-    }, 404);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
   }
 
   const deleted = await deleteMergeDraft(db, id);
   if (!deleted) {
-    return c.json({
-      success: false as const,
-      error: { code: 'DELETE_FAILED', message: 'Failed to delete merge draft' },
-    }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DELETE_FAILED', message: 'Failed to delete merge draft' },
+      },
+      500
+    );
   }
 
   return c.json({ success: true as const, data: { deleted: true } }, 200);
