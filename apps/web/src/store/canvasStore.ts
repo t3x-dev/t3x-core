@@ -101,7 +101,7 @@ type CanvasState = {
   // Leaf panel methods
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
-  addLeafNode: (leafType: LeafType) => void;
+  addLeafNode: (leafType: LeafType) => Promise<void>;
   // Deletion confirmation methods
   confirmDeletion: () => void;
   cancelDeletion: () => void;
@@ -1039,7 +1039,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     // For leaf nodes: must be created via LeafPanel from a commit
     // Direct creation would create a fake node without backend data
     if (kind === 'leaf') {
-      throw new Error('Cannot create leaf directly. Use the Leaf Panel from a committed commit.');
+      // Use warning instead of error - this is an expected user flow issue, not a bug
+      const notify = get().notifyCallback;
+      notify?.('To create a Leaf, click "Add output" on a committed Unit node.', 'warning');
+      return;
     }
 
     // Fallback for any unknown kinds - should not happen
@@ -2086,7 +2089,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
   closeLeafPanel: () => set({ leafPanelOpen: false, leafPanelCommitId: undefined }),
 
-  addLeafNode: (leafType) => {
+  addLeafNode: async (leafType) => {
     const state = get();
     const notify = state.notifyCallback;
 
@@ -2102,66 +2105,100 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return;
     }
 
-    set((state) => {
-      // Count existing leaf nodes connected to this commit to offset position
-      const existingLeafCount = state.edges.filter((edge) => {
-        if (edge.source !== commitId) return false;
-        const targetNode = state.nodes.find((n) => n.id === edge.target);
-        return targetNode?.data.kind === 'leaf';
-      }).length;
+    // Get commit hash from unit node - required for creating leaf
+    const commitHash = unitNode.data.commitHash;
+    if (!commitHash) {
+      notify?.('Commit not saved yet. Please commit first before adding output.', 'error');
+      return;
+    }
 
-      const newNodeId = nextNodeId();
-      const leafLabels: Record<LeafType, string> = {
-        deploy_agent: 'Deploy',
-        tweet: 'Twitter',
-        weibo: '微博',
-        wechat: '朋友圈',
-        email: 'Email',
-        article: '文章',
-        slack: 'Slack',
-        eval: 'Eval',
-      };
+    const projectId = state.projectId;
+    if (!projectId) {
+      notify?.('Project not found', 'error');
+      return;
+    }
 
-      // Position leaf above the unit node
-      const newNode: Node<CanvasNodeData> = {
-        id: newNodeId,
-        type: 'leaf',
-        position: snapPosition({
-          x: unitNode.position.x + commitQuickOffset,
-          y:
-            unitNode.position.y -
-            leafNodeHeight -
-            leafNodeOffset -
-            existingLeafCount * (leafNodeHeight + 20),
-        }),
-        data: {
-          entryId: `LEAF-${getNumericId(newNodeId)}`,
-          title: leafLabels[leafType],
-          summary: '',
-          status: 'pending',
-          timestamp: 'just now',
-          tags: ['leaf', leafType],
-          kind: 'leaf',
-          leafType,
-        },
-      };
+    const leafLabels: Record<LeafType, string> = {
+      deploy_agent: 'Deploy',
+      tweet: 'Twitter',
+      weibo: '微博',
+      wechat: '朋友圈',
+      email: 'Email',
+      article: '文章',
+      slack: 'Slack',
+      eval: 'Eval',
+    };
 
-      const newEdge: Edge = {
-        id: nextEdgeId(),
-        source: commitId,
-        target: newNodeId,
-        type: edgeType,
-        animated: false,
-        style: edgeStyle,
-      };
+    // Close panel immediately
+    set({ leafPanelOpen: false, leafPanelCommitId: undefined });
 
-      return {
-        nodes: [...state.nodes, newNode],
-        edges: [...state.edges, newEdge],
-        leafPanelOpen: false,
-        leafPanelCommitId: undefined,
-      };
-    });
+    try {
+      // Call API to create leaf
+      const leaf = await api.createLeaf({
+        commit_hash: commitHash,
+        type: leafType,
+        title: leafLabels[leafType],
+        project_id: projectId,
+        constraints: [],
+        config: {},
+      });
+
+      // Add leaf node to canvas with the backend leafId
+      set((state) => {
+        // Count existing leaf nodes connected to this commit to offset position
+        const existingLeafCount = state.edges.filter((edge) => {
+          if (edge.source !== commitId) return false;
+          const targetNode = state.nodes.find((n) => n.id === edge.target);
+          return targetNode?.data.kind === 'leaf';
+        }).length;
+
+        const newNodeId = nextNodeId();
+
+        // Position leaf above the unit node
+        const newNode: Node<CanvasNodeData> = {
+          id: newNodeId,
+          type: 'leaf',
+          position: snapPosition({
+            x: unitNode.position.x + commitQuickOffset,
+            y:
+              unitNode.position.y -
+              leafNodeHeight -
+              leafNodeOffset -
+              existingLeafCount * (leafNodeHeight + 20),
+          }),
+          data: {
+            entryId: `LEAF-${getNumericId(newNodeId)}`,
+            title: leafLabels[leafType],
+            summary: '',
+            status: 'pending',
+            timestamp: 'just now',
+            tags: ['leaf', leafType],
+            kind: 'leaf',
+            leafType,
+            leafId: leaf.id, // Store backend leaf ID
+          },
+        };
+
+        const newEdge: Edge = {
+          id: nextEdgeId(),
+          source: commitId,
+          target: newNodeId,
+          type: edgeType,
+          animated: false,
+          style: edgeStyle,
+        };
+
+        return {
+          nodes: [...state.nodes, newNode],
+          edges: [...state.edges, newEdge],
+        };
+      });
+
+      notify?.(`${leafLabels[leafType]} created successfully`, 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create leaf';
+      notify?.(message, 'error');
+    }
   },
 
   // Deletion confirmation methods

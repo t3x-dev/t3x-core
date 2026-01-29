@@ -277,6 +277,94 @@ export const ValidateLeafOutputResponse = SuccessResponse(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Leaf History API
+// ═══════════════════════════════════════════════════════════════════════════
+
+// LeafConfig schema (matches LeafConfig type from @t3x/core)
+const LeafConfigSchema = z
+  .object({
+    prompt_template: z.string().optional(),
+    model: z.string().optional(),
+    max_tokens: z.number().optional(),
+  })
+  .passthrough();
+
+// GET /v1/leaves/:id/history
+export const LeafHistoryResponse = z.object({
+  id: z.string(), // lhist_xxx
+  leaf_id: z.string(), // 关联的 Leaf ID
+  output: z.string(), // 生成的输出内容
+  config: LeafConfigSchema, // 生成时使用的配置
+  model: z.string(), // 使用的 LLM 模型
+  generated_at: z.string(), // 生成时间 ISO8601
+  created_by: z.string().nullable(), // 触发生成的用户/系统
+});
+
+export const GetLeafHistoryResponse = SuccessResponse(LeafHistoryResponse);
+export const ListLeafHistoryResponse = SuccessResponse(z.array(LeafHistoryResponse));
+
+// POST /v1/leaves/:id/restore
+export const RestoreLeafOutputRequest = z.object({
+  history_id: z.string(), // 要恢复的历史记录 ID
+});
+
+export const RestoreLeafOutputResponse = SuccessResponse(LeafResponse);
+
+// DELETE /v1/leaf-history/:id
+export const DeleteLeafHistoryResponse = SuccessResponse(
+  z.object({
+    deleted: z.literal(true),
+    id: z.string(),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Batch Generation API
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /v1/commits/{hash}/leaves/batch
+// 单个 leaf 的配置（批量创建时使用）
+export const BatchLeafConfig = z.object({
+  type: LeafTypeEnum, // leaf 类型 (tweet, weibo, email 等)
+  title: z.string().optional(), // 可选标题
+  constraints: z.array(ConstraintSchema).default([]), // 约束条件
+  config: LeafConfigSchema.default({}), // 生成配置
+});
+
+// 批量生成请求
+export const BatchGenerateRequest = z.object({
+  project_id: z.string().min(1), // 项目 ID
+  leaves: z
+    .array(BatchLeafConfig)
+    .min(1, 'At least one leaf config is required')
+    .max(10, 'Maximum 10 leaves per batch'), // leaf 配置数组 (1-10 个)
+  skip_generation: z.boolean().default(false), // 是否跳过生成，仅创建 leaves
+});
+
+// 单个 leaf 的结果
+export const BatchLeafResult = z.object({
+  leaf: LeafResponse.nullable(), // 成功时返回 leaf 数据
+  error: z
+    .object({
+      code: z.string(), // 错误码
+      message: z.string(), // 错误信息
+    })
+    .nullable(), // 失败时返回错误信息
+});
+
+// 批量生成响应
+export const BatchGenerateResponse = SuccessResponse(
+  z.object({
+    results: z.array(BatchLeafResult), // 每个 leaf 的结果
+    summary: z.object({
+      total: z.number(), // 总数
+      succeeded: z.number(), // 成功数
+      failed: z.number(), // 失败数
+    }),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -425,3 +513,11 @@ export const ExecuteMergeV4Response = SuccessResponse(CommitV4Response);
 export type MergeV4ResultType = z.infer<typeof MergeV4ResultSchema>;
 export type PrepareMergeV4RequestType = z.infer<typeof PrepareMergeV4Request>;
 export type ExecuteMergeV4RequestType = z.infer<typeof ExecuteMergeV4Request>;
+
+export type LeafHistoryResponseType = z.infer<typeof LeafHistoryResponse>;
+export type RestoreLeafOutputRequestType = z.infer<typeof RestoreLeafOutputRequest>;
+
+export type BatchLeafConfigType = z.infer<typeof BatchLeafConfig>;
+export type BatchGenerateRequestType = z.infer<typeof BatchGenerateRequest>;
+export type BatchLeafResultType = z.infer<typeof BatchLeafResult>;
+export type BatchGenerateResponseType = z.infer<typeof BatchGenerateResponse>;

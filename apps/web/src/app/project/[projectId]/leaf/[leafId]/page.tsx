@@ -1,13 +1,34 @@
 'use client';
 
-import { ArrowLeft, Check, CheckCircle, Loader2, Play, Settings, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle,
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  Loader2,
+  Play,
+  Plus,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import type { Assertion, Constraint, Leaf, LeafConfig } from '@/lib/api';
-import { ApiError, generateLeafOutput, getLeaf, updateLeaf } from '@/lib/api';
+import { ApiError, generateLeafOutput, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
+import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
@@ -24,6 +45,10 @@ export default function LeafDetailPage() {
   const [saving, setSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [semanticWarning, setSemanticWarning] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load leaf data
   useEffect(() => {
@@ -67,6 +92,18 @@ export default function LeafDetailPage() {
     handleUpdateConstraints(updated);
   };
 
+  // Add new constraint
+  const handleAddConstraint = (type: 'require' | 'exclude', value: string, matchMode: 'exact' | 'semantic' = 'exact') => {
+    if (!leaf || !value.trim()) return;
+    const newConstraint: Constraint = {
+      id: `cst_${Date.now().toString(36)}`,
+      type,
+      value: value.trim(),
+      match_mode: matchMode,
+    };
+    handleUpdateConstraints([...leaf.constraints, newConstraint]);
+  };
+
   // Handle config update
   const handleUpdateConfig = async (config: LeafConfig) => {
     if (!leaf) return;
@@ -106,6 +143,48 @@ export default function LeafDetailPage() {
       setGenerateError(message);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Handle validate output
+  const handleValidate = async () => {
+    if (!leaf || !leaf.output) return;
+
+    setIsValidating(true);
+    setValidateError(null);
+    setSemanticWarning(false);
+
+    try {
+      const result = await validateLeafOutput(leafId);
+      // Update local leaf data with validation results
+      setLeaf(result.leaf);
+
+      // Check if any constraints use semantic matching and show warning
+      const hasSemanticConstraints = leaf.constraints.some((c) => c.match_mode === 'semantic');
+      if (hasSemanticConstraints) {
+        setSemanticWarning(true);
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Validation failed';
+      setValidateError(message);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // Handle export
+  const handleExport = async (format: ExportFormat) => {
+    if (!leaf) return;
+
+    const result = await exportLeaf(leaf, format);
+    setExportMessage({
+      type: result.success ? 'success' : 'error',
+      text: result.message,
+    });
+
+    // Auto-clear success message after 3 seconds
+    if (result.success) {
+      setTimeout(() => setExportMessage(null), 3000);
     }
   };
 
@@ -164,18 +243,58 @@ export default function LeafDetailPage() {
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
           {/* Generate button */}
           <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
-            {isGenerating ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Play className="mr-1 h-3 w-3" />
-            )}
+            <span className="mr-1 inline-flex h-3 w-3">
+              {isGenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+            </span>
             {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
-          {/* Validate button - coming soon */}
-          <Button variant="outline" size="sm" disabled title="Coming soon">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            Validate
+          {/* Validate button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleValidate}
+            disabled={isValidating || !leaf.output}
+            title={!leaf.output ? 'Generate output first' : undefined}
+          >
+            <span className="mr-1 inline-flex h-3 w-3">
+              {isValidating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle className="h-3 w-3" />
+              )}
+            </span>
+            {isValidating ? 'Validating...' : 'Validate'}
           </Button>
+          {/* Export dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="mr-1 h-3 w-3" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => handleExport('clipboard')}
+                disabled={!leaf.output}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Output
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('markdown')}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('json')}>
+                <FileJson className="mr-2 h-4 w-4" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -183,6 +302,34 @@ export default function LeafDetailPage() {
       {generateError && (
         <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {generateError}
+        </div>
+      )}
+
+      {/* Validate error message */}
+      {validateError && (
+        <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {validateError}
+        </div>
+      )}
+
+      {/* Semantic validation warning */}
+      {semanticWarning && (
+        <div className="mx-4 mt-2 rounded-md bg-yellow-100 px-4 py-2 text-sm text-yellow-800">
+          Note: Semantic validation is not yet supported. Only exact match was used for validation.
+        </div>
+      )}
+
+      {/* Export message */}
+      {exportMessage && (
+        <div
+          className={cn(
+            'mx-4 mt-2 rounded-md px-4 py-2 text-sm',
+            exportMessage.type === 'success'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-destructive/10 text-destructive'
+          )}
+        >
+          {exportMessage.text}
         </div>
       )}
 
@@ -196,6 +343,7 @@ export default function LeafDetailPage() {
           <ConstraintsSection
             constraints={leaf.constraints}
             onRemove={handleRemoveConstraint}
+            onAdd={handleAddConstraint}
             saving={saving}
           />
 
@@ -314,20 +462,76 @@ function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
 interface ConstraintsSectionProps {
   constraints: Constraint[];
   onRemove: (id: string) => void;
+  onAdd: (type: 'require' | 'exclude', value: string, matchMode?: 'exact' | 'semantic') => void;
   saving: boolean;
 }
 
-function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectionProps) {
+function ConstraintsSection({ constraints, onRemove, onAdd, saving }: ConstraintsSectionProps) {
+  const [newConstraintValue, setNewConstraintValue] = useState('');
+  const [newConstraintType, setNewConstraintType] = useState<'require' | 'exclude'>('require');
+  const [showAddForm, setShowAddForm] = useState(false);
+
   const requireConstraints = constraints.filter((c) => c.type === 'require');
   const excludeConstraints = constraints.filter((c) => c.type === 'exclude');
+
+  const handleAdd = () => {
+    if (!newConstraintValue.trim()) return;
+    onAdd(newConstraintType, newConstraintValue, 'exact');
+    setNewConstraintValue('');
+    setShowAddForm(false);
+  };
 
   return (
     <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Constraints</h2>
-        <span className="text-sm text-muted-foreground">{constraints.length} total</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{constraints.length} total</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddForm(!showAddForm)}
+            disabled={saving}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add
+          </Button>
+        </div>
       </div>
       <div className="p-4 space-y-4">
+        {/* Add constraint form */}
+        {showAddForm && (
+          <div className="rounded-md border border-dashed p-3 space-y-3">
+            <div className="flex gap-2">
+              <select
+                className="rounded-md border bg-background px-3 py-1.5 text-sm"
+                value={newConstraintType}
+                onChange={(e) => setNewConstraintType(e.target.value as 'require' | 'exclude')}
+              >
+                <option value="require">Must Have</option>
+                <option value="exclude">Must Not Have</option>
+              </select>
+              <input
+                type="text"
+                className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
+                placeholder="Enter constraint value..."
+                value={newConstraintValue}
+                onChange={(e) => setNewConstraintValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              />
+              <Button size="sm" onClick={handleAdd} disabled={!newConstraintValue.trim() || saving}>
+                Add
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Add keywords or phrases that must (or must not) appear in the generated output.
+            </p>
+          </div>
+        )}
+
         {/* Require constraints */}
         {requireConstraints.length > 0 && (
           <div>
@@ -366,8 +570,10 @@ function ConstraintsSection({ constraints, onRemove, saving }: ConstraintsSectio
           </div>
         )}
 
-        {constraints.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">No constraints defined</p>
+        {constraints.length === 0 && !showAddForm && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No constraints defined. Click &quot;Add&quot; to create constraints.
+          </p>
         )}
       </div>
     </section>

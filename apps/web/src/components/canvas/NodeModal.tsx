@@ -796,9 +796,13 @@ export function NodeModal({
   // Config state (STEP 1)
   const [template, setTemplate] = useState(node?.data.bridgePrompt || 'prose');
   const [cosineThreshold, setCosineThreshold] = useState(0.75);
-  // Keywords threshold - fixed default value for now
-  // TODO: Read from Leaf config when Leaf feature is fully implemented (see issue #xxx)
-  const keywordsThreshold = DEFAULT_KEYWORD_THRESHOLD;
+  // Leaf config - loaded from associated Leaf (if any)
+  const [leafConfig, setLeafConfig] = useState<api.LeafConfig | null>(null);
+  // Keywords threshold - read from Leaf config or use default
+  const keywordsThreshold =
+    typeof leafConfig?.keyword_threshold === 'number'
+      ? leafConfig.keyword_threshold
+      : DEFAULT_KEYWORD_THRESHOLD;
 
   // Extract intent - user describes what to extract (initialized from first user message)
   const [extractIntent, setExtractIntent] = useState('');
@@ -999,6 +1003,30 @@ export function NodeModal({
   const shouldShowBranchSelect = isPendingCommit && !isMergeDraft;
   // Show branch name input when user selects "+ New branch..." (pendingBranch === 'branch')
   const requireBranchName = !isMergeDraft && isPendingCommit && data?.pendingBranch === 'branch';
+
+  // Load Leaf config when there's an associated Leaf
+  // This enables per-Leaf keyword_threshold settings to affect commit creation
+  useEffect(() => {
+    const leaves = node?.data?.leaves;
+    if (!leaves || leaves.length === 0) {
+      setLeafConfig(null);
+      return;
+    }
+
+    const leafId = leaves[0].id;
+
+    const loadLeafConfig = async () => {
+      try {
+        const leaf = await api.getLeaf(leafId);
+        setLeafConfig(leaf.config);
+      } catch (err) {
+        console.error('Failed to load leaf config:', err);
+        setLeafConfig(null);
+      }
+    };
+
+    loadLeafConfig();
+  }, [node?.data?.leaves]);
 
   // Load branches from API when opening pending commit modal
   useEffect(() => {
@@ -1949,6 +1977,10 @@ export function NodeModal({
             message: data.title,
             parents: parentCommits,
             position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
+            source_refs: data.conversationId ? [{
+              type: 'conversation',
+              id: data.conversationId,
+            }] : undefined,
           }
         );
 

@@ -24,6 +24,7 @@ export {
   generateAssertionId,
   generateConstraintId,
   generateLeafId,
+  generateLeafHistoryId,
   generatePinId,
   generateSentenceId,
   isoNow,

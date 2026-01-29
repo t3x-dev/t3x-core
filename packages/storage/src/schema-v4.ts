@@ -247,6 +247,57 @@ export const leaves = pgTable(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// leaf_history: Generation History
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * LeafHistory stores a snapshot of each generation for a Leaf.
+ *
+ * Each time a Leaf generates output, a history entry is created.
+ * This allows viewing and restoring previous outputs.
+ */
+export const leafHistory = pgTable(
+  'leaf_history',
+  {
+    /** Unique ID: "lhist_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** The leaf this history belongs to */
+    leafId: text('leaf_id')
+      .notNull()
+      .references(() => leaves.id, { onDelete: 'cascade' }),
+
+    /** Generated output content */
+    output: text('output').notNull(),
+
+    /** Configuration used for this generation */
+    config: jsonb('config')
+      .notNull()
+      .$type<{
+        prompt_template?: string;
+        model?: string;
+        max_tokens?: number;
+        [key: string]: unknown;
+      }>(),
+
+    /** LLM model used for generation */
+    model: text('model').notNull(),
+
+    /** When this output was generated */
+    generatedAt: timestamp('generated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    /** Who triggered this generation */
+    createdBy: text('created_by'),
+  },
+  (table) => ({
+    leafIdx: index('idx_leaf_history_leaf').on(table.leafId),
+    generatedAtIdx: index('idx_leaf_history_generated_at').on(table.generatedAt),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // pins: Source Selection Mechanism
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -338,6 +389,9 @@ export type CommitV4Insert = typeof commitsV4.$inferInsert;
 
 export type LeafRecord = typeof leaves.$inferSelect;
 export type LeafInsert = typeof leaves.$inferInsert;
+
+export type LeafHistoryRecord = typeof leafHistory.$inferSelect;
+export type LeafHistoryInsert = typeof leafHistory.$inferInsert;
 
 export type PinRecord = typeof pins.$inferSelect;
 export type PinInsert = typeof pins.$inferInsert;
