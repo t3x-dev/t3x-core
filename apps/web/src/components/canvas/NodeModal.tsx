@@ -3823,8 +3823,6 @@ export function NodeModal({
                         onChange={(e) => {
                           setDiffTargetCommit(e.target.value);
                           setDiffError(null);
-                          setDiffSourceSentences([]);
-                          setDiffTargetSentences([]);
                         }}
                       >
                         <option value="">Select a commit...</option>
