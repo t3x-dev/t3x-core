@@ -822,12 +822,17 @@ function buildTurnContextCacheKey(
  * Fetch turn context with caching and request deduplication
  *
  * @param turnHash - The turn hash to fetch
- * @param options - Context window options
+ * @param options - Context window options and optional highlight positions
  * @returns Turn context data (from cache or fresh)
  */
 export async function fetchTurnContextCached(
   turnHash: string,
-  options?: { before?: number; after?: number }
+  options?: {
+    before?: number;
+    after?: number;
+    highlightStart?: number;
+    highlightEnd?: number;
+  }
 ): Promise<TurnContextData> {
   const cacheKey = buildTurnContextCacheKey(turnHash, options);
 
@@ -1039,58 +1044,6 @@ export interface CommitV3ListData {
   limit: number;
   offset: number;
 }
-
-// ============================================================================
-// CommitV4 Types (Pure knowledge, no constraints)
-// ============================================================================
-
-// CommitV4 sentence - pure knowledge unit
-export interface CommitV4Sentence {
-  id: string;
-  text: string;
-  confidence?: number;
-  source_ref?: {
-    conversation_id: string;
-    turn_hash: string;
-  };
-}
-
-// CommitV4 author
-export interface CommitV4Author {
-  type: 'human' | 'agent';
-  id?: string;
-  name?: string;
-}
-
-// CommitV4 source reference
-export interface CommitV4SourceRef {
-  type: 'conversation' | 'leaf';
-  id: string;
-  title?: string;
-  assertion_lessons?: string[];
-}
-
-// CommitV4 from API response
-export interface CommitV4 {
-  hash: string;
-  schema: 't3x/commit/v4';
-  parents: string[];
-  author: CommitV4Author;
-  committed_at: string;
-  content: {
-    sentences: CommitV4Sentence[];
-  };
-  project_id: string | null;
-  message: string | null;
-  branch: string | null;
-  source_refs: CommitV4SourceRef[] | null;
-  position_x: number | null;
-  position_y: number | null;
-  created_at: string;
-}
-
-// Note: V4 API returns array directly, unlike V3 which returns { commits: [...] }
-export type CommitV4ListData = CommitV4[];
 
 export async function listCommitsV3(
   projectId: string,
