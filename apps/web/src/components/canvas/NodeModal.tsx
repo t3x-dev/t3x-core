@@ -44,7 +44,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import * as api from '@/lib/api';
+import type { DiffResultRaw } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   AnchorCandidate,
@@ -67,6 +69,8 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { PinButton } from '@/components/ui/PinButton';
+import { usePinsStore } from '@/store/pinsStore';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
@@ -174,7 +178,7 @@ function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay
  * Pinned Sources section for V4 commits
  * Uses CommitSourceRef from @t3x/core contract
  */
-function PinnedSourcesSection({ sourceRefs }: { sourceRefs: CommitSourceRef[] }) {
+function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSourceRef[]; projectId?: string }) {
   if (sourceRefs.length === 0) {
     return null;
   }
@@ -213,10 +217,64 @@ function PinnedSourcesSection({ sourceRefs }: { sourceRefs: CommitSourceRef[] })
                 </div>
               )}
             </div>
+            {projectId && ref.id && (
+              <PinButton
+                projectId={projectId}
+                type={ref.type === 'conversation' ? 'conversation' : 'leaf'}
+                refId={ref.id}
+                className="shrink-0"
+              />
+            )}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Memory Context sidebar section for committed view.
+ * Shows pin counts and allows opening EditContextDialog.
+ */
+function MemoryContextSidebar({ projectId, conversationId }: { projectId?: string; conversationId?: string }) {
+  const pins = usePinsStore((state) => state.pins);
+
+  const convCount = pins.filter((p) => p.type === 'conversation').length;
+  const leafCount = pins.filter((p) => p.type === 'leaf').length;
+  const totalCount = convCount + leafCount;
+
+  if (!projectId) return null;
+
+  return (
+    <>
+      <div className="h-px bg-gray-200 my-4" />
+      <div className="mb-5">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Memory Context
+        </h4>
+        <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+          <Pin size={14} className="text-gray-400 shrink-0" />
+          <span>
+            {totalCount === 0
+              ? 'No pins'
+              : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
+          </span>
+        </div>
+        {conversationId && (
+          <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
+            <span className="text-xs text-gray-600 truncate mr-2">
+              conv#{conversationId.slice(0, 6)}
+            </span>
+            <PinButton
+              projectId={projectId}
+              type="conversation"
+              refId={conversationId}
+              className="h-7 w-7"
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -320,7 +378,7 @@ function CommitFullSection({
 
       {/* Pinned Sources - V4 only */}
       {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
-        <PinnedSourcesSection sourceRefs={commit.source_refs} />
+        <PinnedSourcesSection sourceRefs={commit.source_refs} projectId={projectId} />
       )}
 
       {/* Sentences - Full list with IDs */}
@@ -818,6 +876,8 @@ export function NodeModal({
   const [diffResult, setDiffResult] = useState<api.DiffResult | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [diffRawData, setDiffRawData] = useState<DiffResultRaw | null>(null);
+  const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
 
   // Legacy three-way merge state removed - use MergePanel for two-way merge
 
@@ -1999,10 +2059,15 @@ export function NodeModal({
     setIsDiffLoading(true);
     setDiffError(null);
     setDiffResult(null);
+    setDiffRawData(null);
 
     try {
-      const result = await api.diff(data.commitHash, diffTargetCommit);
+      const [result, raw] = await Promise.all([
+        api.diff(data.commitHash, diffTargetCommit),
+        api.diffRaw(data.commitHash, diffTargetCommit),
+      ]);
       setDiffResult(result);
+      setDiffRawData(raw);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setDiffError(error.message);
@@ -3348,6 +3413,7 @@ export function NodeModal({
     );
 
     return (
+    <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         role="dialog"
@@ -3446,6 +3512,8 @@ export function NodeModal({
                   )}
                 </div>
               </div>
+
+              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} />
             </aside>
 
             {/* Left Divider */}
@@ -3768,6 +3836,18 @@ export function NodeModal({
                           </Badge>
                         </div>
 
+                        {diffRawData && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mb-3 gap-1.5"
+                            onClick={() => setShowDiffFullScreen(true)}
+                          >
+                            <GitCompare size={14} />
+                            Open Full Diff
+                          </Button>
+                        )}
+
                         {diffResult.diff.facet_changes.length > 0 && (
                           <div className="flex flex-col gap-2">
                             {diffResult.diff.facet_changes.map((change, idx) => (
@@ -3853,6 +3933,17 @@ export function NodeModal({
           </div>
         </div>
       </div>
+
+      {diffRawData && data?.commitHash && (
+        <DiffFullScreen
+          open={showDiffFullScreen}
+          onClose={() => setShowDiffFullScreen(false)}
+          baseCommitHash={data.commitHash}
+          targetCommitHash={diffTargetCommit}
+          diffData={diffRawData}
+        />
+      )}
+    </>
     );
   }
 
