@@ -26,9 +26,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
-import type { Assertion, Constraint, Leaf, LeafConfig } from '@/lib/api';
-import { ApiError, generateLeafOutput, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
+import type { Assertion, CommitV4, Constraint, Leaf, LeafConfig } from '@/lib/api';
+import { ApiError, generateLeafOutput, getCommitV4, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
+import { ConstraintTextSelector } from '@/components/leaf/ConstraintTextSelector';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
@@ -49,6 +50,7 @@ export default function LeafDetailPage() {
   const [validateError, setValidateError] = useState<string | null>(null);
   const [semanticWarning, setSemanticWarning] = useState(false);
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [commitData, setCommitData] = useState<CommitV4 | null>(null);
 
   // Load leaf data
   useEffect(() => {
@@ -69,6 +71,12 @@ export default function LeafDetailPage() {
 
     loadLeaf();
   }, [leafId]);
+
+  // Load parent commit data for source content display
+  useEffect(() => {
+    if (!leaf?.commit_hash) return;
+    getCommitV4(leaf.commit_hash).then(setCommitData).catch(() => {});
+  }, [leaf?.commit_hash]);
 
   // Handle constraint update
   const handleUpdateConstraints = async (constraints: Constraint[]) => {
@@ -104,6 +112,21 @@ export default function LeafDetailPage() {
     handleUpdateConstraints([...leaf.constraints, newConstraint]);
   };
 
+  // Add constraint with source sentence tracing
+  const handleAddConstraintFromSource = (type: 'require' | 'exclude', value: string, sourceSentenceId: string) => {
+    if (!leaf || !value.trim()) return;
+    const base = {
+      id: `cst_${Date.now().toString(36)}`,
+      value: value.trim(),
+      match_mode: 'exact' as const,
+      description: `Selected from sentence ${sourceSentenceId}`,
+    };
+    const newConstraint: Constraint = type === 'require'
+      ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
+      : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
+    handleUpdateConstraints([...leaf.constraints, newConstraint]);
+  };
+
   // Handle config update
   const handleUpdateConfig = async (config: LeafConfig) => {
     if (!leaf) return;
@@ -119,7 +142,7 @@ export default function LeafDetailPage() {
     }
   };
 
-  // Handle generate output
+  // Handle generate output (with auto-validation)
   const handleGenerate = async () => {
     if (!leaf) return;
 
@@ -128,16 +151,10 @@ export default function LeafDetailPage() {
 
     try {
       const result = await generateLeafOutput(leafId);
-      // Update local leaf data with generated output
-      setLeaf((prev) =>
-        prev
-          ? {
-              ...prev,
-              output: result.output,
-              generated_at: result.generated_at,
-            }
-          : prev
-      );
+      // Update local leaf data with generated output + auto-validation assertions
+      // The API now auto-validates and stores assertions, so re-fetch leaf to get full state
+      const updatedLeaf = await getLeaf(leafId);
+      setLeaf(updatedLeaf);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Generation failed';
       setGenerateError(message);
@@ -250,9 +267,9 @@ export default function LeafDetailPage() {
                 <Play className="h-3 w-3" />
               )}
             </span>
-            {isGenerating ? 'Generating...' : 'Generate'}
+            {isGenerating ? 'Generating & Verifying...' : 'Generate & Verify'}
           </Button>
-          {/* Validate button */}
+          {/* Re-validate button */}
           <Button
             variant="outline"
             size="sm"
@@ -267,7 +284,7 @@ export default function LeafDetailPage() {
                 <CheckCircle className="h-3 w-3" />
               )}
             </span>
-            {isValidating ? 'Validating...' : 'Validate'}
+            {isValidating ? 'Validating...' : 'Re-validate'}
           </Button>
           {/* Export dropdown */}
           <DropdownMenu>
@@ -336,16 +353,35 @@ export default function LeafDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
+          {/* Source Content + Constraints (text selection mode) */}
+          {commitData && (
+            <section className="rounded-lg border bg-card p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <FileText className="h-4 w-4" />
+                Source Content &amp; Constraints
+              </h3>
+              <ConstraintTextSelector
+                sentences={commitData.content.sentences}
+                constraints={leaf.constraints}
+                onAdd={handleAddConstraintFromSource}
+                onRemove={handleRemoveConstraint}
+                saving={saving}
+              />
+            </section>
+          )}
+
+          {/* Fallback: manual constraints when commit data unavailable */}
+          {!commitData && (
+            <ConstraintsSection
+              constraints={leaf.constraints}
+              onRemove={handleRemoveConstraint}
+              onAdd={handleAddConstraint}
+              saving={saving}
+            />
+          )}
+
           {/* Config Section */}
           <ConfigSection config={leaf.config} onUpdateConfig={handleUpdateConfig} saving={saving} />
-
-          {/* Constraints Section */}
-          <ConstraintsSection
-            constraints={leaf.constraints}
-            onRemove={handleRemoveConstraint}
-            onAdd={handleAddConstraint}
-            saving={saving}
-          />
 
           {/* Output Section */}
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
