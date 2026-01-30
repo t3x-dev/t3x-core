@@ -71,6 +71,7 @@ import {
 } from '@/utils/tokenizer';
 import { CommitSourceContext } from './CommitSourceContext';
 import { PinButton } from '@/components/ui/PinButton';
+import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { usePinsStore } from '@/store/pinsStore';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
@@ -237,7 +238,7 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
  * Memory Context sidebar section for committed view.
  * Shows pin counts and allows opening EditContextDialog.
  */
-function MemoryContextSidebar({ projectId, conversationId }: { projectId?: string; conversationId?: string }) {
+function MemoryContextSidebar({ projectId, conversationId, branch }: { projectId?: string; conversationId?: string; branch?: string }) {
   const pins = usePinsStore((state) => state.pins);
 
   const convCount = pins.filter((p) => p.type === 'conversation').length;
@@ -253,26 +254,35 @@ function MemoryContextSidebar({ projectId, conversationId }: { projectId?: strin
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Memory Context
         </h4>
-        <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-          <Pin size={14} className="text-gray-400 shrink-0" />
-          <span>
-            {totalCount === 0
-              ? 'No pins'
-              : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
-          </span>
-        </div>
-        {conversationId && (
-          <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
-            <span className="text-xs text-gray-600 truncate mr-2">
-              conv#{conversationId.slice(0, 6)}
-            </span>
-            <PinButton
-              projectId={projectId}
-              type="conversation"
-              refId={conversationId}
-              className="h-7 w-7"
-            />
-          </div>
+
+        {/* Branch-scoped dropdown selector when branch is known */}
+        {branch ? (
+          <PinDropdownSelector projectId={projectId} branch={branch} />
+        ) : (
+          /* Fallback: original pin count + single conversation toggle */
+          <>
+            <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+              <Pin size={14} className="text-gray-400 shrink-0" />
+              <span>
+                {totalCount === 0
+                  ? 'No pins'
+                  : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
+              </span>
+            </div>
+            {conversationId && (
+              <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
+                <span className="text-xs text-gray-600 truncate mr-2">
+                  conv#{conversationId.slice(0, 6)}
+                </span>
+                <PinButton
+                  projectId={projectId}
+                  type="conversation"
+                  refId={conversationId}
+                  className="h-7 w-7"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
@@ -3561,7 +3571,7 @@ export function NodeModal({
                 </div>
               </div>
 
-              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} />
+              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} branch={branchLabel} />
             </aside>
 
             {/* Left Divider */}
