@@ -2622,6 +2622,14 @@ export function NodeModal({
                   <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
                 </div>
               </div>
+
+              <div className="h-px bg-gray-200 my-4" />
+
+              <MemoryContextSidebar
+                projectId={routeProjectId || projectId || undefined}
+                conversationId={data?.conversationId || data?.sourceConversationId}
+                branch={data.branchName || (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) || 'main'}
+              />
             </aside>
 
             {/* Draggable Divider */}

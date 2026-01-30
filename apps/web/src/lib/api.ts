@@ -2411,6 +2411,13 @@ export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
   return handleResponse<Leaf>(res);
 }
 
+export async function deleteLeaf(leafId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
 /**
  * Generate output result
  * 生成输出的结果
