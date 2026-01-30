@@ -732,17 +732,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDoubleClick={(_, node) => {
-            const nodeData = node.data as CanvasNodeData;
-            // For leaf nodes, navigate to leaf detail page instead of opening modal
-            if (nodeData.kind === 'leaf' && nodeData.leafId && projectId) {
-              router.push(`/project/${projectId}/leaf/${nodeData.leafId}`);
-            } else if (nodeData.kind === 'leaf') {
-              // Leaf node without leafId (not yet saved to backend)
-              notify?.('This leaf has not been saved yet. Please save the project first.', 'warning');
-            } else {
-              // For other nodes, open the modal
-              openNodeModal(node.id, 'commit');
-            }
+            openNodeModal(node.id, 'commit');
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}

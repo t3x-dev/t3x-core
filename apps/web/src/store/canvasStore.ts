@@ -7,6 +7,7 @@ import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
+  EmbeddedLeaf,
   LeafType,
   NodeKind,
   SourceTextBlock,
@@ -102,6 +103,7 @@ type CanvasState = {
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
   addLeafNode: (leafType: LeafType) => Promise<void>;
+  removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
   // Deletion confirmation methods
   confirmDeletion: () => void;
   cancelDeletion: () => void;
@@ -119,7 +121,7 @@ type CanvasState = {
 };
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
-  unit: ['unit', 'leaf'],
+  unit: ['unit'],
   leaf: [],
 };
 
@@ -728,9 +730,6 @@ const unitToNode = (
   };
 };
 
-const leafNodeHeight = reactFlowGridSize * 5;
-const leafNodeOffset = 80;
-
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: [],
   edges: [],
@@ -764,10 +763,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations and V4 commits in parallel
-      const [convResponse, commitsV4] = await Promise.all([
+      // Fetch conversations, V4 commits, and leaves in parallel
+      const [convResponse, commitsV4, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
         api.listCommitsV4(projectId, undefined, 100, 0),
+        api.listLeavesByProject(projectId).catch(() => [] as api.Leaf[]),
       ]);
 
       const conversations = convResponse.conversations;
@@ -933,6 +933,33 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       });
 
       const nodes = [...commitedUnitNodes, ...stagingUnitNodes];
+
+      // Embed leaves into their parent commit nodes
+      if (projectLeaves.length > 0) {
+        const leavesByCommit = new Map<string, EmbeddedLeaf[]>();
+        for (const leaf of projectLeaves) {
+          const embedded: EmbeddedLeaf = {
+            id: leaf.id,
+            type: leaf.type,
+            title: leaf.title || leaf.type,
+            status: leaf.assertions && leaf.assertions.length > 0
+              ? (leaf.assertions.every((a) => a.passed) ? 'passed' : 'failed')
+              : 'idle',
+            passedCount: leaf.assertions?.filter((a) => a.passed).length,
+            failedCount: leaf.assertions?.filter((a) => !a.passed).length,
+            createdAt: leaf.created_at,
+          };
+          const existing = leavesByCommit.get(leaf.commit_hash) || [];
+          existing.push(embedded);
+          leavesByCommit.set(leaf.commit_hash, existing);
+        }
+        for (const node of nodes) {
+          const commitHash = node.data.commitHash;
+          if (commitHash && leavesByCommit.has(commitHash)) {
+            node.data.leaves = leavesByCommit.get(commitHash);
+          }
+        }
+      }
 
       const edges: Edge[] = [];
       const commitHashes = new Set(commits.map((c) => c.commit_hash));
@@ -2143,60 +2170,57 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         config: {},
       });
 
-      // Add leaf node to canvas with the backend leafId
+      // Embed leaf into parent commit node's data.leaves[]
       set((state) => {
-        // Count existing leaf nodes connected to this commit to offset position
-        const existingLeafCount = state.edges.filter((edge) => {
-          if (edge.source !== commitId) return false;
-          const targetNode = state.nodes.find((n) => n.id === edge.target);
-          return targetNode?.data.kind === 'leaf';
-        }).length;
-
-        const newNodeId = nextNodeId();
-
-        // Position leaf above the unit node
-        const newNode: Node<CanvasNodeData> = {
-          id: newNodeId,
-          type: 'leaf',
-          position: snapPosition({
-            x: unitNode.position.x + commitQuickOffset,
-            y:
-              unitNode.position.y -
-              leafNodeHeight -
-              leafNodeOffset -
-              existingLeafCount * (leafNodeHeight + 20),
-          }),
-          data: {
-            entryId: `LEAF-${getNumericId(newNodeId)}`,
-            title: leafLabels[leafType],
-            summary: '',
-            status: 'pending',
-            timestamp: 'just now',
-            tags: ['leaf', leafType],
-            kind: 'leaf',
-            leafType,
-            leafId: leaf.id, // Store backend leaf ID
-          },
+        const newEmbeddedLeaf: EmbeddedLeaf = {
+          id: leaf.id,
+          type: leafType,
+          title: leafLabels[leafType],
+          status: 'idle',
+          createdAt: leaf.created_at,
         };
 
-        const newEdge: Edge = {
-          id: nextEdgeId(),
-          source: commitId,
-          target: newNodeId,
-          type: edgeType,
-          animated: false,
-          style: edgeStyle,
-        };
+        const updatedNodes = state.nodes.map((node) => {
+          if (node.id !== commitId) return node;
+          const existingLeaves = node.data.leaves || [];
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              leaves: [...existingLeaves, newEmbeddedLeaf],
+            },
+          };
+        });
 
-        return {
-          nodes: [...state.nodes, newNode],
-          edges: [...state.edges, newEdge],
-        };
+        return { nodes: updatedNodes };
       });
 
       notify?.(`${leafLabels[leafType]} created successfully`, 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create leaf';
+      notify?.(message, 'error');
+    }
+  },
+
+  removeLeafFromNode: async (commitNodeId: string, leafId: string) => {
+    const notify = get().notifyCallback;
+    try {
+      await api.deleteLeaf(leafId);
+      set((state) => ({
+        nodes: state.nodes.map((node) => {
+          if (node.id !== commitNodeId) return node;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              leaves: (node.data.leaves || []).filter((l) => l.id !== leafId),
+            },
+          };
+        }),
+      }));
+      notify?.('Leaf deleted', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete leaf';
       notify?.(message, 'error');
     }
   },
