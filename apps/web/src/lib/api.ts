@@ -2425,6 +2425,12 @@ export async function deleteLeaf(leafId: string): Promise<void> {
 export interface GenerateLeafOutputResult {
   output: string;        // 生成的输出内容
   generated_at: string;  // 生成时间 (ISO8601)
+  validation?: {         // 自动验证结果（有 constraints 时返回）
+    all_passed: boolean;
+    passed_count: number;
+    failed_count: number;
+    attempts: number;
+  };
 }
 
 /**
@@ -2445,7 +2451,7 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     },
-    60000 // 60 seconds timeout for LLM generation
+    180000 // 180 seconds timeout for LLM generation with auto-retry
   );
   return handleResponse<GenerateLeafOutputResult>(res);
 }
