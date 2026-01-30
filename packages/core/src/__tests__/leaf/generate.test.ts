@@ -30,14 +30,14 @@ const createTestCommit = (): CommitV4 => ({
   },
 });
 
-const createTestLeaf = (): Leaf => ({
+const createTestLeaf = (withConstraints = false): Leaf => ({
   id: 'leaf_test',
   commit_hash: 'sha256:test-hash',
   type: 'tweet',
   title: 'Test Tweet',
-  constraints: [
-    { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'dark mode' },
-  ],
+  constraints: withConstraints
+    ? [{ id: 'cst_1', type: 'require', match_mode: 'exact', value: 'dark mode' }]
+    : [],
   config: {},
   project_id: 'proj_test',
   created_at: new Date().toISOString(),
@@ -143,7 +143,7 @@ describe('generateLeafOutput', () => {
     });
 
     const commit = createTestCommit();
-    const leaf = createTestLeaf();
+    const leaf = createTestLeaf(true);
 
     await generateLeafOutput({
       commit,
@@ -361,6 +361,81 @@ describe('generateLeafOutput', () => {
     ).rejects.toMatchObject({
       code: 'EMPTY_RESPONSE',
     });
+  });
+
+  it('auto-validates and retries when constraints fail', async () => {
+    const leaf = createTestLeaf(true); // has require constraint: 'dark mode'
+
+    // First attempt: output missing 'dark mode' → fails validation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () =>
+        Promise.resolve(JSON.stringify(createMockResponse('A tweet about preferences', 100, 50))),
+    });
+    // Retry: output now includes 'dark mode' → passes validation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () =>
+        Promise.resolve(JSON.stringify(createMockResponse('I love dark mode!', 120, 60))),
+    });
+
+    const result = await generateLeafOutput({
+      commit: createTestCommit(),
+      leaf,
+    });
+
+    expect(result.output).toBe('I love dark mode!');
+    expect(result.attempts).toBe(2);
+    expect(result.validation).toBeDefined();
+    expect(result.validation!.allPassed).toBe(true);
+    // Total usage should be sum of both calls
+    expect(result.usage.inputTokens).toBe(220);
+    expect(result.usage.outputTokens).toBe(110);
+    // fetch was called twice (initial + retry)
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns failed validation after max retries', async () => {
+    const leaf = createTestLeaf(true); // has require constraint: 'dark mode'
+
+    // All 3 attempts fail validation
+    for (let i = 0; i < 3; i++) {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(JSON.stringify(createMockResponse('No matching content', 100, 50))),
+      });
+    }
+
+    const result = await generateLeafOutput({
+      commit: createTestCommit(),
+      leaf,
+    });
+
+    expect(result.output).toBe('No matching content');
+    expect(result.attempts).toBe(3);
+    expect(result.validation).toBeDefined();
+    expect(result.validation!.allPassed).toBe(false);
+    expect(result.validation!.failedCount).toBe(1);
+  });
+
+  it('skips validation when no constraints', async () => {
+    const leaf = createTestLeaf(false); // no constraints
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify(createMockResponse('Any output'))),
+    });
+
+    const result = await generateLeafOutput({
+      commit: createTestCommit(),
+      leaf,
+    });
+
+    expect(result.output).toBe('Any output');
+    expect(result.attempts).toBe(1);
+    expect(result.validation).toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('uses custom base URL when set', async () => {

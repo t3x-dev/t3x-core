@@ -86,6 +86,17 @@ export interface GenerateResult {
     system: string;
     user: string;
   };
+
+  /** Validation result from auto-verify (present when constraints exist) */
+  validation?: {
+    allPassed: boolean;
+    passedCount: number;
+    failedCount: number;
+    assertions: Assertion[];
+  };
+
+  /** Number of generation attempts (1 = first try passed, >1 = retries needed) */
+  attempts: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
