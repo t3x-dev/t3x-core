@@ -2341,6 +2341,26 @@ export interface Leaf {
 }
 
 /**
+ * List leaves by commit hash
+ */
+export async function listLeavesByCommit(commitHash: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/leaves`
+  );
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
+ * List leaves by project
+ */
+export async function listLeavesByProject(projectId: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/leaves`
+  );
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
  * Get leaf by ID
  */
 export async function getLeaf(leafId: string): Promise<Leaf> {

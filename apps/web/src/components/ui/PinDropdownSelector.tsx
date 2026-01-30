@@ -1,0 +1,251 @@
+'use client';
+
+import { ChevronDown, GitCommit, Leaf as LeafIcon, Loader2, Pin } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
+import { useBranchCommits } from '@/hooks/useBranchCommits';
+import { cn } from '@/lib/utils';
+import { usePinsStore } from '@/store/pinsStore';
+
+interface PinDropdownSelectorProps {
+  projectId: string;
+  branch: string;
+}
+
+export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorProps) {
+  const [open, setOpen] = useState(false);
+  const { data, loading } = useBranchCommits(projectId, branch);
+  const pins = usePinsStore((s) => s.pins);
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const addPin = usePinsStore((s) => s.addPin);
+  const removePin = usePinsStore((s) => s.removePin);
+
+  const convCount = pins.filter((p) => p.type === 'conversation').length;
+  const leafCount = pins.filter((p) => p.type === 'leaf').length;
+  const totalCount = convCount + leafCount;
+
+  const handleToggle = async (type: 'conversation' | 'leaf', refId: string) => {
+    if (isPinned(type, refId)) {
+      const pin = getPinByRef(type, refId);
+      if (pin) await removePin(pin.id);
+    } else {
+      await addPin(projectId, type, refId);
+    }
+  };
+
+  const handleSelectAll = async () => {
+    if (!data) return;
+    for (const item of data) {
+      const convId = extractConversationId(item);
+      if (convId && !isPinned('conversation', convId)) {
+        await addPin(projectId, 'conversation', convId);
+      }
+      for (const leaf of item.leaves) {
+        if (!isPinned('leaf', leaf.id)) {
+          await addPin(projectId, 'leaf', leaf.id);
+        }
+      }
+    }
+  };
+
+  const handleDeselectAll = async () => {
+    for (const pin of [...pins]) {
+      await removePin(pin.id);
+    }
+  };
+
+  const summaryText =
+    totalCount === 0
+      ? 'No pins'
+      : `${convCount} conv${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
+          <span className="flex items-center gap-1.5">
+            <Pin size={12} className={cn(totalCount > 0 ? 'text-amber-500' : 'text-gray-400')} />
+            {summaryText}
+          </span>
+          <ChevronDown size={12} className="text-gray-400" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-72 max-h-80 overflow-y-auto" align="start">
+        {/* Header actions */}
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <span className="text-xs font-semibold text-gray-500">Branch: {branch}</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className="text-[0.65rem] text-blue-600 hover:underline"
+              onClick={handleSelectAll}
+            >
+              Select all
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              type="button"
+              className="text-[0.65rem] text-blue-600 hover:underline"
+              onClick={handleDeselectAll}
+            >
+              Deselect all
+            </button>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+
+        {/* Loading state */}
+        {loading && (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 size={16} className="animate-spin text-gray-400" />
+            <span className="ml-2 text-xs text-gray-400">Loading commits...</span>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && (!data || data.length === 0) && (
+          <div className="px-2 py-4 text-center text-xs text-gray-400">
+            No commits on this branch
+          </div>
+        )}
+
+        {/* Commit groups */}
+        {data?.map((item, idx) => (
+          <CommitGroup
+            key={item.commit.hash}
+            item={item}
+            isPinned={isPinned}
+            onToggle={handleToggle}
+            showSeparator={idx < data.length - 1}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Internal: single commit group
+// ---------------------------------------------------------------------------
+
+function CommitGroup({
+  item,
+  isPinned,
+  onToggle,
+  showSeparator,
+}: {
+  item: CommitWithLeaves;
+  isPinned: (type: 'conversation' | 'leaf', refId: string) => boolean;
+  onToggle: (type: 'conversation' | 'leaf', refId: string) => void;
+  showSeparator: boolean;
+}) {
+  const { commit, leaves } = item;
+  const convId = extractConversationId(item);
+  const hashShort = commit.hash.replace(/^sha256:/, '').slice(0, 8);
+  const message = commit.message || 'No message';
+  const time = formatRelativeTime(commit.committed_at);
+
+  return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="flex items-center gap-1.5 text-[0.7rem] text-gray-500 px-2 py-1">
+        <GitCommit size={12} className="shrink-0" />
+        <span className="font-mono">{hashShort}</span>
+        <span className="truncate flex-1">{message}</span>
+        <span className="shrink-0 text-gray-400">{time}</span>
+      </DropdownMenuLabel>
+
+      {/* Conversation pin */}
+      {convId && (
+        <DropdownMenuCheckboxItem
+          checked={isPinned('conversation', convId)}
+          onCheckedChange={() => onToggle('conversation', convId)}
+          onSelect={(e) => e.preventDefault()}
+          className="text-xs pl-6"
+        >
+          <span className="inline-flex items-center gap-1">
+            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-blue-100 text-blue-600">
+              conv
+            </span>
+            <span className="truncate">conv#{convId.slice(0, 8)}</span>
+          </span>
+        </DropdownMenuCheckboxItem>
+      )}
+
+      {/* Leaf pins */}
+      {leaves.map((leaf) => (
+        <DropdownMenuCheckboxItem
+          key={leaf.id}
+          checked={isPinned('leaf', leaf.id)}
+          onCheckedChange={() => onToggle('leaf', leaf.id)}
+          onSelect={(e) => e.preventDefault()}
+          className="text-xs pl-6"
+        >
+          <span className="inline-flex items-center gap-1">
+            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-purple-100 text-purple-600">
+              leaf
+            </span>
+            <LeafIcon size={10} className="text-purple-400" />
+            <span className="truncate">{leaf.title || leaf.id.slice(0, 10)}</span>
+          </span>
+        </DropdownMenuCheckboxItem>
+      ))}
+
+      {/* No pinnable items under this commit */}
+      {!convId && leaves.length === 0 && (
+        <div className="px-6 py-1 text-[0.65rem] text-gray-400 italic">No pinnable items</div>
+      )}
+
+      {showSeparator && <DropdownMenuSeparator />}
+    </DropdownMenuGroup>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract conversation_id from commit's source_refs or content.
+ * CommitV3 doesn't have a direct conversation_id field; it may be embedded
+ * in sentences[].source.turn_hash context. For now, we check if the commit
+ * has a project_id which is always present.
+ *
+ * Note: In the current data model, conversation association is indirect.
+ * This returns the first sentence's source conversation if available via
+ * the commit's metadata, otherwise null.
+ */
+function extractConversationId(_item: CommitWithLeaves): string | null {
+  // CommitV3 sentences may have source refs with turn_hash but not conversation_id directly.
+  // The canvas nodes store conversation_id separately. For the dropdown, we rely on
+  // the commit's content sentences — if they have source.turn_hash, the conversation
+  // association exists but isn't directly available here without an extra API call.
+  // Return null for now; conversation pins are handled via the existing PinButton on
+  // the conversation node itself. The dropdown focuses on commit-associated leaves.
+  //
+  // Future enhancement: accept conversationId as optional prop or resolve via API.
+  return null;
+}
+
+function formatRelativeTime(isoString: string): string {
+  const now = Date.now();
+  const then = new Date(isoString).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d`;
+}
