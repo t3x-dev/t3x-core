@@ -2357,9 +2357,44 @@ export function NodeModal({
     setStreamingContent('');
 
     try {
+      // Ensure conversation exists before fetching memory (create if needed)
+      let convId = conversationIdRef.current;
+      if (!convId && projectId && nodeKindRef.current === 'unit') {
+        const newConv = await api.createConversation(
+          projectId,
+          data?.title || 'Untitled Conversation'
+        );
+        convId = newConv.conversation_id;
+        onUpdate({
+          conversationId: convId,
+          sourceConversationId: convId,
+        });
+        conversationIdRef.current = convId;
+        if (node?.id && node.id !== convId) {
+          useCanvasStore.getState().updateNodeId(node.id, convId);
+        }
+      }
+
+      // Fetch pin-based memory context
+      let memoryContext = '';
+      if (convId) {
+        try {
+          const ctx = await api.getConversationMemory(convId);
+          if (ctx.text) {
+            memoryContext = ctx.text;
+          }
+        } catch {
+          // Memory fetch failed — proceed without context
+        }
+      }
+
       // Build messages array from chat history (use ref to get latest)
       const currentMessages = chatMessagesRef.current;
       const messages: api.ChatMessage[] = [
+        // Inject pin memory as system message (if available)
+        ...(memoryContext
+          ? [{ role: 'system' as const, content: memoryContext }]
+          : []),
         ...currentMessages.map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
@@ -2411,9 +2446,8 @@ export function NodeModal({
         setStreamingContent('');
       }
 
-      // If projectId is available and this is a conversation node, save the turns
-      // Use refs to get current values (avoiding stale closure)
-      let currentConversationId = conversationIdRef.current;
+      // Save turns to the conversation (conversation was already created above if needed)
+      const currentConversationId = conversationIdRef.current;
       const currentKind = nodeKindRef.current;
       console.log('[handleSendMessage] Save turns check:', {
         projectId,
@@ -2423,28 +2457,8 @@ export function NodeModal({
         fullResponsePreview: fullResponse.slice(0, 100),
         addedFinalMessage,
       });
-      if (projectId && currentKind === 'unit') {
+      if (projectId && currentKind === 'unit' && currentConversationId) {
         try {
-          // If no conversationId yet, create one first
-          if (!currentConversationId) {
-            console.log('[handleSendMessage] Creating new conversation...');
-            const newConv = await api.createConversation(
-              projectId,
-              data?.title || 'Untitled Conversation'
-            );
-            currentConversationId = newConv.conversation_id;
-            // Update the node with the new conversationId and sourceConversationId
-            onUpdate({
-              conversationId: currentConversationId,
-              sourceConversationId: currentConversationId,
-            });
-            conversationIdRef.current = currentConversationId;
-            // Also update the node ID in the store to match conversation ID
-            if (node?.id && node.id !== currentConversationId) {
-              useCanvasStore.getState().updateNodeId(node.id, currentConversationId);
-            }
-            console.log('[handleSendMessage] Created conversation:', currentConversationId);
-          }
 
           // Save user turn
           console.log('[handleSendMessage] Saving user turn...');
