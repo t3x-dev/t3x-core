@@ -2277,6 +2277,38 @@ export async function updateConversationContext(
 }
 
 // ============================================================================
+// Conversation Memory (Built context from pins for LLM injection)
+// ============================================================================
+
+export interface ContextSource {
+  type: 'commit' | 'conversation' | 'leaf';
+  id: string;
+  label?: string;
+}
+
+export interface BuiltContext {
+  text: string;           // 组装好的上下文文本（用于 LLM system message）
+  token_estimate: number; // 预估 token 数
+  sources: ContextSource[]; // 上下文来源列表
+}
+
+/**
+ * Get built memory context for a conversation.
+ * Assembles pinned conversations, leaves, and current commit into LLM-ready text.
+ *
+ * @param conversationId - Conversation ID
+ * @returns Built context with text, token estimate, and sources
+ */
+export async function getConversationMemory(
+  conversationId: string
+): Promise<BuiltContext> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/memory`
+  );
+  return handleResponse<BuiltContext>(res);
+}
+
+// ============================================================================
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 

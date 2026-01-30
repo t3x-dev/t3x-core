@@ -121,15 +121,24 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
         )}
 
         {/* Commit groups */}
-        {data?.map((item, idx) => (
-          <CommitGroup
-            key={item.commit.hash}
-            item={item}
-            isPinned={isPinned}
-            onToggle={handleToggle}
-            showSeparator={idx < data.length - 1}
-          />
-        ))}
+        {(() => {
+          const seenConvIds = new Set<string>();
+          return data?.map((item, idx) => {
+            const convId = extractConversationId(item);
+            const showConv = convId != null && !seenConvIds.has(convId);
+            if (convId) seenConvIds.add(convId);
+            return (
+              <CommitGroup
+                key={item.commit.hash}
+                item={item}
+                isPinned={isPinned}
+                onToggle={handleToggle}
+                showSeparator={idx < data.length - 1}
+                showConversation={showConv}
+              />
+            );
+          });
+        })()}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -144,11 +153,13 @@ function CommitGroup({
   isPinned,
   onToggle,
   showSeparator,
+  showConversation,
 }: {
   item: CommitWithLeaves;
   isPinned: (type: 'conversation' | 'leaf', refId: string) => boolean;
   onToggle: (type: 'conversation' | 'leaf', refId: string) => void;
   showSeparator: boolean;
+  showConversation: boolean;
 }) {
   const { commit, leaves } = item;
   const convId = extractConversationId(item);
@@ -165,8 +176,8 @@ function CommitGroup({
         <span className="shrink-0 text-gray-400">{time}</span>
       </DropdownMenuLabel>
 
-      {/* Conversation pin */}
-      {convId && (
+      {/* Conversation pin (deduplicated: only shown once per conversation) */}
+      {convId && showConversation && (
         <DropdownMenuCheckboxItem
           checked={isPinned('conversation', convId)}
           onCheckedChange={() => onToggle('conversation', convId)}
@@ -202,7 +213,7 @@ function CommitGroup({
       ))}
 
       {/* No pinnable items under this commit */}
-      {!convId && leaves.length === 0 && (
+      {(!convId || !showConversation) && leaves.length === 0 && (
         <div className="px-6 py-1 text-[0.65rem] text-gray-400 italic">No pinnable items</div>
       )}
 
