@@ -4,11 +4,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CommitV3, Leaf } from '@/lib/api';
+import type { CommitV4, Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 
 export interface CommitWithLeaves {
-  commit: CommitV3;
+  commit: CommitV4;
   leaves: Leaf[];
 }
 
@@ -39,8 +39,7 @@ export function useBranchCommits(
     setError(null);
 
     try {
-      const commitsData = await api.listCommitsV3(projectId, branch, 200, 0);
-      const commits = commitsData.commits;
+      const commits = await api.listCommitsV4(projectId, branch, 200, 0);
 
       const results: CommitWithLeaves[] = await Promise.all(
         commits.map(async (commit) => {

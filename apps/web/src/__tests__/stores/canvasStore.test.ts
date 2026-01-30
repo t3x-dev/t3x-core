@@ -222,39 +222,6 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(state.edges.length).toBe(0);
     });
 
-    it('allows unit to connect to leaf', () => {
-      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
-      const leafNode = createLeafNode('leaf-1');
-      useCanvasStore.setState({ nodes: [committedUnit, leafNode], edges: [] });
-
-      useCanvasStore.getState().onConnect({
-        source: 'unit-1',
-        target: 'leaf-1',
-        sourceHandle: null,
-        targetHandle: null,
-      });
-
-      const state = useCanvasStore.getState();
-      expect(state.edges.length).toBe(1);
-    });
-
-    it('does not allow leaf to connect to anything', () => {
-      const leafNode = createLeafNode('leaf-1');
-      const stagingUnit = createStagingUnitNode('unit-1');
-      useCanvasStore.setState({ nodes: [leafNode, stagingUnit], edges: [] });
-
-      useCanvasStore.getState().onConnect({
-        source: 'leaf-1',
-        target: 'unit-1',
-        sourceHandle: null,
-        targetHandle: null,
-      });
-
-      const state = useCanvasStore.getState();
-      // Edge should not be created - leaf nodes have no outgoing connections
-      expect(state.edges.length).toBe(0);
-    });
-
     it('does not allow self-connection', () => {
       const unit = createStagingUnitNode('unit-1');
       useCanvasStore.setState({ nodes: [unit], edges: [] });
@@ -357,7 +324,7 @@ describe('Canvas Store - Unit Node Model', () => {
   // addLeafNode Tests
   // ===========================================================================
   describe('addLeafNode', () => {
-    it('adds a leaf node connected to the selected unit', async () => {
+    it('embeds a leaf into the parent commit node data.leaves', async () => {
       const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
       useCanvasStore.setState({
         nodes: [committedUnit],
@@ -370,13 +337,17 @@ describe('Canvas Store - Unit Node Model', () => {
       await useCanvasStore.getState().addLeafNode('deploy_agent');
 
       const state = useCanvasStore.getState();
-      expect(state.nodes.length).toBe(2);
-      const leafNode = state.nodes.find((n) => n.data.kind === 'leaf');
-      expect(leafNode).toBeDefined();
-      expect(leafNode?.data.leafType).toBe('deploy_agent');
-      // Edge should be created
-      expect(state.edges.length).toBe(1);
-      expect(state.edges[0].source).toBe('unit-1');
+      // No new node created — leaf is embedded
+      expect(state.nodes.length).toBe(1);
+      // No edge created
+      expect(state.edges.length).toBe(0);
+      // Leaf embedded in parent node's data.leaves
+      const unitNode = state.nodes[0];
+      expect(unitNode.data.leaves).toBeDefined();
+      expect(unitNode.data.leaves!.length).toBe(1);
+      expect(unitNode.data.leaves![0].type).toBe('deploy_agent');
+      expect(unitNode.data.leaves![0].title).toBe('Deploy');
+      expect(unitNode.data.leaves![0].status).toBe('idle');
     });
 
     it('does nothing when leafPanelCommitId is not set', async () => {

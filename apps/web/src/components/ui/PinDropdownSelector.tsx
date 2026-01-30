@@ -216,25 +216,12 @@ function CommitGroup({
 // ---------------------------------------------------------------------------
 
 /**
- * Extract conversation_id from commit's source_refs or content.
- * CommitV3 doesn't have a direct conversation_id field; it may be embedded
- * in sentences[].source.turn_hash context. For now, we check if the commit
- * has a project_id which is always present.
- *
- * Note: In the current data model, conversation association is indirect.
- * This returns the first sentence's source conversation if available via
- * the commit's metadata, otherwise null.
+ * Extract conversation_id from commit's source_refs.
+ * CommitV4 has source_refs with type='conversation' entries.
  */
-function extractConversationId(_item: CommitWithLeaves): string | null {
-  // CommitV3 sentences may have source refs with turn_hash but not conversation_id directly.
-  // The canvas nodes store conversation_id separately. For the dropdown, we rely on
-  // the commit's content sentences — if they have source.turn_hash, the conversation
-  // association exists but isn't directly available here without an extra API call.
-  // Return null for now; conversation pins are handled via the existing PinButton on
-  // the conversation node itself. The dropdown focuses on commit-associated leaves.
-  //
-  // Future enhancement: accept conversationId as optional prop or resolve via API.
-  return null;
+function extractConversationId(item: CommitWithLeaves): string | null {
+  const ref = item.commit.source_refs?.find((r) => r.type === 'conversation');
+  return ref?.id ?? null;
 }
 
 function formatRelativeTime(isoString: string): string {

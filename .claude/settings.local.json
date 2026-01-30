@@ -151,7 +151,8 @@
       "Bash(TARGET=\"sha256:60f36e582c6a7ea81675a90a1fcbe491944f292c6b4d082eb22e491ab87c58db\")",
       "Bash(SOURCE=\"sha256:030f5867313699be367a876e3d36682f5a81ecac774c0ca6702aa231a273c2ea\" TARGET=\"sha256:5ef6af385fda7078140156213b4ee08fff23b0524afa5bbed6d936447b0f731e\" curl -s -X POST \"http://localhost:8000/api/v1/merge/prepare\" -H \"Content-Type: application/json\" -d \"{\"\"source_hash\"\": \"\"$SOURCE\"\", \"\"target_hash\"\": \"\"$TARGET\"\"}\")",
       "mcp__ide__getDiagnostics",
-      "Bash(pnpm exec tsc:*)"
+      "Bash(pnpm exec tsc:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
