@@ -40,16 +40,19 @@ import {
   useRef,
   useState,
 } from 'react';
+import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PinButton } from '@/components/ui/PinButton';
+import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import * as api from '@/lib/api';
 import type { DiffResult, DiffResultRaw } from '@/lib/api';
+import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { useCanvasStore } from '@/store/canvasStore';
+import { usePinsStore } from '@/store/pinsStore';
 import type {
   AnchorCandidate,
   CanvasNodeData,
@@ -73,9 +76,6 @@ import {
 } from '@/utils/tokenizer';
 import { CommitHistoryPanel } from './CommitHistoryPanel';
 import { CommitSourceContext } from './CommitSourceContext';
-import { PinButton } from '@/components/ui/PinButton';
-import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
-import { usePinsStore } from '@/store/pinsStore';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
 
@@ -139,9 +139,11 @@ function isCommitV4(commit: CommitDisplay): commit is CommitV4Display {
 function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
   const isVerified = author.verification === 'verified';
   return (
-    <span className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
-      isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-    }`}>
+    <span
+      className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
+        isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+      }`}
+    >
       {author.name}
       {isVerified && ' ✓'}
     </span>
@@ -154,9 +156,11 @@ function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) 
 function CommitV4AuthorBadge({ author }: { author: CommitV4Display['author'] }) {
   const isAgent = author.type === 'agent';
   return (
-    <span className={`inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded ${
-      isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
-    }`}>
+    <span
+      className={`inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded ${
+        isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+      }`}
+    >
       {isAgent ? <Bot size={14} /> : <User size={14} />}
       {author.name || author.id || 'Unknown'}
     </span>
@@ -169,11 +173,13 @@ function CommitV4AuthorBadge({ author }: { author: CommitV4Display['author'] }) 
 function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
   const isRequire = constraint.type === 'require';
   return (
-    <span className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
-      isRequire
-        ? 'bg-green-100 text-green-700 border border-green-300'
-        : 'bg-red-100 text-red-700 border border-red-300 line-through'
-    }`}>
+    <span
+      className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
+        isRequire
+          ? 'bg-green-100 text-green-700 border border-green-300'
+          : 'bg-red-100 text-red-700 border border-red-300 line-through'
+      }`}
+    >
       {isRequire ? '✓' : '✗'} {constraint.value}
     </span>
   );
@@ -183,7 +189,13 @@ function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay
  * Pinned Sources section for V4 commits
  * Uses CommitSourceRef from @t3x/core contract
  */
-function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSourceRef[]; projectId?: string }) {
+function PinnedSourcesSection({
+  sourceRefs,
+  projectId,
+}: {
+  sourceRefs: CommitSourceRef[];
+  projectId?: string;
+}) {
   if (sourceRefs.length === 0) {
     return null;
   }
@@ -195,7 +207,9 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
           <Pin size={14} className="text-blue-600" />
           <h3 className="font-semibold text-sm text-blue-700">Pinned Sources</h3>
         </div>
-        <span className="text-xs text-blue-400">{sourceRefs.length} source{sourceRefs.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-blue-400">
+          {sourceRefs.length} source{sourceRefs.length !== 1 ? 's' : ''}
+        </span>
       </div>
       <ul className="space-y-2">
         {sourceRefs.map((ref, idx) => (
@@ -203,12 +217,14 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
             key={ref.id || idx}
             className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100"
           >
-            <span className={cn(
-              'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
-              ref.type === 'conversation'
-                ? 'bg-blue-100 text-blue-600'
-                : 'bg-purple-100 text-purple-600'
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
+                ref.type === 'conversation'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'bg-purple-100 text-purple-600'
+              )}
+            >
               {ref.type === 'conversation' ? 'conv' : 'leaf'}
             </span>
             <div className="flex-1 min-w-0">
@@ -217,8 +233,7 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
               </span>
               {ref.assertion_lessons && ref.assertion_lessons.length > 0 && (
                 <div className="mt-1 text-xs text-gray-500">
-                  <span className="font-medium">Lessons:</span>{' '}
-                  {ref.assertion_lessons.join(', ')}
+                  <span className="font-medium">Lessons:</span> {ref.assertion_lessons.join(', ')}
                 </div>
               )}
             </div>
@@ -241,7 +256,15 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
  * Memory Context sidebar section for committed view.
  * Shows pin counts and allows opening EditContextDialog.
  */
-function MemoryContextSidebar({ projectId, conversationId, branch }: { projectId?: string; conversationId?: string; branch?: string }) {
+function MemoryContextSidebar({
+  projectId,
+  conversationId,
+  branch,
+}: {
+  projectId?: string;
+  conversationId?: string;
+  branch?: string;
+}) {
   const pins = usePinsStore((state) => state.pins);
 
   const convCount = pins.filter((p) => p.type === 'conversation').length;
@@ -304,8 +327,9 @@ function V4ConstraintInfoMessage() {
           <h3 className="font-semibold text-sm text-amber-800 mb-1">V4 Architecture</h3>
           <p className="text-sm text-amber-700">
             In V4, constraints are defined at the <strong>Leaf</strong> level, not the Commit level.
-            This allows the same knowledge (commit) to be applied with different constraints for different outputs.
-            Create a Leaf from this commit to define constraints for your specific use case.
+            This allows the same knowledge (commit) to be applied with different constraints for
+            different outputs. Create a Leaf from this commit to define constraints for your
+            specific use case.
           </p>
         </div>
       </div>
@@ -316,13 +340,7 @@ function V4ConstraintInfoMessage() {
 /**
  * Header bar for committed commit - shows hash, schema version, branch, author
  */
-function CommitFullHeader({
-  commit,
-  branchName,
-}: {
-  commit: CommitDisplay;
-  branchName?: string;
-}) {
+function CommitFullHeader({ commit, branchName }: { commit: CommitDisplay; branchName?: string }) {
   const [copiedHash, setCopiedHash] = useState(false);
   const isV4 = isCommitV4(commit);
 
@@ -347,19 +365,21 @@ function CommitFullHeader({
             <Copy size={14} className="text-gray-400" />
           )}
         </button>
-        <span className={cn(
-          'text-xs font-medium px-1.5 py-0.5 rounded',
-          isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
-        )}>
+        <span
+          className={cn(
+            'text-xs font-medium px-1.5 py-0.5 rounded',
+            isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+          )}
+        >
           {isV4 ? 'V4' : 'V3'}
         </span>
         {branchName && (
-          <span className={cn(
-            'text-xs font-semibold px-2 py-0.5 rounded',
-            branchName === 'main'
-              ? 'bg-blue-100 text-blue-700'
-              : 'bg-amber-100 text-amber-700'
-          )}>
+          <span
+            className={cn(
+              'text-xs font-semibold px-2 py-0.5 rounded',
+              branchName === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+            )}
+          >
             {branchName}
           </span>
         )}
@@ -378,20 +398,22 @@ function CommitFullHeader({
  */
 function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   const isV4 = isCommitV4(commit);
-  const sentences = isV4
-    ? commit.content.sentences
-    : (commit as CommitV3Display).sentences;
+  const sentences = isV4 ? commit.content.sentences : (commit as CommitV3Display).sentences;
 
-  const hasSourceInfo = isV4
+  // Check for turn-based or leaf-based source info
+  const hasLeafSources =
+    isV4 && (commit as CommitV4Display).source_refs?.some((r) => r.type === 'leaf');
+  const hasTurnSourceInfo = isV4
     ? (commit as CommitV4Display).content.sentences.some((s) => s.source_ref?.turn_hash)
     : (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash);
+  const hasSourceInfo = hasTurnSourceInfo || hasLeafSources;
 
   if (hasSourceInfo) {
     const mappedSentences = isV4
       ? (commit as CommitV4Display).content.sentences.map((s) => ({
           id: s.id,
           text: s.text,
-          source: s.source_ref
+          source: s.source_ref?.turn_hash
             ? {
                 turn_hash: s.source_ref.turn_hash,
                 start_char: s.source_ref.start_char,
@@ -411,7 +433,11 @@ function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
             : undefined,
         }));
 
-    return <CommitSourceContext sentences={mappedSentences} />;
+    const commitSourceRefs = isV4
+      ? ((commit as CommitV4Display).source_refs ?? undefined)
+      : undefined;
+
+    return <CommitSourceContext sentences={mappedSentences} sourceRefs={commitSourceRefs} />;
   }
 
   return (
@@ -422,7 +448,10 @@ function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
       </div>
       <ul className="space-y-2">
         {sentences.map((s) => (
-          <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+          <li
+            key={s.id}
+            className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100"
+          >
             <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
               {s.id}
             </span>
@@ -432,9 +461,7 @@ function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
           </li>
         ))}
         {sentences.length === 0 && (
-          <li className="text-center py-4 text-gray-400 text-sm">
-            No sentences
-          </li>
+          <li className="text-center py-4 text-gray-400 text-sm">No sentences</li>
         )}
       </ul>
     </div>
@@ -479,16 +506,16 @@ function CommitConstraintsAndLeaves({
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm text-gray-700">Constraints</h3>
-            <span className="text-xs text-gray-400">{(commit as CommitV3Display).constraints.length} total</span>
+            <span className="text-xs text-gray-400">
+              {(commit as CommitV3Display).constraints.length} total
+            </span>
           </div>
           <div className="flex flex-wrap gap-2">
             {(commit as CommitV3Display).constraints.map((c) => (
               <CommitV3ConstraintBadge key={c.id} constraint={c} />
             ))}
             {(commit as CommitV3Display).constraints.length === 0 && (
-              <span className="text-center py-4 text-gray-400 text-sm w-full">
-                No constraints
-              </span>
+              <span className="text-center py-4 text-gray-400 text-sm w-full">No constraints</span>
             )}
           </div>
         </div>
@@ -502,7 +529,9 @@ function CommitConstraintsAndLeaves({
               <Leaf size={14} className="text-green-600" />
               <h3 className="font-semibold text-sm text-green-700">Associated Leaves</h3>
             </div>
-            <span className="text-xs text-green-400">{leaves.length} leaf{leaves.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-green-400">
+              {leaves.length} leaf{leaves.length !== 1 ? 's' : ''}
+            </span>
           </div>
           <ul className="space-y-2">
             {leaves.map((leaf) => (
@@ -512,12 +541,16 @@ function CommitConstraintsAndLeaves({
                   className="flex items-center justify-between p-2 bg-white rounded border border-green-100 hover:border-green-300 hover:bg-green-50 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={cn(
-                      'text-xs font-medium px-1.5 py-0.5 rounded',
-                      leaf.type === 'eval' ? 'bg-purple-100 text-purple-600' :
-                      leaf.type === 'deploy_agent' ? 'bg-emerald-100 text-emerald-600' :
-                      'bg-blue-100 text-blue-600'
-                    )}>
+                    <span
+                      className={cn(
+                        'text-xs font-medium px-1.5 py-0.5 rounded',
+                        leaf.type === 'eval'
+                          ? 'bg-purple-100 text-purple-600'
+                          : leaf.type === 'deploy_agent'
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-blue-100 text-blue-600'
+                      )}
+                    >
                       {leaf.type}
                     </span>
                     <span className="text-sm text-gray-700 truncate">{leaf.title}</span>
@@ -1058,7 +1091,8 @@ export function NodeModal({
   // Show conversation view:
   // 1. Staging units not in commit config mode (default behavior)
   // 2. Any unit when viewMode is 'conversation' (from Sources badge click)
-  const isConversation = (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
+  const isConversation =
+    (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
   const isPendingCommit = isStagingUnit && showCommitConfig && viewMode !== 'conversation';
   const isCommittedCommit = isCommittedUnit && viewMode !== 'conversation';
   const isMergeDraft = isPendingCommit && data?.bridgePrompt === '/merge' && !!data?.mergeConfig;
@@ -1264,7 +1298,8 @@ export function NodeModal({
   // IMPORTANT: Do NOT add node or node.data to dependencies - it would trigger on every pendingSource update
   useEffect(() => {
     const newSourceId = data?.sourceConversationId || data?.conversationId || null;
-    const sourceChanged = prevSourceIdRef.current !== null && prevSourceIdRef.current !== newSourceId;
+    const sourceChanged =
+      prevSourceIdRef.current !== null && prevSourceIdRef.current !== newSourceId;
 
     // Always update the ref for in-flight request invalidation
     sourceConversationIdRef.current = newSourceId;
@@ -1391,10 +1426,7 @@ export function NodeModal({
     if (committedAnchors.length === 0) return pendingAnchors;
     // Merge: pending anchors override committed ones with same id
     const pendingIds = new Set(pendingAnchors.map((a) => a.id));
-    const merged = [
-      ...pendingAnchors,
-      ...committedAnchors.filter((a) => !pendingIds.has(a.id)),
-    ];
+    const merged = [...pendingAnchors, ...committedAnchors.filter((a) => !pendingIds.has(a.id))];
     return merged;
   }, [committedAnchors, pendingAnchors]);
 
@@ -1463,7 +1495,12 @@ export function NodeModal({
     if (tokens.length === 0) return;
 
     // Build selections from selected chunks
-    const newSelections: Array<{ id: string; startIndex: number; endIndex: number; type: 'include' | 'exclude' }> = [];
+    const newSelections: Array<{
+      id: string;
+      startIndex: number;
+      endIndex: number;
+      type: 'include' | 'exclude';
+    }> = [];
 
     for (const chunk of curatePreview.chunks) {
       if (!chunk.selected) continue;
@@ -1492,8 +1529,15 @@ export function NodeModal({
 
     // Check if we need to update (either text changed or selections changed)
     const textChanged = existingBlock?.originalText !== sourceText;
-    const currentSelectionIds = existingBlock?.selections?.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',') ?? '';
-    const newSelectionIds = newSelections.map((s) => `${s.startIndex}-${s.endIndex}`).sort().join(',');
+    const currentSelectionIds =
+      existingBlock?.selections
+        ?.map((s) => `${s.startIndex}-${s.endIndex}`)
+        .sort()
+        .join(',') ?? '';
+    const newSelectionIds = newSelections
+      .map((s) => `${s.startIndex}-${s.endIndex}`)
+      .sort()
+      .join(',');
     const selectionsChanged = currentSelectionIds !== newSelectionIds;
 
     if (textChanged || selectionsChanged) {
@@ -1506,7 +1550,9 @@ export function NodeModal({
         keywords: textChanged
           ? []
           : (existingBlock?.keywords ?? []).filter((kw) =>
-              newSelections.some((sel) => kw.tokenIndex >= sel.startIndex && kw.tokenIndex <= sel.endIndex)
+              newSelections.some(
+                (sel) => kw.tokenIndex >= sel.startIndex && kw.tokenIndex <= sel.endIndex
+              )
             ),
         sourceNodeId: existingBlock?.sourceNodeId,
         sourceNodeType: existingBlock?.sourceNodeType,
@@ -1549,7 +1595,14 @@ export function NodeModal({
         },
       });
     }
-  }, [curatePreview, configLocked, previewConversationId, currentSourceConversationId, data?.pendingSource, onUpdate]);
+  }, [
+    curatePreview,
+    configLocked,
+    previewConversationId,
+    currentSourceConversationId,
+    data?.pendingSource,
+    onUpdate,
+  ]);
 
   const addCommitAction = useMemo(
     () => quickActions?.find((a) => a.key === 'add-commit'),
@@ -1799,8 +1852,9 @@ export function NodeModal({
       // Determine turn_window: from source conversation or inherited from parent commit
       // Priority: dynamic unit block (if conversation) > static sourceConversationId > staging conversationId
       // Note: sourceNodeId could be a commit hash (sha256:...) for commit-derived pendings, so only use if it's a conversation
-      const unitBlockConversationId =
-        sourceUnitBlock?.sourceNodeId?.startsWith('conv_') ? sourceUnitBlock.sourceNodeId : null;
+      const unitBlockConversationId = sourceUnitBlock?.sourceNodeId?.startsWith('conv_')
+        ? sourceUnitBlock.sourceNodeId
+        : null;
       const sourceConversationId =
         unitBlockConversationId || data.sourceConversationId || data.conversationId;
       if (sourceConversationId) {
@@ -1953,35 +2007,39 @@ export function NodeModal({
 
       if (pendingSource?.inputTextHash && pendingSource?.sentences && pendingAnchors.length > 0) {
         // Group anchors by sentence (find which sentence contains each anchor)
-        const sentencesWithAnchors: api.ApiSentenceWithAnchors[] = pendingSource.sentences.map((sentence) => {
-          // Find anchors that fall within this sentence
-          const sentenceAnchors = pendingAnchors.filter((anchor) => {
-            const anchorStart = anchor.globalStart ?? anchor.start;
-            const anchorEnd = anchor.globalEnd ?? anchor.end;
-            return anchorStart >= sentence.start && anchorEnd <= sentence.end;
-          });
+        const sentencesWithAnchors: api.ApiSentenceWithAnchors[] = pendingSource.sentences.map(
+          (sentence) => {
+            // Find anchors that fall within this sentence
+            const sentenceAnchors = pendingAnchors.filter((anchor) => {
+              const anchorStart = anchor.globalStart ?? anchor.start;
+              const anchorEnd = anchor.globalEnd ?? anchor.end;
+              return anchorStart >= sentence.start && anchorEnd <= sentence.end;
+            });
 
-          // Convert to API format with sentence-relative positions
-          const apiAnchors: api.ApiConfirmedAnchor[] = sentenceAnchors.map((anchor) => ({
-            id: anchor.id,
-            text: anchor.text,
-            // Convert global position to sentence-relative position
-            start: (anchor.globalStart ?? anchor.start) - sentence.start,
-            end: (anchor.globalEnd ?? anchor.end) - sentence.start,
-            type: anchor.type as api.ApiAnchorType,
-            constraint: (anchor.constraint === 'mustHave' ? 'must_have' :
-                        anchor.constraint === 'mustntHave' ? 'mustnt_have' :
-                        anchor.constraint) as api.ApiAnchorConstraint,
-          }));
+            // Convert to API format with sentence-relative positions
+            const apiAnchors: api.ApiConfirmedAnchor[] = sentenceAnchors.map((anchor) => ({
+              id: anchor.id,
+              text: anchor.text,
+              // Convert global position to sentence-relative position
+              start: (anchor.globalStart ?? anchor.start) - sentence.start,
+              end: (anchor.globalEnd ?? anchor.end) - sentence.start,
+              type: anchor.type as api.ApiAnchorType,
+              constraint: (anchor.constraint === 'mustHave'
+                ? 'must_have'
+                : anchor.constraint === 'mustntHave'
+                  ? 'mustnt_have'
+                  : anchor.constraint) as api.ApiAnchorConstraint,
+            }));
 
-          return {
-            sentence_id: sentence.id,
-            text: sentence.text,
-            start_char: sentence.start,
-            end_char: sentence.end,
-            anchors: apiAnchors,
-          };
-        });
+            return {
+              sentence_id: sentence.id,
+              text: sentence.text,
+              start_char: sentence.start,
+              end_char: sentence.end,
+              anchors: apiAnchors,
+            };
+          }
+        );
 
         // Only include sentences that have anchors
         const nonEmptySentences = sentencesWithAnchors.filter((s) => s.anchors.length > 0);
@@ -2033,25 +2091,27 @@ export function NodeModal({
           parentCommits.push(data.sourceCommitHash);
         }
 
-        const commitV4 = await api.createCommitV4(
-          projectId,
-          v4Sentences,
-          {
-            branch,
-            message: data.title,
-            parents: parentCommits,
-            position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
-            source_refs: data.conversationId ? [{
-              type: 'conversation',
-              id: data.conversationId,
-            }] : undefined,
-          }
-        );
+        const commitV4 = await api.createCommitV4(projectId, v4Sentences, {
+          branch,
+          message: data.title,
+          parents: parentCommits,
+          position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
+          source_refs: data.conversationId
+            ? [
+                {
+                  type: 'conversation',
+                  id: data.conversationId,
+                },
+              ]
+            : undefined,
+        });
 
         commitHash = commitV4.hash;
       } else {
         // V4: sentence data is required
-        throw new Error('Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.');
+        throw new Error(
+          'Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.'
+        );
       }
 
       // 8. Trigger convert to committed state BEFORE updating node ID
@@ -2389,9 +2449,7 @@ export function NodeModal({
       const currentMessages = chatMessagesRef.current;
       const messages: api.ChatMessage[] = [
         // Inject pin memory as system message (if available)
-        ...(memoryContext
-          ? [{ role: 'system' as const, content: memoryContext }]
-          : []),
+        ...(memoryContext ? [{ role: 'system' as const, content: memoryContext }] : []),
         ...currentMessages.map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
@@ -2456,7 +2514,6 @@ export function NodeModal({
       });
       if (projectId && currentKind === 'unit' && currentConversationId) {
         try {
-
           // Save user turn
           console.log('[handleSendMessage] Saving user turn...');
           await api.createTurn(projectId, currentConversationId, 'user', userMessage);
@@ -2639,7 +2696,11 @@ export function NodeModal({
               <MemoryContextSidebar
                 projectId={routeProjectId || projectId || undefined}
                 conversationId={data?.conversationId || data?.sourceConversationId}
-                branch={data.branchName || (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) || 'main'}
+                branch={
+                  data.branchName ||
+                  (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) ||
+                  'main'
+                }
               />
             </aside>
 
@@ -2745,23 +2806,25 @@ export function NodeModal({
                           </div>
                         )}
                         {/* Ring 1 Preference Keywords - highlighted separately */}
-                        {msg.rings?.ring1?.preferenceKeywords && msg.rings.ring1.preferenceKeywords.length > 0 && (
-                          <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <span className="text-[0.65rem] text-gray-400 mr-1">偏好:</span>
-                            {msg.rings.ring1.preferenceKeywords.map((kw, idx) => (
-                              <span
-                                key={`pref-${kw.text}-${idx}`}
-                                className={cn(
-                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
-                                  kw.polarity === 1 && 'bg-green-50 text-green-700 border-green-300',
-                                  kw.polarity === -1 && 'bg-red-50 text-red-700 border-red-300'
-                                )}
-                              >
-                                {kw.polarity === 1 ? '✓' : '✗'} {kw.text}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        {msg.rings?.ring1?.preferenceKeywords &&
+                          msg.rings.ring1.preferenceKeywords.length > 0 && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              <span className="text-[0.65rem] text-gray-400 mr-1">偏好:</span>
+                              {msg.rings.ring1.preferenceKeywords.map((kw, idx) => (
+                                <span
+                                  key={`pref-${kw.text}-${idx}`}
+                                  className={cn(
+                                    'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
+                                    kw.polarity === 1 &&
+                                      'bg-green-50 text-green-700 border-green-300',
+                                    kw.polarity === -1 && 'bg-red-50 text-red-700 border-red-300'
+                                  )}
+                                >
+                                  {kw.polarity === 1 ? '✓' : '✗'} {kw.text}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         {/* Ring 2 Facets - structured semantic data */}
                         {msg.rings?.ring2?.facets && msg.rings.ring2.facets.length > 0 && (
                           <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -2771,10 +2834,13 @@ export function NodeModal({
                                 className={cn(
                                   'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.65rem] font-medium',
                                   // Facet type colors
-                                  facet.facetType === 'intent_seed' && 'bg-indigo-100 text-indigo-700',
+                                  facet.facetType === 'intent_seed' &&
+                                    'bg-indigo-100 text-indigo-700',
                                   facet.facetType === 'time_window' && 'bg-cyan-100 text-cyan-700',
-                                  facet.facetType === 'preference_soft' && 'bg-amber-100 text-amber-700',
-                                  facet.facetType === 'unknown_slot' && 'bg-slate-100 text-slate-600'
+                                  facet.facetType === 'preference_soft' &&
+                                    'bg-amber-100 text-amber-700',
+                                  facet.facetType === 'unknown_slot' &&
+                                    'bg-slate-100 text-slate-600'
                                 )}
                                 title={`${facet.facetType}: ${facet.key} = ${JSON.stringify(facet.value)} (${Math.round(facet.confidence * 100)}%)`}
                               >
@@ -3077,7 +3143,9 @@ export function NodeModal({
                       />
                       <div className="flex justify-between text-xs text-gray-500">
                         <span>More content</span>
-                        <span className="font-medium text-gray-600">{(100 - cosineThreshold * 60).toFixed(0)}%</span>
+                        <span className="font-medium text-gray-600">
+                          {(100 - cosineThreshold * 60).toFixed(0)}%
+                        </span>
                         <span>Less content</span>
                       </div>
                     </div>
@@ -3326,9 +3394,7 @@ export function NodeModal({
                   {isMergeDraft ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500">
                       <GitCompare size={48} strokeWidth={1} className="text-gray-300 mb-4" />
-                      <h4 className="font-semibold text-gray-700 mb-2">
-                        Merge via MergePanel
-                      </h4>
+                      <h4 className="font-semibold text-gray-700 mb-2">Merge via MergePanel</h4>
                       <p className="text-sm text-gray-500 mb-6">
                         Use the MergePanel component for two-way merge operations.
                       </p>
@@ -3490,589 +3556,589 @@ export function NodeModal({
     );
 
     return (
-    <>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {/* Top Bar */}
-          <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
-            <div className="flex items-center gap-3">
-              <h2 className="text-[0.95rem] font-semibold text-gray-800">
-                Commit: {data.title || 'Untitled'}
-              </h2>
-              <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
-              <Badge
-                className={cn(
-                  'text-[0.65rem] gap-1',
-                  branchLabel === 'main'
-                    ? 'bg-green-100 text-green-700 border-green-300'
-                    : 'bg-purple-100 text-purple-700 border-purple-300'
-                )}
-              >
-                <GitBranch size={12} />
-                {branchLabel}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              {quickActions?.map((action) => (
-                <Button
-                  key={action.key}
-                  variant="outline"
-                  onClick={() => {
-                    action.onClick();
-                    onClose();
-                  }}
-                  disabled={action.disabled}
-                  className="gap-1.5 h-9"
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </Button>
-              ))}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                aria-label="Close"
-                className="h-9 w-9 text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </Button>
-            </div>
-          </header>
-
-          <div className="flex flex-1 overflow-hidden min-h-0" ref={commitContainerRef}>
-            {/* Left Sidebar - Meta & Lineage */}
-            <aside
-              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
-              style={{ width: commitLeftWidth }}
-            >
-              <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Version Info
-                </h4>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-                  <GitBranch size={14} className="text-gray-400 shrink-0" />
-                  <span>
-                    Branch: <strong>{branchLabel}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-                  <Clock size={14} className="text-gray-400 shrink-0" />
-                  <span>{data.timestamp}</span>
-                </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-                  <Tag size={14} className="text-gray-400 shrink-0" />
-                  <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
-                </div>
-              </div>
-
-              <div className="h-px bg-gray-200 my-4" />
-
-              <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Lineage
-                </h4>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-[0.85rem]">
-                    <span className="text-gray-500">From Draft:</span>
-                    <span className="text-gray-700 font-mono text-xs">{data.entryId}</span>
-                  </div>
-                  {data.baselineSummary && (
-                    <div className="flex items-center gap-2 text-[0.85rem]">
-                      <span className="text-gray-500">Upstream:</span>
-                      <span className="text-gray-700">Connected</span>
-                    </div>
+      <>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Top Bar */}
+            <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+              <div className="flex items-center gap-3">
+                <h2 className="text-[0.95rem] font-semibold text-gray-800">
+                  Commit: {data.title || 'Untitled'}
+                </h2>
+                <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
+                <Badge
+                  className={cn(
+                    'text-[0.65rem] gap-1',
+                    branchLabel === 'main'
+                      ? 'bg-green-100 text-green-700 border-green-300'
+                      : 'bg-purple-100 text-purple-700 border-purple-300'
                   )}
+                >
+                  <GitBranch size={12} />
+                  {branchLabel}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                {quickActions?.map((action) => (
+                  <Button
+                    key={action.key}
+                    variant="outline"
+                    onClick={() => {
+                      action.onClick();
+                      onClose();
+                    }}
+                    disabled={action.disabled}
+                    className="gap-1.5 h-9"
+                  >
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </Button>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="h-9 w-9 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </Button>
+              </div>
+            </header>
+
+            <div className="flex flex-1 overflow-hidden min-h-0" ref={commitContainerRef}>
+              {/* Left Sidebar - Meta & Lineage */}
+              <aside
+                className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
+                style={{ width: commitLeftWidth }}
+              >
+                <div className="mb-5">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                    Version Info
+                  </h4>
+                  <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                    <GitBranch size={14} className="text-gray-400 shrink-0" />
+                    <span>
+                      Branch: <strong>{branchLabel}</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                    <Clock size={14} className="text-gray-400 shrink-0" />
+                    <span>{data.timestamp}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+                    <Tag size={14} className="text-gray-400 shrink-0" />
+                    <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
+                  </div>
                 </div>
+
+                <div className="h-px bg-gray-200 my-4" />
+
+                <div className="mb-5">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                    Lineage
+                  </h4>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-[0.85rem]">
+                      <span className="text-gray-500">From Draft:</span>
+                      <span className="text-gray-700 font-mono text-xs">{data.entryId}</span>
+                    </div>
+                    {data.baselineSummary && (
+                      <div className="flex items-center gap-2 text-[0.85rem]">
+                        <span className="text-gray-500">Upstream:</span>
+                        <span className="text-gray-700">Connected</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <MemoryContextSidebar
+                  projectId={routeProjectId || projectId || undefined}
+                  conversationId={data?.conversationId || data?.sourceConversationId}
+                  branch={branchLabel}
+                />
+              </aside>
+
+              {/* Left Divider */}
+              <div
+                className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
+                onMouseDown={handleCommitLeftDivider}
+              />
+
+              {/* Main Content - Tabbed Source View & Generated Output */}
+              <div className="flex-1 min-w-0 overflow-y-auto p-6 flex flex-col gap-6">
+                {/* Commit header + tabbed source view */}
+                {(data.commitV3 || data.commitV4) &&
+                  (() => {
+                    const commit = (data.commitV4 || data.commitV3) as CommitDisplay;
+                    const branchName =
+                      data.branchName || (data.branchType === 'main' ? 'main' : undefined);
+                    const isV4 = isCommitV4(commit);
+                    const commitProjectId = routeProjectId || projectId || undefined;
+
+                    return (
+                      <div className="space-y-4">
+                        <CommitFullHeader commit={commit} branchName={branchName} />
+
+                        {/* Pinned Sources - V4 only */}
+                        {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
+                          <PinnedSourcesSection
+                            sourceRefs={commit.source_refs}
+                            projectId={commitProjectId}
+                          />
+                        )}
+
+                        {/* Tabbed view: Source Context | Source Excerpt | JSON */}
+                        <Tabs defaultValue="context">
+                          <TabsList variant="pill" className="w-full">
+                            <TabsTrigger value="context" variant="pill">
+                              Source Context
+                            </TabsTrigger>
+                            <TabsTrigger value="excerpt" variant="pill">
+                              Source Excerpt
+                            </TabsTrigger>
+                            <TabsTrigger value="json" variant="pill">
+                              JSON
+                            </TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent
+                            value="context"
+                            forceMount
+                            className="data-[state=inactive]:hidden"
+                          >
+                            <CommitSourceContent commit={commit} />
+                          </TabsContent>
+
+                          <TabsContent value="excerpt">
+                            <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
+                              {commitSourceExcerpt.length > 0 ? (
+                                <div className="flex flex-col gap-2">
+                                  {commitSourceExcerpt.map((excerpt, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100"
+                                    >
+                                      <span className="text-gray-400 font-bold shrink-0">
+                                        &bull;
+                                      </span>
+                                      <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                                        {excerpt}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
+                                  <span>No source excerpt recorded</span>
+                                </div>
+                              )}
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="json">
+                            <pre className="p-4 bg-gray-50 border border-gray-200 rounded-md text-xs font-mono text-gray-700 overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
+                              {JSON.stringify(commit, null, 2)}
+                            </pre>
+                          </TabsContent>
+                        </Tabs>
+
+                        {/* Constraints and Leaves below tabs */}
+                        <CommitConstraintsAndLeaves
+                          commit={commit}
+                          leaves={data.leaves}
+                          projectId={commitProjectId}
+                        />
+                      </div>
+                    );
+                  })()}
+
+                {/* Generated Output - LLM generated content (only show if no commit data) */}
+                {!data.commitV3 && !data.commitV4 && (
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
+                    </div>
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-[0.9rem] leading-relaxed text-gray-700">
+                      {data.summary || 'No generated content.'}
+                    </div>
+                  </div>
+                )}
+
+                {data.status && !data.commitV3 && !data.commitV4 && (
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-gray-700">Intent</h3>
+                    </div>
+                    <div className="p-3 bg-white border border-gray-200 rounded-md text-[0.9rem] text-gray-700">
+                      {data.status}
+                    </div>
+                  </div>
+                )}
+
+                {/* Facets - Extracted semantic data (only show if no commit data) */}
+                {!data.commitV3 && !data.commitV4 && (
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-gray-700">Facets</h3>
+                      <span className="text-xs text-gray-400">{commitFacets.length} extracted</span>
+                    </div>
+                    <div>
+                      {commitFacets.length > 0 ? (
+                        <div className="flex flex-col gap-3">
+                          {Object.entries(facetsByType).map(([type, facets]) => (
+                            <div
+                              key={type}
+                              className="bg-white border border-gray-200 rounded-md overflow-hidden"
+                            >
+                              <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-700">
+                                <span>
+                                  {type === 'keyword' && '\u{1F3F7}\u{FE0F}'}
+                                  {type === 'preference' && '\u{1F496}'}
+                                  {type === 'intent_seed' && '\u{1F3AF}'}
+                                  {type === 'time_window' && '\u{23F0}'}
+                                  {type === 'preference_soft' && '\u{1F4A1}'}
+                                  {type === 'unknown_slot' && '\u{2753}'}
+                                  {type === 'segment' && '\u{1F4DD}'}
+                                  {type === 'topic' && '\u{1F4CC}'}
+                                  {type === 'time_anchor' && '\u{1F4C6}'}
+                                  {type === 'facet' && '\u{2728}'}
+                                </span>
+                                {type}
+                                <span className="text-xs text-gray-400">({facets.length})</span>
+                              </h5>
+                              <div className="p-2 flex flex-wrap gap-2">
+                                {facets.map((facet, idx) => {
+                                  // Determine background color based on polarity
+                                  const polarityClass =
+                                    facet.polarity === 1
+                                      ? 'bg-green-100 text-green-700'
+                                      : facet.polarity === -1
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-gray-50 text-gray-700';
+
+                                  // Entity type icon mapping
+                                  const entityIcon =
+                                    facet.entity_type === 'LOCATION'
+                                      ? '\u{1F4CD}'
+                                      : facet.entity_type === 'PERSON'
+                                        ? '\u{1F464}'
+                                        : facet.entity_type === 'DATE'
+                                          ? '\u{1F4C5}'
+                                          : facet.entity_type === 'ORGANIZATION'
+                                            ? '\u{1F3E2}'
+                                            : facet.entity_type === 'EVENT'
+                                              ? '\u{1F389}'
+                                              : facet.entity_type === 'NUMBER'
+                                                ? '#'
+                                                : null;
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={cn(
+                                        'inline-flex items-center gap-1.5 px-2 py-1 rounded text-sm',
+                                        polarityClass
+                                      )}
+                                      title={
+                                        facet.turn_hash
+                                          ? `From turn: ${facet.turn_hash.slice(0, 12)}...`
+                                          : undefined
+                                      }
+                                    >
+                                      {entityIcon && <span>{entityIcon}</span>}
+                                      {facet.text && <span>{facet.text}</span>}
+                                      {facet.key && facet.value !== undefined && !facet.text && (
+                                        <span>
+                                          <span className="opacity-70">{facet.key}:</span>
+                                          <span className="ml-0.5">{String(facet.value)}</span>
+                                        </span>
+                                      )}
+                                      {facet.confidence !== undefined && facet.confidence < 1 && (
+                                        <span className="text-xs opacity-60 font-medium">
+                                          {Math.round(facet.confidence * 100)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
+                          <span>No facets extracted</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} branch={branchLabel} />
-            </aside>
+              {/* Right Divider */}
+              <div
+                className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
+                onMouseDown={handleCommitRightDivider}
+              />
 
-            {/* Left Divider */}
-            <div
-              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
-              onMouseDown={handleCommitLeftDivider}
-            />
+              {/* Right Sidebar - Constraints Summary */}
+              <aside
+                className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
+                style={{ width: commitRightWidth }}
+              >
+                <div className="mb-5">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                    Constraints
+                  </h4>
 
-            {/* Main Content - Tabbed Source View & Generated Output */}
-            <div className="flex-1 min-w-0 overflow-y-auto p-6 flex flex-col gap-6">
-              {/* Commit header + tabbed source view */}
-              {(data.commitV3 || data.commitV4) && (() => {
-                const commit = (data.commitV4 || data.commitV3) as CommitDisplay;
-                const branchName = data.branchName || (data.branchType === 'main' ? 'main' : undefined);
-                const isV4 = isCommitV4(commit);
-                const commitProjectId = routeProjectId || projectId || undefined;
-
-                return (
-                  <div className="space-y-4">
-                    <CommitFullHeader commit={commit} branchName={branchName} />
-
-                    {/* Pinned Sources - V4 only */}
-                    {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
-                      <PinnedSourcesSection sourceRefs={commit.source_refs} projectId={commitProjectId} />
+                  <div className="mb-4">
+                    <h5 className="text-xs font-medium text-green-600 mb-2">Must-have</h5>
+                    {commitMustHave.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {commitMustHave.map((w, i) => (
+                          <Badge
+                            key={i}
+                            className="text-[0.7rem] bg-green-100 text-green-700 border-green-300"
+                          >
+                            {w}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">None</span>
                     )}
-
-                    {/* Tabbed view: Source Context | Source Excerpt | JSON */}
-                    <Tabs defaultValue="context">
-                      <TabsList variant="pill" className="w-full">
-                        <TabsTrigger value="context" variant="pill">Source Context</TabsTrigger>
-                        <TabsTrigger value="excerpt" variant="pill">Source Excerpt</TabsTrigger>
-                        <TabsTrigger value="json" variant="pill">JSON</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="context" forceMount className="data-[state=inactive]:hidden">
-                        <CommitSourceContent commit={commit} />
-                      </TabsContent>
-
-                      <TabsContent value="excerpt">
-                        <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
-                          {commitSourceExcerpt.length > 0 ? (
-                            <div className="flex flex-col gap-2">
-                              {commitSourceExcerpt.map((excerpt, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100"
-                                >
-                                  <span className="text-gray-400 font-bold shrink-0">&bull;</span>
-                                  <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
-                                    {excerpt}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
-                              <span>No source excerpt recorded</span>
-                            </div>
-                          )}
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="json">
-                        <pre className="p-4 bg-gray-50 border border-gray-200 rounded-md text-xs font-mono text-gray-700 overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
-                          {JSON.stringify(commit, null, 2)}
-                        </pre>
-                      </TabsContent>
-                    </Tabs>
-
-                    {/* Constraints and Leaves below tabs */}
-                    <CommitConstraintsAndLeaves
-                      commit={commit}
-                      leaves={data.leaves}
-                      projectId={commitProjectId}
-                    />
                   </div>
-                );
-              })()}
 
-              {/* Generated Output - LLM generated content (only show if no commit data) */}
-              {!data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700">Generated Output</h3>
-                  </div>
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-[0.9rem] leading-relaxed text-gray-700">
-                    {data.summary || 'No generated content.'}
+                  <div className="mb-4">
+                    <h5 className="text-xs font-medium text-red-600 mb-2">Mustn&apos;t-have</h5>
+                    {commitMustntHave.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {commitMustntHave.map((w, i) => (
+                          <Badge
+                            key={i}
+                            className="text-[0.7rem] bg-red-100 text-red-700 border-red-300"
+                          >
+                            {w}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">None</span>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {data.status && !data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700">Intent</h3>
-                  </div>
-                  <div className="p-3 bg-white border border-gray-200 rounded-md text-[0.9rem] text-gray-700">
-                    {data.status}
-                  </div>
-                </div>
-              )}
+                <div className="h-px bg-gray-200 my-4" />
 
-              {/* Facets - Extracted semantic data (only show if no commit data) */}
-              {!data.commitV3 && !data.commitV4 && (
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm text-gray-700">Facets</h3>
-                  <span className="text-xs text-gray-400">{commitFacets.length} extracted</span>
-                </div>
-                <div>
-                  {commitFacets.length > 0 ? (
+                {/* Diff Section */}
+                <div className="mb-5">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <GitCompare size={14} />
+                    Compare
+                  </h4>
+
+                  {!showDiffPanel ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDiffPanel(true)}
+                      disabled={allCommittedCommits.length <= 1}
+                      title={
+                        allCommittedCommits.length <= 1
+                          ? 'Need at least 2 commits to compare'
+                          : 'Compare with another commit'
+                      }
+                      className="w-full gap-2"
+                    >
+                      <GitCompare size={14} />
+                      <span>Compare with...</span>
+                    </Button>
+                  ) : (
                     <div className="flex flex-col gap-3">
-                      {Object.entries(facetsByType).map(([type, facets]) => (
-                        <div
-                          key={type}
-                          className="bg-white border border-gray-200 rounded-md overflow-hidden"
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-gray-500">Compare with:</label>
+                        <select
+                          className="w-full py-2 px-3 border border-gray-300 rounded-md text-sm bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-blue-500"
+                          value={diffTargetCommit}
+                          onChange={(e) => {
+                            setDiffTargetCommit(e.target.value);
+                            setDiffError(null);
+                          }}
                         >
-                          <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-700">
-                            <span>
-                              {type === 'keyword' && '\u{1F3F7}\u{FE0F}'}
-                              {type === 'preference' && '\u{1F496}'}
-                              {type === 'intent_seed' && '\u{1F3AF}'}
-                              {type === 'time_window' && '\u{23F0}'}
-                              {type === 'preference_soft' && '\u{1F4A1}'}
-                              {type === 'unknown_slot' && '\u{2753}'}
-                              {type === 'segment' && '\u{1F4DD}'}
-                              {type === 'topic' && '\u{1F4CC}'}
-                              {type === 'time_anchor' && '\u{1F4C6}'}
-                              {type === 'facet' && '\u{2728}'}
+                          <option value="">Select a commit...</option>
+                          {allCommittedCommits
+                            .filter((c) => c.data.commitHash !== data.commitHash)
+                            .map((c) => (
+                              <option key={c.id} value={c.data.commitHash}>
+                                {c.data.title || c.data.entryId} ({c.data.commitHash?.slice(0, 8)})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleDiff}
+                          disabled={!diffTargetCommit || isDiffLoading}
+                          className="flex-1 gap-1.5"
+                        >
+                          {isDiffLoading ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              <span>Comparing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <GitCompare size={14} />
+                              <span>Run Diff</span>
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowDiffPanel(false);
+                            setDiffTargetCommit('');
+                            setDiffError(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+
+                      {diffError && (
+                        <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm mt-2">
+                          <AlertCircle size={14} />
+                          <span>{diffError}</span>
+                        </div>
+                      )}
+
+                      {diffResult && (
+                        <div className="mt-3 p-3 bg-white border border-gray-200 rounded-md">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-medium text-gray-600">
+                              Facet Changes:
                             </span>
-                            {type}
-                            <span className="text-xs text-gray-400">({facets.length})</span>
-                          </h5>
-                          <div className="p-2 flex flex-wrap gap-2">
-                            {facets.map((facet, idx) => {
-                              // Determine background color based on polarity
-                              const polarityClass =
-                                facet.polarity === 1
-                                  ? 'bg-green-100 text-green-700'
-                                  : facet.polarity === -1
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-gray-50 text-gray-700';
+                            <Badge variant="outline" className="text-xs">
+                              {diffResult.diff.facet_changes.length}
+                            </Badge>
+                          </div>
 
-                              // Entity type icon mapping
-                              const entityIcon =
-                                facet.entity_type === 'LOCATION'
-                                  ? '\u{1F4CD}'
-                                  : facet.entity_type === 'PERSON'
-                                    ? '\u{1F464}'
-                                    : facet.entity_type === 'DATE'
-                                      ? '\u{1F4C5}'
-                                      : facet.entity_type === 'ORGANIZATION'
-                                        ? '\u{1F3E2}'
-                                        : facet.entity_type === 'EVENT'
-                                          ? '\u{1F389}'
-                                          : facet.entity_type === 'NUMBER'
-                                            ? '#'
-                                            : null;
+                          {diffRawData && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full mb-3 gap-1.5"
+                              onClick={() => setShowDiffFullScreen(true)}
+                            >
+                              <GitCompare size={14} />
+                              Open Full Diff
+                            </Button>
+                          )}
 
-                              return (
+                          {diffResult.diff.facet_changes.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                              {diffResult.diff.facet_changes.map((change, idx) => (
                                 <div
                                   key={idx}
                                   className={cn(
-                                    'inline-flex items-center gap-1.5 px-2 py-1 rounded text-sm',
-                                    polarityClass
+                                    'p-2 rounded border text-sm',
+                                    change.change_type === 'added' &&
+                                      'bg-green-50 border-green-200',
+                                    change.change_type === 'removed' && 'bg-red-50 border-red-200',
+                                    change.change_type === 'modified' &&
+                                      'bg-amber-50 border-amber-200'
                                   )}
-                                  title={
-                                    facet.turn_hash
-                                      ? `From turn: ${facet.turn_hash.slice(0, 12)}...`
-                                      : undefined
-                                  }
                                 >
-                                  {entityIcon && <span>{entityIcon}</span>}
-                                  {facet.text && <span>{facet.text}</span>}
-                                  {facet.key && facet.value !== undefined && !facet.text && (
-                                    <span>
-                                      <span className="opacity-70">{facet.key}:</span>
-                                      <span className="ml-0.5">{String(facet.value)}</span>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-[0.6rem]',
+                                        change.change_type === 'added' &&
+                                          'text-green-600 border-green-300',
+                                        change.change_type === 'removed' &&
+                                          'text-red-600 border-red-300',
+                                        change.change_type === 'modified' &&
+                                          'text-amber-600 border-amber-300'
+                                      )}
+                                    >
+                                      {change.change_type}
+                                    </Badge>
+                                    <span className="font-medium text-gray-700">
+                                      {change.facet}
                                     </span>
+                                  </div>
+                                  {change.base_text && (
+                                    <div className="text-red-600 text-xs font-mono bg-red-100/50 px-2 py-1 rounded">
+                                      - {change.base_text}
+                                    </div>
                                   )}
-                                  {facet.confidence !== undefined && facet.confidence < 1 && (
-                                    <span className="text-xs opacity-60 font-medium">
-                                      {Math.round(facet.confidence * 100)}%
-                                    </span>
+                                  {change.target_text && (
+                                    <div className="text-green-600 text-xs font-mono bg-green-100/50 px-2 py-1 rounded mt-1">
+                                      + {change.target_text}
+                                    </div>
+                                  )}
+                                  {change.added_keywords.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1 mt-2">
+                                      <span className="text-xs text-gray-500">Added:</span>
+                                      {change.added_keywords.map((kw, i) => (
+                                        <Badge
+                                          key={i}
+                                          className="text-[0.6rem] bg-green-100 text-green-700"
+                                        >
+                                          {kw}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {change.removed_keywords.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1 mt-2">
+                                      <span className="text-xs text-gray-500">Removed:</span>
+                                      {change.removed_keywords.map((kw, i) => (
+                                        <Badge
+                                          key={i}
+                                          className="text-[0.6rem] bg-red-100 text-red-700"
+                                        >
+                                          {kw}
+                                        </Badge>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
-                              );
-                            })}
-                          </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {diffResult.diff.facet_changes.length === 0 && (
+                            <div className="text-center py-4 text-sm text-gray-400">
+                              No facet changes detected
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
-                      <span>No facets extracted</span>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-              )}
+              </aside>
             </div>
-
-            {/* Right Divider */}
-            <div
-              className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors"
-              onMouseDown={handleCommitRightDivider}
-            />
-
-            {/* Right Sidebar - Constraints Summary */}
-            <aside
-              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50"
-              style={{ width: commitRightWidth }}
-            >
-              <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Constraints
-                </h4>
-
-                <div className="mb-4">
-                  <h5 className="text-xs font-medium text-green-600 mb-2">Must-have</h5>
-                  {commitMustHave.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {commitMustHave.map((w, i) => (
-                        <Badge
-                          key={i}
-                          className="text-[0.7rem] bg-green-100 text-green-700 border-green-300"
-                        >
-                          {w}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-400">None</span>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <h5 className="text-xs font-medium text-red-600 mb-2">Mustn&apos;t-have</h5>
-                  {commitMustntHave.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {commitMustntHave.map((w, i) => (
-                        <Badge
-                          key={i}
-                          className="text-[0.7rem] bg-red-100 text-red-700 border-red-300"
-                        >
-                          {w}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-400">None</span>
-                  )}
-                </div>
-              </div>
-
-              {/* History Section */}
-              {data.commitV4 && data.commitHash && (
-                <>
-                  <div className="h-px bg-gray-200 my-4" />
-                  <div className="mb-5">
-                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                      <History size={14} />
-                      History
-                    </h4>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowHistoryPanel(true)}
-                      className="w-full gap-2"
-                    >
-                      <History size={14} />
-                      <span>View commit history</span>
-                    </Button>
-                  </div>
-                  <CommitHistoryPanel
-                    commitHash={data.commitHash}
-                    open={showHistoryPanel}
-                    onClose={() => setShowHistoryPanel(false)}
-                  />
-                </>
-              )}
-
-              <div className="h-px bg-gray-200 my-4" />
-
-              {/* Diff Section */}
-              <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                  <GitCompare size={14} />
-                  Compare
-                </h4>
-
-                {!showDiffPanel ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDiffPanel(true)}
-                    disabled={allCommittedCommits.length <= 1}
-                    title={
-                      allCommittedCommits.length <= 1
-                        ? 'Need at least 2 commits to compare'
-                        : 'Compare with another commit'
-                    }
-                    className="w-full gap-2"
-                  >
-                    <GitCompare size={14} />
-                    <span>Compare with...</span>
-                  </Button>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs text-gray-500">Compare with:</label>
-                      <select
-                        className="w-full py-2 px-3 border border-gray-300 rounded-md text-sm bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-blue-500"
-                        value={diffTargetCommit}
-                        onChange={(e) => {
-                          setDiffTargetCommit(e.target.value);
-                          setDiffError(null);
-                        }}
-                      >
-                        <option value="">Select a commit...</option>
-                        {allCommittedCommits
-                          .filter((c) => c.data.commitHash !== data.commitHash)
-                          .map((c) => (
-                            <option key={c.id} value={c.data.commitHash}>
-                              {c.data.title || c.data.entryId} ({c.data.commitHash?.slice(0, 8)})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleDiff}
-                        disabled={!diffTargetCommit || isDiffLoading}
-                        className="flex-1 gap-1.5"
-                      >
-                        {isDiffLoading ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin" />
-                            <span>Comparing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <GitCompare size={14} />
-                            <span>Run Diff</span>
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowDiffPanel(false);
-                          setDiffTargetCommit('');
-                          setDiffError(null);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-
-                    {diffError && (
-                      <div className="flex items-center gap-2 py-2 px-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm mt-2">
-                        <AlertCircle size={14} />
-                        <span>{diffError}</span>
-                      </div>
-                    )}
-
-                    {diffResult && (
-                      <div className="mt-3 p-3 bg-white border border-gray-200 rounded-md">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-600">Facet Changes:</span>
-                          <Badge variant="outline" className="text-xs">
-                            {diffResult.diff.facet_changes.length}
-                          </Badge>
-                        </div>
-
-                        {diffRawData && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full mb-3 gap-1.5"
-                            onClick={() => setShowDiffFullScreen(true)}
-                          >
-                            <GitCompare size={14} />
-                            Open Full Diff
-                          </Button>
-                        )}
-
-                        {diffResult.diff.facet_changes.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            {diffResult.diff.facet_changes.map((change, idx) => (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  'p-2 rounded border text-sm',
-                                  change.change_type === 'added' && 'bg-green-50 border-green-200',
-                                  change.change_type === 'removed' && 'bg-red-50 border-red-200',
-                                  change.change_type === 'modified' &&
-                                    'bg-amber-50 border-amber-200'
-                                )}
-                              >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[0.6rem]',
-                                      change.change_type === 'added' &&
-                                        'text-green-600 border-green-300',
-                                      change.change_type === 'removed' &&
-                                        'text-red-600 border-red-300',
-                                      change.change_type === 'modified' &&
-                                        'text-amber-600 border-amber-300'
-                                    )}
-                                  >
-                                    {change.change_type}
-                                  </Badge>
-                                  <span className="font-medium text-gray-700">{change.facet}</span>
-                                </div>
-                                {change.base_text && (
-                                  <div className="text-red-600 text-xs font-mono bg-red-100/50 px-2 py-1 rounded">
-                                    - {change.base_text}
-                                  </div>
-                                )}
-                                {change.target_text && (
-                                  <div className="text-green-600 text-xs font-mono bg-green-100/50 px-2 py-1 rounded mt-1">
-                                    + {change.target_text}
-                                  </div>
-                                )}
-                                {change.added_keywords.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1 mt-2">
-                                    <span className="text-xs text-gray-500">Added:</span>
-                                    {change.added_keywords.map((kw, i) => (
-                                      <Badge
-                                        key={i}
-                                        className="text-[0.6rem] bg-green-100 text-green-700"
-                                      >
-                                        {kw}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                                {change.removed_keywords.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1 mt-2">
-                                    <span className="text-xs text-gray-500">Removed:</span>
-                                    {change.removed_keywords.map((kw, i) => (
-                                      <Badge
-                                        key={i}
-                                        className="text-[0.6rem] bg-red-100 text-red-700"
-                                      >
-                                        {kw}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {diffResult.diff.facet_changes.length === 0 && (
-                          <div className="text-center py-4 text-sm text-gray-400">
-                            No facet changes detected
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </aside>
           </div>
         </div>
-      </div>
 
-      {diffRawData && data?.commitHash && (
-        <DiffFullScreen
-          open={showDiffFullScreen}
-          onClose={() => setShowDiffFullScreen(false)}
-          baseCommitHash={data.commitHash}
-          targetCommitHash={diffTargetCommit}
-          diffData={diffRawData}
-        />
-      )}
-    </>
+        {diffRawData && data?.commitHash && (
+          <DiffFullScreen
+            open={showDiffFullScreen}
+            onClose={() => setShowDiffFullScreen(false)}
+            baseCommitHash={data.commitHash}
+            targetCommitHash={diffTargetCommit}
+            diffData={diffRawData}
+          />
+        )}
+      </>
     );
   }
 
