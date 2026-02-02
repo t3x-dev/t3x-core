@@ -5,13 +5,11 @@ import {
   CheckCircle,
   ChevronRight,
   Copy,
-  ExternalLink,
   FilePlus,
   FileText,
   FlaskConical,
   GitCommit,
   GitMerge,
-  Loader2,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -20,9 +18,9 @@ import {
   Pin,
   Plus,
   Rocket,
+  Trash2,
   Twitter,
   Users,
-  XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -433,6 +431,7 @@ function UnitNode(props: Props) {
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
+  const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -513,14 +512,8 @@ function UnitNode(props: Props) {
 
   // Navigate to leaf detail page
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (leaf.type === 'deploy_agent') {
-      return '/deploy';
-    }
-    if (leaf.type === 'eval' && leaf.id) {
-      // Use leaf.id as runId for eval results
-      return `/eval/${leaf.id}`;
-    }
-    return undefined;
+    if (!projectId || !leaf.id) return undefined;
+    return `/project/${projectId}/leaf/${leaf.id}`;
   };
 
   return (
@@ -781,28 +774,33 @@ function UnitNode(props: Props) {
                                 : leaf.status}
                             </span>
                           )}
-                          {leafHref && (
-                            <ExternalLink
-                              size={10}
-                              className="text-slate-300 group-hover/leaf:text-slate-500 transition-colors"
-                            />
-                          )}
                         </>
                       );
-                      return leafHref ? (
-                        <Link
-                          key={leaf.id}
-                          href={leafHref}
-                          className="group/leaf flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors cursor-pointer"
-                        >
-                          {leafContent}
-                        </Link>
-                      ) : (
-                        <div
-                          key={leaf.id}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors"
-                        >
-                          {leafContent}
+                      return (
+                        <div key={leaf.id} className="group/leaf flex items-center gap-1">
+                          {leafHref ? (
+                            <Link
+                              href={leafHref}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors cursor-pointer flex-1 min-w-0"
+                            >
+                              {leafContent}
+                            </Link>
+                          ) : (
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md flex-1 min-w-0">
+                              {leafContent}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all shrink-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeLeafFromNode(id, leaf.id);
+                            }}
+                          >
+                            <Trash2 size={11} />
+                          </button>
                         </div>
                       );
                     })}
@@ -813,8 +811,8 @@ function UnitNode(props: Props) {
           </div>
         )}
 
-        {/* Add Leaf button for committed units without leaves */}
-        {isCommitted && (!data.leaves || data.leaves.length === 0) && (
+        {/* Add Leaf button for committed units */}
+        {isCommitted && (
           <div className="border-t border-slate-100 px-3 py-2">
             <button
               className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 py-1 rounded hover:bg-slate-50 transition-colors"
@@ -876,124 +874,6 @@ function UnitNode(props: Props) {
   );
 }
 
-// Status indicator for deploy/eval leaves
-function LeafStatusIndicator({ leafType, data }: { leafType: LeafType; data: CanvasNodeData }) {
-  const baseClasses =
-    'inline-flex items-center gap-1 text-[0.65rem] font-medium px-1.5 py-0.5 rounded';
-
-  if (leafType === 'deploy_agent') {
-    const status = (data.leafConfig as { status?: string })?.status || 'idle';
-    switch (status) {
-      case 'running':
-        return (
-          <span className={cn(baseClasses, 'bg-blue-100 text-blue-700')}>
-            <Loader2 size={12} className="animate-spin" /> Running
-          </span>
-        );
-      case 'stopped':
-        return <span className={cn(baseClasses, 'bg-slate-100 text-slate-600')}>Stopped</span>;
-      case 'error':
-        return (
-          <span className={cn(baseClasses, 'bg-red-100 text-red-700')}>
-            <XCircle size={12} /> Error
-          </span>
-        );
-      default:
-        return <span className={cn(baseClasses, 'bg-green-100 text-green-700')}>Ready</span>;
-    }
-  }
-
-  if (leafType === 'eval') {
-    const status = (data.leafConfig as { status?: string })?.status || 'pending';
-    const config = data.leafConfig as { passedCount?: number; failedCount?: number } | undefined;
-    switch (status) {
-      case 'running':
-        return (
-          <span className={cn(baseClasses, 'bg-blue-100 text-blue-700')}>
-            <Loader2 size={12} className="animate-spin" /> Running
-          </span>
-        );
-      case 'passed':
-        return (
-          <span className={cn(baseClasses, 'bg-green-100 text-green-700')}>
-            <CheckCircle size={12} /> {config?.passedCount || 0} passed
-          </span>
-        );
-      case 'failed':
-        return (
-          <span className={cn(baseClasses, 'bg-red-100 text-red-700')}>
-            <XCircle size={12} /> {config?.failedCount || 0} failed
-          </span>
-        );
-      default:
-        return <span className={cn(baseClasses, 'bg-amber-100 text-amber-700')}>Pending</span>;
-    }
-  }
-
-  return null;
-}
-
-// Leaf Node - Output destination node
-function LeafNode(props: Props) {
-  const { data, selected } = props;
-  const leafTypeInfo = LEAF_TYPES.find((l) => l.type === data.leafType) || LEAF_TYPES[0];
-  const Icon = leafTypeInfo.icon;
-  const isRunnerLeaf = data.leafType === 'deploy_agent' || data.leafType === 'eval';
-
-  return (
-    <>
-      <Handle type="target" position={Position.Left} style={targetHandleStyle} />
-      <motion.div
-        variants={nodeEnter}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        whileHover={{
-          scale: 1.03,
-          boxShadow: '0 4px 16px -4px rgba(99,102,241,0.2), 0 0 0 1px rgba(99,102,241,0.1)',
-          transition: springConfig.smooth,
-        }}
-        whileTap={{ scale: 0.98 }}
-        className={cn(
-          'w-40 bg-white border border-slate-200 rounded-xl',
-          'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)]',
-          selected &&
-            'border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.3),0_0_16px_rgba(99,102,241,0.15)]'
-        )}
-        style={{ willChange: 'transform' }}
-      >
-        <div className="flex items-center gap-2.5 px-3 py-3">
-          <div
-            className={cn(
-              'w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm',
-              isRunnerLeaf
-                ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-                : 'bg-gradient-to-br from-indigo-500 to-violet-600'
-            )}
-          >
-            <Icon size={16} />
-          </div>
-          <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
-            <span
-              className={cn(
-                'text-[0.6rem] font-semibold uppercase tracking-wider',
-                isRunnerLeaf ? 'text-emerald-600' : 'text-indigo-600'
-              )}
-            >
-              {leafTypeInfo.label}
-            </span>
-            <span className="text-xs font-medium text-slate-700 truncate max-w-full">
-              {data.title || 'Untitled'}
-            </span>
-            {isRunnerLeaf && <LeafStatusIndicator leafType={data.leafType!} data={data} />}
-          </div>
-        </div>
-      </motion.div>
-    </>
-  );
-}
-
 export const canvasNodeTypes = {
   unit: UnitNode,
-  leaf: LeafNode,
 };

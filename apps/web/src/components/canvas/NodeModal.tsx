@@ -72,6 +72,7 @@ import {
 } from '@/utils/tokenizer';
 import { CommitSourceContext } from './CommitSourceContext';
 import { PinButton } from '@/components/ui/PinButton';
+import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { usePinsStore } from '@/store/pinsStore';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
@@ -238,7 +239,7 @@ function PinnedSourcesSection({ sourceRefs, projectId }: { sourceRefs: CommitSou
  * Memory Context sidebar section for committed view.
  * Shows pin counts and allows opening EditContextDialog.
  */
-function MemoryContextSidebar({ projectId, conversationId }: { projectId?: string; conversationId?: string }) {
+function MemoryContextSidebar({ projectId, conversationId, branch }: { projectId?: string; conversationId?: string; branch?: string }) {
   const pins = usePinsStore((state) => state.pins);
 
   const convCount = pins.filter((p) => p.type === 'conversation').length;
@@ -254,26 +255,35 @@ function MemoryContextSidebar({ projectId, conversationId }: { projectId?: strin
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Memory Context
         </h4>
-        <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-          <Pin size={14} className="text-gray-400 shrink-0" />
-          <span>
-            {totalCount === 0
-              ? 'No pins'
-              : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
-          </span>
-        </div>
-        {conversationId && (
-          <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
-            <span className="text-xs text-gray-600 truncate mr-2">
-              conv#{conversationId.slice(0, 6)}
-            </span>
-            <PinButton
-              projectId={projectId}
-              type="conversation"
-              refId={conversationId}
-              className="h-7 w-7"
-            />
-          </div>
+
+        {/* Branch-scoped dropdown selector when branch is known */}
+        {branch ? (
+          <PinDropdownSelector projectId={projectId} branch={branch} />
+        ) : (
+          /* Fallback: original pin count + single conversation toggle */
+          <>
+            <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
+              <Pin size={14} className="text-gray-400 shrink-0" />
+              <span>
+                {totalCount === 0
+                  ? 'No pins'
+                  : `${convCount} conversation${convCount !== 1 ? 's' : ''}${leafCount > 0 ? `, ${leafCount} leaf${leafCount !== 1 ? 's' : ''}` : ''} pinned`}
+              </span>
+            </div>
+            {conversationId && (
+              <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
+                <span className="text-xs text-gray-600 truncate mr-2">
+                  conv#{conversationId.slice(0, 6)}
+                </span>
+                <PinButton
+                  projectId={projectId}
+                  type="conversation"
+                  refId={conversationId}
+                  className="h-7 w-7"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
@@ -2339,9 +2349,44 @@ export function NodeModal({
     setStreamingContent('');
 
     try {
+      // Ensure conversation exists before fetching memory (create if needed)
+      let convId = conversationIdRef.current;
+      if (!convId && projectId && nodeKindRef.current === 'unit') {
+        const newConv = await api.createConversation(
+          projectId,
+          data?.title || 'Untitled Conversation'
+        );
+        convId = newConv.conversation_id;
+        onUpdate({
+          conversationId: convId,
+          sourceConversationId: convId,
+        });
+        conversationIdRef.current = convId;
+        if (node?.id && node.id !== convId) {
+          useCanvasStore.getState().updateNodeId(node.id, convId);
+        }
+      }
+
+      // Fetch pin-based memory context
+      let memoryContext = '';
+      if (convId) {
+        try {
+          const ctx = await api.getConversationMemory(convId);
+          if (ctx.text) {
+            memoryContext = ctx.text;
+          }
+        } catch {
+          // Memory fetch failed — proceed without context
+        }
+      }
+
       // Build messages array from chat history (use ref to get latest)
       const currentMessages = chatMessagesRef.current;
       const messages: api.ChatMessage[] = [
+        // Inject pin memory as system message (if available)
+        ...(memoryContext
+          ? [{ role: 'system' as const, content: memoryContext }]
+          : []),
         ...currentMessages.map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
@@ -2393,9 +2438,8 @@ export function NodeModal({
         setStreamingContent('');
       }
 
-      // If projectId is available and this is a conversation node, save the turns
-      // Use refs to get current values (avoiding stale closure)
-      let currentConversationId = conversationIdRef.current;
+      // Save turns to the conversation (conversation was already created above if needed)
+      const currentConversationId = conversationIdRef.current;
       const currentKind = nodeKindRef.current;
       console.log('[handleSendMessage] Save turns check:', {
         projectId,
@@ -2405,28 +2449,8 @@ export function NodeModal({
         fullResponsePreview: fullResponse.slice(0, 100),
         addedFinalMessage,
       });
-      if (projectId && currentKind === 'unit') {
+      if (projectId && currentKind === 'unit' && currentConversationId) {
         try {
-          // If no conversationId yet, create one first
-          if (!currentConversationId) {
-            console.log('[handleSendMessage] Creating new conversation...');
-            const newConv = await api.createConversation(
-              projectId,
-              data?.title || 'Untitled Conversation'
-            );
-            currentConversationId = newConv.conversation_id;
-            // Update the node with the new conversationId and sourceConversationId
-            onUpdate({
-              conversationId: currentConversationId,
-              sourceConversationId: currentConversationId,
-            });
-            conversationIdRef.current = currentConversationId;
-            // Also update the node ID in the store to match conversation ID
-            if (node?.id && node.id !== currentConversationId) {
-              useCanvasStore.getState().updateNodeId(node.id, currentConversationId);
-            }
-            console.log('[handleSendMessage] Created conversation:', currentConversationId);
-          }
 
           // Save user turn
           console.log('[handleSendMessage] Saving user turn...');
@@ -2604,6 +2628,14 @@ export function NodeModal({
                   <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
                 </div>
               </div>
+
+              <div className="h-px bg-gray-200 my-4" />
+
+              <MemoryContextSidebar
+                projectId={routeProjectId || projectId || undefined}
+                conversationId={data?.conversationId || data?.sourceConversationId}
+                branch={data.branchName || (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) || 'main'}
+              />
             </aside>
 
             {/* Draggable Divider */}
@@ -3553,7 +3585,7 @@ export function NodeModal({
                 </div>
               </div>
 
-              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} />
+              <MemoryContextSidebar projectId={routeProjectId || projectId || undefined} conversationId={data?.conversationId || data?.sourceConversationId} branch={branchLabel} />
             </aside>
 
             {/* Left Divider */}
