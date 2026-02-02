@@ -49,6 +49,20 @@ export interface HighlightRange {
   end: number;
 }
 
+/**
+ * Highlight range with per-range color.
+ * Used when a single turn needs highlights in multiple colors
+ * (e.g., green for sentences, deepGreen/deepRed for constraints).
+ */
+export interface ColoredHighlightRange {
+  /** Start position (0-indexed, inclusive) */
+  start: number;
+  /** End position (0-indexed, exclusive) */
+  end: number;
+  /** Highlight color for this specific range */
+  color: HighlightColor;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Truncation Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -109,12 +123,14 @@ export interface TurnBubbleData {
   highlight?: HighlightRange;
   /** Multiple highlights (for multiple sentences from same turn) */
   highlights?: HighlightRange[];
+  /** Multi-color highlights (each range has its own color, overrides highlightColor) */
+  coloredHighlights?: ColoredHighlightRange[];
 }
 
 /**
  * Highlight color options.
  */
-export type HighlightColor = 'yellow' | 'green';
+export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Data Types

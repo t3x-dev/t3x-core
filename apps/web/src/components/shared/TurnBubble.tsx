@@ -13,6 +13,7 @@ import type { ReactNode } from 'react';
 
 import { mergeHighlightRanges } from '@/lib/highlightUtils';
 import type {
+  ColoredHighlightRange,
   HighlightColor,
   HighlightRange,
   TurnBubbleData,
@@ -20,7 +21,7 @@ import type {
 } from '@/types/sourceContext';
 
 // Re-export types for backward compatibility
-export type { HighlightColor, TurnBubbleData, TurnBubbleProps };
+export type { ColoredHighlightRange, HighlightColor, TurnBubbleData, TurnBubbleProps };
 export type TurnHighlight = HighlightRange;
 
 const roleIcons: Record<string, ReactNode> = {
@@ -40,6 +41,8 @@ const roleLabels: Record<string, string> = {
 const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-yellow-200',
   green: 'bg-green-200',
+  deepGreen: 'bg-green-500 text-white',
+  deepRed: 'bg-red-500 text-white',
 };
 
 export function TurnBubble({
@@ -60,6 +63,32 @@ export function TurnBubble({
 
   // Render content with highlights
   const renderContent = () => {
+    // Path A: Multi-color highlights (each range has its own color)
+    if (turn.coloredHighlights && turn.coloredHighlights.length > 0) {
+      const sorted = [...turn.coloredHighlights].sort((a, b) => a.start - b.start);
+      const segments: ReactNode[] = [];
+      let lastEnd = 0;
+
+      for (let i = 0; i < sorted.length; i++) {
+        const { start, end, color } = sorted[i];
+        if (start > lastEnd) {
+          segments.push(turn.content.slice(lastEnd, start));
+        }
+        segments.push(
+          <mark key={i} className={`${highlightColors[color]} px-0.5 rounded`}>
+            {turn.content.slice(start, end)}
+          </mark>
+        );
+        lastEnd = end;
+      }
+
+      if (lastEnd < turn.content.length) {
+        segments.push(turn.content.slice(lastEnd));
+      }
+      return <>{segments}</>;
+    }
+
+    // Path B: Uniform-color highlights (original behavior)
     if (allHighlights.length === 0) {
       return turn.content;
     }
@@ -98,12 +127,14 @@ export function TurnBubble({
     return <>{segments}</>;
   };
 
-  const ringClass =
-    showTargetRing && turn.is_target
-      ? highlightColor === 'yellow'
-        ? 'ring-2 ring-yellow-400 ring-offset-2'
-        : 'ring-2 ring-green-400 ring-offset-2'
-      : '';
+  const ringColorMap: Record<HighlightColor, string> = {
+    yellow: 'ring-2 ring-yellow-400 ring-offset-2',
+    green: 'ring-2 ring-green-400 ring-offset-2',
+    deepGreen: 'ring-2 ring-green-600 ring-offset-2',
+    deepRed: 'ring-2 ring-red-600 ring-offset-2',
+  };
+
+  const ringClass = showTargetRing && turn.is_target ? ringColorMap[highlightColor] : '';
 
   return (
     <div
