@@ -50,6 +50,7 @@ export {
   findCommitV4ByHash,
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
+  findCommitV4History,
   getCommitV4Parents,
   getCommitsV4ByHashes,
   type ListCommitsV4Options,

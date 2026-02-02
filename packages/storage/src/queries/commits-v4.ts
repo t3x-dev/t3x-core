@@ -312,6 +312,49 @@ export async function getCommitV4Parents(
   return getCommitsV4ByHashes(db, commit.parents);
 }
 
+/**
+ * Walk the parent chain from a given commit (BFS traversal).
+ *
+ * Returns an ordered list of ancestor commits starting from the given hash.
+ * Handles DAG (multiple parents) gracefully — visits breadth-first.
+ * Missing/deleted parents are skipped with a warning.
+ *
+ * @param db - Database instance
+ * @param hash - Starting commit hash
+ * @param limit - Maximum number of commits to return (default 50)
+ */
+export async function findCommitV4History(
+  db: AnyDB,
+  hash: string,
+  limit = 50
+): Promise<CommitV4[]> {
+  const history: CommitV4[] = [];
+  const visited = new Set<string>();
+  const queue: string[] = [hash];
+
+  while (queue.length > 0 && history.length < limit) {
+    const currentHash = queue.shift()!;
+    if (visited.has(currentHash)) continue;
+    visited.add(currentHash);
+
+    const commit = await findCommitV4ByHash(db, currentHash);
+    if (!commit) {
+      console.warn(`[findCommitV4History] Commit not found: ${currentHash}, skipping`);
+      continue;
+    }
+
+    history.push(commit);
+
+    for (const parentHash of commit.parents) {
+      if (!visited.has(parentHash)) {
+        queue.push(parentHash);
+      }
+    }
+  }
+
+  return history;
+}
+
 // ============================================================
 // Helpers
 // ============================================================

@@ -12,6 +12,7 @@ import {
   GitBranch,
   GitCommit,
   GitCompare,
+  History,
   GitMerge,
   Info,
   Leaf,
@@ -73,6 +74,7 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { CommitHistoryPanel } from './CommitHistoryPanel';
 import { CommitSourceContext } from './CommitSourceContext';
 import { LeafCreationDialog } from './LeafCreationDialog';
 import { PendingSourceEditor } from './SelectableTextBlock';
@@ -944,6 +946,9 @@ export function NodeModal({
   // Branches state for Step 1 dropdown
   const [branches, setBranches] = useState<api.Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+
+  // History panel state
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
 
   // Diff state for committed commit comparison
   const [showDiffPanel, setShowDiffPanel] = useState(false);

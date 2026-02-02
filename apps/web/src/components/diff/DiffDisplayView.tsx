@@ -14,7 +14,7 @@
  * @see https://github.com/t3x-dev/T3X/issues/220
  */
 
-import { AlertCircle, Columns2, FileText, Loader2, MapPin } from 'lucide-react';
+import { AlertCircle, Columns2, Expand, FileText, Loader2, MapPin } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
@@ -24,7 +24,7 @@ import * as api from '@/lib/api';
 import { type CommitDiff, type DiffableSentence, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
 
-import { DiffSourceContextModal } from './DiffSourceContextModal';
+import { DiffSourceContextModal, TurnBubble } from './DiffSourceContextModal';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -132,6 +132,62 @@ function TraceToSourceButton({ sentence, onClick }: TraceToSourceButtonProps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Inline Source Context
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface InlineSourceContextProps {
+  data: TurnContextData | null;
+  loading: boolean;
+  onOpenModal: () => void;
+}
+
+function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContextProps) {
+  return (
+    <div className="mt-1 mb-2 ml-4 mr-2 rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40 bg-muted/50">
+        <span className="text-[0.65rem] font-medium text-muted-foreground uppercase tracking-wide">
+          Source Context
+        </span>
+        <button
+          type="button"
+          onClick={onOpenModal}
+          className="inline-flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-primary transition-colors"
+          title="Open in full modal"
+        >
+          <Expand size={10} />
+          Expand
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2 max-h-[200px] overflow-y-auto">
+        {loading && (
+          <div className="flex items-center gap-2 py-4 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Loading context...</span>
+          </div>
+        )}
+
+        {!loading && data && (
+          <div className="space-y-2">
+            {data.context.map((turn, idx) => (
+              <TurnBubble key={turn.turn_hash || idx} turn={turn} />
+            ))}
+          </div>
+        )}
+
+        {!loading && !data && (
+          <div className="text-xs text-muted-foreground py-3 text-center">
+            Could not load conversation context.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Side-by-Side View
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -142,6 +198,10 @@ interface SideBySideRowProps {
   wordDiff?: WordDiffSegment[];
   similarity?: number;
   onTraceSource: (sentence: SentenceWithSource) => void;
+  expandedSentenceId?: string | null;
+  inlineContextData?: TurnContextData | null;
+  inlineContextLoading?: boolean;
+  onOpenModal?: () => void;
 }
 
 function SideBySideRow({
@@ -151,6 +211,10 @@ function SideBySideRow({
   wordDiff: wordDiffSegments,
   similarity,
   onTraceSource,
+  expandedSentenceId,
+  inlineContextData,
+  inlineContextLoading,
+  onOpenModal,
 }: SideBySideRowProps) {
   const leftBg =
     type === 'removed'
@@ -184,57 +248,73 @@ function SideBySideRow({
         ? 'border-l-2 border-amber-300'
         : '';
 
+  // Check if either sentence is currently expanded inline
+  const isSourceExpanded = sourceSentence && expandedSentenceId === sourceSentence.id;
+  const isTargetExpanded = targetSentence && expandedSentenceId === targetSentence.id;
+  const isExpanded = isSourceExpanded || isTargetExpanded;
+
   return (
-    <div className="grid grid-cols-2 gap-1">
-      {/* Left (Source) Side */}
-      <div className={cn('p-2 rounded-l text-sm', leftBg, leftBorder)}>
-        {sourceSentence ? (
-          <div className="flex flex-col gap-1">
-            {type === 'modified' && wordDiffSegments ? (
-              <div>
-                <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'added')} />
-                {similarity !== undefined && (
-                  <span className="text-[0.6rem] text-amber-600 ml-2">
-                    ({Math.round(similarity * 100)}% similar)
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className={type === 'removed' ? 'text-red-800' : ''}>
-                {sourceSentence.text}
-              </span>
-            )}
-            <TraceToSourceButton sentence={sourceSentence} onClick={onTraceSource} />
-          </div>
-        ) : (
-          <span className="text-slate-300 italic">—</span>
-        )}
+    <div>
+      <div className="grid grid-cols-2 gap-1">
+        {/* Left (Source) Side */}
+        <div className={cn('p-2 rounded-l text-sm', leftBg, leftBorder)}>
+          {sourceSentence ? (
+            <div className="flex flex-col gap-1">
+              {type === 'modified' && wordDiffSegments ? (
+                <div>
+                  <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'added')} />
+                  {similarity !== undefined && (
+                    <span className="text-[0.6rem] text-amber-600 ml-2">
+                      ({Math.round(similarity * 100)}% similar)
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className={type === 'removed' ? 'text-red-800' : ''}>
+                  {sourceSentence.text}
+                </span>
+              )}
+              <TraceToSourceButton sentence={sourceSentence} onClick={onTraceSource} />
+            </div>
+          ) : (
+            <span className="text-slate-300 italic">—</span>
+          )}
+        </div>
+
+        {/* Right (Target) Side */}
+        <div className={cn('p-2 rounded-r text-sm', rightBg, rightBorder)}>
+          {targetSentence ? (
+            <div className="flex flex-col gap-1">
+              {type === 'modified' && wordDiffSegments ? (
+                <div>
+                  <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'removed')} />
+                  {similarity !== undefined && (
+                    <span className="text-[0.6rem] text-amber-600 ml-2">
+                      ({Math.round(similarity * 100)}% similar)
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className={type === 'added' ? 'text-green-800' : ''}>
+                  {targetSentence.text}
+                </span>
+              )}
+              <TraceToSourceButton sentence={targetSentence} onClick={onTraceSource} />
+            </div>
+          ) : (
+            <span className="text-slate-300 italic">—</span>
+          )}
+        </div>
       </div>
 
-      {/* Right (Target) Side */}
-      <div className={cn('p-2 rounded-r text-sm', rightBg, rightBorder)}>
-        {targetSentence ? (
-          <div className="flex flex-col gap-1">
-            {type === 'modified' && wordDiffSegments ? (
-              <div>
-                <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'removed')} />
-                {similarity !== undefined && (
-                  <span className="text-[0.6rem] text-amber-600 ml-2">
-                    ({Math.round(similarity * 100)}% similar)
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className={type === 'added' ? 'text-green-800' : ''}>
-                {targetSentence.text}
-              </span>
-            )}
-            <TraceToSourceButton sentence={targetSentence} onClick={onTraceSource} />
-          </div>
-        ) : (
-          <span className="text-slate-300 italic">—</span>
-        )}
-      </div>
+      {/* Inline source context (expanded below the row) */}
+      {isExpanded && (
+        <InlineSourceContext
+          data={inlineContextData ?? null}
+          loading={inlineContextLoading ?? false}
+          onOpenModal={onOpenModal ?? (() => {})}
+        />
+      )}
     </div>
   );
 }
@@ -246,9 +326,13 @@ function SideBySideRow({
 interface UnifiedRowProps {
   line: UnifiedDiffLine;
   onTraceSource: (sentence: SentenceWithSource) => void;
+  expandedSentenceId?: string | null;
+  inlineContextData?: TurnContextData | null;
+  inlineContextLoading?: boolean;
+  onOpenModal?: () => void;
 }
 
-function UnifiedRow({ line, onTraceSource }: UnifiedRowProps) {
+function UnifiedRow({ line, onTraceSource, expandedSentenceId, inlineContextData, inlineContextLoading, onOpenModal }: UnifiedRowProps) {
   const getBgClass = () => {
     switch (line.type) {
       case 'added':
@@ -275,38 +359,52 @@ function UnifiedRow({ line, onTraceSource }: UnifiedRowProps) {
     }
   };
 
+  const relevantSentence = line.sourceSentence || line.targetSentence;
+  const isExpanded = relevantSentence && expandedSentenceId === relevantSentence.id;
+
   return (
-    <div className={cn('p-2 rounded text-sm flex items-start', getBgClass())}>
-      {getPrefix()}
-      <div className="flex-1">
-        {line.type === 'modified' && line.wordDiff ? (
-          <div>
-            <WordDiffDisplay segments={line.wordDiff} />
-            {line.similarity !== undefined && (
-              <span className="text-[0.6rem] text-amber-600 ml-2">
-                ({Math.round(line.similarity * 100)}% similar)
-              </span>
-            )}
-          </div>
-        ) : (
-          <span
-            className={
-              line.type === 'added'
-                ? 'text-green-800'
-                : line.type === 'removed'
-                  ? 'text-red-800'
-                  : ''
-            }
-          >
-            {line.sourceText || line.targetText}
-          </span>
+    <div>
+      <div className={cn('p-2 rounded text-sm flex items-start', getBgClass())}>
+        {getPrefix()}
+        <div className="flex-1">
+          {line.type === 'modified' && line.wordDiff ? (
+            <div>
+              <WordDiffDisplay segments={line.wordDiff} />
+              {line.similarity !== undefined && (
+                <span className="text-[0.6rem] text-amber-600 ml-2">
+                  ({Math.round(line.similarity * 100)}% similar)
+                </span>
+              )}
+            </div>
+          ) : (
+            <span
+              className={
+                line.type === 'added'
+                  ? 'text-green-800'
+                  : line.type === 'removed'
+                    ? 'text-red-800'
+                    : ''
+              }
+            >
+              {line.sourceText || line.targetText}
+            </span>
+          )}
+        </div>
+        {line.sourceSentence && (
+          <TraceToSourceButton sentence={line.sourceSentence} onClick={onTraceSource} />
+        )}
+        {line.targetSentence && !line.sourceSentence && (
+          <TraceToSourceButton sentence={line.targetSentence} onClick={onTraceSource} />
         )}
       </div>
-      {line.sourceSentence && (
-        <TraceToSourceButton sentence={line.sourceSentence} onClick={onTraceSource} />
-      )}
-      {line.targetSentence && !line.sourceSentence && (
-        <TraceToSourceButton sentence={line.targetSentence} onClick={onTraceSource} />
+
+      {/* Inline source context */}
+      {isExpanded && (
+        <InlineSourceContext
+          data={inlineContextData ?? null}
+          loading={inlineContextLoading ?? false}
+          onOpenModal={onOpenModal ?? (() => {})}
+        />
       )}
     </div>
   );
@@ -329,10 +427,17 @@ export function DiffDisplayView({
   loading = false,
 }: DiffDisplayViewProps) {
   const [viewMode, setViewMode] = useState<DiffViewMode>(initialViewMode);
+
+  // Modal context state (fallback / expanded view)
   const [contextModalOpen, setContextModalOpen] = useState(false);
   const [contextSentence, setContextSentence] = useState<SentenceWithSource | null>(null);
   const [contextData, setContextData] = useState<TurnContextData | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
+
+  // Inline context state
+  const [expandedSentenceId, setExpandedSentenceId] = useState<string | null>(null);
+  const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
+  const [inlineContextLoading, setInlineContextLoading] = useState(false);
 
   // Build maps from id to full sentence for source info lookup
   const sourceMap = useMemo(() => {
@@ -422,13 +527,22 @@ export function DiffDisplayView({
     return lines;
   }, [diff, sourceSentences, sourceMap, targetMap, textToTargetMap]);
 
-  // Handle trace to source
+  // Handle trace to source — toggles inline context
   const handleTraceSource = useCallback(async (sentence: SentenceWithSource) => {
     if (!sentence.source?.turn_hash) return;
 
-    setContextSentence(sentence);
-    setContextModalOpen(true);
-    setContextLoading(true);
+    // Toggle: if already expanded, collapse
+    if (expandedSentenceId === sentence.id) {
+      setExpandedSentenceId(null);
+      setInlineContextData(null);
+      return;
+    }
+
+    // Expand inline
+    setExpandedSentenceId(sentence.id);
+    setContextSentence(sentence); // keep for modal fallback
+    setInlineContextLoading(true);
+    setInlineContextData(null);
 
     try {
       const data = await api.fetchTurnContextCached(sentence.source.turn_hash, {
@@ -437,14 +551,20 @@ export function DiffDisplayView({
         highlightStart: sentence.source.start_char,
         highlightEnd: sentence.source.end_char,
       });
-      setContextData(data);
+      setInlineContextData(data);
     } catch {
-      // Context load failed - modal will show fallback UI
-      setContextData(null);
+      setInlineContextData(null);
     } finally {
-      setContextLoading(false);
+      setInlineContextLoading(false);
     }
-  }, []);
+  }, [expandedSentenceId]);
+
+  // Open modal from inline context "Expand" button
+  const handleOpenModal = useCallback(() => {
+    setContextData(inlineContextData);
+    setContextModalOpen(true);
+    setContextLoading(false);
+  }, [inlineContextData]);
 
   const closeContextModal = useCallback(() => {
     setContextModalOpen(false);
@@ -538,6 +658,10 @@ export function DiffDisplayView({
                 sourceSentence={sourceMap.get(s.id)}
                 targetSentence={textToTargetMap.get(s.text)}
                 onTraceSource={handleTraceSource}
+                expandedSentenceId={expandedSentenceId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onOpenModal={handleOpenModal}
               />
             ))}
 
@@ -551,6 +675,10 @@ export function DiffDisplayView({
                 wordDiff={pair.wordDiff}
                 similarity={pair.similarity}
                 onTraceSource={handleTraceSource}
+                expandedSentenceId={expandedSentenceId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onOpenModal={handleOpenModal}
               />
             ))}
 
@@ -561,6 +689,10 @@ export function DiffDisplayView({
                 type="removed"
                 sourceSentence={sourceMap.get(s.id)}
                 onTraceSource={handleTraceSource}
+                expandedSentenceId={expandedSentenceId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onOpenModal={handleOpenModal}
               />
             ))}
 
@@ -571,6 +703,10 @@ export function DiffDisplayView({
                 type="added"
                 targetSentence={targetMap.get(s.id)}
                 onTraceSource={handleTraceSource}
+                expandedSentenceId={expandedSentenceId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onOpenModal={handleOpenModal}
               />
             ))}
           </>
@@ -581,6 +717,10 @@ export function DiffDisplayView({
               key={`unified-${idx}-${line.sourceText || line.targetText}`}
               line={line}
               onTraceSource={handleTraceSource}
+              expandedSentenceId={expandedSentenceId}
+              inlineContextData={inlineContextData}
+              inlineContextLoading={inlineContextLoading}
+              onOpenModal={handleOpenModal}
             />
           ))
         )}

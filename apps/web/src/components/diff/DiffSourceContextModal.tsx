@@ -25,7 +25,7 @@ const roleLabels: Record<string, string> = {
   tool: 'Tool',
 };
 
-function TurnBubble({ turn }: { turn: TurnWithContext }) {
+export function TurnBubble({ turn }: { turn: TurnWithContext }) {
   const isUser = turn.role === 'user';
 
   const renderContent = () => {
