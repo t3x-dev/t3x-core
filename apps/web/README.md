@@ -2,7 +2,7 @@
 
 Web frontend for T3X, a canvas-based semantic version control interface built with Next.js.
 
-**Last Updated:** 2026-01-22 (Merge Workspace + A/B Test Compare + V4 Leaves)
+**Last Updated:** 2026-01-29 (V4 Pins + Conversation Context)
 
 ## Tech Stack
 
@@ -93,8 +93,9 @@ WebUI calls the standalone Hono API service via `lib/api.ts`:
 | `canvasStore` | Nodes, edges, selection state, canvas operations |
 | `projectStore` | Project list, current project, CRUD operations |
 | `agentDemoStore` | Agent Demo page state |
-| `mergeWorkspaceStore` | Merge Workspace state (decisions, preview) (NEW) |
-| `optimiserStore` | Agent Optimiser state (runs, filter) (NEW) |
+| `mergeWorkspaceStore` | Merge Workspace state (decisions, preview) |
+| `optimiserStore` | Agent Optimiser state (runs, filter) |
+| `pinsStore` | Pin state management (fetch, add, remove, update) |
 
 ## Getting Started
 
@@ -134,9 +135,14 @@ Evaluate impact before modifying the following exported interfaces:
 - **State fields**: `draftId`, `prepared`, `decisions`, `preview`
 - **Public Actions**: `loadMergeDraft`, `setDecision`, `updatePreview`, `commitMerge`
 
-### store/optimiserStore.ts (Medium Stability) (NEW)
+### store/optimiserStore.ts (Medium Stability)
 - **State fields**: `runs`, `filters`, `configurations`
 - **Public Actions**: `fetchRuns`, `setFilter`, `compareConfigurations`
+
+### store/pinsStore.ts (Medium Stability)
+- **State fields**: `pins`, `loading`
+- **Public Actions**: `fetchPins`, `addPin`, `removePin`, `updatePinAssertions`
+- **Selectors**: `isPinned()`, `getPinByRef()`
 
 ### types/nodes.ts (High Stability)
 - **Node types**: `NodeKind`, `CanvasNodeData`, `LeafType`, `BranchType`
