@@ -2,8 +2,8 @@
 
 > PIN = Source Selection + LLM Memory (One mechanism, dual purpose)
 
-**Status**: Approved for Implementation
-**Last Updated**: 2025-01-20
+**Status**: Implemented
+**Last Updated**: 2026-01-29
 **Related**: [Semantic Layer Architecture](./semantic-layer-architecture.md)
 
 ---

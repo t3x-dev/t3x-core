@@ -2,7 +2,7 @@
 
 A comprehensive dictionary of all APIs, functions, and their locations for project owners.
 
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-29
 
 ---
 
@@ -46,6 +46,22 @@ The API is a standalone Hono server running independently from the Next.js WebUI
 | GET | `/v1/conversations/:id` | Get conversation | `conversations.ts` |
 | PUT | `/v1/conversations/:id` | Update conversation | `conversations.ts` |
 | DELETE | `/v1/conversations/:id` | Delete conversation | `conversations.ts` |
+| GET | `/v1/conversations/:id/context` | Get context config | `conversations.ts` |
+| PUT | `/v1/conversations/:id/context` | Update context config | `conversations.ts` |
+| GET | `/v1/conversations/:id/memory` | Get built memory string | `conversations.ts` |
+| GET | `/v1/conversations/:id/context-export` | Export context as file | `conversations.ts` |
+
+**Conversation Context (V4)**：
+
+用于控制对话的 LLM 上下文配置。
+
+- `GET /context`: 获取上下文配置，`null` 表示使用所有项目 pins
+- `PUT /context`: 设置上下文配置
+  - `selected_pin_ids: null` = 使用所有 pins（默认）
+  - `selected_pin_ids: []` = 无 pins（全新对话）
+  - `selected_pin_ids: [...ids]` = 仅使用指定的 pins
+- `GET /memory`: 获取构建好的上下文字符串，供 LLM 使用
+- `GET /context-export`: 导出上下文为文件（支持 `?format=json` 或 `?format=markdown`）
 
 ### Turns
 
@@ -71,8 +87,7 @@ The extracted rings populate `rings_json` with keywords, entities, facets, and s
 | POST | `/v1/commits` | Create commit | `commits.ts` |
 | GET | `/v1/commits/:hash` | Get commit by hash | `commits.ts` |
 
-### CommitV3 (NEW)
-
+### CommitV3 
 | Method | Endpoint | Description | File |
 |--------|----------|-------------|------|
 | GET | `/v1/commits-v3` | List CommitV3 commits | `commits-v3.openapi.ts` |
@@ -197,8 +212,7 @@ The extracted rings populate `rings_json` with keywords, entities, facets, and s
 }
 ```
 
-### Merge Drafts (NEW)
-
+### Merge Drafts 
 | Method | Endpoint | Description | File |
 |--------|----------|-------------|------|
 | POST | `/v1/merge/drafts` | Create a new merge draft | `merge.openapi.ts` |
@@ -311,7 +325,17 @@ The extracted rings populate `rings_json` with keywords, entities, facets, and s
   "committed_at": "ISO8601",
   "content": {
     "sentences": [
-      { "id": "s_abc123", "text": "We want to visit Tokyo in spring." }
+      {
+        "id": "s_abc123",
+        "text": "We want to visit Tokyo in spring.",
+        "confidence": 0.95,
+        "source_ref": {
+          "conversation_id": "conv_...",
+          "turn_hash": "sha256:...",
+          "start_char": 0,
+          "end_char": 35
+        }
+      }
     ]
   },
   "project_id": "proj_...",
@@ -343,6 +367,17 @@ The extracted rings populate `rings_json` with keywords, entities, facets, and s
 | DELETE | `/v1/leaves/:id` | Delete leaf | `leaves.openapi.ts` |
 | GET | `/v1/commits/:hash/leaves` | List leaves by commit | `leaves.openapi.ts` |
 | GET | `/v1/projects/:projectId/leaves` | List leaves by project | `leaves.openapi.ts` |
+| POST | `/v1/leaves/:id/generate` | Generate output using Claude API | `leaves.openapi.ts` |
+| POST | `/v1/leaves/:id/validate` | Validate output against constraints | `leaves.openapi.ts` |
+| POST | `/v1/commits/:hash/leaves/batch` | Batch create and generate leaves (max 10) | `leaves.openapi.ts` |
+
+### Leaf History (V4 NEW)
+
+| Method | Endpoint | Description | File |
+|--------|----------|-------------|------|
+| GET | `/v1/leaves/:id/history` | List generation history | `leaves.openapi.ts` |
+| POST | `/v1/leaves/:id/restore` | Restore output from history | `leaves.openapi.ts` |
+| DELETE | `/v1/leaf-history/:id` | Delete history entry | `leaves.openapi.ts` |
 
 **Leaf 数据模型** (V4 架构)：
 ```json
@@ -710,8 +745,7 @@ const engine = createDiffEngine({ similarityThreshold: 0.8 });
 const result = engine.computeTwoWay(baseSegments, targetSegments);
 const threeWay = engine.computeThreeWay(base, ours, theirs);
 
-// Word-level diff (NEW)
-import { computeWordDiff } from '@t3x/core';
+// Word-level diff import { computeWordDiff } from '@t3x/core';
 const wordDiff = computeWordDiff("Visit Tokyo in spring.", "Visit Tokyo in autumn.");
 // => [{ type: "equal", text: "Visit Tokyo in " }, { type: "delete", text: "spring" }, ...]
 ```
@@ -739,8 +773,7 @@ const engine = createMergeEngine({ autoResolve: true });
 const result = engine.merge(baseFacets, oursFacets, theirsFacets);
 const resolved = engine.resolveConflicts(result, resolutions);
 
-// Two-way merge (NEW)
-import { prepareMerge, executeMerge } from '@t3x/core';
+// Two-way merge import { prepareMerge, executeMerge } from '@t3x/core';
 const analysis = prepareMerge(sourceCommit.content, targetCommit.content);
 // User reviews similar_pairs and makes decisions
 const merged = executeMerge(analysis, decisions);
@@ -878,8 +911,9 @@ const { data, loading, error, refetch } = useApi('/api/v1/projects');
 | `useProjectStore` | `projectStore.ts` | Project state management |
 | `useCanvasStore` | `canvasStore.ts` | Canvas/node state |
 | `useAgentDemoStore` | `agentDemoStore.ts` | Agent demo state |
-| `useMergeWorkspaceStore` | `mergeWorkspaceStore.ts` | Merge workspace state (NEW) |
-| `useOptimiserStore` | `optimiserStore.ts` | Agent Optimiser state (NEW) |
+| `useMergeWorkspaceStore` | `mergeWorkspaceStore.ts` | Merge workspace state |
+| `useOptimiserStore` | `optimiserStore.ts` | Agent Optimiser state |
+| `usePinsStore` | `pinsStore.ts` | Pin state management (V4) |
 
 **Usage:**
 ```typescript
@@ -931,3 +965,4 @@ const { draftId, prepared, setDecision } = useMergeWorkspaceStore();
 | 2.5 | 2026-01-19 | Replaced Merge Results with Merge Drafts; Added Runs A/B test endpoints (filters, configurations, compare); Added trace storage fields |
 | 2.6 | 2026-01-22 | Added V4 architecture: Leaves API, CommitsV4/Leaves/Pins/ConversationContexts Storage functions |
 | 2.7 | 2026-01-23 | Added CommitsV4 API, Pins API; Updated Leaf/Constraint/Assertion types to match code; Added ensureMainBranch for branch HEAD auto-update |
+| 2.8 | 2026-01-29 | Added Leaf Generation/Validation/Batch endpoints, Leaf History endpoints, Conversation Context API, pinsStore |

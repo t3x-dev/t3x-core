@@ -2,8 +2,8 @@
 
 > Clean separation: Commits = Knowledge (Sentences), Leaves = Application (Constraints)
 
-**Status**: Proposed
-**Last Updated**: 2025-01-20
+**Status**: Implemented
+**Last Updated**: 2026-01-29
 
 ---
 
