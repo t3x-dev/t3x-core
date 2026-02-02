@@ -695,7 +695,7 @@ describe('Canvas Store - Unit Node Model', () => {
             onlyInTarget: [],
           },
         },
-      } as Parameters<typeof selectCanExecuteMerge>[0];
+      } as unknown as Parameters<typeof selectCanExecuteMerge>[0];
 
       expect(selectCanExecuteMerge(state)).toBe(true);
     });
@@ -733,7 +733,7 @@ describe('Canvas Store - Unit Node Model', () => {
             onlyInTarget: [],
           },
         },
-      } as Parameters<typeof selectCanExecuteMerge>[0];
+      } as unknown as Parameters<typeof selectCanExecuteMerge>[0];
 
       expect(selectCanExecuteMerge(state)).toBe(false);
     });

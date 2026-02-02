@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 /**
  * Real DiffDisplayView UI E2E Test
@@ -26,8 +26,6 @@ test.describe('DiffDisplayView Real UI Test', () => {
       if (commitsData.data.commits.length >= 2) {
         projectId = project.project_id;
         projectName = project.name;
-        console.log(`Found project with commits: ${projectName} (${projectId})`);
-        console.log(`  - Has ${commitsData.data.commits.length} commits`);
         break;
       }
     }
@@ -38,140 +36,130 @@ test.describe('DiffDisplayView Real UI Test', () => {
   });
 
   test('Canvas page loads and shows commits', async ({ page }) => {
-    // Visit homepage first
+    // Visit homepage and wait for project list to render
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // Click on the project to navigate using exact text match
     // Use a more specific selector that targets the project card
-    const projectCard = page.locator(`[data-testid="project-card"]:has-text("${projectName}"), a:has-text("${projectName}")`).first();
+    const projectCard = page
+      .locator(
+        `[data-testid="project-card"]:has-text("${projectName}"), a:has-text("${projectName}")`
+      )
+      .first();
 
     // If that doesn't work, fall back to clicking any element with the exact project name
-    const clickTarget = await projectCard.isVisible() ? projectCard : page.getByText(projectName, { exact: true });
+    const isCardVisible = await projectCard.isVisible();
+    const clickTarget = isCardVisible ? projectCard : page.getByText(projectName, { exact: true });
     await clickTarget.click();
 
     // Wait for navigation and canvas to load
-    await page.waitForURL(/\/project\//, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Take screenshot
     await page.screenshot({ path: 'test-results/canvas-page.png', fullPage: true });
 
     // Check if canvas is visible
     const canvas = page.locator('.react-flow');
-    const hasCanvas = await canvas.isVisible({ timeout: 10000 }).catch(() => false);
-
-    console.log(`Canvas visible: ${hasCanvas}`);
-
-    if (!hasCanvas) {
-      // Check page content for errors
-      const pageText = await page.locator('body').innerText();
-      console.log('Page content:', pageText.substring(0, 500));
-    }
-
-    expect(hasCanvas).toBe(true);
+    await expect(canvas).toBeVisible();
   });
 
   test('Can open commit modal and see Compare section', async ({ page }) => {
-    // Visit homepage first
+    // Visit homepage and wait for project list to render
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // Click on the project using exact text match
     await page.getByText(projectName, { exact: true }).click();
 
     // Wait for navigation and canvas
-    await page.waitForURL(/\/project\//, { timeout: 10000 }).catch(() => {});
-    await page.waitForSelector('.react-flow', { timeout: 30000 });
-    await page.waitForTimeout(3000);
+    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
-    // Find and click a commit node
+    // Wait for nodes to render inside the canvas
     const nodes = page.locator('.react-flow__node');
+    await nodes.first().waitFor({ state: 'visible', timeout: 15000 });
     const nodeCount = await nodes.count();
-    console.log(`Found ${nodeCount} nodes`);
 
     expect(nodeCount).toBeGreaterThan(0);
 
     // Click first node
     await nodes.first().click();
-    await page.waitForTimeout(1000);
+
+    // Wait for sidebar to appear after clicking
+    const sidebar = page.locator('aside').first();
+    await sidebar.waitFor({ state: 'visible', timeout: 10000 });
 
     // Take screenshot of modal
     await page.screenshot({ path: 'test-results/commit-modal.png' });
 
-    // Check for Compare section (may need to scroll)
-    const sidebar = page.locator('aside').first();
-    if (await sidebar.isVisible()) {
-      // Scroll to bottom
-      await sidebar.evaluate(el => el.scrollTop = el.scrollHeight);
-      await page.waitForTimeout(500);
-    }
+    // Scroll sidebar to bottom to reveal Compare section
+    await sidebar.evaluate((el) => (el.scrollTop = el.scrollHeight));
 
     // Look for Compare section
     const compareText = page.locator('text=Compare').first();
-    const hasCompare = await compareText.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasCompare = await compareText.isVisible();
 
     await page.screenshot({ path: 'test-results/modal-scrolled.png' });
-    console.log(`Compare section visible: ${hasCompare}`);
 
     // If not found, check if this is a V4 commit (no compare) or staging commit
     if (!hasCompare) {
-      const hasV4Badge = await page.locator('text=V4').isVisible().catch(() => false);
-      const hasStaging = await page.locator('text=staging').isVisible().catch(() => false);
-      console.log(`V4 commit: ${hasV4Badge}, Staging: ${hasStaging}`);
+      const _hasV4Badge = await page.locator('text=V4').isVisible();
+      const _hasStaging = await page.locator('text=staging').isVisible();
 
       // Try another node
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
 
       if (nodeCount > 1) {
+        await nodes.nth(1).waitFor({ state: 'visible', timeout: 5000 });
         await nodes.nth(1).click();
-        await page.waitForTimeout(1000);
+        await sidebar.waitFor({ state: 'visible', timeout: 10000 });
         await page.screenshot({ path: 'test-results/second-commit-modal.png' });
       }
     }
   });
 
   test('Can run diff comparison', async ({ page }) => {
-    // Visit homepage first
+    // Visit homepage and wait for project list to render
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // Click on the project using exact text match
     await page.getByText(projectName, { exact: true }).click();
 
     // Wait for navigation and canvas
-    await page.waitForURL(/\/project\//, { timeout: 10000 }).catch(() => {});
-    await page.waitForSelector('.react-flow', { timeout: 30000 });
-    await page.waitForTimeout(3000);
+    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
-    // Click a commit node
+    // Wait for nodes to render and click a commit node
     const nodes = page.locator('.react-flow__node');
+    await nodes.first().waitFor({ state: 'visible', timeout: 15000 });
     await nodes.first().click();
-    await page.waitForTimeout(1000);
+
+    // Wait for sidebar to appear
+    const sidebar = page.locator('aside').first();
+    await sidebar.waitFor({ state: 'visible', timeout: 10000 });
 
     // Scroll sidebar to see Compare section
-    const sidebar = page.locator('aside').first();
-    if (await sidebar.isVisible()) {
-      await sidebar.evaluate(el => el.scrollTop = el.scrollHeight);
-      await page.waitForTimeout(500);
-    }
+    await sidebar.evaluate((el) => (el.scrollTop = el.scrollHeight));
 
     // Find Compare with... button
     const compareBtn = page.locator('button:has-text("Compare with")');
-    const hasCmpBtn = await compareBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasCmpBtn = await compareBtn.isVisible();
 
     if (!hasCmpBtn) {
-      console.log('Compare button not found on this commit');
       await page.screenshot({ path: 'test-results/no-compare-btn.png' });
 
       // This might be a V3 commit without enough siblings, or a V4 commit
       // Check commit type
-      const isV3 = await page.locator('text=V3').isVisible().catch(() => false);
-      console.log(`Is V3 commit: ${isV3}`);
+      const isV3 = await page.locator('text=V3').isVisible();
 
       // Skip if not V3 or no compare button
       test.skip(!isV3, 'Not a V3 commit with compare capability');
@@ -180,37 +168,32 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
     // Click Compare button
     await compareBtn.click();
-    await page.waitForTimeout(500);
 
-    // Select from dropdown
+    // Wait for dropdown to appear
     const select = page.locator('select').first();
+    await select.waitFor({ state: 'visible', timeout: 5000 });
     const options = await select.locator('option').allTextContents();
-    console.log('Dropdown options:', options);
 
     if (options.length > 1) {
       await select.selectOption({ index: 1 });
-      await page.waitForTimeout(500);
 
       // Click Run Diff
       const runDiff = page.locator('button:has-text("Run Diff")');
       await runDiff.click();
 
-      // Wait for diff to load
-      await page.waitForTimeout(3000);
+      // Wait for diff results to appear
+      const diffIndicator = page
+        .locator('text=identical')
+        .or(page.locator('text=Unified').or(page.locator('text=Side-by-side')))
+        .first();
+      await diffIndicator.waitFor({ state: 'visible', timeout: 15000 });
+
       await page.screenshot({ path: 'test-results/diff-result.png' });
 
       // Check for DiffDisplayView elements
-      const hasDiff = await page.locator('text=identical').or(
-        page.locator('text=Unified').or(
-          page.locator('text=Side-by-side')
-        )
-      ).first().isVisible({ timeout: 5000 }).catch(() => false);
-
-      console.log(`DiffDisplayView visible: ${hasDiff}`);
-      expect(hasDiff).toBe(true);
+      await expect(diffIndicator).toBeVisible();
     } else {
-      console.log('Not enough commits to compare');
-      test.skip();
+      test.skip(true, 'Not enough commits to compare');
     }
   });
 });

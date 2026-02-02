@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 /**
  * Full DiffDisplayView E2E Test
@@ -11,7 +11,6 @@ const API_BASE = 'http://localhost:8000/api/v1';
 
 test.describe('DiffDisplayView Full E2E', () => {
   test.describe.configure({ mode: 'serial' });
-  test.setTimeout(60000); // Increase timeout to 60 seconds
 
   let projectId: string;
   let projectName: string;
@@ -31,7 +30,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const projectData = await projectRes.json();
     expect(projectData.success).toBe(true);
     projectId = projectData.data.project_id;
-    console.log(`Created project: ${projectName} (${projectId})`);
 
     // 2. Create FIRST conversation for commit 1
     const conv1Res = await request.post(`${API_BASE}/conversations`, {
@@ -43,7 +41,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const conv1Data = await conv1Res.json();
     expect(conv1Data.success).toBe(true);
     conversation1Id = conv1Data.data.conversation_id;
-    console.log(`Created conversation 1: ${conversation1Id}`);
 
     // 3. Create turn in first conversation
     const turn1Res = await request.post(`${API_BASE}/turns`, {
@@ -57,7 +54,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const turn1Data = await turn1Res.json();
     expect(turn1Data.success).toBe(true);
     turn1Hash = turn1Data.data.turn_hash;
-    console.log(`Created turn 1: ${turn1Hash}`);
 
     // 4. Create SECOND conversation for commit 2
     const conv2Res = await request.post(`${API_BASE}/conversations`, {
@@ -69,7 +65,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const conv2Data = await conv2Res.json();
     expect(conv2Data.success).toBe(true);
     conversation2Id = conv2Data.data.conversation_id;
-    console.log(`Created conversation 2: ${conversation2Id}`);
 
     // 5. Create turn in second conversation
     const turn2Res = await request.post(`${API_BASE}/turns`, {
@@ -77,13 +72,13 @@ test.describe('DiffDisplayView Full E2E', () => {
         project_id: projectId,
         conversation_id: conversation2Id,
         role: 'assistant',
-        content: 'Got it! Dark mode, $3000 budget, Friday deadline. I will also schedule a meeting for Monday.',
+        content:
+          'Got it! Dark mode, $3000 budget, Friday deadline. I will also schedule a meeting for Monday.',
       },
     });
     const turn2Data = await turn2Res.json();
     expect(turn2Data.success).toBe(true);
     turn2Hash = turn2Data.data.turn_hash;
-    console.log(`Created turn 2: ${turn2Hash}`);
 
     // 6. Create first V3 commit with sentences from turn 1
     const commit1Res = await request.post(`${API_BASE}/commits-v3`, {
@@ -93,9 +88,21 @@ test.describe('DiffDisplayView Full E2E', () => {
         message: 'Initial requirements',
         content: {
           sentences: [
-            { id: 's1', text: 'User prefers dark mode', source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 } },
-            { id: 's2', text: 'Budget is $3000', source: { turn_hash: turn1Hash, start_char: 46, end_char: 61 } },
-            { id: 's3', text: 'Deadline is Friday', source: { turn_hash: turn1Hash, start_char: 66, end_char: 84 } },
+            {
+              id: 's1',
+              text: 'User prefers dark mode',
+              source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 },
+            },
+            {
+              id: 's2',
+              text: 'Budget is $3000',
+              source: { turn_hash: turn1Hash, start_char: 46, end_char: 61 },
+            },
+            {
+              id: 's3',
+              text: 'Deadline is Friday',
+              source: { turn_hash: turn1Hash, start_char: 66, end_char: 84 },
+            },
           ],
         },
         author: { name: 'E2E Tester' },
@@ -105,7 +112,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
     commit1Hash = commit1Data.data.hash;
-    console.log(`Created commit 1: ${commit1Hash}`);
 
     // 7. Create second V3 commit with modified sentences from turn 2
     const commit2Res = await request.post(`${API_BASE}/commits-v3`, {
@@ -116,9 +122,21 @@ test.describe('DiffDisplayView Full E2E', () => {
         parents: [commit1Hash],
         content: {
           sentences: [
-            { id: 's1', text: 'User prefers dark mode', source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 } },
-            { id: 's2', text: 'Budget is $3000', source: { turn_hash: turn2Hash, start_char: 11, end_char: 26 } },
-            { id: 's4', text: 'Meeting scheduled for Monday', source: { turn_hash: turn2Hash, start_char: 61, end_char: 89 } },
+            {
+              id: 's1',
+              text: 'User prefers dark mode',
+              source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 },
+            },
+            {
+              id: 's2',
+              text: 'Budget is $3000',
+              source: { turn_hash: turn2Hash, start_char: 11, end_char: 26 },
+            },
+            {
+              id: 's4',
+              text: 'Meeting scheduled for Monday',
+              source: { turn_hash: turn2Hash, start_char: 61, end_char: 89 },
+            },
             // s3 (Deadline) removed
           ],
         },
@@ -129,11 +147,6 @@ test.describe('DiffDisplayView Full E2E', () => {
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
     commit2Hash = commit2Data.data.hash;
-    console.log(`Created commit 2: ${commit2Hash}`);
-
-    console.log('\n=== Test Data Created ===');
-    console.log(`Project: ${projectName}`);
-    console.log(`Commits: ${commit1Hash.slice(0, 12)}... → ${commit2Hash.slice(0, 12)}...`);
   });
 
   test('API data is correct', async ({ request }) => {
@@ -151,98 +164,93 @@ test.describe('DiffDisplayView Full E2E', () => {
 
     // Verify parent relationship
     expect(data2.data.parents).toContain(commit1Hash);
-
-    console.log('API data verified');
   });
 
   test('Canvas loads with commits', async ({ page }) => {
-    // Visit homepage
+    // Visit homepage and wait for project list to render
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
 
     // Click on project
     await page.getByText(projectName, { exact: true }).click();
 
-    // Wait for canvas
-    await page.waitForURL(/\/project\//, { timeout: 10000 }).catch(() => {});
-    await page.waitForSelector('.react-flow', { timeout: 30000 });
-    await page.waitForTimeout(5000); // Wait for data to load
+    // Wait for canvas to render
+    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
-    // Wait for sentences to load (not showing "Loading...")
-    await page.waitForFunction(
-      () => !document.body.innerText.includes('Loading...'),
-      { timeout: 15000 }
-    ).catch(() => {});
-    await page.waitForTimeout(1000);
+    // Wait for "Loading..." to disappear (sentences loaded)
+    await page
+      .locator('text=Loading...')
+      .waitFor({ state: 'hidden', timeout: 30000 })
+      .catch(() => {});
 
     // Screenshot
     await page.screenshot({ path: 'test-results/diff-full-canvas.png' });
 
     // Verify at least one node (Canvas may show head commit only)
     const nodes = page.locator('.react-flow__node');
+    await expect(nodes.first()).toBeVisible({ timeout: 15000 });
     const nodeCount = await nodes.count();
-    console.log(`Found ${nodeCount} nodes`);
 
     expect(nodeCount).toBeGreaterThanOrEqual(1);
 
     // Check page has loaded properly (either commit message or committed state)
     const pageText = await page.locator('body').innerText();
-    const hasCommitContent = pageText.includes('Committed') ||
-                            pageText.includes('Initial requirements') ||
-                            pageText.includes('Updated requirements') ||
-                            pageText.includes('SENTENCES');
+    const hasCommitContent =
+      pageText.includes('Committed') ||
+      pageText.includes('Initial requirements') ||
+      pageText.includes('Updated requirements') ||
+      pageText.includes('SENTENCES');
 
-    console.log(`Has commit content: ${hasCommitContent}`);
     expect(hasCommitContent).toBe(true);
   });
 
   test('Can open commit modal with View full', async ({ page }) => {
     // Navigate to project
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
     await page.getByText(projectName, { exact: true }).click();
-    await page.waitForSelector('.react-flow', { timeout: 30000 });
-    await page.waitForTimeout(5000);
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
-    // Wait for sentences to load
-    await page.waitForFunction(
-      () => !document.body.innerText.includes('Loading...'),
-      { timeout: 15000 }
-    ).catch(() => {});
-    await page.waitForTimeout(1000);
+    // Wait for "Loading..." to disappear
+    await page
+      .locator('text=Loading...')
+      .waitFor({ state: 'hidden', timeout: 30000 })
+      .catch(() => {});
 
     // Find View full button
     const viewFullBtn = page.getByText('View full').first();
-    const hasViewFull = await viewFullBtn.isVisible({ timeout: 10000 }).catch(() => false);
-
-    console.log(`View full button visible: ${hasViewFull}`);
+    const hasViewFull = await viewFullBtn.isVisible({ timeout: 10000 });
 
     if (hasViewFull) {
       // Click using dispatchEvent to bypass pointer interception
-      await viewFullBtn.evaluate((el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-      await page.waitForTimeout(2000);
+      await viewFullBtn.evaluate((el) =>
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      );
 
       // Wait for modal to open (check for modal header)
-      const modalOpened = await page.locator('text=Commit:').isVisible({ timeout: 5000 }).catch(() => false);
-      console.log(`Modal opened: ${modalOpened}`);
+      const modalHeader = page.locator('text=Commit:');
+      const modalOpened = await modalHeader.isVisible({ timeout: 5000 });
 
       // Screenshot
       await page.screenshot({ path: 'test-results/diff-full-modal.png' });
 
       // Check for Compare section (UI shows "COMPARE" in uppercase)
-      const hasCompare = await page.locator('text=COMPARE').isVisible().catch(() => false);
-      const hasCompareBtn = await page.locator('text=Compare with').isVisible().catch(() => false);
-      console.log(`Compare section visible: ${hasCompare}, Compare button visible: ${hasCompareBtn}`);
+      const hasCompare = await page.locator('text=COMPARE').isVisible();
+      const hasCompareBtn = await page.locator('text=Compare with').isVisible();
 
       expect(hasCompare || hasCompareBtn || modalOpened).toBe(true);
     } else {
       // Fallback: Click SOURCES to open modal, then check if we can switch view
-      console.log('View full not found, trying SOURCES click');
       const sourcesBtn = page.locator('text=SOURCES').first();
       await sourcesBtn.click();
-      await page.waitForTimeout(2000);
+
+      // Wait for modal content to appear
+      await page.locator('aside').first().waitFor({ state: 'visible', timeout: 5000 });
 
       await page.screenshot({ path: 'test-results/diff-full-modal-sources.png' });
     }
@@ -254,58 +262,46 @@ test.describe('DiffDisplayView Full E2E', () => {
     page.on('response', (response) => {
       if (response.url().includes('/turns/') && response.url().includes('/context')) {
         turnContextResponses.push({ url: response.url(), status: response.status() });
-        console.log(`Turn context response: ${response.status()} - ${response.url().slice(0, 80)}...`);
       }
     });
 
     // Navigate to project
     await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .getByText(projectName, { exact: true })
+      .waitFor({ state: 'visible', timeout: 15000 });
     await page.getByText(projectName, { exact: true }).click();
-    await page.waitForSelector('.react-flow', { timeout: 30000 });
+    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
-    // Wait longer for sentences to load and component to stabilize
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await page.waitForTimeout(2000);
-      const stillLoading = await page.locator('text=Loading...').isVisible().catch(() => false);
-      if (!stillLoading) {
-        console.log(`Loading completed after ${(attempt + 1) * 2} seconds`);
-        break;
-      }
-      console.log(`Still loading... (attempt ${attempt + 1})`);
-    }
-
-    // Log network status
-    console.log(`Turn context API calls: ${turnContextResponses.length}`);
-    turnContextResponses.forEach((r, i) => console.log(`  ${i + 1}. ${r.status}`));
-
-    // Extra wait for component stability
-    await page.waitForTimeout(3000);
+    // Wait for "Loading..." to disappear
+    await page
+      .locator('text=Loading...')
+      .waitFor({ state: 'hidden', timeout: 30000 })
+      .catch(() => {});
 
     // Screenshot before trying to click
     await page.screenshot({ path: 'test-results/diff-full-before-click.png' });
 
     // Try to find and click View full with force
     const viewFullBtn = page.getByText('View full').first();
-    const hasViewFull = await viewFullBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasViewFull = await viewFullBtn.isVisible({ timeout: 5000 });
 
     if (!hasViewFull) {
-      console.log('View full button not visible - trying alternative: click SOURCES to open modal');
       await page.screenshot({ path: 'test-results/diff-full-no-viewfull.png' });
 
       // Alternative: click SOURCES to open modal, then navigate to commit view
       const sourcesBtn = page.locator('text=SOURCES').first();
-      if (await sourcesBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const sourcesVisible = await sourcesBtn.isVisible({ timeout: 3000 });
+      if (sourcesVisible) {
         await sourcesBtn.click({ force: true });
-        await page.waitForTimeout(2000);
+
+        // Wait for modal content to appear
+        await page.locator('aside').first().waitFor({ state: 'visible', timeout: 5000 });
 
         // Look for a way to switch to commit view or find Compare section
         const pageText = await page.locator('body').innerText();
-        console.log('Modal content check - has Compare:', pageText.includes('Compare'));
 
         if (!pageText.includes('Compare')) {
-          console.log('Compare section not in conversation view - need commit view');
           test.skip();
           return;
         }
@@ -315,70 +311,70 @@ test.describe('DiffDisplayView Full E2E', () => {
       }
     } else {
       // Use dispatchEvent to bypass pointer interception
-      await viewFullBtn.evaluate((el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-      await page.waitForTimeout(2000);
+      await viewFullBtn.evaluate((el) =>
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      );
 
       // Wait for modal
-      const modalOpened = await page.locator('text=Commit:').isVisible({ timeout: 5000 }).catch(() => false);
-      console.log(`Modal opened in diff test: ${modalOpened}`);
+      await page
+        .locator('text=Commit:')
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .catch(() => {});
     }
 
     // Look for Compare section
     const compareBtn = page.locator('button:has-text("Compare with")');
-    const hasCompareBtn = await compareBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasCompareBtn = await compareBtn.isVisible({ timeout: 5000 });
 
     if (!hasCompareBtn) {
       // Scroll sidebar
       const sidebar = page.locator('aside').first();
-      await sidebar.evaluate(el => el.scrollTop = el.scrollHeight);
-      await page.waitForTimeout(500);
+      await sidebar.evaluate((el) => (el.scrollTop = el.scrollHeight));
     }
 
     const compareBtnAfterScroll = page.locator('button:has-text("Compare with")');
-    if (await compareBtnAfterScroll.isVisible({ timeout: 3000 }).catch(() => false)) {
+    const compareBtnVisible = await compareBtnAfterScroll.isVisible({ timeout: 3000 });
+    if (compareBtnVisible) {
       await compareBtnAfterScroll.click();
-      await page.waitForTimeout(500);
 
-      // Select target commit
+      // Wait for the select dropdown to appear
       const select = page.locator('select').first();
+      await select.waitFor({ state: 'visible', timeout: 5000 });
+
       const options = await select.locator('option').allTextContents();
-      console.log(`Dropdown options: ${options.join(', ')}`);
 
       if (options.length > 1) {
         await select.selectOption({ index: 1 });
-        await page.waitForTimeout(500);
 
-        // Click Run Diff
+        // Click Run Diff and wait for results
         await page.locator('button:has-text("Run Diff")').click();
-        await page.waitForTimeout(3000);
+
+        // Wait for diff results to appear by checking for diff-related content
+        await expect(page.locator('body')).toContainText(
+          /(identical|Unified|Side-by-side|only in)/,
+          { timeout: 15000 }
+        );
 
         // Screenshot result
         await page.screenshot({ path: 'test-results/diff-full-result.png' });
 
         // Verify DiffDisplayView
         const pageText = await page.locator('body').innerText();
-        const hasDiffView = pageText.includes('identical') ||
-                          pageText.includes('Unified') ||
-                          pageText.includes('Side-by-side') ||
-                          pageText.includes('only in');
+        const hasDiffView =
+          pageText.includes('identical') ||
+          pageText.includes('Unified') ||
+          pageText.includes('Side-by-side') ||
+          pageText.includes('only in');
 
-        console.log(`DiffDisplayView visible: ${hasDiffView}`);
         expect(hasDiffView).toBe(true);
       }
     } else {
-      console.log('Compare button not found');
       await page.screenshot({ path: 'test-results/diff-full-no-compare.png' });
     }
   });
 
   test('Provides manual verification URL', async () => {
-    console.log('\n═══════════════════════════════════════════════════════════════');
-    console.log('Manual Verification:');
-    console.log(`Open: http://localhost:3000/project/${projectId}`);
-    console.log('1. Click "View full" on a commit node');
-    console.log('2. Find "Compare" section in sidebar');
-    console.log('3. Click "Compare with..." and select another commit');
-    console.log('4. Click "Run Diff" to see DiffDisplayView');
-    console.log('═══════════════════════════════════════════════════════════════\n');
+    // Verification info available via test metadata; projectId is set in beforeAll
+    expect(projectId).toBeTruthy();
   });
 });

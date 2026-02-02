@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as api from '@/lib/api';
+import type { NotifyCallback } from './canvasStoreTypes';
 
 export interface ProjectSummary {
   id: string;
@@ -11,9 +12,6 @@ export interface ProjectSummary {
   nodes: number;
   drafts: number;
 }
-
-// Callback type for notifications
-type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void;
 
 type ProjectStore = {
   projects: ProjectSummary[];
@@ -101,9 +99,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
       notify?.(`Created project "${name}"`, 'success');
       return projectSummary;
-    } catch (err) {
+    } catch (_err) {
       // Log error and notify user
-      console.warn('Failed to create project via API:', err);
       notify?.(`API unavailable - created offline project "${name}"`, 'warning');
 
       const projectSummary: ProjectSummary = {
@@ -152,7 +149,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
 
       const error = err instanceof Error ? err : new Error(String(err));
-      console.warn('Failed to delete project via API:', error);
 
       // Check if it's a 404 (already deleted) - don't restore in this case
       if (error.message.includes('404') || error.message.includes('not found')) {

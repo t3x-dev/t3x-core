@@ -111,7 +111,6 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
       onRunComplete?.(result.run_id);
     } catch (err) {
-      console.error('Failed to run E2E test:', err);
       setError(err instanceof Error ? err.message : 'Failed to run test');
       setLastRun((prev) => (prev ? { ...prev, status: 'failed' } : null));
     } finally {

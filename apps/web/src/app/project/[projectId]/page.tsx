@@ -1,6 +1,6 @@
 'use client';
 
-import { redirect, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
@@ -11,9 +11,12 @@ import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.projectId as string;
 
   const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
+  const projectsInitialized = useProjectStore((state) => state.initialized);
+  const projectsLoading = useProjectStore((state) => state.loading);
   const [mode, setMode] = useState<'editor' | 'execution'>('editor');
 
   // Canvas store for loading project data
@@ -35,8 +38,35 @@ export default function ProjectDetailPage() {
     }
   }, [projectId]);
 
+  // Show loading while projects list is still loading
+  if (!projectsInitialized || projectsLoading) {
+    return (
+      <div className="flex h-full flex-col">
+        <LoadingSpinner message="Loading project..." />
+      </div>
+    );
+  }
+
+  // Show not-found page when projects loaded but this one doesn't exist
   if (!project) {
-    redirect('/');
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
+        <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
+          <p className="text-lg font-semibold text-foreground">Project not found</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The project <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{projectId}</code>{' '}
+            does not exist or was deleted.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            type="button"
+          >
+            Go to Projects
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Show loading state

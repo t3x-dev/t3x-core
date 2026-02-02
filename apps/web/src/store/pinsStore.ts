@@ -7,11 +7,10 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import { create } from 'zustand';
 import type { Pin, PinType } from '@t3x/core';
+import { create } from 'zustand';
 import * as api from '@/lib/api';
-
-type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void;
+import type { NotifyCallback } from './canvasStoreTypes';
 
 interface PinsState {
   /** All pins for the current project */

@@ -1,16 +1,9 @@
 import type { ColorMode, Node } from '@xyflow/react';
-import {
-  Background,
-  MiniMap,
-  ReactFlow,
-  ReactFlowProvider,
-  useReactFlow,
-} from '@xyflow/react';
+import { Background, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { GitCommit, LayoutGrid, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
-import { useRouter } from 'next/navigation';
 import { AnimatedEdge } from './AnimatedEdge';
 import { canvasNodeTypes } from './CanvasNodes';
 import { NodePalette } from './NodePalette';
@@ -21,8 +14,6 @@ const edgeTypes = {
 };
 
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ZoomSlider } from '@/components/ui/zoom-slider';
 import {
   Select,
   SelectContent,
@@ -30,14 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
-import { MergePanel } from '../merge/MergePanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
@@ -90,10 +83,8 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
     modalViewMode,
     openNodeModal,
     closeNodeModal,
-    projectId,
   } = useCanvasStore();
   const notify = useProjectStore((state) => state.notifyCallback);
-  const router = useRouter();
 
   // Auto-layout handler
   const handleAutoLayout = useCallback(async () => {
@@ -114,8 +105,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       setTimeout(() => {
         fitView({ padding: 0.2, duration: 300 });
       }, 50);
-    } catch (err) {
-      console.error('Auto-layout failed:', err);
+    } catch (_err) {
       notify?.('Auto-layout failed', 'error');
     } finally {
       setIsLayouting(false);
@@ -135,13 +125,6 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       return undefined;
     }
     return state.getPendingCommitBranchMode(openNodeId);
-  });
-
-  const _canSeedPendingCommitFromConversation = useCanvasStore((state) => {
-    if (!openNodeId) {
-      return false;
-    }
-    return state.canCreatePendingCommitFromConversation(openNodeId);
   });
 
   // Get effective constraints for pending commit nodes
@@ -372,7 +355,6 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create node';
         notify?.(message, 'error');
-        console.error('Failed to add node:', err);
       }
     });
   };
@@ -402,7 +384,6 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to create node';
           notify?.(message, 'error');
-          console.error('Failed to add node:', err);
         }
       });
     },
@@ -591,7 +572,8 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               disabled={!hasMainCommits}
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode !== 'main' && 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                highlight?.mode !== 'main' &&
+                  'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
               Main
@@ -609,7 +591,8 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               disabled={!hasBranchCommits}
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode !== 'branch' && 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                highlight?.mode !== 'branch' &&
+                  'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
               Branch
@@ -780,7 +763,8 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               </div>
               <p className="text-base font-medium text-foreground">No units yet</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Click the <span className="font-medium text-primary">+</span> button above or drag from the palette
+                Click the <span className="font-medium text-primary">+</span> button above or drag
+                from the palette
               </p>
             </div>
           </div>
