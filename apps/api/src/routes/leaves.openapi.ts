@@ -675,6 +675,10 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
             const result = await generateLeafOutput({
               commit,
               leaf,
+              additionalInstructions:
+                typeof leaf.config?.user_instruction === 'string'
+                  ? leaf.config.user_instruction
+                  : undefined,
             });
 
             // Update leaf with output
@@ -682,9 +686,10 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 
             // If auto-validation produced assertions, store them on the leaf
             if (result.validation && updatedLeaf) {
-              updatedLeaf = await updateLeaf(db, leaf.id, {
-                assertions: result.validation.assertions,
-              }) ?? updatedLeaf;
+              updatedLeaf =
+                (await updateLeaf(db, leaf.id, {
+                  assertions: result.validation.assertions,
+                })) ?? updatedLeaf;
             }
 
             // Save to history (non-blocking)
@@ -899,6 +904,10 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     const result = await generateLeafOutput({
       commit,
       leaf,
+      additionalInstructions:
+        typeof leaf.config?.user_instruction === 'string'
+          ? leaf.config.user_instruction
+          : undefined,
     });
 
     // Update leaf with output (storage sets generated_at automatically)

@@ -62,6 +62,8 @@ export default function LeafDetailPage() {
     text: string;
   } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
+  const [userInstruction, setUserInstruction] = useState<string>('');
+  const instructionDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load leaf data
   useEffect(() => {
@@ -82,6 +84,62 @@ export default function LeafDetailPage() {
 
     loadLeaf();
   }, [leafId]);
+
+  // Sync userInstruction from leaf config
+  useEffect(() => {
+    if (leaf?.config?.user_instruction && typeof leaf.config.user_instruction === 'string') {
+      setUserInstruction(leaf.config.user_instruction);
+    } else {
+      setUserInstruction('');
+    }
+  }, [leaf?.config?.user_instruction]);
+
+  // Cleanup instruction debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (instructionDebounceRef.current) {
+        clearTimeout(instructionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  // Handle user instruction change with debounce
+  const handleUpdateUserInstruction = useCallback(
+    (value: string) => {
+      setUserInstruction(value);
+
+      if (instructionDebounceRef.current) {
+        clearTimeout(instructionDebounceRef.current);
+      }
+
+      instructionDebounceRef.current = setTimeout(async () => {
+        if (!leaf) return;
+        const cleanValue = value.trim() || undefined;
+        const serverConfig = { ...leaf.config };
+        if (cleanValue) {
+          serverConfig.user_instruction = cleanValue;
+        } else {
+          delete serverConfig.user_instruction;
+        }
+        try {
+          setSaving(true);
+          await updateLeaf(leafId, { config: serverConfig });
+          // Merge saved config into leaf state. Use the raw value (not trimmed)
+          // to prevent the sync effect from snapping the user's in-progress typing.
+          const localConfig = { ...serverConfig };
+          if (value) {
+            localConfig.user_instruction = value;
+          }
+          setLeaf((prev) => (prev ? { ...prev, config: localConfig } : prev));
+        } catch (err) {
+          setError(err instanceof Error ? err : new Error('Failed to update instruction'));
+        } finally {
+          setSaving(false);
+        }
+      }, 500);
+    },
+    [leaf, leafId]
+  );
 
   // Load parent commit data for source content display
   useEffect(() => {
@@ -397,6 +455,8 @@ export default function LeafDetailPage() {
                 onAdd={handleAddConstraintFromSource}
                 onRemove={handleRemoveConstraint}
                 saving={saving}
+                userInstruction={userInstruction}
+                onUpdateUserInstruction={handleUpdateUserInstruction}
               />
             </section>
           )}
