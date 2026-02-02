@@ -1,9 +1,11 @@
 'use client';
 
-import { useRef, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+import { useRef, useCallback, useImperativeHandle, forwardRef, useMemo, useState } from 'react';
 import { DiffSectionHeader } from './DiffSectionHeader';
 import { DiffSentenceLine } from './DiffSentenceLine';
-import type { CommitV4Sentence } from '@/lib/api';
+import { DiffSourceContextModal } from './DiffSourceContextModal';
+import * as api from '@/lib/api';
+import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import type { Sentence } from '@/types/merge';
 import type { WordDiffSegment } from '@/types/merge';
 
@@ -43,6 +45,8 @@ function toMergeSentence(s: CommitV4Sentence): Sentence {
     confidence: s.confidence,
     source: {
       turn_hash: s.source_ref?.turn_hash,
+      start_char: s.source_ref?.start_char,
+      end_char: s.source_ref?.end_char,
     },
   };
 }
@@ -88,6 +92,16 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       },
     }));
 
+    // Inline context state
+    const [expandedSegmentId, setExpandedSegmentId] = useState<string | null>(null);
+    const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
+    const [inlineContextLoading, setInlineContextLoading] = useState(false);
+
+    // Modal state (for "Expand" button)
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalSentence, setModalSentence] = useState<Sentence | null>(null);
+    const [modalData, setModalData] = useState<TurnContextData | null>(null);
+
     const hasBaseSource = useCallback(
       (segmentId: string) => !!baseMap.get(segmentId)?.source_ref?.turn_hash,
       [baseMap]
@@ -97,21 +111,51 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [targetMap]
     );
 
-    const handleBaseSourceClick = useCallback(
-      (segmentId: string) => {
-        const s = baseMap.get(segmentId);
-        if (s) onSourceClick(toMergeSentence(s));
+    // Toggle inline context for a segment
+    const handleSourceToggle = useCallback(
+      async (segmentId: string, sentence: CommitV4Sentence) => {
+        // Toggle off
+        if (expandedSegmentId === segmentId) {
+          setExpandedSegmentId(null);
+          setInlineContextData(null);
+          return;
+        }
+
+        if (!sentence.source_ref?.turn_hash) return;
+
+        setExpandedSegmentId(segmentId);
+        setInlineContextLoading(true);
+        setInlineContextData(null);
+        setModalSentence(toMergeSentence(sentence));
+
+        try {
+          const data = await api.fetchTurnContextCached(sentence.source_ref.turn_hash, {
+            before: 2,
+            after: 2,
+            highlightStart: sentence.source_ref.start_char,
+            highlightEnd: sentence.source_ref.end_char,
+          });
+          setInlineContextData(data);
+        } catch {
+          setInlineContextData(null);
+        } finally {
+          setInlineContextLoading(false);
+        }
       },
-      [baseMap, onSourceClick]
+      [expandedSegmentId]
     );
 
-    const handleTargetSourceClick = useCallback(
-      (segmentId: string) => {
-        const s = targetMap.get(segmentId);
-        if (s) onSourceClick(toMergeSentence(s));
-      },
-      [targetMap, onSourceClick]
-    );
+    // Open modal from inline "Expand" button
+    const handleExpandModal = useCallback(() => {
+      setModalData(inlineContextData);
+      setModalOpen(true);
+    }, [inlineContextData]);
+
+    const closeModal = useCallback(() => {
+      setModalOpen(false);
+      setModalSentence(null);
+      setModalData(null);
+    }, []);
 
     const invertWordDiff = (wordDiff: WordDiffSegment[]): WordDiffSegment[] =>
       wordDiff.map((seg) => {
@@ -137,19 +181,35 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           <DiffSectionHeader title="Identical" count={identical.length} variant="identical" defaultCollapsed>
             <div className="divide-y">
               {identical.map((s) => (
-                <div key={s.segmentId} className="grid grid-cols-2 divide-x">
-                  <DiffSentenceLine
-                    text={s.text}
-                    type="context"
-                    hasSource={hasBaseSource(s.segmentId)}
-                    onSourceClick={() => handleBaseSourceClick(s.segmentId)}
-                  />
-                  <DiffSentenceLine
-                    text={s.text}
-                    type="context"
-                    hasSource={hasTargetSource(s.segmentId)}
-                    onSourceClick={() => handleTargetSourceClick(s.segmentId)}
-                  />
+                <div key={s.segmentId}>
+                  <div className="grid grid-cols-2 divide-x">
+                    <DiffSentenceLine
+                      text={s.text}
+                      type="context"
+                      hasSource={hasBaseSource(s.segmentId)}
+                      onSourceClick={() => {
+                        const sentence = baseMap.get(s.segmentId);
+                        if (sentence) handleSourceToggle(s.segmentId, sentence);
+                      }}
+                      expanded={expandedSegmentId === s.segmentId}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                    <DiffSentenceLine
+                      text={s.text}
+                      type="context"
+                      hasSource={hasTargetSource(s.segmentId)}
+                      onSourceClick={() => {
+                        const sentence = targetMap.get(s.segmentId);
+                        if (sentence) handleSourceToggle(`target-${s.segmentId}`, sentence);
+                      }}
+                      expanded={expandedSegmentId === `target-${s.segmentId}`}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -161,23 +221,39 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           <DiffSectionHeader title="Modified" count={modified.length} variant="modified">
             <div className="divide-y">
               {modified.map((s) => (
-                <div key={s.segmentId} className="grid grid-cols-2 divide-x">
-                  <DiffSentenceLine
-                    text={s.text}
-                    type="removed"
-                    wordDiff={s.wordDiff ? invertWordDiff(s.wordDiff) : undefined}
-                    hasSource={hasBaseSource(s.segmentId)}
-                    onSourceClick={() => handleBaseSourceClick(s.segmentId)}
-                  />
-                  <DiffSentenceLine
-                    text={s.matchedText || ''}
-                    type="added"
-                    wordDiff={s.wordDiff}
-                    hasSource={s.matchedSegmentId ? hasTargetSource(s.matchedSegmentId) : false}
-                    onSourceClick={() => {
-                      if (s.matchedSegmentId) handleTargetSourceClick(s.matchedSegmentId);
-                    }}
-                  />
+                <div key={s.segmentId}>
+                  <div className="grid grid-cols-2 divide-x">
+                    <DiffSentenceLine
+                      text={s.text}
+                      type="removed"
+                      wordDiff={s.wordDiff ? invertWordDiff(s.wordDiff) : undefined}
+                      hasSource={hasBaseSource(s.segmentId)}
+                      onSourceClick={() => {
+                        const sentence = baseMap.get(s.segmentId);
+                        if (sentence) handleSourceToggle(s.segmentId, sentence);
+                      }}
+                      expanded={expandedSegmentId === s.segmentId}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                    <DiffSentenceLine
+                      text={s.matchedText || ''}
+                      type="added"
+                      wordDiff={s.wordDiff}
+                      hasSource={s.matchedSegmentId ? hasTargetSource(s.matchedSegmentId) : false}
+                      onSourceClick={() => {
+                        if (s.matchedSegmentId) {
+                          const sentence = targetMap.get(s.matchedSegmentId);
+                          if (sentence) handleSourceToggle(`target-${s.matchedSegmentId}`, sentence);
+                        }
+                      }}
+                      expanded={expandedSegmentId === `target-${s.matchedSegmentId}`}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -189,14 +265,23 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           <DiffSectionHeader title="Removed" count={removed.length} variant="removed">
             <div className="divide-y">
               {removed.map((s) => (
-                <div key={s.segmentId} className="grid grid-cols-2 divide-x">
-                  <DiffSentenceLine
-                    text={s.text}
-                    type="removed"
-                    hasSource={hasBaseSource(s.segmentId)}
-                    onSourceClick={() => handleBaseSourceClick(s.segmentId)}
-                  />
-                  <div className="bg-muted/10 px-3 py-2" />
+                <div key={s.segmentId}>
+                  <div className="grid grid-cols-2 divide-x">
+                    <DiffSentenceLine
+                      text={s.text}
+                      type="removed"
+                      hasSource={hasBaseSource(s.segmentId)}
+                      onSourceClick={() => {
+                        const sentence = baseMap.get(s.segmentId);
+                        if (sentence) handleSourceToggle(s.segmentId, sentence);
+                      }}
+                      expanded={expandedSegmentId === s.segmentId}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                    <div className="bg-muted/10 px-3 py-2" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -208,14 +293,23 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           <DiffSectionHeader title="Added" count={added.length} variant="added">
             <div className="divide-y">
               {added.map((s) => (
-                <div key={s.segmentId} className="grid grid-cols-2 divide-x">
-                  <div className="bg-muted/10 px-3 py-2" />
-                  <DiffSentenceLine
-                    text={s.text}
-                    type="added"
-                    hasSource={hasTargetSource(s.segmentId)}
-                    onSourceClick={() => handleTargetSourceClick(s.segmentId)}
-                  />
+                <div key={s.segmentId}>
+                  <div className="grid grid-cols-2 divide-x">
+                    <div className="bg-muted/10 px-3 py-2" />
+                    <DiffSentenceLine
+                      text={s.text}
+                      type="added"
+                      hasSource={hasTargetSource(s.segmentId)}
+                      onSourceClick={() => {
+                        const sentence = targetMap.get(s.segmentId);
+                        if (sentence) handleSourceToggle(`target-${s.segmentId}`, sentence);
+                      }}
+                      expanded={expandedSegmentId === `target-${s.segmentId}`}
+                      inlineContextData={inlineContextData}
+                      inlineContextLoading={inlineContextLoading}
+                      onExpandModal={handleExpandModal}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -228,6 +322,15 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             No differences found
           </div>
         )}
+
+        {/* Source Context Modal (for "Expand" button) */}
+        <DiffSourceContextModal
+          open={modalOpen}
+          onClose={closeModal}
+          sentence={modalSentence}
+          data={modalData}
+          loading={false}
+        />
       </div>
     );
   }

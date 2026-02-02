@@ -1176,6 +1176,21 @@ export async function getCommitV4(commitHash: string): Promise<CommitV4> {
 }
 
 /**
+ * Get V4 commit ancestor chain (history)
+ * Walks parent chain via BFS from the given commit.
+ */
+export async function getCommitV4History(
+  commitHash: string,
+  limit = 50
+): Promise<CommitV4[]> {
+  const query = buildQueryString({ limit });
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/history?${query}`
+  );
+  return handleResponse<CommitV4[]>(res);
+}
+
+/**
  * Create a V4 commit (pure knowledge - sentences only)
  *
  * V4 commits use sentences[] only. Constraints belong to Leaves.
