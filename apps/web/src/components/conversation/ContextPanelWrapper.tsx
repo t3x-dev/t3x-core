@@ -32,7 +32,6 @@ export function ContextPanelWrapper({ projectId, conversationId }: ContextPanelW
         const context = await getConversationContext(conversationId);
         setContextConfig(context);
       } catch (err) {
-        console.error('Failed to load context:', err);
         // Default to null (use all pins) if fetch fails
         setContextConfig(null);
       } finally {
@@ -50,7 +49,6 @@ export function ContextPanelWrapper({ projectId, conversationId }: ContextPanelW
       setContextConfig({ selected_pin_ids: updatedContext.selected_pin_ids });
       toast.success('Context updated');
     } catch (err) {
-      console.error('Failed to update context:', err);
       const message = err instanceof Error ? err.message : 'Failed to update context';
       toast.error(message);
     } finally {

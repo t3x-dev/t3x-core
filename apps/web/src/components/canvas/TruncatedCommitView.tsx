@@ -186,12 +186,6 @@ export function TruncatedCommitView({
             });
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(
-                `[TruncatedCommitView] Failed to fetch turn context for ${turnHash}:`,
-                err
-              );
-            }
             newData.set(turnHash, {
               turnHash,
               context: null,

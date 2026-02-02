@@ -1,8 +1,7 @@
-import type { Sentence } from '@/types/merge';
 import { useState } from 'react';
 
 interface MergeIdenticalSectionProps {
-  sentences: Sentence[];
+  sentences: { id: string; text: string }[];
 }
 
 /**

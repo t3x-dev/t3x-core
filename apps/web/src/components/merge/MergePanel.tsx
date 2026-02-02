@@ -54,7 +54,7 @@ export function MergePanel() {
       await executeMerge(message);
       setMessage('');
     } catch (error) {
-      console.error('Merge execution failed:', error);
+      // Error handled silently
     }
   };
 
@@ -104,7 +104,7 @@ export function MergePanel() {
 
       {/* Identical section */}
       <div className="mb-4">
-        <MergeIdenticalSection sentences={prepared.identical as any} />
+        <MergeIdenticalSection sentences={prepared.identical} />
       </div>
 
       {/* Similar pairs */}

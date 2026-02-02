@@ -16,10 +16,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { E2ETestCard } from '@/components/optimiser/E2ETestCard';
 import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
 import { RunsTable } from '@/components/optimiser/RunsTable';
+import { showToast } from '@/components/Toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   checkRunnerHealth,
   createDeployAgent,
@@ -32,13 +40,6 @@ import {
   listEngineRuns,
   updateDeployAgent,
 } from '@/lib/api';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 export default function DeployPage() {
   const router = useRouter();
@@ -79,16 +80,16 @@ export default function DeployPage() {
               await updateDeployAgent(agent.deploy_agent_id, { status: 'idle' });
               agent.status = 'idle';
             }
-          } catch (err) {
-            console.warn(`Failed to check run status for agent ${agent.deploy_agent_id}:`, err);
+          } catch (_err) {
+            // Agent status sync is best-effort; failures are non-critical
           }
         }
       }
 
       setDeployAgents(agents);
       return agents;
-    } catch (err) {
-      console.warn('Failed to load deploy agents from database:', err);
+    } catch (_err) {
+      showToast('Failed to load deploy agents', 'error');
     }
     return [];
   }, []);
@@ -101,8 +102,8 @@ export default function DeployPage() {
         prompt_version: promptVersion || undefined,
       });
       setRuns(runsData.runs);
-    } catch (err) {
-      console.warn('Failed to load runs:', err);
+    } catch (_err) {
+      showToast('Failed to load runs', 'error');
     }
   }, []);
 
@@ -123,11 +124,10 @@ export default function DeployPage() {
         try {
           const options = await getRunFilterOptions();
           setFilterOptions(options);
-        } catch (err) {
-          console.warn('Failed to load filter options:', err);
+        } catch (_err) {
+          // Filter options are non-critical; proceed without them
         }
-      } catch (err) {
-        console.error('Failed to connect to runner:', err);
+      } catch (_err) {
         setRunnerHealthy(false);
         // Still try to load deploy agents even if runner is offline
         await loadDeployAgents();
@@ -166,9 +166,8 @@ export default function DeployPage() {
       setDeployAgents([...deployAgents, agent]);
       setNewAgent({ id: '', name: '', endpoint: '' });
       setShowAddAgent(false);
-    } catch (err) {
-      console.error('Failed to create deploy agent:', err);
-      alert('Failed to create deploy agent. Please try again.');
+    } catch (_err) {
+      showToast('Failed to create deploy agent', 'error');
     }
   };
 
@@ -220,19 +219,19 @@ export default function DeployPage() {
       try {
         const runsData = await listEngineRuns();
         setRuns(runsData.runs);
-      } catch (err) {
-        console.warn('Failed to refresh runs:', err);
+      } catch (_err) {
+        // Runs refresh is best-effort after triggering agent
       }
 
       // Show warning if any
       if (result.warning) {
-        console.warn('Run warning:', result.warning);
+        showToast(`Run warning: ${result.warning}`, 'warning');
       }
 
       // Navigate to run detail page
       router.push(`/deploy/${result.run_id}`);
-    } catch (err) {
-      console.error('Failed to run deploy agent:', err);
+    } catch (_err) {
+      showToast('Failed to run deploy agent', 'error');
 
       // Update database status to error
       await updateDeployAgent(agent.deploy_agent_id, { status: 'error' });
@@ -256,9 +255,8 @@ export default function DeployPage() {
 
       // Update local state
       setDeployAgents(deployAgents.filter((a) => a.deploy_agent_id !== agent.deploy_agent_id));
-    } catch (err) {
-      console.error('Failed to delete deploy agent:', err);
-      alert('Failed to delete deploy agent. Please try again.');
+    } catch (_err) {
+      showToast('Failed to delete deploy agent', 'error');
     }
   };
 
@@ -436,8 +434,8 @@ export default function DeployPage() {
           try {
             const options = await getRunFilterOptions();
             setFilterOptions(options);
-          } catch (err) {
-            console.warn('Failed to refresh filter options:', err);
+          } catch (_err) {
+            // Filter options refresh is best-effort
           }
           // Navigate to run detail page
           router.push(`/deploy/${runId}`);
@@ -524,11 +522,7 @@ function RecentRunsSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push('/deploy/compare')}
-          >
+          <Button variant="outline" size="sm" onClick={() => router.push('/deploy/compare')}>
             <GitCompare className="h-4 w-4" />
             Compare
           </Button>

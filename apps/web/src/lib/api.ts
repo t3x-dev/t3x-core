@@ -5,15 +5,15 @@
  * Falls back to embedded Next.js API routes if standalone API is not configured.
  */
 
+import type { Pin } from '@t3x/core';
 // Import types for CommitAnchors conversion (must be at top level)
 import type {
-  CommitAnchors,
-  SentenceWithAnchors,
-  ConfirmedAnchor,
-  AnchorType,
   AnchorConstraint,
+  AnchorType,
+  CommitAnchors,
+  ConfirmedAnchor,
+  SentenceWithAnchors,
 } from '@/types/nodes';
-import type { Pin } from '@t3x/core';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -186,7 +186,15 @@ export interface SourceRef {
 export type ApiAnchorConstraint = 'must_have' | 'mustnt_have' | 'preferred';
 
 /** Anchor type */
-export type ApiAnchorType = 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
+export type ApiAnchorType =
+  | 'number'
+  | 'money'
+  | 'duration'
+  | 'percent'
+  | 'date'
+  | 'entity'
+  | 'term'
+  | 'phrase';
 
 /** Confirmed anchor (snake_case API format) */
 export interface ApiConfirmedAnchor {
@@ -477,9 +485,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return json.data as T;
 }
 
-// Fetch with timeout wrapper
-// Supports external AbortSignal for cancellation (e.g., component unmount)
-async function fetchWithTimeout(
+// Single fetch attempt with timeout + abort support
+async function fetchOnce(
   url: string,
   options?: RequestInit,
   timeoutMs = DEFAULT_TIMEOUT,
@@ -511,6 +518,48 @@ async function fetchWithTimeout(
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener('abort', abortHandler);
   }
+}
+
+// Fetch with timeout wrapper + automatic retry for GET requests.
+// GET requests (no method or method='GET') retry up to 3 times on server/network errors
+// with exponential backoff (500ms → 1s → 2s). Non-GET requests are never retried.
+async function fetchWithTimeout(
+  url: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT,
+  externalSignal?: AbortSignal
+): Promise<Response> {
+  const method = (options?.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD';
+  const maxAttempts = isIdempotent ? 3 : 1;
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetchOnce(url, options, timeoutMs, externalSignal);
+      // Don't retry on success or client errors (4xx)
+      if (
+        response.ok ||
+        (response.status >= 400 && response.status < 500) ||
+        attempt >= maxAttempts
+      ) {
+        return response;
+      }
+      // Server error (5xx) — retry with backoff
+      lastError = new ApiError('SERVER_ERROR', `HTTP ${response.status}`);
+    } catch (err) {
+      // Never retry aborted or timed-out requests
+      if (err instanceof ApiError && (err.code === 'ABORTED' || err.code === 'TIMEOUT')) {
+        throw err;
+      }
+      lastError = err;
+      if (attempt >= maxAttempts) throw err;
+    }
+    // Exponential backoff: 500ms, 1000ms, 2000ms
+    const delay = 500 * 2 ** (attempt - 1);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  throw lastError;
 }
 
 // Helper to build query string with proper encoding
@@ -1179,10 +1228,7 @@ export async function getCommitV4(commitHash: string): Promise<CommitV4> {
  * Get V4 commit ancestor chain (history)
  * Walks parent chain via BFS from the given commit.
  */
-export async function getCommitV4History(
-  commitHash: string,
-  limit = 50
-): Promise<CommitV4[]> {
+export async function getCommitV4History(commitHash: string, limit = 50): Promise<CommitV4[]> {
   const query = buildQueryString({ limit });
   const res = await fetchWithTimeout(
     `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/history?${query}`
@@ -1392,10 +1438,15 @@ export async function exportCfpack(projectId: string): Promise<Blob> {
   const query = buildQueryString({ project_id: projectId });
   const res = await fetchWithTimeout(`${API_V1}/export/cfpack?${query}`, undefined, 30000);
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    const errorData = await res.json().catch(() => ({
+      error: {
+        code: 'EXPORT_ERROR',
+        message: `Server returned HTTP ${res.status} with non-JSON body`,
+      },
+    }));
     throw new ApiError(
       errorData.error?.code || 'EXPORT_ERROR',
-      errorData.error?.message || `HTTP ${res.status}`
+      errorData.error?.message || `Export failed: HTTP ${res.status}`
     );
   }
   return res.blob();
@@ -1405,10 +1456,15 @@ export async function exportLedger(projectId: string): Promise<Blob> {
   const query = buildQueryString({ project_id: projectId });
   const res = await fetchWithTimeout(`${API_V1}/export/ledger?${query}`, undefined, 30000);
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    const errorData = await res.json().catch(() => ({
+      error: {
+        code: 'EXPORT_ERROR',
+        message: `Server returned HTTP ${res.status} with non-JSON body`,
+      },
+    }));
     throw new ApiError(
       errorData.error?.code || 'EXPORT_ERROR',
-      errorData.error?.message || `HTTP ${res.status}`
+      errorData.error?.message || `Export failed: HTTP ${res.status}`
     );
   }
   return res.blob();
@@ -1487,75 +1543,77 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
 
 // Deploy Agent stored in database
 export interface DeployAgent {
-  deploy_agent_id: string
-  project_id: string | null
-  name: string
-  endpoint: string
-  type: string
+  deploy_agent_id: string;
+  project_id: string | null;
+  name: string;
+  endpoint: string;
+  type: string;
   auth: {
-    type: 'bearer' | 'api_key'
-    token: string
-    header?: string
-  } | null
-  status: 'idle' | 'running' | 'error'
-  last_run_id: string | null
-  last_run_at: string | null
-  created_at: string
-  updated_at: string
+    type: 'bearer' | 'api_key';
+    token: string;
+    header?: string;
+  } | null;
+  status: 'idle' | 'running' | 'error';
+  last_run_id: string | null;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DeployAgentListData {
-  deploy_agents: DeployAgent[]
-  limit: number
-  offset: number
+  deploy_agents: DeployAgent[];
+  limit: number;
+  offset: number;
 }
 
 /**
  * List deploy agents from database
  */
 export async function listDeployAgents(options?: {
-  project_id?: string
-  limit?: number
-  offset?: number
+  project_id?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<DeployAgentListData> {
   const query = buildQueryString({
     project_id: options?.project_id,
     limit: options?.limit ?? 100,
     offset: options?.offset ?? 0,
-  })
-  const res = await fetchWithTimeout(`${API_V1}/deploy-agents?${query}`)
-  return handleResponse<DeployAgentListData>(res)
+  });
+  const res = await fetchWithTimeout(`${API_V1}/deploy-agents?${query}`);
+  return handleResponse<DeployAgentListData>(res);
 }
 
 /**
  * Get deploy agent by ID from database
  */
 export async function getDeployAgent(deployAgentId: string): Promise<DeployAgent> {
-  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`)
-  return handleResponse<DeployAgent>(res)
+  const res = await fetchWithTimeout(
+    `${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`
+  );
+  return handleResponse<DeployAgent>(res);
 }
 
 /**
  * Create deploy agent in database
  */
 export async function createDeployAgent(input: {
-  id: string
-  name: string
-  endpoint: string
-  type?: 'http' | 'websocket' | 'grpc'
-  project_id?: string
+  id: string;
+  name: string;
+  endpoint: string;
+  type?: 'http' | 'websocket' | 'grpc';
+  project_id?: string;
   auth?: {
-    type: 'bearer' | 'api_key'
-    token: string
-    header?: string
-  }
+    type: 'bearer' | 'api_key';
+    token: string;
+    header?: string;
+  };
 }): Promise<DeployAgent> {
   const res = await fetchWithTimeout(`${API_V1}/deploy-agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  })
-  return handleResponse<DeployAgent>(res)
+  });
+  return handleResponse<DeployAgent>(res);
 }
 
 /**
@@ -1564,35 +1622,43 @@ export async function createDeployAgent(input: {
 export async function updateDeployAgent(
   deployAgentId: string,
   updates: {
-    name?: string
-    endpoint?: string
-    type?: 'http' | 'websocket' | 'grpc'
+    name?: string;
+    endpoint?: string;
+    type?: 'http' | 'websocket' | 'grpc';
     auth?: {
-      type: 'bearer' | 'api_key'
-      token: string
-      header?: string
-    } | null
-    status?: 'idle' | 'running' | 'error'
-    last_run_id?: string
-    last_run_at?: string
+      type: 'bearer' | 'api_key';
+      token: string;
+      header?: string;
+    } | null;
+    status?: 'idle' | 'running' | 'error';
+    last_run_id?: string;
+    last_run_at?: string;
   }
 ): Promise<DeployAgent> {
-  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  })
-  return handleResponse<DeployAgent>(res)
+  const res = await fetchWithTimeout(
+    `${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+  return handleResponse<DeployAgent>(res);
 }
 
 /**
  * Delete deploy agent from database
  */
-export async function deleteDeployAgent(deployAgentId: string): Promise<{ deleted: boolean; deploy_agent_id: string }> {
-  const res = await fetchWithTimeout(`${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`, {
-    method: 'DELETE',
-  })
-  return handleResponse<{ deleted: boolean; deploy_agent_id: string }>(res)
+export async function deleteDeployAgent(
+  deployAgentId: string
+): Promise<{ deleted: boolean; deploy_agent_id: string }> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/deploy-agents/${encodeURIComponent(deployAgentId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+  return handleResponse<{ deleted: boolean; deploy_agent_id: string }>(res);
 }
 
 // ============================================================================
@@ -1646,13 +1712,13 @@ export interface RunTrace {
 }
 
 export interface RunAgentResult {
-  run_id: string
-  output?: unknown
-  trace: RunTrace
+  run_id: string;
+  output?: unknown;
+  trace: RunTrace;
   error?: {
-    code: string
-    message: string
-  }
+    code: string;
+    message: string;
+  };
 }
 
 // Test step
@@ -1736,36 +1802,37 @@ export async function runAgent(
   input: Record<string, unknown>,
   config?: { timeout_ms?: number }
 ): Promise<RunAgentResult> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      agent_id: agentId,
-      input,
-      config,
-    }),
-  }, config?.timeout_ms ?? 60000)
+  const res = await fetchWithTimeout(
+    `${RUNNER_URL}/run`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: agentId,
+        input,
+        config,
+      }),
+    },
+    config?.timeout_ms ?? 60000
+  );
 
-  const json = await res.json().catch(() => ({
+  const json = (await res.json().catch(() => ({
     success: false,
     error: { code: 'PARSE_ERROR', message: 'Failed to parse response' },
-  })) as ApiResponse<{ run_id: string; output?: unknown; trace: RunTrace }>
+  }))) as ApiResponse<{ run_id: string; output?: unknown; trace: RunTrace }>;
 
   if (res.ok && json.success) {
-    return json.data as RunAgentResult
+    return json.data as RunAgentResult;
   }
 
   if (json.data?.run_id && json.data?.trace) {
     return {
       ...(json.data as { run_id: string; output?: unknown; trace: RunTrace }),
       error: json.error || { code: 'RUN_FAILED', message: `HTTP ${res.status}` },
-    }
+    };
   }
 
-  throw new ApiError(
-    json.error?.code || 'RUN_FAILED',
-    json.error?.message || `HTTP ${res.status}`
-  )
+  throw new ApiError(json.error?.code || 'RUN_FAILED', json.error?.message || `HTTP ${res.status}`);
 }
 
 /**
@@ -1851,7 +1918,7 @@ export interface EngineRun {
   commit_ref: string | null;
   leaf: {
     id: string;
-    type: 'deploy_agent' | 'eval';  // V4 LeafType
+    type: 'deploy_agent' | 'eval'; // V4 LeafType
     content?: string;
   } | null;
   inputs: Record<string, unknown> | null;
@@ -1897,9 +1964,9 @@ export interface CreateEngineRunInput {
   commit_ref?: string;
   leaf?: {
     id: string;
-    type: 'deploy_agent' | 'eval';  // V4 LeafType (runner-related types only)
+    type: 'deploy_agent' | 'eval'; // V4 LeafType (runner-related types only)
     content?: string;
-    rules_ref?: string;  // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
+    rules_ref?: string; // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   };
   inputs?: Record<string, unknown>;
   workflow?: {
@@ -1972,10 +2039,12 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
   const traceSummary = safeJsonParse(raw.traceSummaryJson, null);
 
   // Merge trace_summary into result for UI compatibility
-  const mergedResult = result ? {
-    ...result,
-    trace_summary: traceSummary,
-  } : null;
+  const mergedResult = result
+    ? {
+        ...result,
+        trace_summary: traceSummary,
+      }
+    : null;
 
   return {
     run_id: raw.runId,
@@ -2059,14 +2128,14 @@ export async function getRunFilterOptions(): Promise<{
  * Configuration stats grouped by model + prompt_version
  */
 export interface ConfigurationStats {
-  model: string;              // 模型名称
-  prompt_version: string;     // prompt 版本
-  run_count: number;          // 运行次数（样本量）
-  pass_count: number;         // 通过次数
-  pass_rate: number;          // 通过率 (0-1)
-  avg_score: number;          // 平均得分
-  avg_latency_ms: number;     // 平均延迟（毫秒）
-  avg_tokens: number;         // 平均 token 数
+  model: string; // 模型名称
+  prompt_version: string; // prompt 版本
+  run_count: number; // 运行次数（样本量）
+  pass_count: number; // 通过次数
+  pass_rate: number; // 通过率 (0-1)
+  avg_score: number; // 平均得分
+  avg_latency_ms: number; // 平均延迟（毫秒）
+  avg_tokens: number; // 平均 token 数
 }
 
 /**
@@ -2074,14 +2143,14 @@ export interface ConfigurationStats {
  * Result of statistical test (z-test or t-test)
  */
 export interface ABTestResult {
-  controlMean: number;                    // 控制组均值
-  treatmentMean: number;                  // 实验组均值
-  delta: number;                          // 差值 (B - A)
-  deltaPercent: number;                   // 差值百分比
-  pValue: number;                         // p 值（小于 0.05 表示显著）
-  confidenceInterval: [number, number];   // 95% 置信区间
-  isSignificant: boolean;                 // 是否统计显著 (p < 0.05)
-  sampleSizeAdequate: boolean;            // 样本量是否足够 (>= 30)
+  controlMean: number; // 控制组均值
+  treatmentMean: number; // 实验组均值
+  delta: number; // 差值 (B - A)
+  deltaPercent: number; // 差值百分比
+  pValue: number; // p 值（小于 0.05 表示显著）
+  confidenceInterval: [number, number]; // 95% 置信区间
+  isSignificant: boolean; // 是否统计显著 (p < 0.05)
+  sampleSizeAdequate: boolean; // 样本量是否足够 (>= 30)
 }
 
 /**
@@ -2100,13 +2169,13 @@ export interface SimpleDeltaResult {
  * Complete comparison result between two configurations
  */
 export interface ComparisonResult {
-  control: ConfigurationStats;            // 控制组 A 的统计
-  treatment: ConfigurationStats;          // 实验组 B 的统计
+  control: ConfigurationStats; // 控制组 A 的统计
+  treatment: ConfigurationStats; // 实验组 B 的统计
   comparison: {
-    pass_rate: ABTestResult;              // 通过率对比（z-test）
-    avg_score: ABTestResult;              // 平均分对比（t-test）
-    avg_latency: SimpleDeltaResult;       // 延迟对比
-    avg_tokens: SimpleDeltaResult;        // token 对比
+    pass_rate: ABTestResult; // 通过率对比（z-test）
+    avg_score: ABTestResult; // 平均分对比（t-test）
+    avg_latency: SimpleDeltaResult; // 延迟对比
+    avg_tokens: SimpleDeltaResult; // token 对比
   };
 }
 
@@ -2189,10 +2258,7 @@ export interface PinListData {
 /**
  * List pins by project
  */
-export async function listPins(
-  projectId: string,
-  type?: PinType
-): Promise<Pin[]> {
+export async function listPins(projectId: string, type?: PinType): Promise<Pin[]> {
   const query = buildQueryString({ type });
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pins${query ? `?${query}` : ''}`
@@ -2210,18 +2276,15 @@ export async function createPinApi(
   refId: string,
   selectedAssertionIds?: string[]
 ): Promise<Pin> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/pins`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type,
-        ref_id: refId,
-        selected_assertion_ids: selectedAssertionIds,
-      }),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}/pins`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type,
+      ref_id: refId,
+      selected_assertion_ids: selectedAssertionIds,
+    }),
+  });
   const apiPin = await handleResponse<ApiPin>(res);
   return toPin(apiPin);
 }
@@ -2243,16 +2306,13 @@ export async function updatePinAssertionsApi(
   pinId: string,
   selectedAssertionIds: string[]
 ): Promise<Pin> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/pins/${encodeURIComponent(pinId)}/assertions`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        selected_assertion_ids: selectedAssertionIds,
-      }),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/pins/${encodeURIComponent(pinId)}/assertions`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      selected_assertion_ids: selectedAssertionIds,
+    }),
+  });
   const apiPin = await handleResponse<ApiPin>(res);
   return toPin(apiPin);
 }
@@ -2302,7 +2362,7 @@ export interface ContextSource {
 }
 
 export interface BuiltContext {
-  text: string;           // 组装好的上下文文本（用于 LLM system message）
+  text: string; // 组装好的上下文文本（用于 LLM system message）
   token_estimate: number; // 预估 token 数
   sources: ContextSource[]; // 上下文来源列表
 }
@@ -2314,9 +2374,7 @@ export interface BuiltContext {
  * @param conversationId - Conversation ID
  * @returns Built context with text, token estimate, and sources
  */
-export async function getConversationMemory(
-  conversationId: string
-): Promise<BuiltContext> {
+export async function getConversationMemory(conversationId: string): Promise<BuiltContext> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/memory`
   );
@@ -2391,9 +2449,7 @@ export interface Leaf {
  * List leaves by commit hash
  */
 export async function listLeavesByCommit(commitHash: string): Promise<Leaf[]> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(commitHash)}/leaves`
-  );
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}/leaves`);
   return handleResponse<Leaf[]>(res);
 }
 
@@ -2401,9 +2457,7 @@ export async function listLeavesByCommit(commitHash: string): Promise<Leaf[]> {
  * List leaves by project
  */
 export async function listLeavesByProject(projectId: string): Promise<Leaf[]> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/leaves`
-  );
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}/leaves`);
   return handleResponse<Leaf[]>(res);
 }
 
@@ -2426,14 +2480,11 @@ export async function updateLeaf(
     config?: LeafConfig;
   }
 ): Promise<Leaf> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
   return handleResponse<Leaf>(res);
 }
 
@@ -2470,9 +2521,10 @@ export async function deleteLeaf(leafId: string): Promise<void> {
  * 生成输出的结果
  */
 export interface GenerateLeafOutputResult {
-  output: string;        // 生成的输出内容
-  generated_at: string;  // 生成时间 (ISO8601)
-  validation?: {         // 自动验证结果（有 constraints 时返回）
+  output: string; // 生成的输出内容
+  generated_at: string; // 生成时间 (ISO8601)
+  validation?: {
+    // 自动验证结果（有 constraints 时返回）
     all_passed: boolean;
     passed_count: number;
     failed_count: number;
@@ -2508,11 +2560,11 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
  * 验证输出的结果
  */
 export interface ValidateLeafOutputResult {
-  leaf: Leaf;              // 更新后的 Leaf（包含新的 assertions）
+  leaf: Leaf; // 更新后的 Leaf（包含新的 assertions）
   validation: {
-    all_passed: boolean;   // 是否全部通过
-    passed_count: number;  // 通过的断言数量
-    failed_count: number;  // 失败的断言数量
+    all_passed: boolean; // 是否全部通过
+    passed_count: number; // 通过的断言数量
+    failed_count: number; // 失败的断言数量
   };
 }
 
@@ -2531,14 +2583,11 @@ export async function validateLeafOutput(
   leafId: string,
   useSemantic = false
 ): Promise<ValidateLeafOutputResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ use_semantic: useSemantic }),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ use_semantic: useSemantic }),
+  });
   return handleResponse<ValidateLeafOutputResult>(res);
 }
 
@@ -2553,10 +2602,15 @@ export async function* chatStream(
   });
 
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    const errorData = await res.json().catch(() => ({
+      error: {
+        code: 'CHAT_ERROR',
+        message: `Server returned HTTP ${res.status} with non-JSON body`,
+      },
+    }));
     throw new ApiError(
       errorData.error?.code || 'CHAT_ERROR',
-      errorData.error?.message || `HTTP ${res.status}`
+      errorData.error?.message || `Chat failed: HTTP ${res.status}`
     );
   }
 
@@ -2603,7 +2657,14 @@ export async function* chatStream(
 // Curate Preview API
 // ============================================================================
 
-export type BridgeTemplate = 'prose' | 'plan' | 'story' | 'summary' | 'refine' | 'explain' | 'clarify';
+export type BridgeTemplate =
+  | 'prose'
+  | 'plan'
+  | 'story'
+  | 'summary'
+  | 'refine'
+  | 'explain'
+  | 'clarify';
 
 export interface CurateChunk {
   id: string;
@@ -2683,26 +2744,28 @@ export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAncho
  */
 export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): SentenceWithAnchors {
   const sentenceStartChar = api.start_char;
-  const hasValidStartChar = typeof sentenceStartChar === 'number' && !Number.isNaN(sentenceStartChar);
+  const hasValidStartChar =
+    typeof sentenceStartChar === 'number' && !Number.isNaN(sentenceStartChar);
 
   return {
     sentenceId: api.sentence_id,
     text: api.text,
     startChar: api.start_char,
     endChar: api.end_char,
-    anchors: api.anchors?.map((anchor) => {
-      const parsed = parseApiConfirmedAnchor(anchor);
-      // Compute global positions if not already present and start_char is valid
-      // If start_char is missing/corrupt, skip computation to avoid NaN positions
-      if (hasValidStartChar) {
-        return {
-          ...parsed,
-          globalStart: parsed.globalStart ?? (sentenceStartChar + parsed.start),
-          globalEnd: parsed.globalEnd ?? (sentenceStartChar + parsed.end),
-        };
-      }
-      return parsed;
-    }) ?? [],
+    anchors:
+      api.anchors?.map((anchor) => {
+        const parsed = parseApiConfirmedAnchor(anchor);
+        // Compute global positions if not already present and start_char is valid
+        // If start_char is missing/corrupt, skip computation to avoid NaN positions
+        if (hasValidStartChar) {
+          return {
+            ...parsed,
+            globalStart: parsed.globalStart ?? sentenceStartChar + parsed.start,
+            globalEnd: parsed.globalEnd ?? sentenceStartChar + parsed.end,
+          };
+        }
+        return parsed;
+      }) ?? [],
   };
 }
 

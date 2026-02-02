@@ -65,7 +65,6 @@ export function ContextPanel({
 
       toast.success(`Context exported as ${format.toUpperCase()}`);
     } catch (error) {
-      console.error('Export error:', error);
       toast.error('Failed to export context');
     } finally {
       setIsExporting(false);
@@ -90,7 +89,6 @@ export function ContextPanel({
         throw new Error('Invalid response');
       }
     } catch (error) {
-      console.error('Copy error:', error);
       toast.error('Failed to copy context');
     } finally {
       setIsExporting(false);
