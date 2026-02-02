@@ -18,6 +18,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -27,10 +28,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import type { Assertion, CommitV4, Constraint, Leaf, LeafConfig } from '@/lib/api';
-import { ApiError, generateLeafOutput, getCommitV4, getLeaf, updateLeaf, validateLeafOutput } from '@/lib/api';
+import {
+  ApiError,
+  generateLeafOutput,
+  getCommitV4,
+  getLeaf,
+  updateLeaf,
+  validateLeafOutput,
+} from '@/lib/api';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
-import { ConstraintTextSelector } from '@/components/leaf/ConstraintTextSelector';
 import { cn } from '@/lib/utils';
+import type { SentenceWithSource } from '@/types/sourceContext';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
 
@@ -49,7 +57,10 @@ export default function LeafDetailPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [validateError, setValidateError] = useState<string | null>(null);
   const [semanticWarning, setSemanticWarning] = useState(false);
-  const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [exportMessage, setExportMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
 
   // Load leaf data
@@ -75,7 +86,9 @@ export default function LeafDetailPage() {
   // Load parent commit data for source content display
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getCommitV4(leaf.commit_hash).then(setCommitData).catch(() => {});
+    getCommitV4(leaf.commit_hash)
+      .then(setCommitData)
+      .catch(() => {});
   }, [leaf?.commit_hash]);
 
   // Handle constraint update
@@ -101,7 +114,11 @@ export default function LeafDetailPage() {
   };
 
   // Add new constraint
-  const handleAddConstraint = (type: 'require' | 'exclude', value: string, matchMode: 'exact' | 'semantic' = 'exact') => {
+  const handleAddConstraint = (
+    type: 'require' | 'exclude',
+    value: string,
+    matchMode: 'exact' | 'semantic' = 'exact'
+  ) => {
     if (!leaf || !value.trim()) return;
     const newConstraint: Constraint = {
       id: `cst_${Date.now().toString(36)}`,
@@ -113,7 +130,11 @@ export default function LeafDetailPage() {
   };
 
   // Add constraint with source sentence tracing
-  const handleAddConstraintFromSource = (type: 'require' | 'exclude', value: string, sourceSentenceId: string) => {
+  const handleAddConstraintFromSource = (
+    type: 'require' | 'exclude',
+    value: string,
+    sourceSentenceId: string
+  ) => {
     if (!leaf || !value.trim()) return;
     const base = {
       id: `cst_${Date.now().toString(36)}`,
@@ -121,9 +142,10 @@ export default function LeafDetailPage() {
       match_mode: 'exact' as const,
       description: `Selected from sentence ${sourceSentenceId}`,
     };
-    const newConstraint: Constraint = type === 'require'
-      ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
-      : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
+    const newConstraint: Constraint =
+      type === 'require'
+        ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
+        : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
     handleUpdateConstraints([...leaf.constraints, newConstraint]);
   };
 
@@ -295,10 +317,7 @@ export default function LeafDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => handleExport('clipboard')}
-                disabled={!leaf.output}
-              >
+              <DropdownMenuItem onClick={() => handleExport('clipboard')} disabled={!leaf.output}>
                 <Copy className="mr-2 h-4 w-4" />
                 Copy Output
               </DropdownMenuItem>
@@ -353,15 +372,27 @@ export default function LeafDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
-          {/* Source Content + Constraints (text selection mode) */}
+          {/* Source Context with constraint highlights + text selection */}
           {commitData && (
             <section className="rounded-lg border bg-card p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <FileText className="h-4 w-4" />
                 Source Content &amp; Constraints
               </h3>
-              <ConstraintTextSelector
-                sentences={commitData.content.sentences}
+              <LeafConstraintSourceContext
+                sentences={commitData.content.sentences.map(
+                  (s): SentenceWithSource => ({
+                    id: s.id,
+                    text: s.text,
+                    source: s.source_ref
+                      ? {
+                          turn_hash: s.source_ref.turn_hash,
+                          start_char: s.source_ref.start_char,
+                          end_char: s.source_ref.end_char,
+                        }
+                      : undefined,
+                  })
+                )}
                 constraints={leaf.constraints}
                 onAdd={handleAddConstraintFromSource}
                 onRemove={handleRemoveConstraint}
