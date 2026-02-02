@@ -2277,6 +2277,38 @@ export async function updateConversationContext(
 }
 
 // ============================================================================
+// Conversation Memory (Built context from pins for LLM injection)
+// ============================================================================
+
+export interface ContextSource {
+  type: 'commit' | 'conversation' | 'leaf';
+  id: string;
+  label?: string;
+}
+
+export interface BuiltContext {
+  text: string;           // 组装好的上下文文本（用于 LLM system message）
+  token_estimate: number; // 预估 token 数
+  sources: ContextSource[]; // 上下文来源列表
+}
+
+/**
+ * Get built memory context for a conversation.
+ * Assembles pinned conversations, leaves, and current commit into LLM-ready text.
+ *
+ * @param conversationId - Conversation ID
+ * @returns Built context with text, token estimate, and sources
+ */
+export async function getConversationMemory(
+  conversationId: string
+): Promise<BuiltContext> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/memory`
+  );
+  return handleResponse<BuiltContext>(res);
+}
+
+// ============================================================================
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 
@@ -2341,6 +2373,26 @@ export interface Leaf {
 }
 
 /**
+ * List leaves by commit hash
+ */
+export async function listLeavesByCommit(commitHash: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/leaves`
+  );
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
+ * List leaves by project
+ */
+export async function listLeavesByProject(projectId: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/leaves`
+  );
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
  * Get leaf by ID
  */
 export async function getLeaf(leafId: string): Promise<Leaf> {
@@ -2391,6 +2443,13 @@ export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
   return handleResponse<Leaf>(res);
 }
 
+export async function deleteLeaf(leafId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
 /**
  * Generate output result
  * 生成输出的结果
@@ -2398,6 +2457,12 @@ export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
 export interface GenerateLeafOutputResult {
   output: string;        // 生成的输出内容
   generated_at: string;  // 生成时间 (ISO8601)
+  validation?: {         // 自动验证结果（有 constraints 时返回）
+    all_passed: boolean;
+    passed_count: number;
+    failed_count: number;
+    attempts: number;
+  };
 }
 
 /**
@@ -2418,7 +2483,7 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     },
-    60000 // 60 seconds timeout for LLM generation
+    180000 // 180 seconds timeout for LLM generation with auto-retry
   );
   return handleResponse<GenerateLeafOutputResult>(res);
 }

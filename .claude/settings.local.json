@@ -156,7 +156,9 @@
       "Bash(then echo \"$dir/README.md\")",
       "Bash(fi)",
       "Bash(pnpm dev:api:*)",
-      "Bash(pnpm dev:webui:*)"
+      "Bash(pnpm dev:webui:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

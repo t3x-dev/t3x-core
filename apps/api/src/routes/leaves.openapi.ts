@@ -678,7 +678,14 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
             });
 
             // Update leaf with output
-            const updatedLeaf = await updateLeafOutput(db, leaf.id, result.output);
+            let updatedLeaf = await updateLeafOutput(db, leaf.id, result.output);
+
+            // If auto-validation produced assertions, store them on the leaf
+            if (result.validation && updatedLeaf) {
+              updatedLeaf = await updateLeaf(db, leaf.id, {
+                assertions: result.validation.assertions,
+              }) ?? updatedLeaf;
+            }
 
             // Save to history (non-blocking)
             try {
@@ -901,6 +908,13 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
     }
 
+    // If auto-validation produced assertions, store them on the leaf
+    if (result.validation) {
+      await updateLeaf(db, id, {
+        assertions: result.validation.assertions,
+      });
+    }
+
     // Save to generation history (non-blocking - don't fail if history save fails)
     try {
       await createLeafHistory(db, {
@@ -922,6 +936,16 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
         data: {
           output: result.output,
           generated_at: updatedLeaf.generated_at!,
+          ...(result.validation
+            ? {
+                validation: {
+                  all_passed: result.validation.allPassed,
+                  passed_count: result.validation.passedCount,
+                  failed_count: result.validation.failedCount,
+                  attempts: result.attempts,
+                },
+              }
+            : {}),
         },
       },
       200

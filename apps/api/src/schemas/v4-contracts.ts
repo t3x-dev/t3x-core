@@ -255,6 +255,14 @@ export const GenerateLeafOutputResponse = SuccessResponse(
   z.object({
     output: z.string(),
     generated_at: z.string(),
+    validation: z
+      .object({
+        all_passed: z.boolean(),
+        passed_count: z.number(),
+        failed_count: z.number(),
+        attempts: z.number(),
+      })
+      .optional(),
   })
 );
 
