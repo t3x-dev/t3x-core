@@ -500,15 +500,19 @@ export function CommitSourceContext({
     };
   }, [turnHashes, leafIds, byTurn, byLeaf, compact]);
 
-  // Post-fetch resolution: match unattributed sentences to leaves by text matching.
+  // Post-fetch resolution: match sentences to leaves by text matching.
   // This handles multi-leaf commits where sentence-level leaf_id isn't available.
-  // Each sentence is claimed by the first leaf whose output contains it (no duplicates).
+  // Phase 1: Match unattributed sentences (exclusive claim, no duplicates).
+  // Phase 2: Match turn-attributed sentences whose text also appears in a leaf output
+  //          (dual attribution — sentence stays in turn section AND appears in leaf section).
   const resolvedByLeaf = useMemo(() => {
-    if (withoutSource.length === 0 || leafData.size === 0) {
+    if (leafData.size === 0) {
       return new Map<string, LeafSentence[]>();
     }
     const resolved = new Map<string, LeafSentence[]>();
     const claimedIds = new Set<string>();
+
+    // Phase 1: unattributed sentences — exclusive claim (first leaf wins)
     for (const [leafId, data] of leafData) {
       if (!data.leaf?.output) continue;
       const output = data.leaf.output;
@@ -522,8 +526,26 @@ export function CommitSourceContext({
         }
       }
     }
+
+    // Phase 2: turn-attributed sentences — dual attribution (appear in both turn & leaf)
+    const allTurnSentences = Array.from(byTurn.values()).flat();
+    for (const [leafId, data] of leafData) {
+      if (!data.leaf?.output) continue;
+      const output = data.leaf.output;
+      for (const sg of allTurnSentences) {
+        if (output.includes(sg.sentence.text)) {
+          const group = resolved.get(leafId) || [];
+          // Avoid adding the same sentence twice to this leaf
+          if (!group.some((g) => g.sentence.id === sg.sentence.id)) {
+            group.push({ sentence: sg.sentence, leafId });
+            resolved.set(leafId, group);
+          }
+        }
+      }
+    }
+
     return resolved;
-  }, [withoutSource, leafData]);
+  }, [withoutSource, byTurn, leafData]);
 
   // Sentences truly without any source (not matched to any leaf)
   const unresolvedSentences = useMemo(() => {

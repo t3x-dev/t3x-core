@@ -2086,19 +2086,37 @@ export function NodeModal({
           parentCommits.push(data.sourceCommitHash);
         }
 
+        // Build complete source_refs from all pinned sources (conversations + leaves)
+        const commitSourceRefs: api.CommitV4SourceRef[] = [];
+        const seenRefIds = new Set<string>();
+
+        // 1. Collect conversation IDs from sourceConversationId + textBlocks
+        if (sourceConversationId) {
+          seenRefIds.add(sourceConversationId);
+          commitSourceRefs.push({ type: 'conversation', id: sourceConversationId });
+        }
+        for (const block of textBlocks) {
+          if (block.sourceNodeId?.startsWith('conv_') && !seenRefIds.has(block.sourceNodeId)) {
+            seenRefIds.add(block.sourceNodeId);
+            commitSourceRefs.push({ type: 'conversation', id: block.sourceNodeId });
+          }
+        }
+
+        // 2. Collect all pinned sources (conversations + leaves)
+        const currentPins = usePinsStore.getState().pins;
+        for (const pin of currentPins) {
+          if (!seenRefIds.has(pin.ref_id)) {
+            seenRefIds.add(pin.ref_id);
+            commitSourceRefs.push({ type: pin.type, id: pin.ref_id });
+          }
+        }
+
         const commitV4 = await api.createCommitV4(projectId, v4Sentences, {
           branch,
           message: data.title,
           parents: parentCommits,
           position: currentPosition ? { x: currentPosition.x, y: currentPosition.y } : undefined,
-          source_refs: data.conversationId
-            ? [
-                {
-                  type: 'conversation',
-                  id: data.conversationId,
-                },
-              ]
-            : undefined,
+          source_refs: commitSourceRefs.length > 0 ? commitSourceRefs : undefined,
         });
 
         commitHash = commitV4.hash;
