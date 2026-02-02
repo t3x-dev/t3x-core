@@ -42,6 +42,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import * as api from '@/lib/api';
 import type { DiffResult, DiffResultRaw } from '@/lib/api';
@@ -311,31 +312,17 @@ function V4ConstraintInfoMessage() {
 }
 
 /**
- * Unified Commit Full Section - handles both V3 and V4 commits
- *
- * Key difference in sentence structure:
- * - V3Display: sentences at top level (commit.sentences)
- * - V4: sentences nested in content (commit.content.sentences)
+ * Header bar for committed commit - shows hash, schema version, branch, author
  */
-function CommitFullSection({
+function CommitFullHeader({
   commit,
   branchName,
-  leaves,
-  projectId,
 }: {
   commit: CommitDisplay;
   branchName?: string;
-  leaves?: EmbeddedLeaf[];
-  projectId?: string;
 }) {
   const [copiedHash, setCopiedHash] = useState(false);
-  const [showCreateLeaf, setShowCreateLeaf] = useState(false);
   const isV4 = isCommitV4(commit);
-
-  // Get sentences - V4 uses content.sentences, V3Display uses top-level sentences
-  const sentences = isV4
-    ? commit.content.sentences
-    : (commit as CommitV3Display).sentences;
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(commit.hash);
@@ -344,123 +331,136 @@ function CommitFullSection({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header with hash, branch and author */}
-      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center gap-2">
-          {/* Hash with copy */}
-          <button
-            type="button"
-            onClick={handleCopyHash}
-            className="inline-flex items-center gap-1 font-mono text-sm text-gray-500 bg-white hover:bg-gray-100 px-2 py-1 rounded border border-gray-200 transition-colors cursor-pointer"
-          >
-            {commit.hash.slice(0, 7)}
-            {copiedHash ? (
-              <CheckCircle size={14} className="text-green-500" />
-            ) : (
-              <Copy size={14} className="text-gray-400" />
-            )}
-          </button>
-          {/* Schema version badge */}
-          <span className={cn(
-            'text-xs font-medium px-1.5 py-0.5 rounded',
-            isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
-          )}>
-            {isV4 ? 'V4' : 'V3'}
-          </span>
-          {/* Branch badge */}
-          {branchName && (
-            <span className={cn(
-              'text-xs font-semibold px-2 py-0.5 rounded',
-              branchName === 'main'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-amber-100 text-amber-700'
-            )}>
-              {branchName}
-            </span>
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleCopyHash}
+          className="inline-flex items-center gap-1 font-mono text-sm text-gray-500 bg-white hover:bg-gray-100 px-2 py-1 rounded border border-gray-200 transition-colors cursor-pointer"
+        >
+          {commit.hash.slice(0, 7)}
+          {copiedHash ? (
+            <CheckCircle size={14} className="text-green-500" />
+          ) : (
+            <Copy size={14} className="text-gray-400" />
           )}
-        </div>
-        {isV4 ? (
-          <CommitV4AuthorBadge author={commit.author} />
-        ) : (
-          <CommitV3AuthorBadge author={(commit as CommitV3Display).author} />
+        </button>
+        <span className={cn(
+          'text-xs font-medium px-1.5 py-0.5 rounded',
+          isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+        )}>
+          {isV4 ? 'V4' : 'V3'}
+        </span>
+        {branchName && (
+          <span className={cn(
+            'text-xs font-semibold px-2 py-0.5 rounded',
+            branchName === 'main'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-amber-100 text-amber-700'
+          )}>
+            {branchName}
+          </span>
         )}
       </div>
-
-      {/* Pinned Sources - V4 only */}
-      {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
-        <PinnedSourcesSection sourceRefs={commit.source_refs} projectId={projectId} />
+      {isV4 ? (
+        <CommitV4AuthorBadge author={commit.author} />
+      ) : (
+        <CommitV3AuthorBadge author={(commit as CommitV3Display).author} />
       )}
+    </div>
+  );
+}
 
-      {/* Sentences with Source Context - supports both V3 and V4 */}
-      {(() => {
-        // Check if sentences have source info (V4: content.sentences with source_ref, V3: sentences with source)
-        const hasSourceInfo = isV4
-          ? (commit as CommitV4Display).content.sentences.some((s) => s.source_ref?.turn_hash)
-          : (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash);
+/**
+ * Renders the source context / sentence display for a commit, used inside tabs.
+ */
+function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
+  const isV4 = isCommitV4(commit);
+  const sentences = isV4
+    ? commit.content.sentences
+    : (commit as CommitV3Display).sentences;
 
-        if (hasSourceInfo) {
-          // Map to CommitSourceContext format
-          const mappedSentences = isV4
-            ? (commit as CommitV4Display).content.sentences.map((s) => ({
-                id: s.id,
-                text: s.text,
-                source: s.source_ref
-                  ? {
-                      turn_hash: s.source_ref.turn_hash,
-                      start_char: s.source_ref.start_char,
-                      end_char: s.source_ref.end_char,
-                    }
-                  : undefined,
-              }))
-            : (commit as CommitV3Display).sentences.map((s) => ({
-                id: s.id,
-                text: s.text,
-                source: s.source
-                  ? {
-                      turn_hash: s.source.turn_hash,
-                      start_char: s.source.start_char || 0,
-                      end_char: s.source.end_char || s.text.length,
-                    }
-                  : undefined,
-              }));
+  const hasSourceInfo = isV4
+    ? (commit as CommitV4Display).content.sentences.some((s) => s.source_ref?.turn_hash)
+    : (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash);
 
-          return <CommitSourceContext sentences={mappedSentences} />;
-        }
+  if (hasSourceInfo) {
+    const mappedSentences = isV4
+      ? (commit as CommitV4Display).content.sentences.map((s) => ({
+          id: s.id,
+          text: s.text,
+          source: s.source_ref
+            ? {
+                turn_hash: s.source_ref.turn_hash,
+                start_char: s.source_ref.start_char,
+                end_char: s.source_ref.end_char,
+              }
+            : undefined,
+        }))
+      : (commit as CommitV3Display).sentences.map((s) => ({
+          id: s.id,
+          text: s.text,
+          source: s.source
+            ? {
+                turn_hash: s.source.turn_hash,
+                start_char: s.source.start_char || 0,
+                end_char: s.source.end_char || s.text.length,
+              }
+            : undefined,
+        }));
 
-        // Fallback to simple sentence list
-        return (
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
-              <span className="text-xs text-gray-400">{sentences.length} total</span>
-            </div>
-            <ul className="space-y-2">
-              {sentences.map((s) => (
-                <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
-                  <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-                    {s.id}
-                  </span>
-                  <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
-                    {s.text}
-                  </span>
-                </li>
-              ))}
-              {sentences.length === 0 && (
-                <li className="text-center py-4 text-gray-400 text-sm">
-                  No sentences
-                </li>
-              )}
-            </ul>
-          </div>
-        );
-      })()}
+    return <CommitSourceContext sentences={mappedSentences} />;
+  }
 
+  return (
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+        <span className="text-xs text-gray-400">{sentences.length} total</span>
+      </div>
+      <ul className="space-y-2">
+        {sentences.map((s) => (
+          <li key={s.id} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+            <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+              {s.id}
+            </span>
+            <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+              {s.text}
+            </span>
+          </li>
+        ))}
+        {sentences.length === 0 && (
+          <li className="text-center py-4 text-gray-400 text-sm">
+            No sentences
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Constraints and leaves section for a committed commit.
+ * Renders constraints and leaves below the tabbed source view.
+ */
+function CommitConstraintsAndLeaves({
+  commit,
+  leaves,
+  projectId,
+}: {
+  commit: CommitDisplay;
+  leaves?: EmbeddedLeaf[];
+  projectId?: string;
+}) {
+  const [showCreateLeaf, setShowCreateLeaf] = useState(false);
+  const isV4 = isCommitV4(commit);
+
+  return (
+    <>
       {/* Constraints - V3 only, or info message + Create Leaf button for V4 */}
       {isV4 ? (
         <div className="space-y-3">
           <V4ConstraintInfoMessage />
-          {/* Create Leaf button - V4 only */}
           {projectId && (
             <Button
               variant="outline"
@@ -492,7 +492,7 @@ function CommitFullSection({
         </div>
       )}
 
-      {/* Associated Leaves - V4 only, shows links to leaf detail pages */}
+      {/* Associated Leaves - V4 only */}
       {isV4 && leaves && leaves.length > 0 && projectId && (
         <div className="p-4 bg-green-50 rounded-lg border border-green-200">
           <div className="flex items-center justify-between mb-3">
@@ -537,16 +537,8 @@ function CommitFullSection({
           projectId={projectId}
         />
       )}
-    </div>
+    </>
   );
-}
-
-/**
- * Legacy component name for backwards compatibility
- * @deprecated Use CommitFullSection instead
- */
-function CommitV3FullSection({ commit, branchName }: { commit: CommitV3Display; branchName?: string }) {
-  return <CommitFullSection commit={commit} branchName={branchName} />;
 }
 
 export type NodeQuickAction = {
@@ -3602,48 +3594,76 @@ export function NodeModal({
               onMouseDown={handleCommitLeftDivider}
             />
 
-            {/* Main Content - Source Excerpt & Generated Output */}
+            {/* Main Content - Tabbed Source View & Generated Output */}
             <div className="flex-1 min-w-0 overflow-y-auto p-6 flex flex-col gap-6">
-              {/* Source Excerpt - User's semantic selections */}
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm text-gray-700">Source Excerpt</h3>
-                  <Badge variant="outline" className="text-[0.65rem] text-gray-400">
-                    Read-only
-                  </Badge>
-                </div>
-                <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
-                  {commitSourceExcerpt.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {commitSourceExcerpt.map((excerpt, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100"
-                        >
-                          <span className="text-gray-400 font-bold shrink-0">•</span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
-                            {excerpt}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
-                      <span>No source excerpt recorded</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* Commit header + tabbed source view */}
+              {(data.commitV3 || data.commitV4) && (() => {
+                const commit = (data.commitV4 || data.commitV3) as CommitDisplay;
+                const branchName = data.branchName || (data.branchType === 'main' ? 'main' : undefined);
+                const isV4 = isCommitV4(commit);
+                const commitProjectId = routeProjectId || projectId || undefined;
 
-              {/* Commit Content - Sentences and Constraints (V3) or Sentences only (V4) */}
-              {(data.commitV3 || data.commitV4) && (
-                <CommitFullSection
-                  commit={(data.commitV4 || data.commitV3) as CommitDisplay}
-                  branchName={data.branchName || (data.branchType === 'main' ? 'main' : undefined)}
-                  leaves={data.leaves}
-                  projectId={routeProjectId || projectId || undefined}
-                />
-              )}
+                return (
+                  <div className="space-y-4">
+                    <CommitFullHeader commit={commit} branchName={branchName} />
+
+                    {/* Pinned Sources - V4 only */}
+                    {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
+                      <PinnedSourcesSection sourceRefs={commit.source_refs} projectId={commitProjectId} />
+                    )}
+
+                    {/* Tabbed view: Source Context | Source Excerpt | JSON */}
+                    <Tabs defaultValue="context">
+                      <TabsList variant="pill" className="w-full">
+                        <TabsTrigger value="context" variant="pill">Source Context</TabsTrigger>
+                        <TabsTrigger value="excerpt" variant="pill">Source Excerpt</TabsTrigger>
+                        <TabsTrigger value="json" variant="pill">JSON</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="context" forceMount className="data-[state=inactive]:hidden">
+                        <CommitSourceContent commit={commit} />
+                      </TabsContent>
+
+                      <TabsContent value="excerpt">
+                        <div className="p-3 bg-white border border-gray-200 rounded-md min-h-[80px]">
+                          {commitSourceExcerpt.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                              {commitSourceExcerpt.map((excerpt, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-100"
+                                >
+                                  <span className="text-gray-400 font-bold shrink-0">&bull;</span>
+                                  <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                                    {excerpt}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center py-6 text-gray-400 text-sm">
+                              <span>No source excerpt recorded</span>
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="json">
+                        <pre className="p-4 bg-gray-50 border border-gray-200 rounded-md text-xs font-mono text-gray-700 overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
+                          {JSON.stringify(commit, null, 2)}
+                        </pre>
+                      </TabsContent>
+                    </Tabs>
+
+                    {/* Constraints and Leaves below tabs */}
+                    <CommitConstraintsAndLeaves
+                      commit={commit}
+                      leaves={data.leaves}
+                      projectId={commitProjectId}
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Generated Output - LLM generated content (only show if no commit data) */}
               {!data.commitV3 && !data.commitV4 && (
