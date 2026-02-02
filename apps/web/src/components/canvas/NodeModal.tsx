@@ -12,6 +12,7 @@ import {
   GitBranch,
   GitCommit,
   GitCompare,
+  History,
   GitMerge,
   Info,
   Leaf,
@@ -70,6 +71,7 @@ import {
   getSelectedText,
   tokenizeText,
 } from '@/utils/tokenizer';
+import { CommitHistoryPanel } from './CommitHistoryPanel';
 import { CommitSourceContext } from './CommitSourceContext';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
@@ -911,6 +913,9 @@ export function NodeModal({
   // Branches state for Step 1 dropdown
   const [branches, setBranches] = useState<api.Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+
+  // History panel state
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
 
   // Diff state for committed commit comparison
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -3840,6 +3845,32 @@ export function NodeModal({
                   )}
                 </div>
               </div>
+
+              {/* History Section */}
+              {data.commitV4 && data.commitHash && (
+                <>
+                  <div className="h-px bg-gray-200 my-4" />
+                  <div className="mb-5">
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                      <History size={14} />
+                      History
+                    </h4>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowHistoryPanel(true)}
+                      className="w-full gap-2"
+                    >
+                      <History size={14} />
+                      <span>View commit history</span>
+                    </Button>
+                  </div>
+                  <CommitHistoryPanel
+                    commitHash={data.commitHash}
+                    open={showHistoryPanel}
+                    onClose={() => setShowHistoryPanel(false)}
+                  />
+                </>
+              )}
 
               <div className="h-px bg-gray-200 my-4" />
 

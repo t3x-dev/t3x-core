@@ -10,6 +10,7 @@
  * - GET    /v1/commits-v4/:hash         - Get commit by hash
  * - GET    /v1/projects/:projectId/commits-v4 - List commits by project
  * - PATCH  /v1/commits-v4/:hash/position - Update canvas position
+ * - GET    /v1/commits-v4/:hash/history - Get commit ancestor chain
  * - DELETE /v1/commits-v4/:hash         - Delete commit
  *
  * @see docs/specification/semantic-layer-architecture.md
@@ -30,6 +31,7 @@ import {
   deleteCommitV4,
   ensureMainBranch,
   findCommitV4ByHash,
+  findCommitV4History,
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
   ParentNotFoundErrorV4,
@@ -262,6 +264,49 @@ const updateCommitV4PositionRoute = createRoute({
   },
 });
 
+// GET /v1/commits-v4/:hash/history - Get commit ancestor chain
+const getCommitV4HistoryRoute = createRoute({
+  method: 'get',
+  path: '/v1/commits-v4/{hash}/history',
+  tags: ['Commits V4'],
+  summary: 'Get commit history (ancestor chain)',
+  description:
+    'Walks the parent chain from the given commit via BFS traversal. ' +
+    'Returns an ordered list of ancestor commits (including the starting commit).',
+  request: {
+    params: HashParamSchema,
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Commit history',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.array(CommitV4Response)),
+        },
+      },
+    },
+    404: {
+      description: 'Starting commit not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 // DELETE /v1/commits-v4/:hash - Delete commit
 const deleteCommitV4Route = createRoute({
   method: 'delete',
@@ -464,6 +509,27 @@ commitsV4Routes.openapi(updateCommitV4PositionRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'UPDATE_FAILED', message);
+  }
+});
+
+// GET /v1/commits-v4/:hash/history - Get commit ancestor chain
+commitsV4Routes.openapi(getCommitV4HistoryRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const decodedHash = decodeURIComponent(hash);
+  const { limit } = c.req.valid('query');
+
+  try {
+    const db = await getDB();
+    const history = await findCommitV4History(db, decodedHash, limit);
+
+    if (history.length === 0) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
+    }
+
+    return c.json({ success: true as const, data: history.map(toApiCommit) }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'HISTORY_FAILED', message);
   }
 });
 
