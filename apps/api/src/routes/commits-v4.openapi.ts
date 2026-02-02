@@ -359,10 +359,9 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   const body = c.req.valid('json');
 
   // ============================================================
-  // V4-only validation
+  // V4-only validation: check for unexpected fields in raw body
   // ============================================================
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawBody = body as any;
+  const rawBody = body as Record<string, unknown>;
 
   // Rule 1: If schema field provided, must be t3x/commit/v4
   if (rawBody.schema && rawBody.schema !== 't3x/commit/v4') {
@@ -385,7 +384,8 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   }
 
   // Rule 3: Reject constraints at commit level (V4 stores constraints in Leaves)
-  if (rawBody.constraints || rawBody.content?.constraints) {
+  const rawContent = rawBody.content as Record<string, unknown> | undefined;
+  if (rawBody.constraints || rawContent?.constraints) {
     return errorResponse(
       c,
       'INVALID_REQUEST',
