@@ -909,7 +909,7 @@ const { data, loading, error, refetch } = useApi('/api/v1/projects');
 | Store | File | Description |
 |-------|------|-------------|
 | `useProjectStore` | `projectStore.ts` | Project state management |
-| `useCanvasStore` | `canvasStore.ts` | Canvas/node state |
+| `useCanvasStore` | `canvasStore.ts` (+ slices: `canvasMergeSlice.ts`, `canvasLeafSlice.ts`) | Canvas/node state |
 | `useAgentDemoStore` | `agentDemoStore.ts` | Agent demo state |
 | `useMergeWorkspaceStore` | `mergeWorkspaceStore.ts` | Merge workspace state |
 | `useOptimiserStore` | `optimiserStore.ts` | Agent Optimiser state |
