@@ -479,7 +479,6 @@ function UnitNode(props: Props) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create unit';
       notify?.(message, 'error');
-      console.error('Failed to create unit:', err);
     }
   };
 

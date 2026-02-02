@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Rocket, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Rocket } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { checkRunnerHealth } from '@/lib/api';
 
@@ -18,8 +18,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
       try {
         const health = await checkRunnerHealth();
         setRunnerHealthy(health.status === 'ok');
-      } catch (err) {
-        console.error('Failed to connect to runner:', err);
+      } catch (_err) {
         setRunnerHealthy(false);
       } finally {
         setLoading(false);
@@ -44,10 +43,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
               Connecting...
             </Badge>
           ) : runnerHealthy ? (
-            <Badge
-              variant="outline"
-              className="border-green-500/30 bg-green-500/10 text-green-600"
-            >
+            <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600">
               <CheckCircle className="h-3 w-3" />
               Runner Connected
             </Badge>

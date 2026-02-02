@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 /**
  * V4 WebUI E2E Tests
@@ -48,11 +48,6 @@ test.describe('V4 WebUI Flow', () => {
     commitHash = commitData.data.hash;
   });
 
-  test.afterAll(async ({ request }) => {
-    // Cleanup: Delete test project (if needed)
-    // Note: This is optional as test data can be useful for debugging
-  });
-
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 1: V4 commits display in canvas
   // ─────────────────────────────────────────────────────────────────────────
@@ -61,24 +56,16 @@ test.describe('V4 WebUI Flow', () => {
     await page.goto(`/project/${projectId}`);
 
     // Wait for canvas to load
-    await page.waitForSelector('[data-testid="canvas"]', { timeout: 10000 }).catch(() => {
-      // Fallback: wait for any canvas-like element
-      return page.waitForSelector('.react-flow', { timeout: 10000 });
-    });
+    const canvas = page.locator('.react-flow');
+    await expect(canvas).toBeVisible({ timeout: 15000 });
 
     // Check that commit node is visible
-    // Note: Adjust selector based on actual implementation
-    const commitNode = page.locator(`[data-id="${commitHash}"]`).or(
-      page.locator(`text=E2E test commit`)
-    );
+    const commitNode = page
+      .locator(`[data-id="${commitHash}"]`)
+      .or(page.locator('text=E2E test commit'));
 
-    // Verify commit is displayed (may need to wait for data load)
-    await expect(commitNode.first()).toBeVisible({ timeout: 15000 }).catch(async () => {
-      // If specific node not found, at least verify canvas loaded
-      const canvas = page.locator('.react-flow');
-      await expect(canvas).toBeVisible();
-      console.log('Canvas loaded, commit node selector may need adjustment');
-    });
+    // Verify commit is displayed
+    await expect(commitNode.first()).toBeVisible({ timeout: 15000 });
 
     // No console errors
     const errors: string[] = [];
@@ -95,50 +82,44 @@ test.describe('V4 WebUI Flow', () => {
     await page.goto(`/project/${projectId}`);
 
     // Wait for canvas
-    await page.waitForSelector('.react-flow', { timeout: 10000 });
+    const canvas = page.locator('.react-flow');
+    await expect(canvas).toBeVisible({ timeout: 15000 });
 
     // Click on commit node to open detail panel
-    const commitNode = page.locator(`[data-id="${commitHash}"]`).or(
-      page.locator(`text=E2E test commit`)
-    );
+    const commitNode = page
+      .locator(`[data-id="${commitHash}"]`)
+      .or(page.locator('text=E2E test commit'));
 
-    await commitNode.first().click().catch(async () => {
-      // Fallback: try clicking any commit node
-      const anyCommit = page.locator('[data-type="commit"]').first();
-      if (await anyCommit.isVisible()) {
-        await anyCommit.click();
-      }
-    });
+    await commitNode.first().click();
 
-    // Wait for detail panel
-    await page.waitForTimeout(1000);
+    // Wait for detail panel to appear
+    const detailPanel = page.locator('aside, [role="dialog"]').first();
+    await expect(detailPanel).toBeVisible({ timeout: 10000 });
 
     // Check for sentences display
-    const sentenceTexts = ['User prefers dark mode', 'User speaks English', 'User timezone is UTC+8'];
+    const sentenceTexts = [
+      'User prefers dark mode',
+      'User speaks English',
+      'User timezone is UTC+8',
+    ];
 
     for (const text of sentenceTexts) {
       const sentence = page.locator(`text=${text}`);
-      // Sentences should be visible in the detail panel
-      const isVisible = await sentence.isVisible().catch(() => false);
-      if (!isVisible) {
-        console.log(`Sentence "${text}" not directly visible, may be in expandable section`);
-      }
+      // Soft check - sentences may be in expandable sections
+      await sentence.isVisible();
     }
 
     // Verify NO constraints section at commit level (V4 feature)
     const constraintsHeading = page.locator('text=Constraints').first();
-    const hasConstraints = await constraintsHeading.isVisible().catch(() => false);
-
     // In V4, commit detail should NOT show constraints (they're in Leaves)
-    // This test may need adjustment based on actual UI
-    console.log(`Constraints section visible: ${hasConstraints} (should be false for V4)`);
+    await constraintsHeading.isVisible();
   });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 3: Create leaf from commit
   // ─────────────────────────────────────────────────────────────────────────
   test('3. Create leaf from commit', async ({ request }) => {
-    // Create leaf via API (UI flow can be added later)
+    // Create leaf via API
     const response = await request.post('http://localhost:8000/api/v1/leaves', {
       data: {
         commit_hash: commitHash,
@@ -147,7 +128,12 @@ test.describe('V4 WebUI Flow', () => {
         project_id: projectId,
         constraints: [
           { type: 'require', match_mode: 'semantic', value: 'dark mode' },
-          { type: 'exclude', match_mode: 'exact', value: 'light mode', reason: 'User prefers dark' },
+          {
+            type: 'exclude',
+            match_mode: 'exact',
+            value: 'light mode',
+            reason: 'User prefers dark',
+          },
         ],
       },
     });
@@ -169,12 +155,15 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('4. Pin/unpin leaf', async ({ request }) => {
     // Pin the leaf via API
-    const pinResponse = await request.post(`http://localhost:8000/api/v1/projects/${projectId}/pins`, {
-      data: {
-        type: 'leaf',
-        ref_id: leafId,
-      },
-    });
+    const pinResponse = await request.post(
+      `http://localhost:8000/api/v1/projects/${projectId}/pins`,
+      {
+        data: {
+          type: 'leaf',
+          ref_id: leafId,
+        },
+      }
+    );
 
     const pinData = await pinResponse.json();
     expect(pinData.success).toBe(true);
@@ -184,12 +173,15 @@ test.describe('V4 WebUI Flow', () => {
     const pinId = pinData.data.id;
 
     // Verify duplicate pin is rejected
-    const duplicateResponse = await request.post(`http://localhost:8000/api/v1/projects/${projectId}/pins`, {
-      data: {
-        type: 'leaf',
-        ref_id: leafId,
-      },
-    });
+    const duplicateResponse = await request.post(
+      `http://localhost:8000/api/v1/projects/${projectId}/pins`,
+      {
+        data: {
+          type: 'leaf',
+          ref_id: leafId,
+        },
+      }
+    );
 
     const duplicateData = await duplicateResponse.json();
     expect(duplicateData.success).toBe(false);
@@ -229,20 +221,17 @@ test.describe('V4 WebUI Flow', () => {
     // Navigate to conversation page
     await page.goto(`/project/${projectId}/conversation/${conversationId}`);
 
-    // Wait for page to load
-    await page.waitForTimeout(2000);
+    // Wait for page content to load
+    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
     // Look for Context panel
     const contextPanel = page.locator('text=Context').first();
-    const hasContextPanel = await contextPanel.isVisible().catch(() => false);
+    const hasContextPanel = await contextPanel.isVisible();
 
     if (hasContextPanel) {
       // Check for pinned items display
       const pinsText = page.locator('text=Using').or(page.locator('text=pins'));
-      const hasPinsInfo = await pinsText.first().isVisible().catch(() => false);
-      console.log(`Pins info visible: ${hasPinsInfo}`);
-    } else {
-      console.log('Context panel not visible on this page, may need different route');
+      await pinsText.first().isVisible();
     }
   });
 
@@ -295,17 +284,18 @@ test.describe('V4 WebUI Flow', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Additional UI Tests (can be expanded)
+// Additional UI Tests
 // ─────────────────────────────────────────────────────────────────────────
 test.describe('V4 WebUI UI Tests', () => {
   test('Project list page loads', async ({ page }) => {
     await page.goto('/');
 
     // Should see project list or dashboard
-    await expect(page).toHaveTitle(/T3X|Projects/i, { timeout: 10000 }).catch(() => {
-      // Fallback: just check page loads
-      console.log('Page title may differ from expected');
-    });
+    await expect(page)
+      .toHaveTitle(/T3X|Projects/i, { timeout: 10000 })
+      .catch(() => {
+        // Page title may differ from expected
+      });
 
     // Check for console errors
     const errors: string[] = [];
@@ -315,23 +305,18 @@ test.describe('V4 WebUI UI Tests', () => {
       }
     });
 
-    await page.waitForTimeout(2000);
-
-    // Log any non-React errors
-    if (errors.length > 0) {
-      console.log('Console errors:', errors);
-    }
+    // Wait for page content to fully load
+    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
   });
 
   test('Navigation works', async ({ page }) => {
     await page.goto('/');
 
-    // Wait for page load
-    await page.waitForLoadState('networkidle');
+    // Wait for page content to load
+    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
     // Basic navigation test
-    const hasNavigation = await page.locator('nav').or(page.locator('[role="navigation"]')).first().isVisible().catch(() => false);
-
-    console.log(`Navigation element found: ${hasNavigation}`);
+    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    await expect(navigation).toBeVisible({ timeout: 10000 });
   });
 });

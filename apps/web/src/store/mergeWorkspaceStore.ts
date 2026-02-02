@@ -6,18 +6,16 @@
  */
 
 import { create } from 'zustand';
+import * as api from '@/lib/api';
 import type {
-  MergeDraft,
-  Merge2WayResult,
-  TurnContextData,
-  Sentence,
   CommitV3,
+  Merge2WayResult,
+  MergeDraft,
+  Sentence,
+  TurnContextData,
 } from '@/types/merge';
 import { useCanvasStore } from './canvasStore';
-import * as api from '@/lib/api';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_V1 = `${API_BASE}/api/v1`;
+import { API_V1 } from './canvasStoreUtils';
 
 // ============================================================================
 // Types
@@ -152,10 +150,7 @@ interface MergeWorkspaceState {
 // Helper Functions
 // ============================================================================
 
-async function fetchApi<T>(
-  endpoint: string,
-  options?: RequestInit
-): Promise<T> {
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_V1}${endpoint}`, {
     ...options,
     headers: {
@@ -238,9 +233,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ loading: true, error: null });
 
     try {
-      const apiDraft = await fetchApi<Record<string, unknown>>(
-        `/merge/drafts/${draftId}`
-      );
+      const apiDraft = await fetchApi<Record<string, unknown>>(`/merge/drafts/${draftId}`);
       const draft = apiDraftToInternal(apiDraft);
 
       set({
@@ -273,19 +266,16 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ loading: true, error: null });
 
     try {
-      const apiDraft = await fetchApi<Record<string, unknown>>(
-        '/merge/drafts',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            project_id: projectId,
-            source_hash: sourceHash,
-            target_hash: targetHash,
-            source_branch: sourceBranch,
-            target_branch: targetBranch,
-          }),
-        }
-      );
+      const apiDraft = await fetchApi<Record<string, unknown>>('/merge/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: projectId,
+          source_hash: sourceHash,
+          target_hash: targetHash,
+          source_branch: sourceBranch,
+          target_branch: targetBranch,
+        }),
+      });
       const draft = apiDraftToInternal(apiDraft);
 
       set({
@@ -389,16 +379,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ loading: true, error: null });
 
     try {
-      const commitResult = await fetchApi<CommitV3>(
-        `/merge/drafts/${draftId}/commit`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            message,
-            branch: branch || targetBranch || 'main',
-          }),
-        }
-      );
+      const commitResult = await fetchApi<CommitV3>(`/merge/drafts/${draftId}/commit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          message,
+          branch: branch || targetBranch || 'main',
+        }),
+      });
 
       set({ status: 'committed', loading: false });
 
@@ -475,9 +462,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         params.set('highlight_end', String(sentence.source.end_char));
       }
 
-      const contextData = await fetchApi<TurnContextData>(
-        `/turns/${turnHash}/context?${params}`
-      );
+      const contextData = await fetchApi<TurnContextData>(`/turns/${turnHash}/context?${params}`);
 
       set({ contextData, contextLoading: false });
     } catch (err) {
@@ -636,7 +621,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       newPrepared.similarPairs = [...prepared.similarPairs];
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { resolution: _, ...pairWithoutResolution } = newPrepared.similarPairs[index];
-      newPrepared.similarPairs[index] = pairWithoutResolution as typeof newPrepared.similarPairs[number];
+      newPrepared.similarPairs[index] =
+        pairWithoutResolution as (typeof newPrepared.similarPairs)[number];
 
       const newExtended = { ...extendedResolutions };
       if (resolution === 'both') {
@@ -660,12 +646,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (!current || current.type !== 'edit') {
       // Should only be called when resolution is 'edit'
       // Auto-set to edit mode if not already (defensive programming)
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(
-          `[MergeWorkspace] setCustomText called at index ${index} without edit resolution. ` +
-          `Current resolution: ${current?.type ?? 'none'}. Auto-setting to edit mode.`
-        );
-      }
       set({
         extendedResolutions: {
           ...extendedResolutions,
@@ -724,10 +704,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       }));
 
       return contextData;
-    } catch (err) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[MergeWorkspace] Failed to fetch context for', turnHash, err);
-      }
+    } catch {
       // Mark as not loading on error
       set((state) => ({
         contextLoadingStates: {

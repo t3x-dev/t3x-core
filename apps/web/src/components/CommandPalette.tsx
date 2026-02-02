@@ -135,13 +135,13 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                   </CommandItem>
                   <CommandItem
                     icon={<GitBranch size={16} />}
-                    onSelect={() => handleSelect(() => console.log('Create branch'))}
+                    onSelect={() => handleSelect(() => {})}
                   >
                     Create Branch
                   </CommandItem>
                   <CommandItem
                     icon={<Sparkles size={16} />}
-                    onSelect={() => handleSelect(() => console.log('Generate summary'))}
+                    onSelect={() => handleSelect(() => {})}
                   >
                     Generate Summary
                   </CommandItem>
