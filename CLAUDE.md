@@ -172,7 +172,11 @@ src/
 │   └── project/[projectId]/ # Project canvas page
 ├── components/            # React components
 ├── store/                 # Zustand state management
-│   └── canvasStore.ts     # Canvas nodes/edges state
+│   ├── canvasStore.ts     # Canvas store (core state + slice composition)
+│   ├── canvasStoreTypes.ts # Shared CanvasState type + slice interfaces
+│   ├── canvasStoreUtils.ts # Pure utility functions (layout, position, graph helpers)
+│   ├── canvasMergeSlice.ts # Merge domain slice (state + methods + selectors)
+│   └── canvasLeafSlice.ts  # Leaf panel domain slice
 ├── hooks/                 # React hooks
 ├── lib/
 │   ├── api.ts             # API client functions
@@ -192,6 +196,20 @@ API uses snake_case for JSON fields, internal code uses camelCase.
 - **Nodes**: Conversations, commits (pending/committed), leaf nodes
 - **Edges**: Data flow connections
 - **Locking**: Committed commits and upstream nodes are immutable
+
+### Canvas Store Architecture
+
+The canvas store uses the Zustand slice pattern for modular state management:
+
+```
+canvasStore.ts          ← Entry point: create<CanvasState>(slices + core)
+├── canvasStoreTypes.ts ← Shared types: CanvasState, MergeSlice, LeafPanelSlice
+├── canvasStoreUtils.ts ← Pure functions: layout, position, graph traversal
+├── canvasMergeSlice.ts ← Merge domain: state + 6 methods + 4 selectors
+└── canvasLeafSlice.ts  ← Leaf domain: state + 4 methods
+```
+
+All consumers import from `canvasStore.ts` (re-exports selectors/types for backward compatibility).
 
 ## Testing
 
