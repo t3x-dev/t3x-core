@@ -13,16 +13,18 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Source reference pointing to a position within a conversation turn.
+ * Source reference pointing to a position within a conversation turn or leaf.
  * Uses character offsets relative to turn.content (not including role prefix).
  */
 export interface SourceRef {
-  /** Hash of the source turn */
-  turn_hash: string;
+  /** Hash of the source turn (optional for leaf-originated sentences) */
+  turn_hash?: string;
   /** Start character position (0-indexed, inclusive) */
   start_char: number;
   /** End character position (0-indexed, exclusive) */
   end_char: number;
+  /** Leaf source identifier (for sentences originating from a leaf) */
+  leaf_id?: string;
 }
 
 /**
@@ -157,6 +159,8 @@ export interface CommitSourceContextProps {
   compact?: boolean;
   /** Default expanded state for turns (default: first turn expanded) */
   defaultExpanded?: boolean;
+  /** Commit-level source refs (V4) for identifying leaf sources */
+  sourceRefs?: Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>;
 }
 
 /**
