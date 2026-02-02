@@ -75,6 +75,10 @@ interface LeafConstraintSourceContextProps {
   compact?: boolean;
   /** Default expanded state (default: first turn expanded) */
   defaultExpanded?: boolean;
+  /** User instruction (soft prompt) for LLM generation */
+  userInstruction?: string;
+  /** Callback when user instruction changes */
+  onUpdateUserInstruction?: (value: string) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -308,6 +312,8 @@ export function LeafConstraintSourceContext({
   saving,
   compact = false,
   defaultExpanded = true,
+  userInstruction,
+  onUpdateUserInstruction,
 }: LeafConstraintSourceContextProps) {
   const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
@@ -906,6 +912,29 @@ export function LeafConstraintSourceContext({
         <p className="mt-3 text-xs text-slate-400 italic">
           Select text above to create constraints. Switch mode with the buttons.
         </p>
+      )}
+
+      {/* User instruction textarea */}
+      {isEditable && onUpdateUserInstruction && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <label
+            htmlFor="user-instruction"
+            className="block text-xs font-semibold text-gray-600 mb-1.5"
+          >
+            Custom Instruction
+          </label>
+          <textarea
+            id="user-instruction"
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y"
+            rows={3}
+            placeholder="Add custom guidance for the LLM (e.g., tone, format, focus areas)..."
+            value={userInstruction ?? ''}
+            onChange={(e) => onUpdateUserInstruction(e.target.value)}
+          />
+          <p className="mt-1 text-[0.65rem] text-gray-400">
+            This instruction is included in the generation prompt as additional guidance.
+          </p>
+        </div>
       )}
     </div>
   );
