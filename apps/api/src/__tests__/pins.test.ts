@@ -4,7 +4,7 @@
  * Integration tests for Pins CRUD API endpoints.
  */
 
-import { insertConversation, insertProject, createLeaf } from '@t3x/storage';
+import { createLeaf, insertConversation, insertProject } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -174,7 +174,7 @@ describe('Pins Routes', () => {
   });
 
   describe('GET /v1/projects/:projectId/pins', () => {
-    let createdPinIds: string[] = [];
+    const createdPinIds: string[] = [];
 
     beforeAll(async () => {
       // Create multiple pins for testing list/filter

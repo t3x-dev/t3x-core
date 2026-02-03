@@ -10,8 +10,8 @@ export const EngineRunRequestSchema = z.object({
     .object({
       id: z.string(),
       type: z.enum(['deploy', 'eval']),
-      content: z.string().optional(),      // prompt for n8n AI Agent
-      rules_ref: z.string().optional(),    // rules file reference (from resources/rules/)
+      content: z.string().optional(), // prompt for n8n AI Agent
+      rules_ref: z.string().optional(), // rules file reference (from resources/rules/)
     })
     .optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),

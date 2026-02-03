@@ -1,2 +1,2 @@
-export { TraceTimeline, type StepRecord, type SpanKind, type TraceStep } from './TraceTimeline';
 export { SpanCard } from './SpanCard';
+export { type SpanKind, type StepRecord, type TraceStep, TraceTimeline } from './TraceTimeline';

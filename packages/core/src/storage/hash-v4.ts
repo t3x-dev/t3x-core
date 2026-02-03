@@ -5,8 +5,8 @@
  * Constraints now belong to Leaf (application layer).
  */
 
-import type { CommitV4FirstClass } from '../types/v4';
 import { sha256 } from '../common/hash';
+import type { CommitV4FirstClass } from '../types/v4';
 
 // Re-export for convenience
 export type { CommitV4FirstClass } from '../types/v4';

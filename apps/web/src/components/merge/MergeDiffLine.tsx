@@ -6,7 +6,7 @@
  * Renders with Git-style +/- prefixes and colors.
  */
 
-import { MapPin, Check, Square, CheckSquare } from 'lucide-react';
+import { Check, CheckSquare, MapPin, Square } from 'lucide-react';
 import type { Sentence } from '@/types/merge';
 
 type LineType = 'context' | 'added' | 'removed';

@@ -1,21 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
 import {
-  FlaskConical,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
-  Lightbulb,
-  Play,
+  ArrowLeft,
+  CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
+  FlaskConical,
+  Lightbulb,
   Loader2,
-  ArrowLeft,
+  Play,
   RefreshCw,
+  XCircle,
 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,16 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import {
-  getRunTrace,
-  getEngineRun,
-  runEval,
-  type RunTrace,
-  type TestStep,
-  type TestResult,
   type EvalResponse,
+  getEngineRun,
+  getRunTrace,
+  type RunTrace,
+  runEval,
+  type TestResult,
+  type TestStep,
 } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 // Default test steps for demonstration
 const DEFAULT_TEST_STEPS: TestStep[] = [
@@ -84,8 +84,8 @@ export default function EvalPage() {
         try {
           const traceData = await getRunTrace(runId);
           setTrace(traceData);
-        } catch (err) {
-          console.error('Failed to load legacy trace:', err);
+        } catch {
+          // Legacy trace load failed - will show "Run not found" state
         } finally {
           setLoading(false);
         }
@@ -148,7 +148,11 @@ export default function EvalPage() {
           setTrace(syntheticTrace);
 
           // Load saved assertions from PG if available
-          if (run.result?.assertions && Array.isArray(run.result.assertions) && run.result.assertions.length > 0) {
+          if (
+            run.result?.assertions &&
+            Array.isArray(run.result.assertions) &&
+            run.result.assertions.length > 0
+          ) {
             const savedAssertions = run.result.assertions as Array<{
               id: string;
               type: 'pass' | 'fail' | 'warning';
@@ -158,8 +162,8 @@ export default function EvalPage() {
             }>;
 
             // Convert LLM assertions to EvalResponse format
-            const passCount = savedAssertions.filter(a => a.type === 'pass').length;
-            const failCount = savedAssertions.filter(a => a.type === 'fail').length;
+            const passCount = savedAssertions.filter((a) => a.type === 'pass').length;
+            const failCount = savedAssertions.filter((a) => a.type === 'fail').length;
 
             setEvalResult({
               run_id: run.run_id,
@@ -167,7 +171,7 @@ export default function EvalPage() {
               total_steps: savedAssertions.length,
               passed_steps: passCount,
               failed_steps: failCount,
-              results: savedAssertions.map(a => ({
+              results: savedAssertions.map((a) => ({
                 step_id: a.id,
                 step_name: a.message.slice(0, 50) + (a.message.length > 50 ? '...' : ''),
                 passed: a.type === 'pass',
@@ -176,22 +180,25 @@ export default function EvalPage() {
                 expected: a.category,
                 actual: `${a.type} (${Math.round(a.confidence * 100)}% confidence)`,
               })),
-              suggestions: (run.result as { eval_summary?: string }).eval_summary ? [{
-                type: 'other' as const,
-                description: (run.result as { eval_summary?: string }).eval_summary as string,
-                confidence: 1,
-              }] : undefined,
+              suggestions: (run.result as { eval_summary?: string }).eval_summary
+                ? [
+                    {
+                      type: 'other' as const,
+                      description: (run.result as { eval_summary?: string }).eval_summary as string,
+                      confidence: 1,
+                    },
+                  ]
+                : undefined,
             });
           }
         }
-      } catch (err) {
-        console.warn('Run not found in Engine, trying Runner:', err);
+      } catch {
         // Fall back to Runner
         try {
           const traceData = await getRunTrace(runId);
           setTrace(traceData);
-        } catch (runnerErr) {
-          console.error('Failed to load trace from both Engine and Runner:', runnerErr);
+        } catch {
+          // Both Engine and Runner failed - will show "Run not found" state
         }
       } finally {
         setLoading(false);
@@ -208,8 +215,8 @@ export default function EvalPage() {
     try {
       const result = await runEval(runId, testSteps, { generate_suggestions: true });
       setEvalResult(result);
-    } catch (err) {
-      console.error('Failed to run eval:', err);
+    } catch {
+      // Eval failed - user can retry via button
     } finally {
       setEvaluating(false);
     }
@@ -295,7 +302,8 @@ export default function EvalPage() {
             <XCircle className="mb-4 h-12 w-12 text-red-500" />
             <h2 className="text-lg font-semibold">Run not found</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              The run ID "<code className="rounded bg-muted px-1">{runId}</code>" could not be found.
+              The run ID "<code className="rounded bg-muted px-1">{runId}</code>" could not be
+              found.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               This usually means the n8n workflow hasn't been set up or activated yet.
@@ -403,7 +411,9 @@ export default function EvalPage() {
                       {new Date(event.timestamp).toLocaleTimeString()}
                     </span>
                     {event.data.latency_ms && (
-                      <span className="text-xs text-muted-foreground">{event.data.latency_ms}ms</span>
+                      <span className="text-xs text-muted-foreground">
+                        {event.data.latency_ms}ms
+                      </span>
                     )}
                     {event.data.model && (
                       <Badge variant="outline" className="text-xs">

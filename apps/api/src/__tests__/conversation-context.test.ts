@@ -249,7 +249,9 @@ describe('Conversation Context Routes', () => {
     });
 
     it('returns JSON format with ?format=json', async () => {
-      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=json`);
+      const res = await app.request(
+        `/v1/conversations/${testConversationId}/context-export?format=json`
+      );
       expect(res.status).toBe(200);
 
       expect(res.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
@@ -259,7 +261,9 @@ describe('Conversation Context Routes', () => {
     });
 
     it('returns Markdown format with ?format=markdown', async () => {
-      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=markdown`);
+      const res = await app.request(
+        `/v1/conversations/${testConversationId}/context-export?format=markdown`
+      );
       expect(res.status).toBe(200);
 
       // Check headers
@@ -293,7 +297,9 @@ describe('Conversation Context Routes', () => {
     });
 
     it('includes correct filename for markdown format', async () => {
-      const res = await app.request(`/v1/conversations/${testConversationId}/context-export?format=markdown`);
+      const res = await app.request(
+        `/v1/conversations/${testConversationId}/context-export?format=markdown`
+      );
       expect(res.status).toBe(200);
 
       const disposition = res.headers.get('Content-Disposition');

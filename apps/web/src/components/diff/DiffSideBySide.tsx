@@ -1,13 +1,12 @@
 'use client';
 
-import { useRef, useCallback, useImperativeHandle, forwardRef, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
+import * as api from '@/lib/api';
+import type { Sentence, WordDiffSegment } from '@/types/merge';
 import { DiffSectionHeader } from './DiffSectionHeader';
 import { DiffSentenceLine } from './DiffSentenceLine';
 import { DiffSourceContextModal } from './DiffSourceContextModal';
-import * as api from '@/lib/api';
-import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
-import type { Sentence } from '@/types/merge';
-import type { WordDiffSegment } from '@/types/merge';
 
 // ============================================================================
 // Types
@@ -74,9 +73,18 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const targetMap = useMemo(() => buildSentenceMap(targetSentences), [targetSentences]);
 
     // Categorize
-    const identical = useMemo(() => segmentDiffs.filter((s) => s.diffType === 'same'), [segmentDiffs]);
-    const modified = useMemo(() => segmentDiffs.filter((s) => s.diffType === 'modified'), [segmentDiffs]);
-    const removed = useMemo(() => segmentDiffs.filter((s) => s.diffType === 'removed'), [segmentDiffs]);
+    const identical = useMemo(
+      () => segmentDiffs.filter((s) => s.diffType === 'same'),
+      [segmentDiffs]
+    );
+    const modified = useMemo(
+      () => segmentDiffs.filter((s) => s.diffType === 'modified'),
+      [segmentDiffs]
+    );
+    const removed = useMemo(
+      () => segmentDiffs.filter((s) => s.diffType === 'removed'),
+      [segmentDiffs]
+    );
     const added = useMemo(() => segmentDiffs.filter((s) => s.diffType === 'added'), [segmentDiffs]);
 
     // Jump to section
@@ -178,7 +186,12 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
         {/* Identical */}
         <div ref={identicalRef}>
-          <DiffSectionHeader title="Identical" count={identical.length} variant="identical" defaultCollapsed>
+          <DiffSectionHeader
+            title="Identical"
+            count={identical.length}
+            variant="identical"
+            defaultCollapsed
+          >
             <div className="divide-y">
               {identical.map((s) => (
                 <div key={s.segmentId}>
@@ -245,7 +258,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                       onSourceClick={() => {
                         if (s.matchedSegmentId) {
                           const sentence = targetMap.get(s.matchedSegmentId);
-                          if (sentence) handleSourceToggle(`target-${s.matchedSegmentId}`, sentence);
+                          if (sentence)
+                            handleSourceToggle(`target-${s.matchedSegmentId}`, sentence);
                         }
                       }}
                       expanded={expandedSegmentId === `target-${s.matchedSegmentId}`}

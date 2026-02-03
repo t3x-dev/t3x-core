@@ -14,16 +14,8 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import {
-  pgTable,
-  text,
-  timestamp,
-  jsonb,
-  index,
-  uniqueIndex,
-  real,
-} from 'drizzle-orm/pg-core';
-import { projects, conversations } from './schema';
+import { index, jsonb, pgTable, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage
@@ -105,23 +97,22 @@ export const commitsV4 = pgTable(
      * Source references (frozen at commit time)
      * Records which pinned items contributed to this commit
      */
-    sourceRefs: jsonb('source_refs').$type<
-      Array<{
-        type: 'conversation' | 'leaf';
-        id: string;
-        title?: string;
-        assertion_lessons?: string[];
-      }>
-    >(),
+    sourceRefs:
+      jsonb('source_refs').$type<
+        Array<{
+          type: 'conversation' | 'leaf';
+          id: string;
+          title?: string;
+          assertion_lessons?: string[];
+        }>
+      >(),
 
     /** Canvas position */
     positionX: real('position_x'),
     positionY: real('position_y'),
 
     /** Record creation time */
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     projectIdx: index('idx_commits_v4_project').on(table.projectId),
@@ -212,15 +203,16 @@ export const leaves = pgTable(
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Validation results */
-    assertions: jsonb('assertions').$type<
-      Array<{
-        id: string;
-        constraint_id: string;
-        passed: boolean;
-        details: string;
-        lesson?: string;
-      }>
-    >(),
+    assertions:
+      jsonb('assertions').$type<
+        Array<{
+          id: string;
+          constraint_id: string;
+          passed: boolean;
+          details: string;
+          lesson?: string;
+        }>
+      >(),
 
     // ─────────────────────────────────────────────────────────────────────────
     // Metadata
@@ -232,9 +224,7 @@ export const leaves = pgTable(
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
     /** Creation time */
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
     /** Creator */
     createdBy: text('created_by'),
@@ -271,22 +261,18 @@ export const leafHistory = pgTable(
     output: text('output').notNull(),
 
     /** Configuration used for this generation */
-    config: jsonb('config')
-      .notNull()
-      .$type<{
-        prompt_template?: string;
-        model?: string;
-        max_tokens?: number;
-        [key: string]: unknown;
-      }>(),
+    config: jsonb('config').notNull().$type<{
+      prompt_template?: string;
+      model?: string;
+      max_tokens?: number;
+      [key: string]: unknown;
+    }>(),
 
     /** LLM model used for generation */
     model: text('model').notNull(),
 
     /** When this output was generated */
-    generatedAt: timestamp('generated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
 
     /** Who triggered this generation */
     createdBy: text('created_by'),
@@ -332,9 +318,7 @@ export const pins = pgTable(
     selectedAssertionIds: jsonb('selected_assertion_ids').$type<string[]>(),
 
     /** When pinned */
-    pinnedAt: timestamp('pinned_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }).notNull().defaultNow(),
 
     /** Who pinned it */
     pinnedBy: text('pinned_by'),
@@ -342,11 +326,7 @@ export const pins = pgTable(
   (table) => ({
     projectIdx: index('idx_pins_project').on(table.projectId),
     /** Ensure unique pin per project + type + ref */
-    uniquePin: uniqueIndex('idx_pins_unique').on(
-      table.projectId,
-      table.type,
-      table.refId
-    ),
+    uniquePin: uniqueIndex('idx_pins_unique').on(table.projectId, table.type, table.refId),
   })
 );
 
@@ -375,9 +355,7 @@ export const conversationContexts = pgTable('conversation_contexts', {
   selectedPinIds: jsonb('selected_pin_ids').$type<string[] | null>(),
 
   /** Last update time */
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -396,7 +374,5 @@ export type LeafHistoryInsert = typeof leafHistory.$inferInsert;
 export type PinRecord = typeof pins.$inferSelect;
 export type PinInsert = typeof pins.$inferInsert;
 
-export type ConversationContextRecord =
-  typeof conversationContexts.$inferSelect;
-export type ConversationContextInsert =
-  typeof conversationContexts.$inferInsert;
+export type ConversationContextRecord = typeof conversationContexts.$inferSelect;
+export type ConversationContextInsert = typeof conversationContexts.$inferInsert;

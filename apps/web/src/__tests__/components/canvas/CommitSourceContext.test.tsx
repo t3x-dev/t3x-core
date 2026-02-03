@@ -81,8 +81,18 @@ function calculateSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   if (a.length === 0 || b.length === 0) return 0;
 
-  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter((w) => w.length > 0));
-  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter((w) => w.length > 0));
+  const wordsA = new Set(
+    a
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 0)
+  );
+  const wordsB = new Set(
+    b
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 0)
+  );
 
   // Handle whitespace-only strings
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
@@ -200,7 +210,11 @@ describe('CommitSourceContext - Edge Cases', () => {
   describe('Legacy Data Handling (no source field)', () => {
     test('separates sentences with and without source', () => {
       const sentences: CommitSentence[] = [
-        { id: 's1', text: 'Has source', source: { turn_hash: 'hash1', start_char: 0, end_char: 10 } },
+        {
+          id: 's1',
+          text: 'Has source',
+          source: { turn_hash: 'hash1', start_char: 0, end_char: 10 },
+        },
         { id: 's2', text: 'Legacy sentence', source: undefined },
         { id: 's3', text: 'Another legacy' },
       ];
@@ -238,11 +252,23 @@ describe('CommitSourceContext - Edge Cases', () => {
 
     test('handles mixed data correctly', () => {
       const sentences: CommitSentence[] = [
-        { id: 's1', text: 'From turn 1', source: { turn_hash: 'hash1', start_char: 0, end_char: 11 } },
+        {
+          id: 's1',
+          text: 'From turn 1',
+          source: { turn_hash: 'hash1', start_char: 0, end_char: 11 },
+        },
         { id: 's2', text: 'Legacy', source: undefined },
-        { id: 's3', text: 'From turn 2', source: { turn_hash: 'hash2', start_char: 0, end_char: 11 } },
+        {
+          id: 's3',
+          text: 'From turn 2',
+          source: { turn_hash: 'hash2', start_char: 0, end_char: 11 },
+        },
         { id: 's4', text: 'Also legacy' },
-        { id: 's5', text: 'From turn 1 again', source: { turn_hash: 'hash1', start_char: 20, end_char: 37 } },
+        {
+          id: 's5',
+          text: 'From turn 1 again',
+          source: { turn_hash: 'hash1', start_char: 20, end_char: 37 },
+        },
       ];
 
       const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
@@ -300,7 +326,8 @@ describe('CommitSourceContext - Edge Cases', () => {
     test('returns valid for very high similarity (>90%)', () => {
       // Need >90% Jaccard similarity: intersection/union > 0.9
       // With 19 common words and 2 different (one in each), we get 19/21 = 0.905
-      const commonWords = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen';
+      const commonWords =
+        'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen';
       const sentenceText = commonWords + ' original';
       const turnContent = commonWords + ' modified';
       const status = checkContentIntegrity(sentenceText, turnContent, 0, turnContent.length);
@@ -429,9 +456,21 @@ describe('CommitSourceContext - Edge Cases', () => {
 
     test('groups sentences from multiple turns', () => {
       const sentences: CommitSentence[] = [
-        { id: 's1', text: 'From turn 1', source: { turn_hash: 'hash1', start_char: 0, end_char: 11 } },
-        { id: 's2', text: 'From turn 2', source: { turn_hash: 'hash2', start_char: 0, end_char: 11 } },
-        { id: 's3', text: 'Also turn 1', source: { turn_hash: 'hash1', start_char: 20, end_char: 31 } },
+        {
+          id: 's1',
+          text: 'From turn 1',
+          source: { turn_hash: 'hash1', start_char: 0, end_char: 11 },
+        },
+        {
+          id: 's2',
+          text: 'From turn 2',
+          source: { turn_hash: 'hash2', start_char: 0, end_char: 11 },
+        },
+        {
+          id: 's3',
+          text: 'Also turn 1',
+          source: { turn_hash: 'hash1', start_char: 20, end_char: 31 },
+        },
       ];
 
       const { byTurn } = groupSentencesByTurn(sentences);
@@ -443,7 +482,11 @@ describe('CommitSourceContext - Edge Cases', () => {
 
     test('preserves original sentence reference', () => {
       const sentences: CommitSentence[] = [
-        { id: 's1', text: 'Test sentence', source: { turn_hash: 'hash1', start_char: 0, end_char: 13 } },
+        {
+          id: 's1',
+          text: 'Test sentence',
+          source: { turn_hash: 'hash1', start_char: 0, end_char: 13 },
+        },
       ];
 
       const { byTurn } = groupSentencesByTurn(sentences);
@@ -476,7 +519,11 @@ describe('CommitSourceContext - Edge Cases', () => {
     test('handles very long sentence text', () => {
       const longText = 'word '.repeat(1000);
       const sentences: CommitSentence[] = [
-        { id: 's1', text: longText, source: { turn_hash: 'hash1', start_char: 0, end_char: longText.length } },
+        {
+          id: 's1',
+          text: longText,
+          source: { turn_hash: 'hash1', start_char: 0, end_char: longText.length },
+        },
       ];
 
       const { byTurn } = groupSentencesByTurn(sentences);

@@ -4,7 +4,7 @@
  * Tests for context editing dialog component
  */
 
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { EditContextDialog } from '@/components/conversation/EditContextDialog';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -120,8 +120,8 @@ describe('EditContextDialog', () => {
   test('pins can be filtered by type', () => {
     const store = usePinsStore();
 
-    const convPins = store.pins.filter(p => p.type === 'conversation');
-    const leafPins = store.pins.filter(p => p.type === 'leaf');
+    const convPins = store.pins.filter((p) => p.type === 'conversation');
+    const leafPins = store.pins.filter((p) => p.type === 'leaf');
 
     expect(convPins.length).toBe(1);
     expect(leafPins.length).toBe(1);

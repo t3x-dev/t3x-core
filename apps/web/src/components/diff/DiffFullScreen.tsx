@@ -10,18 +10,18 @@
  * - Stats bar with section jumping
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
-import { getCommitV4 } from '@/lib/api';
-import type { CommitV4, DiffResultRaw } from '@/lib/api';
-import type { Sentence } from '@/types/merge';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useSourceContext } from '@/hooks/useSourceContext';
+import type { CommitV4, DiffResultRaw } from '@/lib/api';
+import { getCommitV4 } from '@/lib/api';
+import type { Sentence } from '@/types/merge';
 import { DiffHeader } from './DiffHeader';
-import { DiffStatsBar } from './DiffStatsBar';
-import { DiffSideBySide } from './DiffSideBySide';
 import type { DiffSideBySideHandle } from './DiffSideBySide';
+import { DiffSideBySide } from './DiffSideBySide';
 import { DiffSourceContextModal } from './DiffSourceContextModal';
+import { DiffStatsBar } from './DiffStatsBar';
 
 // ============================================================================
 // Types

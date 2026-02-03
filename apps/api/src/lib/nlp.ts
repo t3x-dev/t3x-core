@@ -16,7 +16,9 @@ function getProxyFetch() {
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
     return (url: string, options?: RequestInit) =>
-      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]) as Promise<Response>;
+      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<
+        typeof undiciFetch
+      >[1]) as Promise<Response>;
   }
   return fetch;
 }
@@ -39,13 +41,15 @@ export function getNLPProvider(): NLPProvider {
     if (!googleApiKey) {
       throw new Error(
         '[nlp] GOOGLE_CLOUD_NLP_KEY is not set. ' +
-        'Google Cloud NLP is required for Ring extraction. ' +
-        'Set the environment variable in .env file.'
+          'Google Cloud NLP is required for Ring extraction. ' +
+          'Set the environment variable in .env file.'
       );
     }
 
     const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-    console.log(`[nlp] Using Google Cloud NLP provider${proxyUrl ? ` (via proxy: ${proxyUrl})` : ''}`);
+    console.log(
+      `[nlp] Using Google Cloud NLP provider${proxyUrl ? ` (via proxy: ${proxyUrl})` : ''}`
+    );
     nlpProvider = createGoogleCloudNLPProvider(googleApiKey, {
       fetch: getProxyFetch(),
     });

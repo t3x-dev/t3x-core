@@ -49,7 +49,9 @@ async function initializeDB(): Promise<AnyDB> {
     // Local development: Use PGLite
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
     console.log('[db] Using PGLite:', dataDir);
-    const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import('@t3x/storage/pglite');
+    const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import(
+      '@t3x/storage/pglite'
+    );
     dbInstance = await createPGLiteStorage({ dataDir });
     getPGLiteClientFn = getPGLiteClient;
     closeDbFn = closePGLiteStorage;
@@ -66,7 +68,9 @@ async function initializeDB(): Promise<AnyDB> {
  */
 export function getRawClient(): PGlite {
   if (!getPGLiteClientFn) {
-    throw new Error('PGLite client not available. Either database not initialized or using PostgreSQL.');
+    throw new Error(
+      'PGLite client not available. Either database not initialized or using PostgreSQL.'
+    );
   }
   return getPGLiteClientFn();
 }

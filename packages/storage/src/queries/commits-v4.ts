@@ -11,7 +11,6 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import { computeJCSHash } from '@t3x/core';
 import type {
   CommitAuthorV4,
   CommitSourceRef,
@@ -19,6 +18,7 @@ import type {
   CreateCommitV4Input,
   SentenceV4,
 } from '@t3x/core';
+import { computeJCSHash } from '@t3x/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
@@ -163,15 +163,8 @@ export async function createCommitV4(
 /**
  * Find a CommitV4 by hash
  */
-export async function findCommitV4ByHash(
-  db: AnyDB,
-  hash: string
-): Promise<CommitV4 | null> {
-  const [row] = await db
-    .select()
-    .from(commitsV4)
-    .where(eq(commitsV4.hash, hash))
-    .limit(1);
+export async function findCommitV4ByHash(db: AnyDB, hash: string): Promise<CommitV4 | null> {
+  const [row] = await db.select().from(commitsV4).where(eq(commitsV4.hash, hash)).limit(1);
 
   return row ? rowToCommitV4(row) : null;
 }
@@ -254,10 +247,7 @@ export async function updateCommitV4Position(
  * @returns true if deleted, false if not found
  */
 export async function deleteCommitV4(db: AnyDB, hash: string): Promise<boolean> {
-  const result = await db
-    .delete(commitsV4)
-    .where(eq(commitsV4.hash, hash))
-    .returning();
+  const result = await db.delete(commitsV4).where(eq(commitsV4.hash, hash)).returning();
 
   return result.length > 0;
 }
@@ -269,16 +259,10 @@ export async function deleteCommitV4(db: AnyDB, hash: string): Promise<boolean> 
  * Returns commits in the same order as the input hashes array.
  * Missing hashes are skipped (no nulls in result).
  */
-export async function getCommitsV4ByHashes(
-  db: AnyDB,
-  hashes: string[]
-): Promise<CommitV4[]> {
+export async function getCommitsV4ByHashes(db: AnyDB, hashes: string[]): Promise<CommitV4[]> {
   if (hashes.length === 0) return [];
 
-  const rows = await db
-    .select()
-    .from(commitsV4)
-    .where(inArray(commitsV4.hash, hashes));
+  const rows = await db.select().from(commitsV4).where(inArray(commitsV4.hash, hashes));
 
   // Create a map for O(1) lookup
   const commitMap = new Map<string, CommitV4>();
@@ -302,10 +286,7 @@ export async function getCommitsV4ByHashes(
  * Uses single query with WHERE IN to avoid N+1 problem.
  * Returns parents in the same order as the parents array.
  */
-export async function getCommitV4Parents(
-  db: AnyDB,
-  hash: string
-): Promise<CommitV4[]> {
+export async function getCommitV4Parents(db: AnyDB, hash: string): Promise<CommitV4[]> {
   const commit = await findCommitV4ByHash(db, hash);
   if (!commit || commit.parents.length === 0) return [];
 

@@ -51,9 +51,12 @@ const badgeVariants = cva(
           'border-transparent bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm',
 
         // Subtle variants for inline status
-        'commit-subtle': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300',
-        'pending-subtle': 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300',
-        'branch-subtle': 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300',
+        'commit-subtle':
+          'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300',
+        'pending-subtle':
+          'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300',
+        'branch-subtle':
+          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300',
       },
     },
     defaultVariants: {

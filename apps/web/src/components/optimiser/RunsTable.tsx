@@ -187,9 +187,7 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
                 <code className="text-xs">{run.run_id}</code>
               </TableCell>
               <TableCell>{run.leaf?.id || '-'}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {run.metadata?.model || '-'}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{run.metadata?.model || '-'}</TableCell>
               <TableCell className="text-muted-foreground">
                 {run.metadata?.prompt_version || '-'}
               </TableCell>

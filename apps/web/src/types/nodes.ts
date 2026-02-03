@@ -17,8 +17,8 @@ export type CommitStatus = 'staging' | 'committed';
 // Leaf node types for output destinations
 // Must match @t3x/core LeafType from V4 schema
 export type LeafType =
-  | 'deploy_agent'  // was 'deploy'
-  | 'tweet'         // was 'twitter'
+  | 'deploy_agent' // was 'deploy'
+  | 'tweet' // was 'twitter'
   | 'weibo'
   | 'wechat'
   | 'email'
@@ -120,7 +120,14 @@ import type {
 } from '@t3x/core';
 
 // Re-export contract types for convenience
-export type { CommitAuthorV4, CommitSourceRef, CommitV4, CommitV4Content, SentenceSourceRef, SentenceV4 };
+export type {
+  CommitAuthorV4,
+  CommitSourceRef,
+  CommitV4,
+  CommitV4Content,
+  SentenceSourceRef,
+  SentenceV4,
+};
 
 /**
  * CommitV4 display data for canvas nodes
@@ -216,14 +223,14 @@ export type KeywordConstraintType = 'must_have' | 'mustnt_have' | 'neutral';
  * Matches API's anchor candidate types from Ring 1 extraction
  */
 export type AnchorType =
-  | 'number'    // Pure numbers: "100", "2025"
-  | 'money'     // Currency: "$5000", "100 USD"
-  | 'duration'  // Time periods: "30 days", "2 weeks"
-  | 'percent'   // Percentages: "15%", "3.5%"
-  | 'date'      // Dates: "November", "2025-01-08"
-  | 'entity'    // Named entities: "Bangkok", "Google"
-  | 'term'      // Important terms/keywords
-  | 'phrase';   // Multi-token phrases
+  | 'number' // Pure numbers: "100", "2025"
+  | 'money' // Currency: "$5000", "100 USD"
+  | 'duration' // Time periods: "30 days", "2 weeks"
+  | 'percent' // Percentages: "15%", "3.5%"
+  | 'date' // Dates: "November", "2025-01-08"
+  | 'entity' // Named entities: "Bangkok", "Google"
+  | 'term' // Important terms/keywords
+  | 'phrase'; // Multi-token phrases
 
 /**
  * Anchor constraint - user's choice for how this anchor should be treated
@@ -231,9 +238,11 @@ export type AnchorType =
  * Accepts both camelCase (UI) and snake_case (API v1.1) formats.
  */
 export type AnchorConstraint =
-  | 'mustHave' | 'must_have'       // Must include this anchor
-  | 'mustntHave' | 'mustnt_have'   // Must exclude this anchor
-  | 'preferred';                    // Prefer to include (soft constraint)
+  | 'mustHave'
+  | 'must_have' // Must include this anchor
+  | 'mustntHave'
+  | 'mustnt_have' // Must exclude this anchor
+  | 'preferred'; // Prefer to include (soft constraint)
 
 /**
  * Anchor candidate for UI display (camelCase version of ApiAnchorCandidate)
@@ -242,9 +251,9 @@ export type AnchorConstraint =
 export interface AnchorCandidate {
   text: string;
   type: AnchorType;
-  startChar: number;   // Global position in source text
+  startChar: number; // Global position in source text
   endChar: number;
-  confidence: number;  // 0-1 confidence/salience score
+  confidence: number; // 0-1 confidence/salience score
   source: 'token' | 'entity' | 'phrase';
 }
 
@@ -286,9 +295,9 @@ export interface ConfirmedAnchor {
  * Provides the sentence context for anchor display and auditing
  */
 export interface SentenceWithAnchors {
-  sentenceId: string;  // Ring 3 segment ID
-  text: string;        // Sentence original text
-  startChar: number;   // Position in source text (global)
+  sentenceId: string; // Ring 3 segment ID
+  text: string; // Sentence original text
+  startChar: number; // Position in source text (global)
   endChar: number;
   anchors: ConfirmedAnchor[];
 }
@@ -298,7 +307,7 @@ export interface SentenceWithAnchors {
  * Persisted in commit for auditing and playback
  */
 export interface CommitAnchors {
-  inputTextHash: string;              // SHA-256 of source text for validation
+  inputTextHash: string; // SHA-256 of source text for validation
   sentences: SentenceWithAnchors[];
 }
 
@@ -379,10 +388,10 @@ export interface SourceTextBlock {
 
 // Sentence info for building CommitAnchors (from curate preview chunks)
 export interface PendingCommitSentence {
-  id: string;      // Sentence/chunk ID
-  text: string;    // Sentence text
-  start: number;   // Global start char position (in source_text)
-  end: number;     // Global end char position (in source_text)
+  id: string; // Sentence/chunk ID
+  text: string; // Sentence text
+  start: number; // Global start char position (in source_text)
+  end: number; // Global end char position (in source_text)
   /** v1.3: Turn hash this sentence belongs to (for source context display) */
   turn_hash?: string;
   /** v1.3: Start position relative to turn.content (without [role]: prefix) */

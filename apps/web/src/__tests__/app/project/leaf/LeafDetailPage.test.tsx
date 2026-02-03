@@ -4,9 +4,9 @@
  * Tests for the leaf detail page showing constraints, output, and assertions
  */
 
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { Assertion, Constraint, Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
-import type { Leaf, Constraint, Assertion } from '@/lib/api';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -183,8 +183,8 @@ describe('LeafDetailPage', () => {
   // ============================================================
 
   test('can filter constraints by type', () => {
-    const requireConstraints = mockConstraints.filter(c => c.type === 'require');
-    const excludeConstraints = mockConstraints.filter(c => c.type === 'exclude');
+    const requireConstraints = mockConstraints.filter((c) => c.type === 'require');
+    const excludeConstraints = mockConstraints.filter((c) => c.type === 'exclude');
 
     expect(requireConstraints).toHaveLength(1);
     expect(excludeConstraints).toHaveLength(1);
@@ -197,22 +197,22 @@ describe('LeafDetailPage', () => {
   // ============================================================
 
   test('can calculate assertion pass/fail counts', () => {
-    const passedCount = mockAssertions.filter(a => a.passed).length;
-    const failedCount = mockAssertions.filter(a => !a.passed).length;
+    const passedCount = mockAssertions.filter((a) => a.passed).length;
+    const failedCount = mockAssertions.filter((a) => !a.passed).length;
 
     expect(passedCount).toBe(1);
     expect(failedCount).toBe(1);
   });
 
   test('can determine if all assertions passed', () => {
-    const allPassed = mockAssertions.every(a => a.passed);
+    const allPassed = mockAssertions.every((a) => a.passed);
     expect(allPassed).toBe(false);
 
     const allPassedAssertions: Assertion[] = [
       { id: 'ast_1', constraint_id: 'cst_1', passed: true, details: 'ok' },
       { id: 'ast_2', constraint_id: 'cst_2', passed: true, details: 'ok' },
     ];
-    const allPassedResult = allPassedAssertions.every(a => a.passed);
+    const allPassedResult = allPassedAssertions.every((a) => a.passed);
     expect(allPassedResult).toBe(true);
   });
 
@@ -254,7 +254,7 @@ describe('LeafDetailPage', () => {
   // ============================================================
 
   test('can create constraint map for assertion lookup', () => {
-    const constraintMap = new Map(mockConstraints.map(c => [c.id, c]));
+    const constraintMap = new Map(mockConstraints.map((c) => [c.id, c]));
 
     expect(constraintMap.get('cst_req1')?.value).toBe('must contain this');
     expect(constraintMap.get('cst_exc1')?.value).toBe('forbidden phrase');
@@ -262,7 +262,7 @@ describe('LeafDetailPage', () => {
   });
 
   test('assertion can find its constraint', () => {
-    const constraintMap = new Map(mockConstraints.map(c => [c.id, c]));
+    const constraintMap = new Map(mockConstraints.map((c) => [c.id, c]));
 
     const assertion = mockAssertions[0];
     const constraint = constraintMap.get(assertion.constraint_id);

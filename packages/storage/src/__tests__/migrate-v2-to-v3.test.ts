@@ -4,21 +4,21 @@
  * Tests for the V2 to V3 commit migration script.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createTestDB, testData } from './setup';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
-  extractSegments,
   buildSentencesFromV2Segments,
-  safeParseJson,
-  topologicalSort,
+  extractSegments,
   getMigrationAuthor,
   migrate,
-  type V2CommitRecord,
   type SegmentFacet,
+  safeParseJson,
+  topologicalSort,
+  type V2CommitRecord,
 } from '../migrations/migrate-v2-to-v3';
 import { insertProject } from '../queries/projects';
 import { commits as commitsV2Table, commitsV3 as commitsV3Table } from '../schema';
+import { createTestDB, testData } from './setup';
 
 // Suppress console output during tests
 beforeEach(() => {
@@ -270,11 +270,7 @@ describe('topologicalSort', () => {
 
   it('should sort commits so parents come before children', () => {
     // DAG:  A → B → C
-    const commits = [
-      makeCommit('C', ['B']),
-      makeCommit('A', []),
-      makeCommit('B', ['A']),
-    ];
+    const commits = [makeCommit('C', ['B']), makeCommit('A', []), makeCommit('B', ['A'])];
 
     const sorted = topologicalSort(commits);
     const hashes = sorted.map((c) => c.commitHash);
@@ -287,11 +283,7 @@ describe('topologicalSort', () => {
   it('should handle multiple root commits', () => {
     // DAG:  A → C
     //       B → C
-    const commits = [
-      makeCommit('C', ['A', 'B']),
-      makeCommit('A', []),
-      makeCommit('B', []),
-    ];
+    const commits = [makeCommit('C', ['A', 'B']), makeCommit('A', []), makeCommit('B', [])];
 
     const sorted = topologicalSort(commits);
     const hashes = sorted.map((c) => c.commitHash);
@@ -327,10 +319,7 @@ describe('topologicalSort', () => {
 
   it('should handle external parent references (not in commit set)', () => {
     // B references external parent "external_hash" not in our set
-    const commits = [
-      makeCommit('B', ['A', 'external_hash']),
-      makeCommit('A', []),
-    ];
+    const commits = [makeCommit('B', ['A', 'external_hash']), makeCommit('A', [])];
 
     const sorted = topologicalSort(commits);
     const hashes = sorted.map((c) => c.commitHash);
@@ -367,9 +356,7 @@ describe('topologicalSort', () => {
     expect(sorted.map((c) => c.commitHash).sort()).toEqual(['A', 'B', 'C']);
 
     // Verify warning was logged about cycle
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('commits not processed')
-    );
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('commits not processed'));
   });
 });
 
@@ -579,7 +566,15 @@ describe('migrate (integration)', () => {
       parentsJson: '[]',
       turnWindowJson: '{}',
       facetSnapshotJson: JSON.stringify([
-        { facet: 'segment', key: 's-1', text: 'Parent', value: 'Parent', start_char: 0, end_char: 6, turn_hash: 'sha256:t1' },
+        {
+          facet: 'segment',
+          key: 's-1',
+          text: 'Parent',
+          value: 'Parent',
+          start_char: 0,
+          end_char: 6,
+          turn_hash: 'sha256:t1',
+        },
       ]),
       mustHaveJson: null,
       mustntHaveJson: null,
@@ -595,7 +590,15 @@ describe('migrate (integration)', () => {
       parentsJson: JSON.stringify(['sha256:parent_v2']),
       turnWindowJson: '{}',
       facetSnapshotJson: JSON.stringify([
-        { facet: 'segment', key: 's-1', text: 'Child', value: 'Child', start_char: 0, end_char: 5, turn_hash: 'sha256:t2' },
+        {
+          facet: 'segment',
+          key: 's-1',
+          text: 'Child',
+          value: 'Child',
+          start_char: 0,
+          end_char: 5,
+          turn_hash: 'sha256:t2',
+        },
       ]),
       mustHaveJson: null,
       mustntHaveJson: null,
@@ -627,7 +630,15 @@ describe('migrate (integration)', () => {
 
     // Insert V2 commit
     const facetSnapshot = [
-      { facet: 'segment', key: 's-1', text: 'Test', value: 'Test', start_char: 0, end_char: 4, turn_hash: 'sha256:t1' },
+      {
+        facet: 'segment',
+        key: 's-1',
+        text: 'Test',
+        value: 'Test',
+        start_char: 0,
+        end_char: 4,
+        turn_hash: 'sha256:t1',
+      },
     ];
 
     await db.insert(commitsV2Table).values({
@@ -669,9 +680,7 @@ describe('migrate (integration)', () => {
       message: 'Empty commit',
       parentsJson: '[]',
       turnWindowJson: '{}',
-      facetSnapshotJson: JSON.stringify([
-        { facet: 'keyword', key: 'test', value: 'test' },
-      ]),
+      facetSnapshotJson: JSON.stringify([{ facet: 'keyword', key: 'test', value: 'test' }]),
       mustHaveJson: null,
       mustntHaveJson: null,
       createdAt: new Date(),
@@ -730,14 +739,22 @@ describe('migrate (integration)', () => {
     expect(content.constraints).toBeDefined();
     expect(content.constraints.length).toBeGreaterThanOrEqual(2);
 
-    const requireConstraint = content.constraints.find((c) => c.type === 'require' && c.value === '$5000');
-    const excludeConstraint = content.constraints.find((c) => c.type === 'exclude' && c.value === 'competitor');
+    const requireConstraint = content.constraints.find(
+      (c) => c.type === 'require' && c.value === '$5000'
+    );
+    const excludeConstraint = content.constraints.find(
+      (c) => c.type === 'exclude' && c.value === 'competitor'
+    );
 
     expect(requireConstraint).toBeDefined();
     expect(excludeConstraint).toBeDefined();
 
     // Verify source_sentence_id is correctly linked
-    const requireWithSource = requireConstraint as { type: string; value: string; source_sentence_id?: string };
+    const requireWithSource = requireConstraint as {
+      type: string;
+      value: string;
+      source_sentence_id?: string;
+    };
     expect(requireWithSource.source_sentence_id).toBe('s-1');
   });
 
@@ -745,7 +762,15 @@ describe('migrate (integration)', () => {
     const project = await insertProject(db, testData.project());
 
     const facetSnapshot = [
-      { facet: 'segment', key: 's-1', text: 'Test', value: 'Test', start_char: 0, end_char: 4, turn_hash: 'sha256:t1' },
+      {
+        facet: 'segment',
+        key: 's-1',
+        text: 'Test',
+        value: 'Test',
+        start_char: 0,
+        end_char: 4,
+        turn_hash: 'sha256:t1',
+      },
     ];
 
     await db.insert(commitsV2Table).values({
@@ -776,7 +801,15 @@ describe('migrate (integration)', () => {
 
     const specificDate = new Date('2024-06-15T10:30:00.000Z');
     const facetSnapshot = [
-      { facet: 'segment', key: 's-1', text: 'Test', value: 'Test', start_char: 0, end_char: 4, turn_hash: 'sha256:t1' },
+      {
+        facet: 'segment',
+        key: 's-1',
+        text: 'Test',
+        value: 'Test',
+        start_char: 0,
+        end_char: 4,
+        turn_hash: 'sha256:t1',
+      },
     ];
 
     await db.insert(commitsV2Table).values({
@@ -804,7 +837,15 @@ describe('migrate (integration)', () => {
 
     // Insert a V2 commit with segment missing turn_hash (will fail Fail-Fast check)
     const badFacetSnapshot = [
-      { facet: 'segment', key: 's-1', text: 'Missing turn_hash', value: 'Missing turn_hash', start_char: 0, end_char: 17, turn_hash: '' },
+      {
+        facet: 'segment',
+        key: 's-1',
+        text: 'Missing turn_hash',
+        value: 'Missing turn_hash',
+        start_char: 0,
+        end_char: 17,
+        turn_hash: '',
+      },
     ];
 
     await db.insert(commitsV2Table).values({
@@ -827,9 +868,7 @@ describe('migrate (integration)', () => {
     expect(result.errors).toBe(1);
 
     // Verify error was logged
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('Error:')
-    );
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Error:'));
 
     // Verify no V3 commit was created
     const v3Commits = await db.select().from(commitsV3Table);
@@ -840,7 +879,15 @@ describe('migrate (integration)', () => {
     const project = await insertProject(db, testData.project());
 
     const facetSnapshot = [
-      { facet: 'segment', key: 's-1', text: 'Test', value: 'Test', start_char: 0, end_char: 4, turn_hash: 'sha256:t1' },
+      {
+        facet: 'segment',
+        key: 's-1',
+        text: 'Test',
+        value: 'Test',
+        start_char: 0,
+        end_char: 4,
+        turn_hash: 'sha256:t1',
+      },
     ];
 
     // Insert V2 commit that references an external parent (not in migration set)
@@ -862,9 +909,7 @@ describe('migrate (integration)', () => {
     expect(result.migrated).toBe(1);
 
     // Verify warning was logged about missing parent mapping
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Missing parent mappings')
-    );
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Missing parent mappings'));
 
     // Verify V3 commit has empty parents (external reference excluded)
     const v3Commits = await db.select().from(commitsV3Table);

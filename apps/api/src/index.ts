@@ -23,19 +23,19 @@ import {
   commitsV4Routes,
   conversationRoutes,
   curateRoutes,
+  deployAgentRoutes,
   diffRoutes,
   exportRoutes,
   healthRoutes,
-  runnerRoutes,
-  statusRoutes,
-  turnRoutes,
-  deployAgentRoutes,
-  runsRoutes,
   leavesRoutes,
   pinsRoutes,
+  runnerRoutes,
+  runsRoutes,
+  statusRoutes,
+  turnRoutes,
 } from './routes';
-import { projectRoutes } from './routes/projects.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
+import { projectRoutes } from './routes/projects.openapi';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -44,10 +44,7 @@ function loadEnvLocal(): void {
   const isInAppsApi = cwd.endsWith('apps/api') || cwd.endsWith('apps\\api');
   const rootDir = isInAppsApi ? path.resolve(cwd, '../..') : cwd;
 
-  const candidates = [
-    path.resolve(rootDir, '.env.local'),
-    path.resolve(rootDir, '.env'),
-  ];
+  const candidates = [path.resolve(rootDir, '.env.local'), path.resolve(rootDir, '.env')];
 
   for (const envPath of candidates) {
     if (!fs.existsSync(envPath)) continue;
@@ -150,7 +147,10 @@ api.doc('/openapi.json', {
     { name: 'Runner', description: 'Grey-box agent evaluation' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
-    { name: 'Commits V4', description: 'Commits v4 (pure knowledge, sentences only, no constraints)' },
+    {
+      name: 'Commits V4',
+      description: 'Commits v4 (pure knowledge, sentences only, no constraints)',
+    },
   ],
 });
 
@@ -215,6 +215,18 @@ async function start() {
     });
 
     console.log(`T3X API server running on http://localhost:${port}`);
+    console.log('─── Configuration ───');
+    console.log(
+      `  ANTHROPIC_API_KEY:      ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set'}`
+    );
+    console.log(
+      `  GOOGLE_AI_STUDIO_KEY:   ${process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set'}`
+    );
+    console.log(
+      `  Database:               ${process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)'}`
+    );
+    console.log(`  RUNNER_BASE_URL:        ${process.env.RUNNER_BASE_URL || 'not set'}`);
+    console.log('─────────────────────');
 
     // Graceful shutdown
     const shutdown = async () => {

@@ -87,7 +87,10 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         const [convResponse, commitsV4, projectLeaves] = await Promise.all([
           api.listConversations(projectId, 100, 0),
           api.listCommitsV4(projectId, undefined, 100, 0),
-          api.listLeavesByProject(projectId).catch(() => [] as api.Leaf[]),
+          api.listLeavesByProject(projectId).catch((err) => {
+            console.warn('[canvasStore] Failed to load leaves:', err);
+            return [] as api.Leaf[];
+          }),
         ]);
 
         const conversations = convResponse.conversations;

@@ -10,9 +10,9 @@
  *   />
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react';
 
-const QUERY = '(prefers-reduced-motion: reduce)'
+const QUERY = '(prefers-reduced-motion: reduce)';
 
 /**
  * Returns true if the user prefers reduced motion
@@ -20,24 +20,24 @@ const QUERY = '(prefers-reduced-motion: reduce)'
  */
 export function useReducedMotion(): boolean {
   // Default to false on server, will be updated on client
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia(QUERY)
+    const mediaQuery = window.matchMedia(QUERY);
 
     // Set initial value
-    setPrefersReducedMotion(mediaQuery.matches)
+    setPrefersReducedMotion(mediaQuery.matches);
 
     // Listen for changes
     const handler = (event: MediaQueryListEvent) => {
-      setPrefersReducedMotion(event.matches)
-    }
+      setPrefersReducedMotion(event.matches);
+    };
 
-    mediaQuery.addEventListener('change', handler)
-    return () => mediaQuery.removeEventListener('change', handler)
-  }, [])
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
 
-  return prefersReducedMotion
+  return prefersReducedMotion;
 }
 
 /**
@@ -45,6 +45,6 @@ export function useReducedMotion(): boolean {
  * Can be used in getServerSideProps or static props
  */
 export function getReducedMotionPreference(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia(QUERY).matches
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia(QUERY).matches;
 }

@@ -4,7 +4,7 @@
  * Tests for pin/unpin button component
  */
 
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { PinButton } from '@/components/ui/PinButton';
 import { usePinsStore } from '@/store/pinsStore';
 

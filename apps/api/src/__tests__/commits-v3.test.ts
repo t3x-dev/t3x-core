@@ -34,7 +34,10 @@ describe('Commits V3 Routes', () => {
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(mockDB, testData.project({ name: 'CommitsV3 Test Project' }));
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'CommitsV3 Test Project' })
+    );
     testProjectId = project.projectId;
   });
 
@@ -468,12 +471,20 @@ describe('Commits V3 Routes', () => {
       // Hash with different content (first-class field)
       const hash1 = computeCommitV3Hash({
         ...baseCommit,
-        content: { sentences: [{ id: 's1', text: 'A', source: { turn_hash: 'sha256:a', start_char: 0, end_char: 1 } }] },
+        content: {
+          sentences: [
+            { id: 's1', text: 'A', source: { turn_hash: 'sha256:a', start_char: 0, end_char: 1 } },
+          ],
+        },
       });
 
       const hash2 = computeCommitV3Hash({
         ...baseCommit,
-        content: { sentences: [{ id: 's2', text: 'B', source: { turn_hash: 'sha256:b', start_char: 0, end_char: 1 } }] },
+        content: {
+          sentences: [
+            { id: 's2', text: 'B', source: { turn_hash: 'sha256:b', start_char: 0, end_char: 1 } },
+          ],
+        },
       });
 
       // Hashes should be different since content is a first-class field

@@ -26,22 +26,24 @@ export const SentenceSchema = z.object({
     description: 'Confidence score (0-1), optional',
     example: 1,
   }),
-  source: z.object({
-    turn_hash: z.string().openapi({
-      description: 'Source turn hash',
-      example: 'sha256:abc123...',
+  source: z
+    .object({
+      turn_hash: z.string().openapi({
+        description: 'Source turn hash',
+        example: 'sha256:abc123...',
+      }),
+      start_char: z.number().openapi({
+        description: 'Start character position in turn',
+        example: 0,
+      }),
+      end_char: z.number().openapi({
+        description: 'End character position in turn',
+        example: 17,
+      }),
+    })
+    .openapi({
+      description: 'Source reference for the sentence',
     }),
-    start_char: z.number().openapi({
-      description: 'Start character position in turn',
-      example: 0,
-    }),
-    end_char: z.number().openapi({
-      description: 'End character position in turn',
-      example: 17,
-    }),
-  }).openapi({
-    description: 'Source reference for the sentence',
-  }),
 });
 
 /**

@@ -9,16 +9,16 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  type CommitDiff,
+  type DiffableSentence,
   diffCommits,
+  JACCARD_THRESHOLD,
   jaccard,
   lcs,
   lcsIndices,
   splitWords,
   tokenize,
   wordDiff,
-  JACCARD_THRESHOLD,
-  type CommitDiff,
-  type DiffableSentence,
 } from '@/lib/diffUtils';
 
 // ═══════════════════════════════════════════════════════════════════════════

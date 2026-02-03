@@ -132,9 +132,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
       if (leaf.output) {
         // Truncate long outputs to avoid context overflow
         const truncatedOutput =
-          leaf.output.length > 200
-            ? `${leaf.output.substring(0, 200)}...`
-            : leaf.output;
+          leaf.output.length > 200 ? `${leaf.output.substring(0, 200)}...` : leaf.output;
         leafText += `Output: ${truncatedOutput}\n\n`;
       }
 
@@ -208,9 +206,7 @@ export function buildLeafContext(commit: CommitV4): BuiltContext {
  * @param input - Partial context build input (no currentCommit required)
  * @returns Built context with pinned items only
  */
-export function buildMemoryFromPins(
-  input: Omit<ContextBuildInput, 'currentCommit'>
-): BuiltContext {
+export function buildMemoryFromPins(input: Omit<ContextBuildInput, 'currentCommit'>): BuiltContext {
   return buildConversationContext({
     ...input,
     currentCommit: undefined,
@@ -228,10 +224,7 @@ export function buildMemoryFromPins(
  * @param config - Conversation context config (null = use all)
  * @returns Filtered list of active pins
  */
-export function filterActivePins(
-  pins: Pin[],
-  config?: ConversationContext | null
-): Pin[] {
+export function filterActivePins(pins: Pin[], config?: ConversationContext | null): Pin[] {
   // null or undefined config = use all pins
   if (!config || config.selected_pin_ids === null) {
     return pins;

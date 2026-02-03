@@ -1,14 +1,14 @@
 'use client';
 
 import {
-  BarChart as RechartsBarChart,
   Bar,
-  XAxis,
-  YAxis,
   Cell,
+  LabelList,
+  BarChart as RechartsBarChart,
   ResponsiveContainer,
   Tooltip,
-  LabelList,
+  XAxis,
+  YAxis,
 } from 'recharts';
 
 export interface DimensionScores {
@@ -50,7 +50,13 @@ function getScoreColor(value: number): string {
 }
 
 // Custom tooltip component
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { dimension: string; value: number } }> }) {
+function CustomTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: { dimension: string; value: number } }>;
+}) {
   if (!active || !payload || payload.length === 0) return null;
 
   const data = payload[0].payload;
@@ -114,11 +120,7 @@ export function BarChart({ scores, className }: BarChartProps) {
             width={65}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-          <Bar
-            dataKey="value"
-            radius={[0, 4, 4, 0]}
-            barSize={24}
-          >
+          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getScoreColor(entry.value)} />
             ))}

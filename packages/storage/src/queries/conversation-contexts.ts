@@ -15,10 +15,7 @@
 import type { ConversationContext } from '@t3x/core';
 import { eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import {
-  type ConversationContextRecord,
-  conversationContexts,
-} from '../schema-v4';
+import { type ConversationContextRecord, conversationContexts } from '../schema-v4';
 
 // ============================================================
 // Query Functions
@@ -108,9 +105,7 @@ export async function deleteConversationContext(
 /**
  * Convert database row to ConversationContext type
  */
-function rowToConversationContext(
-  row: ConversationContextRecord
-): ConversationContext {
+function rowToConversationContext(row: ConversationContextRecord): ConversationContext {
   return {
     conversation_id: row.conversationId,
     selected_pin_ids: row.selectedPinIds ?? null,

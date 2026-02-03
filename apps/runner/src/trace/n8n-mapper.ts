@@ -10,12 +10,12 @@
 
 import pino from 'pino';
 import type {
-  RunRecord,
-  StepRecord,
-  SpanKind,
   LLMData,
-  ToolData,
   RetrievalData,
+  RunRecord,
+  SpanKind,
+  StepRecord,
+  ToolData,
 } from '../schemas/run-record.js';
 import type { N8nExecution, N8nNodeRun, N8nRunData } from './types.js';
 
@@ -145,11 +145,16 @@ function extractLLMData(nodeRun: N8nNodeRun, output: unknown): LLMData | undefin
   let model = 'unknown';
 
   if (aiLmData?.[0]?.[0]) {
-    const lmOutput = (Array.isArray(aiLmData[0][0]) ? null : aiLmData[0][0]) as Record<string, unknown> | null;
+    const lmOutput = (Array.isArray(aiLmData[0][0]) ? null : aiLmData[0][0]) as Record<
+      string,
+      unknown
+    > | null;
     const json = lmOutput?.json as Record<string, unknown> | undefined;
 
     // n8n uses tokenUsage (not tokenUsageEstimate)
-    const tokenUsage = (json?.tokenUsage || json?.tokenUsageEstimate) as Record<string, number> | undefined;
+    const tokenUsage = (json?.tokenUsage || json?.tokenUsageEstimate) as
+      | Record<string, number>
+      | undefined;
     if (tokenUsage) {
       promptTokens = tokenUsage.promptTokens || 0;
       completionTokens = tokenUsage.completionTokens || 0;
@@ -159,7 +164,10 @@ function extractLLMData(nodeRun: N8nNodeRun, output: unknown): LLMData | undefin
 
   // Extract model from inputOverride
   if (aiLmInputData?.[0]?.[0]) {
-    const lmInput = (Array.isArray(aiLmInputData[0][0]) ? null : aiLmInputData[0][0]) as Record<string, unknown> | null;
+    const lmInput = (Array.isArray(aiLmInputData[0][0]) ? null : aiLmInputData[0][0]) as Record<
+      string,
+      unknown
+    > | null;
     const json = lmInput?.json as Record<string, unknown> | undefined;
     const options = json?.options as Record<string, unknown> | undefined;
     if (options?.model) {
@@ -213,7 +221,7 @@ function extractProvider(model: string): string {
  */
 function extractToolData(
   nodeName: string,
-  nodeRun: N8nNodeRun,
+  _nodeRun: N8nNodeRun,
   input: unknown,
   output: unknown
 ): ToolData | undefined {
@@ -228,7 +236,7 @@ function extractToolData(
  * Extract Retrieval data from node (v2.0)
  */
 function extractRetrievalData(
-  nodeRun: N8nNodeRun,
+  _nodeRun: N8nNodeRun,
   input: unknown,
   output: unknown
 ): RetrievalData | undefined {
@@ -236,12 +244,11 @@ function extractRetrievalData(
   const outputObj = output as Record<string, unknown> | undefined;
 
   // Try to extract query
-  const query = (inputObj?.query as string) ||
-    (inputObj?.search as string) ||
-    '';
+  const query = (inputObj?.query as string) || (inputObj?.search as string) || '';
 
   // Try to extract documents from output
-  const docs = (outputObj?.documents as Array<Record<string, unknown>>) ||
+  const docs =
+    (outputObj?.documents as Array<Record<string, unknown>>) ||
     (outputObj?.results as Array<Record<string, unknown>>) ||
     [];
 
@@ -506,9 +513,7 @@ function extractInputs(execution: N8nExecution): Record<string, unknown> {
   }
 
   // Look for Webhook node input
-  const webhookNode = Object.keys(runData).find((name) =>
-    name.toLowerCase().includes('webhook')
-  );
+  const webhookNode = Object.keys(runData).find((name) => name.toLowerCase().includes('webhook'));
 
   if (!webhookNode || !runData[webhookNode]?.[0]) {
     return {};
@@ -559,9 +564,7 @@ export function mapN8nExecutionToRunRecord(
   // Calculate timing
   const startedAt = execution.startedAt;
   const endedAt = execution.stoppedAt;
-  const totalMs = endedAt
-    ? new Date(endedAt).getTime() - new Date(startedAt).getTime()
-    : undefined;
+  const totalMs = endedAt ? new Date(endedAt).getTime() - new Date(startedAt).getTime() : undefined;
 
   // Build node type map from workflow data
   const nodeTypeMap = buildNodeTypeMap(execution);

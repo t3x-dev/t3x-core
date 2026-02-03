@@ -6,23 +6,11 @@
 
 // Import types for use in this file
 // 导入类型以便在本文件中使用
-import type {
-  Constraint,
-  CommitAuthor,
-  CommitContent,
-  CommitV3,
-  WordDiffSegment,
-} from '@t3x/core';
+import type { CommitAuthor, CommitContent, CommitV3, Constraint, WordDiffSegment } from '@t3x/core';
 
 // Re-export for consumers of this module
 // 重新导出供本模块的使用者使用
-export type {
-  Constraint,
-  CommitAuthor,
-  CommitContent,
-  CommitV3,
-  WordDiffSegment,
-};
+export type { Constraint, CommitAuthor, CommitContent, CommitV3, WordDiffSegment };
 
 // ============================================================================
 // Sentence Types (compatible with both commit.ts and commit-v3.ts formats)

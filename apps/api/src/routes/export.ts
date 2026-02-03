@@ -6,10 +6,10 @@
  */
 
 import {
-  listCommitsV3,
   findConversationsByProject,
   findProjectById,
   findTurnsByProject,
+  listCommitsV3,
 } from '@t3x/storage/pglite';
 import * as crypto from 'crypto';
 import { Hono } from 'hono';
@@ -271,11 +271,15 @@ exportRoutes.get('/v1/export/cfpack', async (c) => {
         facet: `sentence_${i + 1}`,
         text: s.text,
         keywords: [],
-        evidence: s.source?.turn_hash ? [{
-          turn_hash: s.source.turn_hash,
-          segment_id: s.id,
-          similarity_score: 1.0,
-        }] : [],
+        evidence: s.source?.turn_hash
+          ? [
+              {
+                turn_hash: s.source.turn_hash,
+                segment_id: s.id,
+                similarity_score: 1.0,
+              },
+            ]
+          : [],
       }));
 
       commits.push({
@@ -439,10 +443,12 @@ exportRoutes.get('/v1/export/ledger', async (c) => {
           author: commit.author,
           content: commit.content,
           // Legacy fields for backward compatibility
-          turn_window: firstSource ? {
-            start_turn_hash: firstSource.turn_hash,
-            end_turn_hash: lastSource?.turn_hash || firstSource.turn_hash,
-          } : null,
+          turn_window: firstSource
+            ? {
+                start_turn_hash: firstSource.turn_hash,
+                end_turn_hash: lastSource?.turn_hash || firstSource.turn_hash,
+              }
+            : null,
           created_at: commit.created_at,
         })
       );

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MetricsDeltaProps {
@@ -13,7 +13,13 @@ interface MetricsDeltaProps {
   className?: string;
 }
 
-export function MetricsDelta({ v1, v2, asPercent = true, invertColors = false, className }: MetricsDeltaProps) {
+export function MetricsDelta({
+  v1,
+  v2,
+  asPercent = true,
+  invertColors = false,
+  className,
+}: MetricsDeltaProps) {
   const delta = v2 - v1;
   const deltaPercent = asPercent ? Math.round(delta * 100) : delta;
 
@@ -40,11 +46,7 @@ export function MetricsDelta({ v1, v2, asPercent = true, invertColors = false, c
         className
       )}
     >
-      {isImproved ? (
-        <ArrowUp className="h-3 w-3" />
-      ) : (
-        <ArrowDown className="h-3 w-3" />
-      )}
+      {isImproved ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
       <span>
         {delta > 0 ? '+' : ''}
         {deltaPercent}%
@@ -63,8 +65,15 @@ interface CompareValueProps {
   className?: string;
 }
 
-export function CompareValue({ v1, v2, label, asPercent = true, invertColors = false, className }: CompareValueProps) {
-  const format = (v: number) => asPercent ? `${Math.round(v * 100)}%` : v.toFixed(1);
+export function CompareValue({
+  v1,
+  v2,
+  label,
+  asPercent = true,
+  invertColors = false,
+  className,
+}: CompareValueProps) {
+  const format = (v: number) => (asPercent ? `${Math.round(v * 100)}%` : v.toFixed(1));
 
   return (
     <div className={cn('space-y-1', className)}>

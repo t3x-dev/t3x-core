@@ -25,7 +25,7 @@ const SuccessResponse = <T extends z.ZodType>(dataSchema: T) =>
     data: dataSchema,
   });
 
-const ErrorResponse = z.object({
+const _ErrorResponse = z.object({
   success: z.literal(false),
   error: z.object({
     code: z.string(),

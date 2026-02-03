@@ -4,8 +4,8 @@
  * Converts Ring 3 segments to CommitV3 sentences with source provenance.
  */
 
-import type { Sentence } from '../types/commit-v3';
 import type { Segment } from '../extractors/types';
+import type { Sentence } from '../types/commit-v3';
 
 /**
  * Build CommitV3 sentences from Ring 3 segments.
@@ -22,10 +22,7 @@ import type { Segment } from '../extractors/types';
  * @param turnHash - The source turn's hash for provenance
  * @returns Array of CommitV3 sentences
  */
-export function buildSentencesFromSegments(
-  segments: Segment[],
-  turnHash: string
-): Sentence[] {
+export function buildSentencesFromSegments(segments: Segment[], turnHash: string): Sentence[] {
   return segments.map((seg) => ({
     id: seg.segmentId,
     text: seg.text,

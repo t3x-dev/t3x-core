@@ -6,10 +6,10 @@
  * Shows branch info, save status, and action buttons.
  */
 
-import { ArrowLeft, GitMerge, Check, Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, GitMerge, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -102,12 +102,7 @@ export function MergeActionBar({
         <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          size="sm"
-          onClick={onCommit}
-          disabled={!canCommit}
-          className="gap-1"
-        >
+        <Button size="sm" onClick={onCommit} disabled={!canCommit} className="gap-1">
           <GitMerge className="h-3 w-3" />
           Commit Merge
         </Button>

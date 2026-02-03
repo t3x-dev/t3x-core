@@ -2,6 +2,7 @@
 
 import { Bot, GitCommit, GitCompare, Loader2, User } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import {
   Sheet,
   SheetContent,
@@ -9,9 +10,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
-import * as api from '@/lib/api';
 import type { CommitV4, DiffResultRaw } from '@/lib/api';
+import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface CommitHistoryPanelProps {
@@ -172,8 +172,7 @@ export function CommitHistoryPanel({
                     const isHead = index === 0;
                     const isSelected = selectedHash === commit.hash;
                     const isRoot = index === history.length - 1;
-                    const authorName =
-                      commit.author?.name || commit.author?.type || 'unknown';
+                    const authorName = commit.author?.name || commit.author?.type || 'unknown';
                     const isAgent = commit.author?.type === 'agent';
 
                     return (
@@ -225,18 +224,12 @@ export function CommitHistoryPanel({
                               {commit.message || 'No message'}
                             </p>
                             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              {isAgent ? (
-                                <Bot className="size-3" />
-                              ) : (
-                                <User className="size-3" />
-                              )}
+                              {isAgent ? <Bot className="size-3" /> : <User className="size-3" />}
                               <span>{authorName}</span>
                               <span>·</span>
                               <span>{formatTime(commit.committed_at)}</span>
                               <span>·</span>
-                              <span>
-                                {commit.content?.sentences?.length ?? 0} sentences
-                              </span>
+                              <span>{commit.content?.sentences?.length ?? 0} sentences</span>
                             </div>
                           </div>
                         </div>
@@ -293,14 +286,10 @@ export function CommitHistoryPanel({
                         </span>
                       )}
                       {diffData.stats.addedCount > 0 && (
-                        <span className="text-green-600">
-                          +{diffData.stats.addedCount} added
-                        </span>
+                        <span className="text-green-600">+{diffData.stats.addedCount} added</span>
                       )}
                       {diffData.stats.removedCount > 0 && (
-                        <span className="text-red-600">
-                          -{diffData.stats.removedCount} removed
-                        </span>
+                        <span className="text-red-600">-{diffData.stats.removedCount} removed</span>
                       )}
                       {diffData.stats.modifiedCount > 0 && (
                         <span className="text-amber-600">
