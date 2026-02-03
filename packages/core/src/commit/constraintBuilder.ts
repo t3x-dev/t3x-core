@@ -6,9 +6,9 @@
 
 import type {
   Constraint,
-  Sentence,
-  RequireConstraint,
   ExcludeConstraint,
+  RequireConstraint,
+  Sentence,
 } from '../types/commit-v3';
 
 /**
@@ -22,10 +22,7 @@ import type {
  * @param sentences - Array of sentences to search
  * @returns The sentence ID if found, undefined otherwise
  */
-export function findBestSourceSentenceId(
-  value: string,
-  sentences: Sentence[]
-): string | undefined {
+export function findBestSourceSentenceId(value: string, sentences: Sentence[]): string | undefined {
   // Empty value cannot match anything meaningfully
   if (!value) {
     return undefined;

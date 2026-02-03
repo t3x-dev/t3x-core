@@ -4,8 +4,8 @@
  * Provides word-level diff between two strings using dynamic programming.
  */
 
-import type { WordDiffSegment } from './types';
 import { tokenize } from './tokenize';
+import type { WordDiffSegment } from './types';
 
 /**
  * Longest Common Subsequence using dynamic programming

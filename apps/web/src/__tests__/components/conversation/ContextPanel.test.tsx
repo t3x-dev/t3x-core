@@ -4,7 +4,7 @@
  * Tests for context panel sidebar component
  */
 
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ContextPanel } from '@/components/conversation/ContextPanel';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -116,8 +116,8 @@ describe('ContextPanel', () => {
   test('pins can be filtered by type for display', () => {
     const store = usePinsStore();
 
-    const convPins = store.pins.filter(p => p.type === 'conversation');
-    const leafPins = store.pins.filter(p => p.type === 'leaf');
+    const convPins = store.pins.filter((p) => p.type === 'conversation');
+    const leafPins = store.pins.filter((p) => p.type === 'leaf');
 
     expect(convPins.length).toBe(2);
     expect(leafPins.length).toBe(1);
@@ -128,9 +128,10 @@ describe('ContextPanel', () => {
     const contextConfig = { selected_pin_ids: null };
 
     // When selected_pin_ids is null, all pins are active
-    const activePins = contextConfig.selected_pin_ids === null
-      ? store.pins
-      : store.pins.filter(p => contextConfig.selected_pin_ids?.includes(p.id));
+    const activePins =
+      contextConfig.selected_pin_ids === null
+        ? store.pins
+        : store.pins.filter((p) => contextConfig.selected_pin_ids?.includes(p.id));
 
     expect(activePins.length).toBe(3);
   });
@@ -140,9 +141,10 @@ describe('ContextPanel', () => {
     const contextConfig = { selected_pin_ids: ['pin_conv_1'] };
 
     // When selected_pin_ids has values, filter to those pins
-    const activePins = contextConfig.selected_pin_ids === null
-      ? store.pins
-      : store.pins.filter(p => contextConfig.selected_pin_ids?.includes(p.id));
+    const activePins =
+      contextConfig.selected_pin_ids === null
+        ? store.pins
+        : store.pins.filter((p) => contextConfig.selected_pin_ids?.includes(p.id));
 
     expect(activePins.length).toBe(1);
     expect(activePins[0].id).toBe('pin_conv_1');

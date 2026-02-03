@@ -1,5 +1,5 @@
 import { BaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * AnimatedEdge - A smooth step edge with subtle flow animation

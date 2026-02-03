@@ -48,10 +48,10 @@ type TokenState =
   | 'excluded'
   | 'keyword-must'
   | 'keyword-mustnt'
-  | 'anchor-candidate'     // Dotted underline for unconfirmed candidates
-  | 'anchor-must'          // Confirmed mustHave anchor
-  | 'anchor-mustnt'        // Confirmed mustntHave anchor
-  | 'anchor-preferred';    // Confirmed preferred anchor
+  | 'anchor-candidate' // Dotted underline for unconfirmed candidates
+  | 'anchor-must' // Confirmed mustHave anchor
+  | 'anchor-mustnt' // Confirmed mustntHave anchor
+  | 'anchor-preferred'; // Confirmed preferred anchor
 
 /**
  * Check if a token falls within an anchor candidate's character range
@@ -85,8 +85,8 @@ function isTokenInConfirmedAnchor(
 ): ConfirmedAnchor | null {
   for (const anchor of anchors) {
     // Use pre-computed global positions if available, otherwise convert from relative
-    const anchorGlobalStart = anchor.globalStart ?? (sentenceStartChar + anchor.start);
-    const anchorGlobalEnd = anchor.globalEnd ?? (sentenceStartChar + anchor.end);
+    const anchorGlobalStart = anchor.globalStart ?? sentenceStartChar + anchor.start;
+    const anchorGlobalEnd = anchor.globalEnd ?? sentenceStartChar + anchor.end;
     // Check if token overlaps with anchor's character range
     if (token.charStart < anchorGlobalEnd && token.charEnd > anchorGlobalStart) {
       return anchor;
@@ -339,8 +339,8 @@ export function SelectableTextBlock({
               const newAnchor: ConfirmedAnchor = {
                 id: `anchor-${candidate.startChar}-${candidate.endChar}`,
                 text: candidate.text,
-                start: candidate.startChar,  // Global position (for now)
-                end: candidate.endChar,      // Global position (for now)
+                start: candidate.startChar, // Global position (for now)
+                end: candidate.endChar, // Global position (for now)
                 type: candidate.type,
                 constraint: 'preferred',
                 globalStart: candidate.startChar,
@@ -457,11 +457,15 @@ export function SelectableTextBlock({
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
-      state === 'anchor-candidate' && 'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+      state === 'anchor-candidate' &&
+        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
       // Confirmed anchors: solid background with appropriate color
-      state === 'anchor-must' && 'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
-      state === 'anchor-mustnt' && 'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
-      state === 'anchor-preferred' && 'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
+      state === 'anchor-must' &&
+        'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+      state === 'anchor-mustnt' &&
+        'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+      state === 'anchor-preferred' &&
+        'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
       isDragging && state === 'normal' && 'bg-blue-100'
     );
   };
@@ -823,8 +827,8 @@ function ConversationTurnRenderer({
               const newAnchor: ConfirmedAnchor = {
                 id: `anchor-${candidate.startChar}-${candidate.endChar}`,
                 text: candidate.text,
-                start: candidate.startChar,  // Global position (for now)
-                end: candidate.endChar,      // Global position (for now)
+                start: candidate.startChar, // Global position (for now)
+                end: candidate.endChar, // Global position (for now)
                 type: candidate.type,
                 constraint: 'preferred',
                 globalStart: candidate.startChar,
@@ -913,11 +917,15 @@ function ConversationTurnRenderer({
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
-      state === 'anchor-candidate' && 'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+      state === 'anchor-candidate' &&
+        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
       // Confirmed anchors: solid background with appropriate color
-      state === 'anchor-must' && 'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
-      state === 'anchor-mustnt' && 'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
-      state === 'anchor-preferred' && 'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
+      state === 'anchor-must' &&
+        'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+      state === 'anchor-mustnt' &&
+        'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+      state === 'anchor-preferred' &&
+        'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
       isDragging && state === 'normal' && 'bg-blue-100'
     );
   };
@@ -988,7 +996,7 @@ function ConversationTurnRenderer({
             !group.turn && 'border-slate-200 bg-slate-50'
           )}
         >
-{/* Turn header removed - [role]: prefix in content provides role info */}
+          {/* Turn header removed - [role]: prefix in content provides role info */}
           <div className="text-[0.95rem] leading-7 select-none">
             {group.tokens.map((token, idx) => renderToken(token, group.tokens[idx + 1]))}
           </div>
@@ -997,9 +1005,7 @@ function ConversationTurnRenderer({
 
       {!readOnly && (
         <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
-          <span>
-            左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't
-          </span>
+          <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't</span>
         </div>
       )}
     </div>

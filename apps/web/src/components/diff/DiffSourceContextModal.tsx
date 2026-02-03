@@ -7,8 +7,8 @@
  * instead of mergeWorkspaceStore.
  */
 
+import { Bot, Loader2, Settings, Terminal, User } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { User, Bot, Terminal, Settings, Loader2 } from 'lucide-react';
 import type { Sentence, TurnContextData, TurnWithContext } from '@/types/merge';
 
 const roleIcons: Record<string, React.ReactNode> = {

@@ -60,15 +60,8 @@ export async function createLeafHistory(
 /**
  * Find a LeafHistory entry by ID
  */
-export async function findLeafHistoryById(
-  db: AnyDB,
-  id: string
-): Promise<LeafHistory | null> {
-  const [row] = await db
-    .select()
-    .from(leafHistory)
-    .where(eq(leafHistory.id, id))
-    .limit(1);
+export async function findLeafHistoryById(db: AnyDB, id: string): Promise<LeafHistory | null> {
+  const [row] = await db.select().from(leafHistory).where(eq(leafHistory.id, id)).limit(1);
 
   return row ? rowToLeafHistory(row) : null;
 }
@@ -100,14 +93,8 @@ export async function findHistoryByLeafId(
 /**
  * Count history entries for a Leaf
  */
-export async function countHistoryByLeafId(
-  db: AnyDB,
-  leafId: string
-): Promise<number> {
-  const rows = await db
-    .select()
-    .from(leafHistory)
-    .where(eq(leafHistory.leafId, leafId));
+export async function countHistoryByLeafId(db: AnyDB, leafId: string): Promise<number> {
+  const rows = await db.select().from(leafHistory).where(eq(leafHistory.leafId, leafId));
 
   return rows.length;
 }
@@ -117,14 +104,8 @@ export async function countHistoryByLeafId(
  *
  * @returns true if deleted, false if not found
  */
-export async function deleteLeafHistory(
-  db: AnyDB,
-  id: string
-): Promise<boolean> {
-  const result = await db
-    .delete(leafHistory)
-    .where(eq(leafHistory.id, id))
-    .returning();
+export async function deleteLeafHistory(db: AnyDB, id: string): Promise<boolean> {
+  const result = await db.delete(leafHistory).where(eq(leafHistory.id, id)).returning();
 
   return result.length > 0;
 }
@@ -134,14 +115,8 @@ export async function deleteLeafHistory(
  *
  * @returns number of deleted entries
  */
-export async function deleteHistoryByLeafId(
-  db: AnyDB,
-  leafId: string
-): Promise<number> {
-  const result = await db
-    .delete(leafHistory)
-    .where(eq(leafHistory.leafId, leafId))
-    .returning();
+export async function deleteHistoryByLeafId(db: AnyDB, leafId: string): Promise<number> {
+  const result = await db.delete(leafHistory).where(eq(leafHistory.leafId, leafId)).returning();
 
   return result.length;
 }

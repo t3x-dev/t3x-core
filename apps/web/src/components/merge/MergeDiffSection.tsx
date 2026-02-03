@@ -4,8 +4,8 @@
  * MergeDiffSection - Collapsible section for diff groups
  */
 
-import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 
 type SectionVariant = 'success' | 'warning' | 'info' | 'default';
 
@@ -59,9 +59,7 @@ export function MergeDiffSection({
           <ChevronDown className={`h-4 w-4 ${styles.icon}`} />
         )}
         <span className={`font-semibold ${styles.header}`}>{title}</span>
-        {subtitle && (
-          <span className="text-sm text-muted-foreground ml-2">{subtitle}</span>
-        )}
+        {subtitle && <span className="text-sm text-muted-foreground ml-2">{subtitle}</span>}
       </button>
 
       {/* Section Content */}

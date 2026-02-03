@@ -246,7 +246,13 @@ describe('Projects Storage', () => {
           author: { name: 'Test User' },
           committedAt: new Date(),
           content: {
-            sentences: [{ id: 's1', text: 'Test sentence', source: { turn_hash: 'sha256:test', start_char: 0, end_char: 12 } }],
+            sentences: [
+              {
+                id: 's1',
+                text: 'Test sentence',
+                source: { turn_hash: 'sha256:test', start_char: 0, end_char: 12 },
+              },
+            ],
           },
           projectId,
           branch: 'main',

@@ -67,9 +67,7 @@ describe('MergePanel', () => {
 
   test('handles merge counts calculation', () => {
     const prepared = {
-      identical: [
-        { id: '1', text: 'Same', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-      ],
+      identical: [{ id: '1', text: 'Same', confidence: 0.9, source: { type: 'turn', id: 't1' } }],
       similarPairs: [
         {
           source: { id: 's1', text: 'Source', confidence: 0.9, source: { type: 'turn', id: 't1' } },
@@ -82,14 +80,24 @@ describe('MergePanel', () => {
       ],
       onlyInSource: [
         {
-          sentence: { id: '2', text: 'Only in source', confidence: 0.9, source: { type: 'turn', id: 't1' } },
+          sentence: {
+            id: '2',
+            text: 'Only in source',
+            confidence: 0.9,
+            source: { type: 'turn', id: 't1' },
+          },
           constraints: [],
           keep: true,
         },
       ],
       onlyInTarget: [
         {
-          sentence: { id: '3', text: 'Only in target', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+          sentence: {
+            id: '3',
+            text: 'Only in target',
+            confidence: 0.9,
+            source: { type: 'turn', id: 't2' },
+          },
           constraints: [],
           keep: false,
         },

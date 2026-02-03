@@ -4,12 +4,8 @@
  * @see packages/core/src/leaf/generate.ts
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  generateLeafOutput,
-  isGenerationConfigured,
-  GenerationError,
-} from '../../leaf/generate';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
 import type { CommitV4, Leaf } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -375,8 +371,7 @@ describe('generateLeafOutput', () => {
     // Retry: output now includes 'dark mode' → passes validation
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: () =>
-        Promise.resolve(JSON.stringify(createMockResponse('I love dark mode!', 120, 60))),
+      text: () => Promise.resolve(JSON.stringify(createMockResponse('I love dark mode!', 120, 60))),
     });
 
     const result = await generateLeafOutput({

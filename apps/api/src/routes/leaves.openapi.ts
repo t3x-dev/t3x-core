@@ -49,7 +49,6 @@ import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../sc
 import {
   BatchGenerateRequest,
   BatchGenerateResponse,
-  BatchLeafResult,
   CreateLeafRequest,
   DeleteLeafHistoryResponse,
   GenerateLeafOutputRequest,

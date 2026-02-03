@@ -2,31 +2,27 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express } from 'express';
 import pino from 'pino';
-import { llmAsserter, type GenerateAssertionsResult } from './asserter.js';
-import {
-  getRunByRunnerRunId,
-  getEngineCallbackUrl,
-  type ParsedRun,
-} from './engine-client.js';
-import { evalEngine, parseRulesFromLeaf } from './evaluator/index.js';
+import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
+import { getEngineCallbackUrl, getRunByRunnerRunId, type ParsedRun } from './engine-client.js';
+import { evalEngine } from './evaluator/index.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
-import { fetchWithRetry } from './utils/retry.js';
 import type { EvalResult } from './schemas/eval-result.js';
-import type { RunRecord } from './schemas/run-record.js';
-import {
-  n8nClient,
-  mapN8nExecutionToRunRecord,
-  buildTraceSummary,
-  shouldStoreFullTrace,
-  type TracePolicy,
-} from './trace/index.js';
 import {
   AgentConfigSchema,
   AgentInputSchema,
   EngineRunRequestSchema,
   N8nCallbackSchema,
 } from './schemas/index.js';
+import type { RunRecord } from './schemas/run-record.js';
+import {
+  buildTraceSummary,
+  mapN8nExecutionToRunRecord,
+  n8nClient,
+  shouldStoreFullTrace,
+  type TracePolicy,
+} from './trace/index.js';
+import { fetchWithRetry } from './utils/retry.js';
 
 const logger = pino({
   transport: {
@@ -84,7 +80,9 @@ app.post('/agents', (req, res) => {
     logger.info({ agent_id: config.id }, 'Agent registered');
     res.json({ success: true, data: { agent_id: config.id } });
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -94,7 +92,9 @@ app.post('/agents', (req, res) => {
 app.get('/agents/:id', (req, res) => {
   const agent = observer.getAgent(req.params.id);
   if (!agent) {
-    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Agent not found' } });
+    return res
+      .status(404)
+      .json({ success: false, error: { code: 'NOT_FOUND', message: 'Agent not found' } });
   }
   res.json({ success: true, data: agent });
 });
@@ -115,7 +115,10 @@ app.post('/run', async (req, res) => {
     const agent = observer.getAgent(input.agent_id);
 
     if (!agent) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `Agent not found: ${input.agent_id}` } });
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Agent not found: ${input.agent_id}` },
+      });
     }
 
     // Start observing
@@ -164,7 +167,9 @@ app.post('/run', async (req, res) => {
       });
     }
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -195,7 +200,9 @@ app.post('/run/:id/step', (req, res) => {
 
     res.json({ success: true, data: {} });
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -218,7 +225,9 @@ app.post('/run/:id/event', (req, res) => {
 
     res.json({ success: true, data: {} });
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -228,7 +237,9 @@ app.post('/run/:id/event', (req, res) => {
 app.get('/run/:id', (req, res) => {
   const record = observer.getRun(req.params.id);
   if (!record) {
-    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Run not found' } });
+    return res
+      .status(404)
+      .json({ success: false, error: { code: 'NOT_FOUND', message: 'Run not found' } });
   }
   res.json({ success: true, data: record });
 });
@@ -274,7 +285,9 @@ app.post('/runs', async (req, res) => {
 
     res.json({ success: true, data: { runner_run_id, status: 'running' } });
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -296,7 +309,10 @@ app.post('/callbacks/n8n', async (req, res) => {
   try {
     const data = N8nCallbackSchema.parse(req.body);
 
-    logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'n8n callback received');
+    logger.info(
+      { run_id: data.run_id, runner_run_id: data.runner_run_id },
+      'n8n callback received'
+    );
 
     // ═══════════════════════════════════════════════════
     // IMMEDIATE RESPONSE - Unblock n8n workflow
@@ -319,9 +335,10 @@ app.post('/callbacks/n8n', async (req, res) => {
         );
       }
     }, ASYNC_DELAY_MS);
-
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 
@@ -337,7 +354,10 @@ async function processN8nCallback(data: {
   meta?: { latency_ms?: number; tokens?: number; model?: string };
   error?: string | null;
 }) {
-  logger.info({ run_id: data.run_id, runner_run_id: data.runner_run_id }, 'Starting async callback processing');
+  logger.info(
+    { run_id: data.run_id, runner_run_id: data.runner_run_id },
+    'Starting async callback processing'
+  );
 
   // ═══════════════════════════════════════════════════
   // Step 0: Fetch run details from Engine API (stateless)
@@ -349,7 +369,10 @@ async function processN8nCallback(data: {
     return;
   }
 
-  logger.info({ run_id: runInfo.run_id, runner_run_id: data.runner_run_id }, 'Run info fetched from Engine');
+  logger.info(
+    { run_id: runInfo.run_id, runner_run_id: data.runner_run_id },
+    'Run info fetched from Engine'
+  );
 
   // ═══════════════════════════════════════════════════
   // Step 1: Collect trace from n8n (with retry for completion)
@@ -370,21 +393,27 @@ async function processN8nCallback(data: {
           for (const [runIndex, nodeRun] of nodeRuns.entries()) {
             const nodeRunAny = nodeRun as unknown as Record<string, unknown>;
             const dataKeys = nodeRunAny.data ? Object.keys(nodeRunAny.data as object) : [];
-            logger.info({
-              node: nodeName,
-              run_index: runIndex,
-              data_keys: dataKeys,
-              has_ai_tool: dataKeys.includes('ai_tool'),
-              has_ai_languageModel: dataKeys.includes('ai_languageModel'),
-            }, 'Node run data structure');
+            logger.info(
+              {
+                node: nodeName,
+                run_index: runIndex,
+                data_keys: dataKeys,
+                has_ai_tool: dataKeys.includes('ai_tool'),
+                has_ai_languageModel: dataKeys.includes('ai_languageModel'),
+              },
+              'Node run data structure'
+            );
 
             // Log ai_tool data if present (for debugging tool detection)
             const nodeData = nodeRunAny.data as Record<string, unknown> | undefined;
             if (nodeData?.ai_tool) {
-              logger.debug({
-                node: nodeName,
-                ai_tool_data: JSON.stringify(nodeData.ai_tool).slice(0, 500),
-              }, 'ai_tool data found');
+              logger.debug(
+                {
+                  node: nodeName,
+                  ai_tool_data: JSON.stringify(nodeData.ai_tool).slice(0, 500),
+                },
+                'ai_tool data found'
+              );
             }
           }
         }
@@ -393,12 +422,15 @@ async function processN8nCallback(data: {
       runRecord = mapN8nExecutionToRunRecord(execution, {
         runId: runInfo.run_id,
       });
-      logger.info({
-        run_id: runInfo.run_id,
-        steps: runRecord.steps.length,
-        status: runRecord.status,
-        finished: execution.finished,
-      }, 'n8n trace collected');
+      logger.info(
+        {
+          run_id: runInfo.run_id,
+          steps: runRecord.steps.length,
+          status: runRecord.status,
+          finished: execution.finished,
+        },
+        'n8n trace collected'
+      );
     } catch (traceError) {
       logger.warn({ error: String(traceError) }, 'Failed to collect n8n trace, using fallback');
       // Fallback: build minimal RunRecord from callback data
@@ -412,19 +444,25 @@ async function processN8nCallback(data: {
   // ═══════════════════════════════════════════════════
   // Step 2: Deterministic evaluation
   // ═══════════════════════════════════════════════════
-  logger.info({ run_id: runInfo.run_id, rules_ref: runInfo.leaf?.rules_ref }, 'Running deterministic evaluation...');
+  logger.info(
+    { run_id: runInfo.run_id, rules_ref: runInfo.leaf?.rules_ref },
+    'Running deterministic evaluation...'
+  );
 
   const evalResult: EvalResult = evalEngine.evaluateWithLeaf(
     runRecord,
-    runInfo.leaf ?? undefined  // null -> undefined, load rules based on rules_ref
+    runInfo.leaf ?? undefined // null -> undefined, load rules based on rules_ref
   );
 
-  logger.info({
-    run_id: runInfo.run_id,
-    passed: evalResult.passed,
-    score: evalResult.score.toFixed(2),
-    violations: evalResult.violations.length,
-  }, 'Evaluation complete');
+  logger.info(
+    {
+      run_id: runInfo.run_id,
+      passed: evalResult.passed,
+      score: evalResult.score.toFixed(2),
+      violations: evalResult.violations.length,
+    },
+    'Evaluation complete'
+  );
 
   // ═══════════════════════════════════════════════════
   // Step 3: LLM assertions (for prompt tuning insights)
@@ -444,23 +482,32 @@ async function processN8nCallback(data: {
 
     // Log based on assertion status
     if (assertionResult.status === 'success') {
-      logger.info({
-        run_id: runInfo.run_id,
-        assertions_count: assertionResult.output?.assertions.length,
-        suggestions_count: assertionResult.output?.suggestions.length,
-      }, 'LLM assertions generated');
+      logger.info(
+        {
+          run_id: runInfo.run_id,
+          assertions_count: assertionResult.output?.assertions.length,
+          suggestions_count: assertionResult.output?.suggestions.length,
+        },
+        'LLM assertions generated'
+      );
     } else if (assertionResult.status === 'skipped') {
       logger.info({ run_id: runInfo.run_id }, 'LLM assertions skipped: all checks passed');
     } else if (assertionResult.status === 'unavailable') {
       logger.warn({ run_id: runInfo.run_id }, 'LLM assertions unavailable: no API key');
     } else if (assertionResult.status === 'error') {
-      logger.error({
-        run_id: runInfo.run_id,
-        error: assertionResult.error,
-      }, 'LLM assertion generation failed');
+      logger.error(
+        {
+          run_id: runInfo.run_id,
+          error: assertionResult.error,
+        },
+        'LLM assertion generation failed'
+      );
     }
   } catch (assertError) {
-    logger.error({ run_id: runInfo.run_id, error: String(assertError) }, 'Unexpected assertion error');
+    logger.error(
+      { run_id: runInfo.run_id, error: String(assertError) },
+      'Unexpected assertion error'
+    );
     assertionResult = {
       status: 'error',
       reason: 'Unexpected error during assertion generation',
@@ -481,23 +528,29 @@ async function processN8nCallback(data: {
   const hasViolations = evalResult.violations && evalResult.violations.length > 0;
   const storeFullTrace = shouldStoreFullTrace(tracePolicy, status, hasViolations);
 
-  logger.debug({
-    run_id: runInfo.run_id,
-    trace_policy: tracePolicy,
-    store_full_trace: storeFullTrace,
-    trajectory: traceSummary.trajectory,
-  }, 'Trace storage decision');
+  logger.debug(
+    {
+      run_id: runInfo.run_id,
+      trace_policy: tracePolicy,
+      store_full_trace: storeFullTrace,
+      trajectory: traceSummary.trajectory,
+    },
+    'Trace storage decision'
+  );
 
   // v2.2: Extract actual model from trace (takes priority over n8n callback hardcoded value)
-  const llmStep = runRecord.steps.find(s => s.llm?.model && s.llm.model !== 'unknown');
+  const llmStep = runRecord.steps.find((s) => s.llm?.model && s.llm.model !== 'unknown');
   const actualModel = llmStep?.llm?.model || data.meta?.model;
 
-  logger.debug({
-    run_id: runInfo.run_id,
-    model_from_trace: llmStep?.llm?.model,
-    model_from_callback: data.meta?.model,
-    actual_model: actualModel,
-  }, 'Model extraction');
+  logger.debug(
+    {
+      run_id: runInfo.run_id,
+      model_from_trace: llmStep?.llm?.model,
+      model_from_callback: data.meta?.model,
+      actual_model: actualModel,
+    },
+    'Model extraction'
+  );
 
   const ingestPayload = {
     run_id: runInfo.run_id,
@@ -563,7 +616,12 @@ async function processN8nCallback(data: {
  * Build minimal RunRecord from callback data (fallback when no execution_id)
  */
 function buildRunRecordFromCallback(
-  data: { run_id: string; output?: Record<string, unknown>; meta?: { latency_ms?: number }; error?: string | null },
+  data: {
+    run_id: string;
+    output?: Record<string, unknown>;
+    meta?: { latency_ms?: number };
+    error?: string | null;
+  },
   runInfo: ParsedRun
 ): RunRecord {
   const now = new Date().toISOString();
@@ -627,7 +685,8 @@ app.post('/webhook/run', (_req, res) => {
     success: false,
     error: {
       code: 'NOT_IMPLEMENTED',
-      message: 'POST /webhook/run is reserved for future implementation. See RUNNER_PLAN.md for roadmap.',
+      message:
+        'POST /webhook/run is reserved for future implementation. See RUNNER_PLAN.md for roadmap.',
     },
   });
 });
@@ -649,7 +708,7 @@ app.post('/eval', async (req, res) => {
     if (!run_record) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_REQUEST', message: 'run_record is required' }
+        error: { code: 'INVALID_REQUEST', message: 'run_record is required' },
       });
     }
 
@@ -658,15 +717,20 @@ app.post('/eval', async (req, res) => {
 
     const evalResult = evalEngine.evaluateWithLeaf(run_record, leaf);
 
-    logger.info({
-      run_id: run_record.run_id,
-      passed: evalResult.passed,
-      score: evalResult.score.toFixed(2),
-    }, 'Direct eval completed');
+    logger.info(
+      {
+        run_id: run_record.run_id,
+        passed: evalResult.passed,
+        score: evalResult.score.toFixed(2),
+      },
+      'Direct eval completed'
+    );
 
     res.json({ success: true, data: evalResult });
   } catch (error) {
-    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
   }
 });
 

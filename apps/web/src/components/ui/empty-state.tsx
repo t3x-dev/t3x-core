@@ -52,10 +52,7 @@ export function EmptyState({
       variants={fadeIn}
       initial="initial"
       animate="animate"
-      className={cn(
-        'flex flex-col items-center justify-center py-12 px-4 text-center',
-        className
-      )}
+      className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}
     >
       {/* Icon with subtle animation */}
       <motion.div
@@ -72,32 +69,19 @@ export function EmptyState({
       </motion.div>
 
       {/* Title */}
-      <motion.h3
-        variants={fadeIn}
-        className="mb-2 text-lg font-semibold text-foreground"
-      >
+      <motion.h3 variants={fadeIn} className="mb-2 text-lg font-semibold text-foreground">
         {title}
       </motion.h3>
 
       {/* Description */}
-      <motion.p
-        variants={fadeIn}
-        className="mb-6 max-w-sm text-sm text-muted-foreground"
-      >
+      <motion.p variants={fadeIn} className="mb-6 max-w-sm text-sm text-muted-foreground">
         {description}
       </motion.p>
 
       {/* Actions */}
       {(action || secondaryAction) && (
-        <motion.div
-          variants={fadeIn}
-          className="flex items-center gap-3"
-        >
-          {action && (
-            <Button onClick={action.onClick}>
-              {action.label}
-            </Button>
-          )}
+        <motion.div variants={fadeIn} className="flex items-center gap-3">
+          {action && <Button onClick={action.onClick}>{action.label}</Button>}
           {secondaryAction && (
             <Button variant="outline" onClick={secondaryAction.onClick}>
               {secondaryAction.label}

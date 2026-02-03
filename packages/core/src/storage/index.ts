@@ -5,30 +5,28 @@
  * For actual CRUD operations, use @t3x/storage package.
  */
 
+// V4 Hash computation
+export { type CommitV4FirstClass, computeCommitV4Hash } from './hash-v4';
 // Types (pure type definitions)
 export * from './types';
-
 // Utils (pure functions - ID generation, hash computation, timestamps)
 export {
   computeCommitHash,
   computeJCSHash,
   computeTextHash,
   computeTurnHash,
-  // V3 ID generation
-  generateBranchId,
-  generateConversationId,
-  generateDraftId,
-  generateMergeDraftId,
-  generateProjectId,
   // V4 ID generation
   generateAssertionId,
+  // V3 ID generation
+  generateBranchId,
   generateConstraintId,
-  generateLeafId,
+  generateConversationId,
+  generateDraftId,
   generateLeafHistoryId,
+  generateLeafId,
+  generateMergeDraftId,
   generatePinId,
+  generateProjectId,
   generateSentenceId,
   isoNow,
 } from './utils';
-
-// V4 Hash computation
-export { computeCommitV4Hash, type CommitV4FirstClass } from './hash-v4';

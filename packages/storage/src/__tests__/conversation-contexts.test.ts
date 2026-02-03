@@ -31,7 +31,7 @@ describe('Conversation Contexts Storage', () => {
   let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
-  let testConversationId: string;
+  let _testConversationId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
@@ -51,7 +51,7 @@ describe('Conversation Contexts Storage', () => {
       db,
       testData.conversation(testProjectId, { title: 'Test Conversation' })
     );
-    testConversationId = conversation.conversationId;
+    _testConversationId = conversation.conversationId;
   });
 
   afterAll(async () => {
@@ -96,11 +96,10 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Create Context Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_a', 'pin_b']
-      );
+      const result = await setConversationContext(db, conversation.conversationId, [
+        'pin_a',
+        'pin_b',
+      ]);
 
       expect(result).toBeDefined();
       expect(result.conversation_id).toBe(conversation.conversationId);
@@ -115,21 +114,16 @@ describe('Conversation Contexts Storage', () => {
       );
 
       // Create initial context
-      const initial = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_1']
-      );
+      const initial = await setConversationContext(db, conversation.conversationId, ['pin_1']);
 
       // Wait a bit to ensure different timestamp
       await new Promise((r) => setTimeout(r, 10));
 
       // Update context
-      const updated = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_2', 'pin_3']
-      );
+      const updated = await setConversationContext(db, conversation.conversationId, [
+        'pin_2',
+        'pin_3',
+      ]);
 
       expect(updated.conversation_id).toBe(conversation.conversationId);
       expect(updated.selected_pin_ids).toEqual(['pin_2', 'pin_3']);
@@ -142,11 +136,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Null PinIds Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        null
-      );
+      const result = await setConversationContext(db, conversation.conversationId, null);
 
       expect(result.selected_pin_ids).toBeNull();
     });
@@ -157,11 +147,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Empty PinIds Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        []
-      );
+      const result = await setConversationContext(db, conversation.conversationId, []);
 
       expect(result.selected_pin_ids).toEqual([]);
     });
@@ -172,11 +158,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'DB Store Test' })
       );
 
-      await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_db_1', 'pin_db_2']
-      );
+      await setConversationContext(db, conversation.conversationId, ['pin_db_1', 'pin_db_2']);
 
       // Verify database effect
       const rows = await db
@@ -245,11 +227,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Format Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_format']
-      );
+      const result = await setConversationContext(db, conversation.conversationId, ['pin_format']);
 
       // Verify snake_case keys exist
       expect(result).toHaveProperty('conversation_id');
@@ -268,11 +246,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'ISO Format Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_iso']
-      );
+      const result = await setConversationContext(db, conversation.conversationId, ['pin_iso']);
 
       expect(result.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     });
@@ -285,11 +259,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Semantic Null Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        null
-      );
+      const result = await setConversationContext(db, conversation.conversationId, null);
 
       // null = use all project pins
       expect(result.selected_pin_ids).toBeNull();
@@ -301,11 +271,7 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Semantic Empty Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        []
-      );
+      const result = await setConversationContext(db, conversation.conversationId, []);
 
       // [] = no pins (fresh start)
       expect(result.selected_pin_ids).toEqual([]);
@@ -317,11 +283,10 @@ describe('Conversation Contexts Storage', () => {
         testData.conversation(testProjectId, { title: 'Semantic Specific Test' })
       );
 
-      const result = await setConversationContext(
-        db,
-        conversation.conversationId,
-        ['pin_specific_1', 'pin_specific_2']
-      );
+      const result = await setConversationContext(db, conversation.conversationId, [
+        'pin_specific_1',
+        'pin_specific_2',
+      ]);
 
       // [...ids] = specific pins only
       expect(result.selected_pin_ids).toEqual(['pin_specific_1', 'pin_specific_2']);

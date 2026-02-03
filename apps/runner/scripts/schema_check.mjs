@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -8,7 +8,12 @@ import yaml from 'js-yaml';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const runnerRoot = path.resolve(scriptDir, '..');
 
-const evalRulesSchemaPath = path.join(runnerRoot, 'resources', 'json-schemas', 'eval-rules.schema.json');
+const evalRulesSchemaPath = path.join(
+  runnerRoot,
+  'resources',
+  'json-schemas',
+  'eval-rules.schema.json'
+);
 const rulesRoot = path.join(runnerRoot, 'resources', 'rules');
 
 const ajv = new Ajv2020({

@@ -4,13 +4,13 @@
  * Tests for sentence, constraint, and author builders.
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  buildSentencesFromSegments,
   buildConstraints,
+  buildSentencesFromSegments,
   findBestSourceSentenceId,
-  getLocalAuthor,
   getDockerAuthor,
+  getLocalAuthor,
   getWebAuthor,
 } from '../../commit';
 import type { Segment } from '../../extractors/types';
@@ -64,9 +64,7 @@ describe('buildSentencesFromSegments', () => {
   });
 
   it('does not include confidence (by design)', () => {
-    const segments: Segment[] = [
-      { segmentId: 's-1', text: 'Test.', startChar: 0, endChar: 5 },
-    ];
+    const segments: Segment[] = [{ segmentId: 's-1', text: 'Test.', startChar: 0, endChar: 5 }];
 
     const sentences = buildSentencesFromSegments(segments, 'sha256:abc');
 

@@ -35,16 +35,17 @@ export class Observer {
   /**
    * Start a new run
    */
-  startRun(agentId: string, input: AgentInput): string {
+  startRun(_agentId: string, input: AgentInput): string {
     const runId = `run_${randomUUID().slice(0, 8)}`;
     const now = new Date().toISOString();
 
     const record: RunRecord = {
       run_id: runId,
       status: 'running',
-      inputs: typeof input.input === 'object' && input.input !== null
-        ? input.input as Record<string, unknown>
-        : { input: input.input },
+      inputs:
+        typeof input.input === 'object' && input.input !== null
+          ? (input.input as Record<string, unknown>)
+          : { input: input.input },
       steps: [],
       timing: {
         started_at: now,
@@ -145,7 +146,7 @@ export class Observer {
 
     // If stepId provided, mark that step as error
     if (stepId) {
-      const step = record.steps.find(s => s.step_id === stepId);
+      const step = record.steps.find((s) => s.step_id === stepId);
       if (step) {
         step.status = 'error';
         step.error = error;
@@ -244,7 +245,7 @@ export class Observer {
   /**
    * @deprecated Use listRuns() instead
    */
-  listTraces(agentId?: string): RunRecord[] {
+  listTraces(_agentId?: string): RunRecord[] {
     // Note: agentId filtering is no longer supported in RunRecord
     // (agent_id was removed from the schema)
     return this.listRuns();

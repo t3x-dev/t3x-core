@@ -36,10 +36,7 @@ export interface RetryOptions {
  * @returns Result of the function
  * @throws Last error if all retries fail
  */
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const {
     maxRetries = 3,
     initialDelayMs = 1000,

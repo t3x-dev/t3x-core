@@ -215,51 +215,55 @@ export const mergeDrafts = pgTable(
  * Deploy Agents - Registered agents for deployment and evaluation
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
-export const deployAgents = pgTable('deploy_agents', {
-  deployAgentId: text('deploy_agent_id').primaryKey(),
-  projectId: text('project_id')
-    .references(() => projects.projectId, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  endpoint: text('endpoint').notNull(),
-  type: text('type').notNull().default('http'), // 'http' | 'websocket' | 'grpc'
-  authJson: text('auth_json'), // { type: 'bearer' | 'api_key', token, header? }
-  status: text('status').notNull().default('idle'), // 'idle' | 'running' | 'error'
-  lastRunId: text('last_run_id'),
-  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
-}, (table) => [
-  index('idx_deploy_agents_project').on(table.projectId),
-]);
+export const deployAgents = pgTable(
+  'deploy_agents',
+  {
+    deployAgentId: text('deploy_agent_id').primaryKey(),
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    endpoint: text('endpoint').notNull(),
+    type: text('type').notNull().default('http'), // 'http' | 'websocket' | 'grpc'
+    authJson: text('auth_json'), // { type: 'bearer' | 'api_key', token, header? }
+    status: text('status').notNull().default('idle'), // 'idle' | 'running' | 'error'
+    lastRunId: text('last_run_id'),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('idx_deploy_agents_project').on(table.projectId)]
+);
 
 /**
  * Runs - Engine run records for tracking workflow executions
  *
  * v2.0: Added trace storage fields for agent evaluation
  */
-export const runs = pgTable('runs', {
-  runId: text('run_id').primaryKey(),
-  projectId: text('project_id')
-    .references(() => projects.projectId, { onDelete: 'cascade' }),
-  runnerRunId: text('runner_run_id'),
-  commitRef: text('commit_ref'),
-  leafJson: text('leaf_json'), // { id, type, content? }
-  inputsJson: text('inputs_json'),
-  workflowJson: text('workflow_json'), // { type, webhook_id? }
-  status: text('status').notNull().default('queued'), // 'queued' | 'running' | 'completed' | 'failed'
-  resultJson: text('result_json'), // { run_report, assertions, evidence_pack }
-  // v2.0: Trace storage fields
-  traceSummaryJson: text('trace_summary_json'), // Lightweight stats (always stored)
-  tracePolicy: text('trace_policy').default('on_failure'), // 'always' | 'on_failure' | 'on_violation'
-  fullTraceJson: text('full_trace_json'), // Complete RunRecord (conditional)
-  // v2.1: Metadata for A/B test filtering
-  metadataJson: text('metadata_json'), // { model, prompt_version, workflow_id, test_case }
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
-}, (table) => [
-  index('idx_runs_project').on(table.projectId),
-  index('idx_runs_status').on(table.status),
-]);
+export const runs = pgTable(
+  'runs',
+  {
+    runId: text('run_id').primaryKey(),
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+    runnerRunId: text('runner_run_id'),
+    commitRef: text('commit_ref'),
+    leafJson: text('leaf_json'), // { id, type, content? }
+    inputsJson: text('inputs_json'),
+    workflowJson: text('workflow_json'), // { type, webhook_id? }
+    status: text('status').notNull().default('queued'), // 'queued' | 'running' | 'completed' | 'failed'
+    resultJson: text('result_json'), // { run_report, assertions, evidence_pack }
+    // v2.0: Trace storage fields
+    traceSummaryJson: text('trace_summary_json'), // Lightweight stats (always stored)
+    tracePolicy: text('trace_policy').default('on_failure'), // 'always' | 'on_failure' | 'on_violation'
+    fullTraceJson: text('full_trace_json'), // Complete RunRecord (conditional)
+    // v2.1: Metadata for A/B test filtering
+    metadataJson: text('metadata_json'), // { model, prompt_version, workflow_id, test_case }
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_runs_project').on(table.projectId),
+    index('idx_runs_status').on(table.status),
+  ]
+);
 
 /**
  * Commits V3 - Sentence-based semantic snapshots with JSONB content

@@ -16,20 +16,17 @@ function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive
   );
 }
 
-const tabsListVariants = cva(
-  'inline-flex w-fit items-center justify-center',
-  {
-    variants: {
-      variant: {
-        default: 'bg-muted text-muted-foreground h-9 rounded-lg p-[3px]',
-        pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 shadow-lg backdrop-blur-md',
-      },
+const tabsListVariants = cva('inline-flex w-fit items-center justify-center', {
+  variants: {
+    variant: {
+      default: 'bg-muted text-muted-foreground h-9 rounded-lg p-[3px]',
+      pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 shadow-lg backdrop-blur-md',
     },
-    defaultVariants: {
-      variant: 'default',
-    },
-  }
-);
+  },
+  defaultVariants: {
+    variant: 'default',
+  },
+});
 
 interface TabsListProps
   extends React.ComponentProps<typeof TabsPrimitive.List>,

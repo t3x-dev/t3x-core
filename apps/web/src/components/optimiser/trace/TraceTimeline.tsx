@@ -1,7 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Cpu, Wrench, Database, GitBranch, Workflow } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  Database,
+  GitBranch,
+  Workflow,
+  Wrench,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SpanCard } from './SpanCard';
@@ -63,7 +71,6 @@ function getSpanIcon(spanKind: SpanKind | undefined) {
       return Database;
     case 'workflow':
       return Workflow;
-    case 'chain':
     default:
       return GitBranch;
   }
@@ -80,7 +87,6 @@ function getSpanColor(spanKind: SpanKind | undefined): string {
       return 'bg-green-500';
     case 'workflow':
       return 'bg-orange-500';
-    case 'chain':
     default:
       return 'bg-gray-500';
   }
@@ -97,7 +103,6 @@ function getSpanBadgeClass(spanKind: SpanKind | undefined): string {
       return 'bg-green-500/10 text-green-600 border-green-500/30';
     case 'workflow':
       return 'bg-orange-500/10 text-orange-600 border-orange-500/30';
-    case 'chain':
     default:
       return 'bg-gray-500/10 text-gray-600 border-gray-500/30';
   }
@@ -144,7 +149,12 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
 
   if (steps.length === 0) {
     return (
-      <div className={cn('flex h-48 items-center justify-center text-sm text-muted-foreground', className)}>
+      <div
+        className={cn(
+          'flex h-48 items-center justify-center text-sm text-muted-foreground',
+          className
+        )}
+      >
         No trace data available
       </div>
     );
@@ -155,7 +165,10 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Total: <span className="font-mono font-medium text-foreground">{formatDuration(totalDuration)}</span>
+          Total:{' '}
+          <span className="font-mono font-medium text-foreground">
+            {formatDuration(totalDuration)}
+          </span>
           <span className="mx-2">•</span>
           <span className="font-medium text-foreground">{steps.length}</span> steps
         </div>
@@ -166,7 +179,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
 
       {/* Timeline */}
       <div className="space-y-1">
-        {steps.map((step, index) => {
+        {steps.map((step, _index) => {
           const Icon = getSpanIcon(step.span_kind);
           const barColor = getSpanColor(step.span_kind);
           const badgeClass = getSpanBadgeClass(step.span_kind);

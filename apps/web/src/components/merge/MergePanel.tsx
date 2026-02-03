@@ -1,9 +1,9 @@
-import { useCanvasStore, selectCanExecuteMerge, selectUnresolvedCount } from '@/store/canvasStore';
+import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
+import { MergeCandidateList } from './MergeCandidateList';
 import { MergeIdenticalSection } from './MergeIdenticalSection';
 import { MergeSimilarPairCard } from './MergeSimilarPairCard';
-import { MergeCandidateList } from './MergeCandidateList';
-import { useState } from 'react';
 
 /**
  * Main merge review panel integrating all merge components
@@ -53,7 +53,7 @@ export function MergePanel() {
     try {
       await executeMerge(message);
       setMessage('');
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     }
   };
@@ -110,9 +110,7 @@ export function MergePanel() {
       {/* Similar pairs */}
       {prepared.similarPairs.length > 0 && (
         <div className="mb-4">
-          <h3 className="font-medium mb-2 text-yellow-800">
-            Similar Sentences (Pick One)
-          </h3>
+          <h3 className="font-medium mb-2 text-yellow-800">Similar Sentences (Pick One)</h3>
           <div className="space-y-3">
             {prepared.similarPairs.map((pair, index) => (
               <MergeSimilarPairCard

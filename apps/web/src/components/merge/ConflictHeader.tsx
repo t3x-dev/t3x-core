@@ -4,7 +4,7 @@
  * ConflictHeader - Header for conflict card showing index and resolution status
  */
 
-import { CheckCircle, AlertTriangle, Edit3, Layers } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Edit3, Layers } from 'lucide-react';
 
 interface ConflictHeaderProps {
   index: number;
@@ -15,7 +15,11 @@ interface ConflictHeaderProps {
 
 const resolutionLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   source: { label: 'Keep A', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-red-600' },
-  target: { label: 'Keep B', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-green-600' },
+  target: {
+    label: 'Keep B',
+    icon: <CheckCircle className="h-3.5 w-3.5" />,
+    color: 'text-green-600',
+  },
   both: { label: 'Keep Both', icon: <Layers className="h-3.5 w-3.5" />, color: 'text-blue-600' },
   edit: { label: 'Custom', icon: <Edit3 className="h-3.5 w-3.5" />, color: 'text-purple-600' },
 };
@@ -36,9 +40,7 @@ export function ConflictHeader({
         ) : (
           <CheckCircle className="h-4 w-4 text-green-500" />
         )}
-        <span className="text-sm font-medium text-muted-foreground">
-          Conflict {index + 1}
-        </span>
+        <span className="text-sm font-medium text-muted-foreground">Conflict {index + 1}</span>
         <span className="text-xs text-muted-foreground">
           ({sourceBranch} vs {targetBranch})
         </span>

@@ -38,9 +38,7 @@ function isBuffer(value: unknown): value is Buffer {
  * @param commit - The commit object (without hash field)
  * @returns The computed hash with "sha256:" prefix
  */
-export function computeCommitV3Hash(
-  commit: Omit<CommitV3, 'hash'>
-): string {
+export function computeCommitV3Hash(commit: Omit<CommitV3, 'hash'>): string {
   // Normalize constraints to [] to avoid undefined vs [] hash differences
   const normalizedContent = {
     sentences: commit.content.sentences,

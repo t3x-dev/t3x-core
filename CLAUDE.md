@@ -17,11 +17,12 @@ t3x/
 ├── packages/
 │   ├── core/           # @t3x/core - Deterministic semantic engine
 │   ├── storage/        # @t3x/storage - PostgreSQL persistence (Drizzle ORM)
-│   └── api-client/     # @t3x/api-client - TypeScript API client
+│   ├── api-client/     # @t3x/api-client - TypeScript API client
+│   └── runner/         # @t3x/runner - Shared runner library (schemas, evaluator, trace)
 ├── apps/
 │   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
 │   ├── api/            # @t3x/api - Hono API server with OpenAPI
-│   ├── runner/         # @t3x/runner - Grey-box agent evaluation engine
+│   ├── runner/         # @t3x/runner - Grey-box agent evaluation engine (server)
 │   ├── cli/            # @t3x/cli - Command line interface
 │   └── agent-demo/     # Demo agent for testing
 ├── biome.json          # Linting and formatting config
@@ -53,6 +54,7 @@ pnpm build:runner               # Build @t3x/runner
 pnpm test:core                  # Test @t3x/core
 pnpm test:storage               # Test @t3x/storage
 pnpm test:webui                 # Test t3x-webui
+pnpm test:runner                # Test @t3x/runner
 ```
 
 ### Development servers
@@ -114,7 +116,7 @@ T3X uses PostgreSQL (via Drizzle ORM):
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
-Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v2`, `drafts_v2`, `commits_v3`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
+Key tables: `projects`, `conversations`, `turns_v2`, `branches`, `commits_v3`, `drafts_v2`, `commits_v4`, `leaves`, `pins`, `leaf_history`, `conversation_contexts`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
 
 ### Hash Chains
 
@@ -130,20 +132,30 @@ Semantic extraction happens in three rings:
 
 ### Diff Engine (t3x-core)
 
-Semantic diff engine for comparing commits:
+Words-based semantic diff engine for comparing commits:
 - **Two-way diff**: Compare Draft vs parent Commit (self-check scenario)
 - **Three-way diff**: Merge preview with conflict detection (merge scenario)
 
-Algorithm: Encodes sentences as vectors, calculates cosine similarity, classifies as SAME/MODIFIED/ADDED/REMOVED/CONFLICT based on threshold (default 0.70).
+**Design**: Storage = Sentence, Diff = Word, Merge = Three-Way
+
+Algorithm uses tiered matching:
+1. **Exact match** (O(N+M)): Identical sentences skip diff
+2. **Jaccard filter** (fast): Find candidate pairs with Jaccard >= 0.3
+3. **LCS word diff** (per pair): Word-level changes within matched sentences
+4. **Classify remainder**: Unpaired sentences as added/removed
+
+See `docs/specification/words-based-diff-merge-architecture.md` for full specification.
 
 ### Merge System (t3x-core)
 
 Two-phase merge process:
-1. **prepareMerge**: Analyzes source/target commits, returns `Merge2WayResult` with:
+1. **prepareMerge**: Analyzes source/target commits, returns merge result with:
    - `identical`: Auto-kept sentences (no user action)
-   - `similarPairs`: User must choose source or target
+   - `similarPairs`: User must choose source or target (with `word_diff` for display)
    - `onlyInSource`/`onlyInTarget`: User can keep or discard
 2. **executeMerge**: Applies user decisions, generates merged commit
+
+Resolution types: `source` | `target` | `both` (keep both sentences) | `edit` (custom text)
 
 ### Runner (apps/runner)
 
@@ -167,21 +179,46 @@ const result = await evalEngine.evaluate({ trace, test_steps: [...] });
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── api/v1/            # REST API routes (snake_case JSON)
-│   └── project/[projectId]/ # Project canvas page
-├── components/            # React components
-├── store/                 # Zustand state management
-│   ├── canvasStore.ts     # Canvas store (core state + slice composition)
-│   ├── canvasStoreTypes.ts # Shared CanvasState type + slice interfaces
-│   ├── canvasStoreUtils.ts # Pure utility functions (layout, position, graph helpers)
-│   ├── canvasMergeSlice.ts # Merge domain slice (state + methods + selectors)
-│   └── canvasLeafSlice.ts  # Leaf panel domain slice
-├── hooks/                 # React hooks
+├── app/                          # Next.js App Router
+│   ├── api/v1/chat/stream/      # Chat streaming endpoint
+│   ├── project/[projectId]/     # Project canvas page
+│   │   ├── leaf/[leafId]/       # Leaf detail page
+│   │   ├── merge/[mergeId]/     # Merge workspace page
+│   │   └── conversation/[conversationId]/
+│   ├── insights/                # Insights page
+│   └── deploy/                  # Deploy & compare pages
+├── components/                  # React components
+│   ├── ui/                      # shadcn/ui base components
+│   ├── canvas/                  # Canvas workspace (nodes, modal, panels)
+│   ├── leaf/                    # Leaf-specific components
+│   ├── merge/                   # Merge workspace components
+│   ├── diff/                    # Diff visualization
+│   ├── shared/                  # Shared UI (TurnBubble, etc.)
+│   ├── conversation/            # Conversation components
+│   └── optimiser/               # Agent evaluation UI
+├── store/                       # Zustand state management
+│   ├── canvasStore.ts           # Canvas store (core state + slice composition)
+│   ├── canvasStoreTypes.ts      # Shared CanvasState type + slice interfaces
+│   ├── canvasStoreUtils.ts      # Pure utility functions (layout, position, graph helpers)
+│   ├── canvasMergeSlice.ts      # Merge domain slice (state + methods + selectors)
+│   ├── canvasLeafSlice.ts       # Leaf panel domain slice
+│   ├── pinsStore.ts             # V4 pin management (CRUD, selectors)
+│   ├── projectStore.ts          # Project state
+│   ├── mergeWorkspaceStore.ts   # Full-screen merge workspace state
+│   ├── optimiserStore.ts        # Agent evaluation UI state (persisted)
+│   └── agentDemoStore.ts        # Agent demo state
+├── hooks/                       # React hooks
+│   ├── useApi.ts                # API wrapper
+│   ├── useSourceContext.ts      # V4 source context fetching
+│   └── useBranchCommits.ts      # Branch commit data
 ├── lib/
-│   ├── api.ts             # API client functions
-│   └── db.ts              # Database singleton
-└── __tests__/             # API route tests
+│   ├── api.ts                   # API client functions
+│   ├── db.ts                    # Database singleton
+│   ├── bridgeQueries.ts         # Storage queries bridge
+│   ├── diffUtils.ts             # Diff algorithm (Jaccard + LCS)
+│   ├── elkLayout.ts             # ELK.js graph layout
+│   └── highlightUtils.ts        # Text highlighting
+└── __tests__/                   # API route tests
 ```
 
 ### API Response Format
@@ -239,7 +276,78 @@ vi.mock('@/lib/db', () => ({
 }
 ```
 
-### CommitV3 Record (Current)
+### CommitV4 Record (Current)
+```json
+{
+  "hash": "sha256:...",
+  "schema": "t3x/commit/v4",
+  "parents": ["sha256:..."],
+  "author": { "type": "human|agent", "id": "...", "name": "..." },
+  "committed_at": "ISO8601",
+  "content": {
+    "sentences": [
+      {
+        "id": "s_abc123",
+        "text": "...",
+        "confidence": 0.95,
+        "source_ref": {
+          "conversation_id": "conv_...",
+          "turn_hash": "sha256:...",
+          "start_char": 0,
+          "end_char": 50
+        }
+      }
+    ]
+  },
+  "project_id": "proj_...",
+  "message": "...",
+  "branch": "main",
+  "source_refs": [
+    { "type": "conversation|leaf", "id": "...", "title": "...", "assertion_lessons": ["..."] }
+  ]
+}
+```
+
+**Key difference from V3**: CommitV4 content has sentences ONLY. No constraints. Constraints belong to Leaf.
+
+**Field Classification:**
+- **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
+- **Second-class (not in hash)**: `project_id`, `message`, `branch`, `source_refs`, `position_x`, `position_y`
+
+### Leaf Record (V4)
+```json
+{
+  "id": "leaf_abc123",
+  "commit_hash": "sha256:...",
+  "type": "deploy_agent|tweet|weibo|wechat|email|article|slack|eval",
+  "title": "...",
+  "constraints": [
+    { "id": "cst_def456", "type": "require", "match_mode": "exact|semantic", "value": "..." },
+    { "id": "cst_ghi789", "type": "exclude", "match_mode": "exact|semantic", "value": "...", "reason": "..." }
+  ],
+  "config": { "prompt_template": "...", "model": "...", "max_tokens": 4096 },
+  "output": "...",
+  "assertions": [
+    { "id": "ast_jkl012", "constraint_id": "cst_def456", "passed": true, "details": "...", "lesson": "..." }
+  ],
+  "project_id": "proj_...",
+  "created_at": "ISO8601"
+}
+```
+
+### Pin Record (V4)
+```json
+{
+  "id": "pin_mno345",
+  "project_id": "proj_...",
+  "type": "conversation|leaf",
+  "ref_id": "conv_...|leaf_...",
+  "selected_assertion_ids": ["ast_..."],
+  "pinned_at": "ISO8601"
+}
+```
+
+### CommitV3 Record (Legacy)
 ```json
 {
   "hash": "sha256:...",
@@ -262,22 +370,6 @@ vi.mock('@/lib/db', () => ({
 }
 ```
 
-**Field Classification:**
-- **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
-- **Second-class (not in hash)**: `project_id`, `message`, `branch`, `positionX`, `positionY`
-
-### Legacy Commit Record (V2)
-```json
-{
-  "commit_hash": "sha256:...",
-  "parent_hashes": ["sha256:..."],
-  "branch": "main",
-  "turn_window": { "start_turn_hash": "...", "end_turn_hash": "..." },
-  "facet_snapshot": [...],
-  "source_refs": [{ "type": "conversation", "conversation_id": "..." }]
-}
-```
-
 ## Important Design Constraints
 
 1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
@@ -293,17 +385,24 @@ Copy `.env.example` to `.env`:
 - `DATABASE_URL`: PostgreSQL connection string (production/Docker)
 - `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
 - `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
+- `GOOGLE_CLOUD_NLP_KEY`: For Google Cloud NLP features (optional)
 - `N8N_BASE_URL`: n8n workflow engine URL (default: http://localhost:5678)
+- `N8N_API_KEY`: n8n API key (optional)
 - `RUNNER_BASE_URL`: Runner service URL (default: http://localhost:8080)
+- `TRACE_POLICY`: Runner trace policy: `always` | `on_failure` | `on_violation`
 
 ## ID Conventions
 
 T3X uses prefixed IDs for type safety:
 - `proj_` - Project IDs
 - `conv_` - Conversation IDs
-- `s_` or `s1`, `s2` - Sentence IDs (within commits)
-- `c_` or `c1`, `c2` - Constraint IDs (within commits)
-- `mc1`, `mc2` - Merged constraint IDs (generated during merge)
+- `s_` - Sentence IDs (V4, e.g., `s_abc123`)
+- `cst_` - Constraint IDs (V4, e.g., `cst_def456`)
+- `ast_` - Assertion IDs (V4, e.g., `ast_ghi789`)
+- `leaf_` - Leaf IDs (V4, e.g., `leaf_jkl012`)
+- `lhist_` - Leaf history IDs (V4, e.g., `lhist_pqr678`)
+- `pin_` - Pin IDs (V4, e.g., `pin_mno345`)
+- Legacy: `s1`, `s2` (sentence), `c1`, `c2` (constraint), `mc1` (merged constraint) - V3 format
 
 ## API Naming Conventions
 
@@ -314,7 +413,7 @@ T3X uses prefixed IDs for type safety:
 
 ## V4 Architecture Parallel Development Rules
 
-> Status: Active (Phase 1 complete, Phase 2 in progress)
+> Status: Active (Core types, storage, API, and WebUI integration implemented)
 > Related docs: docs/specification/semantic-layer-architecture.md, docs/specification/memory-pin-system-design.md
 
 ### Contract Files (Single Source of Truth)
@@ -358,14 +457,18 @@ interface Leaf { ... }  // DON'T DO THIS
 | Constraint | cst_ | cst_def456 |
 | Assertion | ast_ | ast_ghi789 |
 | Leaf | leaf_ | leaf_jkl012 |
+| LeafHistory | lhist_ | lhist_pqr678 |
 | Pin | pin_ | pin_mno345 |
 
 ### V4 Architecture Summary
 
 ```
-CommitV4 = Sentences only (pure knowledge, NO constraints)
-Leaf = Constraints + Output + Validation (application layer)
-Pin = Source selection (for commit sources + conversation context)
+CommitV4        = Sentences only (pure knowledge, NO constraints)
+Leaf            = Constraints + Output + Validation (application layer)
+LeafHistory     = Snapshot of each generation (for rollback/comparison)
+Pin             = Source selection (for commit sources + conversation context)
+ConversationCtx = Per-conversation pin selection (customize LLM context)
+BuiltContext    = Assembled context for LLM consumption (text + token estimate + sources)
 ```
 
 ### Track Assignment
@@ -380,11 +483,15 @@ At the start of a new conversation, read relevant documentation based on task ty
 | Task Type | Documentation to Read |
 |-----------|----------------------|
 | V4 Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
-| API Development | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts` |
-| WebUI Development | `apps/web/README.md`, `apps/web/src/store/` |
+| Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
+| Diff / Merge Algorithms | `docs/specification/words-based-diff-merge-architecture.md` |
+| API Development | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts`, `docs/API_REFERENCE.md` |
+| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-design-principles.md` |
 | Core Algorithms | `packages/core/README.md`, `packages/core/src/types/` |
 | Storage Layer | `packages/storage/README.md`, `packages/storage/src/schema-v4.ts` |
 | Runner/Eval | `apps/runner/README.md` |
+| Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md` |
+| Docker / Deployment | `docs/docker.md` |
 
 ## Development Workflow
 

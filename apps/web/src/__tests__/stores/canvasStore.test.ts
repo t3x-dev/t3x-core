@@ -87,7 +87,7 @@ const createCommittedUnitNode = (
 });
 
 // Helper to create a mock leaf node
-const createLeafNode = (
+const _createLeafNode = (
   id: string,
   overrides: Partial<CanvasNodeData> = {}
 ): Node<CanvasNodeData> => ({

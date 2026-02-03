@@ -21,7 +21,12 @@ import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
 import type { CommitV3Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
-import { type CommitDiff, type DiffableSentence, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
+import {
+  type CommitDiff,
+  type DiffableSentence,
+  diffCommits,
+  type WordDiffSegment,
+} from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
 
 import { DiffSourceContextModal, TurnBubble } from './DiffSourceContextModal';
@@ -287,7 +292,9 @@ function SideBySideRow({
             <div className="flex flex-col gap-1">
               {type === 'modified' && wordDiffSegments ? (
                 <div>
-                  <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'removed')} />
+                  <WordDiffDisplay
+                    segments={wordDiffSegments.filter((s) => s.type !== 'removed')}
+                  />
                   {similarity !== undefined && (
                     <span className="text-[0.6rem] text-amber-600 ml-2">
                       ({Math.round(similarity * 100)}% similar)
@@ -332,7 +339,14 @@ interface UnifiedRowProps {
   onOpenModal?: () => void;
 }
 
-function UnifiedRow({ line, onTraceSource, expandedSentenceId, inlineContextData, inlineContextLoading, onOpenModal }: UnifiedRowProps) {
+function UnifiedRow({
+  line,
+  onTraceSource,
+  expandedSentenceId,
+  inlineContextData,
+  inlineContextLoading,
+  onOpenModal,
+}: UnifiedRowProps) {
   const getBgClass = () => {
     switch (line.type) {
       case 'added':
@@ -528,36 +542,39 @@ export function DiffDisplayView({
   }, [diff, sourceSentences, sourceMap, targetMap, textToTargetMap]);
 
   // Handle trace to source — toggles inline context
-  const handleTraceSource = useCallback(async (sentence: SentenceWithSource) => {
-    if (!sentence.source?.turn_hash) return;
+  const handleTraceSource = useCallback(
+    async (sentence: SentenceWithSource) => {
+      if (!sentence.source?.turn_hash) return;
 
-    // Toggle: if already expanded, collapse
-    if (expandedSentenceId === sentence.id) {
-      setExpandedSentenceId(null);
+      // Toggle: if already expanded, collapse
+      if (expandedSentenceId === sentence.id) {
+        setExpandedSentenceId(null);
+        setInlineContextData(null);
+        return;
+      }
+
+      // Expand inline
+      setExpandedSentenceId(sentence.id);
+      setContextSentence(sentence); // keep for modal fallback
+      setInlineContextLoading(true);
       setInlineContextData(null);
-      return;
-    }
 
-    // Expand inline
-    setExpandedSentenceId(sentence.id);
-    setContextSentence(sentence); // keep for modal fallback
-    setInlineContextLoading(true);
-    setInlineContextData(null);
-
-    try {
-      const data = await api.fetchTurnContextCached(sentence.source.turn_hash, {
-        before: 2,
-        after: 2,
-        highlightStart: sentence.source.start_char,
-        highlightEnd: sentence.source.end_char,
-      });
-      setInlineContextData(data);
-    } catch {
-      setInlineContextData(null);
-    } finally {
-      setInlineContextLoading(false);
-    }
-  }, [expandedSentenceId]);
+      try {
+        const data = await api.fetchTurnContextCached(sentence.source.turn_hash, {
+          before: 2,
+          after: 2,
+          highlightStart: sentence.source.start_char,
+          highlightEnd: sentence.source.end_char,
+        });
+        setInlineContextData(data);
+      } catch {
+        setInlineContextData(null);
+      } finally {
+        setInlineContextLoading(false);
+      }
+    },
+    [expandedSentenceId]
+  );
 
   // Open modal from inline context "Expand" button
   const handleOpenModal = useCallback(() => {

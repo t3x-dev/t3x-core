@@ -8,12 +8,13 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CreatePinInput, PinType } from '@t3x/core';
-import { and, eq } from 'drizzle-orm';
+import type { CreatePinInput } from '@t3x/core';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createLeaf } from '../queries/leaves';
 import { createCommitV4 } from '../queries/commits-v4';
+import { insertConversation } from '../queries/conversations';
+import { createLeaf } from '../queries/leaves';
 import {
   createPin,
   deletePin,
@@ -26,7 +27,6 @@ import {
   updatePinAssertions,
 } from '../queries/pins';
 import { insertProject } from '../queries/projects';
-import { insertConversation } from '../queries/conversations';
 import { pins } from '../schema-v4';
 import { createTestDB, testData } from './setup';
 
@@ -45,10 +45,7 @@ describe('Pins Storage', () => {
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(
-      db,
-      testData.project({ name: 'Pins Test Project' })
-    );
+    const project = await insertProject(db, testData.project({ name: 'Pins Test Project' }));
     testProjectId = project.projectId;
 
     // Create a test conversation (for conversation pins)
@@ -136,10 +133,7 @@ describe('Pins Storage', () => {
       const result = await createPin(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(pins)
-        .where(eq(pins.id, result.id));
+      const rows = await db.select().from(pins).where(eq(pins.id, result.id));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe(result.id);
@@ -187,10 +181,7 @@ describe('Pins Storage', () => {
   describe('findPinsByProject', () => {
     it('returns pins for a specific project', async () => {
       // Create a new project to avoid pollution from other tests
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Project Pins Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Project Pins Test' }));
 
       await createPin(db, {
         project_id: project.projectId,
@@ -211,10 +202,7 @@ describe('Pins Storage', () => {
     });
 
     it('orders by pinnedAt descending', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Order Pins Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Order Pins Test' }));
 
       await createPin(db, {
         project_id: project.projectId,
@@ -237,10 +225,7 @@ describe('Pins Storage', () => {
     });
 
     it('respects limit option', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Limit Pins Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Limit Pins Test' }));
 
       for (let i = 0; i < 5; i++) {
         await createPin(db, {
@@ -256,10 +241,7 @@ describe('Pins Storage', () => {
     });
 
     it('returns empty array when no pins exist', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Empty Pins Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Empty Pins Test' }));
 
       const results = await findPinsByProject(db, project.projectId);
 
@@ -269,10 +251,7 @@ describe('Pins Storage', () => {
 
   describe('findPinByRef', () => {
     it('finds a pin by project, type, and ref_id', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'FindByRef Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'FindByRef Test' }));
 
       const created = await createPin(db, {
         project_id: project.projectId,
@@ -281,12 +260,7 @@ describe('Pins Storage', () => {
         pinned_by: 'user_ref',
       });
 
-      const found = await findPinByRef(
-        db,
-        project.projectId,
-        'leaf',
-        'leaf_ref_test'
-      );
+      const found = await findPinByRef(db, project.projectId, 'leaf', 'leaf_ref_test');
 
       expect(found).toBeDefined();
       expect(found!.id).toBe(created.id);
@@ -294,21 +268,13 @@ describe('Pins Storage', () => {
     });
 
     it('returns null when pin does not exist', async () => {
-      const found = await findPinByRef(
-        db,
-        testProjectId,
-        'leaf',
-        'nonexistent_ref'
-      );
+      const found = await findPinByRef(db, testProjectId, 'leaf', 'nonexistent_ref');
 
       expect(found).toBeNull();
     });
 
     it('distinguishes between pin types', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Type Distinguish Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Type Distinguish Test' }));
 
       // Create a conversation pin
       await createPin(db, {
@@ -393,10 +359,7 @@ describe('Pins Storage', () => {
 
   describe('deletePinByRef', () => {
     it('deletes a pin by project, type, and ref_id', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'DeleteByRef Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'DeleteByRef Test' }));
 
       const created = await createPin(db, {
         project_id: project.projectId,
@@ -404,12 +367,7 @@ describe('Pins Storage', () => {
         ref_id: 'leaf_delete_ref_test',
       });
 
-      const deleted = await deletePinByRef(
-        db,
-        project.projectId,
-        'leaf',
-        'leaf_delete_ref_test'
-      );
+      const deleted = await deletePinByRef(db, project.projectId, 'leaf', 'leaf_delete_ref_test');
 
       expect(deleted).toBe(true);
 
@@ -418,12 +376,7 @@ describe('Pins Storage', () => {
     });
 
     it('returns false when pin does not exist', async () => {
-      const deleted = await deletePinByRef(
-        db,
-        testProjectId,
-        'conversation',
-        'nonexistent_ref'
-      );
+      const deleted = await deletePinByRef(db, testProjectId, 'conversation', 'nonexistent_ref');
 
       expect(deleted).toBe(false);
     });
@@ -431,10 +384,7 @@ describe('Pins Storage', () => {
 
   describe('getPinsByIds', () => {
     it('returns multiple pins in single query', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Batch Pins Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Batch Pins Test' }));
 
       const pin1 = await createPin(db, {
         project_id: project.projectId,
@@ -468,21 +418,14 @@ describe('Pins Storage', () => {
         ref_id: 'conv_partial_batch',
       });
 
-      const results = await getPinsByIds(db, [
-        created.id,
-        'pin_nonexistent1',
-        'pin_nonexistent2',
-      ]);
+      const results = await getPinsByIds(db, [created.id, 'pin_nonexistent1', 'pin_nonexistent2']);
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe(created.id);
     });
 
     it('preserves input order', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Order Batch Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Order Batch Test' }));
 
       const pin1 = await createPin(db, {
         project_id: project.projectId,
@@ -514,10 +457,7 @@ describe('Pins Storage', () => {
 
   describe('findPinsByType', () => {
     it('returns only conversation pins', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Type Filter Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Type Filter Test' }));
 
       await createPin(db, {
         project_id: project.projectId,
@@ -544,10 +484,7 @@ describe('Pins Storage', () => {
     });
 
     it('returns only leaf pins', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Leaf Filter Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Leaf Filter Test' }));
 
       await createPin(db, {
         project_id: project.projectId,
@@ -612,10 +549,7 @@ describe('Pins Storage', () => {
 
   describe('pin types', () => {
     it.each(['conversation', 'leaf'] as const)('supports pin type: %s', async (type) => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: `Pin Type ${type} Test` })
-      );
+      const project = await insertProject(db, testData.project({ name: `Pin Type ${type} Test` }));
 
       const created = await createPin(db, {
         project_id: project.projectId,

@@ -1,7 +1,7 @@
+import { useCallback, useRef } from 'react';
+import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeSimilarPair } from '@/types/merge';
 import { WordDiffDisplay } from './WordDiffDisplay';
-import { useCanvasStore } from '@/store/canvasStore';
-import { useCallback, useRef } from 'react';
 
 interface MergeSimilarPairCardProps {
   pair: MergeSimilarPair;

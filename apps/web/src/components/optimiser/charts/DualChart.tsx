@@ -1,13 +1,13 @@
 'use client';
 
 import {
+  Legend,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
   Radar,
   RadarChart as RechartsRadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
   ResponsiveContainer,
-  Legend,
   Tooltip,
 } from 'recharts';
 import { cn } from '@/lib/utils';

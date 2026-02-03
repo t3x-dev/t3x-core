@@ -42,10 +42,7 @@ describe('Leaves Storage', () => {
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(
-      db,
-      testData.project({ name: 'Leaves Test Project' })
-    );
+    const project = await insertProject(db, testData.project({ name: 'Leaves Test Project' }));
     testProjectId = project.projectId;
 
     // Create a test commit (leaves require a commit hash)
@@ -176,10 +173,7 @@ describe('Leaves Storage', () => {
       const result = await createLeaf(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(leaves)
-        .where(eq(leaves.id, result.id));
+      const rows = await db.select().from(leaves).where(eq(leaves.id, result.id));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe(result.id);
@@ -335,10 +329,7 @@ describe('Leaves Storage', () => {
 
   describe('findLeavesByProject', () => {
     it('returns leaves for a specific project', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Project Leaves Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Project Leaves Test' }));
 
       const commit = await createCommitV4(db, {
         parents: [],
@@ -366,10 +357,7 @@ describe('Leaves Storage', () => {
     });
 
     it('respects limit and offset options', async () => {
-      const project = await insertProject(
-        db,
-        testData.project({ name: 'Pagination Leaves Test' })
-      );
+      const project = await insertProject(db, testData.project({ name: 'Pagination Leaves Test' }));
 
       const commit = await createCommitV4(db, {
         parents: [],
@@ -573,7 +561,13 @@ describe('Leaves Storage', () => {
 
       const assertions: Assertion[] = [
         { id: '', constraint_id: 'cst_test', passed: true, details: 'Found in output' },
-        { id: '', constraint_id: 'cst_test', passed: false, details: 'Not found', lesson: 'Check formatting' },
+        {
+          id: '',
+          constraint_id: 'cst_test',
+          passed: false,
+          details: 'Not found',
+          lesson: 'Check formatting',
+        },
       ];
 
       const updated = await updateLeafAssertions(db, created.id, assertions);

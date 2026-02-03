@@ -9,11 +9,11 @@
  * - Default rules
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import yaml from 'js-yaml';
 import { join } from 'path';
 import pino from 'pino';
-import yaml from 'js-yaml';
-import { EvalRulesSchema, type EvalRules } from '../schemas/eval-rules.js';
+import { type EvalRules, EvalRulesSchema } from '../schemas/eval-rules.js';
 
 /**
  * Leaf object type (for rule parsing)

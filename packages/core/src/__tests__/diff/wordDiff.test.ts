@@ -5,14 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  diffCommits,
-  jaccard,
-  JACCARD_THRESHOLD,
-  lcs,
-  tokenize,
-  wordDiff,
-} from '../../diff';
+import { diffCommits, JACCARD_THRESHOLD, jaccard, lcs, tokenize, wordDiff } from '../../diff';
 import type { Sentence } from '../../types/commit';
 
 // Helper to create test sentences
@@ -285,7 +278,9 @@ describe('Performance', () => {
 
     for (let i = 0; i < 50; i++) {
       source.push(createSentence(`s${i}`, `This is source sentence number ${i} with some content`));
-      target.push(createSentence(`t${i}`, `This is target sentence number ${i} with other content`));
+      target.push(
+        createSentence(`t${i}`, `This is target sentence number ${i} with other content`)
+      );
     }
 
     const start = performance.now();

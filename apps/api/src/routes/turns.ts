@@ -267,7 +267,7 @@ turnRoutes.get('/v1/turns/:hash/context', async (c) => {
     });
 
     // Find target turn index
-    const targetIndex = allTurns.findIndex(t => t.turnHash === turnHash);
+    const targetIndex = allTurns.findIndex((t) => t.turnHash === turnHash);
     if (targetIndex === -1) {
       return jsonError(c, 'NOT_FOUND', 'Turn not found in conversation', 404);
     }
@@ -289,14 +289,15 @@ turnRoutes.get('/v1/turns/:hash/context', async (c) => {
       rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
       created_at: t.createdAt.toISOString(),
       is_target: isTarget,
-      highlight: isTarget && highlightStart && highlightEnd
-        ? { start: parseInt(highlightStart, 10), end: parseInt(highlightEnd, 10) }
-        : undefined,
+      highlight:
+        isTarget && highlightStart && highlightEnd
+          ? { start: parseInt(highlightStart, 10), end: parseInt(highlightEnd, 10) }
+          : undefined,
     });
 
     return jsonSuccess(c, {
       target_turn: toApiTurn(targetTurn, true),
-      context: contextTurns.map(t => toApiTurn(t, t.turnHash === turnHash)),
+      context: contextTurns.map((t) => toApiTurn(t, t.turnHash === turnHash)),
       conversation_id: targetTurn.conversationId,
       conversation_title: conversation?.title ?? null,
     });

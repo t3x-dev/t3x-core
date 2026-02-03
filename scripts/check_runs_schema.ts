@@ -9,7 +9,9 @@ async function main() {
     ORDER BY ordinal_position
   `);
   console.log('Columns in runs table:');
-  (result.rows as Array<{ column_name: string }>).forEach(row => console.log(' -', row.column_name));
+  (result.rows as Array<{ column_name: string }>).forEach((row) =>
+    console.log(' -', row.column_name)
+  );
   await client.close();
 }
 

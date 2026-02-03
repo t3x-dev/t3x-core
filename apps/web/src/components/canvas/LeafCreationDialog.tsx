@@ -78,11 +78,15 @@ export function LeafCreationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[90vw] max-w-[540px] bg-white overflow-hidden z-[60]" overlayClassName="z-[60]">
+      <DialogContent
+        className="w-[90vw] max-w-[540px] bg-white overflow-hidden z-[60]"
+        overlayClassName="z-[60]"
+      >
         <DialogHeader>
           <DialogTitle>Create Leaf from Commit</DialogTitle>
           <DialogDescription>
-            Create a new leaf to apply constraints and generate output from this commit&apos;s knowledge.
+            Create a new leaf to apply constraints and generate output from this commit&apos;s
+            knowledge.
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +124,10 @@ export function LeafCreationDialog({
                       isCreating && 'opacity-50 cursor-not-allowed'
                     )}
                   >
-                    <Icon size={16} className={cn('shrink-0', isSelected ? 'text-indigo-600' : 'text-gray-500')} />
+                    <Icon
+                      size={16}
+                      className={cn('shrink-0', isSelected ? 'text-indigo-600' : 'text-gray-500')}
+                    />
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{leafType.label}</div>
                       <div className="text-xs text-gray-500">
@@ -137,19 +144,13 @@ export function LeafCreationDialog({
           <div className="space-y-2">
             <Label>From Commit</Label>
             <div className="p-2 bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
-              <code className="text-xs font-mono text-gray-600 block truncate">
-                {commitHash}
-              </code>
+              <code className="text-xs font-mono text-gray-600 block truncate">{commitHash}</code>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isCreating}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={isCreating} className="shrink-0">

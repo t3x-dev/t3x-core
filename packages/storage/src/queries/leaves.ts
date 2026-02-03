@@ -9,11 +9,6 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import {
-  generateAssertionId,
-  generateConstraintId,
-  generateLeafId,
-} from '@t3x/core';
 import type {
   Assertion,
   ConstraintV4 as Constraint,
@@ -22,6 +17,7 @@ import type {
   LeafConfig,
   LeafType,
 } from '@t3x/core';
+import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type LeafRecord, leaves } from '../schema-v4';
@@ -58,10 +54,7 @@ export interface UpdateLeafInput {
  * @param input - Leaf data
  * @returns Created leaf
  */
-export async function createLeaf(
-  db: AnyDB,
-  input: CreateLeafInput
-): Promise<Leaf> {
+export async function createLeaf(db: AnyDB, input: CreateLeafInput): Promise<Leaf> {
   const id = generateLeafId();
   const now = new Date();
 
@@ -92,15 +85,8 @@ export async function createLeaf(
 /**
  * Find a Leaf by ID
  */
-export async function findLeafById(
-  db: AnyDB,
-  id: string
-): Promise<Leaf | null> {
-  const [row] = await db
-    .select()
-    .from(leaves)
-    .where(eq(leaves.id, id))
-    .limit(1);
+export async function findLeafById(db: AnyDB, id: string): Promise<Leaf | null> {
+  const [row] = await db.select().from(leaves).where(eq(leaves.id, id)).limit(1);
 
   return row ? rowToLeaf(row) : null;
 }
@@ -209,11 +195,7 @@ export async function updateLeaf(
     return findLeafById(db, id);
   }
 
-  const [updated] = await db
-    .update(leaves)
-    .set(updateData)
-    .where(eq(leaves.id, id))
-    .returning();
+  const [updated] = await db.update(leaves).set(updateData).where(eq(leaves.id, id)).returning();
 
   return updated ? rowToLeaf(updated) : null;
 }
@@ -287,10 +269,7 @@ export async function deleteLeaf(db: AnyDB, id: string): Promise<boolean> {
 export async function getLeavesByIds(db: AnyDB, ids: string[]): Promise<Leaf[]> {
   if (ids.length === 0) return [];
 
-  const rows = await db
-    .select()
-    .from(leaves)
-    .where(inArray(leaves.id, ids));
+  const rows = await db.select().from(leaves).where(inArray(leaves.id, ids));
 
   // Create a map for O(1) lookup
   const leafMap = new Map<string, Leaf>();

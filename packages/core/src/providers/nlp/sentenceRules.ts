@@ -4,16 +4,7 @@ export interface RuleBasedSentenceOptions {
   minLength?: number;
 }
 
-const SENTENCE_END_CHARS = new Set([
-  '.',
-  '!',
-  '?',
-  ';',
-  '\u3002',
-  '\uFF01',
-  '\uFF1F',
-  '\uFF1B',
-]);
+const SENTENCE_END_CHARS = new Set(['.', '!', '?', ';', '\u3002', '\uFF01', '\uFF1F', '\uFF1B']);
 
 const CLOSING_CHARS = new Set([
   '"',
@@ -226,13 +217,7 @@ function isSentenceEndChar(ch: string): boolean {
 }
 
 function isWhitespace(ch: string | undefined): boolean {
-  return (
-    ch === ' ' ||
-    ch === '\t' ||
-    ch === '\n' ||
-    ch === '\r' ||
-    ch === '\u3000'
-  );
+  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\u3000';
 }
 
 function isDigit(ch: string | undefined): boolean {
@@ -240,10 +225,7 @@ function isDigit(ch: string | undefined): boolean {
 }
 
 function isLetter(ch: string | undefined): boolean {
-  return (
-    ch !== undefined &&
-    ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))
-  );
+  return ch !== undefined && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
 }
 
 function isCjkNumeral(ch: string | undefined): boolean {
@@ -378,13 +360,7 @@ function getListMarkerLength(text: string, index: number): number {
 }
 
 function isListMarkerChar(ch: string): boolean {
-  return (
-    ch === '.' ||
-    ch === ')' ||
-    ch === '\u3001' ||
-    ch === '\uFF0E' ||
-    ch === '\uFF09'
-  );
+  return ch === '.' || ch === ')' || ch === '\u3001' || ch === '\uFF0E' || ch === '\uFF09';
 }
 
 function shouldIgnoreSegment(segmentText: string): boolean {
@@ -462,9 +438,9 @@ function isCjkChar(ch: string | undefined): boolean {
     return false;
   }
   return (
-    (code >= 0x4E00 && code <= 0x9FFF) ||
-    (code >= 0x3400 && code <= 0x4DBF) ||
-    (code >= 0xF900 && code <= 0xFAFF)
+    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0xf900 && code <= 0xfaff)
   );
 }
 

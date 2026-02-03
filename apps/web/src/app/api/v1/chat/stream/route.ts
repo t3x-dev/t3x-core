@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       return Response.json(
-        { success: false, error: errorData.error || { code: 'UPSTREAM_ERROR', message: `HTTP ${response.status}` } },
+        {
+          success: false,
+          error: errorData.error || { code: 'UPSTREAM_ERROR', message: `HTTP ${response.status}` },
+        },
         { status: response.status }
       );
     }

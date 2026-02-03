@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from '@/components/Toast';
+import { getConversationContext, updateConversationContext } from '@/lib/api';
 import { usePinsStore } from '@/store/pinsStore';
 import { ContextPanel } from './ContextPanel';
-import { getConversationContext, updateConversationContext } from '@/lib/api';
-import { toast } from '@/components/Toast';
 
 interface ContextPanelWrapperProps {
   projectId: string;
@@ -31,7 +31,7 @@ export function ContextPanelWrapper({ projectId, conversationId }: ContextPanelW
         setContextLoading(true);
         const context = await getConversationContext(conversationId);
         setContextConfig(context);
-      } catch (err) {
+      } catch (_err) {
         // Default to null (use all pins) if fetch fails
         setContextConfig(null);
       } finally {
@@ -58,11 +58,7 @@ export function ContextPanelWrapper({ projectId, conversationId }: ContextPanelW
 
   // Show loading state
   if (pinsLoading || contextLoading) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Loading context...
-      </div>
-    );
+    return <div className="p-4 text-sm text-muted-foreground">Loading context...</div>;
   }
 
   return (

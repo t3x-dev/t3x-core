@@ -6,23 +6,23 @@
  */
 
 import {
+  calculateDiffStats,
   createCachedEmbeddingProvider,
   createDiffEngine,
   createGoogleAIEmbeddingProvider,
-  diffCommits,
-  DiffType,
-  calculateDiffStats,
   type DiffSegment,
-  type SegmentDiff,
-  type WordDiffSegment,
+  DiffType,
+  diffCommits,
   EmbeddingProviderError,
   type RingOutput,
+  type SegmentDiff,
+  type WordDiffSegment,
 } from '@t3x/core';
 import {
-  getCommitV3,
   findCommitV4ByHash,
   findSegmentEmbeddingsByTurn,
   findTurnByHash,
+  getCommitV3,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
@@ -194,12 +194,7 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
         return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
       }
       if (!targetV4 && !targetCommit) {
-        return jsonError(
-          c,
-          'NOT_FOUND',
-          `Target commit ${body.target_commit_hash} not found`,
-          404
-        );
+        return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
       }
 
       // Helper: extract segments from a V3 or V4 commit
@@ -225,9 +220,7 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
           }
         }
         if (turnHashes.size === 0) {
-          throw new Error(
-            `${label} commit has no source turn_hash in any sentence`
-          );
+          throw new Error(`${label} commit has no source turn_hash in any sentence`);
         }
         const segments: DiffSegment[] = [];
         for (const turnHash of turnHashes) {

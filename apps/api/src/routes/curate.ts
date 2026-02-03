@@ -32,7 +32,9 @@ function getProxyFetch() {
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
     return (url: string, options?: RequestInit) =>
-      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]) as Promise<Response>;
+      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<
+        typeof undiciFetch
+      >[1]) as Promise<Response>;
   }
   return fetch;
 }
@@ -351,14 +353,22 @@ function extractChunksFromTurns(
         if (currentHash !== storedHash) {
           throw new DataValidationError(
             `[curate] Turn ${i}: Content hash mismatch (stored=${storedHash.slice(0, 8)}... current=${currentHash.slice(0, 8)}...). ` +
-            `Turn content was modified after anchor extraction. Re-create the turn with NLP extraction enabled.`
+              `Turn content was modified after anchor extraction. Re-create the turn with NLP extraction enabled.`
           );
         }
       }
 
       // Strict validation: all anchor candidates must have valid fields
       // Valid values for type and source enums
-      const VALID_ANCHOR_TYPES = ['number', 'money', 'duration', 'percent', 'date', 'entity', 'term'];
+      const VALID_ANCHOR_TYPES = [
+        'number',
+        'money',
+        'duration',
+        'percent',
+        'date',
+        'entity',
+        'term',
+      ];
       const VALID_ANCHOR_SOURCES = ['token', 'entity', 'phrase'];
 
       for (let k = 0; k < anchorCandidates.length; k++) {
@@ -381,9 +391,12 @@ function extractChunksFromTurns(
         } else if (!VALID_ANCHOR_TYPES.includes(type)) {
           issues.push(`type: invalid value "${type}"`);
         }
-        if (typeof startChar !== 'number') issues.push('startChar/start_char: required, got ' + typeof startChar);
-        if (typeof endChar !== 'number') issues.push('endChar/end_char: required, got ' + typeof endChar);
-        if (typeof confidence !== 'number') issues.push('confidence: required, got ' + typeof confidence);
+        if (typeof startChar !== 'number')
+          issues.push('startChar/start_char: required, got ' + typeof startChar);
+        if (typeof endChar !== 'number')
+          issues.push('endChar/end_char: required, got ' + typeof endChar);
+        if (typeof confidence !== 'number')
+          issues.push('confidence: required, got ' + typeof confidence);
         if (typeof source !== 'string') {
           issues.push('source: required, got ' + typeof source);
         } else if (!VALID_ANCHOR_SOURCES.includes(source)) {
@@ -394,7 +407,7 @@ function extractChunksFromTurns(
         if (issues.length > 0) {
           throw new DataValidationError(
             `[curate] Turn ${i}, anchor[${k}]: Invalid fields - ${issues.join(', ')}. ` +
-            `This indicates data corruption. Re-create the turn with NLP extraction enabled.`
+              `This indicates data corruption. Re-create the turn with NLP extraction enabled.`
           );
         }
 
@@ -425,7 +438,9 @@ function extractChunksFromTurns(
  * Fallback: Simple regex-based sentence splitting
  * Only used when source_text is provided directly (no turns/Ring3 data)
  */
-function chunkBySentencesFallback(text: string): Array<{ id: string; start: number; end: number; text: string }> {
+function chunkBySentencesFallback(
+  text: string
+): Array<{ id: string; start: number; end: number; text: string }> {
   const chunks: Array<{ id: string; start: number; end: number; text: string }> = [];
 
   // Simple sentence splitter - ONLY for fallback when no Ring3 data
@@ -464,7 +479,6 @@ function chunkBySentencesFallback(text: string): Array<{ id: string; start: numb
 
   return chunks;
 }
-
 
 /**
  * Select top chunks by ratio (keep top N%)
@@ -536,12 +550,7 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
 
   // source_conversation_id is optional if source_text is provided
   if (!body?.project_id || !body?.bridge_id || !body?.intent) {
-    return jsonError(
-      c,
-      'INVALID_REQUEST',
-      'project_id, bridge_id, and intent are required',
-      400
-    );
+    return jsonError(c, 'INVALID_REQUEST', 'project_id, bridge_id, and intent are required', 400);
   }
 
   // Either source_conversation_id or source_text must be provided
@@ -555,7 +564,15 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
   }
 
   // Validate bridge_id
-  const validBridges: BridgeTemplate[] = ['prose', 'plan', 'story', 'summary', 'refine', 'explain', 'clarify'];
+  const validBridges: BridgeTemplate[] = [
+    'prose',
+    'plan',
+    'story',
+    'summary',
+    'refine',
+    'explain',
+    'clarify',
+  ];
   if (!validBridges.includes(body.bridge_id as BridgeTemplate)) {
     return jsonError(
       c,
@@ -571,7 +588,12 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
   // Check for embedding API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', 'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)', 400);
+    return jsonError(
+      c,
+      'PROVIDER_ERROR',
+      'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)',
+      400
+    );
   }
 
   try {
@@ -594,7 +616,12 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
 
       const conversation = await findConversationById(db, body.source_conversation_id);
       if (!conversation) {
-        return jsonError(c, 'NOT_FOUND', `Conversation ${body.source_conversation_id} not found`, 404);
+        return jsonError(
+          c,
+          'NOT_FOUND',
+          `Conversation ${body.source_conversation_id} not found`,
+          404
+        );
       }
 
       const turns = await findTurnsByConversation(db, {
@@ -631,7 +658,12 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
       );
     } else {
       // This should not happen due to validation above, but handle gracefully
-      return jsonError(c, 'INVALID_REQUEST', 'Either source_conversation_id or source_text is required', 400);
+      return jsonError(
+        c,
+        'INVALID_REQUEST',
+        'Either source_conversation_id or source_text is required',
+        400
+      );
     }
 
     if (!sourceText || sourceText.trim().length === 0) {
@@ -694,7 +726,7 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
     });
 
     // 5) Slider -> keepRatio (0 -> 75%, 1 -> 15%)
-    const keepRatio = 0.75 - 0.60 * cosine;
+    const keepRatio = 0.75 - 0.6 * cosine;
     const selected = pickTopByRatio(scored, keepRatio);
 
     // 6) Dedupe by cosine similarity

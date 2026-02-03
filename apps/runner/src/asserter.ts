@@ -12,7 +12,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import pino from 'pino';
-import type { EvalResult, Violation } from './schemas/eval-result.js';
+import type { EvalResult } from './schemas/eval-result.js';
 import type { RunRecord } from './schemas/run-record.js';
 
 const logger = pino({
@@ -213,7 +213,10 @@ export class LLMAsserter {
 
     // Format violations for the prompt
     const violationsText = evalResult.violations
-      .map((v, i) => `${i + 1}. [${v.severity}] ${v.message}${v.step_id ? ` (step: ${v.step_id})` : ''}`)
+      .map(
+        (v, i) =>
+          `${i + 1}. [${v.severity}] ${v.message}${v.step_id ? ` (step: ${v.step_id})` : ''}`
+      )
       .join('\n');
 
     // Format check results

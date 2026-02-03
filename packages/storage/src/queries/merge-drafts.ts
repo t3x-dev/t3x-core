@@ -69,10 +69,7 @@ export async function createMergeDraft(
 /**
  * Get merge draft by ID
  */
-export async function getMergeDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<MergeDraft | null> {
+export async function getMergeDraft(db: AnyDB, draftId: string): Promise<MergeDraft | null> {
   const [draft] = await db
     .select()
     .from(mergeDrafts)
@@ -97,10 +94,7 @@ export async function listMergeDraftsByProject(
       .select()
       .from(mergeDrafts)
       .where(
-        and(
-          eq(mergeDrafts.projectId, options.projectId),
-          eq(mergeDrafts.status, options.status)
-        )
+        and(eq(mergeDrafts.projectId, options.projectId), eq(mergeDrafts.status, options.status))
       )
       .orderBy(desc(mergeDrafts.updatedAt))
       .limit(limit)
@@ -153,34 +147,22 @@ export async function updateMergeDraft(
 /**
  * Mark merge draft as committed
  */
-export async function commitMergeDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<MergeDraft | null> {
+export async function commitMergeDraft(db: AnyDB, draftId: string): Promise<MergeDraft | null> {
   return updateMergeDraft(db, draftId, { status: 'committed' });
 }
 
 /**
  * Mark merge draft as cancelled
  */
-export async function cancelMergeDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<MergeDraft | null> {
+export async function cancelMergeDraft(db: AnyDB, draftId: string): Promise<MergeDraft | null> {
   return updateMergeDraft(db, draftId, { status: 'cancelled' });
 }
 
 /**
  * Delete merge draft
  */
-export async function deleteMergeDraft(
-  db: AnyDB,
-  draftId: string
-): Promise<boolean> {
-  const result = await db
-    .delete(mergeDrafts)
-    .where(eq(mergeDrafts.draftId, draftId))
-    .returning();
+export async function deleteMergeDraft(db: AnyDB, draftId: string): Promise<boolean> {
+  const result = await db.delete(mergeDrafts).where(eq(mergeDrafts.draftId, draftId)).returning();
 
   return result.length > 0;
 }

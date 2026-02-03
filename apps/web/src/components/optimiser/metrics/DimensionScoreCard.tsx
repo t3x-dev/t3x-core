@@ -48,9 +48,7 @@ export function DimensionScoreCard({ scores, className }: DimensionScoreCardProp
           <div key={key} className="space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{DIMENSION_LABELS[key]}</span>
-              <span className={cn('font-mono font-medium', colors.text)}>
-                {percentage}%
-              </span>
+              <span className={cn('font-mono font-medium', colors.text)}>{percentage}%</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div

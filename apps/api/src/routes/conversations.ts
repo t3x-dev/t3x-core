@@ -12,10 +12,7 @@
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
-import {
-  buildConversationContext,
-  type ConversationData,
-} from '@t3x/core';
+import { buildConversationContext, type ConversationData } from '@t3x/core';
 import {
   deleteConversation,
   findCommitV4ByHash,
@@ -33,9 +30,9 @@ import {
   updateConversation,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
+import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
-import { formatContextForExport } from '../lib/context-formatter';
 
 export const conversationRoutes = new Hono();
 
@@ -345,11 +342,11 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD (reuse existing branch system)
-    let currentCommit = undefined;
+    let currentCommit;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
       // Try V4 commit first, fallback gracefully if not found
-      currentCommit = await findCommitV4ByHash(db, currentBranch.headCommitHash) ?? undefined;
+      currentCommit = (await findCommitV4ByHash(db, currentBranch.headCommitHash)) ?? undefined;
     }
 
     // 5. Load pinned conversations data
@@ -428,10 +425,10 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD
-    let currentCommit = undefined;
+    let currentCommit;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
-      currentCommit = await findCommitV4ByHash(db, currentBranch.headCommitHash) ?? undefined;
+      currentCommit = (await findCommitV4ByHash(db, currentBranch.headCommitHash)) ?? undefined;
     }
 
     // 5. Load pinned conversations data

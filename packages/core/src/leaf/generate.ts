@@ -8,7 +8,12 @@
  */
 
 import { buildLeafPrompt } from './build-prompt';
-import { DEFAULT_MODEL, DEFAULT_TEMPERATURE, type GenerateOptions, type GenerateResult } from './types';
+import {
+  DEFAULT_MODEL,
+  DEFAULT_TEMPERATURE,
+  type GenerateOptions,
+  type GenerateResult,
+} from './types';
 import { validateConstraintsExactOnly } from './validate-constraints';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -118,11 +123,7 @@ const MAX_GENERATION_ATTEMPTS = 3;
  * @throws GenerationError if API call fails or API key is not configured
  */
 export async function generateLeafOutput(options: GenerateOptions): Promise<GenerateResult> {
-  const {
-    model = DEFAULT_MODEL,
-    temperature = DEFAULT_TEMPERATURE,
-    maxTokens = 1024,
-  } = options;
+  const { model = DEFAULT_MODEL, temperature = DEFAULT_TEMPERATURE, maxTokens = 1024 } = options;
 
   // Check configuration
   if (!isGenerationConfigured()) {
@@ -143,7 +144,7 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
   const hasConstraints = constraints && constraints.length > 0;
   const maxAttempts = hasConstraints ? MAX_GENERATION_ATTEMPTS : 1;
 
-  let totalUsage = { inputTokens: 0, outputTokens: 0 };
+  const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let lastOutput = '';
   let lastModel = '';
   // Message history for multi-turn retry

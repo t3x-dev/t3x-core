@@ -73,9 +73,7 @@ function buildHighlightRanges(
 
   for (const c of constraints) {
     // Find which sentence this constraint links to
-    const linkedSentenceId =
-      ('source_sentence_id' in c && c.source_sentence_id) ||
-      null;
+    const linkedSentenceId = ('source_sentence_id' in c && c.source_sentence_id) || null;
     const linkedByDescription = c.description
       ? sentenceOffsets.find((s) => c.description?.includes(s.id))?.id
       : null;
@@ -173,7 +171,9 @@ export function ConstraintTextSelector({
         key={`hl-${range.constraintId}-${range.start}`}
         className={cn(
           'rounded-sm px-0.5 transition-all',
-          range.type === 'require' ? 'bg-green-700/20 text-green-900' : 'bg-red-700/20 text-red-900',
+          range.type === 'require'
+            ? 'bg-green-700/20 text-green-900'
+            : 'bg-red-700/20 text-red-900',
           isHovered && 'ring-2 ring-offset-1',
           isHovered && range.type === 'require' && 'ring-green-500',
           isHovered && range.type === 'exclude' && 'ring-red-500'
@@ -195,9 +195,7 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'require' ? 'default' : 'outline'}
-          className={cn(
-            mode === 'require' && 'bg-green-600 hover:bg-green-700 text-white'
-          )}
+          className={cn(mode === 'require' && 'bg-green-600 hover:bg-green-700 text-white')}
           onClick={() => setMode('require')}
         >
           <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -206,17 +204,13 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'exclude' ? 'default' : 'outline'}
-          className={cn(
-            mode === 'exclude' && 'bg-red-600 hover:bg-red-700 text-white'
-          )}
+          className={cn(mode === 'exclude' && 'bg-red-600 hover:bg-red-700 text-white')}
           onClick={() => setMode('exclude')}
         >
           <ShieldX className="h-3.5 w-3.5 mr-1.5" />
           Must Not Have
         </Button>
-        <span className="text-xs text-slate-400 ml-2">
-          Select text below to add a constraint
-        </span>
+        <span className="text-xs text-slate-400 ml-2">Select text below to add a constraint</span>
       </div>
 
       {/* Merged text block */}
@@ -322,12 +316,16 @@ function ConstraintRow({
       ) : (
         <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
       )}
-      <span className={cn('flex-1 truncate font-medium', isRequire ? 'text-green-800' : 'text-red-800')}>
+      <span
+        className={cn('flex-1 truncate font-medium', isRequire ? 'text-green-800' : 'text-red-800')}
+      >
         {constraint.value}
       </span>
       {constraint.description && (
         <span className="text-xs font-mono text-slate-400 shrink-0">
-          {constraint.description.replace('Selected from sentence ', '').replace('Excluded from sentence ', '')}
+          {constraint.description
+            .replace('Selected from sentence ', '')
+            .replace('Excluded from sentence ', '')}
         </span>
       )}
       <Button

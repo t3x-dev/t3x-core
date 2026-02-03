@@ -15,14 +15,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getDB } from '../lib/db';
-import { errorResponse, zodErrorHook } from '../lib/errors';
-import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
-import {
-  CreatePinRequest,
-  PinResponse,
-  UpdatePinAssertionsRequest,
-} from '../schemas/v4-contracts';
+import type { Pin } from '@t3x/core';
 // Storage functions (provided by @t3x/storage)
 import {
   createPin,
@@ -32,7 +25,10 @@ import {
   findPinsByType,
   updatePinAssertions,
 } from '@t3x/storage/pglite';
-import type { Pin } from '@t3x/core';
+import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
+import { CreatePinRequest, PinResponse, UpdatePinAssertionsRequest } from '../schemas/v4-contracts';
 
 export const pinsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -68,7 +64,8 @@ const createPinRoute = createRoute({
   path: '/v1/projects/{projectId}/pins',
   tags: ['Pins'],
   summary: 'Create a new pin',
-  description: 'Creates a new pin to mark an item as selected for commit sources and conversation context.',
+  description:
+    'Creates a new pin to mark an item as selected for commit sources and conversation context.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
