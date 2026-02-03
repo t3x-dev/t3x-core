@@ -14,11 +14,20 @@
  * @see https://github.com/t3x-dev/T3X/issues/220
  */
 
-import { AlertCircle, Columns2, Expand, FileText, Loader2, MapPin } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Columns2,
+  Expand,
+  FileText,
+  Loader2,
+  MapPin,
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
+import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV3Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import {
@@ -602,12 +611,11 @@ export function DiffDisplayView({
   // Empty state
   if (sourceSentences.length === 0 && targetSentences.length === 0) {
     return (
-      <div
-        className={cn('flex items-center justify-center py-12 text-muted-foreground', className)}
-      >
-        <AlertCircle className="h-5 w-5 mr-2" />
-        No sentences to compare
-      </div>
+      <EmptyStateInline
+        icon={CheckCircle}
+        message="Documents are identical -- no sentences to compare."
+        className={cn('py-12', className)}
+      />
     );
   }
 

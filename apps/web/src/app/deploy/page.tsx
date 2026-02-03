@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  AlertCircle,
+  CloudOff,
   ExternalLink,
   GitCompare,
   Loader2,
@@ -271,18 +271,19 @@ export default function DeployPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
-      {/* Runner Offline Alert */}
+      {/* Runner Offline Info */}
       {runnerHealthy === false && (
-        <Card className="border-red-500/30 bg-red-500/5">
+        <Card className="border-muted bg-muted/30">
           <CardContent className="flex items-start gap-3 py-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
+            <CloudOff className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-red-600">Runner not available</p>
-              <p className="text-sm text-muted-foreground">
-                Start the runner with:{' '}
-                <code className="rounded bg-muted px-1">pnpm docker:up:runner</code> or{' '}
-                <code className="rounded bg-muted px-1">pnpm dev:runner</code>
-              </p>
+              <p className="font-medium">Runner service is not connected</p>
+              <p className="text-sm text-muted-foreground">Connect the runner to enable:</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
+                <li>Agent deployment and execution</li>
+                <li>Real-time trace collection</li>
+                <li>Automated evaluation</li>
+              </ul>
             </div>
           </CardContent>
         </Card>

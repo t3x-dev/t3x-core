@@ -1,5 +1,5 @@
-import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { GitMerge, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,11 @@ export function MergePanel() {
         resolved: prepared.similarPairs.filter((p) => p.resolution).length,
         onlyInSource: prepared.onlyInSource.length,
         onlyInTarget: prepared.onlyInTarget.length,
+        // B-19: Resolution breakdown for confirm dialog
+        keptSource: prepared.similarPairs.filter((p) => p.resolution === 'source').length,
+        keptTarget: prepared.similarPairs.filter((p) => p.resolution === 'target').length,
+        keptSourceCandidates: prepared.onlyInSource.filter((c) => c.keep).length,
+        keptTargetCandidates: prepared.onlyInTarget.filter((c) => c.keep).length,
       };
     })
   );
@@ -53,17 +58,55 @@ export function MergePanel() {
   const [message, setMessage] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // B-12: Multi-step progress during merge preparation
+  const preparing = !mergeState && mergeLoading;
+  const [prepareStep, setPrepareStep] = useState(0);
+
+  useEffect(() => {
+    if (!preparing) return;
+    const interval = setInterval(() => {
+      setPrepareStep((prev) => (prev + 1) % 3);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [preparing]);
+
+  const preparePhases = [
+    { label: 'Analyzing branches...', detail: 'Comparing source and target commits' },
+    {
+      label: 'Computing diffs...',
+      detail: 'Identifying identical, modified, and unique sentences',
+    },
+    { label: 'Building merge plan...', detail: 'Preparing resolution options' },
+  ];
+
   // A-11: Loading skeleton during prepare phase
-  if (!mergeState && mergeLoading) {
+  if (preparing) {
     return (
       <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background shadow-lg border-l overflow-y-auto p-4 sm:p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Merge Review</h2>
         </div>
-        <div className="flex items-center gap-2 mb-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Analyzing semantic differences...
+
+        {/* B-12: Multi-step progress indicator */}
+        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm font-medium">{preparePhases[prepareStep].label}</span>
+          </div>
+          <p className="text-xs text-muted-foreground ml-6">{preparePhases[prepareStep].detail}</p>
+          <div className="flex gap-1.5 mt-3 ml-6">
+            {preparePhases.map((_, i) => (
+              <div
+                key={`phase-${i}`}
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                  i <= prepareStep ? 'bg-primary' : 'bg-muted'
+                }`}
+              />
+            ))}
+          </div>
         </div>
+
+        {/* Skeleton mimicking stats bar and sections */}
         <div className="space-y-4">
           <Skeleton className="h-28 w-full rounded-lg" />
           <SkeletonText lines={3} />
@@ -106,7 +149,7 @@ export function MergePanel() {
         <h2 className="text-xl font-bold">Merge Review</h2>
         <button
           onClick={cancelMerge}
-          className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+          className="text-muted-foreground hover:text-foreground text-2xl leading-none"
           type="button"
           aria-label="Close merge panel"
         >
@@ -116,14 +159,16 @@ export function MergePanel() {
 
       {/* Progress summary */}
       {counts && (
-        <div className="mb-6 p-3 bg-gray-50 rounded-lg text-sm">
+        <div className="mb-6 p-3 bg-muted/50 rounded-lg text-sm">
           <div className="flex justify-between mb-1">
             <span>Identical (auto-kept):</span>
-            <span className="font-medium text-green-700">{counts.identical}</span>
+            <span className="font-medium text-green-700 dark:text-green-400">
+              {counts.identical}
+            </span>
           </div>
           <div className="flex justify-between mb-1">
             <span>Similar (need decision):</span>
-            <span className="font-medium text-yellow-700">
+            <span className="font-medium text-amber-600 dark:text-amber-400">
               {counts.resolved}/{counts.similar}
             </span>
           </div>
@@ -136,7 +181,7 @@ export function MergePanel() {
             <span className="font-medium">{counts.onlyInTarget}</span>
           </div>
           {unresolvedCount > 0 && (
-            <div className="mt-2 pt-2 border-t border-gray-200 text-yellow-700 font-medium">
+            <div className="mt-2 pt-2 border-t border-border text-amber-600 dark:text-amber-400 font-medium">
               ⚠️ {unresolvedCount} unresolved conflict{unresolvedCount !== 1 ? 's' : ''}
             </div>
           )}
@@ -151,7 +196,9 @@ export function MergePanel() {
       {/* Similar pairs */}
       {prepared.similarPairs.length > 0 && (
         <div className="mb-4">
-          <h3 className="font-medium mb-2 text-yellow-800">Similar Sentences (Pick One)</h3>
+          <h3 className="font-medium mb-2 text-amber-600 dark:text-amber-400">
+            Similar Sentences (Pick One)
+          </h3>
           <div className="space-y-3">
             {prepared.similarPairs.map((pair, index) => (
               <MergeSimilarPairCard
@@ -203,7 +250,7 @@ export function MergePanel() {
             className={`flex-1 py-2 px-4 rounded font-medium transition-colors ${
               canExecute && !mergeLoading
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-muted text-muted-foreground cursor-not-allowed'
             }`}
             type="button"
           >
@@ -218,7 +265,7 @@ export function MergePanel() {
           </button>
           <button
             onClick={cancelMerge}
-            className="px-4 py-2 border rounded hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 border rounded hover:bg-muted/50 transition-colors"
             type="button"
             disabled={mergeLoading}
           >
@@ -227,18 +274,24 @@ export function MergePanel() {
         </div>
 
         {!canExecute && unresolvedCount > 0 && (
-          <p className="text-sm text-yellow-700 mt-2">
+          <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
             Please resolve all similar pairs before executing
           </p>
         )}
       </div>
 
-      {/* A-10: Merge confirmation dialog */}
+      {/* A-10 + B-19: Merge confirmation dialog with polished UI */}
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
+          {/* B-19: Icon circle */}
+          <div className="flex justify-center mb-2">
+            <div className="rounded-full bg-primary/10 p-3">
+              <GitMerge className="h-6 w-6 text-primary" />
+            </div>
+          </div>
           <DialogHeader>
-            <DialogTitle>Confirm Merge</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-center">Confirm Merge</DialogTitle>
+            <DialogDescription className="text-center">
               This will create a new merge commit combining the selected sentences from both
               branches. This action cannot be undone.
             </DialogDescription>
@@ -247,15 +300,32 @@ export function MergePanel() {
             <p>
               <strong>Message:</strong> {message}
             </p>
+
+            {/* B-19: Resolution counts grid */}
             {counts && (
-              <div className="mt-2 space-y-1">
-                <p>{counts.identical} identical (auto-kept)</p>
-                <p>
-                  {counts.resolved}/{counts.similar} conflicts resolved
-                </p>
-                <p>
-                  {counts.onlyInSource} unique to source, {counts.onlyInTarget} unique to target
-                </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted/50 p-2 text-center">
+                  <div className="text-lg font-semibold text-foreground">{counts.identical}</div>
+                  <div className="text-xs text-muted-foreground">Identical (auto-kept)</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2 text-center">
+                  <div className="text-lg font-semibold text-foreground">
+                    {counts.resolved}/{counts.similar}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Conflicts resolved</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2 text-center">
+                  <div className="text-lg font-semibold text-foreground">
+                    {counts.keptSource}/{counts.keptSourceCandidates}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Kept from source</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2 text-center">
+                  <div className="text-lg font-semibold text-foreground">
+                    {counts.keptTarget}/{counts.keptTargetCandidates}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Kept from target</div>
+                </div>
               </div>
             )}
           </div>
@@ -263,7 +333,10 @@ export function MergePanel() {
             <Button variant="outline" onClick={() => setShowConfirm(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmExecute}>Execute Merge</Button>
+            <Button onClick={handleConfirmExecute}>
+              <GitMerge className="h-4 w-4 mr-2" />
+              Execute Merge
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

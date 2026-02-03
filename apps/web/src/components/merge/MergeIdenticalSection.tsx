@@ -20,21 +20,21 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
   if (sentences.length === 0) return null;
 
   return (
-    <div className="border border-green-200 rounded-lg bg-green-50 p-4">
+    <div className="border border-green-200 dark:border-green-800 rounded-lg bg-green-50 dark:bg-green-950/30 p-4">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex justify-between items-center w-full cursor-pointer hover:bg-green-100 rounded px-2 py-1 transition-colors"
+        className="flex justify-between items-center w-full cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 rounded px-2 py-1 transition-colors"
         type="button"
       >
-        <span className="font-medium text-green-800">
+        <span className="font-medium text-green-800 dark:text-green-300">
           ✓ Identical ({sentences.length} {sentences.length === 1 ? 'sentence' : 'sentences'}) —
           auto-kept
         </span>
-        <span className="text-green-600 text-lg">{expanded ? '▲' : '▼'}</span>
+        <span className="text-green-600 dark:text-green-400 text-lg">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (
-        <ul className="mt-3 space-y-1 text-sm text-green-700 pl-2">
+        <ul className="mt-3 space-y-1 text-sm text-green-700 dark:text-green-400 pl-2">
           {sentences.map((s) => (
             <li key={s.id} className="py-1">
               {s.text}

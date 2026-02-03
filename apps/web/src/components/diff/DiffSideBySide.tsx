@@ -1,6 +1,8 @@
 'use client';
 
+import { CheckCircle } from 'lucide-react';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import type { Sentence, WordDiffSegment } from '@/types/merge';
@@ -332,9 +334,11 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
         {/* Empty state */}
         {segmentDiffs.length === 0 && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            No differences found
-          </div>
+          <EmptyStateInline
+            icon={CheckCircle}
+            message="Documents are identical -- no differences found between these commits."
+            className="py-20"
+          />
         )}
 
         {/* Source Context Modal (for "Expand" button) */}
