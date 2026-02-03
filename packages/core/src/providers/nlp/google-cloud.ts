@@ -146,10 +146,7 @@ export class GoogleCloudNLPProvider implements NLPProvider {
   /**
    * Call Google Cloud NLP annotateText API
    */
-  private async callAnnotateText(
-    text: string,
-    language?: string
-  ): Promise<GoogleAnalyzeResponse> {
+  private async callAnnotateText(text: string, language?: string): Promise<GoogleAnalyzeResponse> {
     const url = `${this.endpoint}/documents:annotateText?key=${this.apiKey}`;
 
     const requestBody = {

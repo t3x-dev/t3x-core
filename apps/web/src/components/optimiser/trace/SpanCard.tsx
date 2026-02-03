@@ -1,7 +1,7 @@
 'use client';
 
+import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { StepRecord } from './TraceTimeline';
@@ -12,7 +12,15 @@ interface SpanCardProps {
 }
 
 // Collapsible JSON viewer
-function JsonViewer({ data, label, defaultOpen = false }: { data: unknown; label: string; defaultOpen?: boolean }) {
+function JsonViewer({
+  data,
+  label,
+  defaultOpen = false,
+}: {
+  data: unknown;
+  label: string;
+  defaultOpen?: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
 
@@ -46,12 +54,7 @@ function JsonViewer({ data, label, defaultOpen = false }: { data: unknown; label
             </span>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0"
-          onClick={handleCopy}
-        >
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy}>
           {copied ? (
             <Check className="h-3.5 w-3.5 text-green-500" />
           ) : (
@@ -227,12 +230,8 @@ export function SpanCard({ step, className }: SpanCardProps) {
       {/* Generic Input/Output for chain/workflow types */}
       {!step.llm && !step.tool && !step.retrieval && (
         <div className="space-y-3">
-          {step.input !== undefined && (
-            <JsonViewer data={step.input} label="Input" />
-          )}
-          {step.output !== undefined && (
-            <JsonViewer data={step.output} label="Output" />
-          )}
+          {step.input !== undefined && <JsonViewer data={step.input} label="Input" />}
+          {step.output !== undefined && <JsonViewer data={step.output} label="Output" />}
         </div>
       )}
 

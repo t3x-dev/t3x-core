@@ -584,7 +584,10 @@ apps/web/src/
 │   ├── canvas/
 │   │   ├── CommitSourceContext.tsx    # 主显示组件
 │   │   ├── TruncatedCommitView.tsx    # Canvas 紧凑预览
-│   │   └── NodeModal.tsx              # 集成点 (lines 333-361)
+│   │   └── NodeModal/                 # 集成点 (split into sub-components)
+│   │       ├── NodeModal.tsx          # Shell routing
+│   │       ├── CommittedCommitView.tsx # Committed commit view
+│   │       └── shared.tsx             # Shared sections (source context etc.)
 │   ├── shared/
 │   │   └── TurnBubble.tsx             # 对话气泡渲染
 │   ├── diff/

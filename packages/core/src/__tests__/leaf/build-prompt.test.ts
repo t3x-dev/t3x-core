@@ -4,14 +4,14 @@
  * @see packages/core/src/leaf/build-prompt.ts
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   buildLeafPrompt,
   buildSystemPrompt,
-  getTypeInstructions,
   formatConstraints,
+  getTypeInstructions,
 } from '../../leaf/build-prompt';
-import type { CommitV4, Leaf, Constraint } from '../../types/v4';
+import type { CommitV4, Constraint, Leaf } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

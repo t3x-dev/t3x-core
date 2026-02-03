@@ -10,9 +10,9 @@
  * 3. A critical function was removed or renamed
  */
 
-import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { describe, expect, it } from 'vitest';
 
 // Read the API client source code
 const apiFilePath = path.join(__dirname, '../../lib/api.ts');
@@ -23,7 +23,10 @@ describe('Frontend API Endpoint References', () => {
   // Looks for the function and its following fetch call within a reasonable range
   function extractFunctionWithFetch(funcName: string, maxChars = 800): string | null {
     // Find function declaration and extract up to maxChars chars after it (enough for the fetch call)
-    const pattern = new RegExp(`export async function ${funcName}[\\s\\S]{0,${maxChars}}?handleResponse`, 'm');
+    const pattern = new RegExp(
+      `export async function ${funcName}[\\s\\S]{0,${maxChars}}?handleResponse`,
+      'm'
+    );
     const match = apiCode.match(pattern);
     return match ? match[0] : null;
   }

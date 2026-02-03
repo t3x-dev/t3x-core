@@ -388,7 +388,7 @@ className="shadow-[0_0_0_2px_rgba(79,70,229,0.5)]"
 
 ### 7. Demo Data
 
-**Added**: `canvasStore.loadDemoData()`
+**Added**: `useCanvasStore().loadDemoData()` (in `canvasStore.ts`)
 
 Development-only function to populate canvas with example nodes showcasing all sections.
 
@@ -571,7 +571,10 @@ apps/web/src/
 ├── lib/
 │   └── motion.ts             # NEW: Motion library
 ├── store/
-│   └── canvasStore.ts        # loadDemoData()
+│   ├── canvasStore.ts        # loadDemoData() + slice composition
+│   ├── canvasStoreUtils.ts   # Pure utility functions
+│   ├── canvasMergeSlice.ts   # Merge domain slice
+│   └── canvasLeafSlice.ts    # Leaf panel slice
 └── types/
     ├── display-spec.ts       # NEW: Display rules
     └── nodes.ts              # EmbeddedLeaf, SourceReference

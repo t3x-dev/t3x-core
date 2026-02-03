@@ -442,20 +442,20 @@ export function PendingCommitView({
       }
 
       // Collect user selections
-      let sourceExcerpt: string[] = [];
-      let mustHave: string[] = [];
-      let mustntHave: string[] = [];
+      let _sourceExcerpt: string[] = [];
+      let _mustHave: string[] = [];
+      let _mustntHave: string[] = [];
 
       if (textBlocks.length > 0) {
-        sourceExcerpt = textBlocks
+        _sourceExcerpt = textBlocks
           .map((block) => getSelectedText(block.tokens, block.selections))
           .filter((text) => text.length > 0);
-        mustHave = [...mustHaveKeywordsNew];
-        mustntHave = [...mustntHaveKeywordsNew];
+        _mustHave = [...mustHaveKeywordsNew];
+        _mustntHave = [...mustntHaveKeywordsNew];
       } else {
-        sourceExcerpt = allPhrases.filter((p) => p.included).map((p) => p.text);
-        mustHave = mustHaveKeywordsLegacy.map((kw) => kw.text);
-        mustntHave = mustntHaveKeywordsLegacy.map((kw) => kw.text);
+        _sourceExcerpt = allPhrases.filter((p) => p.included).map((p) => p.text);
+        _mustHave = mustHaveKeywordsLegacy.map((kw) => kw.text);
+        _mustntHave = mustntHaveKeywordsLegacy.map((kw) => kw.text);
       }
 
       // Create branch if needed
@@ -506,7 +506,7 @@ export function PendingCommitView({
       }
 
       // Build CommitAnchors from pendingSource (v1.1)
-      let anchorsParam: api.ApiCommitAnchors | undefined;
+      let _anchorsParam: api.ApiCommitAnchors | undefined;
       const pendingSource = data.pendingSource;
 
       if (pendingSource?.inputTextHash && pendingSource?.sentences && pendingAnchors.length > 0) {
@@ -544,7 +544,7 @@ export function PendingCommitView({
         const nonEmptySentences = sentencesWithAnchors.filter((s) => s.anchors.length > 0);
 
         if (nonEmptySentences.length > 0) {
-          anchorsParam = {
+          _anchorsParam = {
             input_text_hash: pendingSource.inputTextHash,
             sentences: nonEmptySentences,
           };

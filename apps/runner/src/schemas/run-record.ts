@@ -19,10 +19,14 @@ export type SpanKind = z.infer<typeof SpanKindSchema>;
 export const LLMDataSchema = z.object({
   model: z.string(),
   provider: z.string().optional(),
-  messages: z.array(z.object({
-    role: z.string(),
-    content: z.string(),
-  })).optional(),
+  messages: z
+    .array(
+      z.object({
+        role: z.string(),
+        content: z.string(),
+      })
+    )
+    .optional(),
   tokens: z.object({
     prompt: z.number(),
     completion: z.number(),

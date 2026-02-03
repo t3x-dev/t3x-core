@@ -90,9 +90,7 @@ describe('extractChunksFromTurns', () => {
 
       // Fail-Fast: Do not silently fallback to treating entire content as one chunk
       // This ensures users know when NLP extraction is missing
-      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(
-        /Ring3 missing for turn 0/
-      );
+      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(/Ring3 missing for turn 0/);
     });
 
     it('allows empty segments array (valid for empty/punctuation-only content)', () => {
@@ -181,10 +179,7 @@ describe('extractChunksFromTurns', () => {
           content: 'Segments without offsets.',
           rings: {
             ring3: {
-              segments: [
-                { text: 'Segments without offsets.' },
-                { text: 'Another segment.' },
-              ],
+              segments: [{ text: 'Segments without offsets.' }, { text: 'Another segment.' }],
             },
           },
         },
@@ -508,9 +503,7 @@ describe('extractChunksFromTurns', () => {
       ];
 
       // Strict fail-fast: hash mismatch throws error
-      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(
-        /hash mismatch/i
-      );
+      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(/hash mismatch/i);
     });
 
     it('throws error when hash mismatch (snake_case fields)', () => {
@@ -542,9 +535,7 @@ describe('extractChunksFromTurns', () => {
       ];
 
       // Strict fail-fast: hash mismatch throws error even with snake_case fields
-      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(
-        /hash mismatch/i
-      );
+      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(/hash mismatch/i);
     });
 
     it('falls back to anchor_candidates when anchorCandidates is null', () => {

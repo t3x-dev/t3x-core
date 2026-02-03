@@ -1,11 +1,11 @@
 'use client';
 
 import {
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
   Radar,
   RadarChart as RechartsRadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
   ResponsiveContainer,
   Tooltip,
 } from 'recharts';
@@ -42,7 +42,13 @@ function transformScores(scores: DimensionScores) {
 }
 
 // Custom tooltip component
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { dimension: string; value: number } }> }) {
+function CustomTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: { dimension: string; value: number } }>;
+}) {
   if (!active || !payload || payload.length === 0) return null;
 
   const data = payload[0].payload;

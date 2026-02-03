@@ -1,5 +1,5 @@
-import type { MergeCandidate } from '@/types/merge';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { MergeCandidate } from '@/types/merge';
 
 interface MergeCandidateListProps {
   candidates: MergeCandidate[];
@@ -29,10 +29,7 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
 
       <div className="space-y-2">
         {candidates.map((candidate, index) => (
-          <label
-            key={candidate.sentence.id}
-            className="flex items-start gap-2 cursor-pointer"
-          >
+          <label key={candidate.sentence.id} className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={candidate.keep}

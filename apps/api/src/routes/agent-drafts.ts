@@ -444,7 +444,7 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     let turnData: Array<{ role: string; content: string }>;
     const warnings: string[] = [];
 
-    if (body.selected_text && body.selected_text.trim()) {
+    if (body.selected_text?.trim()) {
       // Use pre-selected text from curate preview
       turnData = [{ role: 'context', content: body.selected_text }];
     } else {

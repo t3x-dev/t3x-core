@@ -5,9 +5,9 @@
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
 
-import { eq, desc } from 'drizzle-orm';
-import { deployAgents, type DeployAgent, type NewDeployAgent } from '../schema';
+import { desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type DeployAgent, deployAgents, type NewDeployAgent } from '../schema';
 
 export interface CreateDeployAgentInput {
   id: string;
@@ -51,17 +51,20 @@ export async function insertDeployAgent(
 ): Promise<DeployAgent> {
   const now = new Date();
 
-  const [agent] = await db.insert(deployAgents).values({
-    deployAgentId: input.id,
-    projectId: input.projectId ?? null,
-    name: input.name,
-    endpoint: input.endpoint,
-    type: input.type ?? 'http',
-    authJson: input.auth ? JSON.stringify(input.auth) : null,
-    status: 'idle',
-    createdAt: now,
-    updatedAt: now,
-  }).returning();
+  const [agent] = await db
+    .insert(deployAgents)
+    .values({
+      deployAgentId: input.id,
+      projectId: input.projectId ?? null,
+      name: input.name,
+      endpoint: input.endpoint,
+      type: input.type ?? 'http',
+      authJson: input.auth ? JSON.stringify(input.auth) : null,
+      status: 'idle',
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
 
   return agent;
 }
@@ -159,10 +162,7 @@ export async function updateDeployAgent(
 /**
  * Delete a deploy agent
  */
-export async function deleteDeployAgent(
-  db: AnyDB,
-  deployAgentId: string
-): Promise<boolean> {
+export async function deleteDeployAgent(db: AnyDB, deployAgentId: string): Promise<boolean> {
   const result = await db
     .delete(deployAgents)
     .where(eq(deployAgents.deployAgentId, deployAgentId))

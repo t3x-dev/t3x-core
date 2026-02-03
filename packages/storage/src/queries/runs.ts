@@ -3,9 +3,9 @@
  *
  * CRUD operations for Engine run records.
  */
-import { eq, desc, and, lt, sql, type SQL } from 'drizzle-orm';
-import { runs, type Run } from '../schema';
+import { and, desc, eq, lt, type SQL, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { type Run, runs } from '../schema';
 
 // ============================================================
 // Types
@@ -54,16 +54,16 @@ export interface ListRunsOptions {
 
 // v2.2: Configuration stats for A/B test comparison
 export interface ConfigurationStats {
-  model: string;              // 模型名称
-  prompt_version: string;     // prompt 版本
-  run_count: number;          // 运行次数（样本量）
-  pass_count: number;         // 通过次数
-  pass_rate: number;          // 通过率 (0-1)
-  avg_score: number;          // 平均得分
-  avg_latency_ms: number;     // 平均延迟
-  avg_tokens: number;         // 平均 token 数
-  scores: number[];           // 原始得分数组（用于 t-test）
-  latencies: number[];        // 原始延迟数组
+  model: string; // 模型名称
+  prompt_version: string; // prompt 版本
+  run_count: number; // 运行次数（样本量）
+  pass_count: number; // 通过次数
+  pass_rate: number; // 通过率 (0-1)
+  avg_score: number; // 平均得分
+  avg_latency_ms: number; // 平均延迟
+  avg_tokens: number; // 平均 token 数
+  scores: number[]; // 原始得分数组（用于 t-test）
+  latencies: number[]; // 原始延迟数组
 }
 
 // ============================================================
@@ -73,10 +73,7 @@ export interface ConfigurationStats {
 /**
  * Insert a new run
  */
-export async function insertRun(
-  db: AnyDB,
-  input: CreateRunInput
-): Promise<Run> {
+export async function insertRun(db: AnyDB, input: CreateRunInput): Promise<Run> {
   const now = new Date().toISOString();
 
   const [run] = await db
@@ -108,15 +105,8 @@ export async function insertRun(
 /**
  * Find run by ID
  */
-export async function getRun(
-  db: AnyDB,
-  runId: string
-): Promise<Run | undefined> {
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.runId, runId))
-    .limit(1);
+export async function getRun(db: AnyDB, runId: string): Promise<Run | undefined> {
+  const [run] = await db.select().from(runs).where(eq(runs.runId, runId)).limit(1);
 
   return run;
 }
@@ -126,10 +116,7 @@ export async function getRun(
  *
  * v2.1: Added model and prompt_version filters for A/B test comparison
  */
-export async function listRuns(
-  db: AnyDB,
-  options: ListRunsOptions = {}
-): Promise<Run[]> {
+export async function listRuns(db: AnyDB, options: ListRunsOptions = {}): Promise<Run[]> {
   const { projectId, status, model, prompt_version, limit = 50, offset = 0 } = options;
 
   const conditions: SQL[] = [];
@@ -147,12 +134,7 @@ export async function listRuns(
     conditions.push(sql`${runs.metadataJson}::jsonb->>'prompt_version' = ${prompt_version}`);
   }
 
-  const query = db
-    .select()
-    .from(runs)
-    .orderBy(desc(runs.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const query = db.select().from(runs).orderBy(desc(runs.createdAt)).limit(limit).offset(offset);
 
   if (conditions.length > 0) {
     return query.where(and(...conditions));
@@ -194,11 +176,7 @@ export async function updateRun(
     updateData.metadataJson = input.metadata_json;
   }
 
-  const [run] = await db
-    .update(runs)
-    .set(updateData)
-    .where(eq(runs.runId, runId))
-    .returning();
+  const [run] = await db.update(runs).set(updateData).where(eq(runs.runId, runId)).returning();
 
   return run;
 }
@@ -212,11 +190,7 @@ export async function getRunByRunnerRunId(
   db: AnyDB,
   runnerRunId: string
 ): Promise<Run | undefined> {
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.runnerRunId, runnerRunId))
-    .limit(1);
+  const [run] = await db.select().from(runs).where(eq(runs.runnerRunId, runnerRunId)).limit(1);
 
   return run;
 }
@@ -224,14 +198,8 @@ export async function getRunByRunnerRunId(
 /**
  * Delete run
  */
-export async function deleteRun(
-  db: AnyDB,
-  runId: string
-): Promise<boolean> {
-  const result = await db
-    .delete(runs)
-    .where(eq(runs.runId, runId))
-    .returning();
+export async function deleteRun(db: AnyDB, runId: string): Promise<boolean> {
+  const result = await db.delete(runs).where(eq(runs.runId, runId)).returning();
 
   return result.length > 0;
 }
@@ -254,12 +222,7 @@ export async function getTimedOutRuns(
   return db
     .select()
     .from(runs)
-    .where(
-      and(
-        eq(runs.status, 'running'),
-        lt(runs.updatedAt, cutoffTime)
-      )
-    );
+    .where(and(eq(runs.status, 'running'), lt(runs.updatedAt, cutoffTime)));
 }
 
 /**
@@ -269,10 +232,7 @@ export async function getTimedOutRuns(
  * @param runId - Run ID to mark as timeout
  * @returns Updated run or undefined
  */
-export async function markRunAsTimeout(
-  db: AnyDB,
-  runId: string
-): Promise<Run | undefined> {
+export async function markRunAsTimeout(db: AnyDB, runId: string): Promise<Run | undefined> {
   const [run] = await db
     .update(runs)
     .set({
@@ -358,11 +318,14 @@ export async function getConfigurationStats(
     .where(and(...conditions));
 
   // Group runs by model + prompt_version
-  const groups = new Map<string, {
-    model: string;
-    prompt_version: string;
-    runs: typeof allRuns;
-  }>();
+  const groups = new Map<
+    string,
+    {
+      model: string;
+      prompt_version: string;
+      runs: typeof allRuns;
+    }
+  >();
 
   for (const run of allRuns) {
     const metadata = JSON.parse(run.metadataJson || '{}');
@@ -395,10 +358,11 @@ export async function getConfigurationStats(
           const result = JSON.parse(run.resultJson);
           // v2.2 fix: Get score from run_report.eval_result.score (actual data structure)
           const evalResult = result.run_report?.eval_result;
-          const score = evalResult?.score
-            ?? result.eval_metrics?.overall_score
-            ?? result.run_report?.overall_score
-            ?? result.overall_score;
+          const score =
+            evalResult?.score ??
+            result.eval_metrics?.overall_score ??
+            result.run_report?.overall_score ??
+            result.overall_score;
           if (typeof score === 'number') {
             scores.push(score);
           }
@@ -427,15 +391,10 @@ export async function getConfigurationStats(
     }
 
     const runCount = groupRuns.length;
-    const avgScore = scores.length > 0
-      ? scores.reduce((a, b) => a + b, 0) / scores.length
-      : 0;
-    const avgLatency = latencies.length > 0
-      ? latencies.reduce((a, b) => a + b, 0) / latencies.length
-      : 0;
-    const avgTokens = tokens.length > 0
-      ? tokens.reduce((a, b) => a + b, 0) / tokens.length
-      : 0;
+    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const avgLatency =
+      latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+    const avgTokens = tokens.length > 0 ? tokens.reduce((a, b) => a + b, 0) / tokens.length : 0;
 
     stats.push({
       model,

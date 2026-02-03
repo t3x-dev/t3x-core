@@ -30,19 +30,13 @@ export function WordDiffDisplay({ segments }: WordDiffDisplayProps) {
             return <span key={i}>{segment.text}</span>;
           case 'removed':
             return (
-              <span
-                key={i}
-                className="bg-red-100 text-red-800 line-through px-1 rounded"
-              >
+              <span key={i} className="bg-red-100 text-red-800 line-through px-1 rounded">
                 {segment.text}
               </span>
             );
           case 'added':
             return (
-              <span
-                key={i}
-                className="bg-green-100 text-green-800 px-1 rounded ml-1"
-              >
+              <span key={i} className="bg-green-100 text-green-800 px-1 rounded ml-1">
                 {segment.text}
               </span>
             );

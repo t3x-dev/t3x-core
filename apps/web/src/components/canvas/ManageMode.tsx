@@ -381,15 +381,15 @@ export default function ManageMode({
               key={idx}
               className={cn(
                 'relative inline-flex items-center px-1 py-0.5 rounded cursor-pointer transition-colors group',
-                keyword.constraint === 'must_have' && 'bg-green-100 hover:bg-green-200',
-                keyword.constraint === 'mustnt_have' && 'bg-red-100 hover:bg-red-200',
-                keyword.constraint === 'neutral' && 'bg-slate-100 hover:bg-slate-200',
+                keyword.constraint === 'must_have' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
+                keyword.constraint === 'mustnt_have' && 'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50',
+                keyword.constraint === 'neutral' && 'bg-muted hover:bg-muted/80',
                 isLocked && 'cursor-default'
               )}
             >
               <span className="font-medium">{token.text}</span>
               {!isLocked && (
-                <span className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5 bg-white rounded shadow-sm border p-0.5">
+                <span className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5 bg-background rounded shadow-sm border p-0.5">
                   <button
                     className={cn(
                       'w-4 h-4 rounded flex items-center justify-center transition-colors',
@@ -459,7 +459,7 @@ export default function ManageMode({
             />
             <span>Select All</span>
           </label>
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-muted-foreground">
             {selectedClauseIds.size > 0 && `${selectedClauseIds.size} selected`}
           </span>
         </div>
@@ -469,7 +469,7 @@ export default function ManageMode({
             size="sm"
             onClick={markSelectedAsKeep}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+            className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
           >
             <Bookmark size={14} />
             <span>Keep</span>
@@ -479,12 +479,12 @@ export default function ManageMode({
             size="sm"
             onClick={markSelectedAsDiscard}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
           >
             <Trash2 size={14} />
             <span>Discard</span>
           </Button>
-          <div className="w-px h-6 bg-slate-200 mx-1" />
+          <div className="w-px h-6 bg-border mx-1" />
           <Button variant="default" size="sm" onClick={handleSave} disabled={isLocked}>
             <Save size={14} />
             <span>Save</span>
@@ -497,7 +497,7 @@ export default function ManageMode({
       </div>
 
       {/* Stats bar */}
-      <div className="flex items-center gap-4 px-4 py-2 bg-white border-b text-xs">
+      <div className="flex items-center gap-4 px-4 py-2 bg-background border-b text-xs">
         <span className="inline-flex items-center gap-1 text-green-600">
           <Bookmark size={12} /> {stats.keepCount} kept
         </span>
@@ -519,9 +519,9 @@ export default function ManageMode({
             key={clause.id}
             className={cn(
               'rounded-lg border p-3 transition-colors',
-              clause.status === 'keep' && 'bg-green-50 border-green-200',
-              clause.status === 'discard' && 'bg-red-50 border-red-200',
-              clause.status === 'neutral' && 'bg-white border-slate-200',
+              clause.status === 'keep' && 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800',
+              clause.status === 'discard' && 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800',
+              clause.status === 'neutral' && 'bg-background border-border',
               selectedClauseIds.has(clause.id) && 'ring-2 ring-blue-500',
               isLocked && 'opacity-70'
             )}
@@ -541,8 +541,8 @@ export default function ManageMode({
                 <span
                   className={cn(
                     'shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase',
-                    clause.status === 'keep' && 'bg-green-100 text-green-700',
-                    clause.status === 'discard' && 'bg-red-100 text-red-700'
+                    clause.status === 'keep' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                    clause.status === 'discard' && 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                   )}
                 >
                   {clause.status}

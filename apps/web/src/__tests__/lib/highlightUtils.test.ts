@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  mergeHighlightRanges,
-  rangesOverlap,
-  rangesAdjacent,
   calculateHighlightCoverage,
   clampHighlightRange,
-  isValidHighlightRange,
-  offsetHighlightRanges,
   filterHighlightsInWindow,
+  isValidHighlightRange,
+  mergeHighlightRanges,
+  offsetHighlightRanges,
+  rangesAdjacent,
+  rangesOverlap,
 } from '@/lib/highlightUtils';
 
 describe('highlightUtils', () => {

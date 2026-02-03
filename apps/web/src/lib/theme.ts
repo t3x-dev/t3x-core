@@ -348,9 +348,7 @@ export function getNodeClasses(
 /**
  * Generate Tailwind classes for badge variants
  */
-export function getBadgeClasses(
-  variant: 'commit' | 'pending' | 'branch' | 'main' | 'leaf'
-) {
+export function getBadgeClasses(variant: 'commit' | 'pending' | 'branch' | 'main' | 'leaf') {
   const variants = {
     commit: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
     pending: 'bg-gradient-to-r from-orange-400 to-orange-500 text-white',

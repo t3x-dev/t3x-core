@@ -6,14 +6,14 @@
  * GET  /v1/commits-v3/:hash - Get commit v3 by hash
  */
 
-import { computeCommitV3Hash, getLocalAuthor } from '@t3x/core';
 import type { Constraint, Sentence } from '@t3x/core';
+import { computeCommitV3Hash, getLocalAuthor } from '@t3x/core';
 import {
+  type CommitV3Output,
   createCommitV3,
   getCommitV3,
   listCommitsV3,
   ParentNotFoundError,
-  type CommitV3Output,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
@@ -48,7 +48,11 @@ function toApiCommit(commit: CommitV3Output) {
 /**
  * Parse and validate pagination parameter
  */
-function parsePaginationParam(value: string | undefined, defaultValue: number, max: number): number {
+function parsePaginationParam(
+  value: string | undefined,
+  defaultValue: number,
+  max: number
+): number {
   const parsed = parseInt(value ?? String(defaultValue), 10);
   if (Number.isNaN(parsed) || parsed < 0) return defaultValue;
   return Math.min(parsed, max);
@@ -108,7 +112,10 @@ function validateSentence(input: unknown, index: number): { sentence?: Sentence;
   };
 }
 
-function validateConstraint(input: unknown, index: number): { constraint?: Constraint; error?: string } {
+function validateConstraint(
+  input: unknown,
+  index: number
+): { constraint?: Constraint; error?: string } {
   if (!isRecord(input)) {
     return { error: `constraints[${index}]: expected object` };
   }

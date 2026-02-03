@@ -37,7 +37,10 @@ describe('Commits V4 Routes', () => {
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(mockDB, testData.project({ name: 'CommitsV4 Test Project' }));
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'CommitsV4 Test Project' })
+    );
     testProjectId = project.projectId;
   });
 
@@ -138,9 +141,7 @@ describe('Commits V4 Routes', () => {
             author: { type: 'human' },
             sentences: [{ id: 's_1', text: 'Test sentence.' }],
             project_id: testProjectId,
-            constraints: [
-              { type: 'require', value: 'test', match_mode: 'exact' },
-            ],
+            constraints: [{ type: 'require', value: 'test', match_mode: 'exact' }],
           }),
         });
 
@@ -161,9 +162,7 @@ describe('Commits V4 Routes', () => {
             sentences: [{ id: 's_1', text: 'Test sentence.' }],
             project_id: testProjectId,
             content: {
-              constraints: [
-                { type: 'require', value: 'test', match_mode: 'exact' },
-              ],
+              constraints: [{ type: 'require', value: 'test', match_mode: 'exact' }],
             },
           }),
         });
@@ -517,10 +516,7 @@ describe('Commits V4 Routes', () => {
     });
 
     it('returns empty array for project with no commits', async () => {
-      const emptyProject = await insertProject(
-        mockDB,
-        testData.project({ name: 'Empty Project' })
-      );
+      const emptyProject = await insertProject(mockDB, testData.project({ name: 'Empty Project' }));
 
       const res = await app.request(`/v1/projects/${emptyProject.projectId}/commits-v4`);
       expect(res.status).toBe(200);
@@ -627,12 +623,9 @@ describe('Commits V4 Routes', () => {
     });
 
     it('deletes commit successfully', async () => {
-      const res = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(createdCommitHash)}`,
-        {
-          method: 'DELETE',
-        }
-      );
+      const res = await app.request(`/v1/commits-v4/${encodeURIComponent(createdCommitHash)}`, {
+        method: 'DELETE',
+      });
 
       expect(res.status).toBe(200);
 
@@ -642,9 +635,7 @@ describe('Commits V4 Routes', () => {
       expect(data.data.hash).toBe(createdCommitHash);
 
       // Verify commit is deleted
-      const getRes = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(createdCommitHash)}`
-      );
+      const getRes = await app.request(`/v1/commits-v4/${encodeURIComponent(createdCommitHash)}`);
       expect(getRes.status).toBe(404);
     });
 

@@ -19,12 +19,12 @@
  */
 
 import { nanoid } from 'nanoid';
-import type { Constraint, Assertion } from '../types/v4';
-import { ID_PREFIXES } from '../types/v4';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 import { cosineSimilarity } from '../providers/embedding/base';
-import type { ValidateOptions, ValidationResult, ConstraintCheckResult } from './types';
-import { SEMANTIC_REQUIRE_THRESHOLD, SEMANTIC_EXCLUDE_THRESHOLD } from './types';
+import type { Assertion, Constraint } from '../types/v4';
+import { ID_PREFIXES } from '../types/v4';
+import type { ConstraintCheckResult, ValidateOptions, ValidationResult } from './types';
+import { SEMANTIC_EXCLUDE_THRESHOLD, SEMANTIC_REQUIRE_THRESHOLD } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ID Generation
@@ -50,7 +50,10 @@ export function generateAssertionId(): string {
  * @param value - The required value that must be present
  * @returns ConstraintCheckResult with passed=true if value is found
  */
-export function validateRequireExact(output: string, value: string): Omit<ConstraintCheckResult, 'constraint'> {
+export function validateRequireExact(
+  output: string,
+  value: string
+): Omit<ConstraintCheckResult, 'constraint'> {
   const outputLower = output.toLowerCase();
   const valueLower = value.toLowerCase();
   const index = outputLower.indexOf(valueLower);
@@ -81,7 +84,10 @@ export function validateRequireExact(output: string, value: string): Omit<Constr
  * @param value - The excluded value that must NOT be present
  * @returns ConstraintCheckResult with passed=true if value is NOT found
  */
-export function validateExcludeExact(output: string, value: string): Omit<ConstraintCheckResult, 'constraint'> {
+export function validateExcludeExact(
+  output: string,
+  value: string
+): Omit<ConstraintCheckResult, 'constraint'> {
   const outputLower = output.toLowerCase();
   const valueLower = value.toLowerCase();
   const index = outputLower.indexOf(valueLower);
@@ -207,7 +213,10 @@ export async function validateExcludeSemantic(
  * @param constraints - Array of constraints to check
  * @returns ValidationResult with assertions for each constraint
  */
-export function validateConstraintsExactOnly(output: string, constraints: Constraint[]): ValidationResult {
+export function validateConstraintsExactOnly(
+  output: string,
+  constraints: Constraint[]
+): ValidationResult {
   const assertions: Assertion[] = [];
   let passedCount = 0;
   let failedCount = 0;

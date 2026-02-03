@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  findWordBoundary,
-  truncateLongContent,
   adjustHighlightsForTruncation,
-  truncateWithHighlights,
   calculateTextSimilarity,
   checkContentIntegrity,
   DEFAULT_MAX_LENGTH,
-  DEFAULT_CONTEXT_CHARS,
+  findWordBoundary,
+  truncateLongContent,
+  truncateWithHighlights,
 } from '@/lib/truncationUtils';
 
 describe('truncationUtils', () => {

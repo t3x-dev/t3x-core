@@ -20,19 +20,18 @@
  */
 
 import {
-  computeCommitV3Hash,
   buildConstraints,
-  type Sentence,
-  type Constraint,
   type CommitAuthor,
   type CommitContent,
+  computeCommitV3Hash,
+  type Sentence,
 } from '@t3x/core';
 import {
-  createPGLiteStorage,
-  createPostgresStorage,
   type AnyDB,
   commits as commitsV2Table,
   commitsV3 as commitsV3Table,
+  createPGLiteStorage,
+  createPostgresStorage,
 } from '../index';
 
 // ============================================================
@@ -341,14 +340,18 @@ export async function migrate(db: AnyDB, options: MigrationOptions): Promise<Mig
 
       // Check if already exists
       if (existingV3Hashes.has(v3Hash)) {
-        console.log(`${progress} ⏭️  ${v2.commitHash.slice(0, 16)}... → ${v3Hash.slice(0, 23)}... (already exists)`);
+        console.log(
+          `${progress} ⏭️  ${v2.commitHash.slice(0, 16)}... → ${v3Hash.slice(0, 23)}... (already exists)`
+        );
         skipped++;
         continue;
       }
 
       // Log migration
       console.log(`${progress} ✅ ${v2.commitHash.slice(0, 16)}... → ${v3Hash.slice(0, 23)}...`);
-      console.log(`         Sentences: ${sentences.length}, Constraints: ${constraints.length}, Parents: ${v3Parents.length}`);
+      console.log(
+        `         Sentences: ${sentences.length}, Constraints: ${constraints.length}, Parents: ${v3Parents.length}`
+      );
 
       // Insert if not dry-run
       if (!dryRun) {
@@ -407,9 +410,13 @@ export async function migrate(db: AnyDB, options: MigrationOptions): Promise<Mig
     const actuallyProcessed = migrated + skipped;
     const shouldHaveProcessed = sortedCommits.length - errors;
     if (actuallyProcessed === shouldHaveProcessed) {
-      console.log(`    ✅ All ${shouldHaveProcessed} commits processed correctly (${migrated} migrated, ${skipped} skipped)`);
+      console.log(
+        `    ✅ All ${shouldHaveProcessed} commits processed correctly (${migrated} migrated, ${skipped} skipped)`
+      );
     } else {
-      console.log(`    ⚠️  Mismatch: should have processed ${shouldHaveProcessed}, actually processed ${actuallyProcessed}`);
+      console.log(
+        `    ⚠️  Mismatch: should have processed ${shouldHaveProcessed}, actually processed ${actuallyProcessed}`
+      );
     }
 
     // Reference counts (V3 may include pre-existing commits not from this migration)

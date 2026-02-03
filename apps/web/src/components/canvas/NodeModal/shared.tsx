@@ -437,15 +437,15 @@ export function CommitConstraintsAndLeaves({
                       className={cn(
                         'text-xs font-medium px-1.5 py-0.5 rounded',
                         leaf.type === 'eval'
-                          ? 'bg-purple-100 text-purple-600'
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
                           : leaf.type === 'deploy_agent'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'bg-blue-100 text-blue-600'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                       )}
                     >
                       {leaf.type}
                     </span>
-                    <span className="text-sm text-gray-700 truncate">{leaf.title}</span>
+                    <span className="text-sm text-foreground/80 truncate">{leaf.title}</span>
                   </div>
                   <ExternalLink size={14} className="text-green-400 shrink-0" />
                 </Link>

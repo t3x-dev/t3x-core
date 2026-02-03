@@ -11,14 +11,14 @@
  * - Inline edit panel when Edit is selected
  */
 
-import type { MergeSimilarPair } from '@/types/merge';
-import { useMergeWorkspaceStore, isConflictResolved } from '@/store/mergeWorkspaceStore';
-import { ConflictHeader } from './ConflictHeader';
-import { ConflictSide } from './ConflictSide';
-import { ConflictResolutionButtons } from './ConflictResolutionButtons';
-import { ConflictEditPanel } from './ConflictEditPanel';
-import { WordDiffDisplay } from './WordDiffDisplay';
 import { cn } from '@/lib/utils';
+import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import type { MergeSimilarPair } from '@/types/merge';
+import { ConflictEditPanel } from './ConflictEditPanel';
+import { ConflictHeader } from './ConflictHeader';
+import { ConflictResolutionButtons } from './ConflictResolutionButtons';
+import { ConflictSide } from './ConflictSide';
+import { WordDiffDisplay } from './WordDiffDisplay';
 
 interface MergeConflictViewProps {
   pair: MergeSimilarPair;
@@ -33,12 +33,8 @@ export function MergeConflictView({
   sourceBranch,
   targetBranch,
 }: MergeConflictViewProps) {
-  const {
-    extendedResolutions,
-    resolveConflict,
-    setCustomText,
-    getEffectiveResolution,
-  } = useMergeWorkspaceStore();
+  const { extendedResolutions, resolveConflict, setCustomText, getEffectiveResolution } =
+    useMergeWorkspaceStore();
 
   // Get effective resolution (standard or extended)
   const effectiveResolution = getEffectiveResolution(index);
@@ -52,9 +48,7 @@ export function MergeConflictView({
     <div
       className={cn(
         'rounded-lg border p-4 transition-colors',
-        resolved
-          ? 'border-green-200 bg-green-50/30'
-          : 'border-yellow-200 bg-yellow-50/30'
+        resolved ? 'border-green-200 bg-green-50/30' : 'border-yellow-200 bg-yellow-50/30'
       )}
     >
       {/* Header */}

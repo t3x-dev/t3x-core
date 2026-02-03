@@ -35,7 +35,13 @@ src/
 │   ├── canvas/               # Canvas related components
 │   │   ├── CanvasWorkspace.tsx   # Main canvas container
 │   │   ├── CanvasNodes.tsx       # Node renderer
-│   │   ├── NodeModal.tsx         # Node detail modal
+│   │   ├── NodeModal/            # Node detail modal (split into sub-components)
+│   │   │   ├── NodeModal.tsx         # Shell: routing by node kind/status
+│   │   │   ├── ConversationView.tsx  # Conversation (staging unit) view
+│   │   │   ├── PendingCommitView.tsx # Pending commit editing view
+│   │   │   ├── CommittedCommitView.tsx # Committed commit read-only view
+│   │   │   ├── shared.tsx            # Shared sections (source context, leaves, etc.)
+│   │   │   └── helpers.tsx           # Utility functions
 │   │   ├── AnimatedEdge.tsx      # Animated edge
 │   │   └── ...
 │   ├── merge/                # Merge UI components (NEW)
@@ -52,11 +58,16 @@ src/
 │   ├── Sidebar.tsx           # Sidebar
 │   └── CommandPalette.tsx    # Command palette
 ├── store/
-│   ├── canvasStore.ts        # Canvas state (nodes, edges, selection)
+│   ├── canvasStore.ts        # Canvas store (core state + slice composition)
+│   ├── canvasStoreTypes.ts   # Shared CanvasState type + slice interfaces
+│   ├── canvasStoreUtils.ts   # Pure utility functions (layout, position, graph)
+│   ├── canvasMergeSlice.ts   # Merge domain slice (state + methods + selectors)
+│   ├── canvasLeafSlice.ts    # Leaf panel domain slice
 │   ├── projectStore.ts       # Project state (list, current project)
+│   ├── pinsStore.ts          # Pin state management (V4)
 │   ├── agentDemoStore.ts     # Agent Demo state
-│   ├── mergeWorkspaceStore.ts # Merge Workspace state (NEW)
-│   └── optimiserStore.ts     # Agent Optimiser state (NEW)
+│   ├── mergeWorkspaceStore.ts # Merge Workspace state
+│   └── optimiserStore.ts     # Agent Optimiser state
 ├── lib/
 │   ├── api.ts                # API client
 │   ├── bridgeQueries.ts      # Bridge template query definitions
@@ -126,6 +137,8 @@ Evaluate impact before modifying the following exported interfaces:
 ### store/canvasStore.ts (Medium Stability)
 - **State fields**: `nodes`, `edges`, `projectId`, `loading`, `openNodeId`, `modalViewMode`
 - **Public Actions**: `loadProjectData`, `addNode`, `updateNode`, `onNodesChange`, `onEdgesChange`, `onConnect`, `openNodeModal`, `closeNodeModal`
+- **Slice architecture**: Core state in `canvasStore.ts`, merge domain in `canvasMergeSlice.ts`, leaf domain in `canvasLeafSlice.ts`, shared types in `canvasStoreTypes.ts`, utilities in `canvasStoreUtils.ts`
+- **Selectors** (re-exported from slices): `selectIsMerging`, `selectCanExecuteMerge`, `selectUnresolvedCount`, `selectMergeCounts`
 
 ### store/projectStore.ts (Medium Stability)
 - **State fields**: `projects`, `loading`

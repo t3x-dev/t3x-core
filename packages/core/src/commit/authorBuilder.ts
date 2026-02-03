@@ -48,10 +48,7 @@ export function getDockerAuthor(containerId: string): CommitAuthor {
  * @param session - Object containing user's name and email
  * @returns CommitAuthor with 'verified' verification
  */
-export function getWebAuthor(session: {
-  name: string;
-  email: string;
-}): CommitAuthor {
+export function getWebAuthor(session: { name: string; email: string }): CommitAuthor {
   return {
     name: session.name,
     identity: `email:${session.email}`,

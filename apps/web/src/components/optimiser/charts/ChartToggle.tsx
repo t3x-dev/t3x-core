@@ -1,10 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { RadarChart, type DimensionScores } from './RadarChart';
-import { BarChart } from './BarChart';
+import { type ChartType, useOptimiserStore } from '@/store/optimiserStore';
 import { DimensionScoreCard } from '../metrics/DimensionScoreCard';
-import { useOptimiserStore, type ChartType } from '@/store/optimiserStore';
+import { BarChart } from './BarChart';
+import { type DimensionScores, RadarChart } from './RadarChart';
 
 interface ChartToggleProps {
   scores: DimensionScores;
@@ -40,11 +40,7 @@ export function ChartToggle({ scores, showScoreList = true, className }: ChartTo
       </div>
 
       {/* Chart */}
-      {chartType === 'radar' ? (
-        <RadarChart scores={scores} />
-      ) : (
-        <BarChart scores={scores} />
-      )}
+      {chartType === 'radar' ? <RadarChart scores={scores} /> : <BarChart scores={scores} />}
 
       {/* Score list with progress bars */}
       {showScoreList && (

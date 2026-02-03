@@ -4,8 +4,8 @@
  * Extract author information from request context.
  */
 
+import { type CommitAuthor, getLocalAuthor, getWebAuthor } from '@t3x/core';
 import type { Context } from 'hono';
-import { getLocalAuthor, getWebAuthor, type CommitAuthor } from '@t3x/core';
 
 /**
  * Get author information from request context.

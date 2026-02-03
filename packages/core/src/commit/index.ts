@@ -4,18 +4,17 @@
  * Utility functions for building CommitV3 components from existing data.
  */
 
-// Sentence Builder
-export { buildSentencesFromSegments } from './sentenceBuilder';
+// Author Builder
+export {
+  getDockerAuthor,
+  getLocalAuthor,
+  getWebAuthor,
+} from './authorBuilder';
 
 // Constraint Builder
 export {
   buildConstraints,
   findBestSourceSentenceId,
 } from './constraintBuilder';
-
-// Author Builder
-export {
-  getLocalAuthor,
-  getDockerAuthor,
-  getWebAuthor,
-} from './authorBuilder';
+// Sentence Builder
+export { buildSentencesFromSegments } from './sentenceBuilder';

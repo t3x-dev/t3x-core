@@ -4,19 +4,19 @@
  * @see packages/core/src/leaf/validate-constraints.ts
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { SEMANTIC_EXCLUDE_THRESHOLD, SEMANTIC_REQUIRE_THRESHOLD } from '../../leaf/types';
 import {
   generateAssertionId,
-  validateRequireExact,
-  validateExcludeExact,
-  validateRequireSemantic,
-  validateExcludeSemantic,
-  validateConstraintsExactOnly,
   validateConstraints,
+  validateConstraintsExactOnly,
+  validateExcludeExact,
+  validateExcludeSemantic,
+  validateRequireExact,
+  validateRequireSemantic,
 } from '../../leaf/validate-constraints';
-import { SEMANTIC_REQUIRE_THRESHOLD, SEMANTIC_EXCLUDE_THRESHOLD } from '../../leaf/types';
-import type { Constraint } from '../../types/v4';
 import type { EmbeddingProvider } from '../../providers/embedding/base';
+import type { Constraint } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -181,7 +181,7 @@ describe('validateExcludeExact', () => {
 
 describe('validateRequireSemantic', () => {
   it('passes when similarity >= threshold', async () => {
-    const embedder = createMockEmbedder(0.90); // Above 0.85 threshold
+    const embedder = createMockEmbedder(0.9); // Above 0.85 threshold
     const result = await validateRequireSemantic('output text', 'required value', embedder);
 
     expect(result.passed).toBe(true);
@@ -189,7 +189,7 @@ describe('validateRequireSemantic', () => {
   });
 
   it('fails when similarity < threshold', async () => {
-    const embedder = createMockEmbedder(0.70); // Below 0.85 threshold
+    const embedder = createMockEmbedder(0.7); // Below 0.85 threshold
     const result = await validateRequireSemantic('output text', 'required value', embedder);
 
     expect(result.passed).toBe(false);
@@ -218,7 +218,7 @@ describe('validateRequireSemantic', () => {
 
 describe('validateExcludeSemantic', () => {
   it('passes when similarity < threshold (content is different)', async () => {
-    const embedder = createMockEmbedder(0.50); // Below 0.70 threshold
+    const embedder = createMockEmbedder(0.5); // Below 0.70 threshold
     const result = await validateExcludeSemantic('output text', 'excluded value', embedder);
 
     expect(result.passed).toBe(true);
@@ -226,7 +226,7 @@ describe('validateExcludeSemantic', () => {
   });
 
   it('fails when similarity >= threshold (content is too similar)', async () => {
-    const embedder = createMockEmbedder(0.80); // Above 0.70 threshold
+    const embedder = createMockEmbedder(0.8); // Above 0.70 threshold
     const result = await validateExcludeSemantic('output text', 'excluded value', embedder);
 
     expect(result.passed).toBe(false);
@@ -234,14 +234,14 @@ describe('validateExcludeSemantic', () => {
   });
 
   it('fails at exact threshold boundary', async () => {
-    const embedder = createMockEmbedder(0.70); // Exactly at threshold
+    const embedder = createMockEmbedder(0.7); // Exactly at threshold
     const result = await validateExcludeSemantic('output text', 'excluded value', embedder);
 
     expect(result.passed).toBe(false);
   });
 
   it('includes similarity score in evidence', async () => {
-    const embedder = createMockEmbedder(0.50);
+    const embedder = createMockEmbedder(0.5);
     const result = await validateExcludeSemantic('output text', 'excluded value', embedder);
 
     expect(result.evidence?.similarity).toBeDefined();
@@ -339,10 +339,7 @@ describe('validateConstraintsExactOnly', () => {
         createRequireConstraint('feature B', 'exact', 'cst_2'),
         createExcludeConstraint('bug', 'exact', 'cst_3'),
       ];
-      const result = validateConstraintsExactOnly(
-        'We have feature A but found a bug',
-        constraints
-      );
+      const result = validateConstraintsExactOnly('We have feature A but found a bug', constraints);
 
       expect(result.allPassed).toBe(false);
       expect(result.passedCount).toBe(1); // Only feature A passes
@@ -373,9 +370,7 @@ describe('validateConstraintsExactOnly', () => {
     });
 
     it('links assertion to constraint via constraint_id', () => {
-      const constraints = [
-        createRequireConstraint('value', 'exact', 'cst_abc123'),
-      ];
+      const constraints = [createRequireConstraint('value', 'exact', 'cst_abc123')];
       const result = validateConstraintsExactOnly('has value', constraints);
 
       expect(result.assertions[0].constraint_id).toBe('cst_abc123');
@@ -424,7 +419,7 @@ describe('validateConstraints (async)', () => {
   });
 
   it('handles semantic REQUIRE constraint with embedder', async () => {
-    const embedder = createMockEmbedder(0.90);
+    const embedder = createMockEmbedder(0.9);
     const constraints = [createRequireConstraint('semantic value', 'semantic')];
     const result = await validateConstraints({
       output: 'output text',
@@ -437,7 +432,7 @@ describe('validateConstraints (async)', () => {
   });
 
   it('handles semantic EXCLUDE constraint with embedder', async () => {
-    const embedder = createMockEmbedder(0.50); // Below threshold = pass
+    const embedder = createMockEmbedder(0.5); // Below threshold = pass
     const constraints = [createExcludeConstraint('excluded value', 'semantic')];
     const result = await validateConstraints({
       output: 'output text',
@@ -449,7 +444,7 @@ describe('validateConstraints (async)', () => {
   });
 
   it('handles mixed exact and semantic constraints', async () => {
-    const embedder = createMockEmbedder(0.90);
+    const embedder = createMockEmbedder(0.9);
     const constraints = [
       createRequireConstraint('exact value', 'exact', 'cst_1'),
       createRequireConstraint('semantic value', 'semantic', 'cst_2'),
@@ -466,12 +461,12 @@ describe('validateConstraints (async)', () => {
   });
 
   it('correctly counts mixed pass/fail results', async () => {
-    const embedder = createMockEmbedder(0.50); // Low similarity
+    const embedder = createMockEmbedder(0.5); // Low similarity
     const constraints = [
-      createRequireConstraint('present', 'exact', 'cst_1'),      // Pass
-      createRequireConstraint('missing', 'exact', 'cst_2'),      // Fail
-      createRequireConstraint('semantic', 'semantic', 'cst_3'),  // Fail (low sim)
-      createExcludeConstraint('absent', 'exact', 'cst_4'),       // Pass
+      createRequireConstraint('present', 'exact', 'cst_1'), // Pass
+      createRequireConstraint('missing', 'exact', 'cst_2'), // Fail
+      createRequireConstraint('semantic', 'semantic', 'cst_3'), // Fail (low sim)
+      createExcludeConstraint('absent', 'exact', 'cst_4'), // Pass
     ];
     const result = await validateConstraints({
       output: 'This text has present but not the other',

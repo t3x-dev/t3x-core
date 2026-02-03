@@ -7,12 +7,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Leaf, Constraint, Assertion } from '@/lib/api';
-import {
-  formatLeafAsMarkdown,
-  formatLeafAsJSON,
-  formatLeafAsJSONString,
-} from '@/lib/export';
+import type { Assertion, Constraint, Leaf } from '@/lib/api';
+import { formatLeafAsJSON, formatLeafAsJSONString, formatLeafAsMarkdown } from '@/lib/export';
 
 describe('Export Utilities', () => {
   // Sample test data

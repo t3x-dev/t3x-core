@@ -27,7 +27,8 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
         type="button"
       >
         <span className="font-medium text-green-800">
-          ✓ Identical ({sentences.length} {sentences.length === 1 ? 'sentence' : 'sentences'}) — auto-kept
+          ✓ Identical ({sentences.length} {sentences.length === 1 ? 'sentence' : 'sentences'}) —
+          auto-kept
         </span>
         <span className="text-green-600 text-lg">{expanded ? '▲' : '▼'}</span>
       </button>

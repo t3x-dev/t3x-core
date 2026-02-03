@@ -10,11 +10,11 @@
  * - Target-only sentences
  */
 
-import type { Merge2WayResult, Sentence } from '@/types/merge';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import { MergeDiffSection } from './MergeDiffSection';
-import { MergeDiffLine } from './MergeDiffLine';
+import type { Merge2WayResult, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
+import { MergeDiffLine } from './MergeDiffLine';
+import { MergeDiffSection } from './MergeDiffSection';
 
 interface UnifiedDiffViewProps {
   prepared: Merge2WayResult;

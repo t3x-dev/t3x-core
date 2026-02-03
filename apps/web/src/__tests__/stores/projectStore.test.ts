@@ -107,7 +107,10 @@ describe('Project Store', () => {
 
     it('sets loading state during fetch', async () => {
       vi.mocked(api.listProjects).mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ projects: [], limit: 100, offset: 0 }), 100))
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ projects: [], limit: 100, offset: 0 }), 100)
+          )
       );
 
       const fetchPromise = useProjectStore.getState().fetchProjects();

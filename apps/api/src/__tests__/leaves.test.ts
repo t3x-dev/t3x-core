@@ -4,7 +4,7 @@
  * Integration tests for Leaves CRUD API endpoints.
  */
 
-import { insertProject, createPin, findPinsByProject } from '@t3x/storage';
+import { createPin, findPinsByProject, insertProject } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';

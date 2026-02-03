@@ -258,9 +258,7 @@
       ]
     },
     "Anthropic Chat Model": {
-      "ai_languageModel": [
-        []
-      ]
+      "ai_languageModel": [[]]
     },
     "WeatherTool": {
       "ai_tool": [
@@ -274,9 +272,7 @@
       ]
     },
     "Respond": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     },
     "OpenAI Chat Model": {
       "ai_languageModel": [

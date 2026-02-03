@@ -14,9 +14,9 @@ import {
   deleteCommitV3,
   findCommitV3History,
   findCommonAncestorV3,
+  getCommitsV3ByHashes,
   getCommitV3,
   getCommitV3Parents,
-  getCommitsV3ByHashes,
   listCommitsV3,
   ParentNotFoundError,
   updateCommitV3Position,
@@ -53,7 +53,13 @@ describe('Commits V3 Storage', () => {
         author: { name: 'Test Author' },
         committedAt: new Date('2024-01-15T10:00:00Z'),
         content: {
-          sentences: [{ id: 's1', text: 'Hello world', source: { turn_hash: 'sha256:test', start_char: 0, end_char: 11 } }],
+          sentences: [
+            {
+              id: 's1',
+              text: 'Hello world',
+              source: { turn_hash: 'sha256:test', start_char: 0, end_char: 11 },
+            },
+          ],
         },
         projectId: testProjectId,
         message: 'Initial commit',
@@ -119,8 +125,16 @@ describe('Commits V3 Storage', () => {
         author: { name: 'Constraint Author' },
         committedAt: new Date(),
         content: {
-          sentences: [{ id: 's1', text: 'Budget is $5000', source: { turn_hash: 'sha256:budget', start_char: 0, end_char: 15 } }],
-          constraints: [{ type: 'require' as const, id: 'c1', value: '5000', match: 'exact' as const }],
+          sentences: [
+            {
+              id: 's1',
+              text: 'Budget is $5000',
+              source: { turn_hash: 'sha256:budget', start_char: 0, end_char: 15 },
+            },
+          ],
+          constraints: [
+            { type: 'require' as const, id: 'c1', value: '5000', match: 'exact' as const },
+          ],
         },
         projectId: testProjectId,
       };
@@ -129,7 +143,12 @@ describe('Commits V3 Storage', () => {
 
       expect(result.content.sentences).toHaveLength(1);
       expect(result.content.constraints).toHaveLength(1);
-      expect(result.content.constraints![0]).toEqual({ type: 'require', id: 'c1', value: '5000', match: 'exact' });
+      expect(result.content.constraints![0]).toEqual({
+        type: 'require',
+        id: 'c1',
+        value: '5000',
+        match: 'exact',
+      });
     });
 
     it('stores parents array', async () => {
@@ -298,7 +317,10 @@ describe('Commits V3 Storage', () => {
     });
 
     it('filters by branch at SQL level (correct pagination)', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Branch Filter SQL Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Branch Filter SQL Project' })
+      );
 
       // Create interleaved commits on main and feature branches
       for (let i = 0; i < 5; i++) {
@@ -568,14 +590,18 @@ describe('Commits V3 Storage', () => {
 
     it('handles missing parents gracefully when reading (dangling references)', async () => {
       // Use strictParents: false to allow import mode
-      const commit = await createCommitV3(db, {
-        hash: 'sha256:dangling-ref-001',
-        parents: ['sha256:nonexistent-parent'],
-        author: { name: 'Orphan' },
-        committedAt: new Date(),
-        content: { sentences: [] },
-        projectId: testProjectId,
-      }, { strictParents: false });
+      const commit = await createCommitV3(
+        db,
+        {
+          hash: 'sha256:dangling-ref-001',
+          parents: ['sha256:nonexistent-parent'],
+          author: { name: 'Orphan' },
+          committedAt: new Date(),
+          content: { sentences: [] },
+          projectId: testProjectId,
+        },
+        { strictParents: false }
+      );
 
       const parents = await getCommitV3Parents(db, commit.hash);
 
@@ -619,14 +645,18 @@ describe('Commits V3 Storage', () => {
     });
 
     it('allows missing parents with strictParents: false (import mode)', async () => {
-      const commit = await createCommitV3(db, {
-        hash: 'sha256:import-mode-001',
-        parents: ['sha256:future-parent'],
-        author: { name: 'Importer' },
-        committedAt: new Date(),
-        content: { sentences: [] },
-        projectId: testProjectId,
-      }, { strictParents: false });
+      const commit = await createCommitV3(
+        db,
+        {
+          hash: 'sha256:import-mode-001',
+          parents: ['sha256:future-parent'],
+          author: { name: 'Importer' },
+          committedAt: new Date(),
+          content: { sentences: [] },
+          projectId: testProjectId,
+        },
+        { strictParents: false }
+      );
 
       expect(commit.parents).toEqual(['sha256:future-parent']);
     });
@@ -760,11 +790,7 @@ describe('Commits V3 Storage', () => {
       });
 
       // Request in specific order: 3, 1, 2
-      const results = await getCommitsV3ByHashes(db, [
-        commit3.hash,
-        commit1.hash,
-        commit2.hash,
-      ]);
+      const results = await getCommitsV3ByHashes(db, [commit3.hash, commit1.hash, commit2.hash]);
 
       expect(results).toHaveLength(3);
       expect(results[0].hash).toBe(commit3.hash);
@@ -799,7 +825,10 @@ describe('Commits V3 Storage', () => {
 
   describe('findCommitV3History', () => {
     it('returns commit history using BFS traversal', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'History Test Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'History Test Project' })
+      );
 
       // Create a chain: root -> middle -> tip
       const root = await createCommitV3(db, {
@@ -837,7 +866,10 @@ describe('Commits V3 Storage', () => {
     });
 
     it('respects limit parameter', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'History Limit Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'History Limit Project' })
+      );
 
       const c1 = await createCommitV3(db, {
         hash: 'sha256:limit-c1',
@@ -915,8 +947,8 @@ describe('Commits V3 Storage', () => {
       expect(history).toHaveLength(4);
       // BFS order: merge -> branch1 -> branch2 -> root
       expect(history[0].hash).toBe(merge.hash);
-      expect(history.map(c => c.hash)).toContain(branch1.hash);
-      expect(history.map(c => c.hash)).toContain(branch2.hash);
+      expect(history.map((c) => c.hash)).toContain(branch1.hash);
+      expect(history.map((c) => c.hash)).toContain(branch2.hash);
       expect(history[history.length - 1].hash).toBe(root.hash);
     });
 
@@ -928,7 +960,10 @@ describe('Commits V3 Storage', () => {
 
   describe('findCommonAncestorV3', () => {
     it('finds common ancestor of two branches', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Ancestor Test Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Ancestor Test Project' })
+      );
 
       const root = await createCommitV3(db, {
         hash: 'sha256:ancestor-root-001',
@@ -963,7 +998,10 @@ describe('Commits V3 Storage', () => {
     });
 
     it('finds common ancestor in deeper history', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Deep Ancestor Project' }));
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Deep Ancestor Project' })
+      );
 
       const root = await createCommitV3(db, {
         hash: 'sha256:deep-root-001',

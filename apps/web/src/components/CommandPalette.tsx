@@ -1,7 +1,7 @@
 'use client';
 
 import { Command } from 'cmdk';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   FileText,
   GitBranch,
@@ -149,9 +149,7 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
               </Command.List>
 
               <div className="flex items-center justify-between border-t border-border px-4 py-2">
-                <span className="text-xs text-muted-foreground">
-                  T3X Command Palette
-                </span>
+                <span className="text-xs text-muted-foreground">T3X Command Palette</span>
                 <div className="flex gap-1.5 text-xs text-muted-foreground">
                   <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
                     ↑↓

@@ -19,10 +19,12 @@ const logger = pino({
 });
 
 // Engine API URL (support both T3X_ENGINE_URL and T3X_API_URL for compatibility)
-const T3X_ENGINE_URL = process.env.T3X_ENGINE_URL || process.env.T3X_API_URL || 'http://localhost:8000';
+const T3X_ENGINE_URL =
+  process.env.T3X_ENGINE_URL || process.env.T3X_API_URL || 'http://localhost:8000';
 
 // Default callback URL for Runner → Engine ingest
-const ENGINE_CALLBACK_URL = process.env.ENGINE_CALLBACK_URL || `${T3X_ENGINE_URL}/api/v1/runs/ingest`;
+const ENGINE_CALLBACK_URL =
+  process.env.ENGINE_CALLBACK_URL || `${T3X_ENGINE_URL}/api/v1/runs/ingest`;
 
 /**
  * Run data from Engine (matches @t3x/storage Run type)

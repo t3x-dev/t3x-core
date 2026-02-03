@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Assertion, CommitV4, Constraint, Leaf, LeafConfig } from '@/lib/api';
 import {
   ApiError,
@@ -42,6 +43,28 @@ import type { SentenceWithSource } from '@/types/sourceContext';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
 
+function getGenerateErrorMessage(error: string): {
+  title: string;
+  description: string;
+  showRetry: boolean;
+} {
+  if (error.includes('GENERATION_NOT_CONFIGURED') || error.includes('API_KEY')) {
+    return {
+      title: 'LLM API Key Not Configured',
+      description: 'Set ANTHROPIC_API_KEY in your environment to enable AI generation.',
+      showRetry: false,
+    };
+  }
+  if (error.includes('GENERATION_FAILED') || error.includes('timeout')) {
+    return {
+      title: 'Generation Failed',
+      description: 'The AI service encountered an error. Please try again.',
+      showRetry: true,
+    };
+  }
+  return { title: 'Error', description: error, showRetry: true };
+}
+
 export default function LeafDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -53,6 +76,8 @@ export default function LeafDetailPage() {
   const [error, setError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatePhase, setGeneratePhase] = useState(0);
+  const generateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [validateError, setValidateError] = useState<string | null>(null);
@@ -62,6 +87,7 @@ export default function LeafDetailPage() {
     text: string;
   } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
+  const [commitLoadError, setCommitLoadError] = useState(false);
   const [userInstruction, setUserInstruction] = useState<string>('');
   const instructionDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -93,6 +119,32 @@ export default function LeafDetailPage() {
       setUserInstruction('');
     }
   }, [leaf?.config?.user_instruction]);
+
+  // Generate progress phase messages
+  const generateProgressMessages = useMemo(
+    () => [
+      'Preparing context...',
+      'Generating output...',
+      'Validating constraints...',
+      'Finalizing...',
+    ],
+    []
+  );
+
+  // Cycle through generate phases
+  useEffect(() => {
+    if (!isGenerating) {
+      setGeneratePhase(0);
+      if (generateTimerRef.current) clearInterval(generateTimerRef.current);
+      return;
+    }
+    generateTimerRef.current = setInterval(() => {
+      setGeneratePhase((p) => Math.min(p + 1, generateProgressMessages.length - 1));
+    }, 8000);
+    return () => {
+      if (generateTimerRef.current) clearInterval(generateTimerRef.current);
+    };
+  }, [isGenerating, generateProgressMessages]);
 
   // Cleanup instruction debounce on unmount
   useEffect(() => {
@@ -146,7 +198,9 @@ export default function LeafDetailPage() {
     if (!leaf?.commit_hash) return;
     getCommitV4(leaf.commit_hash)
       .then(setCommitData)
-      .catch(() => {});
+      .catch(() => {
+        setCommitLoadError(true);
+      });
   }, [leaf?.commit_hash]);
 
   // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
@@ -265,7 +319,7 @@ export default function LeafDetailPage() {
     setGenerateError(null);
 
     try {
-      const result = await generateLeafOutput(leafId);
+      const _result = await generateLeafOutput(leafId);
       // Update local leaf data with generated output + auto-validation assertions
       // The API now auto-validates and stores assertions, so re-fetch leaf to get full state
       const updatedLeaf = await getLeaf(leafId);
@@ -382,7 +436,7 @@ export default function LeafDetailPage() {
                 <Play className="h-3 w-3" />
               )}
             </span>
-            {isGenerating ? 'Generating & Verifying...' : 'Generate & Verify'}
+            {isGenerating ? generateProgressMessages[generatePhase] : 'Generate & Verify'}
           </Button>
           {/* Re-validate button */}
           <Button
@@ -428,11 +482,27 @@ export default function LeafDetailPage() {
       </header>
 
       {/* Generate error message */}
-      {generateError && (
-        <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {generateError}
-        </div>
-      )}
+      {generateError &&
+        (() => {
+          const info = getGenerateErrorMessage(generateError);
+          return (
+            <div className="mx-4 mt-2 rounded-md border bg-card px-4 py-3">
+              <p className="text-sm font-medium text-destructive">{info.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{info.description}</p>
+              {info.showRetry && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
+          );
+        })()}
 
       {/* Validate error message */}
       {validateError && (
@@ -465,6 +535,13 @@ export default function LeafDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
+          {/* Commit load warning */}
+          {commitLoadError && (
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+              Source commit data unavailable — constraints shown without source context.
+            </div>
+          )}
+
           {/* Source Context with constraint highlights + text selection */}
           {commitData && sentences.length > 0 && (
             <section className="rounded-lg border bg-card p-4">
@@ -753,7 +830,14 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
           ) : (
             <X className="h-4 w-4 text-red-600 shrink-0" />
           )}
-          <span className="font-medium text-sm truncate">{constraint.value}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-medium text-sm truncate">{constraint.value}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs break-words">
+              {constraint.value}
+            </TooltipContent>
+          </Tooltip>
           <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-background rounded">
             {constraint.match_mode}
           </span>
@@ -844,7 +928,12 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
   const constraintMap = new Map(constraints.map((c) => [c.id, c]));
 
   return (
-    <section className="rounded-lg border bg-card">
+    <section
+      className={cn(
+        'rounded-lg border bg-card transition-all duration-500',
+        allPassed && 'ring-2 ring-green-400/50 animate-in fade-in zoom-in-95 duration-500'
+      )}
+    >
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Validation Results</h2>
         <div className="flex items-center gap-2">
@@ -856,7 +945,7 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
           >
             {allPassed ? (
               <>
-                <Check className="h-4 w-4" />
+                <CheckCircle className="h-4 w-4" />
                 All Passed
               </>
             ) : (
@@ -902,9 +991,16 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">
-              {constraint?.value || assertion.constraint_id}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-medium text-sm truncate max-w-[200px]">
+                  {constraint?.value || assertion.constraint_id}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs break-words">
+                {constraint?.value || assertion.constraint_id}
+              </TooltipContent>
+            </Tooltip>
             <span
               className={cn(
                 'text-xs px-1.5 py-0.5 rounded',

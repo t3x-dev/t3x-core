@@ -1,18 +1,19 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowLeftRight,
-  Loader2,
-  ChevronDown,
-  AlertTriangle,
   CheckCircle2,
-  Trophy,
+  ChevronDown,
   Eye,
-  ExternalLink,
+  Loader2,
+  Trophy,
 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,17 +31,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import {
-  getConfigurations,
-  compareConfigurations,
-  listEngineRuns,
-  type ConfigurationStats,
   type ComparisonResult,
+  type ConfigurationStats,
+  compareConfigurations,
   type EngineRun,
+  getConfigurations,
+  listEngineRuns,
 } from '@/lib/api';
-import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { cn } from '@/lib/utils';
 
 /**
  * 格式化配置为显示字符串
@@ -93,12 +92,9 @@ function calculateProportionCI(p: number, n: number): [number, number] {
   // Wilson score interval (more accurate for small n)
   const denominator = 1 + z2 / n;
   const center = (p + z2 / (2 * n)) / denominator;
-  const margin = (z / denominator) * Math.sqrt((p * (1 - p) / n) + (z2 / (4 * n * n)));
+  const margin = (z / denominator) * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n));
 
-  return [
-    Math.max(0, center - margin),
-    Math.min(1, center + margin)
-  ];
+  return [Math.max(0, center - margin), Math.min(1, center + margin)];
 }
 
 /**
@@ -116,10 +112,7 @@ function calculateMeanCI(mean: number, n: number, std?: number): [number, number
   const z = 1.96;
   const margin = z * (sigma / Math.sqrt(n));
 
-  return [
-    Math.max(0, mean - margin),
-    mean + margin
-  ];
+  return [Math.max(0, mean - margin), mean + margin];
 }
 
 /**
@@ -196,8 +189,7 @@ function ComparePageContent() {
       try {
         const configs = await getConfigurations();
         setConfigurations(configs);
-      } catch (err) {
-        console.error('Failed to load configurations:', err);
+      } catch {
         setError('Failed to load configurations');
       } finally {
         setLoading(false);
@@ -220,8 +212,7 @@ function ComparePageContent() {
       try {
         const result = await compareConfigurations(controlConfig, treatmentConfig);
         setComparisonResult(result);
-      } catch (err) {
-        console.error('Failed to compare configurations:', err);
+      } catch {
         setError('Failed to load comparison data');
         setComparisonResult(null);
       } finally {
@@ -230,7 +221,12 @@ function ComparePageContent() {
     }
 
     loadComparison();
-  }, [controlConfig?.model, controlConfig?.prompt_version, treatmentConfig?.model, treatmentConfig?.prompt_version]);
+  }, [
+    controlConfig?.model,
+    controlConfig?.prompt_version,
+    treatmentConfig?.model,
+    treatmentConfig?.prompt_version,
+  ]);
 
   // Load individual runs when configurations are selected
   useEffect(() => {
@@ -263,18 +259,26 @@ function ComparePageContent() {
 
         setControlRuns(controlResult.runs);
         setTreatmentRuns(treatmentResult.runs);
-      } catch (err) {
-        console.error('Failed to load individual runs:', err);
+      } catch {
+        // Individual runs load failed - empty table will be shown
       } finally {
         setLoadingRuns(false);
       }
     }
 
     loadIndividualRuns();
-  }, [controlConfig?.model, controlConfig?.prompt_version, treatmentConfig?.model, treatmentConfig?.prompt_version]);
+  }, [
+    controlConfig?.model,
+    controlConfig?.prompt_version,
+    treatmentConfig?.model,
+    treatmentConfig?.prompt_version,
+  ]);
 
   // Update URL with selected config
-  const selectConfig = (slot: 'a' | 'b', config: { model: string; prompt_version: string } | null) => {
+  const selectConfig = (
+    slot: 'a' | 'b',
+    config: { model: string; prompt_version: string } | null
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     if (config) {
       params.set(slot, encodeConfigParam(config));
@@ -302,12 +306,12 @@ function ComparePageContent() {
   };
 
   // Check if treatment is the winner (significantly better in key metrics)
-  const isWinner = comparisonResult && (
-    (comparisonResult.comparison.pass_rate.isSignificant &&
+  const isWinner =
+    comparisonResult &&
+    ((comparisonResult.comparison.pass_rate.isSignificant &&
       comparisonResult.treatment.pass_rate > comparisonResult.control.pass_rate) ||
-    (comparisonResult.comparison.avg_score.isSignificant &&
-      comparisonResult.treatment.avg_score > comparisonResult.control.avg_score)
-  );
+      (comparisonResult.comparison.avg_score.isSignificant &&
+        comparisonResult.treatment.avg_score > comparisonResult.control.avg_score));
 
   // Configuration selector dropdown
   const ConfigSelector = ({
@@ -369,7 +373,12 @@ function ComparePageContent() {
                 configurations.map((config) => (
                   <DropdownMenuItem
                     key={`${config.model}-${config.prompt_version}`}
-                    onClick={() => selectConfig(slot, { model: config.model, prompt_version: config.prompt_version })}
+                    onClick={() =>
+                      selectConfig(slot, {
+                        model: config.model,
+                        prompt_version: config.prompt_version,
+                      })
+                    }
                     className={cn(isConfigSelected(config, selectedConfig) && 'bg-muted')}
                   >
                     <div className="flex items-center justify-between w-full">
@@ -407,7 +416,9 @@ function ComparePageContent() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Avg Score</span>
                 <div className="text-right">
-                  <span className="font-mono font-medium">{selectedStats.avg_score.toFixed(2)}</span>
+                  <span className="font-mono font-medium">
+                    {selectedStats.avg_score.toFixed(2)}
+                  </span>
                   {avgScoreCI && selectedStats.run_count >= 5 && (
                     <span className="text-xs text-muted-foreground ml-1">
                       (CI: {formatCI(avgScoreCI, false)})
@@ -575,7 +586,7 @@ function ComparePageContent() {
                           <td className="py-3 text-center font-mono text-xs text-muted-foreground">
                             {formatCI([
                               treatmentCI[0] - controlCI[1],
-                              treatmentCI[1] - controlCI[0]
+                              treatmentCI[1] - controlCI[0],
                             ])}
                           </td>
                           <td className="py-3 text-center font-mono text-xs text-muted-foreground">
@@ -628,10 +639,10 @@ function ComparePageContent() {
                             />
                           </td>
                           <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                            {formatCI([
-                              treatmentCI[0] - controlCI[1],
-                              treatmentCI[1] - controlCI[0]
-                            ], false)}
+                            {formatCI(
+                              [treatmentCI[0] - controlCI[1], treatmentCI[1] - controlCI[0]],
+                              false
+                            )}
                           </td>
                           <td className="py-3 text-center font-mono text-xs text-muted-foreground">
                             {comparisonResult.comparison.avg_score.pValue.toFixed(3)}
@@ -714,16 +725,16 @@ function ComparePageContent() {
                 <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-700">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
-                    Sample size may be insufficient for reliable significance detection (recommended: n
-                    &ge; 30 per group)
+                    Sample size may be insufficient for reliable significance detection
+                    (recommended: n &ge; 30 per group)
                   </span>
                 </div>
               )}
 
               {/* Significance note */}
               <p className="mt-4 text-xs text-muted-foreground">
-                * Statistical significance: p &lt; 0.05. Pass rate: two-proportion z-test; Avg score: Welch's t-test.
-                CI = 95% confidence interval (Wilson score for proportions).
+                * Statistical significance: p &lt; 0.05. Pass rate: two-proportion z-test; Avg
+                score: Welch's t-test. CI = 95% confidence interval (Wilson score for proportions).
               </p>
             </CardContent>
           </Card>
@@ -774,129 +785,133 @@ function ComparePageContent() {
                   <span className="ml-2 text-sm text-muted-foreground">Loading runs...</span>
                 </div>
               ) : (
-                <>
-                  {(() => {
-                    // Combine and filter runs based on selection
-                    const taggedControlRuns = controlRuns.map((r) => ({ ...r, group: 'a' as const }));
-                    const taggedTreatmentRuns = treatmentRuns.map((r) => ({ ...r, group: 'b' as const }));
+                (() => {
+                  // Combine and filter runs based on selection
+                  const taggedControlRuns = controlRuns.map((r) => ({
+                    ...r,
+                    group: 'a' as const,
+                  }));
+                  const taggedTreatmentRuns = treatmentRuns.map((r) => ({
+                    ...r,
+                    group: 'b' as const,
+                  }));
 
-                    let combinedRuns =
-                      runFilter === 'a'
-                        ? taggedControlRuns
-                        : runFilter === 'b'
-                          ? taggedTreatmentRuns
-                          : [...taggedControlRuns, ...taggedTreatmentRuns];
+                  let combinedRuns =
+                    runFilter === 'a'
+                      ? taggedControlRuns
+                      : runFilter === 'b'
+                        ? taggedTreatmentRuns
+                        : [...taggedControlRuns, ...taggedTreatmentRuns];
 
-                    // Sort by created_at descending
-                    combinedRuns = combinedRuns.sort(
-                      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                    );
+                  // Sort by created_at descending
+                  combinedRuns = combinedRuns.sort(
+                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  );
 
-                    // Limit to 10 runs
-                    combinedRuns = combinedRuns.slice(0, 10);
+                  // Limit to 10 runs
+                  combinedRuns = combinedRuns.slice(0, 10);
 
-                    if (combinedRuns.length === 0) {
-                      return (
-                        <div className="py-8 text-center text-sm text-muted-foreground">
-                          No runs found for the selected configurations
-                        </div>
-                      );
-                    }
-
+                  if (combinedRuns.length === 0) {
                     return (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12">Group</TableHead>
-                            <TableHead>Run ID</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Score</TableHead>
-                            <TableHead className="text-right">Latency</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead className="w-20">Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {combinedRuns.map((run) => {
-                            const metrics = getRunMetrics(run);
-                            return (
-                              <TableRow
-                                key={run.run_id}
-                                className="cursor-pointer hover:bg-muted/50"
-                                onClick={() => router.push(`/deploy/${run.run_id}`)}
-                              >
-                                <TableCell>
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        No runs found for the selected configurations
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">Group</TableHead>
+                          <TableHead>Run ID</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Score</TableHead>
+                          <TableHead className="text-right">Latency</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead className="w-20">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {combinedRuns.map((run) => {
+                          const metrics = getRunMetrics(run);
+                          return (
+                            <TableRow
+                              key={run.run_id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => router.push(`/deploy/${run.run_id}`)}
+                            >
+                              <TableCell>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-xs',
+                                    run.group === 'a'
+                                      ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                                      : 'bg-green-500/10 text-green-600 border-green-500/30'
+                                  )}
+                                >
+                                  {run.group.toUpperCase()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <code className="text-xs">{run.run_id.slice(0, 12)}...</code>
+                              </TableCell>
+                              <TableCell>
+                                {metrics.passed !== null ? (
                                   <Badge
                                     variant="outline"
                                     className={cn(
-                                      'text-xs',
-                                      run.group === 'a'
-                                        ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
-                                        : 'bg-green-500/10 text-green-600 border-green-500/30'
+                                      metrics.passed
+                                        ? 'border-green-500/30 bg-green-500/10 text-green-600'
+                                        : 'border-red-500/30 bg-red-500/10 text-red-600'
                                     )}
                                   >
-                                    {run.group.toUpperCase()}
+                                    {metrics.passed ? 'passed' : 'failed'}
                                   </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <code className="text-xs">{run.run_id.slice(0, 12)}...</code>
-                                </TableCell>
-                                <TableCell>
-                                  {metrics.passed !== null ? (
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        metrics.passed
-                                          ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                                          : 'border-red-500/30 bg-red-500/10 text-red-600'
-                                      )}
-                                    >
-                                      {metrics.passed ? 'passed' : 'failed'}
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-muted-foreground">
-                                      {run.status}
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm">
-                                  {metrics.score !== null ? (
-                                    <span
-                                      className={metrics.passed ? 'text-green-600' : 'text-red-600'}
-                                    >
-                                      {formatScore(metrics.score)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                                  {formatLatency(metrics.latencyMs ?? 0)}
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {new Date(run.created_at).toLocaleString()}
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-2"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      router.push(`/deploy/${run.run_id}`);
-                                    }}
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground">
+                                    {run.status}
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {metrics.score !== null ? (
+                                  <span
+                                    className={metrics.passed ? 'text-green-600' : 'text-red-600'}
                                   >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    );
-                  })()}
-                </>
+                                    {formatScore(metrics.score)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                                {formatLatency(metrics.latencyMs ?? 0)}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(run.created_at).toLocaleString()}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/deploy/${run.run_id}`);
+                                  }}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  );
+                })()
               )}
             </CardContent>
           </Card>
@@ -910,8 +925,8 @@ function ComparePageContent() {
             <ArrowLeftRight className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Choose a control configuration (A) and a treatment configuration (B) from the dropdowns
-              above to see an A/B test comparison with statistical significance.
+              Choose a control configuration (A) and a treatment configuration (B) from the
+              dropdowns above to see an A/B test comparison with statistical significance.
             </p>
           </CardContent>
         </Card>

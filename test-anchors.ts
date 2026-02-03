@@ -1,13 +1,13 @@
-import { RingExtractor } from './packages/core/src/extractors/ringExtractor';
 import { StubNLPProvider } from './packages/core/src/__tests__/setup';
+import { RingExtractor } from './packages/core/src/extractors/ringExtractor';
 
 const extractor = new RingExtractor(new StubNLPProvider());
 
 const testCases = [
-  "I want to travel to Bangkok for 2 weeks in November. Budget is around $3000.",
-  "The contract requires 30 days notice and a $5000 deposit. Interest rate is 15%.",
-  "We discussed visiting Tokyo, Kyoto, and Osaka. The trip should be 10 days.",
-  "Please book a flight to New York on January 15, 2025. Maximum budget $1500.",
+  'I want to travel to Bangkok for 2 weeks in November. Budget is around $3000.',
+  'The contract requires 30 days notice and a $5000 deposit. Interest rate is 15%.',
+  'We discussed visiting Tokyo, Kyoto, and Osaka. The trip should be 10 days.',
+  'Please book a flight to New York on January 15, 2025. Maximum budget $1500.',
 ];
 
 async function test() {
@@ -22,7 +22,9 @@ async function test() {
     if (result.ring1.anchorCandidates && result.ring1.anchorCandidates.length > 0) {
       for (const a of result.ring1.anchorCandidates) {
         const typeStr = a.type.padEnd(8);
-        console.log(`  [${typeStr}] "${a.text}" @ ${a.startChar}-${a.endChar} (${a.source}, conf: ${a.confidence})`);
+        console.log(
+          `  [${typeStr}] "${a.text}" @ ${a.startChar}-${a.endChar} (${a.source}, conf: ${a.confidence})`
+        );
       }
     } else {
       console.log('  (none)');

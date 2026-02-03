@@ -1,16 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Pin, PinOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { usePinsStore } from '@/store/pinsStore';
 import type { PinType } from '@t3x/core';
+import { Pin, PinOff } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { usePinsStore } from '@/store/pinsStore';
 
 interface PinButtonProps {
   projectId: string;
@@ -45,24 +41,14 @@ export function PinButton({ projectId, type, refId, className }: PinButtonProps)
         <Button
           variant="ghost"
           size="icon"
-          className={cn(
-            'h-8 w-8',
-            pinned && 'text-amber-500 hover:text-amber-600',
-            className
-          )}
+          className={cn('h-8 w-8', pinned && 'text-amber-500 hover:text-amber-600', className)}
           onClick={handleClick}
           disabled={isLoading}
         >
-          {pinned ? (
-            <Pin className="h-4 w-4 fill-current" />
-          ) : (
-            <PinOff className="h-4 w-4" />
-          )}
+          {pinned ? <Pin className="h-4 w-4 fill-current" /> : <PinOff className="h-4 w-4" />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>
-        {pinned ? 'Unpin from sources' : 'Pin as source'}
-      </TooltipContent>
+      <TooltipContent>{pinned ? 'Unpin from sources' : 'Pin as source'}</TooltipContent>
     </Tooltip>
   );
 }

@@ -20,7 +20,12 @@ interface DiffSentenceLineProps {
 }
 
 const lineStyles = {
-  context: { bg: 'bg-muted/20', text: 'text-foreground', border: 'border-transparent', prefix: ' ' },
+  context: {
+    bg: 'bg-muted/20',
+    text: 'text-foreground',
+    border: 'border-transparent',
+    prefix: ' ',
+  },
   added: { bg: 'bg-green-50', text: 'text-green-900', border: 'border-green-300', prefix: '+' },
   removed: { bg: 'bg-red-50', text: 'text-red-900', border: 'border-red-300', prefix: '-' },
 };

@@ -34,10 +34,7 @@ export interface ContextExportJson {
  * @param conversationId - The conversation ID for metadata
  * @returns Formatted JSON string
  */
-export function formatContextAsJson(
-  context: BuiltContext,
-  conversationId: string
-): string {
+export function formatContextAsJson(context: BuiltContext, conversationId: string): string {
   const exportData: ContextExportJson = {
     metadata: {
       conversation_id: conversationId,
@@ -69,10 +66,7 @@ function formatSource(source: ContextSource): string {
  * @param conversationId - The conversation ID for metadata
  * @returns Formatted Markdown string
  */
-export function formatContextAsMarkdown(
-  context: BuiltContext,
-  conversationId: string
-): string {
+export function formatContextAsMarkdown(context: BuiltContext, conversationId: string): string {
   const exportedAt = new Date().toISOString();
 
   const lines: string[] = [

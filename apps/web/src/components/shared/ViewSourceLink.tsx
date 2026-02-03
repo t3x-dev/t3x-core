@@ -98,7 +98,7 @@ export function parseHighlightParam(
   const start = parseInt(match[1], 10);
   const end = parseInt(match[2], 10);
 
-  if (isNaN(start) || isNaN(end) || start < 0 || end <= start) {
+  if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end <= start) {
     return null;
   }
 

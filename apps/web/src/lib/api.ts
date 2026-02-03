@@ -30,6 +30,9 @@ export interface Project {
   created_at: string;
   conversations_count?: number;
   turns_count?: number;
+  commits_count?: number;
+  branches_count?: number;
+  drafts_count?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -381,7 +384,9 @@ function safeJsonParse<T>(json: string | null, fallback: T): T {
   try {
     return JSON.parse(json) as T;
   } catch {
-    console.warn('Failed to parse JSON:', json.slice(0, 100));
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Failed to parse JSON:', json.slice(0, 100));
+    }
     return fallback;
   }
 }
@@ -417,7 +422,7 @@ export function parseRingsData(rings: TurnDetail['rings']): RingsData | null {
  * Graceful degradation: Returns null if data is corrupt (logs warning).
  * This prevents a single corrupt commit from breaking the entire canvas.
  */
-function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors | null {
+function _parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors | null {
   if (!json) return null;
 
   try {
@@ -431,10 +436,12 @@ function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors 
       // Graceful degradation: if start_char is missing, warn and return null
       // This prevents a single corrupt commit from breaking the entire canvas
       if (typeof sentence.start_char !== 'number') {
-        console.warn(
-          `[api] Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
-            `Cannot compute global anchor positions. Anchor highlighting disabled for this commit.`
-        );
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(
+            `[api] Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
+              `Cannot compute global anchor positions. Anchor highlighting disabled for this commit.`
+          );
+        }
         return null;
       }
 
@@ -448,7 +455,9 @@ function parseAnchorsWithGlobalPositions(json: string | null): ApiCommitAnchors 
 
     return anchors;
   } catch (err) {
-    console.warn('[api] Failed to parse anchors_json:', json?.slice(0, 100), err);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[api] Failed to parse anchors_json:', json?.slice(0, 100), err);
+    }
     return null;
   }
 }

@@ -5,10 +5,10 @@
  */
 
 import { useEffect } from 'react';
-import type { Sentence, TurnContextData } from '@/types/merge';
-import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import { ConflictSourceContext } from './ConflictSourceContext';
 import { cn } from '@/lib/utils';
+import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import type { Sentence } from '@/types/merge';
+import { ConflictSourceContext } from './ConflictSourceContext';
 
 type SideType = 'source' | 'target';
 
@@ -32,21 +32,12 @@ const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: str
   },
 };
 
-export function ConflictSide({
-  side,
-  sentence,
-  label,
-  isSelected,
-}: ConflictSideProps) {
+export function ConflictSide({ side, sentence, label, isSelected }: ConflictSideProps) {
   const styles = sideStyles[side];
   const turnHash = sentence.source.turn_hash;
 
   // Access store for context fetching
-  const {
-    contextCache,
-    contextLoadingStates,
-    fetchSourceContext,
-  } = useMergeWorkspaceStore();
+  const { contextCache, contextLoadingStates, fetchSourceContext } = useMergeWorkspaceStore();
 
   // Memoize sentence source info to avoid unnecessary refetches
   const startChar = sentence.source.start_char;
@@ -63,7 +54,16 @@ export function ConflictSide({
       };
       fetchSourceContext(turnHash, sentenceForFetch);
     }
-  }, [turnHash, startChar, endChar, contextCache, contextLoadingStates, fetchSourceContext, sentence.id, sentence.text]);
+  }, [
+    turnHash,
+    startChar,
+    endChar,
+    contextCache,
+    contextLoadingStates,
+    fetchSourceContext,
+    sentence.id,
+    sentence.text,
+  ]);
 
   // Get cached context data
   const cachedContext = turnHash ? contextCache[turnHash]?.data : null;
@@ -82,17 +82,11 @@ export function ConflictSide({
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
-        {isSelected && (
-          <span className="text-xs font-medium text-green-600">
-            Selected
-          </span>
-        )}
+        {isSelected && <span className="text-xs font-medium text-green-600">Selected</span>}
       </div>
 
       {/* Sentence text */}
-      <p className="text-sm leading-relaxed">
-        {sentence.text}
-      </p>
+      <p className="text-sm leading-relaxed">{sentence.text}</p>
 
       {/* Inline source context */}
       <ConflictSourceContext
