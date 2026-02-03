@@ -1,7 +1,7 @@
 # T3X Frontend Design Principles
 
 > Status: Active
-> Last Updated: 2026-01-30
+> Last Updated: 2026-02-03
 > Scope: apps/web (t3x-webui)
 
 This document defines the frontend design principles and design direction for T3X WebUI. It is grounded in T3X's product nature as a semantic version control system for AI conversations, designed to be accessible to a broad audience while offering depth for technical users.
@@ -20,6 +20,7 @@ This document defines the frontend design principles and design direction for T3
 8. [User Testing & Validation](#8-user-testing--validation)
 9. [Personalization](#9-personalization)
 10. [Priority Matrix](#10-priority-matrix)
+11. [Three-Layer Capability Model](#11-three-layer-capability-model)
 
 ---
 
@@ -571,6 +572,186 @@ Ordered by importance:
 | **P2** | Multiple views | Canvas / Timeline / List — three project views |
 | **P2** | Dark mode polish | Node color tuning, contrast verification for both themes |
 | **P3** | Personalization | Layout persistence, filter presets, information density preference |
+
+---
+
+## 11. Three-Layer Capability Model
+
+> **Status**: Design Specification (Single Source of Truth)
+> **Related Issues**: #283-#294 (UX Redesign Implementation)
+
+This section defines the operational model for progressive feature disclosure in T3X WebUI. All UI implementation should follow these layer assignments to ensure consistency across the product.
+
+### 11.1 Layer Definitions
+
+| Layer | Audience | Visibility Rule | Purpose |
+|-------|----------|-----------------|---------|
+| **Layer 1 (Default)** | New users, non-technical (~80%) | Always visible | Core workflow features. Users can complete primary tasks using only Layer 1 features. |
+| **Layer 2 (Proficient)** | Regular users who have used T3X multiple times | Collapsed by default, expandable | Supporting features that enhance efficiency but are not required for basic workflows. |
+| **Layer 3 (Expert)** | Technical/power users (~20%), developers | Hidden behind "Advanced" section or Developer Mode | Specialist features for precise control, debugging, and advanced operations. |
+
+**Key principle**: A user should never need Layer 2 or Layer 3 features to complete a basic task. Layer 1 must be self-sufficient for the core workflow.
+
+### 11.2 Feature Assignment Table
+
+#### Commit Detail View (CommittedCommitView)
+
+| Feature | Layer | Default Visible? | Location | Rationale |
+|---------|-------|------------------|----------|-----------|
+| Sentence list | 1 | Yes | Main content area | Core content users need to see |
+| Constraint badges (must/mustnt) | 1 | Yes | Below sentences | Essential for understanding commit semantics |
+| Next Step button | 1 | Yes | Below constraints, prominent | Primary CTA guiding user to next action |
+| Source Context mapping | 2 | No (collapsed) | Collapsible section "Source" | Useful for verification, not essential for basic flow |
+| Pin management | 2 | No (collapsed) | Collapsible section "Context" | Advanced context control |
+| Version History | 2 | No (collapsed) | Collapsible section "History" | Important but secondary to viewing content |
+| Linked Leaves (outputs) | 2 | No (collapsed) | Collapsible section "Outputs" | Supporting feature for output management |
+| Diff comparison | 3 | No (hidden) | Advanced section link | Technical feature for detailed analysis |
+| Raw JSON view | 3 | No (hidden) | Advanced section link | Developer/debug feature |
+| Merge operations | 3 | No (hidden) | Advanced section link | Complex operation for power users |
+| Commit metadata/lineage | 3 | No (hidden) | Advanced section | Technical details (hash, parents, timestamps) |
+
+#### Pending Commit View (PendingCommitView / Staging)
+
+| Feature | Layer | Default Visible? | Location | Rationale |
+|---------|-------|------------------|----------|-----------|
+| Source content preview | 1 | Yes | Main content area | Users must see what they're committing |
+| Selection tools (text selection) | 1 | Yes | Inline in content | Core interaction for creating commits |
+| Keyword highlighting | 1 | Yes | Inline badges | Essential for semantic extraction visibility |
+| Commit button | 1 | Yes | Footer, prominent | Primary action CTA |
+| Extraction configuration | 2 | No (collapsed) | Collapsible "Settings" | Advanced tuning, not required for basic use |
+| Similarity threshold | 3 | No (hidden) | Advanced settings | Technical parameter |
+
+#### Canvas View
+
+| Feature | Layer | Default Visible? | Location | Rationale |
+|---------|-------|------------------|----------|-----------|
+| Node cards (conversation/commit) | 1 | Yes | Canvas | Core visual representation |
+| Connection edges | 1 | Yes | Canvas | Essential for understanding relationships |
+| Add Conversation button | 1 | Yes | Toolbar | Primary action for starting workflow |
+| Zoom/Pan controls | 1 | Yes | Toolbar | Basic navigation |
+| Node context menu | 2 | No (on right-click) | Context menu | Power user efficiency feature |
+| Minimap | 2 | No (collapsed) | Corner overlay | Useful for large projects |
+| Auto-layout button | 2 | No (toolbar secondary) | Toolbar dropdown | Utility feature |
+| Grid toggle | 3 | No (hidden) | Advanced menu | Developer preference |
+| Debug overlays | 3 | No (hidden) | Developer Mode only | Debug feature |
+
+#### Diff View
+
+| Feature | Layer | Default Visible? | Location | Rationale |
+|---------|-------|------------------|----------|-----------|
+| Side-by-side comparison | 1 | Yes | Main content | Core diff visualization |
+| Color-coded changes (Same/Changed/Added/Removed) | 1 | Yes | Inline styling | Essential for understanding changes |
+| Summary stats ("3 changed, 2 new") | 1 | Yes | Header | Quick overview |
+| Source context links | 2 | No (on hover/click) | Inline popover | Supporting verification feature |
+| Similarity scores | 3 | No (Developer Mode) | Inline badges | Technical metric |
+| Threshold configuration | 3 | No (hidden) | Advanced settings | Technical parameter |
+
+#### Merge View
+
+| Feature | Layer | Default Visible? | Location | Rationale |
+|---------|-------|------------------|----------|-----------|
+| Conflict list with choices | 1 | Yes | Main content | Core merge interaction |
+| "Keep source" / "Keep target" buttons | 1 | Yes | Per-item actions | Essential decision controls |
+| Progress indicator ("5 of 12 resolved") | 1 | Yes | Header | Users need to know progress |
+| Batch operations ("Keep all from A") | 2 | No (collapsed) | Section header | Efficiency feature for large merges |
+| Word-level diff highlighting | 2 | No (on hover) | Inline | Detailed comparison, not essential |
+| Similarity scores per pair | 3 | No (Developer Mode) | Inline badges | Technical metric |
+| Auto-resolve configuration | 3 | No (hidden) | Advanced settings | Technical parameter |
+
+### 11.3 Design Principles (Actionable Rules)
+
+These are concrete rules, not vague guidelines. Implementations that violate these rules should be flagged in code review.
+
+#### Rule 1: Every View Must Answer Three Questions
+
+Every screen/panel/modal must provide clear answers to:
+
+| Question | UI Element | Example |
+|----------|------------|---------|
+| **Where am I?** | Title, breadcrumb, or context indicator | "Commit abc123 on main" |
+| **What's next?** | Next Step CTA or guidance text | "Create Output →" button |
+| **Am I stuck?** | Error message, empty state, or help link | "No source connected. [How to connect]" |
+
+**Verification**: Before shipping any view, manually verify these three questions are answered.
+
+#### Rule 2: Next Step Is the Most Visually Prominent Element
+
+In any view showing a commit or workflow state:
+- The Next Step button/card must have the highest visual weight (size, color, position)
+- It must be visible without scrolling on standard viewport sizes (1280x800 minimum)
+- It must use the primary action styling (blue gradient, pulse animation if appropriate)
+
+**Anti-pattern**: A view where the user has to search for what to do next.
+
+#### Rule 3: Layer 1 Visible, Layer 2 Collapsed, Layer 3 Hidden
+
+| Layer | Default State | User Action to Reveal |
+|-------|---------------|----------------------|
+| Layer 1 | Fully visible, no interaction required | N/A |
+| Layer 2 | Collapsed with visible header/chevron | Single click to expand |
+| Layer 3 | Not visible in default mode | Click "Advanced" link or enable Developer Mode |
+
+**Implementation pattern**:
+```tsx
+// Layer 2: CollapsibleSection with defaultOpen={false}
+<CollapsibleSection title="Source Context" defaultOpen={false}>
+  {/* Layer 2 content */}
+</CollapsibleSection>
+
+// Layer 3: Only render when in Advanced section or Developer Mode
+{showAdvanced && (
+  <div className="border-t pt-3 mt-1">
+    <span className="text-xs text-gray-400">Advanced</span>
+    {/* Layer 3 content */}
+  </div>
+)}
+```
+
+#### Rule 4: Empty States Are Teaching Moments
+
+Every empty state must include:
+1. **What**: Clear description of what's missing ("No source content")
+2. **Why it matters**: Brief explanation ("Source provides the knowledge to extract")
+3. **Action**: Button or link to resolve ("Connect a conversation" or "How to connect")
+
+**Anti-pattern**: Empty state showing only "No data" or a disabled button with no explanation.
+
+#### Rule 5: Hide, Don't Disable (for Layer 3 features)
+
+When a Layer 3 feature is unavailable:
+- **Correct**: Hide the feature entirely (e.g., hide "Compare Versions" when only 1 commit exists)
+- **Incorrect**: Show a disabled button with a tooltip explaining why it's disabled
+
+Rationale: Disabled buttons create confusion ("why can't I click this?") and clutter the interface. If a feature doesn't apply, remove it from view.
+
+**Exception**: Layer 1 features may be disabled with clear guidance when a prerequisite is missing.
+
+#### Rule 6: Consistent Section Order
+
+Commit detail views must follow this section order:
+
+```
+1. [Layer 1] Sentences + Constraints + Next Step
+2. [Layer 2] Source Context (collapsed)
+3. [Layer 2] Linked Outputs (collapsed)
+4. [Layer 2] Version History (collapsed)
+5. [Layer 3] Advanced (Diff, Raw JSON, Merge, Metadata)
+```
+
+This order reflects importance and frequency of use. Users build mental models based on consistent layouts.
+
+### 11.4 Implementation Checklist
+
+When implementing or reviewing a UI component, verify:
+
+- [ ] Layer 1 features are visible by default without any user action
+- [ ] Layer 2 features are in collapsible sections with clear headers
+- [ ] Layer 3 features are behind "Advanced" or require Developer Mode
+- [ ] The view answers: Where am I? What's next? Am I stuck?
+- [ ] Next Step CTA is the most prominent element
+- [ ] Empty states include what/why/action guidance
+- [ ] Unavailable Layer 3 features are hidden, not disabled
+- [ ] Section order follows the standard layout
 
 ---
 
