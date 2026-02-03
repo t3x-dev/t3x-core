@@ -1,7 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Trash2 } from 'lucide-react';
+import {
+  FolderOpen,
+  GitBranch,
+  GitCommitHorizontal,
+  MessageSquare,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect } from 'react';
@@ -165,9 +172,20 @@ export default function SemanticLedgerPage() {
                     </div>
 
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="hidden sm:inline">
-                        {project.nodes} turns · {project.drafts} conversations
-                      </span>
+                      <div className="hidden sm:flex items-center gap-3">
+                        <span className="flex items-center gap-1" title="Conversations">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          {project.drafts}
+                        </span>
+                        <span className="flex items-center gap-1" title="Commits">
+                          <GitCommitHorizontal className="h-3.5 w-3.5" />
+                          {project.commitsCount}
+                        </span>
+                        <span className="flex items-center gap-1" title="Branches">
+                          <GitBranch className="h-3.5 w-3.5" />
+                          {project.branchesCount}
+                        </span>
+                      </div>
                       <Badge
                         variant="outline"
                         className={cn(

@@ -1,5 +1,17 @@
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
 import { MergeCandidateList } from './MergeCandidateList';
 import { MergeIdenticalSection } from './MergeIdenticalSection';
@@ -39,6 +51,28 @@ export function MergePanel() {
   );
 
   const [message, setMessage] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // A-11: Loading skeleton during prepare phase
+  if (!mergeState && mergeLoading) {
+    return (
+      <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background shadow-lg border-l overflow-y-auto p-4 sm:p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Merge Review</h2>
+        </div>
+        <div className="flex items-center gap-2 mb-6 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Analyzing semantic differences...
+        </div>
+        <div className="space-y-4">
+          <Skeleton className="h-28 w-full rounded-lg" />
+          <SkeletonText lines={3} />
+          <Skeleton className="h-20 w-full rounded-lg" />
+          <SkeletonText lines={2} />
+        </div>
+      </div>
+    );
+  }
 
   if (!mergeState) return null;
 
@@ -46,20 +80,27 @@ export function MergePanel() {
 
   const handleExecute = async () => {
     if (!message.trim()) {
-      alert('Please enter a merge message');
+      // A-12: Replace alert() with toast
+      toast.warning('Please enter a merge message');
       return;
     }
 
+    // A-10: Show confirmation dialog
+    setShowConfirm(true);
+  };
+
+  const handleConfirmExecute = async () => {
+    setShowConfirm(false);
     try {
       await executeMerge(message);
       setMessage('');
     } catch (_error) {
-      // Error handled silently
+      // Error handled by store notifyCallback
     }
   };
 
   return (
-    <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white shadow-lg border-l overflow-y-auto p-4 sm:p-6">
+    <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background shadow-lg border-l overflow-y-auto p-4 sm:p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Merge Review</h2>
@@ -142,7 +183,7 @@ export function MergePanel() {
       </div>
 
       {/* Execute section */}
-      <div className="mt-6 pt-6 border-t sticky bottom-0 bg-white">
+      <div className="mt-6 pt-6 border-t sticky bottom-0 bg-background">
         <label htmlFor="merge-message" className="block mb-2 font-medium">
           Merge Message
         </label>
@@ -151,7 +192,7 @@ export function MergePanel() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Describe this merge..."
-          className="w-full border rounded p-2 mb-3 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border rounded p-2 mb-3 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-background"
           disabled={mergeLoading}
         />
 
@@ -166,7 +207,14 @@ export function MergePanel() {
             }`}
             type="button"
           >
-            {mergeLoading ? 'Executing...' : 'Execute Merge'}
+            {mergeLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Executing...
+              </span>
+            ) : (
+              'Execute Merge'
+            )}
           </button>
           <button
             onClick={cancelMerge}
@@ -184,6 +232,41 @@ export function MergePanel() {
           </p>
         )}
       </div>
+
+      {/* A-10: Merge confirmation dialog */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Merge</DialogTitle>
+            <DialogDescription>
+              This will create a new merge commit combining the selected sentences from both
+              branches. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground">
+            <p>
+              <strong>Message:</strong> {message}
+            </p>
+            {counts && (
+              <div className="mt-2 space-y-1">
+                <p>{counts.identical} identical (auto-kept)</p>
+                <p>
+                  {counts.resolved}/{counts.similar} conflicts resolved
+                </p>
+                <p>
+                  {counts.onlyInSource} unique to source, {counts.onlyInTarget} unique to target
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmExecute}>Execute Merge</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

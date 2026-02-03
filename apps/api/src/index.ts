@@ -215,6 +215,18 @@ async function start() {
     });
 
     console.log(`T3X API server running on http://localhost:${port}`);
+    console.log('─── Configuration ───');
+    console.log(
+      `  ANTHROPIC_API_KEY:      ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set'}`
+    );
+    console.log(
+      `  GOOGLE_AI_STUDIO_KEY:   ${process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set'}`
+    );
+    console.log(
+      `  Database:               ${process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)'}`
+    );
+    console.log(`  RUNNER_BASE_URL:        ${process.env.RUNNER_BASE_URL || 'not set'}`);
+    console.log('─────────────────────');
 
     // Graceful shutdown
     const shutdown = async () => {
