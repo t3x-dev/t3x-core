@@ -420,9 +420,14 @@ export default function LeafDetailPage() {
             <h1 className="text-lg font-semibold">
               {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Type: {leaf.type} | Created: {new Date(leaf.created_at).toLocaleDateString()}
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {leaf.type}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(leaf.created_at).toLocaleDateString()}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

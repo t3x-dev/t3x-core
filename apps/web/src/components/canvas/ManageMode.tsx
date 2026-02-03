@@ -381,8 +381,10 @@ export default function ManageMode({
               key={idx}
               className={cn(
                 'relative inline-flex items-center px-1 py-0.5 rounded cursor-pointer transition-colors group',
-                keyword.constraint === 'must_have' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
-                keyword.constraint === 'mustnt_have' && 'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50',
+                keyword.constraint === 'must_have' &&
+                  'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
+                keyword.constraint === 'mustnt_have' &&
+                  'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50',
                 keyword.constraint === 'neutral' && 'bg-muted hover:bg-muted/80',
                 isLocked && 'cursor-default'
               )}
@@ -519,8 +521,10 @@ export default function ManageMode({
             key={clause.id}
             className={cn(
               'rounded-lg border p-3 transition-colors',
-              clause.status === 'keep' && 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800',
-              clause.status === 'discard' && 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800',
+              clause.status === 'keep' &&
+                'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800',
+              clause.status === 'discard' &&
+                'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800',
               clause.status === 'neutral' && 'bg-background border-border',
               selectedClauseIds.has(clause.id) && 'ring-2 ring-blue-500',
               isLocked && 'opacity-70'
@@ -541,8 +545,10 @@ export default function ManageMode({
                 <span
                   className={cn(
                     'shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase',
-                    clause.status === 'keep' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-                    clause.status === 'discard' && 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    clause.status === 'keep' &&
+                      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                    clause.status === 'discard' &&
+                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                   )}
                 >
                   {clause.status}

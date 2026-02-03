@@ -193,7 +193,7 @@ export function CommittedCommitView({
               <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
               <Badge
                 className={cn(
-                  'text-[0.65rem] gap-1',
+                  'text-xs gap-1',
                   branchLabel === 'main'
                     ? 'bg-green-100 text-green-700 border-green-300'
                     : 'bg-purple-100 text-purple-700 border-purple-300'
@@ -685,7 +685,7 @@ export function CommittedCommitView({
                                   <Badge
                                     variant="outline"
                                     className={cn(
-                                      'text-[0.6rem]',
+                                      'text-xs',
                                       change.change_type === 'added' &&
                                         'text-green-600 border-green-300',
                                       change.change_type === 'removed' &&
@@ -714,7 +714,7 @@ export function CommittedCommitView({
                                     {change.added_keywords.map((kw, i) => (
                                       <Badge
                                         key={i}
-                                        className="text-[0.6rem] bg-green-100 text-green-700"
+                                        className="text-xs bg-green-100 text-green-700"
                                       >
                                         {kw}
                                       </Badge>
@@ -725,10 +725,7 @@ export function CommittedCommitView({
                                   <div className="flex flex-wrap items-center gap-1 mt-2">
                                     <span className="text-xs text-gray-500">Removed:</span>
                                     {change.removed_keywords.map((kw, i) => (
-                                      <Badge
-                                        key={i}
-                                        className="text-[0.6rem] bg-red-100 text-red-700"
-                                      >
+                                      <Badge key={i} className="text-xs bg-red-100 text-red-700">
                                         {kw}
                                       </Badge>
                                     ))}

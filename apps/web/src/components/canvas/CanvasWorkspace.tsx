@@ -1,6 +1,15 @@
 import type { ColorMode, Node } from '@xyflow/react';
 import { Background, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
-import { GitCommit, LayoutGrid, Loader2, MessageSquarePlus } from 'lucide-react';
+import {
+  FileOutput,
+  GitCommit,
+  GitCommitHorizontal,
+  HelpCircle,
+  LayoutGrid,
+  Loader2,
+  MessageSquare,
+  MessageSquarePlus,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
@@ -14,6 +23,8 @@ const edgeTypes = {
 };
 
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -56,6 +67,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
   const [isPanMode, setIsPanMode] = useState(false);
   const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -305,6 +317,17 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       window.removeEventListener('blur', handleBlur);
     };
   }, [selectAllNodes, deselectAllNodes, navigateToNode]);
+
+  // Keyboard shortcut help dialog toggle (? key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        setShowShortcuts((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const branchNames = useMemo(() => {
     const names = new Set<string>();
@@ -754,19 +777,65 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           />
         </ReactFlow>
 
-        {/* Empty state overlay */}
+        {/* Empty state overlay - guided 3-step card */}
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <div className="rounded-2xl bg-muted/50 p-8 backdrop-blur-sm">
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                <MessageSquarePlus className="h-6 w-6 text-primary" />
+            <Card className="border-dashed border-2 border-border/60 bg-card/80 backdrop-blur-sm px-10 py-8 max-w-lg">
+              <p className="text-lg font-semibold text-foreground mb-6">Get started with T3X</p>
+              <div className="flex flex-col gap-5">
+                {/* Step 1 */}
+                <div className="flex items-start gap-4 text-left">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    1
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <MessageSquare className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Add Conversation</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Start by adding a conversation to extract knowledge from
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {/* Step 2 */}
+                <div className="flex items-start gap-4 text-left">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    2
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <GitCommitHorizontal className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Extract Knowledge</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Commit semantic content from your conversations
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {/* Step 3 */}
+                <div className="flex items-start gap-4 text-left">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    3
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <FileOutput className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Create Outputs</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Generate outputs for different platforms
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="text-base font-medium text-foreground">No units yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Click the <span className="font-medium text-primary">+</span> button above or drag
-                from the palette
-              </p>
-            </div>
+            </Card>
           </div>
         )}
       </div>
@@ -816,6 +885,58 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       <LeafPanel />
       <MergePanel />
       <DeletionConfirmDialog />
+
+      {/* Keyboard shortcuts help button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setShowShortcuts(true)}
+        title="Keyboard Shortcuts (?)"
+        className="absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full border border-border/50 bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground"
+      >
+        <HelpCircle className="h-4 w-4" />
+      </Button>
+
+      {/* Keyboard shortcuts dialog */}
+      <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Show this help</span>
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">?</kbd>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Delete selected node</span>
+              <div className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  Backspace
+                </kbd>
+                <span className="text-xs text-muted-foreground">/</span>
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  Delete
+                </kbd>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Deselect all</span>
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Escape</kbd>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Select all</span>
+              <div className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  Ctrl+A
+                </kbd>
+                <span className="text-xs text-muted-foreground">/</span>
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Cmd+A</kbd>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

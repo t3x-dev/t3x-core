@@ -273,13 +273,13 @@ function CommitV3Content({
     <div className="commit-v3-content mt-2 pt-2 border-t border-slate-100">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-[0.65rem] text-slate-400">by</span>
+        <span className="text-xs text-slate-400">by</span>
         <AuthorBadgeV3 author={commit.author} />
       </div>
 
       {/* Sentences - use TruncatedCommitView if source context available */}
       <div>
-        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider mb-1">
+        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
           Sentences ({commit.sentences.length})
         </div>
         {commit.sentences.length === 0 ? (
@@ -308,7 +308,7 @@ function CommitV3Content({
               </li>
             ))}
             {remainingSentences > 0 && (
-              <li className="text-[0.65rem] text-slate-400">+{remainingSentences} more</li>
+              <li className="text-xs text-slate-400">+{remainingSentences} more</li>
             )}
           </ul>
         )}
@@ -317,7 +317,7 @@ function CommitV3Content({
       {/* Constraints (preview) */}
       {commit.constraints.length > 0 && (
         <div className="mt-2">
-          <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider mb-1">
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
             Constraints ({commit.constraints.length})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -325,9 +325,7 @@ function CommitV3Content({
               <ConstraintBadge key={c.id} constraint={c} />
             ))}
             {remainingConstraints > 0 && (
-              <span className="text-[0.65rem] text-slate-400 px-1 py-0.5">
-                +{remainingConstraints}
-              </span>
+              <span className="text-xs text-slate-400 px-1 py-0.5">+{remainingConstraints}</span>
             )}
           </div>
         </div>
@@ -360,7 +358,7 @@ function CommitV4Content({
     <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-[0.65rem] text-slate-400">by</span>
+        <span className="text-xs text-slate-400">by</span>
         <AuthorBadgeV4 author={commit.author} />
         {/* V4 badge */}
         <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
@@ -370,7 +368,7 @@ function CommitV4Content({
 
       {/* Sentences (preview) */}
       <div>
-        <div className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
           Sentences ({sentences.length})
         </div>
         {sentences.length === 0 ? (
@@ -380,7 +378,7 @@ function CommitV4Content({
             <ul className="mt-1 space-y-0.5">
               {displaySentences.map((s) => (
                 <li key={s.id} className="text-xs text-slate-700 line-clamp-2">
-                  <span className="text-slate-400 font-mono text-[0.6rem] mr-1">{s.id}</span>
+                  <span className="text-slate-400 font-mono text-xs mr-1">{s.id}</span>
                   {s.text}
                 </li>
               ))}
@@ -388,7 +386,7 @@ function CommitV4Content({
             {/* Footer with +N more and View full */}
             <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100">
               {remainingSentences > 0 ? (
-                <span className="text-[0.65rem] text-slate-400">
+                <span className="text-xs text-slate-400">
                   +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
                 </span>
               ) : (
@@ -398,7 +396,7 @@ function CommitV4Content({
                 <button
                   type="button"
                   onClick={onViewFull}
-                  className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+                  className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:text-blue-700 transition-colors"
                 >
                   View full
                   <ChevronRight size={10} />
@@ -411,7 +409,7 @@ function CommitV4Content({
 
       {/* V4: Constraints notice */}
       <div className="mt-2 px-2 py-1.5 bg-amber-50 rounded border border-amber-200">
-        <p className="text-[0.6rem] text-amber-700">Constraints are defined in Leaves</p>
+        <p className="text-xs text-amber-700">Constraints are defined in Leaves</p>
       </div>
     </div>
   );
@@ -506,7 +504,6 @@ function UnitNode(props: Props) {
     navigator.clipboard.writeText(hash);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
-    notify?.('Hash copied to clipboard', 'success');
   };
 
   // Navigate to leaf detail page
@@ -550,7 +547,7 @@ function UnitNode(props: Props) {
               openNodeModal(id, 'conversation');
             }}
           >
-            <div className="flex items-center gap-1.5 text-[0.65rem] text-slate-500">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
               {/* Context indicator */}
               {getContextLabel() && (
@@ -601,7 +598,7 @@ function UnitNode(props: Props) {
             </h4>
             <span
               className={cn(
-                'flex-shrink-0 text-[0.6rem] font-semibold px-1.5 py-0.5 rounded',
+                'flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded',
                 data.branchType === 'main'
                   ? 'bg-blue-100 text-blue-700'
                   : 'bg-amber-100 text-amber-700'
@@ -619,7 +616,7 @@ function UnitNode(props: Props) {
                   <button
                     type="button"
                     onClick={handleCopyHash}
-                    className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[0.6rem] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
                   >
                     {data.commitV4?.hash
                       ? data.commitV4.hash.slice(0, 7)
@@ -670,16 +667,14 @@ function UnitNode(props: Props) {
             {!data.commitV3 &&
               isStaging &&
               (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
-                <span className="text-[0.65rem] font-medium">
+                <span className="text-xs font-medium">
                   <span className="text-green-600">{data.mustHave?.length || 0}✓</span>{' '}
                   <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
                 </span>
               )}
             {/* V2: summary for committed */}
             {!data.commitV3 && !isStaging && data.summary && (
-              <span className="text-[0.65rem] text-slate-400 truncate max-w-[100px]">
-                {data.summary}
-              </span>
+              <span className="text-xs text-slate-400 truncate max-w-[100px]">{data.summary}</span>
             )}
           </div>
 
@@ -710,7 +705,7 @@ function UnitNode(props: Props) {
               onClick={() => setLeavesExpanded((prev) => !prev)}
               type="button"
             >
-              <span className="text-[0.65rem] font-medium text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Leaves ({data.leaves.length})
                 {totalAssertions > 0 && (
                   <span className="ml-1.5 normal-case font-normal">
@@ -760,7 +755,7 @@ function UnitNode(props: Props) {
                           {leaf.status && (
                             <span
                               className={cn(
-                                'text-[0.6rem] font-medium px-1.5 py-0.5 rounded',
+                                'text-xs font-medium px-1.5 py-0.5 rounded',
                                 leaf.status === 'running' && 'bg-blue-100 text-blue-700',
                                 leaf.status === 'passed' && 'bg-green-100 text-green-700',
                                 leaf.status === 'failed' && 'bg-red-100 text-red-700',

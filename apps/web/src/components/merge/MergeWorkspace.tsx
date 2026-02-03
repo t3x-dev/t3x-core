@@ -10,7 +10,9 @@
  * - Merge preview before commit
  */
 
+import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
 import { MergePreview } from './MergePreview';
@@ -98,7 +100,12 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   if (!prepared) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">No merge data available</p>
+        <EmptyState
+          icon={GitMerge}
+          title="No merge data available"
+          description="There is no merge in progress. Start a merge from the canvas by selecting two branches to compare."
+          action={{ label: 'Go Back', onClick: onClose }}
+        />
       </div>
     );
   }

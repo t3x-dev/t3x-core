@@ -34,7 +34,9 @@ export function CommitV3AuthorBadge({ author }: { author: CommitV3Display['autho
   return (
     <span
       className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
-        isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+        isVerified
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+          : 'bg-muted text-muted-foreground'
       }`}
     >
       {author.name}
@@ -51,7 +53,9 @@ export function CommitV4AuthorBadge({ author }: { author: CommitV4Display['autho
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded ${
-        isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+        isAgent
+          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+          : 'bg-muted text-muted-foreground'
       }`}
     >
       {isAgent ? <Bot size={14} /> : <User size={14} />}
@@ -69,8 +73,8 @@ export function CommitV3ConstraintBadge({ constraint }: { constraint: Constraint
     <span
       className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
         isRequire
-          ? 'bg-green-100 text-green-700 border border-green-300'
-          : 'bg-red-100 text-red-700 border border-red-300 line-through'
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800'
+          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800 line-through'
       }`}
     >
       {isRequire ? '\u2713' : '\u2717'} {constraint.value}
@@ -93,13 +97,13 @@ export function PinnedSourcesSection({
   }
 
   return (
-    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Pin size={14} className="text-blue-600" />
-          <h3 className="font-semibold text-sm text-blue-700">Pinned Sources</h3>
+          <Pin size={14} className="text-blue-600 dark:text-blue-400" />
+          <h3 className="font-semibold text-sm text-blue-700 dark:text-blue-300">Pinned Sources</h3>
         </div>
-        <span className="text-xs text-blue-400">
+        <span className="text-xs text-blue-400 dark:text-blue-500">
           {sourceRefs.length} source{sourceRefs.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -107,24 +111,24 @@ export function PinnedSourcesSection({
         {sourceRefs.map((ref, idx) => (
           <li
             key={ref.id || idx}
-            className="flex items-start gap-2 p-2 bg-white rounded border border-blue-100"
+            className="flex items-start gap-2 p-2 bg-white dark:bg-background rounded border border-blue-100 dark:border-blue-900"
           >
             <span
               className={cn(
                 'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
                 ref.type === 'conversation'
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'bg-purple-100 text-purple-600'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
               )}
             >
               {ref.type === 'conversation' ? 'conv' : 'leaf'}
             </span>
             <div className="flex-1 min-w-0">
-              <span className="text-[0.875rem] text-gray-700 break-words">
+              <span className="text-[0.875rem] text-foreground break-words">
                 {ref.title || ref.id}
               </span>
               {ref.assertion_lessons && ref.assertion_lessons.length > 0 && (
-                <div className="mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-muted-foreground">
                   <span className="font-medium">Lessons:</span> {ref.assertion_lessons.join(', ')}
                 </div>
               )}
@@ -167,9 +171,9 @@ export function MemoryContextSidebar({
 
   return (
     <>
-      <div className="h-px bg-gray-200 my-4" />
+      <div className="h-px bg-border my-4" />
       <div className="mb-5">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
           Memory Context
         </h4>
 
@@ -177,8 +181,8 @@ export function MemoryContextSidebar({
           <PinDropdownSelector projectId={projectId} branch={branch} />
         ) : (
           <>
-            <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-              <Pin size={14} className="text-gray-400 shrink-0" />
+            <div className="flex items-center gap-2 text-[0.85rem] text-muted-foreground mb-2">
+              <Pin size={14} className="text-muted-foreground/70 shrink-0" />
               <span>
                 {totalCount === 0
                   ? 'No pins'
@@ -186,8 +190,8 @@ export function MemoryContextSidebar({
               </span>
             </div>
             {conversationId && (
-              <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 mt-2">
-                <span className="text-xs text-gray-600 truncate mr-2">
+              <div className="flex items-center justify-between p-2 bg-background rounded border border-border mt-2">
+                <span className="text-xs text-muted-foreground truncate mr-2">
                   conv#{conversationId.slice(0, 6)}
                 </span>
                 <PinButton
@@ -210,12 +214,14 @@ export function MemoryContextSidebar({
  */
 export function V4ConstraintInfoMessage() {
   return (
-    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+    <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
       <div className="flex items-start gap-3">
-        <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
+        <Info size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <h3 className="font-semibold text-sm text-amber-800 mb-1">V4 Architecture</h3>
-          <p className="text-sm text-amber-700">
+          <h3 className="font-semibold text-sm text-amber-800 dark:text-amber-300 mb-1">
+            V4 Architecture
+          </h3>
+          <p className="text-sm text-amber-700 dark:text-amber-400">
             In V4, constraints are defined at the <strong>Leaf</strong> level, not the Commit level.
             This allows the same knowledge (commit) to be applied with different constraints for
             different outputs. Create a Leaf from this commit to define constraints for your
@@ -247,24 +253,26 @@ export function CommitFullHeader({
   };
 
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={handleCopyHash}
-          className="inline-flex items-center gap-1 font-mono text-sm text-gray-500 bg-white hover:bg-gray-100 px-2 py-1 rounded border border-gray-200 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 font-mono text-sm text-muted-foreground bg-background hover:bg-muted px-2 py-1 rounded border border-border transition-colors cursor-pointer"
         >
           {commit.hash.slice(0, 7)}
           {copiedHash ? (
             <CheckCircle size={14} className="text-green-500" />
           ) : (
-            <Copy size={14} className="text-gray-400" />
+            <Copy size={14} className="text-muted-foreground/70" />
           )}
         </button>
         <span
           className={cn(
             'text-xs font-medium px-1.5 py-0.5 rounded',
-            isV4 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+            isV4
+              ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
+              : 'bg-muted text-muted-foreground'
           )}
         >
           {isV4 ? 'V4' : 'V3'}
@@ -273,7 +281,9 @@ export function CommitFullHeader({
           <span
             className={cn(
               'text-xs font-semibold px-2 py-0.5 rounded',
-              branchName === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+              branchName === 'main'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
             )}
           >
             {branchName}
@@ -336,27 +346,27 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   }
 
   return (
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div className="p-4 bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
-        <span className="text-xs text-gray-400">{sentences.length} total</span>
+        <h3 className="font-semibold text-sm text-foreground">Sentences</h3>
+        <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
       </div>
       <ul className="space-y-2">
         {sentences.map((s) => (
           <li
             key={s.id}
-            className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100"
+            className="flex items-start gap-2 p-2 bg-background rounded border border-border"
           >
-            <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
               {s.id}
             </span>
-            <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+            <span className="text-[0.875rem] leading-relaxed text-foreground break-words">
               {s.text}
             </span>
           </li>
         ))}
         {sentences.length === 0 && (
-          <li className="text-center py-4 text-gray-400 text-sm">No sentences</li>
+          <li className="text-center py-4 text-muted-foreground/70 text-sm">No sentences</li>
         )}
       </ul>
     </div>
@@ -388,7 +398,7 @@ export function CommitConstraintsAndLeaves({
               variant="outline"
               size="sm"
               onClick={() => setShowCreateLeaf(true)}
-              className="w-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
+              className="w-full border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-300 dark:hover:border-indigo-700"
             >
               <Plus size={16} className="mr-1" />
               Create Leaf from This Commit
@@ -396,10 +406,10 @@ export function CommitConstraintsAndLeaves({
           )}
         </div>
       ) : (
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="p-4 bg-muted/50 rounded-lg border border-border">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-gray-700">Constraints</h3>
-            <span className="text-xs text-gray-400">
+            <h3 className="font-semibold text-sm text-foreground">Constraints</h3>
+            <span className="text-xs text-muted-foreground/70">
               {(commit as CommitV3Display).constraints.length} total
             </span>
           </div>
@@ -408,20 +418,24 @@ export function CommitConstraintsAndLeaves({
               <CommitV3ConstraintBadge key={c.id} constraint={c} />
             ))}
             {(commit as CommitV3Display).constraints.length === 0 && (
-              <span className="text-center py-4 text-gray-400 text-sm w-full">No constraints</span>
+              <span className="text-center py-4 text-muted-foreground/70 text-sm w-full">
+                No constraints
+              </span>
             )}
           </div>
         </div>
       )}
 
       {isV4 && leaves && leaves.length > 0 && projectId && (
-        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+        <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Leaf size={14} className="text-green-600" />
-              <h3 className="font-semibold text-sm text-green-700">Associated Leaves</h3>
+              <Leaf size={14} className="text-green-600 dark:text-green-400" />
+              <h3 className="font-semibold text-sm text-green-700 dark:text-green-300">
+                Associated Leaves
+              </h3>
             </div>
-            <span className="text-xs text-green-400">
+            <span className="text-xs text-green-400 dark:text-green-500">
               {leaves.length} leaf{leaves.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -430,7 +444,7 @@ export function CommitConstraintsAndLeaves({
               <li key={leaf.id}>
                 <Link
                   href={`/project/${projectId}/leaf/${leaf.id}`}
-                  className="flex items-center justify-between p-2 bg-white rounded border border-green-100 hover:border-green-300 hover:bg-green-50 transition-colors"
+                  className="flex items-center justify-between p-2 bg-white dark:bg-background rounded border border-green-100 dark:border-green-900 hover:border-green-300 dark:hover:border-green-700 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span
@@ -447,7 +461,7 @@ export function CommitConstraintsAndLeaves({
                     </span>
                     <span className="text-sm text-foreground/80 truncate">{leaf.title}</span>
                   </div>
-                  <ExternalLink size={14} className="text-green-400 shrink-0" />
+                  <ExternalLink size={14} className="text-green-400 dark:text-green-500 shrink-0" />
                 </Link>
               </li>
             ))}

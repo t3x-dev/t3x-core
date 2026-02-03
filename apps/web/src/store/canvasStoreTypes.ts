@@ -36,6 +36,7 @@ export interface MergeSlice {
 export interface LeafPanelSlice {
   leafPanelOpen: boolean;
   leafPanelCommitId?: string;
+  leafCreating: boolean;
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
   addLeafNode: (leafType: LeafType) => Promise<string | null>;
