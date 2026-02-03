@@ -30,6 +30,9 @@ export interface Project {
   created_at: string;
   conversations_count?: number;
   turns_count?: number;
+  commits_count?: number;
+  branches_count?: number;
+  drafts_count?: number;
   metadata?: Record<string, unknown>;
 }
 

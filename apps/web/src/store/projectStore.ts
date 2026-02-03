@@ -11,6 +11,8 @@ export interface ProjectSummary {
   status: 'draft' | 'active' | 'paused';
   nodes: number;
   drafts: number;
+  commitsCount: number;
+  branchesCount: number;
 }
 
 type ProjectStore = {
@@ -50,6 +52,8 @@ const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
   status: 'active',
   nodes: project.turns_count || 0,
   drafts: project.conversations_count || 0,
+  commitsCount: project.commits_count || 0,
+  branchesCount: project.branches_count || 0,
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -112,6 +116,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         status: 'draft',
         nodes: 0,
         drafts: 0,
+        commitsCount: 0,
+        branchesCount: 0,
       };
 
       set((state) => ({

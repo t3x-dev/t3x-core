@@ -5,6 +5,14 @@
 
 ---
 
+## 当前进度
+
+> **Person A 全部 17 个 issue 已完成。** 构建验证通过（`pnpm build` 8/8 tasks success）。
+>
+> Person B 21 个 issue 待开始。共享 issue S-1~S-10 待所有代码完成后执行。
+
+---
+
 ## 与 v1 的差异
 
 | 维度 | v1 | v2 |
@@ -96,27 +104,27 @@
 
 ## 全量 Issue 清单
 
-### Person A — 内容 + 稳定性（17 个）
+### Person A — 内容 + 稳定性（17 个，全部完成 ✅）
 
-| ID | 标题 | 文件 | 说明 |
-|----|------|------|------|
-| A-1 | Seed Data 脚本 | `scripts/seed-demo.sh`（新建） | 3 个项目 + 对话 + turns + commits + leaf + pin + merge draft，详见 v1 |
-| A-2 | Silent Error 修复 | `canvasStore.ts`, `leaf/[leafId]/page.tsx`, `canvasLeafSlice.ts` | 3 处 `.catch(() => {})` 改为有意义的错误处理 |
-| A-3 | Generate 错误友好化 | `leaf/[leafId]/page.tsx` | 区分 API key 缺失 / 生成失败 / 其他，显示友好提示 |
-| A-4 | Merge 流程验证 | `scripts/seed-demo.sh`（更新） | 确认 seed 数据产生 similarPairs，merge workspace 可用 |
-| A-5 | Insights 接真实数据 | `insights/page.tsx` | 去掉 Osaka 假数据，调用 `listProjects` + `listCommitsV4` |
-| A-6 | Console 清理 | `api.ts`, `ErrorBoundary.tsx`, `eval/[runId]/page.tsx`, `deploy/compare/page.tsx` | 删 debug log，production guard |
-| A-7 | Leaf Generate 进度提示 | `leaf/[leafId]/page.tsx` | 180 秒操作加进度文案（"Generating..."→"Validating..."），不只是 spinner |
-| A-8 | Leaf 验证成功动效 | `leaf/[leafId]/page.tsx` | "All Passed" 时加绿色高亮/短暂动画，增强成功感 |
-| A-9 | Leaf 约束文本 tooltip | `leaf/[leafId]/page.tsx` | 长约束被 `truncate` 截断，加 hover tooltip 显示完整文本 |
-| A-10 | Merge 执行确认对话框 | `MergeWorkspace.tsx` 或 `MergePanel.tsx` | 点"Execute Merge"前弹确认，防误操作 |
-| A-11 | Merge loading skeleton | `MergePanel.tsx` | prepare 阶段显示 skeleton + "Analyzing semantic differences..." |
-| A-12 | Merge alert()→Toast | `MergePanel.tsx` | `alert('Please enter a merge message')` 改为 Toast 通知 |
-| A-13 | Projects 列表统计数据 | `page.tsx`, `projectStore.ts` | 卡片显示 commits/branches/leaves 数量 |
-| A-14 | as any 修复 — API | 多文件（`grep "as any" apps/api`） | API 路由中的 `as any` 替换为正确类型 |
-| A-15 | as any 修复 — Web | 多文件（`grep "as any" apps/web`） | Web 组件中的 `as any` 替换为正确类型 |
-| A-16 | API 启动配置状态 | `apps/api/src/index.ts` | 启动日志打印 ANTHROPIC_API_KEY/DB type 配置状态 |
-| A-17 | Seed 数据微调 | `scripts/seed-demo.sh` | 排练后调整描述、消息、句子的措辞 |
+| ID | 标题 | 文件 | 说明 | 状态 |
+|----|------|------|------|------|
+| A-1 | Seed Data 脚本 | `scripts/seed-demo.sh`（新建） | 3 个项目 + 对话 + turns + commits + leaf + pin + merge draft，详见 v1 | ✅ 已完成 |
+| A-2 | Silent Error 修复 | `canvasStore.ts`, `leaf/[leafId]/page.tsx`, `canvasLeafSlice.ts` | 3 处 `.catch(() => {})` 改为有意义的错误处理 | ✅ 已完成 |
+| A-3 | Generate 错误友好化 | `leaf/[leafId]/page.tsx` | 区分 API key 缺失 / 生成失败 / 其他，显示友好提示 | ✅ 已完成 |
+| A-4 | Merge 流程验证 | `scripts/seed-demo.sh`（更新） | 确认 seed 数据产生 similarPairs，merge workspace 可用 | ✅ 已完成 |
+| A-5 | Insights 接真实数据 | `insights/page.tsx` | 去掉 Osaka 假数据，调用 `listProjects` + `listCommitsV4` | ✅ 已完成 |
+| A-6 | Console 清理 | `api.ts`, `ErrorBoundary.tsx`, `eval/[runId]/page.tsx`, `deploy/compare/page.tsx` | 删 debug log，production guard | ✅ 已完成 |
+| A-7 | Leaf Generate 进度提示 | `leaf/[leafId]/page.tsx` | 4 阶段进度文案（Preparing → Generating → Validating → Finalizing），每 8s 切换 | ✅ 已完成 |
+| A-8 | Leaf 验证成功动效 | `leaf/[leafId]/page.tsx` | All Passed 时 section 加 green ring glow + zoom-in 动画，CheckCircle 图标 | ✅ 已完成 |
+| A-9 | Leaf 约束文本 tooltip | `leaf/[leafId]/page.tsx` | ConstraintItem + AssertionItem 的截断文本加 Tooltip hover | ✅ 已完成 |
+| A-10 | Merge 执行确认对话框 | `MergePanel.tsx` | Dialog 确认框：显示 message + 句子数量，需二次确认才执行 | ✅ 已完成 |
+| A-11 | Merge loading skeleton | `MergePanel.tsx` | prepare 阶段 Skeleton + Loader2 spinner + "Analyzing semantic differences..." | ✅ 已完成 |
+| A-12 | Merge alert()→Toast | `MergePanel.tsx` | `alert()` → `toast.warning()` (sonner)，同时修复 bg-white→bg-background | ✅ 已完成 |
+| A-13 | Projects 列表统计数据 | `page.tsx`, `projectStore.ts`, `api.ts` | 卡片显示 conversations/commits/branches（图标+数字），API type 补齐 | ✅ 已完成 |
+| A-14 | as any 修复 — API | 仅 test 文件 3 处 | 生产代码 0 处 as any，test 中为测试 invalid input 的合理使用 | ✅ 无需修复 |
+| A-15 | as any 修复 — Web | 0 处 | apps/web/src 已无 as any | ✅ 无需修复 |
+| A-16 | API 启动配置状态 | `apps/api/src/index.ts` | 打印 ANTHROPIC_API_KEY / GOOGLE_AI_STUDIO_KEY / Database / RUNNER_BASE_URL 状态 | ✅ 已完成 |
+| A-17 | Seed 数据微调 | `scripts/seed-demo.sh` | 排练后调整描述、消息、句子的措辞 | ✅ 已完成（v1 A-7） |
 
 ### Person B — 视觉 + UX（21 个）
 
@@ -148,18 +156,18 @@
 
 ### 共享 Issue（10 个）
 
-| ID | 标题 | 说明 |
-|----|------|------|
-| S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning |
-| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` |
-| S-3 | B-5/B-6 稳定性决策 | 稳定→merge；不稳定→回退旧版 |
-| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 |
-| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 |
-| S-6 | 排练 #2 | 重复 S-4 |
-| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 |
-| S-8 | 排练 #3（终版） | 应该 clean |
-| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 |
-| S-10 | Demo Day 清单确认 | 逐项检查清单 |
+| ID | 标题 | 说明 | 状态 |
+|----|------|------|------|
+| S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning | ✅ 已完成（commit `1c3e155d`），最终需再跑一次收尾 |
+| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ⬜ 需在所有 A+B 完成后重新执行 |
+| S-3 | B-5/B-6 稳定性决策 | 稳定→merge；不稳定→回退旧版 | ⬜ 待做 |
+| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ⬜ 需在所有代码完成后执行 |
+| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ⬜ 待做 |
+| S-6 | 排练 #2 | 重复 S-4 | ⬜ 待做 |
+| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ⬜ 待做 |
+| S-8 | 排练 #3（终版） | 应该 clean | ⬜ 待做 |
+| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ⬜ 待做 |
+| S-10 | Demo Day 清单确认 | 逐项检查清单 | ⬜ 待做 |
 
 ---
 
