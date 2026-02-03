@@ -1,13 +1,13 @@
 'use client';
 
-import { Component, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Component, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode;  // 自定义错误展示（可选）
+  fallback?: ReactNode; // 自定义错误展示（可选）
 }
 
 interface ErrorBoundaryState {
@@ -38,9 +38,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // 可以在这里记录错误到日志服务
-    console.error('[ErrorBoundary] Caught error:', error);
-    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[ErrorBoundary] Caught error:', error);
+      console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+    }
   }
 
   handleRetry = (): void => {
@@ -76,12 +77,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </div>
               )}
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-6"
-                onClick={this.handleRetry}
-              >
+              <Button variant="outline" size="sm" className="mt-6" onClick={this.handleRetry}>
                 <RefreshCw className="h-4 w-4" />
                 Try Again
               </Button>

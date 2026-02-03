@@ -42,6 +42,28 @@ import type { SentenceWithSource } from '@/types/sourceContext';
 
 const DEFAULT_KEYWORD_THRESHOLD = 0.6;
 
+function getGenerateErrorMessage(error: string): {
+  title: string;
+  description: string;
+  showRetry: boolean;
+} {
+  if (error.includes('GENERATION_NOT_CONFIGURED') || error.includes('API_KEY')) {
+    return {
+      title: 'LLM API Key Not Configured',
+      description: 'Set ANTHROPIC_API_KEY in your environment to enable AI generation.',
+      showRetry: false,
+    };
+  }
+  if (error.includes('GENERATION_FAILED') || error.includes('timeout')) {
+    return {
+      title: 'Generation Failed',
+      description: 'The AI service encountered an error. Please try again.',
+      showRetry: true,
+    };
+  }
+  return { title: 'Error', description: error, showRetry: true };
+}
+
 export default function LeafDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -62,6 +84,7 @@ export default function LeafDetailPage() {
     text: string;
   } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
+  const [commitLoadError, setCommitLoadError] = useState(false);
   const [userInstruction, setUserInstruction] = useState<string>('');
   const instructionDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -146,7 +169,9 @@ export default function LeafDetailPage() {
     if (!leaf?.commit_hash) return;
     getCommitV4(leaf.commit_hash)
       .then(setCommitData)
-      .catch(() => {});
+      .catch(() => {
+        setCommitLoadError(true);
+      });
   }, [leaf?.commit_hash]);
 
   // Handle constraint update
@@ -230,7 +255,7 @@ export default function LeafDetailPage() {
     setGenerateError(null);
 
     try {
-      const result = await generateLeafOutput(leafId);
+      const _result = await generateLeafOutput(leafId);
       // Update local leaf data with generated output + auto-validation assertions
       // The API now auto-validates and stores assertions, so re-fetch leaf to get full state
       const updatedLeaf = await getLeaf(leafId);
@@ -393,11 +418,27 @@ export default function LeafDetailPage() {
       </header>
 
       {/* Generate error message */}
-      {generateError && (
-        <div className="mx-4 mt-2 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {generateError}
-        </div>
-      )}
+      {generateError &&
+        (() => {
+          const info = getGenerateErrorMessage(generateError);
+          return (
+            <div className="mx-4 mt-2 rounded-md border bg-card px-4 py-3">
+              <p className="text-sm font-medium text-destructive">{info.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{info.description}</p>
+              {info.showRetry && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
+          );
+        })()}
 
       {/* Validate error message */}
       {validateError && (
@@ -430,6 +471,13 @@ export default function LeafDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
+          {/* Commit load warning */}
+          {commitLoadError && (
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+              Source commit data unavailable — constraints shown without source context.
+            </div>
+          )}
+
           {/* Source Context with constraint highlights + text selection */}
           {commitData && (
             <section className="rounded-lg border bg-card p-4">
