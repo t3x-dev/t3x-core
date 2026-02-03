@@ -1,13 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { Check, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type MouseEvent, useEffect } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
 import { Badge } from '@/components/ui/badge';
-import { AnimatedButton } from '@/components/ui/button';
+import { AnimatedButton, Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { Card, CardContent } from '@/components/ui/card';
 import { SkeletonProject } from '@/components/ui/skeleton';
@@ -23,6 +24,11 @@ export default function SemanticLedgerPage() {
   const { projects, loading, error, initialized, fetchProjects, addProject, deleteProject } =
     useProjectStore();
   const prefersReducedMotion = useReducedMotion();
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Select animation variants based on user preference
   const containerVariants = prefersReducedMotion ? reducedMotion.staggerContainer : staggerContainer;
@@ -66,7 +72,62 @@ export default function SemanticLedgerPage() {
     await deleteProject(id);
   };
 
-  if (loading && !initialized) {
+  // Toggle selection for a project
+  const toggleSelection = (id: string, event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Select/deselect all projects
+  const toggleSelectAll = () => {
+    if (selectedIds.size === projects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(projects.map((p) => p.id)));
+    }
+  };
+
+  // Exit selection mode
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  // Batch delete selected projects
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    const count = selectedIds.size;
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${count} project${count > 1 ? 's' : ''}?\n\nThis will permanently delete all associated conversations, turns, commits, and other data.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete projects sequentially to avoid overwhelming the server
+      for (const id of selectedIds) {
+        await deleteProject(id);
+      }
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Show loading state when not yet initialized (covers initial mount)
+  if (!initialized) {
     return (
       <div className="flex h-full flex-col gap-6 overflow-auto p-6">
         <header className="flex items-center justify-between">
@@ -105,16 +166,59 @@ export default function SemanticLedgerPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.3, ease: [0, 0, 0.2, 1] }}
       >
-        <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-        <ShimmerButton
-          onClick={handleCreateProject}
-          background="linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)"
-          shimmerColor="#ffffff"
-          className="gap-2 text-sm font-semibold"
-        >
-          <Plus className="h-4 w-4" />
-          New Project
-        </ShimmerButton>
+        {isSelectionMode ? (
+          // Selection mode header
+          <>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={exitSelectionMode}>
+                <X className="h-4 w-4" />
+              </Button>
+              <span className="text-lg font-medium">
+                {selectedIds.size} selected
+              </span>
+              <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+                {selectedIds.size === projects.length ? 'Deselect All' : 'Select All'}
+              </Button>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0 || isDeleting}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+            </Button>
+          </>
+        ) : (
+          // Normal header
+          <>
+            <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+            <div className="flex items-center gap-2">
+              {projects.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsSelectionMode(true)}
+                  className="gap-2"
+                >
+                  <Check className="h-4 w-4" />
+                  Select
+                </Button>
+              )}
+              <ShimmerButton
+                onClick={handleCreateProject}
+                background="linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)"
+                shimmerColor="#ffffff"
+                className="gap-2 text-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" />
+                New Project
+              </ShimmerButton>
+            </div>
+          </>
+        )}
       </motion.header>
 
       <motion.div
@@ -138,55 +242,106 @@ export default function SemanticLedgerPage() {
             </Card>
           </motion.div>
         )}
-        {projects.map((project) => (
-          <motion.div key={project.id} variants={itemVariants}>
-            <Link href={`/project/${project.id}`} className="group block">
-              <motion.div
-                whileHover={hoverAnimation}
-                whileTap={tapAnimation}
-              >
-                <Card className="transition-colors hover:border-primary/50">
-                  <CardContent className="flex items-center gap-4 p-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                      <p className="text-sm text-muted-foreground truncate">{project.description}</p>
-                    </div>
+        {projects.map((project) => {
+          const isSelected = selectedIds.has(project.id);
+          return (
+            <motion.div key={project.id} variants={itemVariants}>
+              {isSelectionMode ? (
+                // Selection mode: clickable card with checkbox
+                <motion.div
+                  whileHover={hoverAnimation}
+                  whileTap={tapAnimation}
+                  onClick={(e) => toggleSelection(project.id, e as unknown as MouseEvent)}
+                  className="cursor-pointer"
+                >
+                  <Card
+                    className={cn(
+                      'transition-colors',
+                      isSelected ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                    )}
+                  >
+                    <CardContent className="flex items-center gap-4 p-4">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => {}}
+                        className="shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                        <p className="text-sm text-muted-foreground truncate">{project.description}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span className="hidden sm:inline">
+                          {project.nodes} turns · {project.drafts} conversations
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            project.status === 'active' &&
+                              'border-green-500/30 bg-green-500/10 text-green-600',
+                            project.status === 'draft' &&
+                              'border-amber-500/30 bg-amber-500/10 text-amber-600',
+                            project.status === 'paused' &&
+                              'border-gray-500/30 bg-gray-500/10 text-gray-600'
+                          )}
+                        >
+                          {project.status}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ) : (
+                // Normal mode: link to project
+                <Link href={`/project/${project.id}`} className="group block">
+                  <motion.div
+                    whileHover={hoverAnimation}
+                    whileTap={tapAnimation}
+                  >
+                    <Card className="transition-colors hover:border-primary/50">
+                      <CardContent className="flex items-center gap-4 p-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                          <p className="text-sm text-muted-foreground truncate">{project.description}</p>
+                        </div>
 
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="hidden sm:inline">
-                        {project.nodes} turns · {project.drafts} conversations
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          project.status === 'active' &&
-                            'border-green-500/30 bg-green-500/10 text-green-600',
-                          project.status === 'draft' &&
-                            'border-amber-500/30 bg-amber-500/10 text-amber-600',
-                          project.status === 'paused' &&
-                            'border-gray-500/30 bg-gray-500/10 text-gray-600'
-                        )}
-                      >
-                        {project.status}
-                      </Badge>
-                      <span className="hidden md:inline text-xs">{project.updatedAt}</span>
-                    </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          <span className="hidden sm:inline">
+                            {project.nodes} turns · {project.drafts} conversations
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              project.status === 'active' &&
+                                'border-green-500/30 bg-green-500/10 text-green-600',
+                              project.status === 'draft' &&
+                                'border-amber-500/30 bg-amber-500/10 text-amber-600',
+                              project.status === 'paused' &&
+                                'border-gray-500/30 bg-gray-500/10 text-gray-600'
+                            )}
+                          >
+                            {project.status}
+                          </Badge>
+                          <span className="hidden md:inline text-xs">{project.updatedAt}</span>
+                        </div>
 
-                    <AnimatedButton
-                      variant="ghost"
-                      size="icon-sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                      onClick={(event) => handleDeleteProject(event as unknown as MouseEvent, project.id)}
-                      aria-label={`Delete ${project.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </AnimatedButton>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
-          </motion.div>
-        ))}
+                        <AnimatedButton
+                          variant="ghost"
+                          size="icon-sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          onClick={(event) => handleDeleteProject(event as unknown as MouseEvent, project.id)}
+                          aria-label={`Delete ${project.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </AnimatedButton>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Link>
+              )}
+            </motion.div>
+          );
+        })}
       </motion.div>
     </div>
   );
