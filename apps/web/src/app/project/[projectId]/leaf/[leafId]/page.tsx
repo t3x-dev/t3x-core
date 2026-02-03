@@ -203,29 +203,60 @@ export default function LeafDetailPage() {
       });
   }, [leaf?.commit_hash]);
 
-  // Handle constraint update
-  const handleUpdateConstraints = async (constraints: Constraint[]) => {
+  // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
+  // This is critical: without memoization, .map() creates a new array on every render,
+  // which triggers useEffect/useMemo in child component causing UI jumping
+  const sentences = useMemo((): SentenceWithSource[] => {
+    if (!commitData) return [];
+    return commitData.content.sentences.map((s) => ({
+      id: s.id,
+      text: s.text,
+      source: s.source_ref
+        ? {
+            turn_hash: s.source_ref.turn_hash,
+            start_char: s.source_ref.start_char,
+            end_char: s.source_ref.end_char,
+          }
+        : undefined,
+    }));
+  }, [commitData]);
+
+  // Handle constraint update (with optimistic update to prevent UI jumping)
+  const handleUpdateConstraints = async (constraints: Constraint[], optimisticLeaf?: Leaf) => {
     if (!leaf) return;
+
+    // Apply optimistic update immediately if provided
+    if (optimisticLeaf) {
+      setLeaf(optimisticLeaf);
+    }
 
     try {
       setSaving(true);
       const updated = await updateLeaf(leafId, { constraints });
-      setLeaf(updated);
+      // Only update if no optimistic update was applied, or to sync with server
+      if (!optimisticLeaf) {
+        setLeaf(updated);
+      }
     } catch (err) {
+      // Revert optimistic update on error
+      if (optimisticLeaf) {
+        setLeaf(leaf);
+      }
       setError(err instanceof Error ? err : new Error('Failed to update constraints'));
     } finally {
       setSaving(false);
     }
   };
 
-  // Remove constraint
+  // Remove constraint with optimistic update
   const handleRemoveConstraint = (constraintId: string) => {
     if (!leaf) return;
-    const updated = leaf.constraints.filter((c) => c.id !== constraintId);
-    handleUpdateConstraints(updated);
+    const updatedConstraints = leaf.constraints.filter((c) => c.id !== constraintId);
+    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
+    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
   };
 
-  // Add new constraint
+  // Add new constraint with optimistic update
   const handleAddConstraint = (
     type: 'require' | 'exclude',
     value: string,
@@ -238,10 +269,12 @@ export default function LeafDetailPage() {
       value: value.trim(),
       match_mode: matchMode,
     };
-    handleUpdateConstraints([...leaf.constraints, newConstraint]);
+    const updatedConstraints = [...leaf.constraints, newConstraint];
+    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
+    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
   };
 
-  // Add constraint with source sentence tracing
+  // Add constraint with source sentence tracing (with optimistic update)
   const handleAddConstraintFromSource = (
     type: 'require' | 'exclude',
     value: string,
@@ -258,7 +291,9 @@ export default function LeafDetailPage() {
       type === 'require'
         ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
         : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
-    handleUpdateConstraints([...leaf.constraints, newConstraint]);
+    const updatedConstraints = [...leaf.constraints, newConstraint];
+    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
+    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
   };
 
   // Handle config update
@@ -508,26 +543,14 @@ export default function LeafDetailPage() {
           )}
 
           {/* Source Context with constraint highlights + text selection */}
-          {commitData && (
+          {commitData && sentences.length > 0 && (
             <section className="rounded-lg border bg-card p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <FileText className="h-4 w-4" />
                 Source Content &amp; Constraints
               </h3>
               <LeafConstraintSourceContext
-                sentences={commitData.content.sentences.map(
-                  (s): SentenceWithSource => ({
-                    id: s.id,
-                    text: s.text,
-                    source: s.source_ref
-                      ? {
-                          turn_hash: s.source_ref.turn_hash,
-                          start_char: s.source_ref.start_char,
-                          end_char: s.source_ref.end_char,
-                        }
-                      : undefined,
-                  })
-                )}
+                sentences={sentences}
                 constraints={leaf.constraints}
                 onAdd={handleAddConstraintFromSource}
                 onRemove={handleRemoveConstraint}

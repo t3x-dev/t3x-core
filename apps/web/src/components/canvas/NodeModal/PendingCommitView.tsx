@@ -106,6 +106,19 @@ export function PendingCommitView({
   const [branches, setBranches] = useState<api.Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
 
+  // Get main branch state from canvas store to show warning when selecting main branch
+  const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
+  const latestMainCommitId = useCanvasStore((state) => state.latestMainCommitId);
+
+  // Compute whether main branch selection is invalid
+  const isMainBranchInvalid = useMemo(() => {
+    if (data.pendingBranch === 'branch') return false; // Not selecting main
+    if (!hasMainCommit) return false; // No main commit yet, can create root
+    if (!data.sourceCommitHash) return true; // Has main commit but trying to create another root
+    // Has parent commit: only valid if parent is HEAD of main
+    return data.sourceCommitHash !== latestMainCommitId;
+  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId]);
+
   // ========== Layout state ==========
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240);
   const [hoveredKeywordText, setHoveredKeywordText] = useState<string | null>(null);
@@ -400,6 +413,32 @@ export function PendingCommitView({
         branch = data.pendingBranchName?.trim() || `branch-${Date.now()}`;
       } else {
         branch = 'main';
+      }
+
+      // Validate: main branch must be a linear chain
+      // - If no parent (root commit): only allow if no main commit exists yet
+      // - If has parent: only allow if parent is the latest main commit (HEAD of main)
+      if (branch === 'main') {
+        const { hasMainCommit, latestMainCommitId } = useCanvasStore.getState();
+        if (!data.sourceCommitHash) {
+          // Root commit: check if main branch already has a root
+          if (hasMainCommit) {
+            setCommitError(
+              'A root commit on main branch already exists. Please select a different branch.'
+            );
+            setIsCommitting(false);
+            return;
+          }
+        } else {
+          // Child commit: parent must be the latest main commit (HEAD)
+          if (hasMainCommit && data.sourceCommitHash !== latestMainCommitId) {
+            setCommitError(
+              'Can only extend main branch from its latest commit. Please select a different branch or create a new branch.'
+            );
+            setIsCommitting(false);
+            return;
+          }
+        }
       }
 
       // Collect user selections
@@ -1067,14 +1106,13 @@ export function PendingCommitView({
                       <select
                         className="w-full py-2 px-3 border border-gray-300 rounded-md text-[0.85rem] bg-white text-gray-800 cursor-pointer focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                         value={
-                          data.pendingBranch === 'main'
+                          // Default to 'main' when pendingBranch is undefined or 'main'
+                          data.pendingBranch !== 'branch'
                             ? 'main'
                             : data.pendingBranchName &&
                                 branches.some((b) => b.name === data.pendingBranchName)
                               ? data.pendingBranchName
-                              : data.pendingBranchName
-                                ? '__new__'
-                                : '__new__'
+                              : '__new__'
                         }
                         onChange={(e) => {
                           const value = e.target.value;
@@ -1102,6 +1140,18 @@ export function PendingCommitView({
                           ))}
                         <option value="__new__">+ New branch...</option>
                       </select>
+                      {/* Warning when main branch selection is invalid */}
+                      {isMainBranchInvalid && (
+                        <div className="flex items-start gap-2 mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-amber-700 text-xs">
+                          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                          <span>
+                            {!data.sourceCommitHash
+                              ? 'A root commit on main branch already exists.'
+                              : 'Can only extend main branch from its latest commit.'}
+                            {' '}Please select a different branch.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 

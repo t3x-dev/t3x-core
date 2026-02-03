@@ -38,7 +38,7 @@ export interface LeafPanelSlice {
   leafPanelCommitId?: string;
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
-  addLeafNode: (leafType: LeafType) => Promise<void>;
+  addLeafNode: (leafType: LeafType) => Promise<string | null>;
   removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
 }
 

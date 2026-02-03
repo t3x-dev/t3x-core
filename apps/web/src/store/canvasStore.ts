@@ -578,8 +578,8 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           tags: ['unit'],
           kind: 'unit',
           bridgePrompt: 'prose',
-          // Default to 'main' for first commit, 'branch' for subsequent commits
-          pendingBranch: state.hasMainCommit ? 'branch' : 'main',
+          // Default to 'main' - user can change, commit will validate
+          pendingBranch: 'main',
           pendingBranchName: '',
           commitStatus: 'staging',
           // Pass upstream chat content to pending commit
@@ -716,8 +716,8 @@ export const useCanvasStore = create<CanvasState>((...a) => {
             tags: ['unit'],
             kind: 'unit',
             bridgePrompt: 'prose',
-            // Default to 'main' for first commit, 'branch' for subsequent commits
-            pendingBranch: state.hasMainCommit ? 'branch' : 'main',
+            // Default to 'main' - user can change, commit will validate
+            pendingBranch: 'main',
             pendingBranchName: '',
             commitStatus: 'staging',
             // Pass upstream content to pending commit (use sourceExcerpt)
@@ -1455,10 +1455,14 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         const latestMainCommitId =
           state.latestMainCommitId === oldId ? newId : state.latestMainCommitId;
 
+        // Update openNodeId if the modal is open for the renamed node
+        const openNodeId = state.openNodeId === oldId ? newId : state.openNodeId;
+
         return {
           nodes: updatedNodes,
           edges: updatedEdges,
           latestMainCommitId,
+          openNodeId,
         };
       }),
 

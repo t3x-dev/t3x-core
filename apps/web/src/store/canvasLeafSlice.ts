@@ -19,26 +19,26 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
     const commitId = state.leafPanelCommitId;
     if (!commitId) {
       notify?.('No commit selected', 'error');
-      return;
+      return null;
     }
 
     const unitNode = state.nodes.find((node) => node.id === commitId && node.data.kind === 'unit');
     if (!unitNode) {
       notify?.('Unit not found', 'error');
-      return;
+      return null;
     }
 
     // Get commit hash from unit node - required for creating leaf
     const commitHash = unitNode.data.commitHash;
     if (!commitHash) {
       notify?.('Commit not saved yet. Please commit first before adding output.', 'error');
-      return;
+      return null;
     }
 
     const projectId = state.projectId;
     if (!projectId) {
       notify?.('Project not found', 'error');
-      return;
+      return null;
     }
 
     const leafLabels: Record<LeafType, string> = {
@@ -92,10 +92,12 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
       });
 
       notify?.(`${leafLabels[leafType]} created successfully`, 'success');
+      return leaf.id;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create leaf';
       notify?.(message, 'error');
       // Keep panel open on failure so user can retry
+      return null;
     }
   },
 
