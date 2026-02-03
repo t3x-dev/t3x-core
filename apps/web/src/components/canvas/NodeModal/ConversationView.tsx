@@ -408,12 +408,16 @@ export function ConversationView({
           if (fullResponse) {
             try {
               await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse);
-            } catch {
-              // Failed to save assistant turn - chat still worked
+            } catch (assistantErr) {
+              // Assistant turn save failed - warn user that history may be incomplete
+              console.warn('Failed to save assistant turn:', assistantErr);
+              setChatError('Warning: Assistant response may not be saved to history');
             }
           }
-        } catch {
-          // Failed to save turns - chat still worked
+        } catch (userErr) {
+          // User turn save failed
+          console.warn('Failed to save user turn:', userErr);
+          setChatError('Warning: Message may not be saved to history');
         }
       }
     } catch (err) {

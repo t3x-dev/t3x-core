@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { AnimatedButton } from '@/components/ui/button';
 import {
   Sheet,
@@ -15,13 +16,19 @@ import type { LeafType } from '@/types/nodes';
 import { LEAF_TYPES } from './CanvasNodes';
 
 export function LeafPanel() {
+  const router = useRouter();
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
   const addLeafNode = useCanvasStore((state) => state.addLeafNode);
+  const projectId = useCanvasStore((state) => state.projectId);
 
-  const handleSelectLeaf = (leafType: LeafType) => {
-    addLeafNode(leafType);
+  const handleSelectLeaf = async (leafType: LeafType) => {
+    const leafId = await addLeafNode(leafType);
     closeLeafPanel();
+    // Navigate to leaf detail page after creation
+    if (leafId && projectId) {
+      router.push(`/project/${projectId}/leaf/${leafId}`);
+    }
   };
 
   // Group leaf types by category
