@@ -159,7 +159,8 @@
       "Bash(pnpm dev:webui:*)",
       "Bash(pnpm exec tsc:*)",
       "Bash(git log:*)",
-      "Bash(gh issue view:*)"
+      "Bash(gh issue view:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []
