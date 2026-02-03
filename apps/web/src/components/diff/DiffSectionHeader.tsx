@@ -17,9 +17,21 @@ const variantStyles = {
     text: 'text-muted-foreground',
     badge: 'bg-muted text-muted-foreground',
   },
-  modified: { bg: 'bg-amber-50/50 dark:bg-amber-950/20', text: 'text-amber-700 dark:text-amber-400', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
-  removed: { bg: 'bg-red-50/50 dark:bg-red-950/20', text: 'text-red-700 dark:text-red-400', badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
-  added: { bg: 'bg-green-50/50 dark:bg-green-950/20', text: 'text-green-700 dark:text-green-400', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+  modified: {
+    bg: 'bg-amber-50/50 dark:bg-amber-950/20',
+    text: 'text-amber-700 dark:text-amber-400',
+    badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  },
+  removed: {
+    bg: 'bg-red-50/50 dark:bg-red-950/20',
+    text: 'text-red-700 dark:text-red-400',
+    badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  },
+  added: {
+    bg: 'bg-green-50/50 dark:bg-green-950/20',
+    text: 'text-green-700 dark:text-green-400',
+    badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  },
 };
 
 export function DiffSectionHeader({

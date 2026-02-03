@@ -1,9 +1,12 @@
 'use client';
 
+import { Activity, Badge as BadgeIcon, Clock, Cpu, Search, Zap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -128,8 +131,47 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center bg-muted/30 text-muted-foreground">
-            <p>Execution log will surface here once the project runs.</p>
+          <div className="flex flex-1 items-center justify-center bg-muted/30 p-8">
+            <Card className="w-full max-w-lg">
+              <CardContent className="p-6">
+                <div className="mb-4 text-center">
+                  <h3 className="text-lg font-semibold">Execution Monitor</h3>
+                  <p className="text-sm text-muted-foreground">Coming in v2.0</p>
+                </div>
+
+                <div className="space-y-3 opacity-60">
+                  <div className="flex items-center gap-3 rounded-md border p-3">
+                    <Activity className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-sm">Agent started</span>
+                    <Badge
+                      variant="outline"
+                      className="border-green-500/30 bg-green-500/10 text-green-600"
+                    >
+                      running
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-md border p-3">
+                    <Cpu className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-sm">LLM call: gpt-4</span>
+                    <Badge variant="secondary">500 tokens</Badge>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-md border p-3">
+                    <Search className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-sm">Tool: search_docs</span>
+                    <Badge variant="outline">1.2s</Badge>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-md border p-3">
+                    <Zap className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-sm">Response generated</span>
+                    <Badge>completed</Badge>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  Live trace &middot; Token usage &middot; Latency metrics &middot; Step replay
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}

@@ -42,7 +42,9 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
   return (
     <div
       className={`border rounded-lg p-4 ${
-        isResolved ? 'border-green-300 bg-green-50' : 'border-yellow-300 bg-yellow-50'
+        isResolved
+          ? 'border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+          : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30'
       }`}
     >
       {/* Diff visualization */}
@@ -61,9 +63,9 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
         />
         <div className="flex-1">
           <div className="font-medium">Keep source</div>
-          <div className="text-sm text-gray-600">{pair.source.text}</div>
+          <div className="text-sm text-muted-foreground">{pair.source.text}</div>
           {pair.sourceConstraints.length > 0 && (
-            <div className="text-xs text-blue-600 mt-1">
+            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
               Constraints: {pair.sourceConstraints.map((c) => c.value).join(', ')}
             </div>
           )}
@@ -81,9 +83,9 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
         />
         <div className="flex-1">
           <div className="font-medium">Keep target</div>
-          <div className="text-sm text-gray-600">{pair.target.text}</div>
+          <div className="text-sm text-muted-foreground">{pair.target.text}</div>
           {pair.targetConstraints.length > 0 && (
-            <div className="text-xs text-blue-600 mt-1">
+            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
               Constraints: {pair.targetConstraints.map((c) => c.value).join(', ')}
             </div>
           )}

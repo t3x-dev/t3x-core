@@ -17,8 +17,8 @@ import { type MouseEvent, useEffect, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedButton, Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -195,9 +195,7 @@ export default function SemanticLedgerPage() {
               <Button variant="ghost" size="icon" onClick={exitSelectionMode}>
                 <X className="h-4 w-4" />
               </Button>
-              <span className="text-lg font-medium">
-                {selectedIds.size} selected
-              </span>
+              <span className="text-lg font-medium">{selectedIds.size} selected</span>
               <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
                 {selectedIds.size === projects.length ? 'Deselect All' : 'Select All'}
               </Button>
@@ -290,7 +288,11 @@ export default function SemanticLedgerPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground truncate">{project.description}</p>
+                        {project.description && (
+                          <p className="text-sm text-muted-foreground truncate">
+                            {project.description}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <div className="hidden sm:flex items-center gap-3">
@@ -332,9 +334,11 @@ export default function SemanticLedgerPage() {
                       <CardContent className="flex items-center gap-4 p-4">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {project.description}
-                          </p>
+                          {project.description && (
+                            <p className="text-sm text-muted-foreground truncate">
+                              {project.description}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-3 text-sm text-muted-foreground">

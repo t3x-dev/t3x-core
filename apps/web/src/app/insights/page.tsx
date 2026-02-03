@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { CommitV4, Project } from '@/lib/api';
 import { listCommitsV4, listProjects } from '@/lib/api';
@@ -142,16 +143,11 @@ export default function InsightsPage() {
             <p className="text-sm text-muted-foreground">Semantic commits across all projects.</p>
           </div>
           {isEmpty ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <GitCommit className="mb-4 h-12 w-12 text-muted-foreground/40" />
-                <h3 className="text-lg font-medium">No commits yet</h3>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  Create commits to see insights here. Start by adding a conversation and extracting
-                  knowledge into a commit.
-                </p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={GitCommit}
+              title="No commits yet"
+              description="Create commits to see insights here. Start by adding a conversation and extracting knowledge into a commit."
+            />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {entries.map((entry) => (
@@ -163,15 +159,11 @@ export default function InsightsPage() {
 
         <TabsContent value="latest" className="mt-6">
           {isEmpty ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <Clock3 className="mb-4 h-12 w-12 text-muted-foreground/40" />
-                <h3 className="text-lg font-medium">No activity yet</h3>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  Create commits to see a timeline of activity here.
-                </p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={Clock3}
+              title="No activity yet"
+              description="Create commits to see a timeline of activity here."
+            />
           ) : (
             <Card>
               <CardHeader className="pb-3">

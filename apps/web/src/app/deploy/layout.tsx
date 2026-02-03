@@ -34,7 +34,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
       <header className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5" />
-          <h1 className="text-2xl font-bold tracking-tight">Agent Optimiser</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Deploy &amp; Monitor</h1>
         </div>
         <div>
           {loading ? (

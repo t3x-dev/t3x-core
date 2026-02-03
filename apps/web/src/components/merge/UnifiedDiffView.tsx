@@ -10,6 +10,8 @@
  * - Target-only sentences
  */
 
+import { CheckCircle } from 'lucide-react';
+import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -131,9 +133,11 @@ export function UnifiedDiffView({
         similarPairs.length === 0 &&
         onlyInSource.length === 0 &&
         onlyInTarget.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            No differences found between commits.
-          </div>
+          <EmptyStateInline
+            icon={CheckCircle}
+            message="Documents are identical -- no differences found between commits."
+            className="py-12"
+          />
         )}
     </div>
   );
