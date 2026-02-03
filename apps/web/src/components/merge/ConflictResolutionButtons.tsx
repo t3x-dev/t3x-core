@@ -129,7 +129,7 @@ export function ConflictResolutionButtons({
             {btn.icon}
             <span>{btn.label}</span>
             {enableKeyboard && (
-              <kbd className="ml-1 text-[0.65rem] font-mono bg-muted px-1 rounded opacity-60">
+              <kbd className="ml-1 text-[0.65rem] font-mono bg-muted/50 px-1 rounded opacity-80">
                 {btn.shortcut}
               </kbd>
             )}

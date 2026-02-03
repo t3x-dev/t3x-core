@@ -22,7 +22,7 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
     <div className="border rounded-lg p-4">
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-medium">{title}</h3>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-muted-foreground">
           ({keptCount} / {candidates.length}) keeping
         </span>
       </div>
@@ -37,11 +37,11 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
               className="mt-1"
             />
             <div className="flex-1">
-              <div className={candidate.keep ? '' : 'text-gray-400 line-through'}>
+              <div className={candidate.keep ? '' : 'text-muted-foreground/70 line-through'}>
                 {candidate.sentence.text}
               </div>
               {candidate.constraints.length > 0 && (
-                <div className="text-xs text-blue-600 mt-1">
+                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                   Constraints: {candidate.constraints.map((c) => c.value).join(', ')}
                 </div>
               )}

@@ -62,10 +62,15 @@ export function SourceContextModal() {
 
           {!contextLoading && !contextData && contextSentence && (
             <div className="text-center py-12 text-muted-foreground">
-              <p>Could not load conversation context.</p>
-              <p className="mt-2 text-sm font-mono break-all">
-                Turn: {contextSentence.source.turn_hash}
+              <p>Source context unavailable</p>
+              <p className="mt-1 text-sm">
+                The original conversation context for this sentence could not be loaded.
               </p>
+              {contextSentence.source.turn_hash && (
+                <p className="mt-2 text-xs text-muted-foreground/60">
+                  Ref: {contextSentence.source.turn_hash.slice(0, 16)}...
+                </p>
+              )}
             </div>
           )}
         </div>

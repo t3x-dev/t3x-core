@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AnimatedButton } from '@/components/ui/button';
 import {
@@ -21,10 +22,10 @@ export function LeafPanel() {
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
   const addLeafNode = useCanvasStore((state) => state.addLeafNode);
   const projectId = useCanvasStore((state) => state.projectId);
+  const leafCreating = useCanvasStore((state) => state.leafCreating);
 
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
-    closeLeafPanel();
     // Navigate to leaf detail page after creation
     if (leafId && projectId) {
       router.push(`/project/${projectId}/leaf/${leafId}`);
@@ -64,9 +65,14 @@ export function LeafPanel() {
                         variant="canvas-outline"
                         className="h-auto w-full justify-start gap-3 px-4 py-3"
                         onClick={() => handleSelectLeaf(type)}
+                        disabled={leafCreating}
                       >
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-900/30">
-                          <Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          {leafCreating ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
                         </div>
                         <span className="font-medium">{label}</span>
                       </AnimatedButton>
@@ -87,9 +93,14 @@ export function LeafPanel() {
                         variant="canvas-outline"
                         className="h-auto w-full justify-start gap-3 px-4 py-3"
                         onClick={() => handleSelectLeaf(type)}
+                        disabled={leafCreating}
                       >
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30">
-                          <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          {leafCreating ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+                          ) : (
+                            <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          )}
                         </div>
                         <span className="font-medium">{label}</span>
                       </AnimatedButton>

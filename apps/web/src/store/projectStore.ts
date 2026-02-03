@@ -43,13 +43,19 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString();
 };
 
+const deriveStatus = (project: api.Project): 'draft' | 'active' | 'paused' => {
+  if ((project.commits_count || 0) > 0) return 'active';
+  if ((project.conversations_count || 0) > 0) return 'draft';
+  return 'draft';
+};
+
 const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
   id: project.project_id,
   name: project.name,
-  description: (project.metadata?.description as string) || 'Project created via API',
+  description: (project.metadata?.description as string) || '',
   updatedAt: formatDate(project.created_at),
   owner: 'You',
-  status: 'active',
+  status: deriveStatus(project),
   nodes: project.turns_count || 0,
   drafts: project.conversations_count || 0,
   commitsCount: project.commits_count || 0,

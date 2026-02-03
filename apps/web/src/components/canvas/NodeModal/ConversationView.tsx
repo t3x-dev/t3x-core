@@ -620,15 +620,17 @@ export function ConversationView({
               onScroll={handleChatScroll}
             >
               {isChatLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center gap-2">
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-2">
                   <Loader2 size={48} strokeWidth={1} className="animate-spin" />
-                  <p className="text-base font-medium text-gray-500">Loading conversation...</p>
+                  <p className="text-base font-medium text-muted-foreground">
+                    Loading conversation...
+                  </p>
                 </div>
               ) : chatMessages.length === 0 && !isChatStreaming ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center gap-2">
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-2">
                   <MessageSquarePlus size={48} strokeWidth={1} />
-                  <p className="text-base font-medium text-gray-500">No messages yet</p>
-                  <span className="text-[0.85rem] text-gray-400">
+                  <p className="text-base font-medium text-foreground">No messages yet</p>
+                  <span className="text-[0.85rem] text-muted-foreground">
                     Type a message below to start the conversation
                   </span>
                 </div>

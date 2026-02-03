@@ -1,8 +1,9 @@
 'use client';
 
-import { Bot, GitCommit, GitCompare, Loader2, User } from 'lucide-react';
+import { Bot, GitCommit, GitCompare, History, Loader2, User } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
+import { EmptyStateInline } from '@/components/ui/empty-state';
 import {
   Sheet,
   SheetContent,
@@ -157,9 +158,10 @@ export function CommitHistoryPanel({
             )}
 
             {!loading && !error && history.length === 0 && (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                No commits found
-              </div>
+              <EmptyStateInline
+                icon={History}
+                message="No commits in this history chain. Commits will appear here once created."
+              />
             )}
 
             {!loading && !error && history.length > 0 && (

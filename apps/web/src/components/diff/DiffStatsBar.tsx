@@ -10,10 +10,30 @@ interface DiffStatsBarProps {
 
 export function DiffStatsBar({ identical, modified, added, removed, onJump }: DiffStatsBarProps) {
   const items = [
-    { key: 'identical', label: 'Identical', count: identical, color: 'bg-muted text-muted-foreground' },
-    { key: 'modified', label: 'Modified', count: modified, color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
-    { key: 'added', label: 'Added', count: added, color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
-    { key: 'removed', label: 'Removed', count: removed, color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
+    {
+      key: 'identical',
+      label: 'Identical',
+      count: identical,
+      color: 'bg-muted text-muted-foreground',
+    },
+    {
+      key: 'modified',
+      label: 'Modified',
+      count: modified,
+      color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    },
+    {
+      key: 'added',
+      label: 'Added',
+      count: added,
+      color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    },
+    {
+      key: 'removed',
+      label: 'Removed',
+      count: removed,
+      color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+    },
   ];
 
   return (

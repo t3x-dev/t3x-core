@@ -1147,8 +1147,8 @@ export function PendingCommitView({
                           <span>
                             {!data.sourceCommitHash
                               ? 'A root commit on main branch already exists.'
-                              : 'Can only extend main branch from its latest commit.'}
-                            {' '}Please select a different branch.
+                              : 'Can only extend main branch from its latest commit.'}{' '}
+                            Please select a different branch.
                           </span>
                         </div>
                       )}

@@ -7,6 +7,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
   // Initial state
   leafPanelOpen: false,
   leafPanelCommitId: undefined,
+  leafCreating: false,
 
   // Leaf panel methods
   openLeafPanel: (commitId) => set({ leafPanelOpen: true, leafPanelCommitId: commitId }),
@@ -52,6 +53,8 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
       eval: 'Eval',
     };
 
+    set({ leafCreating: true });
+
     try {
       // Call API to create leaf
       const leaf = await api.createLeaf({
@@ -64,7 +67,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
       });
 
       // Close panel only after API call succeeds
-      set({ leafPanelOpen: false, leafPanelCommitId: undefined });
+      set({ leafPanelOpen: false, leafPanelCommitId: undefined, leafCreating: false });
 
       // Embed leaf into parent commit node's data.leaves[]
       set((state) => {
@@ -96,6 +99,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create leaf';
       notify?.(message, 'error');
+      set({ leafCreating: false });
       // Keep panel open on failure so user can retry
       return null;
     }
