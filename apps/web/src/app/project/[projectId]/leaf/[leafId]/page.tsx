@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Button } from '@/components/ui/button';
@@ -148,6 +148,24 @@ export default function LeafDetailPage() {
       .then(setCommitData)
       .catch(() => {});
   }, [leaf?.commit_hash]);
+
+  // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
+  // This is critical: without memoization, .map() creates a new array on every render,
+  // which triggers useEffect/useMemo in child component causing UI jumping
+  const sentences = useMemo((): SentenceWithSource[] => {
+    if (!commitData) return [];
+    return commitData.content.sentences.map((s) => ({
+      id: s.id,
+      text: s.text,
+      source: s.source_ref
+        ? {
+            turn_hash: s.source_ref.turn_hash,
+            start_char: s.source_ref.start_char,
+            end_char: s.source_ref.end_char,
+          }
+        : undefined,
+    }));
+  }, [commitData]);
 
   // Handle constraint update (with optimistic update to prevent UI jumping)
   const handleUpdateConstraints = async (constraints: Constraint[], optimisticLeaf?: Leaf) => {
@@ -448,26 +466,14 @@ export default function LeafDetailPage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
           {/* Source Context with constraint highlights + text selection */}
-          {commitData && (
+          {commitData && sentences.length > 0 && (
             <section className="rounded-lg border bg-card p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <FileText className="h-4 w-4" />
                 Source Content &amp; Constraints
               </h3>
               <LeafConstraintSourceContext
-                sentences={commitData.content.sentences.map(
-                  (s): SentenceWithSource => ({
-                    id: s.id,
-                    text: s.text,
-                    source: s.source_ref
-                      ? {
-                          turn_hash: s.source_ref.turn_hash,
-                          start_char: s.source_ref.start_char,
-                          end_char: s.source_ref.end_char,
-                        }
-                      : undefined,
-                  })
-                )}
+                sentences={sentences}
                 constraints={leaf.constraints}
                 onAdd={handleAddConstraintFromSource}
                 onRemove={handleRemoveConstraint}
