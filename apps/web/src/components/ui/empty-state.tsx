@@ -23,6 +23,11 @@ interface EmptyStateProps {
     label: string;
     onClick: () => void;
   };
+  /** Help link for external documentation */
+  helpLink?: {
+    label: string;
+    href: string;
+  };
   /** Additional CSS classes */
   className?: string;
 }
@@ -45,6 +50,7 @@ export function EmptyState({
   description,
   action,
   secondaryAction,
+  helpLink,
   className,
 }: EmptyStateProps) {
   return (
@@ -88,6 +94,19 @@ export function EmptyState({
             </Button>
           )}
         </motion.div>
+      )}
+
+      {/* Help Link */}
+      {helpLink && (
+        <motion.a
+          variants={fadeIn}
+          href={helpLink.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 text-sm text-primary hover:underline"
+        >
+          {helpLink.label}
+        </motion.a>
       )}
     </motion.div>
   );
