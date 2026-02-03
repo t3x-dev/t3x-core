@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { hungarian, buildSimilarityMatrix } from '../../diff/hungarian';
+import { buildSimilarityMatrix, hungarian } from '../../diff/hungarian';
 
 describe('hungarian', () => {
   describe('basic matching', () => {

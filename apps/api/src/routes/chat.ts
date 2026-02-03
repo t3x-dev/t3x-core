@@ -4,8 +4,9 @@
  * POST /v1/chat - Non-streaming chat
  * GET  /v1/chat/providers - List available providers
  */
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
+
 import { Hono } from 'hono';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 // Create proxy agent if proxy is configured

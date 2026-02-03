@@ -10,11 +10,7 @@ import type { RuleOperator } from '../schemas/eval-rules.js';
 /**
  * Operator function signature
  */
-export type OperatorFn = (
-  actual: unknown,
-  expected: unknown,
-  options?: OperatorOptions
-) => boolean;
+export type OperatorFn = (actual: unknown, expected: unknown, options?: OperatorOptions) => boolean;
 
 /**
  * Options for operators
@@ -157,7 +153,7 @@ function regex(actual: unknown, _expected: unknown, options?: OperatorOptions): 
  */
 function range(actual: unknown, _expected: unknown, options?: OperatorOptions): boolean {
   const num = Number(actual);
-  if (isNaN(num)) {
+  if (Number.isNaN(num)) {
     return false;
   }
 

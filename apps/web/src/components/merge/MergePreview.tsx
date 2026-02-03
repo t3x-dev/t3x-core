@@ -7,7 +7,7 @@
  * commit will contain.
  */
 
-import { ChevronUp, ChevronDown, FileText, Layers, Edit3 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit3, FileText, Layers } from 'lucide-react';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
 interface MergePreviewProps {
@@ -81,10 +81,7 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
                   // Check if this is a merged/edited sentence
                   const isMerged = sentence.id.startsWith('merged-');
                   return (
-                    <div
-                      key={sentence.id || idx}
-                      className="flex items-start gap-3 text-sm"
-                    >
+                    <div key={sentence.id || idx} className="flex items-start gap-3 text-sm">
                       <span className="shrink-0 w-6 text-muted-foreground text-right">
                         {idx + 1}.
                       </span>

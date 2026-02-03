@@ -1,6 +1,6 @@
 'use client';
 
-import { XCircle, AlertTriangle, Lightbulb } from 'lucide-react';
+import { AlertTriangle, Lightbulb, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -28,12 +28,8 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
   const hasSuggestion = suggestion !== undefined && suggestion !== null;
 
   // Normalize suggestion to string
-  const suggestionText = typeof suggestion === 'string'
-    ? suggestion
-    : suggestion?.content;
-  const suggestionConfidence = typeof suggestion === 'object'
-    ? suggestion?.confidence
-    : undefined;
+  const suggestionText = typeof suggestion === 'string' ? suggestion : suggestion?.content;
+  const suggestionConfidence = typeof suggestion === 'object' ? suggestion?.confidence : undefined;
 
   if (violations.length === 0 && !hasSuggestion) {
     return null;
@@ -109,9 +105,7 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-blue-600">
-                      Prompt Improvement
-                    </span>
+                    <span className="text-sm font-medium text-blue-600">Prompt Improvement</span>
                     {suggestionConfidence !== undefined && (
                       <span className="text-xs text-muted-foreground">
                         {Math.round(suggestionConfidence * 100)}% confidence

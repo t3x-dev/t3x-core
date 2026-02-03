@@ -13,13 +13,7 @@ function LogoIcon() {
   return (
     <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient
-          id="logoGradient"
-          cx="32"
-          cy="32"
-          r="28"
-          gradientUnits="userSpaceOnUse"
-        >
+        <radialGradient id="logoGradient" cx="32" cy="32" r="28" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#2563EB" />
           <stop offset="12%" stopColor="#2563EB" />
           <stop offset="40%" stopColor="#FB923C" />
@@ -118,7 +112,11 @@ function NavItem({ href, label, isActive, children, external, disabled }: NavIte
             {children}
           </a>
         ) : disabled ? (
-          <Button variant="ghost" className={cn(navItemClass, 'cursor-not-allowed opacity-50')} disabled>
+          <Button
+            variant="ghost"
+            className={cn(navItemClass, 'cursor-not-allowed opacity-50')}
+            disabled
+          >
             {children}
           </Button>
         ) : (
@@ -160,10 +158,7 @@ export function Sidebar() {
                 // Simulate Cmd+K keypress to open command palette
                 document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
               }}
-              className={cn(
-                navItemClass,
-                'mb-4 bg-muted/50 ring-1 ring-border/50'
-              )}
+              className={cn(navItemClass, 'mb-4 bg-muted/50 ring-1 ring-border/50')}
               aria-label="Open command palette"
             >
               <Command className="h-4 w-4" />

@@ -10,12 +10,12 @@
  * - Merge preview before commit
  */
 
-import { useEffect, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
-import { UnifiedDiffView } from './UnifiedDiffView';
 import { MergePreview } from './MergePreview';
 import { SourceContextModal } from './SourceContextModal';
+import { UnifiedDiffView } from './UnifiedDiffView';
 
 interface MergeWorkspaceProps {
   projectId: string;
@@ -137,10 +137,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         </div>
 
         {/* Preview Panel */}
-        <MergePreview
-          expanded={previewExpanded}
-          onToggle={togglePreview}
-        />
+        <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
       </div>
 
       {/* Source Context Modal */}

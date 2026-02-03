@@ -5,11 +5,7 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // Import after mocking
-import {
-  clearTurnContextCache,
-  fetchTurnContextBatch,
-  fetchTurnContextCached,
-} from '@/lib/api';
+import { clearTurnContextCache, fetchTurnContextBatch, fetchTurnContextCached } from '@/lib/api';
 
 describe('Turn Context Cache', () => {
   beforeEach(() => {
@@ -83,7 +79,11 @@ describe('Turn Context Cache', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ success: true, data: { ...mockTurnContextData, context: ['different'] } }),
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { ...mockTurnContextData, context: ['different'] },
+            }),
         });
 
       // Different options should result in different cache entries
@@ -99,11 +99,25 @@ describe('Turn Context Cache', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ success: true, data: { ...mockTurnContextData, target_turn: { ...mockTurnContextData.target_turn, turn_hash: 'sha256:a' } } }),
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                ...mockTurnContextData,
+                target_turn: { ...mockTurnContextData.target_turn, turn_hash: 'sha256:a' },
+              },
+            }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ success: true, data: { ...mockTurnContextData, target_turn: { ...mockTurnContextData.target_turn, turn_hash: 'sha256:b' } } }),
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                ...mockTurnContextData,
+                target_turn: { ...mockTurnContextData.target_turn, turn_hash: 'sha256:b' },
+              },
+            }),
         });
 
       const results = await fetchTurnContextBatch(['sha256:a', 'sha256:b']);

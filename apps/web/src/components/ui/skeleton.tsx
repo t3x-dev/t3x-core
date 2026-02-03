@@ -4,17 +4,11 @@ import { cn } from '@/lib/utils';
  * Skeleton component for loading states
  * Provides a shimmer animation to indicate loading content
  */
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       data-slot="skeleton"
-      className={cn(
-        'animate-pulse rounded-md bg-muted',
-        className
-      )}
+      className={cn('animate-pulse rounded-md bg-muted', className)}
       {...props}
     />
   );
@@ -23,10 +17,7 @@ function Skeleton({
 /**
  * Skeleton with shimmer effect (more premium feel)
  */
-function SkeletonShimmer({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+function SkeletonShimmer({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       data-slot="skeleton-shimmer"
@@ -85,12 +76,7 @@ function SkeletonCircle({
     lg: 'size-14',
   };
 
-  return (
-    <Skeleton
-      className={cn('rounded-full', sizeClasses[size], className)}
-      {...props}
-    />
-  );
+  return <Skeleton className={cn('rounded-full', sizeClasses[size], className)} {...props} />;
 }
 
 /**
@@ -99,10 +85,7 @@ function SkeletonCircle({
 function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        'rounded-lg border border-border bg-card p-4 space-y-3',
-        className
-      )}
+      className={cn('rounded-lg border border-border bg-card p-4 space-y-3', className)}
       {...props}
     >
       <div className="flex items-center gap-3">
@@ -148,10 +131,7 @@ function SkeletonProject({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 function SkeletonNode({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        'w-72 rounded-2xl border-2 border-border bg-card p-4 space-y-3',
-        className
-      )}
+      className={cn('w-72 rounded-2xl border-2 border-border bg-card p-4 space-y-3', className)}
       {...props}
     >
       {/* Header */}

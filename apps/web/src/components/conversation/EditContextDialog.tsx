@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { usePinsStore } from '@/store/pinsStore';
 
 interface EditContextDialogProps {
@@ -38,7 +38,7 @@ export function EditContextDialog({
     if (open) {
       if (currentSelection === null) {
         setUseAll(true);
-        setSelection(new Set(pins.map(p => p.id)));
+        setSelection(new Set(pins.map((p) => p.id)));
       } else {
         setUseAll(false);
         setSelection(new Set(currentSelection));
@@ -48,7 +48,7 @@ export function EditContextDialog({
 
   const handleToggle = (pinId: string) => {
     setUseAll(false);
-    setSelection(prev => {
+    setSelection((prev) => {
       const next = new Set(prev);
       if (next.has(pinId)) {
         next.delete(pinId);
@@ -61,7 +61,7 @@ export function EditContextDialog({
 
   const handleUseAll = () => {
     setUseAll(true);
-    setSelection(new Set(pins.map(p => p.id)));
+    setSelection(new Set(pins.map((p) => p.id)));
   };
 
   const handleSave = () => {
@@ -69,8 +69,8 @@ export function EditContextDialog({
     onOpenChange(false);
   };
 
-  const convPins = pins.filter(p => p.type === 'conversation');
-  const leafPins = pins.filter(p => p.type === 'leaf');
+  const convPins = pins.filter((p) => p.type === 'conversation');
+  const leafPins = pins.filter((p) => p.type === 'leaf');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,10 +82,7 @@ export function EditContextDialog({
         <div className="space-y-4 py-4">
           {/* Use all option */}
           <div className="flex items-center gap-2">
-            <Checkbox
-              checked={useAll}
-              onCheckedChange={() => handleUseAll()}
-            />
+            <Checkbox checked={useAll} onCheckedChange={() => handleUseAll()} />
             <span>Use all pinned items (default)</span>
           </div>
 
@@ -94,7 +91,7 @@ export function EditContextDialog({
             {convPins.length > 0 && (
               <div className="mb-4">
                 <div className="text-sm font-medium mb-2">Conversations</div>
-                {convPins.map(pin => (
+                {convPins.map((pin) => (
                   <div key={pin.id} className="flex items-center gap-2 py-1">
                     <Checkbox
                       checked={selection.has(pin.id)}
@@ -111,7 +108,7 @@ export function EditContextDialog({
             {leafPins.length > 0 && (
               <div>
                 <div className="text-sm font-medium mb-2">Leaves</div>
-                {leafPins.map(pin => (
+                {leafPins.map((pin) => (
                   <div key={pin.id} className="flex items-center gap-2 py-1">
                     <Checkbox
                       checked={selection.has(pin.id)}

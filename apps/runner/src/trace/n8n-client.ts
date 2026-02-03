@@ -6,7 +6,7 @@
  */
 
 import pino from 'pino';
-import type { N8nExecution, N8nClientConfig, N8nApiError } from './types.js';
+import type { N8nApiError, N8nClientConfig, N8nExecution } from './types.js';
 
 const logger = pino({
   transport: {

@@ -217,11 +217,13 @@ describe('computeCommitV3Hash', () => {
       const hash2 = computeCommitV3Hash({
         ...baseCommit,
         content: {
-          sentences: [{
-            id: 's1',
-            text: 'Hello',
-            source: { turn_hash: 'sha256:abc', start_char: 0, end_char: 5 },
-          }],
+          sentences: [
+            {
+              id: 's1',
+              text: 'Hello',
+              source: { turn_hash: 'sha256:abc', start_char: 0, end_char: 5 },
+            },
+          ],
           constraints: [],
         },
       });
@@ -238,12 +240,14 @@ describe('computeCommitV3Hash', () => {
         ...baseCommit,
         content: {
           sentences: [],
-          constraints: [{
-            type: 'require',
-            id: 'c1',
-            value: 'test',
-            match: 'exact',
-          }],
+          constraints: [
+            {
+              type: 'require',
+              id: 'c1',
+              value: 'test',
+              match: 'exact',
+            },
+          ],
         },
       });
 

@@ -13,10 +13,9 @@ import { sha256 } from '../common/hash';
 import type { NLPAnalysis, NLPEntity, NLPProvider, NLPToken } from '../providers/nlp';
 import { createPolarityRuleEngine, type PolarityRuleEngine } from './polarityRules';
 import {
-  createEmptyRingOutput,
   type AnchorCandidate,
-  type AnchorSource,
   type AnchorType,
+  createEmptyRingOutput,
   type Facet,
   type Keyword,
   type Polarity,
@@ -303,7 +302,8 @@ const PHRASE_PATTERNS: PhrasePattern[] = [
   // Money: $5000, $1,234.56, USD 100, 100 USD, EUR 50
   {
     type: 'money',
-    pattern: /(?:\$[\d,]+(?:\.\d{1,2})?)|(?:(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD)\s*[\d,]+(?:\.\d{1,2})?)|(?:[\d,]+(?:\.\d{1,2})?\s*(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD))/gi,
+    pattern:
+      /(?:\$[\d,]+(?:\.\d{1,2})?)|(?:(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD)\s*[\d,]+(?:\.\d{1,2})?)|(?:[\d,]+(?:\.\d{1,2})?\s*(?:USD|EUR|GBP|JPY|CNY|KRW|SGD|HKD|AUD|CAD))/gi,
     confidence: 0.95,
   },
   // Percent: 15%, 3.5%, 100%
@@ -321,7 +321,8 @@ const PHRASE_PATTERNS: PhrasePattern[] = [
   // Date patterns: January 2025, 2025-01-01, 01/15/2025, Dec 31, 2025
   {
     type: 'date',
-    pattern: /(?:(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,?\s+\d{4})?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}\/\d{1,2}\/\d{4})/gi,
+    pattern:
+      /(?:(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,?\s+\d{4})?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}\/\d{1,2}\/\d{4})/gi,
     confidence: 0.9,
   },
   // Number: bare numbers like 123, 5.5, 1000 (checked last to avoid conflicts)
@@ -662,9 +663,7 @@ export class RingExtractor {
 
     // Helper: check if a range overlaps with any covered range
     const isOverlapping = (start: number, end: number): boolean => {
-      return coveredRanges.some(
-        (range) => !(end <= range.start || start >= range.end)
-      );
+      return coveredRanges.some((range) => !(end <= range.start || start >= range.end));
     };
 
     // Helper: mark a range as covered

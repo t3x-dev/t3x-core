@@ -2,9 +2,9 @@
  * Pins Store Unit Tests
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { usePinsStore } from '@/store/pinsStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/lib/api';
+import { usePinsStore } from '@/store/pinsStore';
 
 // Mock the API module
 vi.mock('@/lib/api', () => ({

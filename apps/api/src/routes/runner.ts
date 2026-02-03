@@ -12,15 +12,15 @@
 import {
   AgentConfigSchema,
   AgentInputSchema,
-  RunRecordSchema,
-  RuleSchema,
+  DEFAULT_RULES,
+  type EvalRules,
   EvalRulesSchema,
   evalEngine,
   observer,
   parseRulesFromLeaf,
-  DEFAULT_RULES,
+  RuleSchema,
   type RunRecord,
-  type EvalRules,
+  RunRecordSchema,
 } from '@t3x/runner';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -325,4 +325,3 @@ runnerRoutes.post('/runner/webhook/run', async (c) => {
     return c.json({ success: false, error: String(error) }, 500);
   }
 });
-

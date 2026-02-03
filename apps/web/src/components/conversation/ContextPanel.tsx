@@ -1,7 +1,17 @@
 'use client';
 
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  Loader2,
+  Settings2,
+} from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Settings2, Download, FileJson, FileText, Copy, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,7 +21,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { usePinsStore } from '@/store/pinsStore';
 import { EditContextDialog } from './EditContextDialog';
-import { toast } from 'sonner';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -50,7 +59,8 @@ export function ContextPanel({
       // Get filename from Content-Disposition header or generate one
       const disposition = response.headers.get('Content-Disposition');
       const filenameMatch = disposition?.match(/filename="(.+)"/);
-      const filename = filenameMatch?.[1] ?? `${conversationId}-context.${format === 'markdown' ? 'md' : 'json'}`;
+      const filename =
+        filenameMatch?.[1] ?? `${conversationId}-context.${format === 'markdown' ? 'md' : 'json'}`;
 
       // Download the file
       const blob = await response.blob();
@@ -64,7 +74,7 @@ export function ContextPanel({
       URL.revokeObjectURL(url);
 
       toast.success(`Context exported as ${format.toUpperCase()}`);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to export context');
     } finally {
       setIsExporting(false);
@@ -88,7 +98,7 @@ export function ContextPanel({
       } else {
         throw new Error('Invalid response');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to copy context');
     } finally {
       setIsExporting(false);
@@ -96,12 +106,13 @@ export function ContextPanel({
   };
 
   // Determine active pins
-  const activePins = contextConfig?.selected_pin_ids === null
-    ? pins // all pins
-    : pins.filter(p => contextConfig?.selected_pin_ids?.includes(p.id));
+  const activePins =
+    contextConfig?.selected_pin_ids === null
+      ? pins // all pins
+      : pins.filter((p) => contextConfig?.selected_pin_ids?.includes(p.id));
 
-  const convPins = activePins.filter(p => p.type === 'conversation');
-  const leafPins = activePins.filter(p => p.type === 'leaf');
+  const convPins = activePins.filter((p) => p.type === 'conversation');
+  const leafPins = activePins.filter((p) => p.type === 'leaf');
 
   return (
     <div className="border-r bg-muted/30 w-64 flex flex-col">
@@ -111,11 +122,7 @@ export function ContextPanel({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
+          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           <span className="font-medium text-sm">Context</span>
         </div>
         <div className="flex items-center gap-1">
@@ -180,10 +187,8 @@ export function ContextPanel({
           {/* Pinned conversations */}
           {convPins.length > 0 && (
             <div>
-              <div className="text-xs text-muted-foreground mb-1">
-                Conversations
-              </div>
-              {convPins.map(pin => (
+              <div className="text-xs text-muted-foreground mb-1">Conversations</div>
+              {convPins.map((pin) => (
                 <div key={pin.id} className="flex items-center gap-1">
                   <span className="text-amber-500">📌</span>
                   <span className="truncate">{pin.ref_id}</span>
@@ -195,10 +200,8 @@ export function ContextPanel({
           {/* Pinned leaves */}
           {leafPins.length > 0 && (
             <div>
-              <div className="text-xs text-muted-foreground mb-1">
-                Leaves
-              </div>
-              {leafPins.map(pin => (
+              <div className="text-xs text-muted-foreground mb-1">Leaves</div>
+              {leafPins.map((pin) => (
                 <div key={pin.id} className="flex items-center gap-1">
                   <span className="text-amber-500">📌</span>
                   <span className="truncate">{pin.ref_id}</span>

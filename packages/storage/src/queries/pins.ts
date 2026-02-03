@@ -11,8 +11,8 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import { generatePinId } from '@t3x/core';
 import type { CreatePinInput, Pin, PinType } from '@t3x/core';
+import { generatePinId } from '@t3x/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type PinRecord, pins } from '../schema-v4';
@@ -62,11 +62,7 @@ export async function createPin(db: AnyDB, input: CreatePinInput): Promise<Pin> 
  * Find a Pin by ID
  */
 export async function findPinById(db: AnyDB, id: string): Promise<Pin | null> {
-  const [row] = await db
-    .select()
-    .from(pins)
-    .where(eq(pins.id, id))
-    .limit(1);
+  const [row] = await db.select().from(pins).where(eq(pins.id, id)).limit(1);
 
   return row ? rowToPin(row) : null;
 }
@@ -109,13 +105,7 @@ export async function findPinByRef(
   const [row] = await db
     .select()
     .from(pins)
-    .where(
-      and(
-        eq(pins.projectId, projectId),
-        eq(pins.type, type),
-        eq(pins.refId, refId)
-      )
-    )
+    .where(and(eq(pins.projectId, projectId), eq(pins.type, type), eq(pins.refId, refId)))
     .limit(1);
 
   return row ? rowToPin(row) : null;
@@ -171,13 +161,7 @@ export async function deletePinByRef(
 ): Promise<boolean> {
   const result = await db
     .delete(pins)
-    .where(
-      and(
-        eq(pins.projectId, projectId),
-        eq(pins.type, type),
-        eq(pins.refId, refId)
-      )
-    )
+    .where(and(eq(pins.projectId, projectId), eq(pins.type, type), eq(pins.refId, refId)))
     .returning();
 
   return result.length > 0;

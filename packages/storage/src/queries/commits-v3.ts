@@ -96,7 +96,7 @@ export class ParentNotFoundError extends Error {
   ) {
     super(
       `Parent commits not found: ${missingParents.join(', ')}. ` +
-      `Use { strictParents: false } for import mode.`
+        `Use { strictParents: false } for import mode.`
     );
     this.name = 'ParentNotFoundError';
   }
@@ -186,15 +186,8 @@ export async function createCommitV3(
 /**
  * Get a commit v3 by hash
  */
-export async function getCommitV3(
-  db: AnyDB,
-  hash: string
-): Promise<CommitV3Output | null> {
-  const [row] = await db
-    .select()
-    .from(commitsV3)
-    .where(eq(commitsV3.hash, hash))
-    .limit(1);
+export async function getCommitV3(db: AnyDB, hash: string): Promise<CommitV3Output | null> {
+  const [row] = await db.select().from(commitsV3).where(eq(commitsV3.hash, hash)).limit(1);
 
   return row ? rowToCommitV3(row) : null;
 }
@@ -240,11 +233,7 @@ export async function updateCommitV3Position(
   position: { x?: number; y?: number }
 ): Promise<CommitV3Output | null> {
   // Read raw DB values (not the output which only has position when both are set)
-  const [existing] = await db
-    .select()
-    .from(commitsV3)
-    .where(eq(commitsV3.hash, hash))
-    .limit(1);
+  const [existing] = await db.select().from(commitsV3).where(eq(commitsV3.hash, hash)).limit(1);
 
   if (!existing) return null;
 
@@ -268,14 +257,8 @@ export async function updateCommitV3Position(
 /**
  * Delete a commit v3 by hash
  */
-export async function deleteCommitV3(
-  db: AnyDB,
-  hash: string
-): Promise<boolean> {
-  const result = await db
-    .delete(commitsV3)
-    .where(eq(commitsV3.hash, hash))
-    .returning();
+export async function deleteCommitV3(db: AnyDB, hash: string): Promise<boolean> {
+  const result = await db.delete(commitsV3).where(eq(commitsV3.hash, hash)).returning();
 
   return result.length > 0;
 }
@@ -286,18 +269,12 @@ export async function deleteCommitV3(
  * Uses single query with WHERE IN to avoid N+1 problem.
  * Returns parents in the same order as the parents array.
  */
-export async function getCommitV3Parents(
-  db: AnyDB,
-  hash: string
-): Promise<CommitV3Output[]> {
+export async function getCommitV3Parents(db: AnyDB, hash: string): Promise<CommitV3Output[]> {
   const commit = await getCommitV3(db, hash);
   if (!commit || commit.parents.length === 0) return [];
 
   // Single query to get all parents
-  const rows = await db
-    .select()
-    .from(commitsV3)
-    .where(inArray(commitsV3.hash, commit.parents));
+  const rows = await db.select().from(commitsV3).where(inArray(commitsV3.hash, commit.parents));
 
   // Create a map for O(1) lookup
   const parentMap = new Map<string, CommitV3Output>();
@@ -322,16 +299,10 @@ export async function getCommitV3Parents(
  * Returns commits in the same order as the input hashes array.
  * Missing hashes are skipped (no nulls in result).
  */
-export async function getCommitsV3ByHashes(
-  db: AnyDB,
-  hashes: string[]
-): Promise<CommitV3Output[]> {
+export async function getCommitsV3ByHashes(db: AnyDB, hashes: string[]): Promise<CommitV3Output[]> {
   if (hashes.length === 0) return [];
 
-  const rows = await db
-    .select()
-    .from(commitsV3)
-    .where(inArray(commitsV3.hash, hashes));
+  const rows = await db.select().from(commitsV3).where(inArray(commitsV3.hash, hashes));
 
   // Create a map for O(1) lookup
   const commitMap = new Map<string, CommitV3Output>();
@@ -395,7 +366,7 @@ export async function findCommitV3History(
   if (missingHashes.length > 0) {
     console.warn(
       `[findCommitV3History] Skipped ${missingHashes.length} missing commit(s) during traversal: ` +
-      `${missingHashes.slice(0, 3).join(', ')}${missingHashes.length > 3 ? '...' : ''}`
+        `${missingHashes.slice(0, 3).join(', ')}${missingHashes.length > 3 ? '...' : ''}`
     );
   }
 

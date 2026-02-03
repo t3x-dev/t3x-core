@@ -7,7 +7,7 @@
  * Can be used by both Diff and Merge pages.
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { Sentence, TurnContextData } from '@/types/merge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';

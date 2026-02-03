@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { computeCommitV4Hash, type CommitV4FirstClass } from '../../storage/hash-v4';
+import { type CommitV4FirstClass, computeCommitV4Hash } from '../../storage/hash-v4';
 
 describe('computeCommitV4Hash', () => {
   const baseCommit: CommitV4FirstClass = {
@@ -88,10 +88,12 @@ describe('computeCommitV4Hash', () => {
       const hash2 = computeCommitV4Hash({
         ...baseCommit,
         content: {
-          sentences: [{
-            id: 's_abc123456789',
-            text: 'Hello',
-          }],
+          sentences: [
+            {
+              id: 's_abc123456789',
+              text: 'Hello',
+            },
+          ],
         },
       });
 
@@ -200,11 +202,18 @@ describe('computeCommitV4Hash', () => {
       const hash2 = computeCommitV4Hash({
         ...baseCommit,
         content: {
-          sentences: [{
-            id: 's_1',
-            text: 'Test',
-            source_ref: { conversation_id: 'conv_1', turn_hash: 'sha256:abc', start_char: 0, end_char: 4 },
-          }],
+          sentences: [
+            {
+              id: 's_1',
+              text: 'Test',
+              source_ref: {
+                conversation_id: 'conv_1',
+                turn_hash: 'sha256:abc',
+                start_char: 0,
+                end_char: 4,
+              },
+            },
+          ],
         },
       });
 

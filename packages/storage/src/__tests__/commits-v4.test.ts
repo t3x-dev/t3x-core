@@ -16,11 +16,11 @@ import {
   computeCommitV4Hash,
   createCommitV4,
   deleteCommitV4,
-  findCommitV4ByHash,
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
-  getCommitV4Parents,
+  findCommitV4ByHash,
   getCommitsV4ByHashes,
+  getCommitV4Parents,
   ParentNotFoundErrorV4,
   updateCommitV4Position,
 } from '../queries/commits-v4';
@@ -41,10 +41,7 @@ describe('Commits V4 Storage', () => {
     cleanup = setup.cleanup;
 
     // Create a test project
-    const project = await insertProject(
-      db,
-      testData.project({ name: 'Commit V4 Test Project' })
-    );
+    const project = await insertProject(db, testData.project({ name: 'Commit V4 Test Project' }));
     testProjectId = project.projectId;
   });
 
@@ -129,10 +126,7 @@ describe('Commits V4 Storage', () => {
       const result = await createCommitV4(db, input);
 
       // Verify database effect
-      const rows = await db
-        .select()
-        .from(commitsV4)
-        .where(eq(commitsV4.hash, result.hash));
+      const rows = await db.select().from(commitsV4).where(eq(commitsV4.hash, result.hash));
 
       expect(rows).toHaveLength(1);
       expect(rows[0].hash).toBe(result.hash);
@@ -281,10 +275,7 @@ describe('Commits V4 Storage', () => {
 
       // Trying to insert with the same hash should fail (requires same timestamp)
       // This test verifies the DB constraint works
-      const rows = await db
-        .select()
-        .from(commitsV4)
-        .where(eq(commitsV4.hash, first.hash));
+      const rows = await db.select().from(commitsV4).where(eq(commitsV4.hash, first.hash));
       expect(rows).toHaveLength(1);
     });
   });
@@ -315,10 +306,7 @@ describe('Commits V4 Storage', () => {
 
   describe('findCommitsV4ByProject', () => {
     it('returns commits for a project', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'List V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'List V4 Project' }));
 
       await createCommitV4(db, {
         parents: [],
@@ -337,16 +325,11 @@ describe('Commits V4 Storage', () => {
       const results = await findCommitsV4ByProject(db, newProject.projectId);
 
       expect(results).toHaveLength(2);
-      expect(results.every((c) => c.project_id === newProject.projectId)).toBe(
-        true
-      );
+      expect(results.every((c) => c.project_id === newProject.projectId)).toBe(true);
     });
 
     it('orders by committedAt descending', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Order V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Order V4 Project' }));
 
       // Create first commit
       await createCommitV4(db, {
@@ -376,10 +359,7 @@ describe('Commits V4 Storage', () => {
     });
 
     it('respects limit option', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Limit V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Limit V4 Project' }));
 
       for (let i = 0; i < 5; i++) {
         await createCommitV4(db, {
@@ -398,10 +378,7 @@ describe('Commits V4 Storage', () => {
     });
 
     it('respects offset option for pagination', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Offset V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Offset V4 Project' }));
 
       for (let i = 0; i < 5; i++) {
         await createCommitV4(db, {
@@ -449,20 +426,12 @@ describe('Commits V4 Storage', () => {
         });
       }
 
-      const mainResults = await findCommitsV4ByBranch(
-        db,
-        newProject.projectId,
-        'main'
-      );
+      const mainResults = await findCommitsV4ByBranch(db, newProject.projectId, 'main');
 
       expect(mainResults).toHaveLength(3);
       expect(mainResults.every((c) => c.branch === 'main')).toBe(true);
 
-      const featureResults = await findCommitsV4ByBranch(
-        db,
-        newProject.projectId,
-        'feature'
-      );
+      const featureResults = await findCommitsV4ByBranch(db, newProject.projectId, 'feature');
 
       expect(featureResults).toHaveLength(3);
       expect(featureResults.every((c) => c.branch === 'feature')).toBe(true);
@@ -484,12 +453,7 @@ describe('Commits V4 Storage', () => {
         });
       }
 
-      const results = await findCommitsV4ByBranch(
-        db,
-        newProject.projectId,
-        'main',
-        { limit: 2 }
-      );
+      const results = await findCommitsV4ByBranch(db, newProject.projectId, 'main', { limit: 2 });
 
       expect(results).toHaveLength(2);
     });
@@ -558,10 +522,7 @@ describe('Commits V4 Storage', () => {
 
   describe('getCommitV4Parents', () => {
     it('returns parent commits', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Parents V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Parents V4 Project' }));
 
       const parent = await createCommitV4(db, {
         parents: [],
@@ -597,10 +558,7 @@ describe('Commits V4 Storage', () => {
     });
 
     it('returns multiple parents for merge commits', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Merge V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Merge V4 Project' }));
 
       const parent1 = await createCommitV4(db, {
         parents: [],
@@ -716,10 +674,7 @@ describe('Commits V4 Storage', () => {
 
   describe('getCommitsV4ByHashes', () => {
     it('returns multiple commits in single query', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Batch V4 Project' })
-      );
+      const newProject = await insertProject(db, testData.project({ name: 'Batch V4 Project' }));
 
       const commit1 = await createCommitV4(db, {
         parents: [],
@@ -794,11 +749,7 @@ describe('Commits V4 Storage', () => {
       });
 
       // Request in specific order: 3, 1, 2
-      const results = await getCommitsV4ByHashes(db, [
-        commit3.hash,
-        commit1.hash,
-        commit2.hash,
-      ]);
+      const results = await getCommitsV4ByHashes(db, [commit3.hash, commit1.hash, commit2.hash]);
 
       expect(results).toHaveLength(3);
       expect(results[0].hash).toBe(commit3.hash);

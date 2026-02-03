@@ -5,12 +5,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type {
-  CommitV4,
-  ConversationContext,
-  Leaf,
-  Pin,
-} from '../../types/v4';
 import {
   buildConversationContext,
   buildLeafContext,
@@ -19,6 +13,7 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
+import type { CommitV4, ConversationContext, Leaf, Pin } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -56,7 +51,8 @@ const mockLeaf: Leaf = {
   title: 'Travel Agent v1',
   constraints: [],
   config: {},
-  output: 'Based on your preferences, I recommend visiting Tokyo during cherry blossom season in late March to early April.',
+  output:
+    'Based on your preferences, I recommend visiting Tokyo during cherry blossom season in late March to early April.',
   assertions: [
     {
       id: 'ast_1',

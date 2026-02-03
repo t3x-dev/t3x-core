@@ -6,11 +6,16 @@
  */
 
 import pino from 'pino';
-import type { RunRecord } from '../schemas/run-record.js';
+import type {
+  CheckResult,
+  DimensionScores,
+  EvalResult,
+  Violation,
+} from '../schemas/eval-result.js';
 import type { EvalRules, Rule, RuleType } from '../schemas/eval-rules.js';
-import type { EvalResult, CheckResult, Violation, DimensionScores } from '../schemas/eval-result.js';
-import { runOperator, type OperatorOptions } from './operators.js';
-import { parseRulesFromLeaf, DEFAULT_RULES, type LeafForRules } from './rule-parser.js';
+import type { RunRecord } from '../schemas/run-record.js';
+import { type OperatorOptions, runOperator } from './operators.js';
+import { DEFAULT_RULES, type LeafForRules, parseRulesFromLeaf } from './rule-parser.js';
 
 /**
  * Mapping from rule.type to dimension_scores keys
@@ -77,10 +82,7 @@ function getByPath(obj: unknown, path: string): unknown {
  * Groups rules by their type and calculates weighted average for each dimension.
  * Dimensions without rules get a perfect score of 1.0 (not penalized).
  */
-function calculateDimensionScores(
-  checks: CheckResult[],
-  rules: Rule[]
-): DimensionScores {
+function calculateDimensionScores(checks: CheckResult[], rules: Rule[]): DimensionScores {
   // Create a map of rule_id to rule for quick lookup
   const ruleMap = new Map<string, Rule>();
   for (const rule of rules) {
@@ -111,21 +113,26 @@ function calculateDimensionScores(
   // Calculate weighted average for each dimension
   // Dimensions without rules default to 1.0 (not penalized)
   const scores: DimensionScores = {
-    task_completion: dimensionData.task_completion.total > 0
-      ? dimensionData.task_completion.earned / dimensionData.task_completion.total
-      : 1.0,
-    tool_use: dimensionData.tool_use.total > 0
-      ? dimensionData.tool_use.earned / dimensionData.tool_use.total
-      : 1.0,
-    trajectory_efficiency: dimensionData.trajectory_efficiency.total > 0
-      ? dimensionData.trajectory_efficiency.earned / dimensionData.trajectory_efficiency.total
-      : 1.0,
-    cost_efficiency: dimensionData.cost_efficiency.total > 0
-      ? dimensionData.cost_efficiency.earned / dimensionData.cost_efficiency.total
-      : 1.0,
-    latency: dimensionData.latency.total > 0
-      ? dimensionData.latency.earned / dimensionData.latency.total
-      : 1.0,
+    task_completion:
+      dimensionData.task_completion.total > 0
+        ? dimensionData.task_completion.earned / dimensionData.task_completion.total
+        : 1.0,
+    tool_use:
+      dimensionData.tool_use.total > 0
+        ? dimensionData.tool_use.earned / dimensionData.tool_use.total
+        : 1.0,
+    trajectory_efficiency:
+      dimensionData.trajectory_efficiency.total > 0
+        ? dimensionData.trajectory_efficiency.earned / dimensionData.trajectory_efficiency.total
+        : 1.0,
+    cost_efficiency:
+      dimensionData.cost_efficiency.total > 0
+        ? dimensionData.cost_efficiency.earned / dimensionData.cost_efficiency.total
+        : 1.0,
+    latency:
+      dimensionData.latency.total > 0
+        ? dimensionData.latency.earned / dimensionData.latency.total
+        : 1.0,
   };
 
   return scores;
@@ -288,10 +295,7 @@ export class EvalEngine {
    * @param leaf - Leaf object containing rules_ref field
    * @returns Evaluation result
    */
-  evaluateWithLeaf(
-    record: RunRecord,
-    leaf?: LeafForRules
-  ): EvalResult {
+  evaluateWithLeaf(record: RunRecord, leaf?: LeafForRules): EvalResult {
     const rules = parseRulesFromLeaf(leaf);
     return this.evaluate(record, rules);
   }
@@ -310,16 +314,16 @@ export class EvalEngine {
 // Default singleton instance
 export const evalEngine = new EvalEngine();
 
+export type { OperatorFn, OperatorOptions } from './operators.js';
+export { operators, runOperator } from './operators.js';
 // Re-export utilities
 export {
-  parseRulesFromLeaf,
-  parseRulesFromJson,
-  parseRulesFromYaml,
-  loadRulesFromFile,
-  loadDefaultRules,
-  validateRules,
   DEFAULT_RULES,
   type LeafForRules,
+  loadDefaultRules,
+  loadRulesFromFile,
+  parseRulesFromJson,
+  parseRulesFromLeaf,
+  parseRulesFromYaml,
+  validateRules,
 } from './rule-parser.js';
-export { runOperator, operators } from './operators.js';
-export type { OperatorOptions, OperatorFn } from './operators.js';

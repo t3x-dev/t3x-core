@@ -55,7 +55,7 @@ export function getTypeInstructions(leafType: LeafType, config?: Record<string, 
 - Clear and professional body
 - Include sign-off
 - Be concise but complete
-${config?.['recipient'] ? `- Recipient: ${config['recipient']}` : ''}`;
+${config?.recipient ? `- Recipient: ${config.recipient}` : ''}`;
 
     case 'slack':
       return `Format: Slack message

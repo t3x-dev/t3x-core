@@ -16,8 +16,8 @@ export {
 } from './base';
 
 export {
-  createGoogleCloudNLPProvider,
   type CustomFetch,
-  GoogleCloudNLPProvider,
+  createGoogleCloudNLPProvider,
   type GoogleCloudNLPConfig,
+  GoogleCloudNLPProvider,
 } from './google-cloud';

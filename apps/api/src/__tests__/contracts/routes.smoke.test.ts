@@ -24,11 +24,11 @@ vi.mock('../../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { deployAgentRoutes } from '../../routes/deploy-agents';
+import { projectRoutes } from '../../routes/projects';
 // Import all route modules
 import { runsRoutes } from '../../routes/runs';
-import { deployAgentRoutes } from '../../routes/deploy-agents';
 import { statusRoutes } from '../../routes/status';
-import { projectRoutes } from '../../routes/projects';
 
 describe('Critical Routes Smoke Tests', () => {
   let cleanup: () => Promise<void>;
@@ -55,26 +55,30 @@ describe('Critical Routes Smoke Tests', () => {
     const criticalRunnerRoutes = [
       { method: 'GET', path: '/v1/runs', description: 'List runs - used by Deploy page' },
       { method: 'POST', path: '/v1/runs', description: 'Create run - triggers n8n workflow' },
-      { method: 'POST', path: '/v1/runs/ingest', description: 'Ingest callback - receives n8n results' },
+      {
+        method: 'POST',
+        path: '/v1/runs/ingest',
+        description: 'Ingest callback - receives n8n results',
+      },
     ];
 
-    it.each(criticalRunnerRoutes)(
-      '$method $path exists ($description)',
-      async ({ method, path }) => {
-        const res = await app.request(path, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: method === 'POST' ? JSON.stringify({}) : undefined,
-        });
+    it.each(criticalRunnerRoutes)('$method $path exists ($description)', async ({
+      method,
+      path,
+    }) => {
+      const res = await app.request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: method === 'POST' ? JSON.stringify({}) : undefined,
+      });
 
-        // Should not be 404 (route not found)
-        expect(res.status).not.toBe(404);
-        // Log actual status for debugging
-        if (res.status === 404) {
-          console.error(`CRITICAL: Route ${method} ${path} not found!`);
-        }
+      // Should not be 404 (route not found)
+      expect(res.status).not.toBe(404);
+      // Log actual status for debugging
+      if (res.status === 404) {
+        console.error(`CRITICAL: Route ${method} ${path} not found!`);
       }
-    );
+    });
 
     it('GET /v1/runs/:id route exists', async () => {
       const res = await app.request('/v1/runs/run_test123');
@@ -90,18 +94,18 @@ describe('Critical Routes Smoke Tests', () => {
       { method: 'POST', path: '/v1/deploy-agents', description: 'Create deploy agent' },
     ];
 
-    it.each(deployAgentRoutes)(
-      '$method $path exists ($description)',
-      async ({ method, path }) => {
-        const res = await app.request(path, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: method === 'POST' ? JSON.stringify({ id: 'test', name: 'test', endpoint: 'http://test' }) : undefined,
-        });
+    it.each(deployAgentRoutes)('$method $path exists ($description)', async ({ method, path }) => {
+      const res = await app.request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body:
+          method === 'POST'
+            ? JSON.stringify({ id: 'test', name: 'test', endpoint: 'http://test' })
+            : undefined,
+      });
 
-        expect(res.status).not.toBe(404);
-      }
-    );
+      expect(res.status).not.toBe(404);
+    });
 
     it('GET /v1/deploy-agents/:id route exists', async () => {
       const res = await app.request('/v1/deploy-agents/test_agent');
@@ -132,13 +136,10 @@ describe('Critical Routes Smoke Tests', () => {
       { method: 'GET', path: '/v1/projects', description: 'List projects' },
     ];
 
-    it.each(coreRoutes)(
-      '$method $path exists ($description)',
-      async ({ method, path }) => {
-        const res = await app.request(path, { method });
-        expect(res.status).not.toBe(404);
-      }
-    );
+    it.each(coreRoutes)('$method $path exists ($description)', async ({ method, path }) => {
+      const res = await app.request(path, { method });
+      expect(res.status).not.toBe(404);
+    });
   });
 
   describe('Route Path Format Validation', () => {

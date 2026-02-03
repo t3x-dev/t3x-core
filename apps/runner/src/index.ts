@@ -28,70 +28,70 @@
 //   // Evaluate with rules
 //   const result = evalEngine.evaluate(record, rules);
 
+// LLM Asserter
+export { type AssertionStatus, type GenerateAssertionsResult, llmAsserter } from './asserter.js';
+// Evaluator (rule-based)
+export {
+  DEFAULT_RULES,
+  EvalEngine,
+  evalEngine,
+  loadRulesFromFile,
+  parseRulesFromLeaf,
+} from './evaluator/index.js';
 // Observer (SDK proxy mode)
 export { Observer, observer } from './observer.js';
-
-// Evaluator (rule-based)
-export { EvalEngine, evalEngine } from './evaluator/index.js';
-export { parseRulesFromLeaf, loadRulesFromFile, DEFAULT_RULES } from './evaluator/index.js';
-
-// Trace collection (n8n integration)
-export { n8nClient, mapN8nExecutionToRunRecord, buildTraceSummary } from './trace/index.js';
-
-// LLM Asserter
-export { llmAsserter, type GenerateAssertionsResult, type AssertionStatus } from './asserter.js';
-
 // Schemas - Types
 export type {
   // Agent
   AgentConfig,
   AgentInput,
-  // Run Record
-  SpanKind,
+  // Eval Result
+  CheckResult,
+  // Engine
+  EngineRunRequest,
+  EvalResult,
+  EvalRules,
   LLMData,
-  ToolData,
+  N8nCallback,
+  PendingRun,
   RetrievalData,
-  StepRecord,
-  RunRecord,
+  Rule,
   // Eval Rules
   RuleOperator,
   RuleType,
-  Rule,
-  EvalRules,
-  // Eval Result
-  CheckResult,
-  Violation,
-  EvalResult,
-  // Engine
-  EngineRunRequest,
-  N8nCallback,
   RunIngest,
-  PendingRun,
+  RunRecord,
+  // Run Record
+  SpanKind,
+  StepRecord,
+  ToolData,
+  Violation,
 } from './schemas/index.js';
-
 // Schemas - Zod validators
 export {
   // Agent
   AgentConfigSchema,
   AgentInputSchema,
-  // Run Record
-  SpanKindSchema,
-  LLMDataSchema,
-  ToolDataSchema,
-  RetrievalDataSchema,
-  StepRecordSchema,
-  RunRecordSchema,
-  // Eval Rules
-  RuleOperatorSchema,
-  RuleTypeSchema,
-  RuleSchema,
-  EvalRulesSchema,
   // Eval Result
   CheckResultSchema,
-  ViolationSchema,
-  EvalResultSchema,
   // Engine
   EngineRunRequestSchema,
+  EvalResultSchema,
+  EvalRulesSchema,
+  LLMDataSchema,
   N8nCallbackSchema,
+  RetrievalDataSchema,
+  // Eval Rules
+  RuleOperatorSchema,
+  RuleSchema,
+  RuleTypeSchema,
   RunIngestSchema,
+  RunRecordSchema,
+  // Run Record
+  SpanKindSchema,
+  StepRecordSchema,
+  ToolDataSchema,
+  ViolationSchema,
 } from './schemas/index.js';
+// Trace collection (n8n integration)
+export { buildTraceSummary, mapN8nExecutionToRunRecord, n8nClient } from './trace/index.js';

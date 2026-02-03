@@ -41,22 +41,22 @@ export type FacetType = 'intent_seed' | 'time_window' | 'preference_soft' | 'unk
  * @see docs/specification/ring-schema.md#anchortype-enum-v11
  */
 export type AnchorType =
-  | 'number'   // Numeric value: 123, 5.5
-  | 'money'    // Currency amount: $5000, 100 USD
+  | 'number' // Numeric value: 123, 5.5
+  | 'money' // Currency amount: $5000, 100 USD
   | 'duration' // Time duration: 30 days, 2 months
-  | 'percent'  // Percentage: 15%, 3.5%
-  | 'date'     // Date expression: January 2025
-  | 'entity'   // Named entity from NLP: Bangkok, Party A
-  | 'term';    // Domain-specific term: indemnify, terminate
+  | 'percent' // Percentage: 15%, 3.5%
+  | 'date' // Date expression: January 2025
+  | 'entity' // Named entity from NLP: Bangkok, Party A
+  | 'term'; // Domain-specific term: indemnify, terminate
 
 /**
  * Anchor source for Ring 1 v1.1
  * @see docs/specification/ring-schema.md#anchorsource-enum-v11
  */
 export type AnchorSource =
-  | 'token'    // Derived from NLP token
-  | 'entity'   // Derived from NLP named entity
-  | 'phrase';  // Derived from phrase pattern matching
+  | 'token' // Derived from NLP token
+  | 'entity' // Derived from NLP named entity
+  | 'phrase'; // Derived from phrase pattern matching
 
 /**
  * Anchor candidate for Ring 1 v1.1

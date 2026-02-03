@@ -80,11 +80,7 @@ function incompleteBeta(x: number, a: number, b: number): number {
 
   // 简化近似：对于 t 分布的常见情况
   const bt = Math.exp(
-    logGamma(a + b) -
-      logGamma(a) -
-      logGamma(b) +
-      a * Math.log(x) +
-      b * Math.log(1 - x)
+    logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x)
   );
 
   if (x < (a + 1) / (a + b + 2)) {
@@ -102,9 +98,9 @@ function betaCF(x: number, a: number, b: number): number {
   const epsilon = 1e-10;
 
   let m = 1;
-  let qab = a + b;
-  let qap = a + 1;
-  let qam = a - 1;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
   let c = 1;
   let d = 1 - (qab * x) / qap;
 
@@ -144,9 +140,9 @@ function betaCF(x: number, a: number, b: number): number {
 function logGamma(z: number): number {
   const g = 7;
   const c = [
-    0.99999999999980993, 676.5203681218851, -1259.1392167224028,
-    771.32342877765313, -176.61502916214059, 12.507343278686905,
-    -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+    -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
+    1.5056327351493116e-7,
   ];
 
   if (z < 0.5) {
@@ -220,12 +216,12 @@ export function twoProportionZTest(
   // 计算 95% 置信区间
   const seDiff = Math.sqrt((pA * (1 - pA)) / totalA + (pB * (1 - pB)) / totalB);
   const zCritical = 1.96; // 95% 置信度
-  const ciLower = (pB - pA) - zCritical * seDiff;
-  const ciUpper = (pB - pA) + zCritical * seDiff;
+  const ciLower = pB - pA - zCritical * seDiff;
+  const ciUpper = pB - pA + zCritical * seDiff;
 
   // 差值
   const delta = pB - pA;
-  const deltaPercent = pA > 0 ? ((pB - pA) / pA) * 100 : (pB > 0 ? 100 : 0);
+  const deltaPercent = pA > 0 ? ((pB - pA) / pA) * 100 : pB > 0 ? 100 : 0;
 
   return {
     controlMean: pA,
@@ -249,10 +245,7 @@ export function twoProportionZTest(
  * @param samplesB - 实验组样本数组
  * @returns A/B 测试结果
  */
-export function twoSampleTTest(
-  samplesA: number[],
-  samplesB: number[]
-): ABTestResult {
+export function twoSampleTTest(samplesA: number[], samplesB: number[]): ABTestResult {
   const nA = samplesA.length;
   const nB = samplesB.length;
 
@@ -284,8 +277,7 @@ export function twoSampleTTest(
 
   // 计算 Welch-Satterthwaite 自由度
   const numerator = (varA / nA + varB / nB) ** 2;
-  const denominator =
-    (varA / nA) ** 2 / (nA - 1) + (varB / nB) ** 2 / (nB - 1);
+  const denominator = (varA / nA) ** 2 / (nA - 1) + (varB / nB) ** 2 / (nB - 1);
   const df = denominator > 0 ? numerator / denominator : 1;
 
   // 计算 p 值（双尾检验）
@@ -294,8 +286,8 @@ export function twoSampleTTest(
   // 计算 95% 置信区间
   // 对于大自由度，使用 z = 1.96；否则需要查 t 表
   const tCritical = df > 30 ? 1.96 : 2.042; // 近似值
-  const ciLower = (meanB - meanA) - tCritical * se;
-  const ciUpper = (meanB - meanA) + tCritical * se;
+  const ciLower = meanB - meanA - tCritical * se;
+  const ciUpper = meanB - meanA + tCritical * se;
 
   // 差值
   const delta = meanB - meanA;

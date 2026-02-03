@@ -3,18 +3,13 @@
 import type * as React from 'react';
 import { cn } from '@/lib/utils';
 
-interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {
+interface CheckboxProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
 }
 
-function Checkbox({
-  className,
-  checked,
-  onCheckedChange,
-  disabled,
-  ...props
-}: CheckboxProps) {
+function Checkbox({ className, checked, onCheckedChange, disabled, ...props }: CheckboxProps) {
   return (
     <input
       type="checkbox"

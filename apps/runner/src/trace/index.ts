@@ -10,34 +10,32 @@ export { N8nClient, N8nClientError, n8nClient } from './n8n-client.js';
 
 // n8n mapper
 export {
-  mapN8nExecutionToRunRecord,
-  mapN8nExecutionsToRunRecords,
   type MapperOptions,
+  mapN8nExecutionsToRunRecords,
+  mapN8nExecutionToRunRecord,
 } from './n8n-mapper.js';
-
-// n8n types
-export type {
-  N8nExecution,
-  N8nExecutionData,
-  N8nResultData,
-  N8nRunData,
-  N8nNodeRun,
-  N8nNodeOutput,
-  N8nNodeDataItem,
-  N8nClientConfig,
-  N8nApiError,
-} from './types.js';
-
-// Trace summary builder (v2.0)
-export {
-  buildTraceSummary,
-  type TraceSummary,
-  type TrajectorySummary,
-  type TokenStats,
-} from './trace-summary.js';
-
 // Trace storage policy (v2.0)
 export {
   shouldStoreFullTrace,
   type TracePolicy,
 } from './storage-policy.js';
+
+// Trace summary builder (v2.0)
+export {
+  buildTraceSummary,
+  type TokenStats,
+  type TraceSummary,
+  type TrajectorySummary,
+} from './trace-summary.js';
+// n8n types
+export type {
+  N8nApiError,
+  N8nClientConfig,
+  N8nExecution,
+  N8nExecutionData,
+  N8nNodeDataItem,
+  N8nNodeOutput,
+  N8nNodeRun,
+  N8nResultData,
+  N8nRunData,
+} from './types.js';

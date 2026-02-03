@@ -7,10 +7,10 @@
  * with Git-style diff visualization and source tracing.
  */
 
-import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { useEffect } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
+import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
 export default function MergeWorkspacePage() {
   const params = useParams();

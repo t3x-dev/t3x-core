@@ -298,7 +298,8 @@ describe('RingExtractor', () => {
     it('extracts duration patterns as anchor candidates', async () => {
       const result = await extractor.extract('turn-1', 'The lease is for 30 days.');
 
-      const durationAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'duration') ?? [];
+      const durationAnchors =
+        result.ring1.anchorCandidates?.filter((a) => a.type === 'duration') ?? [];
       expect(durationAnchors.length).toBeGreaterThanOrEqual(1);
 
       const thirtyDays = durationAnchors.find((a) => a.text === '30 days');
@@ -309,7 +310,8 @@ describe('RingExtractor', () => {
     it('extracts percent patterns as anchor candidates', async () => {
       const result = await extractor.extract('turn-1', 'The discount is 15%.');
 
-      const percentAnchors = result.ring1.anchorCandidates?.filter((a) => a.type === 'percent') ?? [];
+      const percentAnchors =
+        result.ring1.anchorCandidates?.filter((a) => a.type === 'percent') ?? [];
       expect(percentAnchors.length).toBeGreaterThanOrEqual(1);
       expect(percentAnchors[0]?.text).toBe('15%');
     });
