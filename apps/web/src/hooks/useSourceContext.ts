@@ -20,7 +20,7 @@ export function useSourceContext() {
   const [loading, setLoading] = useState(false);
 
   const openContext = useCallback(async (s: Sentence) => {
-    if (!s.source.turn_hash) {
+    if (!s.source?.turn_hash) {
       setSentence(s);
       setOpen(true);
       setLoading(false);
@@ -34,13 +34,13 @@ export function useSourceContext() {
     setData(null);
 
     try {
-      const turnHash = encodeURIComponent(s.source.turn_hash);
+      const turnHash = encodeURIComponent(s.source!.turn_hash!);
       const params = new URLSearchParams({ before: '2', after: '2' });
 
-      if (s.source.start_char !== undefined) {
+      if (s.source?.start_char !== undefined) {
         params.set('highlight_start', String(s.source.start_char));
       }
-      if (s.source.end_char !== undefined) {
+      if (s.source?.end_char !== undefined) {
         params.set('highlight_end', String(s.source.end_char));
       }
 

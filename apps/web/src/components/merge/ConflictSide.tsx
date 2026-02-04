@@ -34,14 +34,14 @@ const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: str
 
 export function ConflictSide({ side, sentence, label, isSelected }: ConflictSideProps) {
   const styles = sideStyles[side];
-  const turnHash = sentence.source.turn_hash;
+  const turnHash = sentence.source?.turn_hash;
 
   // Access store for context fetching
   const { contextCache, contextLoadingStates, fetchSourceContext } = useMergeWorkspaceStore();
 
   // Memoize sentence source info to avoid unnecessary refetches
-  const startChar = sentence.source.start_char;
-  const endChar = sentence.source.end_char;
+  const startChar = sentence.source?.start_char;
+  const endChar = sentence.source?.end_char;
 
   // Fetch context on mount if turn_hash is available
   useEffect(() => {
@@ -91,14 +91,16 @@ export function ConflictSide({ side, sentence, label, isSelected }: ConflictSide
       <p className="text-sm leading-relaxed">{sentence.text}</p>
 
       {/* Inline source context */}
-      <ConflictSourceContext
-        turnHash={turnHash}
-        sentenceText={sentence.text}
-        startChar={sentence.source.start_char}
-        endChar={sentence.source.end_char}
-        contextData={cachedContext ?? null}
-        loading={isLoading}
-      />
+      {turnHash && (
+        <ConflictSourceContext
+          turnHash={turnHash}
+          sentenceText={sentence.text}
+          startChar={sentence.source?.start_char}
+          endChar={sentence.source?.end_char}
+          contextData={cachedContext ?? null}
+          loading={isLoading}
+        />
+      )}
     </div>
   );
 }
