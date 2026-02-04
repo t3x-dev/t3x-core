@@ -9,11 +9,13 @@
 
 > **Person A 全部 17 个 issue 已完成。** 构建验证通过（`pnpm build` 8/8 tasks success）。
 >
-> **Person B 已完成 15/21 个 issue。** 剩余 6 个未完成（B-4, B-5, B-7, B-8, B-11, B-15）。
+> **Person B 已完成 20/21 个 issue。** 剩余 1 个未完成（B-5 CommittedCommitView 单栏重写，已决定保留三栏布局）。
+> 本轮新完成：B-4（Next Step 按钮）、B-7（Commit 成功页）、B-8（节点卡片简化）、B-11（Dark Mode 全量修复 300+ 处）、B-15（Diff 入口 4 步→2 步）。
+> 同时完成自我审计修复：hasOutput 逻辑 bug、死代码清理、成功页关闭按钮、冗余 API 调用移除。
 >
 > 共享 issue S-1 已完成，S-2~S-10 待所有代码完成后执行。
 >
-> **总进度：33/48（69%）**
+> **总进度：38/48（79%）**
 
 ---
 
@@ -130,7 +132,7 @@
 | A-16 | API 启动配置状态 | `apps/api/src/index.ts` | 打印 ANTHROPIC_API_KEY / GOOGLE_AI_STUDIO_KEY / Database / RUNNER_BASE_URL 状态 | ✅ 已完成 |
 | A-17 | Seed 数据微调 | `scripts/seed-demo.sh` | 排练后调整描述、消息、句子的措辞 | ✅ 已完成（v1 A-7） |
 
-### Person B — 视觉 + UX（21 个，已完成 15 个）
+### Person B — 视觉 + UX（21 个，已完成 20 个）
 
 > B-5 和 B-6 在独立 branch 上做，Day 2 最后如果不稳定则回退。
 
@@ -139,18 +141,18 @@
 | B-1 | Execution Mode 专业预览 | `project/[projectId]/page.tsx` | 空白占位符→专业 Coming Soon 预览（mock timeline + v2.0 badge） | ✅ 已完成 |
 | B-2 | Deploy 标题 + Runner 离线 | `deploy/layout.tsx`, `deploy/page.tsx` | "Agent Optimiser"→"Deploy & Monitor"，红框→温和信息卡 | ✅ 已完成 |
 | B-3 | Canvas Empty State 引导 | `CanvasWorkspace.tsx` | "No units yet"→三步引导卡片（添加对话→提取知识→创建输出） | ✅ 已完成 |
-| B-4 | Canvas 节点 Next Step 按钮 | `CanvasNodes.tsx` | 每个节点底部加上下文 CTA（"Create Output →" 等），叠加式不删内容 | ⬜ 未完成 |
-| **B-5** | **CommittedCommitView 单栏** | `CommittedCommitView.tsx` | 三栏→单栏+三层（Layer1 句子+约束+NextStep / Layer2 折叠 / Layer3 高级链接），详见 progressive-disclosure-redesign.md §4 | ⬜ 未完成（仍是三栏 layout） |
+| B-4 | Canvas 节点 Next Step 按钮 | `CanvasNodes.tsx` | 每个节点底部加上下文 CTA（"Create Output →" 等），叠加式不删内容 | ✅ 已完成（5 种状态机 + 审计修复：hasOutput 终态逻辑、getContextLabel 缓存、死代码 toneStyles.bg 清理） |
+| **B-5** | **CommittedCommitView 单栏** | `CommittedCommitView.tsx` | 三栏→单栏+三层（Layer1 句子+约束+NextStep / Layer2 折叠 / Layer3 高级链接），详见 progressive-disclosure-redesign.md §4 | ⏭️ 跳过（保留三栏 layout，B-15 已在三栏基础上简化 diff 入口） |
 | **B-6** | **PendingCommitView wizard** | `PendingCommitView.tsx`（拆分） | 不拆文件，在现有组件内加：① stepper 进度条 ② 高级设置折叠 ③ 提交后显示成功页，详见 progressive-disclosure-redesign.md §5 | ✅ 已完成（Step 1/2 指示器 + 锁定态） |
-| B-7 | Commit 成功页 + auto-diff | `PendingCommitView.tsx` 或新 `CommitSuccessPage.tsx` | 提交成功后显示变更摘要（+N added / ~N modified / -N removed）+ Next Step | ⬜ 未完成 |
-| B-8 | Canvas 节点卡片简化 | `CanvasNodes.tsx` | 默认只显示标题+统计+Next Step，句子和 leaves 折叠，hash/author 移到展开视图 | ⬜ 未完成（sentences 始终显示） |
+| B-7 | Commit 成功页 + auto-diff | `PendingCommitView.tsx` | 提交成功后显示变更摘要（+N added / ~N modified / -N removed）+ Next Step | ✅ 已完成（全屏成功页 + diff stats + 审计修复：关闭按钮、stale dep 移除） |
+| B-8 | Canvas 节点卡片简化 | `CanvasNodes.tsx` | 默认只显示标题+统计+Next Step，句子和 leaves 折叠，hash/author 移到展开视图 | ✅ 已完成（默认折叠 + "N sentences · M constraints" 统计行 + Details 展开） |
 | B-9 | Leaf 创建 Loading 状态 | `canvasStoreTypes.ts`, `canvasLeafSlice.ts`, `LeafPanel.tsx` | 加 `leafCreating` 状态，按钮 spinner + disabled，成功后才关闭 panel | ✅ 已完成 |
 | B-10 | 全站 Empty State 引导 | 多文件（文本替换） | 所有 "No X yet" → 说明功能 + 指引下一步，详见 v1 B-6 | ✅ 已完成（主要页面已有引导文案） |
-| B-11 | Dark Mode 全站验证 | 多文件 | 走一遍所有 demo 路径页面，修复硬编码颜色（如 `bg-green-50` 暗色下对比度差） | ⬜ 未完成（256+ 处硬编码颜色缺 dark: 变体） |
+| B-11 | Dark Mode 全站验证 | 34 文件 | 走一遍所有 demo 路径页面，修复硬编码颜色（如 `bg-green-50` 暗色下对比度差） | ✅ 已完成（300+ 处 dark: 变体覆盖 canvas/merge/diff/leaf/shared/optimiser/ui 全组件） |
 | B-12 | Merge Loading UI | `MergePanel.tsx` | prepare 阶段 UI 反馈更明确（配合 A-11） | ✅ 已完成（三阶段进度条 + skeleton） |
 | B-13 | Keyboard Shortcuts 弹窗 | `CanvasWorkspace.tsx`（或新组件） | 按 `?` 弹出快捷键列表（Ctrl+A, arrows, ESC, Delete 等已有快捷键） | ✅ 已完成 |
 | B-14 | Projects 卡片视觉增强 | `page.tsx`, `projectStore.ts` | 项目描述去掉 "Project created via API" 回退文本，状态不全部硬编码为 "active" | ✅ 已完成（动态状态 badge） |
-| B-15 | Diff 入口简化 | `CommittedCommitView.tsx` | 现在 4 步（选 target→Run Diff→preview→Open Full）→ 2 步（点 Compare→直接 DiffFullScreen） | ⬜ 未完成（仍是 4 步流程） |
+| B-15 | Diff 入口简化 | `CommittedCommitView.tsx` | 现在 4 步（选 target→Run Diff→preview→Open Full）→ 2 步（点 Compare→直接 DiffFullScreen） | ✅ 已完成（选 target 自动 diffRaw + 直接打开 DiffFullScreen，审计修复：移除死 diffResult state 和冗余 api.diff() 调用） |
 | B-16 | NodeModal 字号优化 | `CanvasNodes.tsx`, `CommittedCommitView.tsx` | commit hash `text-[0.6rem]`→`text-xs`，metadata `text-[0.65rem]`→`text-xs`，提升可读性 | ✅ 已完成（部分文件仍有小字号但为有意设计） |
 | B-17 | Leaf 页面 header 整理 | `leaf/[leafId]/page.tsx` | 标题区域减少拥挤，元数据分行显示 | ✅ 已完成 |
 | B-18 | Merge keyboard shortcuts 显示 | `ConflictResolutionButtons` 相关组件 | inactive 状态下 kbd 标签不可见 → 始终可见 | ✅ 已完成（A/B/X/E 始终可见） |
@@ -180,21 +182,16 @@
 | 分类 | 已完成 | 总数 | 进度 |
 |------|--------|------|------|
 | Person A | 17 | 17 | 100% |
-| Person B | 15 | 21 | 71% |
+| Person B | 20 | 21 | 95% |
 | 共享 | 1 | 10 | 10% |
-| **总计** | **33** | **48** | **69%** |
+| **总计** | **38** | **48** | **79%** |
 
 ### 未完成 Issue 汇总
 
-| ID | 标题 | 阻塞关系 |
-|----|------|----------|
-| B-4 | Canvas 节点 Next Step 按钮 | 无依赖，可立即开始 |
-| B-5 | CommittedCommitView 单栏重写 | 依赖 B-4 |
-| B-7 | Commit 成功页 + auto-diff | 无依赖 |
-| B-8 | Canvas 节点卡片简化 | 依赖 B-4 |
-| B-11 | Dark Mode 全站验证 + 修复 | 无依赖（256+ 处需修复） |
-| B-15 | Diff 入口简化（4步→2步） | 依赖 B-5 |
-| S-2~S-10 | 共享 issue（构建验证 + 排练） | 需所有 A+B 完成后执行 |
+| ID | 标题 | 状态 |
+|----|------|------|
+| B-5 | CommittedCommitView 单栏重写 | ⏭️ 跳过（保留三栏，B-15 已在此基础上简化 diff 入口） |
+| S-2~S-10 | 共享 issue（构建验证 + 排练） | ⬜ 需执行（代码部分已基本完成） |
 
 ---
 
@@ -203,35 +200,24 @@
 ```
 已完成（无需关注）：
   A-1~A-17 全部完成 ✅
-  B-1, B-2, B-3, B-6, B-9, B-10, B-12~B-14, B-16~B-21 全部完成 ✅
+  B-1~B-4, B-6~B-21 全部完成 ✅（20/21）
+  B-5 跳过（保留三栏布局）⏭️
   S-1 已完成 ✅
 
-剩余可立即开始：
-  B-4  Canvas 节点 Next Step 按钮
-  B-7  Commit 成功页 + auto-diff
-  B-11 Dark Mode 全站验证
-
-B-4 完成后：
-  B-5（CommittedCommitView 单栏重写，复用 Next Step 逻辑）
-  B-8（节点简化需要 Next Step 已就位）
-
-B-5 完成后：
-  B-15（Diff 入口简化在新单栏布局中实现）
-
-所有 B 完成后：
-  S-2 → S-3 → S-4 → ... → S-10
+剩余待执行：
+  S-2 → S-3 → S-4 → ... → S-10（构建验证 + 排练）
 ```
 
 ## 文件冲突风险
 
-> A 全部完成，B-12/B-17/B-16/B-21 已完成，冲突已解决。剩余 B issue 无冲突风险。
+> A 全部完成，B 完成 20/21（仅 B-5 跳过）。代码阶段无剩余冲突风险。
 
-| 文件 | 剩余 B 改 | 冲突？ |
-|------|-----------|--------|
-| `CanvasNodes.tsx` | B-4, B-8 | 无冲突（同一人） |
-| `CommittedCommitView.tsx` | B-5, B-15 | 无冲突（B-15 依赖 B-5，顺序做） |
-| 多文件（Dark Mode） | B-11 | 无冲突（仅加 dark: 变体） |
-| `PendingCommitView.tsx` | B-7 | 无冲突 |
+| 文件 | 状态 | 备注 |
+|------|------|------|
+| `CanvasNodes.tsx` | ✅ B-4 + B-8 + 审计修复 + dark mode | 401 行变更 |
+| `CommittedCommitView.tsx` | ✅ B-15 + 审计修复 + dark mode | 352 行变更，移除死代码 |
+| `PendingCommitView.tsx` | ✅ B-7 + 审计修复 + dark mode | 300 行变更 |
+| 34 文件（Dark Mode） | ✅ B-11 全量修复 | 300+ dark: 变体 |
 
 ---
 
@@ -257,7 +243,7 @@ B-5 完成后：
 | PGLite 数据损坏 | `cp -r .t3x/database-backup/ .t3x/database/` |
 | 老板点 Insights | 已接真实数据 |
 | 老板点 Execution mode | 已有专业预览 |
-| Dark mode 不完美 | demo 用亮色模式 |
+| Dark mode 不完美 | ✅ 已全量修复，可使用暗色模式 demo |
 
 ---
 
@@ -287,4 +273,4 @@ B-5 完成后：
 - [ ] 关 DevTools、通知、无关 tab
 - [ ] 1920x1080+，zoom 100-110%，勿扰
 - [ ] Console 无 warning
-- [ ] 亮色模式确认
+- [ ] 亮色或暗色模式确认（B-11 dark mode 已全量修复，两种均可用）

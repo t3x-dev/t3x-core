@@ -466,6 +466,8 @@ Use the existing test setup pattern (`setupTestDB` + PGLite) for tests that need
 | #2 canvasStore split | **P1** | Large | Medium — developer velocity, bug reduction | ✅ 已完成（slice 模式：canvasMergeSlice, canvasLeafSlice） |
 | #5 Loading/error states | **P1** | Medium | High — user trust | ✅ 部分完成（B-9 Leaf loading, A-11 Merge loading, A-3 Generate 错误） |
 | #4 E2E test flakiness | **P1** | Medium | Medium — CI reliability | ⬜ 未开始 |
-| #7 Remove console statements | **P2** | Small | Low — log hygiene | ✅ 已完成（demo-sprint A-6） |
+| #7 Remove console statements | **P2** | Small | Low — log hygiene | ✅ 已完成（demo-sprint A-6 + 审计额外清理） |
 | #6 Eliminate `as any` | **P2** | Small | Medium — refactoring safety | ✅ 已完成（demo-sprint A-14/A-15，生产代码 0 处 as any） |
 | #8 API lib test coverage | **P2** | Medium | Medium — regression prevention | ⬜ 未开始 |
+| — Dark mode 全量修复 | **P1** | Medium | High — 视觉专业度 | ✅ 已完成（B-11: 300+ dark: 变体，34 文件，canvas/merge/diff/leaf/shared/optimiser/ui） |
+| — 审计修复 | **P1** | Small | Medium — 代码质量 | ✅ 已完成（hasOutput 逻辑 bug、死代码清理、冗余 API 调用、成功页 UX） |
