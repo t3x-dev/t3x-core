@@ -93,6 +93,7 @@ export default function DevDatabasePage() {
           <h3 style={styles.sidebarTitle}>Tables</h3>
           {tables.map((t) => (
             <button
+              type="button"
               key={t.name}
               style={styles.tableButton}
               onClick={() => setSql(`SELECT * FROM ${t.name} LIMIT 20`)}
@@ -104,7 +105,12 @@ export default function DevDatabasePage() {
 
           <h3 style={{ ...styles.sidebarTitle, marginTop: 24 }}>Quick Queries</h3>
           {EXAMPLE_QUERIES.map((q) => (
-            <button key={q.label} style={styles.queryButton} onClick={() => setSql(q.sql)}>
+            <button
+              type="button"
+              key={q.label}
+              style={styles.queryButton}
+              onClick={() => setSql(q.sql)}
+            >
               {q.label}
             </button>
           ))}
@@ -123,7 +129,12 @@ export default function DevDatabasePage() {
             />
             <div style={styles.editorFooter}>
               <span style={styles.hint}>Cmd/Ctrl + Enter to execute</span>
-              <button onClick={executeQuery} disabled={loading} style={styles.runButton}>
+              <button
+                type="button"
+                onClick={executeQuery}
+                disabled={loading}
+                style={styles.runButton}
+              >
                 {loading ? 'Running...' : 'Run Query'}
               </button>
             </div>
