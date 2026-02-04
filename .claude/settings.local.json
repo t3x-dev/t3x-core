@@ -160,7 +160,14 @@
       "Bash(pnpm exec tsc:*)",
       "Bash(git log:*)",
       "Bash(gh issue view:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(./scripts/demo-finance.sh:*)",
+      "Bash(pnpm clean:*)",
+      "Bash(pnpm check:fix:*)",
+      "Bash(./scripts/seed-demo.sh:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(gh pr create:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": [],
     "ask": []
