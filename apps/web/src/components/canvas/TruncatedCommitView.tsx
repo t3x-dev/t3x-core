@@ -221,28 +221,28 @@ export function TruncatedCommitView({
   if (allLegacy) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500">
-          <span className="px-1 py-0.5 bg-slate-200 rounded text-[0.6rem]">Legacy</span>
+        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
+          <span className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[0.6rem]">Legacy</span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
-            className="text-xs text-slate-700 bg-green-100 px-1.5 py-1 rounded line-clamp-2"
+            className="text-xs text-slate-700 dark:text-slate-300 bg-green-100 dark:bg-green-900/30 px-1.5 py-1 rounded line-clamp-2"
           >
             {s.text}
           </div>
         ))}
         {hiddenCount > 0 && (
-          <div className="text-[0.65rem] text-slate-400">
+          <div className="text-[0.65rem] text-slate-400 dark:text-slate-500">
             +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
-          <div className="pt-1 border-t border-slate-100">
+          <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
             <button
               type="button"
               onClick={onViewFull}
-              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
             >
               View full
               <ChevronRight size={10} />
@@ -270,28 +270,28 @@ export function TruncatedCommitView({
   if (!hasAnyContext) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500">
-          <span className="px-1 py-0.5 bg-slate-300 rounded text-[0.6rem]">Source unavailable</span>
+        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
+          <span className="px-1 py-0.5 bg-slate-300 dark:bg-slate-700 rounded text-[0.6rem]">Source unavailable</span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
-            className="text-xs text-slate-700 bg-green-100 px-1.5 py-1 rounded line-clamp-2"
+            className="text-xs text-slate-700 dark:text-slate-300 bg-green-100 dark:bg-green-900/30 px-1.5 py-1 rounded line-clamp-2"
           >
             {s.text}
           </div>
         ))}
         {hiddenCount > 0 && (
-          <div className="text-[0.65rem] text-slate-400">
+          <div className="text-[0.65rem] text-slate-400 dark:text-slate-500">
             +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
-          <div className="pt-1 border-t border-slate-100">
+          <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
             <button
               type="button"
               onClick={onViewFull}
-              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
             >
               View full
               <ChevronRight size={10} />
@@ -335,14 +335,14 @@ export function TruncatedCommitView({
                   turnHash={turnHash}
                   startChar={firstHighlight?.start}
                   endChar={firstHighlight?.end}
-                  className="text-[0.6rem] text-blue-500 hover:text-blue-600"
+                  className="text-[0.6rem] text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   View Source
                 </ViewSourceLink>
               )}
             </div>
             {/* Truncated content with highlights */}
-            <div className="mt-0.5 text-slate-700">
+            <div className="mt-0.5 text-slate-700 dark:text-slate-300">
               {segments.map((seg, idx) => {
                 if (seg.type === 'ellipsis') {
                   return (
@@ -353,7 +353,7 @@ export function TruncatedCommitView({
                 }
                 if (seg.type === 'highlight') {
                   return (
-                    <mark key={idx} className="bg-green-200 text-green-900 px-0.5 rounded-sm">
+                    <mark key={idx} className="bg-green-200 dark:bg-green-700 text-green-900 dark:text-green-200 px-0.5 rounded-sm">
                       {seg.content}
                     </mark>
                   );
@@ -366,7 +366,7 @@ export function TruncatedCommitView({
       })}
 
       {/* Footer: +N more + View full */}
-      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700">
         <span className="text-[0.65rem] text-slate-400">
           {hiddenCount > 0 && `+${hiddenCount} sentence${hiddenCount !== 1 ? 's' : ''}`}
         </span>
@@ -374,7 +374,7 @@ export function TruncatedCommitView({
           <button
             type="button"
             onClick={onViewFull}
-            className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors"
+            className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
           >
             View full
             <ChevronRight size={10} />

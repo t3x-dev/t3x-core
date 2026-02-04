@@ -39,8 +39,8 @@ const roleLabels: Record<string, string> = {
 };
 
 const highlightColors: Record<HighlightColor, string> = {
-  yellow: 'bg-yellow-200',
-  green: 'bg-green-200',
+  yellow: 'bg-yellow-200 dark:bg-yellow-800/50',
+  green: 'bg-green-200 dark:bg-green-800/50',
   deepGreen: 'bg-green-500 text-white',
   deepRed: 'bg-red-500 text-white',
 };
@@ -128,8 +128,8 @@ export function TurnBubble({
   };
 
   const ringColorMap: Record<HighlightColor, string> = {
-    yellow: 'ring-2 ring-yellow-400 ring-offset-2',
-    green: 'ring-2 ring-green-400 ring-offset-2',
+    yellow: 'ring-2 ring-yellow-400 dark:ring-yellow-600 ring-offset-2',
+    green: 'ring-2 ring-green-400 dark:ring-green-600 ring-offset-2',
     deepGreen: 'ring-2 ring-green-600 ring-offset-2',
     deepRed: 'ring-2 ring-red-600 ring-offset-2',
   };
@@ -141,14 +141,14 @@ export function TurnBubble({
       className={`
         flex gap-3 p-3 rounded-lg
         ${ringClass}
-        ${isUser ? 'bg-blue-50' : 'bg-muted'}
+        ${isUser ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-muted'}
       `}
     >
       {/* Role Icon */}
       <div
         className={`
           shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          ${isUser ? 'bg-blue-100 text-blue-600' : 'bg-muted-foreground/20 text-muted-foreground'}
+          ${isUser ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-muted-foreground/20 text-muted-foreground'}
         `}
       >
         {roleIcons[turn.role] || <User className="h-4 w-4" />}

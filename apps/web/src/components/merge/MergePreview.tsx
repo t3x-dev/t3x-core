@@ -43,21 +43,21 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="text-green-600">{identicalCount} identical</span>
-            <span className="text-yellow-600">{stats.standard} resolved</span>
+            <span className="text-green-600 dark:text-green-400">{identicalCount} identical</span>
+            <span className="text-yellow-600 dark:text-yellow-400">{stats.standard} resolved</span>
             {stats.both > 0 && (
-              <span className="text-blue-600 flex items-center gap-0.5">
+              <span className="text-blue-600 dark:text-blue-400 flex items-center gap-0.5">
                 <Layers className="h-3 w-3" />
                 {stats.both} both
               </span>
             )}
             {stats.edit > 0 && (
-              <span className="text-purple-600 flex items-center gap-0.5">
+              <span className="text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
                 <Edit3 className="h-3 w-3" />
                 {stats.edit} edited
               </span>
             )}
-            <span className="text-blue-600">{keptSourceCount + keptTargetCount} unique kept</span>
+            <span className="text-blue-600 dark:text-blue-400">{keptSourceCount + keptTargetCount} unique kept</span>
           </div>
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -87,7 +87,7 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
                       </span>
                       <span className="flex-1">
                         {isMerged && (
-                          <span className="inline-flex items-center gap-0.5 text-xs text-purple-600 mr-1.5">
+                          <span className="inline-flex items-center gap-0.5 text-xs text-purple-600 dark:text-purple-400 mr-1.5">
                             <Edit3 className="h-3 w-3" />
                             edited:
                           </span>

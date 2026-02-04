@@ -100,11 +100,11 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
 
   // Otherwise show status
   const variants: Record<string, string> = {
-    queued: 'border-gray-500/30 bg-gray-500/10 text-gray-600',
-    running: 'border-blue-500/30 bg-blue-500/10 text-blue-600',
-    completed: 'border-green-500/30 bg-green-500/10 text-green-600',
-    failed: 'border-red-500/30 bg-red-500/10 text-red-600',
-    timeout: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600',
+    queued: 'border-gray-500/30 bg-gray-500/10 text-gray-600 dark:text-gray-400',
+    running: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    completed: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
+    failed: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+    timeout: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
   };
 
   return (
