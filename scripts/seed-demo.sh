@@ -321,7 +321,15 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     warn "Generation failed - leaf created without output (generate manually)"
   }
 else
-  warn "ANTHROPIC_API_KEY not set - leaf created without output (generate manually from UI)"
+  step "ANTHROPIC_API_KEY not set - writing mock output via PATCH..."
+  MOCK_OUTPUT="Our return policy allows standard returns within 30 days of purchase. All items must be in original packaging with all accessories included. For defective items, we offer an extended 90-day return window with covered return shipping costs. You may choose between a full refund or a replacement for any confirmed defect."
+  curl -sf -X PATCH "${API_V1}/leaves/${LEAF_ID}" \
+    -H "Content-Type: application/json" \
+    -d "{\"output\": \"${MOCK_OUTPUT}\"}" > /dev/null 2>&1 && {
+    ok "Mock output written to leaf (fallback for demo without API key)"
+  } || {
+    warn "Failed to write mock output - leaf created without output (generate manually from UI)"
+  }
 fi
 
 # --- Pin Conversation A ---
