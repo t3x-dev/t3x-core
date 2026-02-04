@@ -452,8 +452,10 @@ export function SelectableTextBlock({
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
       state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
-      state === 'selected' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
-      state === 'excluded' && 'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
+      state === 'selected' &&
+        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+      state === 'excluded' &&
+        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
@@ -618,7 +620,9 @@ function SourceBox({
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {typeLabel}:
         </span>
-        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{title}</span>
+        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+          {title}
+        </span>
       </div>
 
       {/* Box Content */}
@@ -912,8 +916,10 @@ function ConversationTurnRenderer({
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
       state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
-      state === 'selected' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
-      state === 'excluded' && 'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
+      state === 'selected' &&
+        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+      state === 'excluded' &&
+        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
@@ -991,8 +997,10 @@ function ConversationTurnRenderer({
           key={group.turn ? `turn-${group.turn.startTokenIndex}` : `ungrouped-${groupIdx}`}
           className={cn(
             'rounded-lg border p-3',
-            group.turn?.role === 'user' && 'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30',
-            group.turn?.role === 'assistant' && 'border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/30',
+            group.turn?.role === 'user' &&
+              'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30',
+            group.turn?.role === 'assistant' &&
+              'border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/30',
             !group.turn && 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
           )}
         >

@@ -57,7 +57,9 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
                 {stats.edit} edited
               </span>
             )}
-            <span className="text-blue-600 dark:text-blue-400">{keptSourceCount + keptTargetCount} unique kept</span>
+            <span className="text-blue-600 dark:text-blue-400">
+              {keptSourceCount + keptTargetCount} unique kept
+            </span>
           </div>
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />

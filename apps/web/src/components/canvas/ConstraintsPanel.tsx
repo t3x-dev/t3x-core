@@ -409,7 +409,9 @@ function KeywordTag({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm',
-        isMustHave ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+        isMustHave
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
         isRemoved && 'line-through opacity-40',
         isAdditional && 'border border-dashed border-current bg-transparent'
       )}

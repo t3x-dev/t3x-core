@@ -712,7 +712,10 @@ export function LeafConstraintSourceContext({
           if (!data || data.error) {
             const sentencesForTurn = byTurn.get(turnHash) || [];
             return (
-              <div key={turnHash} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div
+                key={turnHash}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
                 <button
                   type="button"
                   onClick={() => toggleTurn(turnHash)}
@@ -723,7 +726,9 @@ export function LeafConstraintSourceContext({
                   ) : (
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">Turn {idx + 1}</span>
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                    Turn {idx + 1}
+                  </span>
                   <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                     Source unavailable
                   </span>
@@ -790,7 +795,10 @@ export function LeafConstraintSourceContext({
           };
 
           return (
-            <div key={turnHash} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div
+              key={turnHash}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
               {!compact && (
                 <button
                   type="button"
@@ -828,7 +836,10 @@ export function LeafConstraintSourceContext({
 
               {isExpanded && (
                 <div
-                  className={cn('p-2 bg-white dark:bg-slate-900', isEditable && 'cursor-text select-text')}
+                  className={cn(
+                    'p-2 bg-white dark:bg-slate-900',
+                    isEditable && 'cursor-text select-text'
+                  )}
                   ref={(el) => {
                     turnBubbleRefs.current.set(turnHash, el);
                   }}
@@ -1017,7 +1028,9 @@ function ConstraintRow({
     <div
       className={cn(
         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm',
-        isRequire ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30' : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+        isRequire
+          ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+          : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
       )}
       onMouseEnter={() => onHover(constraint.id)}
       onMouseLeave={() => onHover(null)}
@@ -1028,7 +1041,10 @@ function ConstraintRow({
         <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 shrink-0" />
       )}
       <span
-        className={cn('flex-1 truncate font-medium', isRequire ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200')}
+        className={cn(
+          'flex-1 truncate font-medium',
+          isRequire ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+        )}
       >
         {constraint.value}
       </span>
