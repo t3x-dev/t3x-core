@@ -14,15 +14,7 @@
  * @see https://github.com/t3x-dev/T3X/issues/220
  */
 
-import {
-  AlertCircle,
-  CheckCircle,
-  Columns2,
-  Expand,
-  FileText,
-  Loader2,
-  MapPin,
-} from 'lucide-react';
+import { CheckCircle, Columns2, Expand, FileText, Loader2, MapPin } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
