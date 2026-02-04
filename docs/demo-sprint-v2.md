@@ -15,7 +15,7 @@
 >
 > 共享 issue S-1 已完成，S-2~S-10 待所有代码完成后执行。
 >
-> **总进度：39/48（81%）**
+> **总进度：42/48（88%）**
 
 ---
 
@@ -165,15 +165,15 @@
 | ID | 标题 | 说明 | 状态 |
 |----|------|------|------|
 | S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning | ✅ 已完成（commit `1c3e155d`），最终需再跑一次收尾 |
-| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ⬜ 需在所有 A+B 完成后重新执行 |
+| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ✅ 已完成（build 8/8, test 365 passed, check 0 errors / 87 pre-existing warnings） |
 | S-3 | B-5/B-6 稳定性决策 | B-5 跳过（保留三栏）；B-6 已完成且稳定，无需回退 | ✅ 已决策 |
 | S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ⬜ 需在所有代码完成后执行 |
 | S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ⬜ 待做 |
 | S-6 | 排练 #2 | 重复 S-4 | ⬜ 待做 |
 | S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ⬜ 待做 |
 | S-8 | 排练 #3（终版） | 应该 clean | ⬜ 待做 |
-| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ⬜ 待做 |
-| S-10 | Demo Day 清单确认 | 逐项检查清单 | ⬜ 待做 |
+| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ✅ 已完成（seed 脚本已补 mock output PATCH fallback；备份命令：`cp -r .t3x/database/ .t3x/database-backup/`） |
+| S-10 | Demo Day 清单确认 | 逐项检查清单 | ⚠️ 代码层面已检查（.env ✅, console 5 处均合理保留, build/test/lint ✅），浏览器层面待排练时确认 |
 
 ---
 
@@ -183,8 +183,8 @@
 |------|--------|------|------|
 | Person A | 17 | 17 | 100% |
 | Person B | 20 | 21 | 95% |
-| 共享 | 2 | 10 | 20% |
-| **总计** | **39** | **48** | **81%** |
+| 共享 | 5 | 10 | 50% |
+| **总计** | **42** | **48** | **88%** |
 
 ### 未完成 Issue 汇总
 
