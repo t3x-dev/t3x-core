@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Badge as BadgeIcon, Clock, Cpu, Search, Zap } from 'lucide-react';
+import { Activity, Cpu, Search, Zap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
