@@ -15,7 +15,7 @@
 >
 > 共享 issue S-1 已完成，S-2~S-10 待所有代码完成后执行。
 >
-> **总进度：38/48（79%）**
+> **总进度：39/48（81%）**
 
 ---
 
@@ -166,7 +166,7 @@
 |----|------|------|------|
 | S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning | ✅ 已完成（commit `1c3e155d`），最终需再跑一次收尾 |
 | S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ⬜ 需在所有 A+B 完成后重新执行 |
-| S-3 | B-5/B-6 稳定性决策 | B-6 已完成；B-5 未完成（仍三栏），需决策是否实施或回退 | ⬜ 待做 |
+| S-3 | B-5/B-6 稳定性决策 | B-5 跳过（保留三栏）；B-6 已完成且稳定，无需回退 | ✅ 已决策 |
 | S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ⬜ 需在所有代码完成后执行 |
 | S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ⬜ 待做 |
 | S-6 | 排练 #2 | 重复 S-4 | ⬜ 待做 |
@@ -183,8 +183,8 @@
 |------|--------|------|------|
 | Person A | 17 | 17 | 100% |
 | Person B | 20 | 21 | 95% |
-| 共享 | 1 | 10 | 10% |
-| **总计** | **38** | **48** | **79%** |
+| 共享 | 2 | 10 | 20% |
+| **总计** | **39** | **48** | **81%** |
 
 ### 未完成 Issue 汇总
 
@@ -223,11 +223,11 @@
 
 ## 回退策略
 
-| 组件 | 在 branch 上做？ | 回退方式 |
-|------|-----------------|----------|
-| B-5 CommittedCommitView 单栏 | 是 | `git checkout main -- CommittedCommitView.tsx` |
-| B-6 PendingCommitView wizard | 是 | `git checkout main -- PendingCommitView.tsx` |
-| 其余所有 issue | 否（直接在主分支） | 改动小，出问题手动修 |
+| 组件 | 状态 | 回退方式 |
+|------|------|----------|
+| B-5 CommittedCommitView 单栏 | ⏭️ 跳过，保留三栏 | 无需回退 |
+| B-6 PendingCommitView wizard | ✅ 已完成且稳定 | 如需回退：`git checkout main -- PendingCommitView.tsx` |
+| 其余所有 issue | ✅ 已完成 | 改动小，出问题手动修 |
 
 ---
 
@@ -259,7 +259,7 @@
 - [ ] 删 `.t3x/database/` → 重启 API → `./scripts/seed-demo.sh`
 - [ ] 项目列表 3 个项目 + 统计数据
 - [ ] Canvas 节点 + Next Step 按钮
-- [ ] 双击已提交节点 → 单栏视图（或三栏如已回退）
+- [ ] 双击已提交节点 → 三栏视图（B-5 跳过，B-15 已简化 Diff 入口）
 - [ ] 双击待提交节点 → wizard 流程（或旧版如已回退）
 - [ ] Leaf → Generate & Verify 正常
 - [ ] Merge workspace 有冲突
