@@ -451,29 +451,31 @@ export function SelectableTextBlock({
     }
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
-      state === 'normal' && 'hover:bg-slate-100',
-      state === 'selected' && 'bg-green-100 hover:bg-green-200',
-      state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
+      state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
+      state === 'selected' &&
+        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+      state === 'excluded' &&
+        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
       state === 'anchor-candidate' &&
-        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50 dark:hover:bg-amber-800',
       // Confirmed anchors: solid background with appropriate color
       state === 'anchor-must' &&
-        'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+        'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200 dark:hover:bg-emerald-700',
       state === 'anchor-mustnt' &&
-        'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+        'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
       state === 'anchor-preferred' &&
-        'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
-      isDragging && state === 'normal' && 'bg-blue-100'
+        'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
+      isDragging && state === 'normal' && 'bg-blue-100 dark:bg-blue-900/30'
     );
   };
 
   return (
     <div
       ref={containerRef}
-      className="p-4 bg-slate-50 rounded-lg border border-slate-200"
+      className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onMouseLeave={() => {
@@ -540,7 +542,7 @@ export function SelectableTextBlock({
       </div>
 
       {!readOnly && (
-        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -600,30 +602,32 @@ function SourceBox({
   return (
     <div
       className={cn(
-        'border border-slate-200 rounded-lg overflow-hidden',
+        'border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden',
         isExpanded && 'shadow-sm'
       )}
     >
       {/* Box Header */}
       <div
-        className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+        className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <span className="text-slate-400">
+        <span className="text-slate-400 dark:text-slate-400">
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <span className="w-6 h-6 rounded flex items-center justify-center bg-blue-100 text-blue-600">
+        <span className="w-6 h-6 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
           {icon}
         </span>
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {typeLabel}:
         </span>
-        <span className="text-sm font-medium text-slate-800 truncate">{title}</span>
+        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+          {title}
+        </span>
       </div>
 
       {/* Box Content */}
       {isExpanded && (
-        <div className="p-4 bg-white">
+        <div className="p-4 bg-white dark:bg-slate-900">
           {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
             // Unit with turns: Render with turn groups
             <ConversationTurnRenderer
@@ -911,22 +915,24 @@ function ConversationTurnRenderer({
   const getTokenClasses = (state: TokenState, isDragging: boolean) => {
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
-      state === 'normal' && 'hover:bg-slate-100',
-      state === 'selected' && 'bg-green-100 hover:bg-green-200',
-      state === 'excluded' && 'bg-red-100/60 hover:bg-red-200/60',
+      state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
+      state === 'selected' &&
+        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+      state === 'excluded' &&
+        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
       state === 'anchor-candidate' &&
-        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50',
+        'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50 dark:hover:bg-amber-800',
       // Confirmed anchors: solid background with appropriate color
       state === 'anchor-must' &&
-        'bg-emerald-100 text-emerald-800 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200',
+        'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200 dark:hover:bg-emerald-700',
       state === 'anchor-mustnt' &&
-        'bg-rose-100 text-rose-800 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200',
+        'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
       state === 'anchor-preferred' &&
-        'bg-blue-100 text-blue-800 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200',
-      isDragging && state === 'normal' && 'bg-blue-100'
+        'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
+      isDragging && state === 'normal' && 'bg-blue-100 dark:bg-blue-900/30'
     );
   };
 
@@ -991,9 +997,11 @@ function ConversationTurnRenderer({
           key={group.turn ? `turn-${group.turn.startTokenIndex}` : `ungrouped-${groupIdx}`}
           className={cn(
             'rounded-lg border p-3',
-            group.turn?.role === 'user' && 'border-blue-200 bg-blue-50/50',
-            group.turn?.role === 'assistant' && 'border-emerald-200 bg-emerald-50/50',
-            !group.turn && 'border-slate-200 bg-slate-50'
+            group.turn?.role === 'user' &&
+              'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30',
+            group.turn?.role === 'assistant' &&
+              'border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/30',
+            !group.turn && 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
           )}
         >
           {/* Turn header removed - [role]: prefix in content provides role info */}
@@ -1004,7 +1012,7 @@ function ConversationTurnRenderer({
       ))}
 
       {!readOnly && (
-        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-500 text-center">
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -1060,7 +1068,7 @@ interface SourceExcerptViewerProps {
 export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
   if (!blocks || blocks.length === 0) {
     return (
-      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center text-sm text-slate-500 italic">
+      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-sm text-slate-500 dark:text-slate-400 italic">
         <span>No source excerpt recorded</span>
       </div>
     );
@@ -1097,15 +1105,15 @@ export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
 
   if (!excerptText.trim()) {
     return (
-      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-center text-sm text-slate-500 italic">
+      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-sm text-slate-500 dark:text-slate-400 italic">
         <span>No semantic content selected</span>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-      <div className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
         {excerptText}
       </div>
     </div>

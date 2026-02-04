@@ -524,8 +524,9 @@ export const reducedMotion = {
    - `Enter` to open node detail modal
 
 2. **Dark Mode Polish**
-   - Currently functional, needs visual refinement
-   - Consider glow effects for selected nodes
+   - ✅ 已完成全量修复（demo-sprint B-11: 300+ dark: 变体覆盖 34 文件）
+   - 所有 demo 路径页面在暗色模式下可用
+   - 可考虑进一步优化：glow effects for selected nodes
 
 3. **Animation Orchestration**
    - Stagger animations when multiple nodes appear

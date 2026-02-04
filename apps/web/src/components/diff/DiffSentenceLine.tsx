@@ -26,8 +26,18 @@ const lineStyles = {
     border: 'border-transparent',
     prefix: ' ',
   },
-  added: { bg: 'bg-green-50', text: 'text-green-900', border: 'border-green-300', prefix: '+' },
-  removed: { bg: 'bg-red-50', text: 'text-red-900', border: 'border-red-300', prefix: '-' },
+  added: {
+    bg: 'bg-green-50 dark:bg-green-950/30',
+    text: 'text-green-900 dark:text-green-100',
+    border: 'border-green-300 dark:border-green-700',
+    prefix: '+',
+  },
+  removed: {
+    bg: 'bg-red-50 dark:bg-red-950/30',
+    text: 'text-red-900 dark:text-red-100',
+    border: 'border-red-300 dark:border-red-700',
+    prefix: '-',
+  },
 };
 
 export function DiffSentenceLine({

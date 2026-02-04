@@ -578,7 +578,9 @@ Ordered by importance:
 ## 11. Three-Layer Capability Model
 
 > **Status**: Design Specification (Single Source of Truth)
-> **Related Issues**: #283-#294 (UX Redesign Implementation)
+> **Related Issues**: UX Redesign Issues 1-12 (see `docs/plans/ux-redesign-issues.md`)
+>
+> **实施说明**: CommittedCommitView 保留三栏布局（Issue 1-3 跳过），下表 CommittedCommitView 列描述的是**目标状态**。当前实际实现中 Layer 1-3 并未拆分为折叠层级，但 Next Step 按钮（B-4）、节点卡片简化（B-8）、Diff 入口简化（B-15）已在现有布局上落地。
 
 This section defines the operational model for progressive feature disclosure in T3X WebUI. All UI implementation should follow these layer assignments to ensure consistency across the product.
 

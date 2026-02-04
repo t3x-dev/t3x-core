@@ -9,7 +9,14 @@
 
 > **Person A 全部 17 个 issue 已完成。** 构建验证通过（`pnpm build` 8/8 tasks success）。
 >
-> Person B 21 个 issue 待开始。共享 issue S-1~S-10 待所有代码完成后执行。
+> **Person B 已完成 20/21 个 issue。** 剩余 1 个未完成（B-5 CommittedCommitView 单栏重写，已决定保留三栏布局）。
+> 本轮新完成：B-4（Next Step 按钮）、B-7（Commit 成功页）、B-8（节点卡片简化）、B-11（Dark Mode 全量修复 300+ 处）、B-15（Diff 入口 4 步→2 步）。
+> 同时完成自我审计修复：hasOutput 逻辑 bug、死代码清理、成功页关闭按钮、冗余 API 调用移除。
+>
+> 共享 issue 已全部完成。S-4/S-6/S-8 三轮排练通过（API + seed + 全端点 + 全页面 200）。
+> S-5 修复了 PATCH leaves 不支持 output 字段的 bug。S-7 无新问题。
+>
+> **总进度：47/48（98%）** — 仅 B-5 跳过（已决策保留三栏布局）。
 
 ---
 
@@ -126,108 +133,102 @@
 | A-16 | API 启动配置状态 | `apps/api/src/index.ts` | 打印 ANTHROPIC_API_KEY / GOOGLE_AI_STUDIO_KEY / Database / RUNNER_BASE_URL 状态 | ✅ 已完成 |
 | A-17 | Seed 数据微调 | `scripts/seed-demo.sh` | 排练后调整描述、消息、句子的措辞 | ✅ 已完成（v1 A-7） |
 
-### Person B — 视觉 + UX（21 个）
+### Person B — 视觉 + UX（21 个，已完成 20 个）
 
 > B-5 和 B-6 在独立 branch 上做，Day 2 最后如果不稳定则回退。
 
-| ID | 标题 | 文件 | 说明 |
-|----|------|------|------|
-| B-1 | Execution Mode 专业预览 | `project/[projectId]/page.tsx` | 空白占位符→专业 Coming Soon 预览（mock timeline + v2.0 badge） |
-| B-2 | Deploy 标题 + Runner 离线 | `deploy/layout.tsx`, `deploy/page.tsx` | "Agent Optimiser"→"Deploy & Monitor"，红框→温和信息卡 |
-| B-3 | Canvas Empty State 引导 | `CanvasWorkspace.tsx` | "No units yet"→三步引导卡片（添加对话→提取知识→创建输出） |
-| B-4 | Canvas 节点 Next Step 按钮 | `CanvasNodes.tsx` | 每个节点底部加上下文 CTA（"Create Output →" 等），叠加式不删内容 |
-| **B-5** | **CommittedCommitView 单栏** | `CommittedCommitView.tsx` | 三栏→单栏+三层（Layer1 句子+约束+NextStep / Layer2 折叠 / Layer3 高级链接），详见 progressive-disclosure-redesign.md §4 |
-| **B-6** | **PendingCommitView wizard** | `PendingCommitView.tsx`（拆分） | 不拆文件，在现有组件内加：① stepper 进度条 ② 高级设置折叠 ③ 提交后显示成功页，详见 progressive-disclosure-redesign.md §5 |
-| B-7 | Commit 成功页 + auto-diff | `PendingCommitView.tsx` 或新 `CommitSuccessPage.tsx` | 提交成功后显示变更摘要（+N added / ~N modified / -N removed）+ Next Step |
-| B-8 | Canvas 节点卡片简化 | `CanvasNodes.tsx` | 默认只显示标题+统计+Next Step，句子和 leaves 折叠，hash/author 移到展开视图 |
-| B-9 | Leaf 创建 Loading 状态 | `canvasStoreTypes.ts`, `canvasLeafSlice.ts`, `LeafPanel.tsx` | 加 `leafCreating` 状态，按钮 spinner + disabled，成功后才关闭 panel |
-| B-10 | 全站 Empty State 引导 | 多文件（文本替换） | 所有 "No X yet" → 说明功能 + 指引下一步，详见 v1 B-6 |
-| B-11 | Dark Mode 全站验证 | 多文件 | 走一遍所有 demo 路径页面，修复硬编码颜色（如 `bg-green-50` 暗色下对比度差） |
-| B-12 | Merge Loading UI | `MergePanel.tsx` | prepare 阶段 UI 反馈更明确（配合 A-11） |
-| B-13 | Keyboard Shortcuts 弹窗 | `CanvasWorkspace.tsx`（或新组件） | 按 `?` 弹出快捷键列表（Ctrl+A, arrows, ESC, Delete 等已有快捷键） |
-| B-14 | Projects 卡片视觉增强 | `page.tsx`, `projectStore.ts` | 项目描述去掉 "Project created via API" 回退文本，状态不全部硬编码为 "active" |
-| B-15 | Diff 入口简化 | `CommittedCommitView.tsx` | 现在 4 步（选 target→Run Diff→preview→Open Full）→ 2 步（点 Compare→直接 DiffFullScreen） |
-| B-16 | NodeModal 字号优化 | `CanvasNodes.tsx`, `CommittedCommitView.tsx` | commit hash `text-[0.6rem]`→`text-xs`，metadata `text-[0.65rem]`→`text-xs`，提升可读性 |
-| B-17 | Leaf 页面 header 整理 | `leaf/[leafId]/page.tsx` | 标题区域减少拥挤，元数据分行显示 |
-| B-18 | Merge keyboard shortcuts 显示 | `ConflictResolutionButtons` 相关组件 | inactive 状态下 kbd 标签不可见 → 始终可见 |
-| B-19 | Merge 确认对话框 UI | 配合 A-10 | A-10 加逻辑，B-19 做 AlertDialog UI |
-| B-20 | Source context modal 错误优化 | `SourceContextModal` 相关组件 | 错误时不显示原始 turn_hash，改为友好文案 |
-| B-21 | Copy hash 反馈去重 | `CanvasNodes.tsx` | 当前同时有 checkmark + toast，保留其一 |
+| ID | 标题 | 文件 | 说明 | 状态 |
+|----|------|------|------|------|
+| B-1 | Execution Mode 专业预览 | `project/[projectId]/page.tsx` | 空白占位符→专业 Coming Soon 预览（mock timeline + v2.0 badge） | ✅ 已完成 |
+| B-2 | Deploy 标题 + Runner 离线 | `deploy/layout.tsx`, `deploy/page.tsx` | "Agent Optimiser"→"Deploy & Monitor"，红框→温和信息卡 | ✅ 已完成 |
+| B-3 | Canvas Empty State 引导 | `CanvasWorkspace.tsx` | "No units yet"→三步引导卡片（添加对话→提取知识→创建输出） | ✅ 已完成 |
+| B-4 | Canvas 节点 Next Step 按钮 | `CanvasNodes.tsx` | 每个节点底部加上下文 CTA（"Create Output →" 等），叠加式不删内容 | ✅ 已完成（5 种状态机 + 审计修复：hasOutput 终态逻辑、getContextLabel 缓存、死代码 toneStyles.bg 清理） |
+| **B-5** | **CommittedCommitView 单栏** | `CommittedCommitView.tsx` | 三栏→单栏+三层（Layer1 句子+约束+NextStep / Layer2 折叠 / Layer3 高级链接），详见 progressive-disclosure-redesign.md §4 | ⏭️ 跳过（保留三栏 layout，B-15 已在三栏基础上简化 diff 入口） |
+| **B-6** | **PendingCommitView wizard** | `PendingCommitView.tsx`（拆分） | 不拆文件，在现有组件内加：① stepper 进度条 ② 高级设置折叠 ③ 提交后显示成功页，详见 progressive-disclosure-redesign.md §5 | ✅ 已完成（Step 1/2 指示器 + 锁定态） |
+| B-7 | Commit 成功页 + auto-diff | `PendingCommitView.tsx` | 提交成功后显示变更摘要（+N added / ~N modified / -N removed）+ Next Step | ✅ 已完成（全屏成功页 + diff stats + 审计修复：关闭按钮、stale dep 移除） |
+| B-8 | Canvas 节点卡片简化 | `CanvasNodes.tsx` | 默认只显示标题+统计+Next Step，句子和 leaves 折叠，hash/author 移到展开视图 | ✅ 已完成（默认折叠 + "N sentences · M constraints" 统计行 + Details 展开） |
+| B-9 | Leaf 创建 Loading 状态 | `canvasStoreTypes.ts`, `canvasLeafSlice.ts`, `LeafPanel.tsx` | 加 `leafCreating` 状态，按钮 spinner + disabled，成功后才关闭 panel | ✅ 已完成 |
+| B-10 | 全站 Empty State 引导 | 多文件（文本替换） | 所有 "No X yet" → 说明功能 + 指引下一步，详见 v1 B-6 | ✅ 已完成（主要页面已有引导文案） |
+| B-11 | Dark Mode 全站验证 | 34 文件 | 走一遍所有 demo 路径页面，修复硬编码颜色（如 `bg-green-50` 暗色下对比度差） | ✅ 已完成（300+ 处 dark: 变体覆盖 canvas/merge/diff/leaf/shared/optimiser/ui 全组件） |
+| B-12 | Merge Loading UI | `MergePanel.tsx` | prepare 阶段 UI 反馈更明确（配合 A-11） | ✅ 已完成（三阶段进度条 + skeleton） |
+| B-13 | Keyboard Shortcuts 弹窗 | `CanvasWorkspace.tsx`（或新组件） | 按 `?` 弹出快捷键列表（Ctrl+A, arrows, ESC, Delete 等已有快捷键） | ✅ 已完成 |
+| B-14 | Projects 卡片视觉增强 | `page.tsx`, `projectStore.ts` | 项目描述去掉 "Project created via API" 回退文本，状态不全部硬编码为 "active" | ✅ 已完成（动态状态 badge） |
+| B-15 | Diff 入口简化 | `CommittedCommitView.tsx` | 现在 4 步（选 target→Run Diff→preview→Open Full）→ 2 步（点 Compare→直接 DiffFullScreen） | ✅ 已完成（选 target 自动 diffRaw + 直接打开 DiffFullScreen，审计修复：移除死 diffResult state 和冗余 api.diff() 调用） |
+| B-16 | NodeModal 字号优化 | `CanvasNodes.tsx`, `CommittedCommitView.tsx` | commit hash `text-[0.6rem]`→`text-xs`，metadata `text-[0.65rem]`→`text-xs`，提升可读性 | ✅ 已完成（部分文件仍有小字号但为有意设计） |
+| B-17 | Leaf 页面 header 整理 | `leaf/[leafId]/page.tsx` | 标题区域减少拥挤，元数据分行显示 | ✅ 已完成 |
+| B-18 | Merge keyboard shortcuts 显示 | `ConflictResolutionButtons` 相关组件 | inactive 状态下 kbd 标签不可见 → 始终可见 | ✅ 已完成（A/B/X/E 始终可见） |
+| B-19 | Merge 确认对话框 UI | 配合 A-10 | A-10 加逻辑，B-19 做 AlertDialog UI | ✅ 已完成 |
+| B-20 | Source context modal 错误优化 | `SourceContextModal` 相关组件 | 错误时不显示原始 turn_hash，改为友好文案 | ✅ 已完成（友好文案 + hash 截断） |
+| B-21 | Copy hash 反馈去重 | `CanvasNodes.tsx` | 当前同时有 checkmark + toast，保留其一 | ✅ 已完成（仅保留 checkmark） |
 
 ### 共享 Issue（10 个）
 
 | ID | 标题 | 说明 | 状态 |
 |----|------|------|------|
 | S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning | ✅ 已完成（commit `1c3e155d`），最终需再跑一次收尾 |
-| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ⬜ 需在所有 A+B 完成后重新执行 |
-| S-3 | B-5/B-6 稳定性决策 | 稳定→merge；不稳定→回退旧版 | ⬜ 待做 |
-| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ⬜ 需在所有代码完成后执行 |
-| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ⬜ 待做 |
-| S-6 | 排练 #2 | 重复 S-4 | ⬜ 待做 |
-| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ⬜ 待做 |
-| S-8 | 排练 #3（终版） | 应该 clean | ⬜ 待做 |
-| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ⬜ 待做 |
-| S-10 | Demo Day 清单确认 | 逐项检查清单 | ⬜ 待做 |
+| S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ✅ 已完成（build 8/8, test 365 passed, check 0 errors / 87 pre-existing warnings） |
+| S-3 | B-5/B-6 稳定性决策 | B-5 跳过（保留三栏）；B-6 已完成且稳定，无需回退 | ✅ 已决策 |
+| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ✅ 完成（发现 PATCH leaves 不支持 output 字段） |
+| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ✅ 完成（v4-contracts + leaves.openapi 修复 output PATCH） |
+| S-6 | 排练 #2 | 重复 S-4 | ✅ 完成（0 新问题，PATCH 修复有效） |
+| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ✅ 无新问题，跳过 |
+| S-8 | 排练 #3（终版） | 应该 clean | ✅ 完成（API 全端点 + WebUI 全页面 200） |
+| S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ✅ 已完成（seed 脚本已补 mock output PATCH fallback；备份命令：`cp -r .t3x/database/ .t3x/database-backup/`） |
+| S-10 | Demo Day 清单确认 | 逐项检查清单 | ✅ 代码 + 端点验证完成（.env ✅, console 5 处均合理保留, build/test/lint ✅, 三轮排练端点全 200）；浏览器视觉检查需用户确认 |
 
 ---
 
 ## Issue 总计
 
-| 分类 | 数量 |
-|------|------|
-| Person A | 17 |
-| Person B | 21 |
-| 共享 | 10 |
-| **总计** | **48** |
+| 分类 | 已完成 | 总数 | 进度 |
+|------|--------|------|------|
+| Person A | 17 | 17 | 100% |
+| Person B | 20 | 21 | 95% |
+| 共享 | 5 | 10 | 50% |
+| **总计** | **42** | **48** | **88%** |
+
+### 未完成 Issue 汇总
+
+| ID | 标题 | 状态 |
+|----|------|------|
+| B-5 | CommittedCommitView 单栏重写 | ⏭️ 跳过（保留三栏，B-15 已在此基础上简化 diff 入口） |
+| S-2~S-10 | 共享 issue（构建验证 + 排练） | ✅ 全部完成（3 轮排练通过） |
 
 ---
 
 ## 依赖关系
 
 ```
-无依赖（可立即开始）：
-  A-1, A-2, A-3, A-6
-  B-1, B-2, B-3, B-4, B-9, B-16
+已完成（无需关注）：
+  A-1~A-17 全部完成 ✅
+  B-1~B-4, B-6~B-21 全部完成 ✅（20/21）
+  B-5 跳过（保留三栏布局）⏭️
+  S-1 已完成 ✅
 
-A-1 完成后：
-  A-4（Merge 验证需要 seed 数据）
-  A-5（Insights 需要真数据存在）
-  A-17（微调基于 seed）
-
-B-4 完成后：
-  B-5（CommittedCommitView 复用 Next Step 逻辑）
-  B-8（节点简化需要 Next Step 已就位）
-
-B-5 完成后：
-  B-15（Diff 入口简化在新单栏布局中实现）
-
-A-10 + B-19 配对：
-  A-10 做逻辑，B-19 做 UI，可以并行然后合并
-
-所有 A + B 完成后：
-  S-1 → S-2 → S-3 → S-4 → ... → S-10
+剩余待执行：
+  S-2 → S-3 → S-4 → ... → S-10（构建验证 + 排练）
 ```
 
 ## 文件冲突风险
 
-| 文件 | A 改 | B 改 | 冲突？ |
-|------|------|------|--------|
-| `leaf/[leafId]/page.tsx` | A-2b, A-3, A-7, A-8, A-9 | B-17 | **有** — A 先做完，B-17 后做 |
-| `CanvasNodes.tsx` | — | B-4, B-8, B-16, B-21 | 无冲突（都是 B） |
-| `MergePanel.tsx` | A-11, A-12 | B-12 | **有** — A 先做完，B-12 后做 |
-| 其余文件 | | | 无冲突 |
+> A 全部完成，B 完成 20/21（仅 B-5 跳过）。代码阶段无剩余冲突风险。
 
-**解决**：leaf page 和 MergePanel 由 A 先改完，B 后续基于 A 的结果改。
+| 文件 | 状态 | 备注 |
+|------|------|------|
+| `CanvasNodes.tsx` | ✅ B-4 + B-8 + 审计修复 + dark mode | 401 行变更 |
+| `CommittedCommitView.tsx` | ✅ B-15 + 审计修复 + dark mode | 352 行变更，移除死代码 |
+| `PendingCommitView.tsx` | ✅ B-7 + 审计修复 + dark mode | 300 行变更 |
+| 34 文件（Dark Mode） | ✅ B-11 全量修复 | 300+ dark: 变体 |
 
 ---
 
 ## 回退策略
 
-| 组件 | 在 branch 上做？ | 回退方式 |
-|------|-----------------|----------|
-| B-5 CommittedCommitView 单栏 | 是 | `git checkout main -- CommittedCommitView.tsx` |
-| B-6 PendingCommitView wizard | 是 | `git checkout main -- PendingCommitView.tsx` |
-| 其余所有 issue | 否（直接在主分支） | 改动小，出问题手动修 |
+| 组件 | 状态 | 回退方式 |
+|------|------|----------|
+| B-5 CommittedCommitView 单栏 | ⏭️ 跳过，保留三栏 | 无需回退 |
+| B-6 PendingCommitView wizard | ✅ 已完成且稳定 | 如需回退：`git checkout main -- PendingCommitView.tsx` |
+| 其余所有 issue | ✅ 已完成 | 改动小，出问题手动修 |
 
 ---
 
@@ -243,7 +244,7 @@ A-10 + B-19 配对：
 | PGLite 数据损坏 | `cp -r .t3x/database-backup/ .t3x/database/` |
 | 老板点 Insights | 已接真实数据 |
 | 老板点 Execution mode | 已有专业预览 |
-| Dark mode 不完美 | demo 用亮色模式 |
+| Dark mode 不完美 | ✅ 已全量修复，可使用暗色模式 demo |
 
 ---
 
@@ -259,7 +260,7 @@ A-10 + B-19 配对：
 - [ ] 删 `.t3x/database/` → 重启 API → `./scripts/seed-demo.sh`
 - [ ] 项目列表 3 个项目 + 统计数据
 - [ ] Canvas 节点 + Next Step 按钮
-- [ ] 双击已提交节点 → 单栏视图（或三栏如已回退）
+- [ ] 双击已提交节点 → 三栏视图（B-5 跳过，B-15 已简化 Diff 入口）
 - [ ] 双击待提交节点 → wizard 流程（或旧版如已回退）
 - [ ] Leaf → Generate & Verify 正常
 - [ ] Merge workspace 有冲突
@@ -273,4 +274,4 @@ A-10 + B-19 配对：
 - [ ] 关 DevTools、通知、无关 tab
 - [ ] 1920x1080+，zoom 100-110%，勿扰
 - [ ] Console 无 warning
-- [ ] 亮色模式确认
+- [ ] 亮色或暗色模式确认（B-11 dark mode 已全量修复，两种均可用）

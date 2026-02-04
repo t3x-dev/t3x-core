@@ -172,8 +172,8 @@ export function ConstraintTextSelector({
         className={cn(
           'rounded-sm px-0.5 transition-all',
           range.type === 'require'
-            ? 'bg-green-700/20 text-green-900'
-            : 'bg-red-700/20 text-red-900',
+            ? 'bg-green-700/20 text-green-900 dark:text-green-100'
+            : 'bg-red-700/20 text-red-900 dark:text-red-100',
           isHovered && 'ring-2 ring-offset-1',
           isHovered && range.type === 'require' && 'ring-green-500',
           isHovered && range.type === 'exclude' && 'ring-red-500'
@@ -195,7 +195,10 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'require' ? 'default' : 'outline'}
-          className={cn(mode === 'require' && 'bg-green-600 hover:bg-green-700 text-white')}
+          className={cn(
+            mode === 'require' &&
+              'bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white'
+          )}
           onClick={() => setMode('require')}
         >
           <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -204,7 +207,10 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'exclude' ? 'default' : 'outline'}
-          className={cn(mode === 'exclude' && 'bg-red-600 hover:bg-red-700 text-white')}
+          className={cn(
+            mode === 'exclude' &&
+              'bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-600 text-white'
+          )}
           onClick={() => setMode('exclude')}
         >
           <ShieldX className="h-3.5 w-3.5 mr-1.5" />
@@ -216,7 +222,7 @@ export function ConstraintTextSelector({
       {/* Merged text block */}
       <div
         ref={textRef}
-        className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 leading-relaxed cursor-text select-text whitespace-pre-wrap"
+        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed cursor-text select-text whitespace-pre-wrap"
         onMouseUp={handleMouseUp}
       >
         {segments}
@@ -239,7 +245,7 @@ export function ConstraintTextSelector({
         <div className="space-y-3">
           {requireConstraints.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1.5">
+              <h4 className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide mb-1.5">
                 Must Have ({requireConstraints.length})
               </h4>
               <div className="space-y-1">
@@ -257,7 +263,7 @@ export function ConstraintTextSelector({
           )}
           {excludeConstraints.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1.5">
+              <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1.5">
                 Must Not Have ({excludeConstraints.length})
               </h4>
               <div className="space-y-1">
@@ -306,18 +312,23 @@ function ConstraintRow({
     <div
       className={cn(
         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm',
-        isRequire ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+        isRequire
+          ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+          : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
       )}
       onMouseEnter={() => onHover(constraint.id)}
       onMouseLeave={() => onHover(null)}
     >
       {isRequire ? (
-        <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+        <CheckCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400 shrink-0" />
       ) : (
-        <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+        <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 shrink-0" />
       )}
       <span
-        className={cn('flex-1 truncate font-medium', isRequire ? 'text-green-800' : 'text-red-800')}
+        className={cn(
+          'flex-1 truncate font-medium',
+          isRequire ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+        )}
       >
         {constraint.value}
       </span>

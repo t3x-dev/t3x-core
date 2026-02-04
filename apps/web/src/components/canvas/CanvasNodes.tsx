@@ -2,9 +2,12 @@ import type { Node, NodeProps } from '@xyflow/react';
 import { Handle, NodeToolbar, Position } from '@xyflow/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  ArrowRight,
   CheckCircle,
+  ChevronDown,
   ChevronRight,
   Copy,
+  Eye,
   FilePlus,
   FileText,
   FlaskConical,
@@ -126,50 +129,44 @@ const sourceHandleStyle = {
 // Tone-based style configurations - Pro design with refined shadows and gradients
 const toneStyles = {
   'main-latest': {
-    bg: 'bg-gradient-to-br from-blue-50 to-indigo-50/50',
     border: 'border-blue-400/50',
     shadow: 'shadow-[0_4px_20px_-4px_rgba(59,130,246,0.25),0_0_0_1px_rgba(59,130,246,0.08)]',
-    accent: 'text-blue-600',
+    accent: 'text-blue-600 dark:text-blue-400',
     badgeBg: 'bg-gradient-to-r from-blue-600 to-indigo-600',
     zIndex: 'z-[4]',
   },
   'main-history': {
-    bg: 'bg-gradient-to-br from-slate-50 to-blue-50/30',
-    border: 'border-blue-300/40',
+    border: 'border-blue-300/40 dark:border-blue-700/40',
     shadow: 'shadow-[0_2px_12px_-4px_rgba(59,130,246,0.15),0_0_0_1px_rgba(59,130,246,0.05)]',
-    accent: 'text-blue-500',
+    accent: 'text-blue-500 dark:text-blue-400',
     badgeBg: 'bg-blue-500',
     zIndex: 'z-[2]',
   },
   'branch-latest': {
-    bg: 'bg-gradient-to-br from-amber-50 to-orange-50/50',
     border: 'border-amber-400/50',
     shadow: 'shadow-[0_4px_20px_-4px_rgba(245,158,11,0.25),0_0_0_1px_rgba(245,158,11,0.08)]',
-    accent: 'text-amber-600',
+    accent: 'text-amber-600 dark:text-amber-400',
     badgeBg: 'bg-gradient-to-r from-amber-500 to-orange-500',
     zIndex: 'z-[4]',
   },
   'branch-history': {
-    bg: 'bg-gradient-to-br from-slate-50 to-amber-50/30',
-    border: 'border-amber-300/40',
+    border: 'border-amber-300/40 dark:border-amber-700/40',
     shadow: 'shadow-[0_2px_12px_-4px_rgba(245,158,11,0.15),0_0_0_1px_rgba(245,158,11,0.05)]',
-    accent: 'text-amber-500',
+    accent: 'text-amber-500 dark:text-amber-400',
     badgeBg: 'bg-amber-500',
     zIndex: 'z-[2]',
   },
   staging: {
-    bg: 'bg-gradient-to-br from-slate-50 to-slate-100/50',
-    border: 'border-slate-300/60 border-dashed',
+    border: 'border-slate-300/60 border-dashed dark:border-slate-700/60',
     shadow: 'shadow-[0_2px_12px_-4px_rgba(100,116,139,0.12),0_0_0_1px_rgba(100,116,139,0.06)]',
-    accent: 'text-slate-500',
-    badgeBg: 'bg-transparent border border-dashed border-slate-400',
+    accent: 'text-slate-500 dark:text-slate-400',
+    badgeBg: 'bg-transparent border border-dashed border-slate-400 dark:border-slate-600',
     zIndex: 'z-[3]',
   },
   default: {
-    bg: 'bg-gradient-to-br from-white to-slate-50',
-    border: 'border-slate-200',
+    border: 'border-slate-200 dark:border-slate-800',
     shadow: 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]',
-    accent: 'text-blue-600',
+    accent: 'text-blue-600 dark:text-blue-400',
     badgeBg: 'bg-blue-600',
     zIndex: 'z-[2]',
   },
@@ -201,7 +198,9 @@ function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
   return (
     <span
       className={`text-xs px-1.5 py-0.5 rounded ${
-        isVerified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+        isVerified
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
       }`}
     >
       {author.name}
@@ -218,7 +217,9 @@ function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
   return (
     <span
       className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
-        isAgent ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+        isAgent
+          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
       }`}
     >
       {author.name || author.id || 'Unknown'}
@@ -233,8 +234,8 @@ function ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
     <span
       className={`text-xs px-1.5 py-0.5 rounded ${
         isRequire
-          ? 'bg-green-100 text-green-700 border border-green-300'
-          : 'bg-red-100 text-red-700 border border-red-300 line-through'
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700'
+          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 line-through'
       }`}
     >
       {isRequire ? '✓' : '✗'} {constraint.value}
@@ -270,7 +271,7 @@ function CommitV3Content({
   const remainingConstraints = commit.constraints.length - PREVIEW_MAX_CONSTRAINTS;
 
   return (
-    <div className="commit-v3-content mt-2 pt-2 border-t border-slate-100">
+    <div className="commit-v3-content mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-xs text-slate-400">by</span>
@@ -279,7 +280,7 @@ function CommitV3Content({
 
       {/* Sentences - use TruncatedCommitView if source context available */}
       <div>
-        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Sentences ({commit.sentences.length})
         </div>
         {commit.sentences.length === 0 ? (
@@ -303,7 +304,7 @@ function CommitV3Content({
         ) : (
           <ul className="space-y-0.5">
             {displaySentences.map((s) => (
-              <li key={s.id} className="text-xs text-slate-700 line-clamp-1">
+              <li key={s.id} className="text-xs text-slate-700 dark:text-slate-300 line-clamp-1">
                 • {s.text}
               </li>
             ))}
@@ -317,7 +318,7 @@ function CommitV3Content({
       {/* Constraints (preview) */}
       {commit.constraints.length > 0 && (
         <div className="mt-2">
-          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+          <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
             Constraints ({commit.constraints.length})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -355,20 +356,20 @@ function CommitV4Content({
   const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
 
   return (
-    <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100">
+    <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-xs text-slate-400">by</span>
         <AuthorBadgeV4 author={commit.author} />
         {/* V4 badge */}
-        <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
+        <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
           V4
         </span>
       </div>
 
       {/* Sentences (preview) */}
       <div>
-        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           Sentences ({sentences.length})
         </div>
         {sentences.length === 0 ? (
@@ -377,14 +378,14 @@ function CommitV4Content({
           <>
             <ul className="mt-1 space-y-0.5">
               {displaySentences.map((s) => (
-                <li key={s.id} className="text-xs text-slate-700 line-clamp-2">
+                <li key={s.id} className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
                   <span className="text-slate-400 font-mono text-xs mr-1">{s.id}</span>
                   {s.text}
                 </li>
               ))}
             </ul>
             {/* Footer with +N more and View full */}
-            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100">
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
               {remainingSentences > 0 ? (
                 <span className="text-xs text-slate-400">
                   +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
@@ -396,7 +397,7 @@ function CommitV4Content({
                 <button
                   type="button"
                   onClick={onViewFull}
-                  className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                  className="inline-flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                 >
                   View full
                   <ChevronRight size={10} />
@@ -408,8 +409,10 @@ function CommitV4Content({
       </div>
 
       {/* V4: Constraints notice */}
-      <div className="mt-2 px-2 py-1.5 bg-amber-50 rounded border border-amber-200">
-        <p className="text-xs text-amber-700">Constraints are defined in Leaves</p>
+      <div className="mt-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800">
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Constraints are defined in Leaves
+        </p>
       </div>
     </div>
   );
@@ -419,6 +422,7 @@ function CommitV4Content({
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
   const [leavesExpanded, setLeavesExpanded] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
   const router = useRouter();
   const params = useParams();
@@ -512,6 +516,59 @@ function UnitNode(props: Props) {
     return `/project/${projectId}/leaf/${leaf.id}`;
   };
 
+  // B-4: Next Step button logic
+  const getNextStep = (): { label: string; icon: typeof ArrowRight; action: () => void } | null => {
+    if (isStaging && !data.conversationId) {
+      return {
+        label: 'Start Conversation',
+        icon: MessageSquarePlus,
+        action: () => openNodeModal(id, 'conversation'),
+      };
+    }
+    if (isStaging && data.conversationId) {
+      return {
+        label: 'Create Commit',
+        icon: GitCommit,
+        action: () => openNodeModal(id, 'commit'),
+      };
+    }
+    if (isCommitted && (!data.leaves || data.leaves.length === 0)) {
+      return {
+        label: 'Create Output',
+        icon: Plus,
+        action: () => openLeafPanel(id),
+      };
+    }
+    if (isCommitted && data.leaves && data.leaves.length > 0) {
+      const firstLeaf = data.leaves[0];
+      const leafHref = getLeafHref(firstLeaf);
+      const terminalStatuses = new Set(['passed', 'failed', 'stopped', 'error']);
+      const hasOutput = firstLeaf.status ? terminalStatuses.has(firstLeaf.status) : false;
+      return {
+        label: hasOutput ? 'View Results' : 'Preview Output',
+        icon: hasOutput ? Eye : ArrowRight,
+        action: () => {
+          if (leafHref) router.push(leafHref);
+        },
+      };
+    }
+    return null;
+  };
+
+  const nextStep = getNextStep();
+
+  // B-8: Compute stats for collapsed view
+  const sentenceCount = data.commitV4
+    ? data.commitV4.content.sentences.length
+    : data.commitV3
+      ? data.commitV3.sentences.length
+      : 0;
+  const constraintCount = data.commitV4
+    ? 0 // V4: constraints are in leaves
+    : data.commitV3
+      ? data.commitV3.constraints.length
+      : (data.mustHave?.length || 0) + (data.mustntHave?.length || 0);
+
   return (
     <>
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
@@ -524,7 +581,7 @@ function UnitNode(props: Props) {
         whileHover={{ scale: 1.01, transition: springConfig.smooth }}
         whileTap={{ scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-xl border overflow-visible text-slate-900 bg-white',
+          'group w-72 rounded-xl border overflow-visible text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900',
           styles.border,
           styles.shadow,
           styles.zIndex,
@@ -541,22 +598,25 @@ function UnitNode(props: Props) {
             ═══════════════════════════════════════════ */}
         {data.sources && data.sources.length > 0 && (
           <div
-            className="px-3 py-2 bg-slate-50/80 border-b border-slate-100 rounded-t-[11px] cursor-pointer hover:bg-slate-100/80 transition-colors nodrag"
+            className="px-3 py-2 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700 rounded-t-[11px] cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-700/80 transition-colors nodrag"
             onClick={(e) => {
               e.stopPropagation();
               openNodeModal(id, 'conversation');
             }}
           >
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
               {/* Context indicator */}
-              {getContextLabel() && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-400 font-medium">{getContextLabel()}</span>
-                </>
-              )}
-              <span className="text-slate-300">·</span>
+              {(() => {
+                const ctxLabel = getContextLabel();
+                return ctxLabel ? (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                    <span className="text-slate-400 font-medium">{ctxLabel}</span>
+                  </>
+                ) : null;
+              })()}
+              <span className="text-slate-300 dark:text-slate-600">·</span>
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
@@ -564,9 +624,14 @@ function UnitNode(props: Props) {
                     source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
-                      {idx > 0 && <span className="text-slate-300 mx-0.5">·</span>}
+                      {idx > 0 && (
+                        <span className="text-slate-300 dark:text-slate-600 mx-0.5">·</span>
+                      )}
                       {sourceIsPinned && (
-                        <Pin size={10} className="text-amber-500 fill-amber-500" />
+                        <Pin
+                          size={10}
+                          className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400"
+                        />
                       )}
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -591,107 +656,164 @@ function UnitNode(props: Props) {
             SECTION 2: COMMIT (main content)
             ═══════════════════════════════════════════ */}
         <div className="px-3 py-3">
-          {/* Row 1: Title + Branch Badge (shared by V2 and V3) */}
+          {/* Row 1: Title + Branch Badge */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h4 className="m-0 text-sm font-semibold text-slate-800 leading-snug flex-1 min-w-0">
+            <h4 className="m-0 text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug flex-1 min-w-0">
               {data.title}
             </h4>
             <span
               className={cn(
                 'flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded',
                 data.branchType === 'main'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-amber-100 text-amber-700'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
               )}
             >
               {branchLabel}
             </span>
           </div>
 
-          {/* Row 2: Commit hash + merge indicator (shared by V2 and V3) */}
-          <div className="flex items-center gap-1.5 text-[0.7rem] text-slate-400 mb-2 nodrag">
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleCopyHash}
-                    className="inline-flex items-center gap-1 font-mono text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
-                  >
-                    {data.commitV4?.hash
-                      ? data.commitV4.hash.slice(0, 7)
-                      : data.commitV3?.hash
-                        ? data.commitV3.hash.slice(0, 7)
-                        : data.commitHash
-                          ? data.commitHash.slice(0, 7)
-                          : data.entryId?.slice(0, 7)}
-                    {copiedHash ? (
-                      <CheckCircle size={10} className="text-green-500" />
-                    ) : (
-                      <Copy size={10} className="text-slate-400" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {copiedHash ? 'Copied!' : 'Click to copy hash'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {data.isMergeCommit && (
-              <>
-                <span className="text-slate-300">·</span>
-                <span className="text-purple-600 font-medium">merge</span>
-              </>
-            )}
-          </div>
-
-          {/* Row 3: Status indicator (shared by V2 and V3) */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {isStaging ? (
-                <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                  <PenSquare size={12} className="text-amber-500" />
-                  <span>Draft</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                  <GitCommit
-                    size={12}
-                    className={data.branchType === 'main' ? 'text-blue-500' : 'text-amber-500'}
-                  />
-                  <span>Committed</span>
-                </span>
+          {/* B-8: Stats line (always visible in collapsed view) */}
+          {(sentenceCount > 0 || constraintCount > 0) && (
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+              {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+              {constraintCount > 0 && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600 mx-1">·</span>
+                  {constraintCount} constraint{constraintCount !== 1 ? 's' : ''}
+                </>
               )}
             </div>
-            {/* V2: mustHave/mustntHave counts for staging */}
-            {!data.commitV3 &&
-              isStaging &&
-              (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
-                <span className="text-xs font-medium">
-                  <span className="text-green-600">{data.mustHave?.length || 0}✓</span>{' '}
-                  <span className="text-red-500">{data.mustntHave?.length || 0}✗</span>
-                </span>
-              )}
-            {/* V2: summary for committed */}
-            {!data.commitV3 && !isStaging && data.summary && (
-              <span className="text-xs text-slate-400 truncate max-w-[100px]">{data.summary}</span>
-            )}
-          </div>
-
-          {/* V3/V4: Sentences and Constraints content */}
-          {data.commitV4 && (
-            <CommitV4Content
-              commit={data.commitV4}
-              onViewFull={() => openNodeModal(id, 'commit')}
-              projectId={projectId}
-            />
           )}
-          {data.commitV3 && !data.commitV4 && (
-            <CommitV3Content
-              commit={data.commitV3}
-              onViewFull={() => openNodeModal(id, 'commit')}
-              projectId={projectId}
-            />
+
+          {/* B-4: Next Step button */}
+          {nextStep && (
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                nextStep.action();
+              }}
+            >
+              <nextStep.icon size={12} />
+              <span>{nextStep.label}</span>
+              <ArrowRight size={10} />
+            </button>
+          )}
+
+          {/* B-8: Details toggle */}
+          {(data.commitV3 || data.commitV4 || data.commitHash) && (
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                setContentExpanded((prev) => !prev);
+              }}
+            >
+              <span>Details</span>
+              {contentExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+          )}
+
+          {/* B-8: Expandable detail content */}
+          {contentExpanded && (
+            <>
+              {/* Hash + copy button */}
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-slate-400 mb-2 mt-2 nodrag">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={handleCopyHash}
+                        className="inline-flex items-center gap-1 font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
+                      >
+                        {data.commitV4?.hash
+                          ? data.commitV4.hash.slice(0, 7)
+                          : data.commitV3?.hash
+                            ? data.commitV3.hash.slice(0, 7)
+                            : data.commitHash
+                              ? data.commitHash.slice(0, 7)
+                              : data.entryId?.slice(0, 7)}
+                        {copiedHash ? (
+                          <CheckCircle size={10} className="text-green-500 dark:text-green-400" />
+                        ) : (
+                          <Copy size={10} className="text-slate-400" />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {copiedHash ? 'Copied!' : 'Click to copy hash'}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {data.isMergeCommit && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                    <span className="text-purple-600 dark:text-purple-400 font-medium">merge</span>
+                  </>
+                )}
+              </div>
+
+              {/* Status indicator */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  {isStaging ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <PenSquare size={12} className="text-amber-500 dark:text-amber-400" />
+                      <span>Draft</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <GitCommit
+                        size={12}
+                        className={
+                          data.branchType === 'main'
+                            ? 'text-blue-500 dark:text-blue-400'
+                            : 'text-amber-500 dark:text-amber-400'
+                        }
+                      />
+                      <span>Committed</span>
+                    </span>
+                  )}
+                </div>
+                {!data.commitV3 &&
+                  isStaging &&
+                  (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
+                    <span className="text-xs font-medium">
+                      <span className="text-green-600 dark:text-green-400">
+                        {data.mustHave?.length || 0}✓
+                      </span>{' '}
+                      <span className="text-red-500 dark:text-red-400">
+                        {data.mustntHave?.length || 0}✗
+                      </span>
+                    </span>
+                  )}
+                {!data.commitV3 && !isStaging && data.summary && (
+                  <span className="text-xs text-slate-400 truncate max-w-[100px]">
+                    {data.summary}
+                  </span>
+                )}
+              </div>
+
+              {/* V3/V4: Sentences and Constraints content */}
+              {data.commitV4 && (
+                <CommitV4Content
+                  commit={data.commitV4}
+                  onViewFull={() => openNodeModal(id, 'commit')}
+                  projectId={projectId}
+                />
+              )}
+              {data.commitV3 && !data.commitV4 && (
+                <CommitV3Content
+                  commit={data.commitV3}
+                  onViewFull={() => openNodeModal(id, 'commit')}
+                  projectId={projectId}
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -699,19 +821,19 @@ function UnitNode(props: Props) {
             SECTION 3: LEAVES (if any)
             ═══════════════════════════════════════════ */}
         {data.leaves && data.leaves.length > 0 && (
-          <div className="border-t border-slate-100">
+          <div className="border-t border-slate-100 dark:border-slate-700">
             <button
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50/50 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
               onClick={() => setLeavesExpanded((prev) => !prev)}
               type="button"
             >
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Leaves ({data.leaves.length})
                 {totalAssertions > 0 && (
                   <span className="ml-1.5 normal-case font-normal">
-                    <span className="text-green-600">{totalPassed}</span>
-                    <span className="text-slate-300">/</span>
-                    <span className="text-slate-500">{totalAssertions}</span>
+                    <span className="text-green-600 dark:text-green-400">{totalPassed}</span>
+                    <span className="text-slate-300 dark:text-slate-600">/</span>
+                    <span className="text-slate-500 dark:text-slate-400">{totalAssertions}</span>
                   </span>
                 )}
               </span>
@@ -743,24 +865,29 @@ function UnitNode(props: Props) {
                             className={cn(
                               'w-5 h-5 rounded flex items-center justify-center',
                               isRunner
-                                ? 'bg-emerald-100 text-emerald-600'
-                                : 'bg-indigo-100 text-indigo-600'
+                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                             )}
                           >
                             <LeafIcon size={12} />
                           </div>
-                          <span className="text-xs text-slate-700 flex-1 truncate">
+                          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">
                             {leaf.title}
                           </span>
                           {leaf.status && (
                             <span
                               className={cn(
                                 'text-xs font-medium px-1.5 py-0.5 rounded',
-                                leaf.status === 'running' && 'bg-blue-100 text-blue-700',
-                                leaf.status === 'passed' && 'bg-green-100 text-green-700',
-                                leaf.status === 'failed' && 'bg-red-100 text-red-700',
-                                leaf.status === 'pending' && 'bg-amber-100 text-amber-700',
-                                leaf.status === 'idle' && 'bg-slate-100 text-slate-600'
+                                leaf.status === 'running' &&
+                                  'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+                                leaf.status === 'passed' &&
+                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+                                leaf.status === 'failed' &&
+                                  'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+                                leaf.status === 'pending' &&
+                                  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+                                leaf.status === 'idle' &&
+                                  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                               )}
                             >
                               {leaf.status === 'passed' && leaf.passedCount !== undefined
@@ -775,7 +902,7 @@ function UnitNode(props: Props) {
                           {leafHref ? (
                             <Link
                               href={leafHref}
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 transition-colors cursor-pointer flex-1 min-w-0"
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 dark:hover:bg-slate-700/80 transition-colors cursor-pointer flex-1 min-w-0"
                             >
                               {leafContent}
                             </Link>
@@ -786,7 +913,7 @@ function UnitNode(props: Props) {
                           )}
                           <button
                             type="button"
-                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all shrink-0"
+                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-all shrink-0"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -807,9 +934,9 @@ function UnitNode(props: Props) {
 
         {/* Add Leaf button for committed units */}
         {isCommitted && (
-          <div className="border-t border-slate-100 px-3 py-2">
+          <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-2">
             <button
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 py-1 rounded hover:bg-slate-50 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               onClick={handleOpenLeafPanel}
               type="button"
             >
@@ -830,7 +957,7 @@ function UnitNode(props: Props) {
               <Button
                 variant="canvas-outline"
                 size="icon-sm"
-                className="rounded-full hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:border-blue-500"
+                className="rounded-full hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:border-blue-500 dark:hover:text-blue-400"
                 onClick={handleAddUnit}
                 aria-label="Add Unit"
               >
@@ -847,7 +974,7 @@ function UnitNode(props: Props) {
                 <Button
                   variant="canvas-outline"
                   size="icon-sm"
-                  className="rounded-full hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950 dark:hover:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-full hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950 dark:hover:border-orange-500 dark:hover:text-orange-400 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={handleMerge}
                   aria-label="Start Merge"
                   disabled={!canTriggerMerge}

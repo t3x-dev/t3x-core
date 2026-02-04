@@ -223,7 +223,7 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
       className={cn(
         'rounded-lg p-4 transition-all duration-300',
         isUser && 'bg-primary/10 ml-8',
-        isAssistant && 'bg-muted mr-8',
+        isAssistant && 'bg-muted dark:bg-slate-800/60 mr-8',
         isSystem &&
           'bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800',
         isTool &&
@@ -247,7 +247,7 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
           {new Date(turn.created_at).toLocaleTimeString()}
         </span>
         {isTarget && (
-          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Source</span>
+          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">Source</span>
         )}
       </div>
       <div className="whitespace-pre-wrap text-sm">{renderContent()}</div>
