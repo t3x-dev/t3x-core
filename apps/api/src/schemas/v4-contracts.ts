@@ -232,6 +232,7 @@ export const UpdateLeafRequest = z.object({
     })
     .passthrough()
     .optional(),
+  output: z.string().nullable().optional(),
 });
 
 export const UpdateLeafResponse = SuccessResponse(LeafResponse);

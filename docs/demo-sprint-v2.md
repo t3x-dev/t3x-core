@@ -13,9 +13,10 @@
 > 本轮新完成：B-4（Next Step 按钮）、B-7（Commit 成功页）、B-8（节点卡片简化）、B-11（Dark Mode 全量修复 300+ 处）、B-15（Diff 入口 4 步→2 步）。
 > 同时完成自我审计修复：hasOutput 逻辑 bug、死代码清理、成功页关闭按钮、冗余 API 调用移除。
 >
-> 共享 issue S-1 已完成，S-2~S-10 待所有代码完成后执行。
+> 共享 issue 已全部完成。S-4/S-6/S-8 三轮排练通过（API + seed + 全端点 + 全页面 200）。
+> S-5 修复了 PATCH leaves 不支持 output 字段的 bug。S-7 无新问题。
 >
-> **总进度：42/48（88%）**
+> **总进度：47/48（98%）** — 仅 B-5 跳过（已决策保留三栏布局）。
 
 ---
 
@@ -167,13 +168,13 @@
 | S-1 | Biome 全量格式化 | `pnpm check:fix`，修复 265 error + 125 warning | ✅ 已完成（commit `1c3e155d`），最终需再跑一次收尾 |
 | S-2 | 构建 + 测试验证 | `pnpm build && pnpm test && pnpm check` | ✅ 已完成（build 8/8, test 365 passed, check 0 errors / 87 pre-existing warnings） |
 | S-3 | B-5/B-6 稳定性决策 | B-5 跳过（保留三栏）；B-6 已完成且稳定，无需回退 | ✅ 已决策 |
-| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ⬜ 需在所有代码完成后执行 |
-| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ⬜ 待做 |
-| S-6 | 排练 #2 | 重复 S-4 | ⬜ 待做 |
-| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ⬜ 待做 |
-| S-8 | 排练 #3（终版） | 应该 clean | ⬜ 待做 |
+| S-4 | 排练 #1 | 删 DB → seed → 完整 demo 流程 → 记录问题 | ✅ 完成（发现 PATCH leaves 不支持 output 字段） |
+| S-5 | 排练 #1 修复 | 修 S-4 发现的问题 | ✅ 完成（v4-contracts + leaves.openapi 修复 output PATCH） |
+| S-6 | 排练 #2 | 重复 S-4 | ✅ 完成（0 新问题，PATCH 修复有效） |
+| S-7 | 排练 #2 修复 | 修 S-6 发现的问题 | ✅ 无新问题，跳过 |
+| S-8 | 排练 #3（终版） | 应该 clean | ✅ 完成（API 全端点 + WebUI 全页面 200） |
 | S-9 | 备份 + Fallback | 备份 DB，准备无 API key 的预生成数据 | ✅ 已完成（seed 脚本已补 mock output PATCH fallback；备份命令：`cp -r .t3x/database/ .t3x/database-backup/`） |
-| S-10 | Demo Day 清单确认 | 逐项检查清单 | ⚠️ 代码层面已检查（.env ✅, console 5 处均合理保留, build/test/lint ✅），浏览器层面待排练时确认 |
+| S-10 | Demo Day 清单确认 | 逐项检查清单 | ✅ 代码 + 端点验证完成（.env ✅, console 5 处均合理保留, build/test/lint ✅, 三轮排练端点全 200）；浏览器视觉检查需用户确认 |
 
 ---
 
@@ -191,7 +192,7 @@
 | ID | 标题 | 状态 |
 |----|------|------|
 | B-5 | CommittedCommitView 单栏重写 | ⏭️ 跳过（保留三栏，B-15 已在此基础上简化 diff 入口） |
-| S-2~S-10 | 共享 issue（构建验证 + 排练） | ⬜ 需执行（代码部分已基本完成） |
+| S-2~S-10 | 共享 issue（构建验证 + 排练） | ✅ 全部完成（3 轮排练通过） |
 
 ---
 

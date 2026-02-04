@@ -335,7 +335,7 @@ const updateLeafRoute = createRoute({
   path: '/v1/leaves/{id}',
   tags: ['Leaves'],
   summary: 'Update leaf',
-  description: 'Updates a leaf node (title, constraints, config).',
+  description: 'Updates a leaf node (title, constraints, config, output).',
   request: {
     params: IdParamSchema,
     body: {
@@ -783,7 +783,7 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
     const db = await getDB();
 
     // Storage handles constraint ID generation
-    const leaf = await updateLeaf(db, id, {
+    let leaf = await updateLeaf(db, id, {
       title: body.title,
       constraints: body.constraints,
       config: body.config,
@@ -791,6 +791,11 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
 
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // If output is provided, update it separately (sets generated_at)
+    if (body.output !== undefined) {
+      leaf = (await updateLeafOutput(db, id, body.output ?? '')) ?? leaf;
     }
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 200);
