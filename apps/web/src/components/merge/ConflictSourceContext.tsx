@@ -60,7 +60,7 @@ export function ConflictSourceContext({
 
   // Error state
   if (error) {
-    return <div className="text-xs text-amber-600 mt-2">{error}</div>;
+    return <div className="text-xs text-amber-600 dark:text-amber-400 mt-2">{error}</div>;
   }
 
   // No context data - show fallback
@@ -100,7 +100,7 @@ export function ConflictSourceContext({
           highlights.length > 0 ? (
             <>
               {targetTurn.content.slice(0, highlights[0].start)}
-              <mark className="bg-yellow-200 text-yellow-900 px-0.5 rounded-sm">
+              <mark className="bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100 px-0.5 rounded-sm">
                 {targetTurn.content.slice(highlights[0].start, highlights[0].end)}
               </mark>
               {targetTurn.content.slice(highlights[0].end)}
@@ -120,7 +120,7 @@ export function ConflictSourceContext({
             }
             if (seg.type === 'highlight') {
               return (
-                <mark key={idx} className="bg-yellow-200 text-yellow-900 px-0.5 rounded-sm">
+                <mark key={idx} className="bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100 px-0.5 rounded-sm">
                   {seg.content}
                 </mark>
               );
@@ -135,7 +135,7 @@ export function ConflictSourceContext({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-0.5 text-[0.65rem] text-blue-600 hover:text-blue-700"
+          className="flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
         >
           {expanded ? (
             <>

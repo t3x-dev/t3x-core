@@ -19,15 +19,15 @@ interface MergeDiffSectionProps {
 
 const variantStyles: Record<SectionVariant, { header: string; icon: string }> = {
   success: {
-    header: 'text-green-700',
+    header: 'text-green-700 dark:text-green-300',
     icon: 'text-green-500',
   },
   warning: {
-    header: 'text-yellow-700',
+    header: 'text-yellow-700 dark:text-yellow-300',
     icon: 'text-yellow-500',
   },
   info: {
-    header: 'text-blue-700',
+    header: 'text-blue-700 dark:text-blue-300',
     icon: 'text-blue-500',
   },
   default: {

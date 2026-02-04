@@ -31,16 +31,16 @@ const lineStyles: Record<LineType, { bg: string; text: string; prefix: string; b
     border: 'border-transparent',
   },
   added: {
-    bg: 'bg-green-50',
-    text: 'text-green-900',
+    bg: 'bg-green-50 dark:bg-green-950/30',
+    text: 'text-green-900 dark:text-green-100',
     prefix: '+',
-    border: 'border-green-300',
+    border: 'border-green-300 dark:border-green-700',
   },
   removed: {
-    bg: 'bg-red-50',
-    text: 'text-red-900',
+    bg: 'bg-red-50 dark:bg-red-950/30',
+    text: 'text-red-900 dark:text-red-100',
     prefix: '-',
-    border: 'border-red-300',
+    border: 'border-red-300 dark:border-red-700',
   },
 };
 
@@ -73,8 +73,8 @@ export function MergeDiffLine({
       <span
         className={`
           shrink-0 w-4 text-center font-bold
-          ${type === 'added' ? 'text-green-600' : ''}
-          ${type === 'removed' ? 'text-red-600' : ''}
+          ${type === 'added' ? 'text-green-600 dark:text-green-400' : ''}
+          ${type === 'removed' ? 'text-red-600 dark:text-red-400' : ''}
         `}
       >
         {styles.prefix}
@@ -90,7 +90,7 @@ export function MergeDiffLine({
           className="shrink-0 text-muted-foreground hover:text-foreground"
         >
           {isKept ? (
-            <CheckSquare className="h-4 w-4 text-green-600" />
+            <CheckSquare className="h-4 w-4 text-green-600 dark:text-green-400" />
           ) : (
             <Square className="h-4 w-4" />
           )}

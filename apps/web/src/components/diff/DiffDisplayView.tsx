@@ -109,16 +109,16 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
     <div className="flex items-center gap-3 text-xs">
       <span className="text-muted-foreground">{total} sentences</span>
       {diff.identical.length > 0 && (
-        <span className="text-slate-500">{diff.identical.length} unchanged</span>
+        <span className="text-slate-500 dark:text-slate-400">{diff.identical.length} unchanged</span>
       )}
       {diff.similar.length > 0 && (
-        <span className="text-amber-600">{diff.similar.length} modified</span>
+        <span className="text-amber-600 dark:text-amber-400">{diff.similar.length} modified</span>
       )}
       {diff.onlyInSource.length > 0 && (
-        <span className="text-red-600">-{diff.onlyInSource.length} removed</span>
+        <span className="text-red-600 dark:text-red-400">-{diff.onlyInSource.length} removed</span>
       )}
       {diff.onlyInTarget.length > 0 && (
-        <span className="text-green-600">+{diff.onlyInTarget.length} added</span>
+        <span className="text-green-600 dark:text-green-400">+{diff.onlyInTarget.length} added</span>
       )}
     </div>
   );
@@ -136,7 +136,7 @@ function TraceToSourceButton({ sentence, onClick }: TraceToSourceButtonProps) {
     <button
       type="button"
       onClick={() => onClick(sentence)}
-      className="inline-flex items-center gap-1 text-[0.65rem] text-blue-600 hover:text-blue-700 transition-colors ml-2"
+      className="inline-flex items-center gap-1 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors ml-2"
       title="View source context"
     >
       <MapPin size={10} />
@@ -232,34 +232,34 @@ function SideBySideRow({
 }: SideBySideRowProps) {
   const leftBg =
     type === 'removed'
-      ? 'bg-red-50'
+      ? 'bg-red-50 dark:bg-red-950/30'
       : type === 'modified'
-        ? 'bg-amber-50/50'
+        ? 'bg-amber-50/50 dark:bg-amber-950/30'
         : type === 'identical'
-          ? 'bg-slate-50/50'
+          ? 'bg-slate-50/50 dark:bg-slate-950/30'
           : 'bg-transparent';
 
   const rightBg =
     type === 'added'
-      ? 'bg-green-50'
+      ? 'bg-green-50 dark:bg-green-950/30'
       : type === 'modified'
-        ? 'bg-amber-50/50'
+        ? 'bg-amber-50/50 dark:bg-amber-950/30'
         : type === 'identical'
-          ? 'bg-slate-50/50'
+          ? 'bg-slate-50/50 dark:bg-slate-950/30'
           : 'bg-transparent';
 
   const leftBorder =
     type === 'removed'
-      ? 'border-l-2 border-red-300'
+      ? 'border-l-2 border-red-300 dark:border-red-700'
       : type === 'modified'
-        ? 'border-l-2 border-amber-300'
+        ? 'border-l-2 border-amber-300 dark:border-amber-700'
         : '';
 
   const rightBorder =
     type === 'added'
-      ? 'border-l-2 border-green-300'
+      ? 'border-l-2 border-green-300 dark:border-green-700'
       : type === 'modified'
-        ? 'border-l-2 border-amber-300'
+        ? 'border-l-2 border-amber-300 dark:border-amber-700'
         : '';
 
   // Check if either sentence is currently expanded inline
@@ -278,20 +278,20 @@ function SideBySideRow({
                 <div>
                   <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'added')} />
                   {similarity !== undefined && (
-                    <span className="text-[0.6rem] text-amber-600 ml-2">
+                    <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
                       ({Math.round(similarity * 100)}% similar)
                     </span>
                   )}
                 </div>
               ) : (
-                <span className={type === 'removed' ? 'text-red-800' : ''}>
+                <span className={type === 'removed' ? 'text-red-800 dark:text-red-200' : ''}>
                   {sourceSentence.text}
                 </span>
               )}
               <TraceToSourceButton sentence={sourceSentence} onClick={onTraceSource} />
             </div>
           ) : (
-            <span className="text-slate-300 italic">—</span>
+            <span className="text-slate-300 dark:text-slate-600 italic">—</span>
           )}
         </div>
 
@@ -305,20 +305,20 @@ function SideBySideRow({
                     segments={wordDiffSegments.filter((s) => s.type !== 'removed')}
                   />
                   {similarity !== undefined && (
-                    <span className="text-[0.6rem] text-amber-600 ml-2">
+                    <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
                       ({Math.round(similarity * 100)}% similar)
                     </span>
                   )}
                 </div>
               ) : (
-                <span className={type === 'added' ? 'text-green-800' : ''}>
+                <span className={type === 'added' ? 'text-green-800 dark:text-green-200' : ''}>
                   {targetSentence.text}
                 </span>
               )}
               <TraceToSourceButton sentence={targetSentence} onClick={onTraceSource} />
             </div>
           ) : (
-            <span className="text-slate-300 italic">—</span>
+            <span className="text-slate-300 dark:text-slate-600 italic">—</span>
           )}
         </div>
       </div>
@@ -359,26 +359,26 @@ function UnifiedRow({
   const getBgClass = () => {
     switch (line.type) {
       case 'added':
-        return 'bg-green-50 border-l-2 border-green-300';
+        return 'bg-green-50 dark:bg-green-950/30 border-l-2 border-green-300 dark:border-green-700';
       case 'removed':
-        return 'bg-red-50 border-l-2 border-red-300';
+        return 'bg-red-50 dark:bg-red-950/30 border-l-2 border-red-300 dark:border-red-700';
       case 'modified':
-        return 'bg-amber-50 border-l-2 border-amber-300';
+        return 'bg-amber-50 dark:bg-amber-950/30 border-l-2 border-amber-300 dark:border-amber-700';
       default:
-        return 'bg-slate-50/50';
+        return 'bg-slate-50/50 dark:bg-slate-950/30';
     }
   };
 
   const getPrefix = () => {
     switch (line.type) {
       case 'added':
-        return <span className="text-green-600 font-mono mr-2">+</span>;
+        return <span className="text-green-600 dark:text-green-400 font-mono mr-2">+</span>;
       case 'removed':
-        return <span className="text-red-600 font-mono mr-2">−</span>;
+        return <span className="text-red-600 dark:text-red-400 font-mono mr-2">−</span>;
       case 'modified':
-        return <span className="text-amber-600 font-mono mr-2">~</span>;
+        return <span className="text-amber-600 dark:text-amber-400 font-mono mr-2">~</span>;
       default:
-        return <span className="text-slate-400 font-mono mr-2"> </span>;
+        return <span className="text-slate-400 dark:text-slate-500 font-mono mr-2"> </span>;
     }
   };
 
@@ -394,7 +394,7 @@ function UnifiedRow({
             <div>
               <WordDiffDisplay segments={line.wordDiff} />
               {line.similarity !== undefined && (
-                <span className="text-[0.6rem] text-amber-600 ml-2">
+                <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
                   ({Math.round(line.similarity * 100)}% similar)
                 </span>
               )}
@@ -403,9 +403,9 @@ function UnifiedRow({
             <span
               className={
                 line.type === 'added'
-                  ? 'text-green-800'
+                  ? 'text-green-800 dark:text-green-200'
                   : line.type === 'removed'
-                    ? 'text-red-800'
+                    ? 'text-red-800 dark:text-red-200'
                     : ''
               }
             >

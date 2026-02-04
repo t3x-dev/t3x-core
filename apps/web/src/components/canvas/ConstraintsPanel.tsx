@@ -220,7 +220,7 @@ export default function ConstraintsPanel({
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-          <Check className="h-3 w-3 text-green-600" />
+          <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
           <span>Must-Have Keywords</span>
           <Badge variant="secondary" className="ml-auto">
             {activeMustHave.length}
@@ -409,7 +409,7 @@ function KeywordTag({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm',
-        isMustHave ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700',
+        isMustHave ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
         isRemoved && 'line-through opacity-40',
         isAdditional && 'border border-dashed border-current bg-transparent'
       )}

@@ -471,18 +471,18 @@ export function ConversationView({
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
         {/* Top Bar */}
-        <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 shrink-0">
+        <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-gray-800">
+            <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
               {isStagingUnit ? 'Unit (Staging)' : 'Unit'}: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-gray-400 font-mono">{data.entryId}</span>
             {isStagingUnit && (
               <Badge
                 variant="outline"
-                className="text-[0.65rem] text-slate-500 uppercase tracking-wider border-dashed border-slate-400/40 bg-slate-500/15"
+                className="text-[0.65rem] text-slate-500 dark:text-slate-400 uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
               >
                 staging
               </Badge>
@@ -529,7 +529,7 @@ export function ConversationView({
               size="icon"
               onClick={onClose}
               aria-label="Close"
-              className="h-9 w-9 text-gray-400 hover:text-gray-600"
+              className="h-9 w-9 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
             >
               <X size={20} />
             </Button>
@@ -540,17 +540,17 @@ export function ConversationView({
           {/* Left Sidebar - Metadata */}
           <aside
             className={cn(
-              'min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50',
+              'min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50 dark:bg-slate-800',
               showSettings ? 'block' : 'hidden md:block'
             )}
             style={{ width: sidebarWidth }}
           >
             <div className="mb-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
                 Metadata
               </h4>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
                 <Input
                   type="text"
                   value={data.title}
@@ -558,7 +558,7 @@ export function ConversationView({
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tags</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tags</label>
                 <Input
                   type="text"
                   value={data.tags.join(', ')}
@@ -575,23 +575,23 @@ export function ConversationView({
               </div>
             </div>
 
-            <div className="h-px bg-gray-200 my-4" />
+            <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
 
             <div className="mb-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
                 Info
               </h4>
-              <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-                <Clock size={14} className="text-gray-400 shrink-0" />
+              <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 dark:text-gray-400 mb-2">
+                <Clock size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
                 <span>Created: {data.timestamp}</span>
               </div>
-              <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 mb-2">
-                <Link2 size={14} className="text-gray-400 shrink-0" />
+              <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 dark:text-gray-400 mb-2">
+                <Link2 size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
                 <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
               </div>
             </div>
 
-            <div className="h-px bg-gray-200 my-4" />
+            <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
 
             <MemoryContextSidebar
               projectId={routeProjectId || projectId || undefined}
@@ -606,10 +606,10 @@ export function ConversationView({
 
           {/* Draggable Divider */}
           <div
-            className="w-1.5 bg-gray-200 cursor-col-resize shrink-0 hover:bg-gray-300 active:bg-blue-500 transition-colors relative group"
+            className="w-1.5 bg-gray-200 dark:bg-gray-700 cursor-col-resize shrink-0 hover:bg-gray-300 dark:hover:bg-gray-600 active:bg-blue-500 transition-colors relative group"
             onMouseDown={handleDividerMouseDown}
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-10 bg-gray-400 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-10 bg-gray-400 dark:bg-gray-500 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
 
           {/* Main Content - Chat Interface */}
@@ -657,7 +657,7 @@ export function ConversationView({
                         'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-200',
                         msg.role === 'user'
                           ? 'self-end bg-blue-500 text-white rounded-br-sm'
-                          : 'self-start bg-gray-100 text-gray-800 rounded-bl-sm'
+                          : 'self-start bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm'
                       )}
                     >
                       <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
@@ -665,15 +665,15 @@ export function ConversationView({
                       </div>
                       {/* Ring 1 Meta: topic and timeAnchor */}
                       {(msg.rings?.ring1?.topic || msg.rings?.ring1?.timeAnchor) && (
-                        <div className="mt-2 pt-2 border-t border-gray-200/50 flex flex-wrap gap-2 text-[0.7rem]">
+                        <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-gray-700/50 flex flex-wrap gap-2 text-[0.7rem]">
                           {msg.rings.ring1.topic && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
                               <Tag size={10} />
                               {msg.rings.ring1.topic}
                             </span>
                           )}
                           {msg.rings.ring1.timeAnchor && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
                               <Clock size={10} />
                               {msg.rings.ring1.timeAnchor}
                             </span>
@@ -688,9 +688,9 @@ export function ConversationView({
                               key={`${kw.text}-${idx}`}
                               className={cn(
                                 'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium',
-                                kw.polarity === 1 && 'bg-green-100 text-green-700',
-                                kw.polarity === 0 && 'bg-gray-100 text-gray-600',
-                                kw.polarity === -1 && 'bg-red-100 text-red-700'
+                                kw.polarity === 1 && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+                                kw.polarity === 0 && 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+                                kw.polarity === -1 && 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                               )}
                               title={`${kw.lemma} (${kw.pos})${kw.entityType ? ` [${kw.entityType}]` : ''}`}
                             >
@@ -716,8 +716,8 @@ export function ConversationView({
                                 className={cn(
                                   'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
                                   kw.polarity === 1 &&
-                                    'bg-green-50 text-green-700 border-green-300',
-                                  kw.polarity === -1 && 'bg-red-50 text-red-700 border-red-300'
+                                    'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
+                                  kw.polarity === -1 && 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700'
                                 )}
                               >
                                 {kw.polarity === 1 ? '\u2713' : '\u2717'} {kw.text}
@@ -734,11 +734,11 @@ export function ConversationView({
                               className={cn(
                                 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.65rem] font-medium',
                                 facet.facetType === 'intent_seed' &&
-                                  'bg-indigo-100 text-indigo-700',
-                                facet.facetType === 'time_window' && 'bg-cyan-100 text-cyan-700',
+                                  'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
+                                facet.facetType === 'time_window' && 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
                                 facet.facetType === 'preference_soft' &&
-                                  'bg-amber-100 text-amber-700',
-                                facet.facetType === 'unknown_slot' && 'bg-slate-100 text-slate-600'
+                                  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+                                facet.facetType === 'unknown_slot' && 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                               )}
                               title={`${facet.facetType}: ${facet.key} = ${JSON.stringify(facet.value)} (${Math.round(facet.confidence * 100)}%)`}
                             >
@@ -763,8 +763,8 @@ export function ConversationView({
                                 className="flex items-start gap-1 text-[0.65rem]"
                                 title={`字符 ${seg.startChar}-${seg.endChar}`}
                               >
-                                <span className="text-gray-400 shrink-0">{idx + 1}.</span>
-                                <span className="text-gray-600">{seg.text}</span>
+                                <span className="text-gray-400 dark:text-gray-500 shrink-0">{idx + 1}.</span>
+                                <span className="text-gray-600 dark:text-gray-400">{seg.text}</span>
                               </div>
                             ))}
                           </div>
@@ -774,7 +774,7 @@ export function ConversationView({
                   ))}
                   {/* Streaming response */}
                   {isChatStreaming && streamingContent && (
-                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-blue-50 text-gray-800">
+                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-blue-50 dark:bg-blue-950/30 text-gray-800 dark:text-gray-200">
                       <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                         {streamingContent}
                         <span className="animate-pulse text-blue-500">▊</span>
@@ -783,7 +783,7 @@ export function ConversationView({
                   )}
                   {/* Loading indicator when streaming starts */}
                   {isChatStreaming && !streamingContent && (
-                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-gray-100 text-gray-800">
+                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
                       <div className="flex items-center gap-2 text-gray-500">
                         <Loader2 size={16} className="animate-spin" />
                         <span>Thinking...</span>
@@ -792,7 +792,7 @@ export function ConversationView({
                   )}
                   {/* Chat error */}
                   {chatError && (
-                    <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[0.85rem]">
+                    <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-[0.85rem]">
                       <AlertCircle size={16} />
                       <span>{chatError}</span>
                     </div>
@@ -802,7 +802,7 @@ export function ConversationView({
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3 items-end">
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-800 flex gap-3 items-end">
               <Textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
