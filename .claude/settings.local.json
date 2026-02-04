@@ -167,7 +167,8 @@
       "Bash(./scripts/seed-demo.sh:*)",
       "WebFetch(domain:localhost)",
       "Bash(gh pr create:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(pnpm lint:fix:*)"
     ],
     "deny": [],
     "ask": []

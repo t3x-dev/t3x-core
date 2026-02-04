@@ -168,6 +168,78 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return data.data as T;
 }
 
+// ============================================================================
+// Data Transformation: API (source_ref) → Frontend (source)
+// ============================================================================
+
+/**
+ * Transform a sentence from API format (source_ref) to frontend format (source)
+ * API uses DiffableSentence.source_ref, frontend uses Sentence.source
+ */
+interface ApiSentence {
+  id: string;
+  text: string;
+  source_ref?: {
+    conversation_id?: string;
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
+}
+
+function transformSentence(apiSentence: ApiSentence): Sentence {
+  return {
+    id: apiSentence.id,
+    text: apiSentence.text,
+    source: apiSentence.source_ref
+      ? {
+          turn_hash: apiSentence.source_ref.turn_hash,
+          start_char: apiSentence.source_ref.start_char,
+          end_char: apiSentence.source_ref.end_char,
+        }
+      : undefined,
+  };
+}
+
+/**
+ * Transform prepared merge result from API format to frontend format
+ */
+function transformPrepared(apiPrepared: Record<string, unknown>): Merge2WayResult {
+  const prepared = apiPrepared as {
+    identical: ApiSentence[];
+    similarPairs: Array<{
+      source: ApiSentence;
+      target: ApiSentence;
+      wordDiff: unknown[];
+      resolution?: 'source' | 'target';
+    }>;
+    onlyInSource: Array<{ sentence: ApiSentence; keep: boolean }>;
+    onlyInTarget: Array<{ sentence: ApiSentence; keep: boolean }>;
+  };
+
+  return {
+    identical: prepared.identical.map(transformSentence),
+    similarPairs: prepared.similarPairs.map((pair) => ({
+      source: transformSentence(pair.source),
+      target: transformSentence(pair.target),
+      wordDiff: pair.wordDiff as Merge2WayResult['similarPairs'][0]['wordDiff'],
+      resolution: pair.resolution,
+      sourceConstraints: [],
+      targetConstraints: [],
+    })),
+    onlyInSource: prepared.onlyInSource.map((item) => ({
+      sentence: transformSentence(item.sentence),
+      constraints: [],
+      keep: item.keep,
+    })),
+    onlyInTarget: prepared.onlyInTarget.map((item) => ({
+      sentence: transformSentence(item.sentence),
+      constraints: [],
+      keep: item.keep,
+    })),
+  };
+}
+
 // Convert API response (snake_case) to internal format (camelCase)
 function apiDraftToInternal(apiDraft: Record<string, unknown>): {
   draftId: string;
@@ -187,7 +259,7 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
     targetHash: apiDraft.targetHash as string,
     sourceBranch: (apiDraft.sourceBranch as string) || null,
     targetBranch: (apiDraft.targetBranch as string) || null,
-    prepared: apiDraft.prepared as Merge2WayResult,
+    prepared: transformPrepared(apiDraft.prepared as Record<string, unknown>),
     status: apiDraft.status as MergeDraft['status'],
     message: (apiDraft.message as string) || null,
   };
@@ -428,8 +500,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // ============================================================================
 
   openContext: async (sentence: Sentence) => {
-    // Check if turn_hash is available for source tracing
-    if (!sentence.source.turn_hash) {
+    // Check if source and turn_hash are available for source tracing
+    if (!sentence.source?.turn_hash) {
       set({
         contextModalOpen: true,
         contextSentence: sentence,
@@ -687,8 +759,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const contextData = await api.fetchTurnContext(turnHash, {
         before: 1,
         after: 1,
-        highlightStart: sentence.source.start_char,
-        highlightEnd: sentence.source.end_char,
+        highlightStart: sentence.source?.start_char,
+        highlightEnd: sentence.source?.end_char,
       });
 
       // Cache the result

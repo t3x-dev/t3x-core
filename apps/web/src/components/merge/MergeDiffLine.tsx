@@ -57,6 +57,7 @@ export function MergeDiffLine({
 }: MergeDiffLineProps) {
   const styles = lineStyles[type];
   const isDiscarded = checkable && !isKept;
+  const hasSource = !!sentence.source?.turn_hash;
 
   return (
     <div
@@ -123,8 +124,9 @@ export function MergeDiffLine({
           e.stopPropagation();
           onSourceClick();
         }}
-        className="shrink-0 text-muted-foreground hover:text-primary"
-        title="View source context"
+        className={`shrink-0 ${hasSource ? 'text-muted-foreground hover:text-primary cursor-pointer' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+        title={hasSource ? 'View source context' : 'Source context not available'}
+        disabled={!hasSource}
       >
         <MapPin className="h-4 w-4" />
       </button>
