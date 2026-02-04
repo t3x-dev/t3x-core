@@ -1,10 +1,42 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Info, type LucideIcon, RefreshCw, X } from 'lucide-react';
 import { fadeIn } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
+
+type ErrorGuidanceVariant = 'destructive' | 'warning' | 'info';
+
+const variantStyles: Record<
+  ErrorGuidanceVariant,
+  { border: string; bg: string; text: string; textMuted: string }
+> = {
+  destructive: {
+    border: 'border-destructive/30',
+    bg: 'bg-destructive/5',
+    text: 'text-destructive',
+    textMuted: 'text-destructive/80',
+  },
+  warning: {
+    border: 'border-yellow-500/30',
+    bg: 'bg-yellow-500/5',
+    text: 'text-yellow-700 dark:text-yellow-400',
+    textMuted: 'text-yellow-600/80 dark:text-yellow-500/80',
+  },
+  info: {
+    border: 'border-blue-500/30',
+    bg: 'bg-blue-500/5',
+    text: 'text-blue-700 dark:text-blue-400',
+    textMuted: 'text-blue-600/80 dark:text-blue-500/80',
+  },
+};
+
+const defaultIcons: Record<ErrorGuidanceVariant, LucideIcon> = {
+  destructive: AlertTriangle,
+  warning: AlertTriangle,
+  info: Info,
+};
 
 interface ErrorGuidanceProps {
   /** Error title/heading */
@@ -17,6 +49,12 @@ interface ErrorGuidanceProps {
   retryLabel?: string;
   /** Additional CSS classes */
   className?: string;
+  /** Custom icon (defaults based on variant) */
+  icon?: LucideIcon;
+  /** Visual variant: destructive (default), warning, info */
+  variant?: ErrorGuidanceVariant;
+  /** Optional dismiss callback — shows a close button */
+  onDismiss?: () => void;
 }
 
 /**
@@ -36,28 +74,31 @@ export function ErrorGuidance({
   retryAction,
   retryLabel = 'Retry',
   className,
+  icon,
+  variant = 'destructive',
+  onDismiss,
 }: ErrorGuidanceProps) {
+  const styles = variantStyles[variant];
+  const IconComponent = icon ?? defaultIcons[variant];
+
   return (
     <motion.div
       variants={fadeIn}
       initial="initial"
       animate="animate"
       data-slot="error-guidance"
-      className={cn(
-        'w-full rounded-lg border border-destructive/30 bg-destructive/5 p-4',
-        className
-      )}
+      className={cn('w-full rounded-lg border p-4', styles.border, styles.bg, className)}
     >
       <div className="flex items-start gap-3">
-        {/* Warning Icon */}
+        {/* Icon */}
         <div className="flex-shrink-0 mt-0.5">
-          <AlertTriangle className="h-5 w-5 text-destructive" />
+          <IconComponent className={cn('h-5 w-5', styles.text)} />
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-destructive">{title}</h4>
-          <p className="mt-1 text-sm text-destructive/80">{description}</p>
+          <h4 className={cn('text-sm font-semibold', styles.text)}>{title}</h4>
+          <p className={cn('mt-1 text-sm', styles.textMuted)}>{description}</p>
         </div>
 
         {/* Retry Button */}
@@ -66,11 +107,31 @@ export function ErrorGuidance({
             variant="outline"
             size="sm"
             onClick={retryAction}
-            className="flex-shrink-0 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className={cn(
+              'flex-shrink-0 gap-1.5',
+              styles.border,
+              styles.text,
+              `hover:${styles.bg}`,
+              `hover:${styles.text}`
+            )}
           >
             <RefreshCw className="h-3.5 w-3.5" />
             {retryLabel}
           </Button>
+        )}
+
+        {/* Dismiss Button */}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className={cn(
+              'flex-shrink-0 rounded-sm p-0.5 opacity-70 hover:opacity-100 transition-opacity',
+              styles.text
+            )}
+          >
+            <X className="h-4 w-4" />
+          </button>
         )}
       </div>
     </motion.div>

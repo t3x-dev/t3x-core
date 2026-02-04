@@ -49,9 +49,15 @@ function commitToSemanticEntry(commit: CommitV4, projectName: string): SemanticE
   };
 }
 
+const INSIGHTS_PROJECT_LIMIT = 10;
+const INSIGHTS_COMMITS_PER_PROJECT = 5;
+const LEDGER_PAGE_SIZE = 50;
+
 export default function InsightsPage() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [entries, setEntries] = useState<SemanticEntry[]>([]);
+  const [ledgerVisible, setLedgerVisible] = useState(LEDGER_PAGE_SIZE);
   const [timeline, setTimeline] = useState<
     { id: string; label: string; detail: string; time: string; stage: string }[]
   >([]);
@@ -59,7 +65,7 @@ export default function InsightsPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const projectData = await listProjects(50, 0);
+        const projectData = await listProjects(INSIGHTS_PROJECT_LIMIT, 0);
         const projects = projectData.projects;
 
         if (projects.length === 0) {
@@ -67,12 +73,17 @@ export default function InsightsPage() {
           return;
         }
 
-        // Fetch commits for all projects in parallel
+        // Fetch commits for all projects in parallel (capped per project)
         const allCommits: { commit: CommitV4; projectName: string }[] = [];
         await Promise.all(
           projects.map(async (project: Project) => {
             try {
-              const commits = await listCommitsV4(project.project_id, undefined, 20, 0);
+              const commits = await listCommitsV4(
+                project.project_id,
+                undefined,
+                INSIGHTS_COMMITS_PER_PROJECT,
+                0
+              );
               for (const commit of commits) {
                 allCommits.push({ commit, projectName: project.name });
               }
@@ -104,7 +115,7 @@ export default function InsightsPage() {
         }));
         setTimeline(timelineItems);
       } catch {
-        // Data load failed - show empty state
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -123,6 +134,20 @@ export default function InsightsPage() {
   }
 
   const isEmpty = entries.length === 0 && timeline.length === 0;
+
+  if (loadError) {
+    return (
+      <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+        <header className="flex items-center gap-3">
+          <Lightbulb className="h-5 w-5" />
+          <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
+        </header>
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Failed to load insights data. Please try refreshing the page.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto p-6">
@@ -149,11 +174,24 @@ export default function InsightsPage() {
               description="Create commits to see insights here. Start by adding a conversation and extracting knowledge into a commit."
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {entries.map((entry) => (
-                <SemanticCard key={entry.id} entry={entry} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {entries.slice(0, ledgerVisible).map((entry) => (
+                  <SemanticCard key={entry.id} entry={entry} />
+                ))}
+              </div>
+              {entries.length > ledgerVisible && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setLedgerVisible((v) => v + LEDGER_PAGE_SIZE)}
+                  >
+                    Load more ({entries.length - ledgerVisible} remaining)
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 

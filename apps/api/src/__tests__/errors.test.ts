@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 28 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(28);
+  it('has 30 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(30);
   });
 
   it('key equals value for every code', () => {
@@ -40,6 +40,8 @@ describe('ErrorCodes', () => {
         "INVALID_REQUEST": "INVALID_REQUEST",
         "LEAF_NOT_FOUND": "LEAF_NOT_FOUND",
         "LIST_FAILED": "LIST_FAILED",
+        "MAIN_NOT_HEAD": "MAIN_NOT_HEAD",
+        "MAIN_ROOT_EXISTS": "MAIN_ROOT_EXISTS",
         "NOT_FOUND": "NOT_FOUND",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",
@@ -80,6 +82,8 @@ describe('ErrorStatusCodes', () => {
   it('maps conflict codes to 409', () => {
     expect(ErrorStatusCodes.DUPLICATE_PIN).toBe(409);
     expect(ErrorStatusCodes.HASH_CONFLICT).toBe(409);
+    expect(ErrorStatusCodes.MAIN_NOT_HEAD).toBe(409);
+    expect(ErrorStatusCodes.MAIN_ROOT_EXISTS).toBe(409);
   });
 
   it('maps operation failures to 500', () => {

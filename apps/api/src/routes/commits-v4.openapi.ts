@@ -26,9 +26,11 @@ import {
   findCommitsV4ByProject,
   findCommitV4ByHash,
   findCommitV4History,
+  MainBranchLinearityError,
   ParentNotFoundErrorV4,
   updateBranchHead,
   updateCommitV4Position,
+  validateMainBranchLinearity,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -118,6 +120,14 @@ const createCommitV4Route = createRoute({
     400: {
       description:
         'Invalid request. Possible error codes: COMMIT_VERSION_UNSUPPORTED (V3 payload), INVALID_REQUEST (missing fields or constraints at commit level), PARENT_NOT_FOUND',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: 'Conflict: main branch linearity violation (MAIN_ROOT_EXISTS, MAIN_NOT_HEAD)',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -398,6 +408,11 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
   try {
     const db = await getDB();
 
+    // Validate main branch linearity before creating commit
+    if (body.branch) {
+      await validateMainBranchLinearity(db, body.project_id, body.branch, body.parents ?? []);
+    }
+
     const commit = await createCommitV4(db, {
       parents: body.parents,
       author: body.author,
@@ -430,6 +445,11 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
   } catch (err) {
+    // Handle main branch linearity violation
+    if (err instanceof MainBranchLinearityError) {
+      return errorResponse(c, err.code, err.message);
+    }
+
     // Handle parent not found error
     if (err instanceof ParentNotFoundErrorV4) {
       return errorResponse(

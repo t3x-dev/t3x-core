@@ -40,6 +40,7 @@ import {
   findLeavesByCommit,
   findLeavesByProject,
   updateLeaf,
+  updateLeafAtomic,
   updateLeafOutput,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
@@ -782,20 +783,16 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Storage handles constraint ID generation
-    let leaf = await updateLeaf(db, id, {
+    // Use atomic update to wrap all changes in a transaction
+    const leaf = await updateLeafAtomic(db, id, {
       title: body.title,
       constraints: body.constraints,
       config: body.config,
+      output: body.output,
     });
 
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
-    }
-
-    // If output is provided, update it separately (sets generated_at)
-    if (body.output !== undefined) {
-      leaf = (await updateLeafOutput(db, id, body.output ?? '')) ?? leaf;
     }
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 200);

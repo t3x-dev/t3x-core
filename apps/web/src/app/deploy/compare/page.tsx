@@ -722,7 +722,7 @@ function ComparePageContent() {
               {/* Sample size warning */}
               {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
                 !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
-                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-700">
+                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
                     Sample size may be insufficient for reliable significance detection
