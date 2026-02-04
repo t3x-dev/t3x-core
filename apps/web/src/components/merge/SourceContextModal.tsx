@@ -66,7 +66,7 @@ export function SourceContextModal() {
               <p className="mt-1 text-sm">
                 The original conversation context for this sentence could not be loaded.
               </p>
-              {contextSentence.source.turn_hash && (
+              {contextSentence.source?.turn_hash && (
                 <p className="mt-2 text-xs text-muted-foreground/60">
                   Ref: {contextSentence.source.turn_hash.slice(0, 16)}...
                 </p>

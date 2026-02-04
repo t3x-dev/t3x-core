@@ -36,12 +36,16 @@ export interface SentenceSource {
 /**
  * A sentence - compatible with both legacy and V3 formats
  * 句子 - 兼容旧格式和 V3 格式
+ *
+ * Note: source is optional because DiffableSentence.source_ref is optional
+ * in the core package. Some sentences (e.g., from executeMerge) may not have
+ * source information.
  */
 export interface Sentence {
   id: string;
   text: string;
   confidence?: number;
-  source: SentenceSource;
+  source?: SentenceSource;
 }
 
 /**
