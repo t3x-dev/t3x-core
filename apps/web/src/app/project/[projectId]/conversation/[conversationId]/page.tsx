@@ -211,7 +211,9 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
     return (
       <>
         {before}
-        <mark className="bg-green-200 text-green-900 px-0.5 rounded-sm">{highlighted}</mark>
+        <mark className="bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100 px-0.5 rounded-sm">
+          {highlighted}
+        </mark>
         {after}
       </>
     );
@@ -247,7 +249,9 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
           {new Date(turn.created_at).toLocaleTimeString()}
         </span>
         {isTarget && (
-          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">Source</span>
+          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+            Source
+          </span>
         )}
       </div>
       <div className="whitespace-pre-wrap text-sm">{renderContent()}</div>

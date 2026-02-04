@@ -454,7 +454,8 @@ describe('Commits V4 Routes', () => {
       testProjectId2 = project.projectId;
 
       // Create commits for this project
-      await app.request('/v1/commits-v4', {
+      // First commit on main (root)
+      const firstRes = await app.request('/v1/commits-v4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,6 +465,10 @@ describe('Commits V4 Routes', () => {
           branch: 'main',
         }),
       });
+      const firstData = (await firstRes.json()) as { data: { hash: string } };
+      const firstHash = firstData.data.hash;
+
+      // Second commit on main (must have parent to satisfy main branch linear chain)
       await app.request('/v1/commits-v4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -472,8 +477,10 @@ describe('Commits V4 Routes', () => {
           sentences: [{ id: 's_1', text: 'Second commit.' }],
           project_id: testProjectId2,
           branch: 'main',
+          parents: [firstHash],
         }),
       });
+      // Feature branch commit (root on feature is fine)
       await app.request('/v1/commits-v4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

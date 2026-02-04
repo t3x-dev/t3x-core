@@ -204,22 +204,48 @@ export async function updateLeaf(
  * Update leaf output
  *
  * Convenience method for setting generated content.
+ * Pass null to clear the output and generated_at timestamp.
  */
 export async function updateLeafOutput(
   db: AnyDB,
   id: string,
-  output: string
+  output: string | null
 ): Promise<Leaf | null> {
-  const [updated] = await db
-    .update(leaves)
-    .set({
-      output,
-      generatedAt: new Date(),
-    })
-    .where(eq(leaves.id, id))
-    .returning();
+  const setData =
+    output === null ? { output: null, generatedAt: null } : { output, generatedAt: new Date() };
+
+  const [updated] = await db.update(leaves).set(setData).where(eq(leaves.id, id)).returning();
 
   return updated ? rowToLeaf(updated) : null;
+}
+
+/**
+ * Atomically update a leaf with optional output in a single transaction.
+ *
+ * Combines updateLeaf + updateLeafOutput into one transaction to prevent
+ * partial state (e.g., constraints updated but output write fails).
+ */
+export async function updateLeafAtomic(
+  db: AnyDB,
+  id: string,
+  updates: UpdateLeafInput & { output?: string | null }
+): Promise<Leaf | null> {
+  // Drizzle ORM transaction — all AnyDB types (PGLite, Postgres, Supabase) support .transaction()
+  // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
+  return (db as any).transaction(async (tx: AnyDB) => {
+    const { output: outputValue, ...rest } = updates;
+
+    // Update non-output fields first
+    let leaf = await updateLeaf(tx, id, rest);
+    if (!leaf) return null;
+
+    // Update output if provided
+    if (outputValue !== undefined) {
+      leaf = (await updateLeafOutput(tx, id, outputValue)) ?? leaf;
+    }
+
+    return leaf;
+  });
 }
 
 /**
