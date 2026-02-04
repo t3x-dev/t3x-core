@@ -3,7 +3,7 @@
 > Each issue below is formatted to match `.github/ISSUE_TEMPLATE/feature_request.yml`.
 > Copy the content between the `---` markers for each issue.
 >
-> **实施进度：** Issue 5/6 ✅ | Issue 11 ✅ | Issue 12 ✅ | 其余 ❌ 未实施。详见 [`ux-redesign-issues.md`](./ux-redesign-issues.md)。
+> **实施进度：** Issue 5/6 ✅ | Issue 7 ✅ (B-7) | Issue 8/9 ✅ (B-4/B-8) | Issue 10 ✅ (B-15) | Issue 11 ✅ | Issue 12 ✅ | Issue 1-3 ⏭️ 跳过（保留三栏，B-5 不实施） | Issue 4 ✅ (B-4 内含)。详见 [`ux-redesign-issues.md`](./ux-redesign-issues.md)。
 
 ---
 

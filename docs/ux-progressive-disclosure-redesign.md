@@ -5,11 +5,12 @@
 > Scope: apps/web (CommittedCommitView, PendingCommitView, CanvasNodes, Diff)
 >
 > **实施进度（对应 demo-sprint-v2.md）：**
-> - Phase 1 (CommittedCommitView 单栏重写): ❌ 未实施（仍为三栏布局，对应 B-5）
+> - Phase 1 (CommittedCommitView 单栏重写): ⏭️ 跳过（保留三栏布局，B-5 决定不实施；B-15 已在三栏基础上简化 Diff 入口 4 步→2 步）
 > - Phase 2 (PendingCommitView wizard): ✅ 已实施（Step 1/2 指示器 + 锁定态，对应 B-6）
-> - Phase 3 (Commit 成功页 + auto-diff): ❌ 未实施（对应 B-7）
-> - Phase 4 (Canvas 节点简化 + Next Step): ❌ 未实施（对应 B-4, B-8）
+> - Phase 3 (Commit 成功页 + auto-diff): ✅ 已实施（全屏成功页 + diff stats 摘要 + 关闭按钮，对应 B-7）
+> - Phase 4 (Canvas 节点简化 + Next Step): ✅ 已实施（5 种状态 Next Step 按钮 B-4 + 默认折叠卡片 B-8）
 > - Phase 5 (空状态引导): ✅ 已实施（主要页面已有引导文案，对应 B-10）
+> - Dark Mode 全量修复: ✅ 已实施（300+ dark: 变体覆盖 34 文件，对应 B-11）
 
 ---
 

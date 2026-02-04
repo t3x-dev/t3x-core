@@ -5,18 +5,19 @@
 > Total: 12 issues across 5 independent phases
 >
 > **实施进度：**
-> - Issue 1 (CommittedCommitView 单栏): ❌ 未实施 → demo-sprint B-5
-> - Issue 2 (Layer 2 折叠区域): ❌ 未实施 → demo-sprint B-5
-> - Issue 3 (Layer 3 Advanced): ❌ 未实施 → demo-sprint B-5, B-15
-> - Issue 4 (NextStepCard 组件): ❌ 未实施 → demo-sprint B-4
+> - Issue 1 (CommittedCommitView 单栏): ⏭️ 跳过（保留三栏布局，B-5 决定不实施）
+> - Issue 2 (Layer 2 折叠区域): ⏭️ 跳过（同 Issue 1）
+> - Issue 3 (Layer 3 Advanced): ⏭️ 跳过（同 Issue 1；但 B-15 已简化 Diff 入口 4 步→2 步）
+> - Issue 4 (NextStepCard 组件): ✅ 已实施 → demo-sprint B-4（5 种状态机 + 审计修复）
 > - Issue 5 (PendingCommitView Page 1): ✅ 已实施 → demo-sprint B-6
 > - Issue 6 (PendingCommitView Page 2): ✅ 已实施 → demo-sprint B-6
-> - Issue 7 (Commit 成功页): ❌ 未实施 → demo-sprint B-7
-> - Issue 8 (Canvas 节点简化): ❌ 未实施 → demo-sprint B-8
-> - Issue 9 (Canvas NextStep 状态): ❌ 未实施 → demo-sprint B-4
-> - Issue 10 (Diff 入口重构): ❌ 未实施 → demo-sprint B-15
+> - Issue 7 (Commit 成功页): ✅ 已实施 → demo-sprint B-7（全屏成功页 + diff stats）
+> - Issue 8 (Canvas 节点简化): ✅ 已实施 → demo-sprint B-8（默认折叠 + 统计行 + Details 展开）
+> - Issue 9 (Canvas NextStep 状态): ✅ 已实施 → demo-sprint B-4（含在 Next Step 按钮中）
+> - Issue 10 (Diff 入口重构): ✅ 已实施 → demo-sprint B-15（选 target 自动 diffRaw + 直接打开 DiffFullScreen）
 > - Issue 11 (空状态引导): ✅ 已实施 → demo-sprint B-10
 > - Issue 12 (设计规范文档): ✅ 已有（本文档及 progressive-disclosure-redesign.md）
+> - Dark Mode: ✅ 已实施 → demo-sprint B-11（300+ dark: 变体，34 文件）
 
 ---
 
