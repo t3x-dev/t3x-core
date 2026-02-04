@@ -8,6 +8,10 @@
 
 set -e
 
+# 依赖检查
+command -v curl >/dev/null 2>&1 || { echo "[x] curl is required but not installed"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "[x] jq is required but not installed"; exit 1; }
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -16,9 +20,21 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# API 配置
+API_BASE="${API_BASE:-http://localhost:8000}"
+API_V1="${API_BASE}/api/v1"
+
 # 项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
+
+# Helper: 从 JSON 提取字段，失败时警告但不退出
+extract() {
+  local json="$1" field="$2"
+  local val
+  val=$(echo "$json" | jq -r "$field // empty" 2>/dev/null)
+  echo "$val"
+}
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
@@ -127,10 +143,10 @@ fi
 echo -e "${BLUE}[Step 4/6]${NC} 创建金融投顾 Agent..."
 
 # 删除已存在的 agent（如果有）
-curl -s -X DELETE "http://localhost:8000/api/v1/deploy-agents/finance_advisor_001" > /dev/null 2>&1 || true
+curl -s -X DELETE "${API_V1}/deploy-agents/finance_advisor_001" > /dev/null 2>&1 || true
 
 # 创建新的 agent
-AGENT_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/deploy-agents" \
+AGENT_RESPONSE=$(curl -s -X POST "${API_V1}/deploy-agents" \
   -H "Content-Type: application/json" \
   -d '{
     "id": "finance_advisor_001",
@@ -144,7 +160,7 @@ AGENT_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/deploy-agents" \
     }
   }')
 
-if echo "$AGENT_RESPONSE" | grep -q '"success":true'; then
+if [ "$(extract "$AGENT_RESPONSE" '.success')" = "true" ]; then
     echo -e "  ${GREEN}✓${NC} Agent 创建成功: 金融投顾 AI (finance_advisor_001)"
 else
     echo -e "  ${YELLOW}⚠${NC} Agent 可能已存在，继续..."
@@ -157,7 +173,7 @@ echo -e "${BLUE}[Step 5/6]${NC} 注入 Demo 测试数据..."
 
 # 案例 1: 合规的 AI 回答
 echo -e "  ${YELLOW}→${NC} 创建合规案例..."
-RUN1_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
+RUN1_RESPONSE=$(curl -s -X POST "${API_V1}/runs" \
   -H "Content-Type: application/json" \
   -d '{
     "deploy_agent_id": "finance_advisor_001",
@@ -165,11 +181,11 @@ RUN1_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
     "inputs": {"query": "帮我推荐一只适合长期持有的股票"},
     "metadata": {"case_type": "compliant", "demo": true}
   }')
-RUN1_ID=$(echo "$RUN1_RESPONSE" | grep -o '"run_id":"[^"]*"' | cut -d'"' -f4)
+RUN1_ID=$(extract "$RUN1_RESPONSE" '.data.run_id')
 
 if [ -n "$RUN1_ID" ]; then
     # 注入合规结果
-    curl -s -X POST "http://localhost:8000/api/v1/runs/ingest" \
+    curl -s -X POST "${API_V1}/runs/ingest" \
       -H "Content-Type: application/json" \
       -d "{
         \"run_id\": \"$RUN1_ID\",
@@ -210,7 +226,7 @@ fi
 
 # 案例 2: 违规的 AI 回答
 echo -e "  ${YELLOW}→${NC} 创建违规案例..."
-RUN2_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
+RUN2_RESPONSE=$(curl -s -X POST "${API_V1}/runs" \
   -H "Content-Type: application/json" \
   -d '{
     "deploy_agent_id": "finance_advisor_001",
@@ -218,11 +234,11 @@ RUN2_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
     "inputs": {"query": "帮我推荐一只适合长期持有的股票"},
     "metadata": {"case_type": "non_compliant", "demo": true}
   }')
-RUN2_ID=$(echo "$RUN2_RESPONSE" | grep -o '"run_id":"[^"]*"' | cut -d'"' -f4)
+RUN2_ID=$(extract "$RUN2_RESPONSE" '.data.run_id')
 
 if [ -n "$RUN2_ID" ]; then
     # 注入违规结果
-    curl -s -X POST "http://localhost:8000/api/v1/runs/ingest" \
+    curl -s -X POST "${API_V1}/runs/ingest" \
       -H "Content-Type: application/json" \
       -d "{
         \"run_id\": \"$RUN2_ID\",
@@ -263,7 +279,7 @@ fi
 
 # 案例 3: 部分合规案例
 echo -e "  ${YELLOW}→${NC} 创建部分合规案例..."
-RUN3_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
+RUN3_RESPONSE=$(curl -s -X POST "${API_V1}/runs" \
   -H "Content-Type: application/json" \
   -d '{
     "deploy_agent_id": "finance_advisor_001",
@@ -271,10 +287,10 @@ RUN3_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/runs" \
     "inputs": {"query": "最近买什么基金好？"},
     "metadata": {"case_type": "partial_compliant", "demo": true}
   }')
-RUN3_ID=$(echo "$RUN3_RESPONSE" | grep -o '"run_id":"[^"]*"' | cut -d'"' -f4)
+RUN3_ID=$(extract "$RUN3_RESPONSE" '.data.run_id')
 
 if [ -n "$RUN3_ID" ]; then
-    curl -s -X POST "http://localhost:8000/api/v1/runs/ingest" \
+    curl -s -X POST "${API_V1}/runs/ingest" \
       -H "Content-Type: application/json" \
       -d "{
         \"run_id\": \"$RUN3_ID\",
