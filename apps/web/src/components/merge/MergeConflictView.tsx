@@ -48,7 +48,9 @@ export function MergeConflictView({
     <div
       className={cn(
         'rounded-lg border p-4 transition-colors',
-        resolved ? 'border-green-200 bg-green-50/30' : 'border-yellow-200 bg-yellow-50/30'
+        resolved
+          ? 'border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30'
+          : 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/30 dark:bg-yellow-950/30'
       )}
     >
       {/* Header */}

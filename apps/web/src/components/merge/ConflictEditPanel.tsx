@@ -46,7 +46,7 @@ export function ConflictEditPanel({
           Write your merged version:
         </label>
         {isEmpty && (
-          <div className="flex items-center gap-1 text-xs text-amber-600">
+          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
             <AlertCircle className="h-3 w-3" />
             <span>Required to complete resolution</span>
           </div>
@@ -59,8 +59,10 @@ export function ConflictEditPanel({
         placeholder="Enter your merged text here..."
         className={cn(
           'w-full min-h-[100px] p-3 text-sm rounded-md border resize-y',
-          'focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300',
-          isEmpty ? 'border-amber-300 bg-amber-50/30' : 'border-muted bg-background'
+          'focus:outline-none focus:ring-2 focus:ring-purple-300 dark:focus:ring-purple-700 focus:border-purple-300 dark:focus:border-purple-700',
+          isEmpty
+            ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/30'
+            : 'border-muted bg-background'
         )}
       />
 
@@ -69,7 +71,7 @@ export function ConflictEditPanel({
         <button
           type="button"
           onClick={() => onChange(sourceText)}
-          className="text-red-600 hover:underline"
+          className="text-red-600 dark:text-red-400 hover:underline"
         >
           Use A
         </button>
@@ -77,7 +79,7 @@ export function ConflictEditPanel({
         <button
           type="button"
           onClick={() => onChange(targetText)}
-          className="text-green-600 hover:underline"
+          className="text-green-600 dark:text-green-400 hover:underline"
         >
           Use B
         </button>
@@ -85,7 +87,7 @@ export function ConflictEditPanel({
         <button
           type="button"
           onClick={() => onChange(combineTexts(sourceText, targetText))}
-          className="text-blue-600 hover:underline"
+          className="text-blue-600 dark:text-blue-400 hover:underline"
         >
           Combine both
         </button>

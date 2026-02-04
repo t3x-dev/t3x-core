@@ -79,7 +79,7 @@ export function LeafCreationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-[90vw] max-w-[540px] bg-white overflow-hidden z-[60]"
+        className="w-[90vw] max-w-[540px] bg-white dark:bg-slate-900 overflow-hidden z-[60]"
         overlayClassName="z-[60]"
       >
         <DialogHeader>
@@ -119,18 +119,23 @@ export function LeafCreationDialog({
                     className={cn(
                       'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',
                       isSelected
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-950/30',
                       isCreating && 'opacity-50 cursor-not-allowed'
                     )}
                   >
                     <Icon
                       size={16}
-                      className={cn('shrink-0', isSelected ? 'text-indigo-600' : 'text-gray-500')}
+                      className={cn(
+                        'shrink-0',
+                        isSelected
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      )}
                     />
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{leafType.label}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         {leafType.category === 'runner' ? 'Runner' : 'Output'}
                       </div>
                     </div>
@@ -143,8 +148,10 @@ export function LeafCreationDialog({
           {/* Commit hash display (read-only) */}
           <div className="space-y-2">
             <Label>From Commit</Label>
-            <div className="p-2 bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
-              <code className="text-xs font-mono text-gray-600 block truncate">{commitHash}</code>
+            <div className="p-2 bg-gray-50 dark:bg-gray-950/30 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <code className="text-xs font-mono text-gray-600 dark:text-gray-400 block truncate">
+                {commitHash}
+              </code>
             </div>
           </div>
         </div>

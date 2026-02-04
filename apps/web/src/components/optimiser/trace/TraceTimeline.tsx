@@ -88,7 +88,7 @@ function getSpanColor(spanKind: SpanKind | undefined): string {
     case 'workflow':
       return 'bg-orange-500';
     default:
-      return 'bg-gray-500';
+      return 'bg-gray-500 dark:bg-gray-400';
   }
 }
 
@@ -96,15 +96,15 @@ function getSpanColor(spanKind: SpanKind | undefined): string {
 function getSpanBadgeClass(spanKind: SpanKind | undefined): string {
   switch (spanKind) {
     case 'llm':
-      return 'bg-purple-500/10 text-purple-600 border-purple-500/30';
+      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30';
     case 'tool':
-      return 'bg-blue-500/10 text-blue-600 border-blue-500/30';
+      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
     case 'retriever':
-      return 'bg-green-500/10 text-green-600 border-green-500/30';
+      return 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30';
     case 'workflow':
-      return 'bg-orange-500/10 text-orange-600 border-orange-500/30';
+      return 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30';
     default:
-      return 'bg-gray-500/10 text-gray-600 border-gray-500/30';
+      return 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30';
   }
 }
 

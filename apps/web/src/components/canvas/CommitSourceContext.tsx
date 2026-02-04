@@ -232,21 +232,23 @@ function LeafOutputWithHighlights({
     // No matches found — show output as plain text + sentence list
     return (
       <div className="space-y-3">
-        <div className="text-[0.875rem] leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
+        <div className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
           {output}
         </div>
-        <div className="border-t border-gray-100 pt-2">
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-2">
           <p className="text-xs text-gray-400 mb-1">Committed sentences:</p>
           <ul className="space-y-1">
             {sentences.map((sg) => (
               <li
                 key={sg.sentence.id}
-                className="flex items-start gap-2 p-1.5 bg-green-50 rounded border border-green-100"
+                className="flex items-start gap-2 p-1.5 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
               >
-                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1 py-0.5 rounded shrink-0">
+                <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1 py-0.5 rounded shrink-0">
                   {sg.sentence.id}
                 </span>
-                <span className="text-xs text-gray-600 break-words">{sg.sentence.text}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 break-words">
+                  {sg.sentence.text}
+                </span>
               </li>
             ))}
           </ul>
@@ -270,10 +272,13 @@ function LeafOutputWithHighlights({
   }
 
   return (
-    <div className="text-[0.875rem] leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
+    <div className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
       {segments.map((seg) =>
         seg.highlighted ? (
-          <mark key={`h-${seg.offset}`} className="bg-green-100 text-green-900 rounded-sm px-0.5">
+          <mark
+            key={`h-${seg.offset}`}
+            className="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100 rounded-sm px-0.5"
+          >
             {seg.text}
           </mark>
         ) : (
@@ -562,10 +567,10 @@ export function CommitSourceContext({
   // Handle empty sentences
   if (sentences.length === 0) {
     return (
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-gray-400" />
-          <h3 className="font-semibold text-sm text-gray-700">Source Context</h3>
+          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
         </div>
         <p className="text-center py-4 text-gray-400 text-sm">No sentences</p>
       </div>
@@ -575,13 +580,13 @@ export function CommitSourceContext({
   // All legacy data - show simple sentence list
   if (allLegacy) {
     return (
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <MessageSquare size={14} className="text-gray-400" />
-            <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+            <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Sentences</h3>
           </div>
-          <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+          <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs rounded">
             Legacy format
           </span>
         </div>
@@ -589,12 +594,12 @@ export function CommitSourceContext({
           {sentences.map((s) => (
             <li
               key={s.id}
-              className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100"
+              className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
             >
-              <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
               </span>
-              <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+              <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                 {s.text}
               </span>
             </li>
@@ -607,10 +612,10 @@ export function CommitSourceContext({
   // Loading state
   if (isLoading) {
     return (
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-gray-400" />
-          <h3 className="font-semibold text-sm text-gray-700">Source Context</h3>
+          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
         </div>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -633,13 +638,13 @@ export function CommitSourceContext({
   // Fallback to sentence list if no context could be loaded
   if (!hasAnyContext) {
     return (
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <XCircle size={14} className="text-gray-400" />
-            <h3 className="font-semibold text-sm text-gray-700">Sentences</h3>
+            <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Sentences</h3>
           </div>
-          <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+          <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs rounded">
             Source unavailable
           </span>
         </div>
@@ -647,12 +652,12 @@ export function CommitSourceContext({
           {sentences.map((s) => (
             <li
               key={s.id}
-              className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100"
+              className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
             >
-              <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
               </span>
-              <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+              <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                 {s.text}
               </span>
             </li>
@@ -683,15 +688,15 @@ export function CommitSourceContext({
       : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}`;
 
   return (
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <MessageSquare size={14} className="text-green-600" />
-          <h3 className="font-semibold text-sm text-gray-700">Source Context</h3>
+          <MessageSquare size={14} className="text-green-600 dark:text-green-400" />
+          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
           {hasIntegrityIssues && (
             <span
-              className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[0.65rem] rounded flex items-center gap-1"
+              className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[0.65rem] rounded flex items-center gap-1"
               title="Some source content may have changed since this commit"
             >
               <AlertTriangle size={10} />
@@ -705,15 +710,15 @@ export function CommitSourceContext({
               <button
                 type="button"
                 onClick={expandAll}
-                className="text-blue-600 hover:text-blue-700 hover:underline"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
               >
                 Expand all
               </button>
-              <span className="text-gray-300">|</span>
+              <span className="text-gray-300 dark:text-gray-700">|</span>
               <button
                 type="button"
                 onClick={collapseAll}
-                className="text-blue-600 hover:text-blue-700 hover:underline"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
               >
                 Collapse
               </button>
@@ -733,37 +738,42 @@ export function CommitSourceContext({
           if (!data || data.error) {
             const sentencesForTurn = byTurn.get(turnHash) || [];
             return (
-              <div key={turnHash} className="rounded-lg border border-gray-200 overflow-hidden">
+              <div
+                key={turnHash}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
                 {/* Collapsible header */}
                 <button
                   type="button"
                   onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 hover:bg-gray-150 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
                 >
                   {isExpanded ? (
                     <ChevronDown size={14} className="text-gray-400 shrink-0" />
                   ) : (
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600">Turn {idx + 1}</span>
-                  <span className="px-1.5 py-0.5 bg-gray-300 text-gray-600 text-[0.65rem] rounded">
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                    Turn {idx + 1}
+                  </span>
+                  <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                     Source unavailable
                   </span>
                 </button>
 
                 {/* Expanded content - show sentences */}
                 {isExpanded && (
-                  <div className="p-3 bg-white">
+                  <div className="p-3 bg-white dark:bg-gray-900">
                     <ul className="space-y-2">
                       {sentencesForTurn.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 rounded border border-green-100"
+                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -812,26 +822,29 @@ export function CommitSourceContext({
           };
 
           return (
-            <div key={turnHash} className="rounded-lg border border-gray-200 overflow-hidden">
+            <div
+              key={turnHash}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
               {/* Collapsible header (not shown in compact mode for single turn) */}
               {!compact && (
                 <button
                   type="button"
                   onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 hover:bg-gray-150 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
                 >
                   {isExpanded ? (
                     <ChevronDown size={14} className="text-gray-400 shrink-0" />
                   ) : (
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600">
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
                     {data.context?.conversation_title || `Turn ${idx + 1}`}
                     <span className="ml-2 text-xs text-gray-400">({targetTurn.role})</span>
                   </span>
                   {turnHasIntegrityIssues && (
                     <span
-                      className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[0.65rem] rounded flex items-center gap-1"
+                      className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[0.65rem] rounded flex items-center gap-1"
                       title="Source content may have changed"
                     >
                       <AlertTriangle size={10} />
@@ -839,7 +852,7 @@ export function CommitSourceContext({
                     </span>
                   )}
                   {isLongTurn && (
-                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[0.65rem] rounded">
+                    <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[0.65rem] rounded">
                       Long turn
                     </span>
                   )}
@@ -851,17 +864,17 @@ export function CommitSourceContext({
 
               {/* Expanded content */}
               {isExpanded && (
-                <div className="p-2 bg-white">
+                <div className="p-2 bg-white dark:bg-gray-900">
                   <TurnBubble turn={turnBubbleData} highlightColor="green" showTargetRing={false} />
 
                   {/* Content integrity warning */}
                   {turnHasIntegrityIssues && (
-                    <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200">
-                      <div className="flex items-start gap-2 text-amber-700 text-xs">
+                    <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-700">
+                      <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300 text-xs">
                         <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                         <div>
                           <p className="font-medium">Source may have changed</p>
-                          <p className="text-amber-600 mt-0.5">
+                          <p className="text-amber-600 dark:text-amber-400 mt-0.5">
                             The highlighted text positions may not match the original content.
                           </p>
                         </div>
@@ -898,11 +911,14 @@ export function CommitSourceContext({
           // Error / unavailable state
           if (!data || data.error || !data.leaf) {
             return (
-              <div key={sectionKey} className="rounded-lg border border-gray-200 overflow-hidden">
+              <div
+                key={sectionKey}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 hover:bg-gray-150 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
                 >
                   {isExpanded ? (
                     <ChevronDown size={14} className="text-gray-400 shrink-0" />
@@ -910,23 +926,25 @@ export function CommitSourceContext({
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
                   <LeafIcon size={14} className="text-gray-400 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 truncate">{leafTitle}</span>
-                  <span className="px-1.5 py-0.5 bg-gray-300 text-gray-600 text-[0.65rem] rounded">
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                    {leafTitle}
+                  </span>
+                  <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                     Source unavailable
                   </span>
                 </button>
                 {isExpanded && sentencesForLeaf.length > 0 && (
-                  <div className="p-3 bg-white">
+                  <div className="p-3 bg-white dark:bg-gray-900">
                     <ul className="space-y-2">
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 rounded border border-green-100"
+                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -942,22 +960,27 @@ export function CommitSourceContext({
           const leafOutput = data.leaf.output;
 
           return (
-            <div key={sectionKey} className="rounded-lg border border-gray-200 overflow-hidden">
+            <div
+              key={sectionKey}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
               {!compact && (
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 hover:bg-gray-150 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
                 >
                   {isExpanded ? (
                     <ChevronDown size={14} className="text-gray-400 shrink-0" />
                   ) : (
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
-                  <LeafIcon size={14} className="text-green-600 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 truncate">{leafTitle}</span>
+                  <LeafIcon size={14} className="text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                    {leafTitle}
+                  </span>
                   {leafType && (
-                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[0.65rem] rounded">
+                    <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[0.65rem] rounded">
                       {leafType}
                     </span>
                   )}
@@ -968,7 +991,7 @@ export function CommitSourceContext({
               )}
 
               {isExpanded && (
-                <div className="p-3 bg-white">
+                <div className="p-3 bg-white dark:bg-gray-900">
                   {leafOutput ? (
                     <LeafOutputWithHighlights output={leafOutput} sentences={sentencesForLeaf} />
                   ) : (
@@ -976,12 +999,12 @@ export function CommitSourceContext({
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 rounded border border-green-100"
+                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -1003,13 +1026,13 @@ export function CommitSourceContext({
 
         {/* Legacy sentences without source info (only truly unresolved ones) */}
         {unresolvedSentences.length > 0 && !allLegacy && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-gray-500">
                 {unresolvedSentences.length} sentence
                 {unresolvedSentences.length !== 1 ? 's' : ''} without source info
               </span>
-              <span className="px-1.5 py-0.5 bg-gray-200 text-gray-600 text-[0.65rem] rounded">
+              <span className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                 Legacy
               </span>
             </div>
@@ -1017,12 +1040,12 @@ export function CommitSourceContext({
               {unresolvedSentences.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100"
+                  className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
                 >
-                  <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                  <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
                     {s.id}
                   </span>
-                  <span className="text-[0.875rem] leading-relaxed text-gray-700 break-words">
+                  <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                     {s.text}
                   </span>
                 </li>
