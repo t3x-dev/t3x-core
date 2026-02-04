@@ -459,13 +459,13 @@ Use the existing test setup pattern (`setupTestDB` + PGLite) for tests that need
 
 ## Priority Matrix
 
-| Issue | Priority | Effort | User Impact |
-|-------|----------|--------|-------------|
-| #1 NodeModal refactor | **P0** | Large | High — performance, maintainability |
-| #3 API retry + error feedback | **P0** | Medium | High — network resilience |
-| #2 canvasStore split | **P1** | Large | Medium — developer velocity, bug reduction |
-| #5 Loading/error states | **P1** | Medium | High — user trust |
-| #4 E2E test flakiness | **P1** | Medium | Medium — CI reliability |
-| #7 Remove console statements | **P2** | Small | Low — log hygiene |
-| #6 Eliminate `as any` | **P2** | Small | Medium — refactoring safety |
-| #8 API lib test coverage | **P2** | Medium | Medium — regression prevention |
+| Issue | Priority | Effort | User Impact | 状态 |
+|-------|----------|--------|-------------|------|
+| #1 NodeModal refactor | **P0** | Large | High — performance, maintainability | ✅ 部分完成（CommittedCommitView/PendingCommitView/ConversationView 已拆分） |
+| #3 API retry + error feedback | **P0** | Medium | High — network resilience | ⬜ 未开始 |
+| #2 canvasStore split | **P1** | Large | Medium — developer velocity, bug reduction | ✅ 已完成（slice 模式：canvasMergeSlice, canvasLeafSlice） |
+| #5 Loading/error states | **P1** | Medium | High — user trust | ✅ 部分完成（B-9 Leaf loading, A-11 Merge loading, A-3 Generate 错误） |
+| #4 E2E test flakiness | **P1** | Medium | Medium — CI reliability | ⬜ 未开始 |
+| #7 Remove console statements | **P2** | Small | Low — log hygiene | ✅ 已完成（demo-sprint A-6） |
+| #6 Eliminate `as any` | **P2** | Small | Medium — refactoring safety | ✅ 已完成（demo-sprint A-14/A-15，生产代码 0 处 as any） |
+| #8 API lib test coverage | **P2** | Medium | Medium — regression prevention | ⬜ 未开始 |

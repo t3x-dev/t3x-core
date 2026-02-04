@@ -1,8 +1,15 @@
 # UX Redesign: Progressive Disclosure & Next Step Navigation
 
-> Status: Proposal
+> Status: **Partially Implemented**
 > Date: 2026-02-03
 > Scope: apps/web (CommittedCommitView, PendingCommitView, CanvasNodes, Diff)
+>
+> **实施进度（对应 demo-sprint-v2.md）：**
+> - Phase 1 (CommittedCommitView 单栏重写): ❌ 未实施（仍为三栏布局，对应 B-5）
+> - Phase 2 (PendingCommitView wizard): ✅ 已实施（Step 1/2 指示器 + 锁定态，对应 B-6）
+> - Phase 3 (Commit 成功页 + auto-diff): ❌ 未实施（对应 B-7）
+> - Phase 4 (Canvas 节点简化 + Next Step): ❌ 未实施（对应 B-4, B-8）
+> - Phase 5 (空状态引导): ✅ 已实施（主要页面已有引导文案，对应 B-10）
 
 ---
 

@@ -1,5 +1,8 @@
 # Demo Sprint — Issue Tracker
 
+> **⚠️ 本文档为 v1 版本，issue 规格说明仍然有效，但进度跟踪请参考 [`demo-sprint-v2.md`](./demo-sprint-v2.md)。**
+> v1 Person A = A-1~A-13（v2 扩展为 A-1~A-17，全部已完成），v1 Person B = B-1~B-6（v2 扩展为 B-1~B-21，15/21 已完成）。
+
 > Each issue is self-contained: has context, exact files, acceptance criteria, and verification steps.
 > Assignee: **A** = Person A (Content + Stability), **B** = Person B (Visual + UX)
 

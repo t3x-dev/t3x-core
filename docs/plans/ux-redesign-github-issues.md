@@ -2,6 +2,8 @@
 
 > Each issue below is formatted to match `.github/ISSUE_TEMPLATE/feature_request.yml`.
 > Copy the content between the `---` markers for each issue.
+>
+> **实施进度：** Issue 5/6 ✅ | Issue 11 ✅ | Issue 12 ✅ | 其余 ❌ 未实施。详见 [`ux-redesign-issues.md`](./ux-redesign-issues.md)。
 
 ---
 
