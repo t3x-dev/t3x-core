@@ -6,6 +6,10 @@ set -euo pipefail
 # Seeds the database with demo data for presentation/testing
 # =============================================================================
 
+# Dependency checks
+command -v curl >/dev/null 2>&1 || { echo "[x] curl is required but not installed"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "[x] jq is required but not installed"; exit 1; }
+
 API_BASE="${API_BASE:-http://localhost:8000}"
 API_V1="${API_BASE}/api/v1"
 
@@ -23,6 +27,15 @@ step() { echo -e "${BLUE}[>] $1${NC}"; }
 ok()   { echo -e "${GREEN}[+] $1${NC}"; }
 warn() { echo -e "${YELLOW}[!] $1${NC}"; }
 fail() { echo -e "${RED}[x] $1${NC}"; exit 1; }
+
+# Helper: extract a field from JSON, fail if empty
+extract() {
+  local json="$1" field="$2"
+  local val
+  val=$(echo "$json" | jq -r "$field // empty")
+  [ -n "$val" ] || fail "Failed to extract $field from API response"
+  echo "$val"
+}
 
 # Helper: POST with JSON and extract field via jq
 post() {
@@ -64,7 +77,7 @@ echo ""
 step "Creating Project 1: Customer Support Knowledge"
 
 PROJECT1=$(post "${API_V1}/projects" '{"name": "Customer Support Knowledge", "metadata": {"description": "Consolidated knowledge from support team conversations — return policies, defective item handling, and shipping coverage"}}')
-PROJECT1_ID=$(echo "$PROJECT1" | jq -r '.data.project_id')
+PROJECT1_ID=$(extract "$PROJECT1" '.data.project_id')
 ok "Project 1 created: ${PROJECT1_ID}"
 
 # --- Conversation A: Return Policy Discussion ---
@@ -76,7 +89,7 @@ CONV_A=$(post "${API_V1}/conversations" "{
   \"position_x\": 100,
   \"position_y\": 100
 }")
-CONV_A_ID=$(echo "$CONV_A" | jq -r '.data.conversation_id')
+CONV_A_ID=$(extract "$CONV_A" '.data.conversation_id')
 ok "Conversation A created: ${CONV_A_ID}"
 
 # Turn A1: user
@@ -87,7 +100,7 @@ TURN_A1=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"What is your return policy for electronics purchased online?\"
 }")
-TURN_A1_HASH=$(echo "$TURN_A1" | jq -r '.data.turn_hash')
+TURN_A1_HASH=$(extract "$TURN_A1" '.data.turn_hash')
 
 # Turn A2: assistant
 TURN_A2=$(post "${API_V1}/turns" "{
@@ -96,7 +109,7 @@ TURN_A2=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"Our standard return policy allows returns within 30 days of purchase. Electronics must be in original packaging with all accessories. A receipt or order confirmation is required for processing.\"
 }")
-TURN_A2_HASH=$(echo "$TURN_A2" | jq -r '.data.turn_hash')
+TURN_A2_HASH=$(extract "$TURN_A2" '.data.turn_hash')
 
 # Turn A3: user
 TURN_A3=$(post "${API_V1}/turns" "{
@@ -105,7 +118,7 @@ TURN_A3=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"What if the item is defective? Is the policy different?\"
 }")
-TURN_A3_HASH=$(echo "$TURN_A3" | jq -r '.data.turn_hash')
+TURN_A3_HASH=$(extract "$TURN_A3" '.data.turn_hash')
 
 # Turn A4: assistant
 TURN_A4=$(post "${API_V1}/turns" "{
@@ -114,7 +127,7 @@ TURN_A4=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"For defective items, we extend the return window to 90 days. We also cover return shipping costs for confirmed defects. You can choose between a full refund or replacement.\"
 }")
-TURN_A4_HASH=$(echo "$TURN_A4" | jq -r '.data.turn_hash')
+TURN_A4_HASH=$(extract "$TURN_A4" '.data.turn_hash')
 ok "  4 turns added to Conversation A"
 
 # --- Conversation B: Warranty Terms Discussion ---
@@ -126,7 +139,7 @@ CONV_B=$(post "${API_V1}/conversations" "{
   \"position_x\": 100,
   \"position_y\": 400
 }")
-CONV_B_ID=$(echo "$CONV_B" | jq -r '.data.conversation_id')
+CONV_B_ID=$(extract "$CONV_B" '.data.conversation_id')
 ok "Conversation B created: ${CONV_B_ID}"
 
 # Turn B1: user
@@ -137,7 +150,7 @@ TURN_B1=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"Can you explain the warranty coverage for premium electronics?\"
 }")
-TURN_B1_HASH=$(echo "$TURN_B1" | jq -r '.data.turn_hash')
+TURN_B1_HASH=$(extract "$TURN_B1" '.data.turn_hash')
 
 # Turn B2: assistant
 TURN_B2=$(post "${API_V1}/turns" "{
@@ -146,7 +159,7 @@ TURN_B2=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"Premium electronics come with a 2-year manufacturer warranty. This covers hardware defects and manufacturing issues. Software issues are covered for the first 6 months only.\"
 }")
-TURN_B2_HASH=$(echo "$TURN_B2" | jq -r '.data.turn_hash')
+TURN_B2_HASH=$(extract "$TURN_B2" '.data.turn_hash')
 
 # Turn B3: user + assistant combined (the spec shows 3 turns total, 2 user + 1 assistant response)
 TURN_B3=$(post "${API_V1}/turns" "{
@@ -155,7 +168,7 @@ TURN_B3=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"What about the return window for warranty claims?\"
 }")
-TURN_B3_HASH=$(echo "$TURN_B3" | jq -r '.data.turn_hash')
+TURN_B3_HASH=$(extract "$TURN_B3" '.data.turn_hash')
 
 TURN_B4=$(post "${API_V1}/turns" "{
   \"project_id\": \"${PROJECT1_ID}\",
@@ -163,7 +176,7 @@ TURN_B4=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"Warranty claims have a 60-day return window, different from standard returns. For warranty items, we always provide a replacement rather than a refund. Return shipping is covered under warranty.\"
 }")
-TURN_B4_HASH=$(echo "$TURN_B4" | jq -r '.data.turn_hash')
+TURN_B4_HASH=$(extract "$TURN_B4" '.data.turn_hash')
 ok "  4 turns added to Conversation B"
 
 # --- CommitV4 on main branch (from Conversation A) ---
@@ -216,7 +229,7 @@ COMMIT_MAIN=$(post "${API_V1}/commits-v4" "{
   \"position_x\": 400,
   \"position_y\": 100
 }")
-COMMIT_MAIN_HASH=$(echo "$COMMIT_MAIN" | jq -r '.data.hash')
+COMMIT_MAIN_HASH=$(extract "$COMMIT_MAIN" '.data.hash')
 ok "Main commit created: ${COMMIT_MAIN_HASH}"
 
 # --- CommitV4 on feature/warranty branch (from Conversation B) ---
@@ -268,7 +281,7 @@ COMMIT_BRANCH=$(post "${API_V1}/commits-v4" "{
   \"position_x\": 400,
   \"position_y\": 400
 }")
-COMMIT_BRANCH_HASH=$(echo "$COMMIT_BRANCH" | jq -r '.data.hash')
+COMMIT_BRANCH_HASH=$(extract "$COMMIT_BRANCH" '.data.hash')
 ok "Branch commit created: ${COMMIT_BRANCH_HASH}"
 
 # --- Leaf on main commit ---
@@ -307,7 +320,7 @@ LEAF=$(post "${API_V1}/leaves" "{
     \"max_tokens\": 1024
   }
 }")
-LEAF_ID=$(echo "$LEAF" | jq -r '.data.id')
+LEAF_ID=$(extract "$LEAF" '.data.id')
 ok "Leaf created: ${LEAF_ID}"
 
 # Try to generate output if API key is available
@@ -325,7 +338,7 @@ else
   MOCK_OUTPUT="Our return policy allows standard returns within 30 days of purchase. All items must be in original packaging with all accessories included. For defective items, we offer an extended 90-day return window with covered return shipping costs. You may choose between a full refund or a replacement for any confirmed defect."
   curl -sf -X PATCH "${API_V1}/leaves/${LEAF_ID}" \
     -H "Content-Type: application/json" \
-    -d "{\"output\": \"${MOCK_OUTPUT}\"}" > /dev/null 2>&1 && {
+    -d "$(jq -n --arg out "$MOCK_OUTPUT" '{output: $out}')" > /dev/null 2>&1 && {
     ok "Mock output written to leaf (fallback for demo without API key)"
   } || {
     warn "Failed to write mock output - leaf created without output (generate manually from UI)"
@@ -339,7 +352,7 @@ PIN=$(post "${API_V1}/projects/${PROJECT1_ID}/pins" "{
   \"type\": \"conversation\",
   \"ref_id\": \"${CONV_A_ID}\"
 }")
-PIN_ID=$(echo "$PIN" | jq -r '.data.id')
+PIN_ID=$(extract "$PIN" '.data.id')
 ok "Pin created: ${PIN_ID}"
 
 # --- Merge Draft ---
@@ -352,7 +365,7 @@ MERGE_DRAFT=$(post "${API_V1}/merge/drafts" "{
   \"source_branch\": \"feature/warranty\",
   \"target_branch\": \"main\"
 }")
-DRAFT_ID=$(echo "$MERGE_DRAFT" | jq -r '.data.draftId')
+DRAFT_ID=$(extract "$MERGE_DRAFT" '.data.draftId')
 SIMILAR_PAIRS=$(echo "$MERGE_DRAFT" | jq '.data.prepared.similarPairs | length')
 ONLY_SOURCE=$(echo "$MERGE_DRAFT" | jq '.data.prepared.onlyInSource | length')
 ONLY_TARGET=$(echo "$MERGE_DRAFT" | jq '.data.prepared.onlyInTarget | length')
@@ -371,7 +384,7 @@ echo ""
 step "Creating Project 2: Product FAQ Draft"
 
 PROJECT2=$(post "${API_V1}/projects" '{"name": "Product FAQ Draft", "metadata": {"description": "Customer-facing FAQ content covering shipping, delivery, and order policies"}}')
-PROJECT2_ID=$(echo "$PROJECT2" | jq -r '.data.project_id')
+PROJECT2_ID=$(extract "$PROJECT2" '.data.project_id')
 ok "Project 2 created: ${PROJECT2_ID}"
 
 # Conversation: FAQ Review
@@ -381,7 +394,7 @@ CONV_FAQ=$(post "${API_V1}/conversations" "{
   \"position_x\": 100,
   \"position_y\": 100
 }")
-CONV_FAQ_ID=$(echo "$CONV_FAQ" | jq -r '.data.conversation_id')
+CONV_FAQ_ID=$(extract "$CONV_FAQ" '.data.conversation_id')
 
 step "  Adding turns to FAQ conversation..."
 TURN_FAQ1=$(post "${API_V1}/turns" "{
@@ -390,7 +403,7 @@ TURN_FAQ1=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"What are the standard shipping times for domestic orders?\"
 }")
-TURN_FAQ1_HASH=$(echo "$TURN_FAQ1" | jq -r '.data.turn_hash')
+TURN_FAQ1_HASH=$(extract "$TURN_FAQ1" '.data.turn_hash')
 
 TURN_FAQ2=$(post "${API_V1}/turns" "{
   \"project_id\": \"${PROJECT2_ID}\",
@@ -398,7 +411,7 @@ TURN_FAQ2=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"Standard domestic shipping takes 5 to 7 business days. Express shipping is available for 2-day delivery at an additional cost. Free shipping is offered on orders over 50 dollars.\"
 }")
-TURN_FAQ2_HASH=$(echo "$TURN_FAQ2" | jq -r '.data.turn_hash')
+TURN_FAQ2_HASH=$(extract "$TURN_FAQ2" '.data.turn_hash')
 ok "  2 turns added"
 
 # Commit on main: 2 sentences about shipping
@@ -439,7 +452,7 @@ COMMIT_FAQ=$(post "${API_V1}/commits-v4" "{
   \"position_x\": 400,
   \"position_y\": 100
 }")
-COMMIT_FAQ_HASH=$(echo "$COMMIT_FAQ" | jq -r '.data.hash')
+COMMIT_FAQ_HASH=$(extract "$COMMIT_FAQ" '.data.hash')
 ok "FAQ commit created: ${COMMIT_FAQ_HASH}"
 
 echo ""
@@ -452,7 +465,7 @@ echo ""
 step "Creating Project 3: Marketing Tone Guide"
 
 PROJECT3=$(post "${API_V1}/projects" '{"name": "Marketing Tone Guide", "metadata": {"description": "Internal style guide for customer-facing communications — voice, tone, and language standards"}}')
-PROJECT3_ID=$(echo "$PROJECT3" | jq -r '.data.project_id')
+PROJECT3_ID=$(extract "$PROJECT3" '.data.project_id')
 ok "Project 3 created: ${PROJECT3_ID}"
 
 # Conversation: Brand Voice Discussion
@@ -462,7 +475,7 @@ CONV_BRAND=$(post "${API_V1}/conversations" "{
   \"position_x\": 100,
   \"position_y\": 100
 }")
-CONV_BRAND_ID=$(echo "$CONV_BRAND" | jq -r '.data.conversation_id')
+CONV_BRAND_ID=$(extract "$CONV_BRAND" '.data.conversation_id')
 
 step "  Adding turns to Brand Voice conversation..."
 TURN_BRAND1=$(post "${API_V1}/turns" "{
@@ -471,7 +484,7 @@ TURN_BRAND1=$(post "${API_V1}/turns" "{
   \"role\": \"user\",
   \"content\": \"What tone should we use for our customer-facing communications?\"
 }")
-TURN_BRAND1_HASH=$(echo "$TURN_BRAND1" | jq -r '.data.turn_hash')
+TURN_BRAND1_HASH=$(extract "$TURN_BRAND1" '.data.turn_hash')
 
 TURN_BRAND2=$(post "${API_V1}/turns" "{
   \"project_id\": \"${PROJECT3_ID}\",
@@ -479,7 +492,7 @@ TURN_BRAND2=$(post "${API_V1}/turns" "{
   \"role\": \"assistant\",
   \"content\": \"Our brand voice should be professional yet approachable. We aim for clarity over complexity, using plain language that any customer can understand. Avoid jargon and technical terms unless absolutely necessary.\"
 }")
-TURN_BRAND2_HASH=$(echo "$TURN_BRAND2" | jq -r '.data.turn_hash')
+TURN_BRAND2_HASH=$(extract "$TURN_BRAND2" '.data.turn_hash')
 ok "  2 turns added"
 
 # Commit on main: 2 sentences about brand guidelines
@@ -520,7 +533,7 @@ COMMIT_BRAND=$(post "${API_V1}/commits-v4" "{
   \"position_x\": 400,
   \"position_y\": 100
 }")
-COMMIT_BRAND_HASH=$(echo "$COMMIT_BRAND" | jq -r '.data.hash')
+COMMIT_BRAND_HASH=$(extract "$COMMIT_BRAND" '.data.hash')
 ok "Brand commit created: ${COMMIT_BRAND_HASH}"
 
 echo ""

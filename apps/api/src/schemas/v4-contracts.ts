@@ -222,8 +222,8 @@ export const ListLeavesResponse = SuccessResponse(z.array(LeafResponse));
 
 // PATCH /v1/leaves/:id
 export const UpdateLeafRequest = z.object({
-  title: z.string().optional(),
-  constraints: z.array(ConstraintSchema).optional(),
+  title: z.string().max(500).optional(),
+  constraints: z.array(ConstraintSchema).max(100).optional(),
   config: z
     .object({
       prompt_template: z.string().optional(),
@@ -232,7 +232,7 @@ export const UpdateLeafRequest = z.object({
     })
     .passthrough()
     .optional(),
-  output: z.string().nullable().optional(),
+  output: z.string().max(1_000_000).nullable().optional(),
 });
 
 export const UpdateLeafResponse = SuccessResponse(LeafResponse);

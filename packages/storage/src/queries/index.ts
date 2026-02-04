@@ -54,8 +54,10 @@ export {
   getCommitsV4ByHashes,
   getCommitV4Parents,
   type ListCommitsV4Options,
+  MainBranchLinearityError,
   ParentNotFoundErrorV4,
   updateCommitV4Position,
+  validateMainBranchLinearity,
 } from './commits-v4';
 // Conversation Contexts (per-conversation context customization)
 export {
@@ -125,6 +127,7 @@ export {
   type UpdateLeafInput,
   updateLeaf,
   updateLeafAssertions,
+  updateLeafAtomic,
   updateLeafOutput,
 } from './leaves';
 // Merge Drafts (Pending merge operations)

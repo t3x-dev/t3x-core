@@ -337,6 +337,69 @@ export async function findCommitV4History(
 }
 
 // ============================================================
+// Validation
+// ============================================================
+
+/**
+ * Error thrown when main branch linearity is violated
+ */
+export class MainBranchLinearityError extends Error {
+  constructor(
+    public code: 'MAIN_ROOT_EXISTS' | 'MAIN_NOT_HEAD',
+    message: string
+  ) {
+    super(message);
+    this.name = 'MainBranchLinearityError';
+  }
+}
+
+/**
+ * Validate that a new commit on the main branch maintains linear chain.
+ *
+ * Rules:
+ * 1. Only one root commit (no parents) is allowed on main
+ * 2. Non-root commits must extend from the current HEAD (latest commit with no children)
+ *
+ * @throws MainBranchLinearityError if validation fails
+ */
+export async function validateMainBranchLinearity(
+  db: AnyDB,
+  projectId: string,
+  branch: string,
+  parents: string[]
+): Promise<void> {
+  if (branch !== 'main') return;
+
+  const mainCommits = await db
+    .select({ hash: commitsV4.hash, parents: commitsV4.parents })
+    .from(commitsV4)
+    .where(and(eq(commitsV4.projectId, projectId), eq(commitsV4.branch, 'main')));
+
+  if (parents.length === 0) {
+    // Root commit — reject if main already has commits
+    if (mainCommits.length > 0) {
+      throw new MainBranchLinearityError(
+        'MAIN_ROOT_EXISTS',
+        'A root commit on main branch already exists'
+      );
+    }
+  } else {
+    // Child commit — parent must be current HEAD (latest with no children on main)
+    if (mainCommits.length > 0) {
+      const childParents = new Set(mainCommits.flatMap((c) => c.parents));
+      const heads = mainCommits.filter((c) => !childParents.has(c.hash));
+      const headHash = heads.length === 1 ? heads[0].hash : null;
+      if (headHash && !parents.includes(headHash)) {
+        throw new MainBranchLinearityError(
+          'MAIN_NOT_HEAD',
+          'Can only extend main branch from its latest commit'
+        );
+      }
+    }
+  }
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 

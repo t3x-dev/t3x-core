@@ -72,6 +72,8 @@ export default function LeafDetailPage() {
   const leafId = params.leafId as string;
 
   const [leaf, setLeaf] = useState<Leaf | null>(null);
+  const leafRef = useRef<Leaf | null>(null);
+  const constraintAbortRef = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,6 +92,18 @@ export default function LeafDetailPage() {
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [userInstruction, setUserInstruction] = useState<string>('');
   const instructionDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keep leafRef in sync with leaf state
+  useEffect(() => {
+    leafRef.current = leaf;
+  }, [leaf]);
+
+  // Cleanup AbortController on unmount
+  useEffect(() => {
+    return () => {
+      constraintAbortRef.current?.abort();
+    };
+  }, []);
 
   // Load leaf data
   useEffect(() => {
@@ -221,80 +235,94 @@ export default function LeafDetailPage() {
     }));
   }, [commitData]);
 
-  // Handle constraint update (with optimistic update to prevent UI jumping)
-  const handleUpdateConstraints = async (constraints: Constraint[], optimisticLeaf?: Leaf) => {
-    if (!leaf) return;
+  // Handle constraint update (with optimistic update and abort support)
+  const handleUpdateConstraints = useCallback(
+    async (constraints: Constraint[], optimisticLeaf?: Leaf) => {
+      // Abort any in-flight constraint update
+      constraintAbortRef.current?.abort();
+      const controller = new AbortController();
+      constraintAbortRef.current = controller;
 
-    // Apply optimistic update immediately if provided
-    if (optimisticLeaf) {
-      setLeaf(optimisticLeaf);
-    }
-
-    try {
-      setSaving(true);
-      const updated = await updateLeaf(leafId, { constraints });
-      // Only update if no optimistic update was applied, or to sync with server
-      if (!optimisticLeaf) {
-        setLeaf(updated);
-      }
-    } catch (err) {
-      // Revert optimistic update on error
+      // Apply optimistic update immediately if provided
       if (optimisticLeaf) {
-        setLeaf(leaf);
+        setLeaf(optimisticLeaf);
       }
-      setError(err instanceof Error ? err : new Error('Failed to update constraints'));
-    } finally {
-      setSaving(false);
-    }
-  };
+
+      try {
+        setSaving(true);
+        const updated = await updateLeaf(leafId, { constraints });
+        // Sync with server state unless this request was superseded
+        if (!controller.signal.aborted) {
+          setLeaf(updated);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          // Revert to latest known good state on error
+          if (optimisticLeaf && leafRef.current) {
+            setLeaf(leafRef.current);
+          }
+          setError(err instanceof Error ? err : new Error('Failed to update constraints'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSaving(false);
+        }
+      }
+    },
+    [leafId]
+  );
 
   // Remove constraint with optimistic update
-  const handleRemoveConstraint = (constraintId: string) => {
-    if (!leaf) return;
-    const updatedConstraints = leaf.constraints.filter((c) => c.id !== constraintId);
-    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
-    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
-  };
+  const handleRemoveConstraint = useCallback(
+    (constraintId: string) => {
+      const current = leafRef.current;
+      if (!current || saving) return;
+      const updatedConstraints = current.constraints.filter((c) => c.id !== constraintId);
+      const optimisticLeaf = { ...current, constraints: updatedConstraints };
+      handleUpdateConstraints(updatedConstraints, optimisticLeaf);
+    },
+    [saving, handleUpdateConstraints]
+  );
 
   // Add new constraint with optimistic update
-  const handleAddConstraint = (
-    type: 'require' | 'exclude',
-    value: string,
-    matchMode: 'exact' | 'semantic' = 'exact'
-  ) => {
-    if (!leaf || !value.trim()) return;
-    const newConstraint: Constraint = {
-      id: `cst_${Date.now().toString(36)}`,
-      type,
-      value: value.trim(),
-      match_mode: matchMode,
-    };
-    const updatedConstraints = [...leaf.constraints, newConstraint];
-    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
-    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
-  };
+  const handleAddConstraint = useCallback(
+    (type: 'require' | 'exclude', value: string, matchMode: 'exact' | 'semantic' = 'exact') => {
+      const current = leafRef.current;
+      if (!current || saving || !value.trim()) return;
+      const newConstraint: Constraint = {
+        id: `cst_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`,
+        type,
+        value: value.trim(),
+        match_mode: matchMode,
+      };
+      const updatedConstraints = [...current.constraints, newConstraint];
+      const optimisticLeaf = { ...current, constraints: updatedConstraints };
+      handleUpdateConstraints(updatedConstraints, optimisticLeaf);
+    },
+    [saving, handleUpdateConstraints]
+  );
 
   // Add constraint with source sentence tracing (with optimistic update)
-  const handleAddConstraintFromSource = (
-    type: 'require' | 'exclude',
-    value: string,
-    sourceSentenceId: string
-  ) => {
-    if (!leaf || !value.trim()) return;
-    const base = {
-      id: `cst_${Date.now().toString(36)}`,
-      value: value.trim(),
-      match_mode: 'exact' as const,
-      description: `Selected from sentence ${sourceSentenceId}`,
-    };
-    const newConstraint: Constraint =
-      type === 'require'
-        ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
-        : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
-    const updatedConstraints = [...leaf.constraints, newConstraint];
-    const optimisticLeaf = { ...leaf, constraints: updatedConstraints };
-    handleUpdateConstraints(updatedConstraints, optimisticLeaf);
-  };
+  const handleAddConstraintFromSource = useCallback(
+    (type: 'require' | 'exclude', value: string, sourceSentenceId: string) => {
+      const current = leafRef.current;
+      if (!current || saving || !value.trim()) return;
+      const base = {
+        id: `cst_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`,
+        value: value.trim(),
+        match_mode: 'exact' as const,
+        description: `Selected from sentence ${sourceSentenceId}`,
+      };
+      const newConstraint: Constraint =
+        type === 'require'
+          ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
+          : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
+      const updatedConstraints = [...current.constraints, newConstraint];
+      const optimisticLeaf = { ...current, constraints: updatedConstraints };
+      handleUpdateConstraints(updatedConstraints, optimisticLeaf);
+    },
+    [saving, handleUpdateConstraints]
+  );
 
   // Handle config update
   const handleUpdateConfig = async (config: LeafConfig) => {
@@ -518,7 +546,7 @@ export default function LeafDetailPage() {
 
       {/* Semantic validation warning */}
       {semanticWarning && (
-        <div className="mx-4 mt-2 rounded-md bg-yellow-100 px-4 py-2 text-sm text-yellow-800">
+        <div className="mx-4 mt-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30 px-4 py-2 text-sm text-yellow-800 dark:text-yellow-300">
           Note: Semantic validation is not yet supported. Only exact match was used for validation.
         </div>
       )}
@@ -542,7 +570,7 @@ export default function LeafDetailPage() {
         <div className="mx-auto max-w-4xl space-y-6">
           {/* Commit load warning */}
           {commitLoadError && (
-            <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+            <div className="rounded-md border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
               Source commit data unavailable — constraints shown without source context.
             </div>
           )}
@@ -1009,7 +1037,9 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
             <span
               className={cn(
                 'text-xs px-1.5 py-0.5 rounded',
-                assertion.passed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                assertion.passed
+                  ? 'bg-green-200 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                  : 'bg-red-200 dark:bg-red-900/30 text-red-800 dark:text-red-300'
               )}
             >
               {assertion.passed ? 'PASS' : 'FAIL'}

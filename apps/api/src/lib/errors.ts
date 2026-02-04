@@ -51,6 +51,8 @@ export const ErrorCodes = {
   // Conflict errors
   DUPLICATE_PIN: 'DUPLICATE_PIN',
   HASH_CONFLICT: 'HASH_CONFLICT',
+  MAIN_ROOT_EXISTS: 'MAIN_ROOT_EXISTS',
+  MAIN_NOT_HEAD: 'MAIN_NOT_HEAD',
 
   // Operation errors
   CREATE_FAILED: 'CREATE_FAILED',
@@ -114,6 +116,8 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   // 409 Conflict
   DUPLICATE_PIN: 409,
   HASH_CONFLICT: 409,
+  MAIN_ROOT_EXISTS: 409,
+  MAIN_NOT_HEAD: 409,
 
   // 500 Server Error
   CREATE_FAILED: 500,

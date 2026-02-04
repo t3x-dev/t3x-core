@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedButton, Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,6 +47,14 @@ export default function SemanticLedgerPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // AlertDialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    type: 'single' | 'batch';
+    projectId?: string;
+    projectName?: string;
+  }>({ open: false, type: 'single' });
+
   // Select animation variants based on user preference
   const containerVariants = prefersReducedMotion
     ? reducedMotion.staggerContainer
@@ -73,23 +82,25 @@ export default function SemanticLedgerPage() {
     router.push(`/project/${project.id}`);
   };
 
-  const handleDeleteProject = async (event: MouseEvent, id: string) => {
+  const handleDeleteProject = (event: MouseEvent, id: string) => {
     event.preventDefault();
     event.stopPropagation();
 
     const project = projects.find((p) => p.id === id);
     const projectName = project?.name || 'this project';
 
-    // Confirm deletion
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${projectName}"?\n\nThis will permanently delete all associated conversations, turns, commits, and other data.`
-    );
+    setDeleteDialog({ open: true, type: 'single', projectId: id, projectName });
+  };
 
-    if (!confirmed) {
-      return;
+  const confirmDeleteProject = async () => {
+    if (!deleteDialog.projectId) return;
+    setIsDeleting(true);
+    try {
+      await deleteProject(deleteDialog.projectId);
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialog({ open: false, type: 'single' });
     }
-
-    await deleteProject(id);
   };
 
   // Toggle selection for a project
@@ -123,26 +134,29 @@ export default function SemanticLedgerPage() {
   };
 
   // Batch delete selected projects
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
+    setDeleteDialog({ open: true, type: 'batch' });
+  };
 
-    const count = selectedIds.size;
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${count} project${count > 1 ? 's' : ''}?\n\nThis will permanently delete all associated conversations, turns, commits, and other data.`
-    );
-
-    if (!confirmed) return;
-
+  const confirmBatchDelete = async () => {
     setIsDeleting(true);
+    const errors: string[] = [];
     try {
-      // Delete projects sequentially to avoid overwhelming the server
       for (const id of selectedIds) {
-        await deleteProject(id);
+        try {
+          await deleteProject(id);
+        } catch {
+          errors.push(id);
+        }
       }
+      // Re-fetch to ensure UI matches server
+      await fetchProjects();
       setSelectedIds(new Set());
       setIsSelectionMode(false);
     } finally {
       setIsDeleting(false);
+      setDeleteDialog({ open: false, type: 'single' });
     }
   };
 
@@ -392,6 +406,22 @@ export default function SemanticLedgerPage() {
           );
         })}
       </motion.div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog((prev) => ({ ...prev, open }))}
+        title={
+          deleteDialog.type === 'batch'
+            ? `Delete ${selectedIds.size} project${selectedIds.size > 1 ? 's' : ''}?`
+            : `Delete "${deleteDialog.projectName}"?`
+        }
+        description="This will permanently delete all associated conversations, turns, commits, and other data. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={deleteDialog.type === 'batch' ? confirmBatchDelete : confirmDeleteProject}
+        loading={isDeleting}
+      />
     </div>
   );
 }
