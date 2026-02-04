@@ -47,12 +47,15 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   const traceEvents: TraceEvent[] = [];
   const _startTime = Date.now();
 
+  // 兼容不同输入格式：确保 context 存在
+  const context = input.context || {};
+
   // Step 1: Summarize
   const summarizeStart = Date.now();
   let summary: string;
 
   try {
-    summary = summarize(input.context.meeting_notes || input.input);
+    summary = summarize(context.meeting_notes || input.input || 'No input provided');
     traceEvents.push({
       type: 'step',
       name: 'summarize',
@@ -73,10 +76,10 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   // Step 2: Send email (if recipient provided)
   let emailResult: { to: string; subject: string; body: string } | undefined;
 
-  if (input.context.recipient) {
+  if (context.recipient) {
     const emailArgs: EmailArgs = {
-      to: input.context.recipient,
-      subject: generateSubject(input.input),
+      to: context.recipient as string,
+      subject: generateSubject(input.input || 'Summary'),
       body: generateEmailBody(summary),
     };
 

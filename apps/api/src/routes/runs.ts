@@ -463,6 +463,44 @@ runsRoutes.get('/v1/runs/:id', async (c) => {
   }
 });
 
+/**
+ * DELETE /runs/:id - Delete a specific run
+ */
+runsRoutes.delete('/v1/runs/:id', async (c) => {
+  try {
+    const runId = c.req.param('id');
+    const db = await getDB();
+
+    // Import deleteRun dynamically to avoid circular dependency issues
+    const { deleteRun } = await import('@t3x/storage');
+    const deleted = await deleteRun(db, runId);
+
+    if (!deleted) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: `Run not found: ${runId}` },
+        },
+        404
+      );
+    }
+
+    return c.json({ success: true, data: { deleted: true } });
+  } catch (error) {
+    console.error('[runs] Error deleting run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
 // Request schema for A/B test comparison
 const CompareRunsSchema = z.object({
   control: z.object({
