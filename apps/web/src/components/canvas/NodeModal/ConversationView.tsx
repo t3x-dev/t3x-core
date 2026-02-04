@@ -550,7 +550,9 @@ export function ConversationView({
                 Metadata
               </h4>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Title
+                </label>
                 <Input
                   type="text"
                   value={data.title}
@@ -558,7 +560,9 @@ export function ConversationView({
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tags</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Tags
+                </label>
                 <Input
                   type="text"
                   value={data.tags.join(', ')}
@@ -688,9 +692,12 @@ export function ConversationView({
                               key={`${kw.text}-${idx}`}
                               className={cn(
                                 'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium',
-                                kw.polarity === 1 && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-                                kw.polarity === 0 && 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
-                                kw.polarity === -1 && 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                kw.polarity === 1 &&
+                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+                                kw.polarity === 0 &&
+                                  'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+                                kw.polarity === -1 &&
+                                  'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                               )}
                               title={`${kw.lemma} (${kw.pos})${kw.entityType ? ` [${kw.entityType}]` : ''}`}
                             >
@@ -717,7 +724,8 @@ export function ConversationView({
                                   'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
                                   kw.polarity === 1 &&
                                     'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
-                                  kw.polarity === -1 && 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700'
+                                  kw.polarity === -1 &&
+                                    'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700'
                                 )}
                               >
                                 {kw.polarity === 1 ? '\u2713' : '\u2717'} {kw.text}
@@ -735,10 +743,12 @@ export function ConversationView({
                                 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.65rem] font-medium',
                                 facet.facetType === 'intent_seed' &&
                                   'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
-                                facet.facetType === 'time_window' && 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
+                                facet.facetType === 'time_window' &&
+                                  'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
                                 facet.facetType === 'preference_soft' &&
                                   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-                                facet.facetType === 'unknown_slot' && 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                facet.facetType === 'unknown_slot' &&
+                                  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                               )}
                               title={`${facet.facetType}: ${facet.key} = ${JSON.stringify(facet.value)} (${Math.round(facet.confidence * 100)}%)`}
                             >
@@ -763,7 +773,9 @@ export function ConversationView({
                                 className="flex items-start gap-1 text-[0.65rem]"
                                 title={`字符 ${seg.startChar}-${seg.endChar}`}
                               >
-                                <span className="text-gray-400 dark:text-gray-500 shrink-0">{idx + 1}.</span>
+                                <span className="text-gray-400 dark:text-gray-500 shrink-0">
+                                  {idx + 1}.
+                                </span>
                                 <span className="text-gray-600 dark:text-gray-400">{seg.text}</span>
                               </div>
                             ))}

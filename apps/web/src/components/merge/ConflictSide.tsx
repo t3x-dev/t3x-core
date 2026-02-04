@@ -82,7 +82,9 @@ export function ConflictSide({ side, sentence, label, isSelected }: ConflictSide
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
-        {isSelected && <span className="text-xs font-medium text-green-600 dark:text-green-400">Selected</span>}
+        {isSelected && (
+          <span className="text-xs font-medium text-green-600 dark:text-green-400">Selected</span>
+        )}
       </div>
 
       {/* Sentence text */}

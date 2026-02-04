@@ -195,7 +195,10 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'require' ? 'default' : 'outline'}
-          className={cn(mode === 'require' && 'bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white')}
+          className={cn(
+            mode === 'require' &&
+              'bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white'
+          )}
           onClick={() => setMode('require')}
         >
           <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -204,7 +207,10 @@ export function ConstraintTextSelector({
         <Button
           size="sm"
           variant={mode === 'exclude' ? 'default' : 'outline'}
-          className={cn(mode === 'exclude' && 'bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-600 text-white')}
+          className={cn(
+            mode === 'exclude' &&
+              'bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-600 text-white'
+          )}
           onClick={() => setMode('exclude')}
         >
           <ShieldX className="h-3.5 w-3.5 mr-1.5" />
@@ -306,7 +312,9 @@ function ConstraintRow({
     <div
       className={cn(
         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm',
-        isRequire ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30' : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+        isRequire
+          ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+          : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
       )}
       onMouseEnter={() => onHover(constraint.id)}
       onMouseLeave={() => onHover(null)}
@@ -317,7 +325,10 @@ function ConstraintRow({
         <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 shrink-0" />
       )}
       <span
-        className={cn('flex-1 truncate font-medium', isRequire ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200')}
+        className={cn(
+          'flex-1 truncate font-medium',
+          isRequire ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+        )}
       >
         {constraint.value}
       </span>

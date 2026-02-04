@@ -222,7 +222,9 @@ export function TruncatedCommitView({
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
-          <span className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[0.6rem]">Legacy</span>
+          <span className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[0.6rem]">
+            Legacy
+          </span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
@@ -271,7 +273,9 @@ export function TruncatedCommitView({
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
-          <span className="px-1 py-0.5 bg-slate-300 dark:bg-slate-700 rounded text-[0.6rem]">Source unavailable</span>
+          <span className="px-1 py-0.5 bg-slate-300 dark:bg-slate-700 rounded text-[0.6rem]">
+            Source unavailable
+          </span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
@@ -353,7 +357,10 @@ export function TruncatedCommitView({
                 }
                 if (seg.type === 'highlight') {
                   return (
-                    <mark key={idx} className="bg-green-200 dark:bg-green-700 text-green-900 dark:text-green-200 px-0.5 rounded-sm">
+                    <mark
+                      key={idx}
+                      className="bg-green-200 dark:bg-green-700 text-green-900 dark:text-green-200 px-0.5 rounded-sm"
+                    >
                       {seg.content}
                     </mark>
                   );

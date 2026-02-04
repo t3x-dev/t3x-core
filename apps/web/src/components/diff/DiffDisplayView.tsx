@@ -109,7 +109,9 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
     <div className="flex items-center gap-3 text-xs">
       <span className="text-muted-foreground">{total} sentences</span>
       {diff.identical.length > 0 && (
-        <span className="text-slate-500 dark:text-slate-400">{diff.identical.length} unchanged</span>
+        <span className="text-slate-500 dark:text-slate-400">
+          {diff.identical.length} unchanged
+        </span>
       )}
       {diff.similar.length > 0 && (
         <span className="text-amber-600 dark:text-amber-400">{diff.similar.length} modified</span>
@@ -118,7 +120,9 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
         <span className="text-red-600 dark:text-red-400">-{diff.onlyInSource.length} removed</span>
       )}
       {diff.onlyInTarget.length > 0 && (
-        <span className="text-green-600 dark:text-green-400">+{diff.onlyInTarget.length} added</span>
+        <span className="text-green-600 dark:text-green-400">
+          +{diff.onlyInTarget.length} added
+        </span>
       )}
     </div>
   );

@@ -120,7 +120,10 @@ export function ConflictSourceContext({
             }
             if (seg.type === 'highlight') {
               return (
-                <mark key={idx} className="bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100 px-0.5 rounded-sm">
+                <mark
+                  key={idx}
+                  className="bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100 px-0.5 rounded-sm"
+                >
                   {seg.content}
                 </mark>
               );

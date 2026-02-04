@@ -14,14 +14,26 @@ interface ConflictHeaderProps {
 }
 
 const resolutionLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  source: { label: 'Keep A', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-red-600 dark:text-red-400' },
+  source: {
+    label: 'Keep A',
+    icon: <CheckCircle className="h-3.5 w-3.5" />,
+    color: 'text-red-600 dark:text-red-400',
+  },
   target: {
     label: 'Keep B',
     icon: <CheckCircle className="h-3.5 w-3.5" />,
     color: 'text-green-600 dark:text-green-400',
   },
-  both: { label: 'Keep Both', icon: <Layers className="h-3.5 w-3.5" />, color: 'text-blue-600 dark:text-blue-400' },
-  edit: { label: 'Custom', icon: <Edit3 className="h-3.5 w-3.5" />, color: 'text-purple-600 dark:text-purple-400' },
+  both: {
+    label: 'Keep Both',
+    icon: <Layers className="h-3.5 w-3.5" />,
+    color: 'text-blue-600 dark:text-blue-400',
+  },
+  edit: {
+    label: 'Custom',
+    icon: <Edit3 className="h-3.5 w-3.5" />,
+    color: 'text-purple-600 dark:text-purple-400',
+  },
 };
 
 export function ConflictHeader({

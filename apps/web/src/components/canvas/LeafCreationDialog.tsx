@@ -126,7 +126,12 @@ export function LeafCreationDialog({
                   >
                     <Icon
                       size={16}
-                      className={cn('shrink-0', isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400')}
+                      className={cn(
+                        'shrink-0',
+                        isSelected
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      )}
                     />
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{leafType.label}</div>
@@ -144,7 +149,9 @@ export function LeafCreationDialog({
           <div className="space-y-2">
             <Label>From Commit</Label>
             <div className="p-2 bg-gray-50 dark:bg-gray-950/30 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <code className="text-xs font-mono text-gray-600 dark:text-gray-400 block truncate">{commitHash}</code>
+              <code className="text-xs font-mono text-gray-600 dark:text-gray-400 block truncate">
+                {commitHash}
+              </code>
             </div>
           </div>
         </div>

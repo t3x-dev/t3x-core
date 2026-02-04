@@ -113,7 +113,12 @@ export function PendingCommitView({
   const [commitSuccess, setCommitSuccess] = useState<{
     commitHash: string;
     parentHash: string | null;
-    diffStats: { sameCount: number; addedCount: number; removedCount: number; modifiedCount: number } | null;
+    diffStats: {
+      sameCount: number;
+      addedCount: number;
+      removedCount: number;
+      modifiedCount: number;
+    } | null;
   } | null>(null);
 
   // Get main branch state from canvas store to show warning when selecting main branch
@@ -624,7 +629,12 @@ export function PendingCommitView({
 
       // Fetch diff stats if there's a parent commit
       const parentHash = data.sourceCommitHash || null;
-      let diffStats: { sameCount: number; addedCount: number; removedCount: number; modifiedCount: number } | null = null;
+      let diffStats: {
+        sameCount: number;
+        addedCount: number;
+        removedCount: number;
+        modifiedCount: number;
+      } | null = null;
       if (parentHash) {
         try {
           const rawDiff = await api.diffRaw(parentHash, commitHash);
@@ -1109,11 +1119,7 @@ export function PendingCommitView({
 
             {/* Action buttons */}
             <div className="w-full flex flex-col gap-2 mt-2">
-              <Button
-                onClick={handleViewCommitDetails}
-                variant="outline"
-                className="w-full gap-2"
-              >
+              <Button onClick={handleViewCommitDetails} variant="outline" className="w-full gap-2">
                 <GitCompare size={16} />
                 <span>View Commit Details</span>
               </Button>
@@ -1147,7 +1153,9 @@ export function PendingCommitView({
             <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
               Commit: {data.title || 'Untitled'}
             </h2>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{data.entryId}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+              {data.entryId}
+            </span>
             <Badge
               variant="outline"
               className="text-[0.65rem] text-slate-500 dark:text-slate-400 uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
@@ -1189,7 +1197,9 @@ export function PendingCommitView({
                   <span
                     className={cn(
                       'w-2 h-2 rounded-full',
-                      !configLocked && !isMergeDraft ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-gray-500 dark:bg-gray-400'
+                      !configLocked && !isMergeDraft
+                        ? 'bg-emerald-500 dark:bg-emerald-400'
+                        : 'bg-gray-500 dark:bg-gray-400'
                     )}
                   />
                   {isMergeDraft ? 'Analyze & Resolve' : 'Configure'}
@@ -1397,7 +1407,9 @@ export function PendingCommitView({
                   <div className="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
                     {shouldShowBranchSelect && (
                       <div className="flex items-center gap-2 text-[0.85rem]">
-                        <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">Branch:</span>
+                        <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">
+                          Branch:
+                        </span>
                         <span className="text-gray-800 dark:text-gray-200 font-medium">
                           {data.pendingBranch || 'branch'}
                         </span>
@@ -1412,8 +1424,12 @@ export function PendingCommitView({
                       </div>
                     )}
                     <div className="flex items-center gap-2 text-[0.85rem]">
-                      <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">Template:</span>
-                      <span className="text-gray-800 dark:text-gray-200 font-medium">{template}</span>
+                      <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">
+                        Template:
+                      </span>
+                      <span className="text-gray-800 dark:text-gray-200 font-medium">
+                        {template}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-[0.85rem]">
                       <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">Cosine:</span>
@@ -1592,21 +1608,31 @@ export function PendingCommitView({
                 {/* Merge draft - legacy three-way merge UI removed */}
                 {isMergeDraft ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500 dark:text-gray-400">
-                    <GitCompare size={48} strokeWidth={1} className="text-gray-300 dark:text-gray-600 mb-4" />
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Merge via MergePanel</h4>
+                    <GitCompare
+                      size={48}
+                      strokeWidth={1}
+                      className="text-gray-300 dark:text-gray-600 mb-4"
+                    />
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Merge via MergePanel
+                    </h4>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                       Use the MergePanel component for two-way merge operations.
                     </p>
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">SOURCE</Badge>
+                        <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                          SOURCE
+                        </Badge>
                         <span className="text-gray-600 dark:text-gray-400">
                           {data?.mergeConfig?.sourceCommitTitle}
                         </span>
                       </div>
                       <span className="text-gray-400 dark:text-gray-500">&rarr;</span>
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">TARGET</Badge>
+                        <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                          TARGET
+                        </Badge>
                         <span className="text-gray-600 dark:text-gray-400">
                           {data?.mergeConfig?.targetCommitTitle}
                         </span>
@@ -1627,7 +1653,9 @@ export function PendingCommitView({
                 ) : sourceBoxes.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
                     <MessageSquarePlus size={32} strokeWidth={1} className="mb-2" />
-                    <p className="font-medium text-gray-500 dark:text-gray-400">No source content</p>
+                    <p className="font-medium text-gray-500 dark:text-gray-400">
+                      No source content
+                    </p>
                     <span className="text-sm">Connect upstream conversation or commit</span>
                   </div>
                 ) : (

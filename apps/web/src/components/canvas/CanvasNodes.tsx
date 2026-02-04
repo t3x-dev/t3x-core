@@ -198,7 +198,9 @@ function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
   return (
     <span
       className={`text-xs px-1.5 py-0.5 rounded ${
-        isVerified ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
+        isVerified
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
       }`}
     >
       {author.name}
@@ -215,7 +217,9 @@ function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
   return (
     <span
       className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
-        isAgent ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
+        isAgent
+          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
       }`}
     >
       {author.name || author.id || 'Unknown'}
@@ -406,7 +410,9 @@ function CommitV4Content({
 
       {/* V4: Constraints notice */}
       <div className="mt-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800">
-        <p className="text-xs text-amber-700 dark:text-amber-300">Constraints are defined in Leaves</p>
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Constraints are defined in Leaves
+        </p>
       </div>
     </div>
   );
@@ -618,9 +624,14 @@ function UnitNode(props: Props) {
                     source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
-                      {idx > 0 && <span className="text-slate-300 dark:text-slate-600 mx-0.5">·</span>}
+                      {idx > 0 && (
+                        <span className="text-slate-300 dark:text-slate-600 mx-0.5">·</span>
+                      )}
                       {sourceIsPinned && (
-                        <Pin size={10} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
+                        <Pin
+                          size={10}
+                          className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400"
+                        />
                       )}
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -758,7 +769,11 @@ function UnitNode(props: Props) {
                     <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
                       <GitCommit
                         size={12}
-                        className={data.branchType === 'main' ? 'text-blue-500 dark:text-blue-400' : 'text-amber-500 dark:text-amber-400'}
+                        className={
+                          data.branchType === 'main'
+                            ? 'text-blue-500 dark:text-blue-400'
+                            : 'text-amber-500 dark:text-amber-400'
+                        }
                       />
                       <span>Committed</span>
                     </span>
@@ -768,8 +783,12 @@ function UnitNode(props: Props) {
                   isStaging &&
                   (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
                     <span className="text-xs font-medium">
-                      <span className="text-green-600 dark:text-green-400">{data.mustHave?.length || 0}✓</span>{' '}
-                      <span className="text-red-500 dark:text-red-400">{data.mustntHave?.length || 0}✗</span>
+                      <span className="text-green-600 dark:text-green-400">
+                        {data.mustHave?.length || 0}✓
+                      </span>{' '}
+                      <span className="text-red-500 dark:text-red-400">
+                        {data.mustntHave?.length || 0}✗
+                      </span>
                     </span>
                   )}
                 {!data.commitV3 && !isStaging && data.summary && (
@@ -859,11 +878,16 @@ function UnitNode(props: Props) {
                             <span
                               className={cn(
                                 'text-xs font-medium px-1.5 py-0.5 rounded',
-                                leaf.status === 'running' && 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-                                leaf.status === 'passed' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-                                leaf.status === 'failed' && 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
-                                leaf.status === 'pending' && 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-                                leaf.status === 'idle' && 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                leaf.status === 'running' &&
+                                  'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+                                leaf.status === 'passed' &&
+                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+                                leaf.status === 'failed' &&
+                                  'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+                                leaf.status === 'pending' &&
+                                  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+                                leaf.status === 'idle' &&
+                                  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                               )}
                             >
                               {leaf.status === 'passed' && leaf.passedCount !== undefined

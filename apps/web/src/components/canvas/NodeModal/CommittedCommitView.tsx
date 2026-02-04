@@ -93,25 +93,28 @@ export function CommittedCommitView({
   // ========== Callbacks ==========
 
   // B-15: Simplified diff - select target and auto-run + open fullscreen
-  const handleDiffTargetSelect = useCallback(async (targetHash: string) => {
-    if (!data?.commitHash || !targetHash) return;
+  const handleDiffTargetSelect = useCallback(
+    async (targetHash: string) => {
+      if (!data?.commitHash || !targetHash) return;
 
-    setDiffTargetCommit(targetHash);
-    setIsDiffLoading(true);
-    setDiffError(null);
-    setDiffRawData(null);
+      setDiffTargetCommit(targetHash);
+      setIsDiffLoading(true);
+      setDiffError(null);
+      setDiffRawData(null);
 
-    try {
-      const raw = await api.diffRaw(data.commitHash, targetHash);
-      setDiffRawData(raw);
-      setShowDiffFullScreen(true);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setDiffError(error.message);
-    } finally {
-      setIsDiffLoading(false);
-    }
-  }, [data?.commitHash]);
+      try {
+        const raw = await api.diffRaw(data.commitHash, targetHash);
+        setDiffRawData(raw);
+        setShowDiffFullScreen(true);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setDiffError(error.message);
+      } finally {
+        setIsDiffLoading(false);
+      }
+    },
+    [data?.commitHash]
+  );
 
   // Commit left divider handler
   const handleCommitLeftDivider = (e: React.MouseEvent) => {
@@ -177,7 +180,9 @@ export function CommittedCommitView({
               <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
                 Commit: {data.title || 'Untitled'}
               </h2>
-              <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{data.entryId}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                {data.entryId}
+              </span>
               <Badge
                 className={cn(
                   'text-xs gap-1',
@@ -238,7 +243,9 @@ export function CommittedCommitView({
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[0.85rem]">
                     <span className="text-gray-500 dark:text-gray-400">From Draft:</span>
-                    <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{data.entryId}</span>
+                    <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">
+                      {data.entryId}
+                    </span>
                   </div>
                   {data.baselineSummary && (
                     <div className="flex items-center gap-2 text-[0.85rem]">
@@ -316,7 +323,9 @@ export function CommittedCommitView({
                                     key={idx}
                                     className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-800"
                                   >
-                                    <span className="text-gray-400 dark:text-gray-500 font-bold shrink-0">&bull;</span>
+                                    <span className="text-gray-400 dark:text-gray-500 font-bold shrink-0">
+                                      &bull;
+                                    </span>
                                     <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
                                       {excerpt}
                                     </span>
@@ -352,7 +361,9 @@ export function CommittedCommitView({
               {!data.commitV3 && !data.commitV4 && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Generated Output</h3>
+                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                      Generated Output
+                    </h3>
                   </div>
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[0.9rem] leading-relaxed text-gray-700 dark:text-gray-300">
                     {data.summary || 'No generated content.'}
@@ -363,7 +374,9 @@ export function CommittedCommitView({
               {data.status && !data.commitV3 && !data.commitV4 && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Intent</h3>
+                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                      Intent
+                    </h3>
                   </div>
                   <div className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-md text-[0.9rem] text-gray-700 dark:text-gray-300">
                     {data.status}
@@ -375,8 +388,12 @@ export function CommittedCommitView({
               {!data.commitV3 && !data.commitV4 && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Facets</h3>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{commitFacets.length} extracted</span>
+                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                      Facets
+                    </h3>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {commitFacets.length} extracted
+                    </span>
                   </div>
                   <div>
                     {commitFacets.length > 0 ? (
@@ -400,7 +417,9 @@ export function CommittedCommitView({
                                 {type === 'facet' && '\u{2728}'}
                               </span>
                               {type}
-                              <span className="text-xs text-gray-400 dark:text-gray-500">({facets.length})</span>
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                ({facets.length})
+                              </span>
                             </h5>
                             <div className="p-2 flex flex-wrap gap-2">
                               {facets.map((facet, idx) => {
@@ -488,7 +507,9 @@ export function CommittedCommitView({
                 </h4>
 
                 <div className="mb-4">
-                  <h5 className="text-xs font-medium text-green-600 dark:text-green-400 mb-2">Must-have</h5>
+                  <h5 className="text-xs font-medium text-green-600 dark:text-green-400 mb-2">
+                    Must-have
+                  </h5>
                   {commitMustHave.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {commitMustHave.map((w, i) => (
@@ -506,7 +527,9 @@ export function CommittedCommitView({
                 </div>
 
                 <div className="mb-4">
-                  <h5 className="text-xs font-medium text-red-600 dark:text-red-400 mb-2">Mustn&apos;t-have</h5>
+                  <h5 className="text-xs font-medium text-red-600 dark:text-red-400 mb-2">
+                    Mustn&apos;t-have
+                  </h5>
                   {commitMustntHave.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {commitMustntHave.map((w, i) => (
@@ -574,9 +597,7 @@ export function CommittedCommitView({
                     }}
                   >
                     <option value="">
-                      {allCommittedCommits.length <= 1
-                        ? 'Need 2+ commits'
-                        : 'Select a commit...'}
+                      {allCommittedCommits.length <= 1 ? 'Need 2+ commits' : 'Select a commit...'}
                     </option>
                     {allCommittedCommits
                       .filter((c) => c.data.commitHash !== data.commitHash)

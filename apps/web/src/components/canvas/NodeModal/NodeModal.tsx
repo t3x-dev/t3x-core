@@ -136,7 +136,9 @@ export function NodeModal({
       <div className="flex flex-col w-[80vw] max-w-[800px] max-h-[60vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
         <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">{data?.title || 'Node'}</h2>
+            <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+              {data?.title || 'Node'}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
             <Button

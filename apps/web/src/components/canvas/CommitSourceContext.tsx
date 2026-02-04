@@ -246,7 +246,9 @@ function LeafOutputWithHighlights({
                 <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1 py-0.5 rounded shrink-0">
                   {sg.sentence.id}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 break-words">{sg.sentence.text}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 break-words">
+                  {sg.sentence.text}
+                </span>
               </li>
             ))}
           </ul>
@@ -273,7 +275,10 @@ function LeafOutputWithHighlights({
     <div className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
       {segments.map((seg) =>
         seg.highlighted ? (
-          <mark key={`h-${seg.offset}`} className="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100 rounded-sm px-0.5">
+          <mark
+            key={`h-${seg.offset}`}
+            className="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100 rounded-sm px-0.5"
+          >
             {seg.text}
           </mark>
         ) : (
@@ -733,7 +738,10 @@ export function CommitSourceContext({
           if (!data || data.error) {
             const sentencesForTurn = byTurn.get(turnHash) || [];
             return (
-              <div key={turnHash} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div
+                key={turnHash}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
                 {/* Collapsible header */}
                 <button
                   type="button"
@@ -745,7 +753,9 @@ export function CommitSourceContext({
                   ) : (
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">Turn {idx + 1}</span>
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                    Turn {idx + 1}
+                  </span>
                   <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                     Source unavailable
                   </span>
@@ -812,7 +822,10 @@ export function CommitSourceContext({
           };
 
           return (
-            <div key={turnHash} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div
+              key={turnHash}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
               {/* Collapsible header (not shown in compact mode for single turn) */}
               {!compact && (
                 <button
@@ -898,7 +911,10 @@ export function CommitSourceContext({
           // Error / unavailable state
           if (!data || data.error || !data.leaf) {
             return (
-              <div key={sectionKey} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div
+                key={sectionKey}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
@@ -910,7 +926,9 @@ export function CommitSourceContext({
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
                   <LeafIcon size={14} className="text-gray-400 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">{leafTitle}</span>
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                    {leafTitle}
+                  </span>
                   <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
                     Source unavailable
                   </span>
@@ -942,7 +960,10 @@ export function CommitSourceContext({
           const leafOutput = data.leaf.output;
 
           return (
-            <div key={sectionKey} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div
+              key={sectionKey}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
               {!compact && (
                 <button
                   type="button"
@@ -955,7 +976,9 @@ export function CommitSourceContext({
                     <ChevronRight size={14} className="text-gray-400 shrink-0" />
                   )}
                   <LeafIcon size={14} className="text-green-600 dark:text-green-400 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">{leafTitle}</span>
+                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                    {leafTitle}
+                  </span>
                   {leafType && (
                     <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[0.65rem] rounded">
                       {leafType}

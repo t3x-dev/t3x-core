@@ -60,7 +60,9 @@ export function ConflictEditPanel({
         className={cn(
           'w-full min-h-[100px] p-3 text-sm rounded-md border resize-y',
           'focus:outline-none focus:ring-2 focus:ring-purple-300 dark:focus:ring-purple-700 focus:border-purple-300 dark:focus:border-purple-700',
-          isEmpty ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/30' : 'border-muted bg-background'
+          isEmpty
+            ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/30'
+            : 'border-muted bg-background'
         )}
       />
 

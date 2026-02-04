@@ -288,10 +288,14 @@ export function CommitHistoryPanel({
                         </span>
                       )}
                       {diffData.stats.addedCount > 0 && (
-                        <span className="text-green-600 dark:text-green-400">+{diffData.stats.addedCount} added</span>
+                        <span className="text-green-600 dark:text-green-400">
+                          +{diffData.stats.addedCount} added
+                        </span>
                       )}
                       {diffData.stats.removedCount > 0 && (
-                        <span className="text-red-600 dark:text-red-400">-{diffData.stats.removedCount} removed</span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{diffData.stats.removedCount} removed
+                        </span>
                       )}
                       {diffData.stats.modifiedCount > 0 && (
                         <span className="text-amber-600 dark:text-amber-400">
