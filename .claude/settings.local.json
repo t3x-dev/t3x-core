@@ -169,7 +169,10 @@
       "Bash(gh pr create:*)",
       "Bash(git rebase:*)",
       "Bash(pnpm lint:fix:*)",
-      "Bash(pnpm next lint:*)"
+      "Bash(pnpm next lint:*)",
+      "Bash(pnpm --filter t3x-webui test -- --run src/__tests__/stores/mergeWorkspaceStore.test.ts)",
+      "Bash(pnpm --filter t3x-webui test:*)",
+      "Bash(gh pr checks:*)"
     ],
     "deny": [],
     "ask": []
