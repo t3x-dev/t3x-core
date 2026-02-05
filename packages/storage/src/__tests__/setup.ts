@@ -217,6 +217,73 @@ CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
 CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);
 CREATE INDEX IF NOT EXISTS idx_pins_project ON pins(project_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pins_unique ON pins(project_id, type, ref_id);
+
+-- Leaf History
+CREATE TABLE IF NOT EXISTS leaf_history (
+  id TEXT PRIMARY KEY,
+  leaf_id TEXT NOT NULL REFERENCES leaves(id) ON DELETE CASCADE,
+  output TEXT NOT NULL,
+  config JSONB NOT NULL,
+  model TEXT NOT NULL,
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
+CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
+
+-- Merge Drafts
+CREATE TABLE IF NOT EXISTS merge_drafts (
+  draft_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_hash TEXT NOT NULL,
+  target_hash TEXT NOT NULL,
+  source_branch TEXT,
+  target_branch TEXT,
+  prepared_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
+CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
+
+-- Deploy Agents
+CREATE TABLE IF NOT EXISTS deploy_agents (
+  deploy_agent_id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'http',
+  auth_json TEXT,
+  status TEXT NOT NULL DEFAULT 'idle',
+  last_run_id TEXT,
+  last_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deploy_agents_project ON deploy_agents(project_id);
+
+-- Runs
+CREATE TABLE IF NOT EXISTS runs (
+  run_id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  runner_run_id TEXT,
+  commit_ref TEXT,
+  leaf_json TEXT,
+  inputs_json TEXT,
+  workflow_json TEXT,
+  status TEXT NOT NULL DEFAULT 'queued',
+  result_json TEXT,
+  trace_summary_json TEXT,
+  trace_policy TEXT DEFAULT 'on_failure',
+  full_trace_json TEXT,
+  metadata_json TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
+CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
 `;
 
 /**
