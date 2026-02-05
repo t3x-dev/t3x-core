@@ -123,7 +123,12 @@ export const useCanvasStore = create<CanvasState>((...a) => {
               mustnt_have: null,
               position_x: v4.position_x ?? null,
               position_y: v4.position_y ?? null,
-              source_refs: null,
+              // Convert V4 source_refs (uses "id") to V2 format (uses "conversation_id")
+              source_refs:
+                v4.source_refs?.map((ref) => ({
+                  type: ref.type === 'leaf' ? 'commit' : ref.type,
+                  conversation_id: ref.id,
+                })) ?? null,
               anchors: null,
               created_at: v4.created_at,
               // Store original V4 data for merge compatibility
@@ -184,6 +189,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           // Method 1: Use source_refs (most reliable - explicitly stored during commit creation)
           if (commit.source_refs && commit.source_refs.length > 0) {
             const convRef = commit.source_refs.find((ref) => ref.type === 'conversation');
+            // V2 format uses conversation_id, V4 format was converted in the mapping above
             if (convRef?.conversation_id) {
               commitSourceConvMap.set(commit.commit_hash, convRef.conversation_id);
               return;
