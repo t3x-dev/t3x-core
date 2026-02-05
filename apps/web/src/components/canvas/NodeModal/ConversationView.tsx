@@ -11,7 +11,6 @@ import {
   MessageSquarePlus,
   Send,
   Settings,
-  Tag,
   X,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -667,121 +666,6 @@ export function ConversationView({
                       <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                         {msg.content}
                       </div>
-                      {/* Ring 1 Meta: topic and timeAnchor */}
-                      {(msg.rings?.ring1?.topic || msg.rings?.ring1?.timeAnchor) && (
-                        <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-gray-700/50 flex flex-wrap gap-2 text-[0.7rem]">
-                          {msg.rings.ring1.topic && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                              <Tag size={10} />
-                              {msg.rings.ring1.topic}
-                            </span>
-                          )}
-                          {msg.rings.ring1.timeAnchor && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                              <Clock size={10} />
-                              {msg.rings.ring1.timeAnchor}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {/* Ring 1 Keywords - with polarity colors and entity types */}
-                      {msg.rings?.ring1?.keywords && msg.rings.ring1.keywords.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {msg.rings.ring1.keywords.map((kw, idx) => (
-                            <span
-                              key={`${kw.text}-${idx}`}
-                              className={cn(
-                                'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium',
-                                kw.polarity === 1 &&
-                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-                                kw.polarity === 0 &&
-                                  'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
-                                kw.polarity === -1 &&
-                                  'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                              )}
-                              title={`${kw.lemma} (${kw.pos})${kw.entityType ? ` [${kw.entityType}]` : ''}`}
-                            >
-                              {kw.entityType === 'LOCATION' && <span>📍</span>}
-                              {kw.entityType === 'PERSON' && <span>👤</span>}
-                              {kw.entityType === 'DATE' && <span>📅</span>}
-                              {kw.entityType === 'ORGANIZATION' && <span>🏢</span>}
-                              {kw.entityType === 'EVENT' && <span>🎉</span>}
-                              {kw.entityType === 'NUMBER' && <span>#</span>}
-                              {kw.text}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {/* Ring 1 Preference Keywords - highlighted separately */}
-                      {msg.rings?.ring1?.preferenceKeywords &&
-                        msg.rings.ring1.preferenceKeywords.length > 0 && (
-                          <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <span className="text-[0.65rem] text-gray-400 mr-1">偏好:</span>
-                            {msg.rings.ring1.preferenceKeywords.map((kw, idx) => (
-                              <span
-                                key={`pref-${kw.text}-${idx}`}
-                                className={cn(
-                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7rem] font-medium border',
-                                  kw.polarity === 1 &&
-                                    'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
-                                  kw.polarity === -1 &&
-                                    'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700'
-                                )}
-                              >
-                                {kw.polarity === 1 ? '\u2713' : '\u2717'} {kw.text}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      {/* Ring 2 Facets - structured semantic data */}
-                      {msg.rings?.ring2?.facets && msg.rings.ring2.facets.length > 0 && (
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {msg.rings.ring2.facets.map((facet, idx) => (
-                            <span
-                              key={`facet-${facet.key}-${idx}`}
-                              className={cn(
-                                'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.65rem] font-medium',
-                                facet.facetType === 'intent_seed' &&
-                                  'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
-                                facet.facetType === 'time_window' &&
-                                  'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
-                                facet.facetType === 'preference_soft' &&
-                                  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-                                facet.facetType === 'unknown_slot' &&
-                                  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                              )}
-                              title={`${facet.facetType}: ${facet.key} = ${JSON.stringify(facet.value)} (${Math.round(facet.confidence * 100)}%)`}
-                            >
-                              {facet.facetType === 'intent_seed' && '🎯'}
-                              {facet.facetType === 'time_window' && '⏰'}
-                              {facet.facetType === 'preference_soft' && '💡'}
-                              {facet.facetType === 'unknown_slot' && '❓'}
-                              <span className="font-semibold">{facet.key}:</span>
-                              <span>{String(facet.value)}</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {/* Ring 3 Segments - sentence-level breakdown */}
-                      {msg.rings?.ring3?.segments && msg.rings.ring3.segments.length > 1 && (
-                        <div className="mt-1 space-y-0.5">
-                          <span className="text-[0.6rem] text-gray-400">句子分段:</span>
-                          <div className="flex flex-col gap-0.5">
-                            {msg.rings.ring3.segments.map((seg, idx) => (
-                              <div
-                                key={seg.segmentId}
-                                className="flex items-start gap-1 text-[0.65rem]"
-                                title={`字符 ${seg.startChar}-${seg.endChar}`}
-                              >
-                                <span className="text-gray-400 dark:text-gray-500 shrink-0">
-                                  {idx + 1}.
-                                </span>
-                                <span className="text-gray-600 dark:text-gray-400">{seg.text}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                   {/* Streaming response */}

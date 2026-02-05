@@ -157,16 +157,15 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                       key={conv.conversation_id}
                       className={cn(
                         'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                        pinned && 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
+                        pinned &&
+                          'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
                       )}
                       onClick={() => handleTogglePin('conversation', conv.conversation_id)}
                     >
                       <Checkbox
                         checked={pinned}
                         disabled={isToggling}
-                        className={cn(
-                          pinned && 'border-amber-500 bg-amber-500 text-white'
-                        )}
+                        className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -214,16 +213,15 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                       key={leaf.id}
                       className={cn(
                         'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                        pinned && 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
+                        pinned &&
+                          'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
                       )}
                       onClick={() => handleTogglePin('leaf', leaf.id)}
                     >
                       <Checkbox
                         checked={pinned}
                         disabled={isToggling}
-                        className={cn(
-                          pinned && 'border-amber-500 bg-amber-500 text-white'
-                        )}
+                        className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

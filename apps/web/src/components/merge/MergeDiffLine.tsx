@@ -25,11 +25,9 @@ interface MergeDiffLineProps {
   isKept?: boolean;
   onSelect?: () => void;
   onToggleKeep?: () => void;
-  /** Callback when modal fallback is needed (optional) */
-  onSourceClick?: () => void;
   selectable?: boolean;
   checkable?: boolean;
-  /** Enable inline expand mode (default: true). Set to false to use modal fallback. */
+  /** Enable inline expand mode (default: true) */
   useInlineExpand?: boolean;
   /** Pre-loaded context data (avoids re-fetch if provided) */
   contextData?: TurnContextData | null;
@@ -67,7 +65,6 @@ export function MergeDiffLine({
   isKept,
   onSelect,
   onToggleKeep,
-  onSourceClick,
   selectable,
   checkable,
   useInlineExpand = true,
@@ -85,16 +82,8 @@ export function MergeDiffLine({
   // Handle source icon click
   const handleSourceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-
     if (!hasSource) return;
-
-    if (useInlineExpand) {
-      // Toggle inline expand
-      setExpanded(!expanded);
-    } else if (onSourceClick) {
-      // Fallback to modal
-      onSourceClick();
-    }
+    setExpanded(!expanded);
   };
 
   // Handle jump to conversation (receives conversationId from SourceContextView)
@@ -165,25 +154,25 @@ export function MergeDiffLine({
           {sentence.text}
         </span>
 
-        {/* Source Trace Button - Click to expand/collapse */}
+        {/* Source Trace Button - always shown, disabled when no source */}
         <button
           type="button"
           onClick={handleSourceClick}
-          className={`shrink-0 flex items-center gap-0.5 ${
+          disabled={!hasSource}
+          className={`shrink-0 flex items-center gap-0.5 p-1 rounded transition-colors ${
             hasSource
               ? expanded
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-primary'
+                ? 'text-primary hover:bg-muted/50'
+                : 'text-muted-foreground hover:text-primary hover:bg-muted/50'
               : 'text-muted-foreground/30 cursor-not-allowed'
           }`}
           title={
             hasSource
               ? expanded
                 ? 'Collapse source context'
-                : 'Expand source context'
+                : 'View source context'
               : 'Source context not available'
           }
-          disabled={!hasSource}
         >
           <MapPin className="h-4 w-4" />
           {hasSource &&
