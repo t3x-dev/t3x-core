@@ -17,6 +17,8 @@ interface ConflictSideProps {
   sentence: Sentence;
   label: string;
   isSelected: boolean;
+  /** Callback when "Jump to conversation" is clicked */
+  onJumpToConversation?: (conversationId: string) => void;
 }
 
 const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: string }> = {
@@ -32,7 +34,13 @@ const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: str
   },
 };
 
-export function ConflictSide({ side, sentence, label, isSelected }: ConflictSideProps) {
+export function ConflictSide({
+  side,
+  sentence,
+  label,
+  isSelected,
+  onJumpToConversation,
+}: ConflictSideProps) {
   const styles = sideStyles[side];
   const turnHash = sentence.source?.turn_hash;
 
@@ -99,6 +107,7 @@ export function ConflictSide({ side, sentence, label, isSelected }: ConflictSide
           endChar={sentence.source?.end_char}
           contextData={cachedContext ?? null}
           loading={isLoading}
+          onJumpToConversation={onJumpToConversation}
         />
       )}
     </div>

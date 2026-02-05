@@ -16,7 +16,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
 import { MergePreview } from './MergePreview';
-import { SourceContextModal } from './SourceContextModal';
 import { UnifiedDiffView } from './UnifiedDiffView';
 
 interface MergeWorkspaceProps {
@@ -38,7 +37,6 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     setMessage,
     resolvePair,
     toggleKeep,
-    openContext,
     getUnresolvedCount,
     canCommit,
     previewExpanded,
@@ -137,7 +135,6 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
             prepared={prepared}
             onResolvePair={resolvePair}
             onToggleKeep={toggleKeep}
-            onSourceClick={openContext}
             sourceBranch={sourceBranch || 'A'}
             targetBranch={targetBranch || 'B'}
           />
@@ -146,9 +143,6 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         {/* Preview Panel */}
         <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
       </div>
-
-      {/* Source Context Modal */}
-      <SourceContextModal />
     </div>
   );
 }

@@ -33,6 +33,7 @@ interface DiffFullScreenProps {
   baseCommitHash: string;
   targetCommitHash: string;
   diffData: DiffResultRaw;
+  projectId?: string;
 }
 
 // ============================================================================
@@ -45,6 +46,7 @@ export function DiffFullScreen({
   baseCommitHash,
   targetCommitHash,
   diffData,
+  projectId,
 }: DiffFullScreenProps) {
   const [baseCommit, setBaseCommit] = useState<CommitV4 | null>(null);
   const [targetCommit, setTargetCommit] = useState<CommitV4 | null>(null);
@@ -153,6 +155,7 @@ export function DiffFullScreen({
         data={sourceContext.data}
         loading={sourceContext.loading}
         onClose={sourceContext.closeContext}
+        projectId={projectId}
       />
     </>
   );

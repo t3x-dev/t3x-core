@@ -126,14 +126,19 @@ interface TraceToSourceButtonProps {
 }
 
 function TraceToSourceButton({ sentence, onClick }: TraceToSourceButtonProps) {
-  if (!sentence.source?.turn_hash) return null;
+  const hasSource = !!sentence.source?.turn_hash;
 
   return (
     <button
       type="button"
-      onClick={() => onClick(sentence)}
-      className="inline-flex items-center gap-1 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors ml-2"
-      title="View source context"
+      onClick={hasSource ? () => onClick(sentence) : undefined}
+      disabled={!hasSource}
+      className={`inline-flex items-center gap-1 text-[0.65rem] ml-2 transition-colors ${
+        hasSource
+          ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700'
+          : 'text-muted-foreground/30 cursor-not-allowed'
+      }`}
+      title={hasSource ? 'View source context' : 'Source context not available'}
     >
       <MapPin size={10} />
       <span>Source</span>
