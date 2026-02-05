@@ -22,6 +22,8 @@ interface CommitHistoryPanelProps {
   onClose: () => void;
   /** Called when user clicks a commit row (for diff view) */
   onSelectCommit?: (hash: string, parentHash: string | null) => void;
+  /** Project ID for navigation */
+  projectId?: string;
 }
 
 export function CommitHistoryPanel({
@@ -29,6 +31,7 @@ export function CommitHistoryPanel({
   open,
   onClose,
   onSelectCommit,
+  projectId,
 }: CommitHistoryPanelProps) {
   const [history, setHistory] = useState<CommitV4[]>([]);
   const [loading, setLoading] = useState(false);
@@ -319,6 +322,7 @@ export function CommitHistoryPanel({
           baseCommitHash={diffBaseHash}
           targetCommitHash={diffTargetHash}
           diffData={diffData}
+          projectId={projectId}
         />
       )}
     </>

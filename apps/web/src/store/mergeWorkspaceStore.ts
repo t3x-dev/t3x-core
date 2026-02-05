@@ -87,12 +87,6 @@ interface MergeWorkspaceState {
   lastSavedAt: Date | null;
   isDirty: boolean;
 
-  // Context modal state
-  contextModalOpen: boolean;
-  contextSentence: Sentence | null;
-  contextData: TurnContextData | null;
-  contextLoading: boolean;
-
   // Preview state
   previewExpanded: boolean;
 
@@ -120,10 +114,6 @@ interface MergeWorkspaceState {
   commitMerge: (branch?: string) => Promise<CommitV3>;
   cancelMerge: () => Promise<void>;
   reset: () => void;
-
-  // Context modal actions
-  openContext: (sentence: Sentence) => Promise<void>;
-  closeContext: () => void;
 
   // Preview actions
   togglePreview: () => void;
@@ -169,29 +159,63 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 /**
  * Transform a sentence from API format (source_ref) to frontend format (source)
  * API uses DiffableSentence.source_ref, frontend uses Sentence.source
+ *
+ * Note: Also checks for 'sourceRef' (camelCase) as fallback in case of
+ * serialization inconsistency somewhere in the stack.
  */
+interface ApiSentenceSourceRef {
+  conversation_id?: string;
+  conversationId?: string;
+  turn_hash?: string;
+  turnHash?: string;
+  start_char?: number;
+  startChar?: number;
+  end_char?: number;
+  endChar?: number;
+}
+
 interface ApiSentence {
   id: string;
   text: string;
-  source_ref?: {
-    conversation_id?: string;
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
+  confidence?: number;
+  source_ref?: ApiSentenceSourceRef;
+  sourceRef?: ApiSentenceSourceRef;
 }
 
 function transformSentence(apiSentence: ApiSentence): Sentence {
+  // Try snake_case first (standard), then camelCase (fallback)
+  const ref = apiSentence.source_ref || apiSentence.sourceRef;
+
+  if (!ref) {
+    return {
+      id: apiSentence.id,
+      text: apiSentence.text,
+      confidence: apiSentence.confidence,
+    };
+  }
+
+  // Handle both snake_case and camelCase field names within the ref
+  const turnHash = ref.turn_hash || ref.turnHash;
+  const startChar = ref.start_char ?? ref.startChar;
+  const endChar = ref.end_char ?? ref.endChar;
+
+  if (!turnHash) {
+    return {
+      id: apiSentence.id,
+      text: apiSentence.text,
+      confidence: apiSentence.confidence,
+    };
+  }
+
   return {
     id: apiSentence.id,
     text: apiSentence.text,
-    source: apiSentence.source_ref
-      ? {
-          turn_hash: apiSentence.source_ref.turn_hash,
-          start_char: apiSentence.source_ref.start_char,
-          end_char: apiSentence.source_ref.end_char,
-        }
-      : undefined,
+    confidence: apiSentence.confidence,
+    source: {
+      turn_hash: turnHash,
+      start_char: startChar ?? 0,
+      end_char: endChar ?? 0,
+    },
   };
 }
 
@@ -278,10 +302,6 @@ const initialState = {
   error: null,
   lastSavedAt: null,
   isDirty: false,
-  contextModalOpen: false,
-  contextSentence: null,
-  contextData: null,
-  contextLoading: false,
   previewExpanded: false,
   extendedResolutions: {} as Record<string, ExtendedResolutionData>,
   contextCache: {} as Record<string, CachedTurnContext>,
@@ -487,62 +507,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   reset: () => {
     set(initialState);
-  },
-
-  // ============================================================================
-  // Context Modal Actions
-  // ============================================================================
-
-  openContext: async (sentence: Sentence) => {
-    // Check if source and turn_hash are available for source tracing
-    if (!sentence.source?.turn_hash) {
-      set({
-        contextModalOpen: true,
-        contextSentence: sentence,
-        contextLoading: false,
-        contextData: null,
-        error: 'Source tracing not available for this sentence',
-      });
-      return;
-    }
-
-    set({
-      contextModalOpen: true,
-      contextSentence: sentence,
-      contextLoading: true,
-      contextData: null,
-    });
-
-    try {
-      const turnHash = encodeURIComponent(sentence.source.turn_hash);
-      const params = new URLSearchParams({
-        before: '2',
-        after: '2',
-      });
-
-      // Only add highlight params if available
-      if (sentence.source.start_char !== undefined) {
-        params.set('highlight_start', String(sentence.source.start_char));
-      }
-      if (sentence.source.end_char !== undefined) {
-        params.set('highlight_end', String(sentence.source.end_char));
-      }
-
-      const contextData = await fetchApi<TurnContextData>(`/turns/${turnHash}/context?${params}`);
-
-      set({ contextData, contextLoading: false });
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
-      set({ contextLoading: false, error: errorMsg });
-    }
-  },
-
-  closeContext: () => {
-    set({
-      contextModalOpen: false,
-      contextSentence: null,
-      contextData: null,
-    });
   },
 
   // ============================================================================

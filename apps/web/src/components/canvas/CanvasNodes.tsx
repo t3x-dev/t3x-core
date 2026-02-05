@@ -670,7 +670,9 @@ function UnitNode(props: Props) {
           {/* Row 2: Self hash (committed only) */}
           {isCommitted && (data.commitV4?.hash || data.commitV3?.hash || data.commitHash) && (
             <div className="text-xs font-mono text-slate-400 dark:text-slate-500 mb-1">
-              {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '').replace('sha256:', 'sha:').slice(0, 11)}
+              {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '')
+                .replace('sha256:', 'sha:')
+                .slice(0, 11)}
             </div>
           )}
 
@@ -927,19 +929,6 @@ function UnitNode(props: Props) {
           </div>
         )}
 
-        {/* Add Leaf button for committed units */}
-        {isCommitted && (
-          <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-2">
-            <button
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              onClick={handleOpenLeafPanel}
-              type="button"
-            >
-              <Plus size={12} />
-              <span>Add output</span>
-            </button>
-          </div>
-        )}
       </motion.div>
 
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />

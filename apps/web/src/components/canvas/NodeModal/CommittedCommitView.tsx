@@ -520,6 +520,7 @@ export function CommittedCommitView({
                     commitHash={data.commitHash}
                     open={showHistoryPanel}
                     onClose={() => setShowHistoryPanel(false)}
+                    projectId={projectId}
                   />
                 </>
               )}
@@ -586,6 +587,7 @@ export function CommittedCommitView({
           baseCommitHash={data.commitHash}
           targetCommitHash={diffTargetCommit}
           diffData={diffRawData}
+          projectId={projectId}
         />
       )}
     </>
