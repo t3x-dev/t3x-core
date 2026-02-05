@@ -47,8 +47,8 @@ const mockConversation: ConversationData = {
 const mockLeaf: Leaf = {
   id: 'leaf_1',
   commit_hash: 'sha256:abc123',
-  type: 'deploy_agent',
-  title: 'Travel Agent v1',
+  type: 'article',
+  title: 'Travel Guide v1',
   constraints: [],
   config: {},
   output:
@@ -224,7 +224,7 @@ describe('buildConversationContext', () => {
 
     expect(result.text).toContain('## Current Knowledge');
     expect(result.text).toContain('## Previous Outputs & Lessons');
-    expect(result.text).toContain('Travel Agent v1');
+    expect(result.text).toContain('Travel Guide v1');
     expect(result.text).toContain('Lesson:');
     expect(result.sources).toHaveLength(2);
     expect(result.sources[1].type).toBe('leaf');

@@ -447,16 +447,7 @@ export function CommitConstraintsAndLeaves({
                   className="flex items-center justify-between p-2 bg-white dark:bg-background rounded border border-green-100 dark:border-green-900 hover:border-green-300 dark:hover:border-green-700 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className={cn(
-                        'text-xs font-medium px-1.5 py-0.5 rounded',
-                        leaf.type === 'eval'
-                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                          : leaf.type === 'deploy_agent'
-                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      )}
-                    >
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                       {leaf.type}
                     </span>
                     <span className="text-sm text-foreground/80 truncate">{leaf.title}</span>
