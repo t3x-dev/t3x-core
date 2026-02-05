@@ -168,7 +168,8 @@
       "WebFetch(domain:localhost)",
       "Bash(gh pr create:*)",
       "Bash(git rebase:*)",
-      "Bash(pnpm lint:fix:*)"
+      "Bash(pnpm lint:fix:*)",
+      "Bash(pnpm next lint:*)"
     ],
     "deny": [],
     "ask": []

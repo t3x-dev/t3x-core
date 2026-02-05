@@ -28,11 +28,10 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
  * Core MergeSimilarPair.resolution only supports 'source' | 'target'
  * We store extended resolutions separately and map at commit time
  */
-export type ExtendedResolutionType = 'both' | 'edit';
+export type ExtendedResolutionType = 'both';
 
 export interface ExtendedResolutionData {
   type: ExtendedResolutionType;
-  customText?: string; // For 'edit' type
 }
 
 /**
@@ -46,11 +45,8 @@ export function isConflictResolved(
   // Standard resolution
   if (pair.resolution) return true;
 
-  // Extended resolution
-  if (extRes) {
-    if (extRes.type === 'both') return true;
-    if (extRes.type === 'edit' && extRes.customText?.trim()) return true;
-  }
+  // Extended resolution (both)
+  if (extRes?.type === 'both') return true;
 
   return false;
 }
@@ -61,7 +57,6 @@ export function isConflictResolved(
 export interface ResolutionStats {
   standard: number; // source or target
   both: number;
-  edit: number;
   unresolved: number;
 }
 
@@ -134,10 +129,9 @@ interface MergeWorkspaceState {
   togglePreview: () => void;
 
   // Extended resolution actions
-  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => void;
-  setCustomText: (index: number, text: string) => void;
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
   fetchSourceContext: (turnHash: string, sentence: Sentence) => Promise<TurnContextData | null>;
-  getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | 'edit' | null;
+  getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | null;
 
   // Computed getters
   getUnresolvedCount: () => number;
@@ -581,9 +575,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   getResolutionStats: (): ResolutionStats => {
     const { prepared, extendedResolutions } = get();
-    if (!prepared) return { standard: 0, both: 0, edit: 0, unresolved: 0 };
+    if (!prepared) return { standard: 0, both: 0, unresolved: 0 };
 
-    const stats: ResolutionStats = { standard: 0, both: 0, edit: 0, unresolved: 0 };
+    const stats: ResolutionStats = { standard: 0, both: 0, unresolved: 0 };
 
     for (let i = 0; i < prepared.similarPairs.length; i++) {
       const pair = prepared.similarPairs[i];
@@ -593,8 +587,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         stats.standard++;
       } else if (extRes?.type === 'both') {
         stats.both++;
-      } else if (extRes?.type === 'edit' && extRes.customText?.trim()) {
-        stats.edit++;
       } else {
         stats.unresolved++;
       }
@@ -631,20 +623,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         sentences.push(pair.source);
       } else if (pair.resolution === 'target') {
         sentences.push(pair.target);
-      } else if (extRes) {
-        // Handle extended resolutions
-        if (extRes.type === 'both') {
-          // Include both sentences
-          sentences.push(pair.source);
-          sentences.push(pair.target);
-        } else if (extRes.type === 'edit' && extRes.customText?.trim()) {
-          // Include custom edited sentence
-          sentences.push({
-            id: `merged-${i}`,
-            text: extRes.customText.trim(),
-            source: pair.source.source, // Keep source reference from original
-          });
-        }
+      } else if (extRes?.type === 'both') {
+        // Include both sentences
+        sentences.push(pair.source);
+        sentences.push(pair.target);
       }
     }
 
@@ -669,7 +651,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // Extended Resolution Actions
   // ============================================================================
 
-  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => {
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => {
     const { prepared, extendedResolutions } = get();
     if (!prepared) return;
 
@@ -688,7 +670,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       delete newExtended[key];
       set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
     } else {
-      // Extended resolution - clear standard and set extended
+      // Extended resolution (both) - clear standard and set extended
       const newPrepared = { ...prepared };
       newPrepared.similarPairs = [...prepared.similarPairs];
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -697,44 +679,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         pairWithoutResolution as (typeof newPrepared.similarPairs)[number];
 
       const newExtended = { ...extendedResolutions };
-      if (resolution === 'both') {
-        newExtended[key] = { type: 'both' };
-      } else {
-        // 'edit' - preserve existing custom text if any
-        newExtended[key] = {
-          type: 'edit',
-          customText: extendedResolutions[key]?.customText || '',
-        };
-      }
+      newExtended[key] = { type: 'both' };
       set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
     }
-  },
-
-  setCustomText: (index: number, text: string) => {
-    const { extendedResolutions } = get();
-    const key = String(index);
-
-    const current = extendedResolutions[key];
-    if (!current || current.type !== 'edit') {
-      // Should only be called when resolution is 'edit'
-      // Auto-set to edit mode if not already (defensive programming)
-      set({
-        extendedResolutions: {
-          ...extendedResolutions,
-          [key]: { type: 'edit', customText: text },
-        },
-        isDirty: true,
-      });
-      return;
-    }
-
-    set({
-      extendedResolutions: {
-        ...extendedResolutions,
-        [key]: { ...current, customText: text },
-      },
-      isDirty: true,
-    });
   },
 
   fetchSourceContext: async (turnHash: string, sentence: Sentence) => {

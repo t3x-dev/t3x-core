@@ -14,7 +14,6 @@
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeSimilarPair } from '@/types/merge';
-import { ConflictEditPanel } from './ConflictEditPanel';
 import { ConflictHeader } from './ConflictHeader';
 import { ConflictResolutionButtons } from './ConflictResolutionButtons';
 import { ConflictSide } from './ConflictSide';
@@ -33,16 +32,13 @@ export function MergeConflictView({
   sourceBranch,
   targetBranch,
 }: MergeConflictViewProps) {
-  const { extendedResolutions, resolveConflict, setCustomText, getEffectiveResolution } =
+  const { extendedResolutions, resolveConflict, getEffectiveResolution } =
     useMergeWorkspaceStore();
 
   // Get effective resolution (standard or extended)
   const effectiveResolution = getEffectiveResolution(index);
   const extRes = extendedResolutions[String(index)];
   const resolved = isConflictResolved(pair, extRes);
-
-  // Get extended resolution data for edit mode
-  const customText = extRes?.type === 'edit' ? extRes.customText || '' : '';
 
   return (
     <div
@@ -75,13 +71,13 @@ export function MergeConflictView({
           side="source"
           sentence={pair.source}
           label={`Branch ${sourceBranch}`}
-          isSelected={effectiveResolution === 'source'}
+          isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
         />
         <ConflictSide
           side="target"
           sentence={pair.target}
           label={`Branch ${targetBranch}`}
-          isSelected={effectiveResolution === 'target'}
+          isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
         />
       </div>
 
@@ -92,16 +88,6 @@ export function MergeConflictView({
         sourceBranch={sourceBranch}
         targetBranch={targetBranch}
       />
-
-      {/* Edit panel (shown when Edit is selected) */}
-      {effectiveResolution === 'edit' && (
-        <ConflictEditPanel
-          text={customText}
-          onChange={(text) => setCustomText(index, text)}
-          sourceText={pair.source.text}
-          targetText={pair.target.text}
-        />
-      )}
     </div>
   );
 }
