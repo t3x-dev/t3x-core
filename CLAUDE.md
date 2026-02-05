@@ -62,6 +62,7 @@ pnpm test:runner                # Test @t3x/runner
 pnpm dev:webui                  # Next.js dev server (port 3000)
 pnpm dev:api                    # Hono API server (port 8000)
 pnpm dev:agent                  # Demo agent (port 9000)
+cd apps/runner && pnpm dev      # Runner server (port 8080)
 ```
 
 ### Run single test
@@ -581,6 +582,28 @@ cd apps/api && pnpm vitest run src/__tests__/leaves.test.ts
 # Test specific case
 cd apps/api && pnpm vitest run -t "should create leaf"
 ```
+
+## Viewing WebUI (Playwright)
+
+When asked to "look at" or "check" the WebUI, use **Playwright** to capture screenshots. WebFetch does not work for localhost, and curl only returns the HTML shell (Next.js is client-rendered).
+
+```bash
+# Screenshot a page (wait for JS to render)
+npx playwright screenshot --wait-for-timeout=3000 "http://localhost:3000/project/proj_xxx" /path/to/output.png
+
+# Full page screenshot (captures scrollable content)
+npx playwright screenshot --wait-for-timeout=3000 --full-page "http://localhost:3000/project/proj_xxx/leaf/leaf_xxx" /path/to/output.png
+```
+
+Then use the Read tool to view the screenshot image.
+
+**Common pages to check:**
+- Project canvas: `http://localhost:3000/project/{projectId}`
+- Leaf detail: `http://localhost:3000/project/{projectId}/leaf/{leafId}`
+- Merge workspace: `http://localhost:3000/project/{projectId}/merge/{mergeId}`
+- Insights: `http://localhost:3000/insights`
+
+**Note:** Screenshots are saved to the scratchpad directory for temporary use.
 
 ## Dependency Build Order
 
