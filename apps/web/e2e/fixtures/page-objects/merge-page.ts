@@ -32,7 +32,7 @@ export class MergePage {
 
   async getUnresolvedCount(): Promise<number> {
     const badge = this.page.locator('text=/\\d+ unresolved/').first();
-    const isVisible = await badge.isVisible().catch(() => false);
+    const isVisible = await badge.isVisible();
     if (!isVisible) return 0;
     const text = await badge.textContent();
     const match = text?.match(/(\d+) unresolved/);

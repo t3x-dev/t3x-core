@@ -94,25 +94,14 @@ test.describe('Deploy Dashboard', () => {
     await deploy.goto();
     await deploy.waitForLoad();
 
-    // Runs section should exist (may be empty)
-    const runsSection = page
-      .locator('text=Recent Runs')
-      .or(page.locator('text=Runs'))
-      .or(page.locator('table'));
-    const hasRuns = await runsSection
-      .first()
-      .isVisible()
-      .catch(() => false);
+    // Look for a dedicated Recent Runs heading (not just the word "Runs")
+    const runsHeading = page.locator('text=Recent Runs').first();
+    const hasRunsSection = await runsHeading.isVisible().catch(() => false);
+    test.skip(!hasRunsSection, 'Recent Runs section not present — no runs data');
 
-    // Deploy page should show either runs section or agents section
-    const agentsHeading = page.locator('text=Deploy Agents').first();
-    const agentsVisible = await agentsHeading.isVisible().catch(() => false);
-    expect(hasRuns || agentsVisible).toBe(true);
-
-    if (hasRuns) {
-      const rowCount = await deploy.getRunsTableRows();
-      expect(rowCount).toBeGreaterThanOrEqual(0);
-    }
+    // Runs heading found — table should exist below it
+    const runsTable = page.locator('table').first();
+    await expect(runsTable).toBeVisible({ timeout: 5000 });
   });
 
   // DD-05: Model filter exists
@@ -122,15 +111,10 @@ test.describe('Deploy Dashboard', () => {
     await deploy.waitForLoad();
 
     const hasFilter = await deploy.hasModelFilter();
-    if (hasFilter) {
-      // Filter is only shown when runs exist — verify it renders
-      const filterElement = page.locator('text=All Models').first();
-      await expect(filterElement).toBeVisible({ timeout: 5000 });
-    } else {
-      // No filter — page should still show agents section
-      const agentsHeading = page.locator('text=Deploy Agents').first();
-      await expect(agentsHeading).toBeVisible({ timeout: 5000 });
-    }
+    test.skip(!hasFilter, 'Model filter not present — no runs data to filter');
+
+    const filterElement = page.locator('text=All Models').first();
+    await expect(filterElement).toBeVisible({ timeout: 5000 });
   });
 
   // DD-06: Runner offline state shows warning
@@ -144,9 +128,10 @@ test.describe('Deploy Dashboard', () => {
       const warning = page.locator('text=Runner service is not connected');
       await expect(warning).toBeVisible({ timeout: 5000 });
     } else {
-      // Runner is online — page should show agents section without warning
-      const agentsHeading = page.locator('text=Deploy Agents').first();
-      await expect(agentsHeading).toBeVisible({ timeout: 5000 });
+      // Runner is online — warning should NOT be shown
+      const warning = page.locator('text=Runner service is not connected');
+      const hasWarning = await warning.isVisible().catch(() => false);
+      expect(hasWarning).toBe(false);
     }
   });
 

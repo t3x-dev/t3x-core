@@ -59,7 +59,7 @@ export class DeployPage {
     const deleteButton = card
       .locator('button')
       .filter({ hasText: /delete/i })
-      .or(card.locator('button[aria-label*="delete" i]').or(card.locator('button:last-child')));
+      .or(card.locator('button[aria-label*="delete" i]'));
     await deleteButton.first().click();
   }
 

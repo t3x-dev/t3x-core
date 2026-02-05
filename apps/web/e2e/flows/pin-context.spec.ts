@@ -112,14 +112,13 @@ test.describe('Pin & Context Management', () => {
     const memoryRes = await request.get(`${API_BASE}/conversations/${conversationId}/memory`);
     const memoryData = await memoryRes.json();
 
-    if (memoryData.success) {
-      const memory = memoryData.data;
-      expect(memory.text).toBeDefined();
-      expect(memory.token_estimate).toBeGreaterThan(0);
-      expect(memory.sources).toBeDefined();
-      expect(Array.isArray(memory.sources)).toBe(true);
-    }
-    // If memory endpoint not available, the pin creation/deletion tests still validate functionality
+    test.skip(!memoryData.success, 'Memory endpoint not available');
+
+    const memory = memoryData.data;
+    expect(memory.text).toBeDefined();
+    expect(memory.token_estimate).toBeGreaterThan(0);
+    expect(memory.sources).toBeDefined();
+    expect(Array.isArray(memory.sources)).toBe(true);
   });
 
   // PC-06: Pin button visible on conversation page
@@ -130,23 +129,29 @@ test.describe('Pin & Context Management', () => {
     const turnBadge = page.locator('text=USER').or(page.locator('text=ASSISTANT'));
     await expect(turnBadge.first()).toBeVisible({ timeout: 15000 });
 
-    // Pin button should be visible
+    // Pin button or pinned indicator should be visible (we pinned this conversation)
     const pinButton = page
       .locator('button:has-text("Pin")')
-      .or(page.locator('button[aria-label*="pin" i]'))
-      .or(page.locator('button:has(svg)').filter({ hasText: /pin/i }));
+      .or(page.locator('button[aria-label*="pin" i]'));
+    const pinnedIndicator = page.locator('text=/pinned/i').or(page.locator('[data-pinned]'));
+
     const hasPinButton = await pinButton
       .first()
       .isVisible()
       .catch(() => false);
+    const hasPinned = await pinnedIndicator
+      .first()
+      .isVisible()
+      .catch(() => false);
 
-    // The pin indicator (pinned state) should be visible since we pinned this conversation
-    if (!hasPinButton) {
-      const pinnedIndicator = page.locator('text=/pinned/i').or(page.locator('[data-pinned]'));
-      const hasPinned = await pinnedIndicator
-        .first()
-        .isVisible()
-        .catch(() => false);
+    if (hasPinButton) {
+      // Pin button visible — verify it's interactive
+      await expect(pinButton.first()).toBeEnabled();
+    } else if (hasPinned) {
+      // Pinned indicator visible — verify it's properly displayed
+      await expect(pinnedIndicator.first()).toBeVisible();
+    } else {
+      // Neither found — fail explicitly
       expect(hasPinButton || hasPinned).toBe(true);
     }
   });

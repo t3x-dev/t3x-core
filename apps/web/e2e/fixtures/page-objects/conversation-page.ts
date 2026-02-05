@@ -3,12 +3,10 @@ import { expect } from '@playwright/test';
 
 export class ConversationPage {
   readonly page: Page;
-  readonly mainContent: Locator;
   readonly contextPanel: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.mainContent = page.locator('main').or(page.locator('[role="main"]')).first();
     this.contextPanel = page.locator('aside').filter({ hasText: 'Context' }).first();
   }
 

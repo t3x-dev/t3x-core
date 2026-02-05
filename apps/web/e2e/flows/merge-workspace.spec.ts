@@ -131,14 +131,17 @@ test.describe('Merge Workspace', () => {
     const hasConflicts = await merge.hasConflictsSection();
     test.skip(!hasConflicts, 'No conflicts section — merge data had no similar pairs');
 
-    // #5: Use expect().toBeVisible() instead of waitForTimeout
+    const initialCount = await merge.getUnresolvedCount();
+
     const keepBButton = page.locator('button:has-text("Keep B")').first();
     await expect(keepBButton).toBeVisible({ timeout: 5000 });
     await keepBButton.click();
 
-    // Verify the button is now in "active" state (has the green/active styling)
-    // The button container gets a colored background when selected
-    await expect(keepBButton).toBeVisible();
+    // Verify the resolution was applied — unresolved count should decrease
+    await expect(async () => {
+      const newCount = await merge.getUnresolvedCount();
+      expect(newCount).toBeLessThan(initialCount);
+    }).toPass({ timeout: 5000 });
   });
 
   // MW-04: Toggle keep for source-only items
