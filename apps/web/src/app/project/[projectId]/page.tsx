@@ -27,6 +27,13 @@ export default function ProjectDetailPage() {
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
 
+  // Fetch projects list if not initialized (handles direct URL access)
+  useEffect(() => {
+    if (!projectsInitialized && !projectsLoading) {
+      useProjectStore.getState().fetchProjects();
+    }
+  }, [projectsInitialized, projectsLoading]);
+
   // Load project data when entering the page
   useEffect(() => {
     if (projectId && projectId !== loadedProjectId) {

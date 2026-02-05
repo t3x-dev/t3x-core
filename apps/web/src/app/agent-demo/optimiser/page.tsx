@@ -273,6 +273,7 @@ export default function AgentDemoOptimiserPage() {
               const isDeployed = commit.commitHash === deployedCommitHash;
               return (
                 <button
+                  type="button"
                   key={commit.id}
                   className={cn(
                     'w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted/50',
@@ -352,8 +353,9 @@ export default function AgentDemoOptimiserPage() {
       </div>
 
       {/* Commit Detail Modal */}
-      {selectedCommit && (
+      {selectedCommit !== null && (
         <CommitDetailModal
+          key={selectedCommit.id}
           commit={selectedCommit}
           onClose={() => setSelectedCommit(null)}
           onDeploy={() => handleDeploy(selectedCommit.commitHash)}

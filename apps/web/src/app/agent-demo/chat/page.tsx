@@ -131,8 +131,8 @@ export default function AgentDemoChatPage() {
       </header>
 
       {/* Messages Section */}
-      <section className="flex-1 overflow-auto">
-        {messages.length === 0 ? (
+      <section className="flex-1 overflow-auto" suppressHydrationWarning>
+        {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <Bot className="h-10 w-10" />
             <div>
@@ -142,8 +142,9 @@ export default function AgentDemoChatPage() {
               </p>
             </div>
           </div>
-        ) : (
-          <>
+        )}
+        {messages.length > 0 && (
+          <div>
             {messages.map((message) => (
               <ChatMessageRow
                 key={message.id}
@@ -165,7 +166,7 @@ export default function AgentDemoChatPage() {
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </section>
