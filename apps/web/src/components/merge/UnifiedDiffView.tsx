@@ -8,9 +8,12 @@
  * - Conflicts (need resolution) - uses MergeConflictView for inline context
  * - Source-only sentences
  * - Target-only sentences
+ *
+ * Supports click-to-expand inline source context (VS Code Peek style).
  */
 
 import { CheckCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, Sentence } from '@/types/merge';
@@ -22,9 +25,12 @@ interface UnifiedDiffViewProps {
   prepared: Merge2WayResult;
   onResolvePair: (index: number, pick: 'source' | 'target') => void;
   onToggleKeep: (side: 'source' | 'target', index: number) => void;
-  onSourceClick: (sentence: Sentence) => void;
+  /** Fallback callback for modal mode (optional) */
+  onSourceClick?: (sentence: Sentence) => void;
   sourceBranch?: string;
   targetBranch?: string;
+  /** Use inline expand instead of modal (default: true) */
+  useInlineExpand?: boolean;
 }
 
 export function UnifiedDiffView({
@@ -34,9 +40,29 @@ export function UnifiedDiffView({
   onSourceClick,
   sourceBranch = 'A',
   targetBranch = 'B',
+  useInlineExpand = true,
 }: UnifiedDiffViewProps) {
   const { identical, similarPairs, onlyInSource, onlyInTarget } = prepared;
-  const { getUnresolvedCount } = useMergeWorkspaceStore();
+  const { getUnresolvedCount, contextCache, contextLoadingStates, projectId } =
+    useMergeWorkspaceStore();
+  const router = useRouter();
+
+  // Helper to get cached context data for a sentence
+  const getContextForSentence = (sentence: Sentence) => {
+    const turnHash = sentence.source?.turn_hash;
+    if (!turnHash) return { data: undefined, loading: false };
+    return {
+      data: contextCache[turnHash]?.data,
+      loading: contextLoadingStates[turnHash] ?? false,
+    };
+  };
+
+  // Handle jump to conversation
+  const handleJumpToConversation = (conversationId: string) => {
+    if (projectId) {
+      router.push(`/project/${projectId}/conversation/${conversationId}`);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -49,14 +75,21 @@ export function UnifiedDiffView({
           defaultCollapsed
         >
           <div className="space-y-1">
-            {identical.map((sentence, idx) => (
-              <MergeDiffLine
-                key={`identical-${idx}`}
-                type="context"
-                sentence={sentence}
-                onSourceClick={() => onSourceClick(sentence)}
-              />
-            ))}
+            {identical.map((sentence, idx) => {
+              const ctx = getContextForSentence(sentence);
+              return (
+                <MergeDiffLine
+                  key={`identical-${idx}`}
+                  type="context"
+                  sentence={sentence}
+                  onSourceClick={onSourceClick ? () => onSourceClick(sentence) : undefined}
+                  useInlineExpand={useInlineExpand}
+                  contextData={ctx.data}
+                  contextLoading={ctx.loading}
+                  onJumpToConversation={handleJumpToConversation}
+                />
+              );
+            })}
           </div>
         </MergeDiffSection>
       )}
@@ -90,17 +123,26 @@ export function UnifiedDiffView({
           variant="info"
         >
           <div className="space-y-1">
-            {onlyInSource.map((candidate, idx) => (
-              <MergeDiffLine
-                key={`source-${idx}`}
-                type="added"
-                sentence={candidate.sentence}
-                isKept={candidate.keep}
-                onToggleKeep={() => onToggleKeep('source', idx)}
-                onSourceClick={() => onSourceClick(candidate.sentence)}
-                checkable
-              />
-            ))}
+            {onlyInSource.map((candidate, idx) => {
+              const ctx = getContextForSentence(candidate.sentence);
+              return (
+                <MergeDiffLine
+                  key={`source-${idx}`}
+                  type="added"
+                  sentence={candidate.sentence}
+                  isKept={candidate.keep}
+                  onToggleKeep={() => onToggleKeep('source', idx)}
+                  onSourceClick={
+                    onSourceClick ? () => onSourceClick(candidate.sentence) : undefined
+                  }
+                  checkable
+                  useInlineExpand={useInlineExpand}
+                  contextData={ctx.data}
+                  contextLoading={ctx.loading}
+                  onJumpToConversation={handleJumpToConversation}
+                />
+              );
+            })}
           </div>
         </MergeDiffSection>
       )}
@@ -113,17 +155,26 @@ export function UnifiedDiffView({
           variant="info"
         >
           <div className="space-y-1">
-            {onlyInTarget.map((candidate, idx) => (
-              <MergeDiffLine
-                key={`target-${idx}`}
-                type="added"
-                sentence={candidate.sentence}
-                isKept={candidate.keep}
-                onToggleKeep={() => onToggleKeep('target', idx)}
-                onSourceClick={() => onSourceClick(candidate.sentence)}
-                checkable
-              />
-            ))}
+            {onlyInTarget.map((candidate, idx) => {
+              const ctx = getContextForSentence(candidate.sentence);
+              return (
+                <MergeDiffLine
+                  key={`target-${idx}`}
+                  type="added"
+                  sentence={candidate.sentence}
+                  isKept={candidate.keep}
+                  onToggleKeep={() => onToggleKeep('target', idx)}
+                  onSourceClick={
+                    onSourceClick ? () => onSourceClick(candidate.sentence) : undefined
+                  }
+                  checkable
+                  useInlineExpand={useInlineExpand}
+                  contextData={ctx.data}
+                  contextLoading={ctx.loading}
+                  onJumpToConversation={handleJumpToConversation}
+                />
+              );
+            })}
           </div>
         </MergeDiffSection>
       )}
