@@ -1,6 +1,7 @@
 import type { ColorMode, Node } from '@xyflow/react';
 import { Background, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import {
+  Brain,
   FileOutput,
   GitCommit,
   GitCommitHorizontal,
@@ -39,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
@@ -68,6 +70,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
   const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showMemoryModal, setShowMemoryModal] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -79,6 +82,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
   const {
     nodes,
     edges,
+    projectId,
     addNode,
     updateNode,
     commitPendingCommit,
@@ -651,6 +655,20 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
+            size="sm"
+            onClick={() => setShowMemoryModal(true)}
+            title="Memory Context"
+            className={cn(
+              'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
+              'text-muted-foreground hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary'
+            )}
+          >
+            <Brain className="h-4 w-4" />
+            Memory
+          </Button>
+          <Button
+            variant="ghost"
             size="icon"
             onClick={handleAutoLayout}
             title="Auto Layout"
@@ -885,6 +903,13 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       <LeafPanel />
       <MergePanel />
       <DeletionConfirmDialog />
+      {projectId && (
+        <MemoryContextModal
+          open={showMemoryModal}
+          onClose={() => setShowMemoryModal(false)}
+          projectId={projectId}
+        />
+      )}
 
       {/* Keyboard shortcuts help button */}
       <Button

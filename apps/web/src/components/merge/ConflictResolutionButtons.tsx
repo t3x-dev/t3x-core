@@ -1,32 +1,30 @@
 'use client';
 
 /**
- * ConflictResolutionButtons - Four resolution action buttons
+ * ConflictResolutionButtons - Three resolution action buttons
  *
  * Keyboard shortcuts:
  * - A = Keep A (Source)
  * - B = Keep B (Target)
  * - X = Keep Both
- * - E = Edit
  *
  * - Keep A: Select source sentence
  * - Keep B: Select target sentence
  * - Keep Both: Include both sentences in merge
- * - Edit: Write custom merged text
  */
 
-import { ArrowLeft, ArrowRight, Layers, Pencil } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';
 import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
-type Resolution = 'source' | 'target' | 'both' | 'edit';
+type Resolution = 'source' | 'target' | 'both';
 
 interface ConflictResolutionButtonsProps {
   current: Resolution | null;
   onResolve: (resolution: Resolution) => void;
   sourceBranch?: string;
   targetBranch?: string;
-  /** Enable keyboard shortcuts (A/B/X/E) - default: true */
+  /** Enable keyboard shortcuts (A/B/X) - default: true */
   enableKeyboard?: boolean;
 }
 
@@ -45,7 +43,7 @@ export function ConflictResolutionButtons({
   targetBranch = 'B',
   enableKeyboard = true,
 }: ConflictResolutionButtonsProps) {
-  // Keyboard shortcuts: A/B/X/E
+  // Keyboard shortcuts: A/B/X
   useEffect(() => {
     if (!enableKeyboard) return;
 
@@ -67,9 +65,6 @@ export function ConflictResolutionButtons({
           break;
         case 'x':
           onResolve('both');
-          break;
-        case 'e':
-          onResolve('edit');
           break;
       }
     };
@@ -102,14 +97,6 @@ export function ConflictResolutionButtons({
       activeClass:
         'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300',
       shortcut: 'X',
-    },
-    {
-      resolution: 'edit',
-      icon: <Pencil className="h-4 w-4" />,
-      label: 'Edit',
-      activeClass:
-        'bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300',
-      shortcut: 'E',
     },
   ];
 

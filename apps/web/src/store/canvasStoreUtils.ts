@@ -520,7 +520,8 @@ export const unitToNode = (
     position: snapPosition(position),
     data: {
       entryId: commit ? commit.commit_hash.slice(0, 12) : conv.conversation_id.slice(0, 8),
-      title: conv.title || 'Untitled',
+      // Priority: commit.message (committed) > conv.title > fallback
+      title: (isCommitted && commit?.message) || conv.title || 'Untitled Unit',
       summary: isCommitted
         ? facetCount > 0
           ? `${facetCount} facets`

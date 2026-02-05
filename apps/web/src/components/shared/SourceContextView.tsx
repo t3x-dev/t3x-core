@@ -1,0 +1,319 @@
+'use client';
+
+/**
+ * SourceContextView - Unified inline expandable source context component
+ *
+ * VS Code Peek-style UX for showing conversation context with highlighted sentences.
+ * Supports both compact (truncated) and expanded (full content) display modes.
+ *
+ * Features:
+ * - Compact mode: Shows truncated context around highlight with expand button
+ * - Expanded mode: Shows full turn content with highlight
+ * - Loading/error state handling
+ * - Configurable highlight color (yellow for merge, green for commits)
+ * - Auto-fetch or external data support
+ *
+ * @example
+ * // With auto-fetch
+ * <SourceContextView
+ *   turnHash="sha256:abc..."
+ *   highlightStart={10}
+ *   highlightEnd={50}
+ *   mode="compact"
+ * />
+ *
+ * // With external data
+ * <SourceContextView
+ *   turnHash="sha256:abc..."
+ *   highlightStart={10}
+ *   highlightEnd={50}
+ *   mode="compact"
+ *   contextData={preLoadedData}
+ *   autoFetch={false}
+ * />
+ */
+
+import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { fetchTurnContextCached } from '@/lib/api';
+import { truncateWithHighlights } from '@/lib/truncationUtils';
+import type { TurnContextData } from '@/types/merge';
+import type { HighlightColor, HighlightRange } from '@/types/sourceContext';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Minimum content length to show expand/collapse button */
+const EXPAND_THRESHOLD = 150;
+
+/** Default context chars for compact mode */
+const DEFAULT_COMPACT_CHARS = 50;
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface SourceContextViewProps {
+  /** Turn hash to fetch/display context for */
+  turnHash: string;
+  /** Start character position for highlight (0-indexed, inclusive) */
+  highlightStart?: number;
+  /** End character position for highlight (0-indexed, exclusive) */
+  highlightEnd?: number;
+
+  /** Display mode: 'compact' shows truncated view, 'expanded' shows full content */
+  mode?: 'compact' | 'expanded';
+  /** Number of context chars to show in compact mode (default: 50) */
+  compactChars?: number;
+
+  /** Highlight color: 'yellow' for merge UI, 'green' for commit display */
+  highlightColor?: HighlightColor;
+
+  /** Pre-loaded context data (skips fetch if provided) */
+  contextData?: TurnContextData | null;
+  /** Whether to auto-fetch context data (default: true) */
+  autoFetch?: boolean;
+
+  /** Show conversation header with role */
+  showHeader?: boolean;
+  /** Show "Jump to conversation" link */
+  showJumpLink?: boolean;
+  /** Callback when jump link is clicked, receives conversation_id */
+  onJumpClick?: (conversationId: string) => void;
+
+  /** External loading state (overrides internal loading) */
+  loading?: boolean;
+  /** External error message (overrides internal error) */
+  error?: string;
+}
+
+// ============================================================================
+// Highlight color classes
+// ============================================================================
+
+const highlightColorClasses: Record<HighlightColor, string> = {
+  yellow: 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100',
+  green: 'bg-green-200 dark:bg-green-800/50 text-green-900 dark:text-green-100',
+  deepGreen: 'bg-green-500 text-white',
+  deepRed: 'bg-red-500 text-white',
+};
+
+// ============================================================================
+// Component
+// ============================================================================
+
+export function SourceContextView({
+  turnHash,
+  highlightStart,
+  highlightEnd,
+  mode = 'compact',
+  compactChars = DEFAULT_COMPACT_CHARS,
+  highlightColor = 'yellow',
+  contextData: externalData,
+  autoFetch = true,
+  showHeader = true,
+  showJumpLink = false,
+  onJumpClick,
+  loading: externalLoading,
+  error: externalError,
+}: SourceContextViewProps) {
+  // Internal state for auto-fetch mode
+  const [internalData, setInternalData] = useState<TurnContextData | null>(null);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const [internalError, setInternalError] = useState<string | undefined>();
+
+  // Local expand state
+  const [expanded, setExpanded] = useState(mode === 'expanded');
+
+  // Use external or internal state
+  const contextData = externalData !== undefined ? externalData : internalData;
+  const loading = externalLoading !== undefined ? externalLoading : internalLoading;
+  const error = externalError !== undefined ? externalError : internalError;
+
+  // Auto-fetch when turnHash changes
+  const fetchContext = useCallback(async () => {
+    if (!turnHash || !autoFetch || externalData !== undefined) return;
+
+    setInternalLoading(true);
+    setInternalError(undefined);
+
+    try {
+      const data = await fetchTurnContextCached(turnHash, {
+        before: 0,
+        after: 0,
+        highlightStart,
+        highlightEnd,
+      });
+      setInternalData(data);
+    } catch (err) {
+      setInternalError(err instanceof Error ? err.message : 'Failed to load context');
+    } finally {
+      setInternalLoading(false);
+    }
+  }, [turnHash, autoFetch, externalData, highlightStart, highlightEnd]);
+
+  useEffect(() => {
+    fetchContext();
+  }, [fetchContext]);
+
+  // Sync expanded state with mode prop
+  useEffect(() => {
+    setExpanded(mode === 'expanded');
+  }, [mode]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render states
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // No turn hash - show unavailable state
+  if (!turnHash) {
+    return (
+      <div className="text-xs text-muted-foreground italic mt-2">Source context unavailable</div>
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span>Loading context...</span>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return <div className="text-xs text-amber-600 dark:text-amber-400 mt-2">{error}</div>;
+  }
+
+  // No context data
+  if (!contextData) {
+    return null;
+  }
+
+  const targetTurn = contextData.target_turn;
+  if (!targetTurn) return null;
+
+  // Build highlight ranges array
+  const highlights: HighlightRange[] =
+    highlightStart !== undefined && highlightEnd !== undefined
+      ? [{ start: highlightStart, end: highlightEnd }]
+      : [];
+
+  // Get role label
+  const roleLabels: Record<string, string> = {
+    user: 'User',
+    assistant: 'Assistant',
+    system: 'System',
+    tool: 'Tool',
+  };
+  const roleLabel = roleLabels[targetTurn.role] || targetTurn.role;
+
+  // Highlight class for marks
+  const highlightClass = `${highlightColorClasses[highlightColor]} px-0.5 rounded-sm`;
+
+  // Get truncated segments for compact mode
+  const segments = truncateWithHighlights(targetTurn.content, highlights, {
+    contextChars: compactChars,
+  });
+
+  // Check if content is long enough to need expand/collapse
+  const canExpand = targetTurn.content.length > EXPAND_THRESHOLD;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render content
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const renderExpandedContent = () => {
+    if (highlights.length === 0) {
+      return targetTurn.content;
+    }
+
+    // Single highlight (most common case)
+    const { start, end } = highlights[0];
+    return (
+      <>
+        {targetTurn.content.slice(0, start)}
+        <mark className={highlightClass}>{targetTurn.content.slice(start, end)}</mark>
+        {targetTurn.content.slice(end)}
+      </>
+    );
+  };
+
+  const renderTruncatedContent = () => {
+    return segments.map((seg, idx) => {
+      // Segments are static once rendered (content doesn't reorder)
+      const key = `${seg.type}-${idx}`;
+      if (seg.type === 'ellipsis') {
+        return (
+          <span key={key} className="text-muted-foreground/50">
+            {seg.content}
+          </span>
+        );
+      }
+      if (seg.type === 'highlight') {
+        return (
+          <mark key={key} className={highlightClass}>
+            {seg.content}
+          </mark>
+        );
+      }
+      return <span key={key}>{seg.content}</span>;
+    });
+  };
+
+  return (
+    <div className="mt-2 space-y-1">
+      {/* Header with conversation info */}
+      {showHeader && (
+        <div className="flex items-center gap-1.5 text-[0.65rem] text-muted-foreground">
+          <MessageCircle className="h-3 w-3" />
+          <span>{contextData.conversation_title || 'Conversation'}</span>
+          <span className="text-muted-foreground/50">|</span>
+          <span className="font-medium">{roleLabel}</span>
+          {showJumpLink && onJumpClick && contextData.conversation_id && (
+            <>
+              <span className="text-muted-foreground/50">|</span>
+              <button
+                type="button"
+                onClick={() => onJumpClick(contextData.conversation_id)}
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Jump to conversation
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Content with highlight */}
+      <div className="text-xs leading-relaxed text-muted-foreground bg-muted/30 rounded px-2 py-1.5">
+        {expanded ? renderExpandedContent() : renderTruncatedContent()}
+      </div>
+
+      {/* Expand/Collapse toggle */}
+      {canExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3 w-3" />
+              <span>Show less</span>
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3" />
+              <span>Show more context</span>
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}

@@ -28,11 +28,10 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
  * Core MergeSimilarPair.resolution only supports 'source' | 'target'
  * We store extended resolutions separately and map at commit time
  */
-export type ExtendedResolutionType = 'both' | 'edit';
+export type ExtendedResolutionType = 'both';
 
 export interface ExtendedResolutionData {
   type: ExtendedResolutionType;
-  customText?: string; // For 'edit' type
 }
 
 /**
@@ -46,11 +45,8 @@ export function isConflictResolved(
   // Standard resolution
   if (pair.resolution) return true;
 
-  // Extended resolution
-  if (extRes) {
-    if (extRes.type === 'both') return true;
-    if (extRes.type === 'edit' && extRes.customText?.trim()) return true;
-  }
+  // Extended resolution (both)
+  if (extRes?.type === 'both') return true;
 
   return false;
 }
@@ -61,7 +57,6 @@ export function isConflictResolved(
 export interface ResolutionStats {
   standard: number; // source or target
   both: number;
-  edit: number;
   unresolved: number;
 }
 
@@ -92,12 +87,6 @@ interface MergeWorkspaceState {
   lastSavedAt: Date | null;
   isDirty: boolean;
 
-  // Context modal state
-  contextModalOpen: boolean;
-  contextSentence: Sentence | null;
-  contextData: TurnContextData | null;
-  contextLoading: boolean;
-
   // Preview state
   previewExpanded: boolean;
 
@@ -126,18 +115,13 @@ interface MergeWorkspaceState {
   cancelMerge: () => Promise<void>;
   reset: () => void;
 
-  // Context modal actions
-  openContext: (sentence: Sentence) => Promise<void>;
-  closeContext: () => void;
-
   // Preview actions
   togglePreview: () => void;
 
   // Extended resolution actions
-  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => void;
-  setCustomText: (index: number, text: string) => void;
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
   fetchSourceContext: (turnHash: string, sentence: Sentence) => Promise<TurnContextData | null>;
-  getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | 'edit' | null;
+  getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | null;
 
   // Computed getters
   getUnresolvedCount: () => number;
@@ -175,29 +159,63 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 /**
  * Transform a sentence from API format (source_ref) to frontend format (source)
  * API uses DiffableSentence.source_ref, frontend uses Sentence.source
+ *
+ * Note: Also checks for 'sourceRef' (camelCase) as fallback in case of
+ * serialization inconsistency somewhere in the stack.
  */
+interface ApiSentenceSourceRef {
+  conversation_id?: string;
+  conversationId?: string;
+  turn_hash?: string;
+  turnHash?: string;
+  start_char?: number;
+  startChar?: number;
+  end_char?: number;
+  endChar?: number;
+}
+
 interface ApiSentence {
   id: string;
   text: string;
-  source_ref?: {
-    conversation_id?: string;
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
+  confidence?: number;
+  source_ref?: ApiSentenceSourceRef;
+  sourceRef?: ApiSentenceSourceRef;
 }
 
 function transformSentence(apiSentence: ApiSentence): Sentence {
+  // Try snake_case first (standard), then camelCase (fallback)
+  const ref = apiSentence.source_ref || apiSentence.sourceRef;
+
+  if (!ref) {
+    return {
+      id: apiSentence.id,
+      text: apiSentence.text,
+      confidence: apiSentence.confidence,
+    };
+  }
+
+  // Handle both snake_case and camelCase field names within the ref
+  const turnHash = ref.turn_hash || ref.turnHash;
+  const startChar = ref.start_char ?? ref.startChar;
+  const endChar = ref.end_char ?? ref.endChar;
+
+  if (!turnHash) {
+    return {
+      id: apiSentence.id,
+      text: apiSentence.text,
+      confidence: apiSentence.confidence,
+    };
+  }
+
   return {
     id: apiSentence.id,
     text: apiSentence.text,
-    source: apiSentence.source_ref
-      ? {
-          turn_hash: apiSentence.source_ref.turn_hash,
-          start_char: apiSentence.source_ref.start_char,
-          end_char: apiSentence.source_ref.end_char,
-        }
-      : undefined,
+    confidence: apiSentence.confidence,
+    source: {
+      turn_hash: turnHash,
+      start_char: startChar ?? 0,
+      end_char: endChar ?? 0,
+    },
   };
 }
 
@@ -284,10 +302,6 @@ const initialState = {
   error: null,
   lastSavedAt: null,
   isDirty: false,
-  contextModalOpen: false,
-  contextSentence: null,
-  contextData: null,
-  contextLoading: false,
   previewExpanded: false,
   extendedResolutions: {} as Record<string, ExtendedResolutionData>,
   contextCache: {} as Record<string, CachedTurnContext>,
@@ -496,62 +510,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   // ============================================================================
-  // Context Modal Actions
-  // ============================================================================
-
-  openContext: async (sentence: Sentence) => {
-    // Check if source and turn_hash are available for source tracing
-    if (!sentence.source?.turn_hash) {
-      set({
-        contextModalOpen: true,
-        contextSentence: sentence,
-        contextLoading: false,
-        contextData: null,
-        error: 'Source tracing not available for this sentence',
-      });
-      return;
-    }
-
-    set({
-      contextModalOpen: true,
-      contextSentence: sentence,
-      contextLoading: true,
-      contextData: null,
-    });
-
-    try {
-      const turnHash = encodeURIComponent(sentence.source.turn_hash);
-      const params = new URLSearchParams({
-        before: '2',
-        after: '2',
-      });
-
-      // Only add highlight params if available
-      if (sentence.source.start_char !== undefined) {
-        params.set('highlight_start', String(sentence.source.start_char));
-      }
-      if (sentence.source.end_char !== undefined) {
-        params.set('highlight_end', String(sentence.source.end_char));
-      }
-
-      const contextData = await fetchApi<TurnContextData>(`/turns/${turnHash}/context?${params}`);
-
-      set({ contextData, contextLoading: false });
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
-      set({ contextLoading: false, error: errorMsg });
-    }
-  },
-
-  closeContext: () => {
-    set({
-      contextModalOpen: false,
-      contextSentence: null,
-      contextData: null,
-    });
-  },
-
-  // ============================================================================
   // Preview Actions
   // ============================================================================
 
@@ -581,9 +539,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   getResolutionStats: (): ResolutionStats => {
     const { prepared, extendedResolutions } = get();
-    if (!prepared) return { standard: 0, both: 0, edit: 0, unresolved: 0 };
+    if (!prepared) return { standard: 0, both: 0, unresolved: 0 };
 
-    const stats: ResolutionStats = { standard: 0, both: 0, edit: 0, unresolved: 0 };
+    const stats: ResolutionStats = { standard: 0, both: 0, unresolved: 0 };
 
     for (let i = 0; i < prepared.similarPairs.length; i++) {
       const pair = prepared.similarPairs[i];
@@ -593,8 +551,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         stats.standard++;
       } else if (extRes?.type === 'both') {
         stats.both++;
-      } else if (extRes?.type === 'edit' && extRes.customText?.trim()) {
-        stats.edit++;
       } else {
         stats.unresolved++;
       }
@@ -631,20 +587,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         sentences.push(pair.source);
       } else if (pair.resolution === 'target') {
         sentences.push(pair.target);
-      } else if (extRes) {
-        // Handle extended resolutions
-        if (extRes.type === 'both') {
-          // Include both sentences
-          sentences.push(pair.source);
-          sentences.push(pair.target);
-        } else if (extRes.type === 'edit' && extRes.customText?.trim()) {
-          // Include custom edited sentence
-          sentences.push({
-            id: `merged-${i}`,
-            text: extRes.customText.trim(),
-            source: pair.source.source, // Keep source reference from original
-          });
-        }
+      } else if (extRes?.type === 'both') {
+        // Include both sentences
+        sentences.push(pair.source);
+        sentences.push(pair.target);
       }
     }
 
@@ -669,7 +615,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // Extended Resolution Actions
   // ============================================================================
 
-  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both' | 'edit') => {
+  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => {
     const { prepared, extendedResolutions } = get();
     if (!prepared) return;
 
@@ -688,7 +634,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       delete newExtended[key];
       set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
     } else {
-      // Extended resolution - clear standard and set extended
+      // Extended resolution (both) - clear standard and set extended
       const newPrepared = { ...prepared };
       newPrepared.similarPairs = [...prepared.similarPairs];
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -697,44 +643,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         pairWithoutResolution as (typeof newPrepared.similarPairs)[number];
 
       const newExtended = { ...extendedResolutions };
-      if (resolution === 'both') {
-        newExtended[key] = { type: 'both' };
-      } else {
-        // 'edit' - preserve existing custom text if any
-        newExtended[key] = {
-          type: 'edit',
-          customText: extendedResolutions[key]?.customText || '',
-        };
-      }
+      newExtended[key] = { type: 'both' };
       set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
     }
-  },
-
-  setCustomText: (index: number, text: string) => {
-    const { extendedResolutions } = get();
-    const key = String(index);
-
-    const current = extendedResolutions[key];
-    if (!current || current.type !== 'edit') {
-      // Should only be called when resolution is 'edit'
-      // Auto-set to edit mode if not already (defensive programming)
-      set({
-        extendedResolutions: {
-          ...extendedResolutions,
-          [key]: { type: 'edit', customText: text },
-        },
-        isDirty: true,
-      });
-      return;
-    }
-
-    set({
-      extendedResolutions: {
-        ...extendedResolutions,
-        [key]: { ...current, customText: text },
-      },
-      isDirty: true,
-    });
   },
 
   fetchSourceContext: async (turnHash: string, sentence: Sentence) => {

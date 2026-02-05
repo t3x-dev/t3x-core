@@ -11,10 +11,11 @@
  * - Inline edit panel when Edit is selected
  */
 
+import { useRouter } from 'next/navigation';
+import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeSimilarPair } from '@/types/merge';
-import { ConflictEditPanel } from './ConflictEditPanel';
 import { ConflictHeader } from './ConflictHeader';
 import { ConflictResolutionButtons } from './ConflictResolutionButtons';
 import { ConflictSide } from './ConflictSide';
@@ -33,7 +34,8 @@ export function MergeConflictView({
   sourceBranch,
   targetBranch,
 }: MergeConflictViewProps) {
-  const { extendedResolutions, resolveConflict, setCustomText, getEffectiveResolution } =
+  const router = useRouter();
+  const { extendedResolutions, resolveConflict, getEffectiveResolution, projectId } =
     useMergeWorkspaceStore();
 
   // Get effective resolution (standard or extended)
@@ -41,8 +43,15 @@ export function MergeConflictView({
   const extRes = extendedResolutions[String(index)];
   const resolved = isConflictResolved(pair, extRes);
 
-  // Get extended resolution data for edit mode
-  const customText = extRes?.type === 'edit' ? extRes.customText || '' : '';
+  // Handle jump to conversation
+  const handleJumpToConversation = useCallback(
+    (conversationId: string) => {
+      if (projectId) {
+        router.push(`/project/${projectId}/conversation/${conversationId}`);
+      }
+    },
+    [projectId, router]
+  );
 
   return (
     <div
@@ -75,13 +84,15 @@ export function MergeConflictView({
           side="source"
           sentence={pair.source}
           label={`Branch ${sourceBranch}`}
-          isSelected={effectiveResolution === 'source'}
+          isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
+          onJumpToConversation={handleJumpToConversation}
         />
         <ConflictSide
           side="target"
           sentence={pair.target}
           label={`Branch ${targetBranch}`}
-          isSelected={effectiveResolution === 'target'}
+          isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
+          onJumpToConversation={handleJumpToConversation}
         />
       </div>
 
@@ -92,16 +103,6 @@ export function MergeConflictView({
         sourceBranch={sourceBranch}
         targetBranch={targetBranch}
       />
-
-      {/* Edit panel (shown when Edit is selected) */}
-      {effectiveResolution === 'edit' && (
-        <ConflictEditPanel
-          text={customText}
-          onChange={(text) => setCustomText(index, text)}
-          sourceText={pair.source.text}
-          targetText={pair.target.text}
-        />
-      )}
     </div>
   );
 }
