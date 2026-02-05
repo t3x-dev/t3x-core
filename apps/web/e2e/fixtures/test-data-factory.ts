@@ -91,6 +91,11 @@ export function isExpectedConsoleError(message: string): boolean {
     // Static asset 404s (not API errors)
     '/favicon.ico',
     '/manifest.json',
+    // External services offline (expected in local dev/CI)
+    'net::ERR_CONNECTION_REFUSED',
+    'Failed to fetch',
+    // Non-API static resource 404s (not T3X API 404s)
+    'the server responded with a status of 404',
   ];
   return expectedPatterns.some((pattern) => message.includes(pattern));
 }

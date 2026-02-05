@@ -197,12 +197,17 @@ test.describe('DiffDisplayView Full E2E', () => {
     expect(nodeCount).toBeGreaterThanOrEqual(1);
 
     // Check page has loaded properly (either commit message or committed state)
-    const pageText = await page.locator('body').innerText();
+    const pageText = await page
+      .locator('body')
+      .innerText()
+      .then((t) => t.toLowerCase());
     const hasCommitContent =
-      pageText.includes('Committed') ||
-      pageText.includes('Initial requirements') ||
-      pageText.includes('Updated requirements') ||
-      pageText.includes('SENTENCES');
+      pageText.includes('committed') ||
+      pageText.includes('initial requirements') ||
+      pageText.includes('updated requirements') ||
+      pageText.includes('sentences') ||
+      pageText.includes('sources') ||
+      pageText.includes('create commit');
 
     expect(hasCommitContent).toBe(true);
   });

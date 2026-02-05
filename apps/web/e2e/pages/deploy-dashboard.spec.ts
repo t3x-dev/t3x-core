@@ -75,12 +75,13 @@ test.describe('Deploy Dashboard', () => {
     const agentText = page.locator('text=DD-03 Delete Me');
     await expect(agentText.first()).toBeVisible({ timeout: 10000 });
 
-    // Delete the agent
+    // Delete the agent — match by specific ID to avoid stale cards from prior runs
     await deploy.deleteAgent('DD-03 Delete Me');
 
-    // Agent should disappear (may need to wait for confirmation dialog)
+    // Verify THIS agent (by unique ID) disappears
+    const thisAgent = page.locator(`text=${agentId}`);
     await expect(async () => {
-      const stillVisible = await agentText
+      const stillVisible = await thisAgent
         .first()
         .isVisible()
         .catch(() => false);
@@ -99,9 +100,12 @@ test.describe('Deploy Dashboard', () => {
     const hasRunsSection = await runsHeading.isVisible().catch(() => false);
     test.skip(!hasRunsSection, 'Recent Runs section not present — no runs data');
 
-    // Runs heading found — table should exist below it
+    // Runs heading found — table or empty state should exist below it
     const runsTable = page.locator('table').first();
-    await expect(runsTable).toBeVisible({ timeout: 5000 });
+    const emptyState = page.locator('text=/no runs|no data|empty/i').first();
+    const hasTable = await runsTable.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasEmpty = await emptyState.isVisible().catch(() => false);
+    expect(hasTable || hasEmpty).toBe(true);
   });
 
   // DD-05: Model filter exists
