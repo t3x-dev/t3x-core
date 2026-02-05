@@ -86,10 +86,15 @@ test.describe('Run Detail Page', () => {
     if (hasAssertions) {
       await assertionsTab.first().click();
       // Assertions content should load
-      await page.waitForTimeout(1000);
+      const assertionContent = page
+        .locator('text=Assertion')
+        .or(page.locator('table'))
+        .or(page.locator('[class*="assertion"]'));
+      await expect(assertionContent.first()).toBeVisible({ timeout: 10000 });
     }
 
-    expect(true).toBe(true);
+    // At least one tab must be available for the test to be meaningful
+    expect(hasTrace || hasAssertions).toBe(true);
   });
 
   // RD-04: Score and metrics visible

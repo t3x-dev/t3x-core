@@ -92,18 +92,14 @@ test.describe('Agent Demo', () => {
       .or(page.locator('button').filter({ has: page.locator('svg') }));
     const starCount = await stars.count();
 
-    if (starCount >= 5) {
-      // Click the 4th star (4 out of 5 rating)
-      await stars.nth(3).click();
+    test.skip(starCount < 5, 'Star rating buttons not found');
 
-      // Feedback recorded indicator should appear
-      const feedback = page.locator('text=/feedback recorded|rated/i');
-      const hasFeedback = await feedback
-        .first()
-        .isVisible()
-        .catch(() => false);
-      expect(hasFeedback || true).toBe(true); // Star click itself validates
-    }
+    // Click the 4th star (4 out of 5 rating)
+    await stars.nth(3).click();
+
+    // Feedback recorded indicator should appear
+    const feedback = page.locator('text=/feedback recorded|rated|thank/i');
+    await expect(feedback.first()).toBeVisible({ timeout: 5000 });
   });
 
   // AD-04: Optimiser page loads with three columns
@@ -178,17 +174,18 @@ test.describe('Agent Demo', () => {
     const optimiseBtn = page.locator('button:has-text("Run Optimisation")').first();
     const hasBtn = await optimiseBtn.isVisible().catch(() => false);
 
-    if (hasBtn) {
-      // Button may be disabled if no feedback ratings exist
-      const isDisabled = await optimiseBtn.isDisabled();
-      if (isDisabled) {
-        // Should show requirement message
-        const requirement = page.locator('text=/rate at least/i');
-        await expect(requirement.first()).toBeVisible({ timeout: 5000 });
-      }
-    }
+    test.skip(!hasBtn, 'Run Optimisation button not present');
 
-    expect(true).toBe(true);
+    // Button may be disabled if no feedback ratings exist
+    const isDisabled = await optimiseBtn.isDisabled();
+    if (isDisabled) {
+      // Should show requirement message
+      const requirement = page.locator('text=/rate at least/i');
+      await expect(requirement.first()).toBeVisible({ timeout: 5000 });
+    } else {
+      // Button is enabled — ready for optimisation
+      await expect(optimiseBtn).toBeEnabled();
+    }
   });
 
   // AD-07: No unexpected console errors on chat page
@@ -199,13 +196,12 @@ test.describe('Agent Demo', () => {
     });
 
     await page.goto('/agent-demo/chat');
-    await page.waitForTimeout(3000);
 
-    const loaded = await page
-      .locator('textarea, text=Agent')
-      .first()
-      .isVisible()
-      .catch(() => false);
+    // Wait for page content to render instead of fixed timeout
+    const pageContent = page.locator('textarea, text=Agent').first();
+    await pageContent.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+
+    const loaded = await pageContent.isVisible().catch(() => false);
     test.skip(!loaded, 'Agent demo chat page not available');
 
     const unexpectedErrors = errors.filter((e) => !isExpectedConsoleError(e));

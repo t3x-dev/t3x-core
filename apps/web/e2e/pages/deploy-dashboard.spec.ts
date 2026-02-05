@@ -104,13 +104,15 @@ test.describe('Deploy Dashboard', () => {
       .isVisible()
       .catch(() => false);
 
-    // Runs table is optional — depends on whether runs exist
+    // Deploy page should show either runs section or agents section
+    const agentsHeading = page.locator('text=Deploy Agents').first();
+    const agentsVisible = await agentsHeading.isVisible().catch(() => false);
+    expect(hasRuns || agentsVisible).toBe(true);
+
     if (hasRuns) {
       const rowCount = await deploy.getRunsTableRows();
       expect(rowCount).toBeGreaterThanOrEqual(0);
     }
-
-    expect(true).toBe(true);
   });
 
   // DD-05: Model filter exists
@@ -120,13 +122,15 @@ test.describe('Deploy Dashboard', () => {
     await deploy.waitForLoad();
 
     const hasFilter = await deploy.hasModelFilter();
-    // Filter is only shown when runs exist
     if (hasFilter) {
+      // Filter is only shown when runs exist — verify it renders
       const filterElement = page.locator('text=All Models').first();
       await expect(filterElement).toBeVisible({ timeout: 5000 });
+    } else {
+      // No filter — page should still show agents section
+      const agentsHeading = page.locator('text=Deploy Agents').first();
+      await expect(agentsHeading).toBeVisible({ timeout: 5000 });
     }
-
-    expect(true).toBe(true);
   });
 
   // DD-06: Runner offline state shows warning
@@ -139,10 +143,11 @@ test.describe('Deploy Dashboard', () => {
     if (isOffline) {
       const warning = page.locator('text=Runner service is not connected');
       await expect(warning).toBeVisible({ timeout: 5000 });
+    } else {
+      // Runner is online — page should show agents section without warning
+      const agentsHeading = page.locator('text=Deploy Agents').first();
+      await expect(agentsHeading).toBeVisible({ timeout: 5000 });
     }
-
-    // Test passes regardless — runner may or may not be running
-    expect(true).toBe(true);
   });
 
   // DD-07: Page renders without unexpected errors

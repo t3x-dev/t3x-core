@@ -132,11 +132,12 @@ test.describe('Insights Page', () => {
 
     if (hasLoadMore) {
       await loadMoreBtn.click();
-      // More items should appear after clicking
-      await page.waitForTimeout(2000);
+      // Wait for new content to load after click
+      await page.waitForLoadState('networkidle');
     }
 
-    // Test passes regardless — pagination depends on data volume
-    expect(true).toBe(true);
+    // Verify commits from test data are visible on the page
+    const commitEntry = page.locator('text=/Pagination commit/').first();
+    await expect(commitEntry).toBeVisible({ timeout: 10000 });
   });
 });

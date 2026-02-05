@@ -62,7 +62,7 @@ test.describe('Canvas Workflow', () => {
     await expect(commitLabel.first()).toBeVisible({ timeout: 10000 });
 
     // Should show sentence count
-    const sentenceCount = page.locator('text=/\\d+ sentence/');
+    const sentenceCount = page.locator('text=/\\d+ sentences?/');
     await expect(sentenceCount.first()).toBeVisible({ timeout: 5000 });
   });
 

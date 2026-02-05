@@ -69,18 +69,12 @@ test.describe('Leaf Workflow', () => {
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
 
-    // At least one sentence from the source commit should appear
-    const firstSentence = page.locator(`text=${sentences[0].text}`).first();
-    const hasSentence = await firstSentence.isVisible().catch(() => false);
-
     // Source context section or sentence list should be present
-    if (!hasSentence) {
-      // Fallback: check for Source Context heading or Constraints heading
-      const sourceSection = page
-        .locator('text=Source Context')
-        .or(page.locator('text=Constraints'));
-      await expect(sourceSection.first()).toBeVisible({ timeout: 10000 });
-    }
+    const sourceSection = page
+      .locator('text=Source Context')
+      .or(page.locator('text=Constraints'))
+      .or(page.locator(`text=${sentences[0].text}`));
+    await expect(sourceSection.first()).toBeVisible({ timeout: 10000 });
   });
 
   // LW-03: Generate output (skip if no LLM key configured)
@@ -90,13 +84,17 @@ test.describe('Leaf Workflow', () => {
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
 
+    // Verify leaf page rendered with expected sections before checking Generate
+    const constraintsSection = page.locator('text=/Must Have|Constraints/i').first();
+    await expect(constraintsSection).toBeVisible({ timeout: 10000 });
+
     // Find generate button
     const generateBtn = page
       .locator('button:has-text("Generate")')
       .or(page.locator('button:has-text("Verify")'))
       .first();
     const hasGenerate = await generateBtn.isVisible().catch(() => false);
-    test.skip(!hasGenerate, 'Generate button not present');
+    test.skip(!hasGenerate, 'Generate button not present — LLM may not be configured');
 
     await generateBtn.click();
 
@@ -123,13 +121,17 @@ test.describe('Leaf Workflow', () => {
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
 
+    // Verify output section rendered before checking Validate
+    const outputSection = page.locator('text=Output').or(page.locator('pre')).first();
+    await expect(outputSection).toBeVisible({ timeout: 10000 });
+
     // Find re-validate button
     const validateBtn = page
       .locator('button:has-text("Validate")')
       .or(page.locator('button:has-text("Re-validate")'))
       .first();
     const hasValidate = await validateBtn.isVisible().catch(() => false);
-    test.skip(!hasValidate, 'Validate button not present');
+    test.skip(!hasValidate, 'Validate button not present — LLM may not be configured');
 
     await validateBtn.click();
 
@@ -151,6 +153,10 @@ test.describe('Leaf Workflow', () => {
 
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
+
+    // Verify output content rendered before checking Export
+    const outputContent = page.locator('pre, [class*="whitespace-pre"]').first();
+    await expect(outputContent).toBeVisible({ timeout: 10000 });
 
     // Look for export/download button
     const exportBtn = page
