@@ -93,7 +93,7 @@ test.describe('Error Scenarios', () => {
     for (const route of routes) {
       errors.length = 0;
       await page.goto(route);
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState('networkidle');
 
       const unexpectedErrors = errors.filter((e) => !isExpectedConsoleError(e));
       expect(

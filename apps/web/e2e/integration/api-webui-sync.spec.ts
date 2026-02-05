@@ -58,7 +58,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Reload and verify removal
     await page.reload();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
     const stillVisible = await projectEntry.isVisible().catch(() => false);
     expect(stillVisible).toBe(false);
   });
