@@ -130,10 +130,16 @@ test.describe('Pin & Context Management', () => {
     await expect(turnBadge.first()).toBeVisible({ timeout: 15000 });
 
     // Pin button or pinned indicator should be visible (we pinned this conversation)
+    // PinButton uses lucide-react icons (Pin/PinOff), may not have text
     const pinButton = page
       .locator('button:has-text("Pin")')
-      .or(page.locator('button[aria-label*="pin" i]'));
-    const pinnedIndicator = page.locator('text=/pinned/i').or(page.locator('[data-pinned]'));
+      .or(page.locator('button[aria-label*="pin" i]'))
+      .or(page.locator('button:has(svg.lucide-pin)'))
+      .or(page.locator('button:has(svg.lucide-pin-off)'));
+    const pinnedIndicator = page
+      .locator('text=/pinned/i')
+      .or(page.locator('[data-pinned]'))
+      .or(page.locator('button.text-amber-500'));
 
     const hasPinButton = await pinButton
       .first()
