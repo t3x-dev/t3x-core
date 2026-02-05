@@ -372,7 +372,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
         const conversation = await api.createConversation(
           state.projectId,
-          'New Unit',
+          'Untitled Unit',
           undefined, // no parent commit
           { x: snappedPosition.x, y: snappedPosition.y }
         );
@@ -383,7 +383,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           position: snappedPosition,
           data: {
             entryId: conversation.conversation_id.slice(0, 8),
-            title: conversation.title || 'New Unit',
+            title: conversation.title || 'Untitled Unit',
             summary: '0 turns',
             status: 'staging',
             timestamp: conversation.created_at,
@@ -577,7 +577,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         position: computeAttachedPosition(source, 'unit', conversationCommitOffset),
         data: {
           entryId: `UNIT-${getNodeCounter()}`,
-          title: `Unit from ${source.data.entryId}`,
+          title: 'Untitled Unit',
           summary: '',
           status: 'staging',
           timestamp: 'just now',
@@ -622,7 +622,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       }
 
       // Create conversation via API with parent_commit_hash
-      const title = `Unit from ${source.data.entryId}`;
+      const title = 'Untitled Unit';
       const parentCommitHash = source.data.commitHash || source.id;
       // Calculate position before API call so we can save it
       const position = computeAttachedPosition(source, 'unit', commitQuickOffset);
@@ -715,7 +715,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           position: computeAttachedPosition(source, 'unit', commitQuickOffset),
           data: {
             entryId: `UNIT-${getNodeCounter()}`,
-            title: `Unit from ${source.data.entryId}`,
+            title: 'Untitled Unit',
             summary: '',
             status: 'in progress',
             timestamp: 'just now',

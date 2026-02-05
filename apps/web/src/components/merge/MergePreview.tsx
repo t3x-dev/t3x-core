@@ -7,7 +7,7 @@
  * commit will contain.
  */
 
-import { ChevronDown, ChevronUp, Edit3, FileText, Layers } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileText, Layers } from 'lucide-react';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
 interface MergePreviewProps {
@@ -51,12 +51,6 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
                 {stats.both} both
               </span>
             )}
-            {stats.edit > 0 && (
-              <span className="text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
-                <Edit3 className="h-3 w-3" />
-                {stats.edit} edited
-              </span>
-            )}
             <span className="text-blue-600 dark:text-blue-400">
               {keptSourceCount + keptTargetCount} unique kept
             </span>
@@ -79,26 +73,14 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
               </p>
             ) : (
               <div className="space-y-2">
-                {sentences.map((sentence, idx) => {
-                  // Check if this is a merged/edited sentence
-                  const isMerged = sentence.id.startsWith('merged-');
-                  return (
-                    <div key={sentence.id || idx} className="flex items-start gap-3 text-sm">
-                      <span className="shrink-0 w-6 text-muted-foreground text-right">
-                        {idx + 1}.
-                      </span>
-                      <span className="flex-1">
-                        {isMerged && (
-                          <span className="inline-flex items-center gap-0.5 text-xs text-purple-600 dark:text-purple-400 mr-1.5">
-                            <Edit3 className="h-3 w-3" />
-                            edited:
-                          </span>
-                        )}
-                        {sentence.text}
-                      </span>
-                    </div>
-                  );
-                })}
+                {sentences.map((sentence, idx) => (
+                  <div key={sentence.id || idx} className="flex items-start gap-3 text-sm">
+                    <span className="shrink-0 w-6 text-muted-foreground text-right">
+                      {idx + 1}.
+                    </span>
+                    <span className="flex-1">{sentence.text}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

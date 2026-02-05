@@ -9,9 +9,9 @@ import {
   FileJson,
   FileText,
   Loader2,
+  MessageSquare,
   Play,
   Plus,
-  Settings,
   Trash2,
   X,
 } from 'lucide-react';
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Assertion, CommitV4, Constraint, Leaf, LeafConfig } from '@/lib/api';
+import type { Assertion, CommitV4, Constraint, Leaf } from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
@@ -40,8 +40,6 @@ import {
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { cn } from '@/lib/utils';
 import type { SentenceWithSource } from '@/types/sourceContext';
-
-const DEFAULT_KEYWORD_THRESHOLD = 0.6;
 
 function getGenerateErrorMessage(error: string): {
   title: string;
@@ -90,8 +88,7 @@ export default function LeafDetailPage() {
   } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
-  const [userInstruction, setUserInstruction] = useState<string>('');
-  const instructionDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [savingInstruction, setSavingInstruction] = useState(false);
 
   // Keep leafRef in sync with leaf state
   useEffect(() => {
@@ -125,15 +122,6 @@ export default function LeafDetailPage() {
     loadLeaf();
   }, [leafId]);
 
-  // Sync userInstruction from leaf config
-  useEffect(() => {
-    if (leaf?.config?.user_instruction && typeof leaf.config.user_instruction === 'string') {
-      setUserInstruction(leaf.config.user_instruction);
-    } else {
-      setUserInstruction('');
-    }
-  }, [leaf?.config?.user_instruction]);
-
   // Generate progress phase messages
   const generateProgressMessages = useMemo(
     () => [
@@ -159,53 +147,6 @@ export default function LeafDetailPage() {
       if (generateTimerRef.current) clearInterval(generateTimerRef.current);
     };
   }, [isGenerating, generateProgressMessages]);
-
-  // Cleanup instruction debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (instructionDebounceRef.current) {
-        clearTimeout(instructionDebounceRef.current);
-      }
-    };
-  }, []);
-
-  // Handle user instruction change with debounce
-  const handleUpdateUserInstruction = useCallback(
-    (value: string) => {
-      setUserInstruction(value);
-
-      if (instructionDebounceRef.current) {
-        clearTimeout(instructionDebounceRef.current);
-      }
-
-      instructionDebounceRef.current = setTimeout(async () => {
-        if (!leaf) return;
-        const cleanValue = value.trim() || undefined;
-        const serverConfig = { ...leaf.config };
-        if (cleanValue) {
-          serverConfig.user_instruction = cleanValue;
-        } else {
-          delete serverConfig.user_instruction;
-        }
-        try {
-          setSaving(true);
-          await updateLeaf(leafId, { config: serverConfig });
-          // Merge saved config into leaf state. Use the raw value (not trimmed)
-          // to prevent the sync effect from snapping the user's in-progress typing.
-          const localConfig = { ...serverConfig };
-          if (value) {
-            localConfig.user_instruction = value;
-          }
-          setLeaf((prev) => (prev ? { ...prev, config: localConfig } : prev));
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error('Failed to update instruction'));
-        } finally {
-          setSaving(false);
-        }
-      }, 500);
-    },
-    [leaf, leafId]
-  );
 
   // Load parent commit data for source content display
   useEffect(() => {
@@ -324,20 +265,28 @@ export default function LeafDetailPage() {
     [saving, handleUpdateConstraints]
   );
 
-  // Handle config update
-  const handleUpdateConfig = async (config: LeafConfig) => {
-    if (!leaf) return;
+  // Handle user instruction update
+  const handleUpdateUserInstruction = useCallback(
+    async (instruction: string) => {
+      const current = leafRef.current;
+      if (!current) return;
 
-    try {
-      setSaving(true);
-      const updated = await updateLeaf(leafId, { config });
-      setLeaf(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to update config'));
-    } finally {
-      setSaving(false);
-    }
-  };
+      setSavingInstruction(true);
+      try {
+        const updatedConfig = {
+          ...current.config,
+          user_instruction: instruction || undefined, // Remove if empty
+        };
+        const updated = await updateLeaf(leafId, { config: updatedConfig });
+        setLeaf(updated);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to update instruction'));
+      } finally {
+        setSavingInstruction(false);
+      }
+    },
+    [leafId]
+  );
 
   // Handle generate output (with auto-validation)
   const handleGenerate = async () => {
@@ -588,8 +537,6 @@ export default function LeafDetailPage() {
                 onAdd={handleAddConstraintFromSource}
                 onRemove={handleRemoveConstraint}
                 saving={saving}
-                userInstruction={userInstruction}
-                onUpdateUserInstruction={handleUpdateUserInstruction}
               />
             </section>
           )}
@@ -604,8 +551,14 @@ export default function LeafDetailPage() {
             />
           )}
 
-          {/* Config Section */}
-          <ConfigSection config={leaf.config} onUpdateConfig={handleUpdateConfig} saving={saving} />
+          {/* User Instruction Section */}
+          <UserInstructionSection
+            instruction={
+              typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : ''
+            }
+            onSave={handleUpdateUserInstruction}
+            saving={savingInstruction}
+          />
 
           {/* Output Section */}
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
@@ -615,103 +568,6 @@ export default function LeafDetailPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-// ============================================================================
-// Config Section
-// ============================================================================
-
-interface ConfigSectionProps {
-  config: LeafConfig;
-  onUpdateConfig: (config: LeafConfig) => Promise<void>;
-  saving: boolean;
-}
-
-function ConfigSection({ config, onUpdateConfig, saving }: ConfigSectionProps) {
-  const keywordThreshold =
-    typeof config.keyword_threshold === 'number'
-      ? config.keyword_threshold
-      : DEFAULT_KEYWORD_THRESHOLD;
-
-  const [localThreshold, setLocalThreshold] = useState(keywordThreshold);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sync local state when config changes from server
-  useEffect(() => {
-    const serverThreshold =
-      typeof config.keyword_threshold === 'number'
-        ? config.keyword_threshold
-        : DEFAULT_KEYWORD_THRESHOLD;
-    setLocalThreshold(serverThreshold);
-  }, [config.keyword_threshold]);
-
-  // Debounced update handler
-  const handleThresholdChange = useCallback(
-    (value: number) => {
-      setLocalThreshold(value);
-
-      // Clear existing timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-
-      // Set new debounced update
-      debounceTimerRef.current = setTimeout(() => {
-        onUpdateConfig({ ...config, keyword_threshold: value });
-      }, 300);
-    },
-    [config, onUpdateConfig]
-  );
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
-
-  return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b p-4">
-        <div className="flex items-center gap-2">
-          <Settings className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold">Config</h2>
-        </div>
-        {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
-      </div>
-      <div className="p-4 space-y-4">
-        {/* Keywords Threshold */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label
-              htmlFor="keyword-threshold"
-              className="text-sm font-medium text-muted-foreground"
-            >
-              Keywords Threshold
-            </label>
-            <span className="text-sm font-semibold tabular-nums">{localThreshold.toFixed(2)}</span>
-          </div>
-          <input
-            id="keyword-threshold"
-            type="range"
-            className="w-full h-2 rounded-lg bg-muted accent-primary cursor-pointer"
-            min="0"
-            max="1"
-            step="0.05"
-            value={localThreshold}
-            onChange={(e) => handleThresholdChange(parseFloat(e.target.value))}
-            disabled={saving}
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Less sensitive</span>
-            <span>More sensitive</span>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -892,6 +748,101 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
         <Trash2 className="h-3 w-3" />
       </Button>
     </div>
+  );
+}
+
+// ============================================================================
+// User Instruction Section
+// ============================================================================
+
+interface UserInstructionSectionProps {
+  instruction: string;
+  onSave: (instruction: string) => Promise<void>;
+  saving: boolean;
+}
+
+function UserInstructionSection({ instruction, onSave, saving }: UserInstructionSectionProps) {
+  const [value, setValue] = useState(instruction);
+  const [isEditing, setIsEditing] = useState(false);
+  const hasChanges = value !== instruction;
+
+  // Sync with prop when it changes externally
+  useEffect(() => {
+    setValue(instruction);
+  }, [instruction]);
+
+  const handleSave = async () => {
+    await onSave(value);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setValue(instruction);
+    setIsEditing(false);
+  };
+
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Generation Instructions</h2>
+        </div>
+        {!isEditing && instruction && (
+          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} disabled={saving}>
+            Edit
+          </Button>
+        )}
+      </div>
+      <div className="p-4">
+        {isEditing || !instruction ? (
+          <div className="space-y-3">
+            <textarea
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[100px] resize-y"
+              placeholder="Enter your requirements for the generated output...&#10;&#10;Example:&#10;- Use formal tone&#10;- Keep it concise (under 200 words)&#10;- Include specific examples"
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (!isEditing) setIsEditing(true);
+              }}
+              disabled={saving}
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                These instructions guide the LLM on style, format, and preferences. Constraints
+                above define hard rules.
+              </p>
+              <div className="flex items-center gap-2">
+                {(isEditing || hasChanges) && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={handleCancel} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving || !hasChanges}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save'
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm cursor-pointer hover:bg-muted/70 transition-colors"
+            onClick={() => setIsEditing(true)}
+          >
+            {instruction}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -62,20 +62,28 @@ export function DiffSentenceLine({
         <div className={`flex-1 min-w-0 break-words whitespace-pre-wrap ${styles.text}`}>
           {wordDiff && wordDiff.length > 0 ? <WordDiffDisplay segments={wordDiff} /> : text}
         </div>
-        {hasSource && onSourceClick && (
-          <button
-            type="button"
-            onClick={onSourceClick}
-            className={`shrink-0 p-1 transition-colors ${
-              expanded
-                ? 'text-primary bg-primary/10 rounded'
-                : 'text-muted-foreground hover:text-primary'
-            }`}
-            title={expanded ? 'Collapse source context' : 'View source context'}
-          >
-            <MapPin className="h-3.5 w-3.5" />
-          </button>
-        )}
+        {/* Source Trace Button - always shown, disabled when no source */}
+        <button
+          type="button"
+          onClick={hasSource && onSourceClick ? onSourceClick : undefined}
+          disabled={!hasSource}
+          className={`shrink-0 p-1 rounded transition-colors ${
+            hasSource
+              ? expanded
+                ? 'text-primary bg-primary/10'
+                : 'text-muted-foreground hover:text-primary hover:bg-muted/50'
+              : 'text-muted-foreground/30 cursor-not-allowed'
+          }`}
+          title={
+            hasSource
+              ? expanded
+                ? 'Collapse source context'
+                : 'View source context'
+              : 'Source context not available'
+          }
+        >
+          <MapPin className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Inline source context */}
