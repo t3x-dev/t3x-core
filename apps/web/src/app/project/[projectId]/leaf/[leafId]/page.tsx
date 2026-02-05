@@ -9,6 +9,7 @@ import {
   FileJson,
   FileText,
   Loader2,
+  MessageSquare,
   Play,
   Plus,
   Trash2,
@@ -87,6 +88,7 @@ export default function LeafDetailPage() {
   } | null>(null);
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
+  const [savingInstruction, setSavingInstruction] = useState(false);
 
   // Keep leafRef in sync with leaf state
   useEffect(() => {
@@ -261,6 +263,29 @@ export default function LeafDetailPage() {
       handleUpdateConstraints(updatedConstraints, optimisticLeaf);
     },
     [saving, handleUpdateConstraints]
+  );
+
+  // Handle user instruction update
+  const handleUpdateUserInstruction = useCallback(
+    async (instruction: string) => {
+      const current = leafRef.current;
+      if (!current) return;
+
+      setSavingInstruction(true);
+      try {
+        const updatedConfig = {
+          ...current.config,
+          user_instruction: instruction || undefined, // Remove if empty
+        };
+        const updated = await updateLeaf(leafId, { config: updatedConfig });
+        setLeaf(updated);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to update instruction'));
+      } finally {
+        setSavingInstruction(false);
+      }
+    },
+    [leafId]
   );
 
   // Handle generate output (with auto-validation)
@@ -526,6 +551,15 @@ export default function LeafDetailPage() {
             />
           )}
 
+          {/* User Instruction Section */}
+          <UserInstructionSection
+            instruction={
+              typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : ''
+            }
+            onSave={handleUpdateUserInstruction}
+            saving={savingInstruction}
+          />
+
           {/* Output Section */}
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
 
@@ -714,6 +748,101 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
         <Trash2 className="h-3 w-3" />
       </Button>
     </div>
+  );
+}
+
+// ============================================================================
+// User Instruction Section
+// ============================================================================
+
+interface UserInstructionSectionProps {
+  instruction: string;
+  onSave: (instruction: string) => Promise<void>;
+  saving: boolean;
+}
+
+function UserInstructionSection({ instruction, onSave, saving }: UserInstructionSectionProps) {
+  const [value, setValue] = useState(instruction);
+  const [isEditing, setIsEditing] = useState(false);
+  const hasChanges = value !== instruction;
+
+  // Sync with prop when it changes externally
+  useEffect(() => {
+    setValue(instruction);
+  }, [instruction]);
+
+  const handleSave = async () => {
+    await onSave(value);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setValue(instruction);
+    setIsEditing(false);
+  };
+
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Generation Instructions</h2>
+        </div>
+        {!isEditing && instruction && (
+          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} disabled={saving}>
+            Edit
+          </Button>
+        )}
+      </div>
+      <div className="p-4">
+        {isEditing || !instruction ? (
+          <div className="space-y-3">
+            <textarea
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[100px] resize-y"
+              placeholder="Enter your requirements for the generated output...&#10;&#10;Example:&#10;- Use formal tone&#10;- Keep it concise (under 200 words)&#10;- Include specific examples"
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (!isEditing) setIsEditing(true);
+              }}
+              disabled={saving}
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                These instructions guide the LLM on style, format, and preferences. Constraints
+                above define hard rules.
+              </p>
+              <div className="flex items-center gap-2">
+                {(isEditing || hasChanges) && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={handleCancel} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving || !hasChanges}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save'
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm cursor-pointer hover:bg-muted/70 transition-colors"
+            onClick={() => setIsEditing(true)}
+          >
+            {instruction}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
