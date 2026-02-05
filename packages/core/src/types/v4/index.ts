@@ -221,14 +221,12 @@ export interface Assertion {
  * Single source of truth - used by both TypeScript types and Zod schemas.
  */
 export const LEAF_TYPES = [
-  'deploy_agent',
   'tweet',
   'weibo',
   'wechat',
   'email',
   'article',
   'slack',
-  'eval',
 ] as const;
 
 export type LeafType = (typeof LEAF_TYPES)[number];
