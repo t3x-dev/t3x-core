@@ -1,12 +1,11 @@
 'use client';
 
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import type { Sentence, WordDiffSegment } from '@/types/merge';
-import { DiffSectionHeader } from './DiffSectionHeader';
 import { DiffSentenceLine } from './DiffSentenceLine';
 import { DiffSourceContextModal } from './DiffSourceContextModal';
 
@@ -35,6 +34,16 @@ export interface DiffSideBySideHandle {
   jumpToSection: (section: string) => void;
 }
 
+/** Unified line for Git-like display */
+interface UnifiedLine {
+  type: 'context' | 'modified' | 'removed' | 'added' | 'collapsed';
+  baseIndex?: number;
+  baseSentence?: CommitV4Sentence;
+  targetSentence?: CommitV4Sentence;
+  wordDiff?: WordDiffSegment[];
+  collapsedCount?: number;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -44,61 +53,203 @@ function toMergeSentence(s: CommitV4Sentence): Sentence {
     id: s.id,
     text: s.text,
     confidence: s.confidence,
-    source: {
-      turn_hash: s.source_ref?.turn_hash,
-      start_char: s.source_ref?.start_char,
-      end_char: s.source_ref?.end_char,
-    },
+    // Only create source object if source_ref exists with turn_hash
+    source: s.source_ref?.turn_hash
+      ? {
+          turn_hash: s.source_ref.turn_hash,
+          start_char: s.source_ref.start_char,
+          end_char: s.source_ref.end_char,
+        }
+      : undefined,
   };
 }
 
-function buildSentenceMap(sentences: CommitV4Sentence[]): Map<string, CommitV4Sentence> {
-  const map = new Map<string, CommitV4Sentence>();
-  for (const s of sentences) {
-    map.set(s.id, s);
+/** Number of context lines to show before/after changes */
+const CONTEXT_LINES = 2;
+
+/**
+ * Build unified lines in position order with context folding
+ */
+function buildUnifiedLines(
+  baseSentences: CommitV4Sentence[],
+  targetSentences: CommitV4Sentence[],
+  segmentDiffs: SegmentDiffItem[]
+): UnifiedLine[] {
+  // Step 1: Build lookup tables
+  const diffByBaseId = new Map<string, SegmentDiffItem>();
+  const addedItems: SegmentDiffItem[] = [];
+
+  for (const diff of segmentDiffs) {
+    if (diff.diffType === 'added') {
+      addedItems.push(diff);
+    } else {
+      diffByBaseId.set(diff.segmentId, diff);
+    }
   }
-  return map;
+
+  const targetMap = new Map(targetSentences.map((s) => [s.id, s]));
+
+  // Step 2: Build raw lines in baseSentences order
+  const rawLines: UnifiedLine[] = [];
+
+  for (let i = 0; i < baseSentences.length; i++) {
+    const baseSentence = baseSentences[i];
+    const diff = diffByBaseId.get(baseSentence.id);
+
+    if (!diff || diff.diffType === 'same') {
+      // Unchanged line
+      rawLines.push({
+        type: 'context',
+        baseIndex: i,
+        baseSentence,
+        targetSentence: baseSentence,
+      });
+    } else if (diff.diffType === 'modified') {
+      rawLines.push({
+        type: 'modified',
+        baseIndex: i,
+        baseSentence,
+        targetSentence: diff.matchedSegmentId ? targetMap.get(diff.matchedSegmentId) : undefined,
+        wordDiff: diff.wordDiff,
+      });
+    } else if (diff.diffType === 'removed') {
+      rawLines.push({
+        type: 'removed',
+        baseIndex: i,
+        baseSentence,
+      });
+    }
+  }
+
+  // Step 3: Add target-only sentences at the end
+  for (const added of addedItems) {
+    const targetSentence = targetMap.get(added.segmentId);
+    if (targetSentence) {
+      rawLines.push({
+        type: 'added',
+        targetSentence,
+      });
+    }
+  }
+
+  // Step 4: Mark which lines to show (changes + N lines of context)
+  const showLine = new Array(rawLines.length).fill(false);
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (line.type !== 'context') {
+      // Show the change itself
+      showLine[i] = true;
+      // Show N lines before and after
+      for (
+        let j = Math.max(0, i - CONTEXT_LINES);
+        j <= Math.min(rawLines.length - 1, i + CONTEXT_LINES);
+        j++
+      ) {
+        showLine[j] = true;
+      }
+    }
+  }
+
+  // Step 5: Build final lines with collapsed sections
+  const finalLines: UnifiedLine[] = [];
+  let collapsedCount = 0;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    if (showLine[i]) {
+      if (collapsedCount > 0) {
+        finalLines.push({ type: 'collapsed', collapsedCount });
+        collapsedCount = 0;
+      }
+      finalLines.push(rawLines[i]);
+    } else {
+      collapsedCount++;
+    }
+  }
+
+  if (collapsedCount > 0) {
+    finalLines.push({ type: 'collapsed', collapsedCount });
+  }
+
+  return finalLines;
 }
 
 // ============================================================================
-// Component
+// Sub-components
+// ============================================================================
+
+interface CollapsedRowProps {
+  count: number;
+  onExpand: () => void;
+}
+
+function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      className="w-full grid grid-cols-2 divide-x bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+    >
+      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+        <ChevronRight className="h-3 w-3" />
+        <span>··· {count} unchanged ···</span>
+      </div>
+      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+        <ChevronRight className="h-3 w-3" />
+        <span>··· {count} unchanged ···</span>
+      </div>
+    </button>
+  );
+}
+
+// ============================================================================
+// Main Component
 // ============================================================================
 
 export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySideProps>(
-  function DiffSideBySide({ segmentDiffs, baseSentences, targetSentences, onSourceClick }, ref) {
-    const identicalRef = useRef<HTMLDivElement>(null);
-    const modifiedRef = useRef<HTMLDivElement>(null);
-    const removedRef = useRef<HTMLDivElement>(null);
-    const addedRef = useRef<HTMLDivElement>(null);
+  function DiffSideBySide(
+    { segmentDiffs, baseSentences, targetSentences, onSourceClick: _onSourceClick },
+    ref
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const baseMap = useMemo(() => buildSentenceMap(baseSentences), [baseSentences]);
-    const targetMap = useMemo(() => buildSentenceMap(targetSentences), [targetSentences]);
+    // Build unified lines
+    const unifiedLines = useMemo(
+      () => buildUnifiedLines(baseSentences, targetSentences, segmentDiffs),
+      [baseSentences, targetSentences, segmentDiffs]
+    );
 
-    // Categorize
-    const identical = useMemo(
-      () => segmentDiffs.filter((s) => s.diffType === 'same'),
-      [segmentDiffs]
-    );
-    const modified = useMemo(
-      () => segmentDiffs.filter((s) => s.diffType === 'modified'),
-      [segmentDiffs]
-    );
-    const removed = useMemo(
-      () => segmentDiffs.filter((s) => s.diffType === 'removed'),
-      [segmentDiffs]
-    );
-    const added = useMemo(() => segmentDiffs.filter((s) => s.diffType === 'added'), [segmentDiffs]);
+    // Track expanded collapsed sections
+    const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
 
-    // Jump to section
+    const toggleSection = useCallback((index: number) => {
+      setExpandedSections((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+        return next;
+      });
+    }, []);
+
+    // Jump to section (for stats bar)
     useImperativeHandle(ref, () => ({
       jumpToSection: (section: string) => {
-        const refMap: Record<string, React.RefObject<HTMLDivElement | null>> = {
-          identical: identicalRef,
-          modified: modifiedRef,
-          removed: removedRef,
-          added: addedRef,
-        };
-        refMap[section]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Find first line of the requested type
+        const targetType =
+          section === 'identical' ? 'context' : section === 'added' ? 'added' : section;
+        const index = unifiedLines.findIndex(
+          (line) => line.type === targetType || (section === 'identical' && line.type === 'context')
+        );
+        if (index >= 0 && containerRef.current) {
+          const rows = containerRef.current.querySelectorAll('[data-line-index]');
+          const targetRow = Array.from(rows).find(
+            (r) => r.getAttribute('data-line-index') === String(index)
+          );
+          targetRow?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       },
     }));
 
@@ -107,24 +258,13 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
     const [inlineContextLoading, setInlineContextLoading] = useState(false);
 
-    // Modal state (for "Expand" button)
+    // Modal state
     const [modalOpen, setModalOpen] = useState(false);
     const [modalSentence, setModalSentence] = useState<Sentence | null>(null);
     const [modalData, setModalData] = useState<TurnContextData | null>(null);
 
-    const hasBaseSource = useCallback(
-      (segmentId: string) => !!baseMap.get(segmentId)?.source_ref?.turn_hash,
-      [baseMap]
-    );
-    const hasTargetSource = useCallback(
-      (segmentId: string) => !!targetMap.get(segmentId)?.source_ref?.turn_hash,
-      [targetMap]
-    );
-
-    // Toggle inline context for a segment
     const handleSourceToggle = useCallback(
       async (segmentId: string, sentence: CommitV4Sentence) => {
-        // Toggle off
         if (expandedSegmentId === segmentId) {
           setExpandedSegmentId(null);
           setInlineContextData(null);
@@ -155,7 +295,6 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [expandedSegmentId]
     );
 
-    // Open modal from inline "Expand" button
     const handleExpandModal = useCallback(() => {
       setModalData(inlineContextData);
       setModalOpen(true);
@@ -167,15 +306,102 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       setModalData(null);
     }, []);
 
-    const invertWordDiff = (wordDiff: WordDiffSegment[]): WordDiffSegment[] =>
-      wordDiff.map((seg) => {
-        if (seg.type === 'added') return { type: 'removed' as const, text: seg.text };
-        if (seg.type === 'removed') return { type: 'added' as const, text: seg.text };
-        return seg;
-      });
+    // Render a unified line row
+    const renderLine = (line: UnifiedLine, index: number) => {
+      if (line.type === 'collapsed') {
+        if (expandedSections.has(index)) {
+          // When expanded, we need to show the actual collapsed content
+          // For now, just show the collapse button differently
+          return (
+            <button
+              key={`collapsed-${index}`}
+              type="button"
+              onClick={() => toggleSection(index)}
+              className="w-full grid grid-cols-2 divide-x bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+              data-line-index={index}
+            >
+              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+                <ChevronDown className="h-3 w-3" />
+                <span>··· {line.collapsedCount} unchanged (click to collapse) ···</span>
+              </div>
+              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+                <ChevronDown className="h-3 w-3" />
+                <span>··· {line.collapsedCount} unchanged ···</span>
+              </div>
+            </button>
+          );
+        }
+        return (
+          <CollapsedRow
+            key={`collapsed-${index}`}
+            count={line.collapsedCount || 0}
+            onExpand={() => toggleSection(index)}
+          />
+        );
+      }
+
+      const baseId = line.baseSentence?.id;
+      const targetId = line.targetSentence?.id;
+
+      return (
+        <div key={`line-${index}-${baseId || targetId}`} data-line-index={index}>
+          <div className="grid grid-cols-2 divide-x">
+            {/* Left (Base) side */}
+            {line.type === 'added' ? (
+              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+            ) : (
+              <DiffSentenceLine
+                text={line.baseSentence?.text || ''}
+                type={line.type === 'context' ? 'context' : 'removed'}
+                wordDiff={
+                  line.type === 'modified'
+                    ? line.wordDiff?.filter((seg) => seg.type !== 'added')
+                    : undefined
+                }
+                hasSource={!!line.baseSentence?.source_ref?.turn_hash}
+                onSourceClick={() => {
+                  if (line.baseSentence) {
+                    handleSourceToggle(line.baseSentence.id, line.baseSentence);
+                  }
+                }}
+                expanded={expandedSegmentId === baseId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onExpandModal={handleExpandModal}
+              />
+            )}
+
+            {/* Right (Target) side */}
+            {line.type === 'removed' ? (
+              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+            ) : (
+              <DiffSentenceLine
+                text={line.targetSentence?.text || ''}
+                type={line.type === 'context' ? 'context' : 'added'}
+                wordDiff={
+                  line.type === 'modified'
+                    ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
+                    : undefined
+                }
+                hasSource={!!line.targetSentence?.source_ref?.turn_hash}
+                onSourceClick={() => {
+                  if (line.targetSentence) {
+                    handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence);
+                  }
+                }}
+                expanded={expandedSegmentId === `target-${targetId}`}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onExpandModal={handleExpandModal}
+              />
+            )}
+          </div>
+        </div>
+      );
+    };
 
     return (
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" ref={containerRef}>
         {/* Column Headers */}
         <div className="grid grid-cols-2 divide-x border-b bg-muted/20 sticky top-0 z-10">
           <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -186,151 +412,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           </div>
         </div>
 
-        {/* Identical */}
-        <div ref={identicalRef}>
-          <DiffSectionHeader
-            title="Identical"
-            count={identical.length}
-            variant="identical"
-            defaultCollapsed
-          >
-            <div className="divide-y">
-              {identical.map((s) => (
-                <div key={s.segmentId}>
-                  <div className="grid grid-cols-2 divide-x">
-                    <DiffSentenceLine
-                      text={s.text}
-                      type="context"
-                      hasSource={hasBaseSource(s.segmentId)}
-                      onSourceClick={() => {
-                        const sentence = baseMap.get(s.segmentId);
-                        if (sentence) handleSourceToggle(s.segmentId, sentence);
-                      }}
-                      expanded={expandedSegmentId === s.segmentId}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                    <DiffSentenceLine
-                      text={s.text}
-                      type="context"
-                      hasSource={hasTargetSource(s.segmentId)}
-                      onSourceClick={() => {
-                        const sentence = targetMap.get(s.segmentId);
-                        if (sentence) handleSourceToggle(`target-${s.segmentId}`, sentence);
-                      }}
-                      expanded={expandedSegmentId === `target-${s.segmentId}`}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DiffSectionHeader>
-        </div>
-
-        {/* Modified */}
-        <div ref={modifiedRef}>
-          <DiffSectionHeader title="Modified" count={modified.length} variant="modified">
-            <div className="divide-y">
-              {modified.map((s) => (
-                <div key={s.segmentId}>
-                  <div className="grid grid-cols-2 divide-x">
-                    <DiffSentenceLine
-                      text={s.text}
-                      type="removed"
-                      wordDiff={s.wordDiff ? invertWordDiff(s.wordDiff) : undefined}
-                      hasSource={hasBaseSource(s.segmentId)}
-                      onSourceClick={() => {
-                        const sentence = baseMap.get(s.segmentId);
-                        if (sentence) handleSourceToggle(s.segmentId, sentence);
-                      }}
-                      expanded={expandedSegmentId === s.segmentId}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                    <DiffSentenceLine
-                      text={s.matchedText || ''}
-                      type="added"
-                      wordDiff={s.wordDiff}
-                      hasSource={s.matchedSegmentId ? hasTargetSource(s.matchedSegmentId) : false}
-                      onSourceClick={() => {
-                        if (s.matchedSegmentId) {
-                          const sentence = targetMap.get(s.matchedSegmentId);
-                          if (sentence)
-                            handleSourceToggle(`target-${s.matchedSegmentId}`, sentence);
-                        }
-                      }}
-                      expanded={expandedSegmentId === `target-${s.matchedSegmentId}`}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DiffSectionHeader>
-        </div>
-
-        {/* Removed */}
-        <div ref={removedRef}>
-          <DiffSectionHeader title="Removed" count={removed.length} variant="removed">
-            <div className="divide-y">
-              {removed.map((s) => (
-                <div key={s.segmentId}>
-                  <div className="grid grid-cols-2 divide-x">
-                    <DiffSentenceLine
-                      text={s.text}
-                      type="removed"
-                      hasSource={hasBaseSource(s.segmentId)}
-                      onSourceClick={() => {
-                        const sentence = baseMap.get(s.segmentId);
-                        if (sentence) handleSourceToggle(s.segmentId, sentence);
-                      }}
-                      expanded={expandedSegmentId === s.segmentId}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                    <div className="bg-muted/10 px-3 py-2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DiffSectionHeader>
-        </div>
-
-        {/* Added */}
-        <div ref={addedRef}>
-          <DiffSectionHeader title="Added" count={added.length} variant="added">
-            <div className="divide-y">
-              {added.map((s) => (
-                <div key={s.segmentId}>
-                  <div className="grid grid-cols-2 divide-x">
-                    <div className="bg-muted/10 px-3 py-2" />
-                    <DiffSentenceLine
-                      text={s.text}
-                      type="added"
-                      hasSource={hasTargetSource(s.segmentId)}
-                      onSourceClick={() => {
-                        const sentence = targetMap.get(s.segmentId);
-                        if (sentence) handleSourceToggle(`target-${s.segmentId}`, sentence);
-                      }}
-                      expanded={expandedSegmentId === `target-${s.segmentId}`}
-                      inlineContextData={inlineContextData}
-                      inlineContextLoading={inlineContextLoading}
-                      onExpandModal={handleExpandModal}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DiffSectionHeader>
-        </div>
+        {/* Unified diff lines */}
+        <div className="divide-y">{unifiedLines.map((line, i) => renderLine(line, i))}</div>
 
         {/* Empty state */}
         {segmentDiffs.length === 0 && (
@@ -341,7 +424,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           />
         )}
 
-        {/* Source Context Modal (for "Expand" button) */}
+        {/* Source Context Modal */}
         <DiffSourceContextModal
           open={modalOpen}
           onClose={closeModal}

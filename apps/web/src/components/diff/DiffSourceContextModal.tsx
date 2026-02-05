@@ -5,9 +5,15 @@
  *
  * Same UI as merge/SourceContextModal but driven by useSourceContext hook
  * instead of mergeWorkspaceStore.
+ *
+ * Features:
+ * - Shows conversation context around the source sentence
+ * - "Jump to conversation" button for quick navigation
  */
 
-import { Bot, Loader2, Settings, Terminal, User } from 'lucide-react';
+import { Bot, ExternalLink, Loader2, Settings, Terminal, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { Sentence, TurnContextData, TurnWithContext } from '@/types/merge';
 
@@ -84,6 +90,7 @@ interface DiffSourceContextModalProps {
   data: TurnContextData | null;
   loading: boolean;
   onClose: () => void;
+  projectId?: string;
 }
 
 export function DiffSourceContextModal({
@@ -92,17 +99,42 @@ export function DiffSourceContextModal({
   data,
   loading,
   onClose,
+  projectId,
 }: DiffSourceContextModalProps) {
+  const router = useRouter();
+
+  const handleJumpToConversation = () => {
+    if (data?.conversation_id && projectId) {
+      onClose();
+      router.push(`/project/${projectId}/conversation/${data.conversation_id}`);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Source Context</DialogTitle>
-          {data && (
-            <p className="text-sm text-muted-foreground">
-              Conversation: {data.conversation_title || data.conversation_id}
-            </p>
-          )}
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>Source Context</DialogTitle>
+              {data && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Conversation: {data.conversation_title || data.conversation_id}
+                </p>
+              )}
+            </div>
+            {data?.conversation_id && projectId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleJumpToConversation}
+                className="shrink-0"
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Jump to conversation
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto py-4">

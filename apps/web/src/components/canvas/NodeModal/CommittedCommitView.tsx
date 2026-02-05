@@ -73,9 +73,7 @@ export function CommittedCommitView({
   // Branch label
   const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main';
 
-  // Keywords and source excerpt from committed data
-  const commitMustHave = data.mustHave || [];
-  const commitMustntHave = data.mustntHave || [];
+  // Source excerpt from committed data
   const commitSourceExcerpt = data.sourceExcerpt || [];
   const commitFacets = data.facetSnapshot || [];
 
@@ -496,61 +494,14 @@ export function CommittedCommitView({
               onMouseDown={handleCommitRightDivider}
             />
 
-            {/* Right Sidebar - Constraints Summary */}
+            {/* Right Sidebar - History & Compare */}
             <aside
               className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50 dark:bg-gray-800"
               style={{ width: commitRightWidth }}
             >
-              <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                  Constraints
-                </h4>
-
-                <div className="mb-4">
-                  <h5 className="text-xs font-medium text-green-600 dark:text-green-400 mb-2">
-                    Must-have
-                  </h5>
-                  {commitMustHave.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {commitMustHave.map((w, i) => (
-                        <Badge
-                          key={i}
-                          className="text-[0.7rem] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-600"
-                        >
-                          {w}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-400 dark:text-gray-500">None</span>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <h5 className="text-xs font-medium text-red-600 dark:text-red-400 mb-2">
-                    Mustn&apos;t-have
-                  </h5>
-                  {commitMustntHave.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {commitMustntHave.map((w, i) => (
-                        <Badge
-                          key={i}
-                          className="text-[0.7rem] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-600"
-                        >
-                          {w}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-400 dark:text-gray-500">None</span>
-                  )}
-                </div>
-              </div>
-
               {/* History Section */}
               {data.commitV4 && data.commitHash && (
                 <>
-                  <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
                   <div className="mb-5">
                     <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                       <History size={14} />
@@ -569,6 +520,7 @@ export function CommittedCommitView({
                     commitHash={data.commitHash}
                     open={showHistoryPanel}
                     onClose={() => setShowHistoryPanel(false)}
+                    projectId={projectId}
                   />
                 </>
               )}
@@ -635,6 +587,7 @@ export function CommittedCommitView({
           baseCommitHash={data.commitHash}
           targetCommitHash={diffTargetCommit}
           diffData={diffRawData}
+          projectId={projectId}
         />
       )}
     </>

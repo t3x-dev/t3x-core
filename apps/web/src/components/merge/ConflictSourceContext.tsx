@@ -28,6 +28,8 @@ interface ConflictSourceContextProps {
   contextData: TurnContextData | null;
   loading: boolean;
   error?: string;
+  /** Callback when "Jump to conversation" is clicked */
+  onJumpToConversation?: (conversationId: string) => void;
 }
 
 export function ConflictSourceContext({
@@ -38,6 +40,7 @@ export function ConflictSourceContext({
   contextData,
   loading,
   error,
+  onJumpToConversation,
 }: ConflictSourceContextProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -91,6 +94,18 @@ export function ConflictSourceContext({
         <span>{contextData.conversation_title || 'Conversation'}</span>
         <span className="text-muted-foreground/50">|</span>
         <span className="font-medium">{roleLabel}</span>
+        {onJumpToConversation && contextData.conversation_id && (
+          <>
+            <span className="text-muted-foreground/50">|</span>
+            <button
+              type="button"
+              onClick={() => onJumpToConversation(contextData.conversation_id)}
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Jump to conversation
+            </button>
+          </>
+        )}
       </div>
 
       {/* Truncated content with highlight */}

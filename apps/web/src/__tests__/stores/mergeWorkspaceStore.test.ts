@@ -117,16 +117,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(state.extendedResolutions['0']).toEqual({ type: 'both' });
     });
 
-    it('should set extended resolution (edit)', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-
-      const state = useMergeWorkspaceStore.getState();
-      expect(state.prepared?.similarPairs[0].resolution).toBeUndefined();
-      expect(state.extendedResolutions['0']).toEqual({ type: 'edit', customText: '' });
-    });
-
     it('should clear extended resolution when switching to standard', () => {
       setupStore();
 
@@ -142,45 +132,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
 
-    it('should preserve custom text when already in edit mode', () => {
-      setupStore();
-
-      // Set edit mode and add custom text
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(0, 'My merged text');
-
-      // Re-select edit mode (should preserve text)
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-
-      expect(useMergeWorkspaceStore.getState().extendedResolutions['0']).toEqual({
-        type: 'edit',
-        customText: 'My merged text',
-      });
-    });
-  });
-
-  describe('setCustomText', () => {
-    it('should update custom text for edit resolution', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(0, 'Budget is $3250 per month.');
-
-      expect(useMergeWorkspaceStore.getState().extendedResolutions['0']).toEqual({
-        type: 'edit',
-        customText: 'Budget is $3250 per month.',
-      });
-    });
-
-    it('should mark store as dirty', () => {
-      setupStore();
-      useMergeWorkspaceStore.setState({ isDirty: false });
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(0, 'Test text');
-
-      expect(useMergeWorkspaceStore.getState().isDirty).toBe(true);
-    });
   });
 
   describe('getUnresolvedCount', () => {
@@ -207,25 +158,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(0);
     });
 
-    it('should count "edit" with text as resolved', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(0, 'Merged text');
-      useMergeWorkspaceStore.getState().resolveConflict(1, 'source');
-
-      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(0);
-    });
-
-    it('should NOT count "edit" without text as resolved', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      // No custom text set
-      useMergeWorkspaceStore.getState().resolveConflict(1, 'source');
-
-      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(1); // First one still unresolved
-    });
   });
 
   describe('canCommit', () => {
@@ -247,24 +179,9 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       });
 
       useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
-      useMergeWorkspaceStore.getState().resolveConflict(1, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(1, 'Custom merged text');
+      useMergeWorkspaceStore.getState().resolveConflict(1, 'target');
 
       expect(useMergeWorkspaceStore.getState().canCommit()).toBe(true);
-    });
-
-    it('should return false when edit resolution has empty text', () => {
-      useMergeWorkspaceStore.setState({
-        prepared: createMockPrepared(),
-        status: 'pending',
-        message: 'Merge commit',
-      });
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
-      useMergeWorkspaceStore.getState().resolveConflict(1, 'edit');
-      // No custom text
-
-      expect(useMergeWorkspaceStore.getState().canCommit()).toBe(false);
     });
 
     it('should return false when message is empty', () => {
@@ -312,32 +229,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(sentences.some((s) => s.id === 'target-1')).toBe(true);
     });
 
-    it('should include custom text for "edit" resolution', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(0, 'Budget is $3250 per month.');
-
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
-
-      const mergedSentence = sentences.find((s) => s.id === 'merged-0');
-      expect(mergedSentence).toBeDefined();
-      expect(mergedSentence?.text).toBe('Budget is $3250 per month.');
-    });
-
-    it('should NOT include sentence for "edit" without text', () => {
-      setupStore();
-
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'edit');
-      // No custom text
-
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
-
-      expect(sentences.some((s) => s.id === 'merged-0')).toBe(false);
-      expect(sentences.some((s) => s.id === 'source-1')).toBe(false);
-      expect(sentences.some((s) => s.id === 'target-1')).toBe(false);
-    });
-
     it('should include kept source-only and target-only sentences', () => {
       setupStore();
 
@@ -377,8 +268,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       setupStore();
 
       useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
-      useMergeWorkspaceStore.getState().resolveConflict(1, 'edit');
-      useMergeWorkspaceStore.getState().setCustomText(1, 'Test');
+      useMergeWorkspaceStore.getState().resolveConflict(1, 'both');
 
       expect(Object.keys(useMergeWorkspaceStore.getState().extendedResolutions).length).toBe(2);
 
