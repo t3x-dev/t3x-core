@@ -1,732 +1,728 @@
-# T3X 产品演示脚本（投资人/老板版）
+# T3X Product Demo Script (Investor/Executive Version)
 
-> 目标受众：非技术背景决策者
-> 演示时长：15-20 分钟
-> 核心信息：T3X 让企业 AI 的知识管理像 Git 管理代码一样——可追溯、可管控、可协作
-
----
-
-## 一、开场：为什么需要 T3X？
-
-### 演示前准备
-- 打开 WebUI (http://localhost:3000)
-- 确保有演示数据（项目、对话、Commit、Leaf）
-
-### 话术
-
-> "在开始演示之前，我想先问大家一个问题：
->
-> **你们公司的客服机器人，有没有说错过话？**
->
-> 比如，把 30 天退货说成 60 天？把免费配送的门槛说错？或者不小心泄露了不该说的信息？
->
-> 这种事情在企业里非常常见。根据我们的调研，**超过 70% 的企业在使用 AI 客服后，都遇到过 AI '乱说话' 的问题**。
->
-> 为什么会这样？因为现在的 AI 系统有三个根本性的问题："
-
-**【停顿，伸出三根手指】**
-
-> "**第一，知识不可追溯。**
->
-> AI 说的话从哪来的？没人知道。可能是训练数据里的、可能是网上抓的、可能是它自己编的。你没法审计、没法追责。
->
-> **第二，输出不可管控。**
->
-> 你可以告诉 AI '请记住我们的退货政策是 30 天'，但 AI 只是'尽量记住'。它可能记住，也可能忘记，也可能记错。你没有任何手段**强制**它必须说什么、不能说什么。
->
-> **第三，迭代不可持续。**
->
-> AI 说错话了，然后呢？改一下 prompt？改完之后怎么验证？新版本会不会引入新问题？谁批准的这次修改？没有流程、没有记录、没有回滚能力。
->
-> **T3X 就是为了解决这三个问题而生的。**
->
-> 我们管它叫 'Git for Meaning'——**语义版本控制系统**。
->
-> 就像程序员用 Git 管理代码一样，T3X 让企业管理 AI 的知识。每一条知识都有来源、有版本、有审批流程。
->
-> 接下来我用实际演示给大家看看它是怎么工作的。"
+> Target audience: Non-technical decision makers
+> Demo duration: 15-20 minutes
+> Core message: T3X makes enterprise AI knowledge management like Git manages code — traceable, controllable, collaborative
 
 ---
 
-## 二、演示路线图
+## Part 1: Opening — Why T3X?
+
+### Pre-demo Setup
+- Open WebUI (http://localhost:3000)
+- Ensure demo data exists (projects, conversations, commits, leaves)
+
+### Script
+
+> "Before we begin the demo, I'd like to ask everyone a question:
+>
+> **Has your company's AI chatbot ever said something wrong?**
+>
+> For example, saying 30-day returns are 60-day? Getting the free shipping threshold wrong? Or accidentally disclosing information it shouldn't?
+>
+> This happens very commonly in enterprises. According to our research, **over 70% of companies using AI customer service have encountered AI 'saying the wrong thing'**.
+>
+> Why does this happen? Because current AI systems have three fundamental problems:"
+
+**[Pause, hold up three fingers]**
+
+> "**First, knowledge is untraceable.**
+>
+> Where does what AI says come from? Nobody knows. It could be from training data, scraped from the internet, or made up. You can't audit it, you can't assign responsibility.
+>
+> **Second, outputs are uncontrollable.**
+>
+> You can tell AI 'please remember our return policy is 30 days,' but AI only 'tries to remember.' It might remember, might forget, might misremember. You have no means to **enforce** what it must say or must not say.
+>
+> **Third, iteration is unsustainable.**
+>
+> AI said something wrong, then what? Modify the prompt? How do you verify after modification? Will the new version introduce new problems? Who approved this change? No process, no records, no rollback capability.
+>
+> **T3X was built to solve these three problems.**
+>
+> We call it 'Git for Meaning' — a **semantic version control system**.
+>
+> Just like programmers use Git to manage code, T3X lets enterprises manage AI knowledge. Every piece of knowledge has a source, a version, and an approval process.
+>
+> Let me show you how it works through an actual demonstration."
+
+---
+
+## Part 2: Demo Roadmap
 
 ```
-首页 → Insights（全景） → 项目画布 → 对话详情 → Leaf 详情 → Agent Chat → Agent Optimiser → Deploy
+Home → Insights (Overview) → Project Canvas → Conversation Details → Leaf Details → Agent Chat → Agent Optimiser → Deploy
 ```
 
 ---
 
-## 三、第一站：Insights 页面（全景总览）
+## Part 3: First Stop — Insights Page (Overview)
 
-### 操作步骤
-1. 点击左侧导航栏的**柱状图图标**（倒数第三个）
-2. 进入 Insights 页面
-3. 确保在 "Ledger" 标签页
+### Steps
+1. Click the **bar chart icon** in the left navigation (third from bottom)
+2. Enter the Insights page
+3. Make sure you're on the "Ledger" tab
 
-### 界面说明
-- 顶部：Ledger / Latest Commits 切换标签
-- 主区域：多个卡片，每个代表一条结构化知识
-- 卡片内容：Commit 标题、摘要、来源句子、项目名、分支名、证据数量
+### Interface Description
+- Top: Ledger / Latest Commits toggle tabs
+- Main area: Multiple cards, each representing a piece of structured knowledge
+- Card content: Commit title, summary, source sentences, project name, branch name, evidence count
 
-### 话术
+### Script
 
-> "这是 T3X 的**全景总览**页面，我们叫它 Insights。
+> "This is T3X's **overview page**, we call it Insights.
 >
-> 大家看到的这些卡片，每一张代表一条**从 AI 对话中提取出来的结构化知识**。
+> Each card you see represents a piece of **structured knowledge automatically extracted from AI conversations**.
 >
-> 我来解读一下这些卡片：
+> Let me explain these cards:
 >
-> **【指向第一张卡片】**
+> **[Point to the first card]**
 >
-> 这张卡片叫 'Brand voice: professional, approachable, plain language first'，翻译过来就是'品牌调性：专业、亲和、简单语言优先'。
+> This card is called 'Brand voice: professional, approachable, plain language first.'
 >
-> 右上角显示 '5h ago'——5 小时前创建的，'main' 表示在主分支上。
+> The top right shows '5h ago' — created 5 hours ago, 'main' means it's on the main branch.
 >
-> 下面有两条具体的句子：
+> Below are two specific sentences:
 > - 'Brand voice should be professional yet approachable...'
 > - 'Use plain language and avoid jargon unless absolutely necessary...'
 >
-> 最下面显示 'Marketing Tone Guide' 和 '2 evidence'——意思是这条知识属于'营销调性指南'这个项目，有 2 条原始对话作为证据支撑。
+> At the bottom it shows 'Marketing Tone Guide' and '2 evidence' — meaning this knowledge belongs to the 'Marketing Tone Guide' project and has 2 original conversations as supporting evidence.
 >
-> **【指向其他卡片】**
+> **[Point to other cards]**
 >
-> 再看这几张：
-> - '配送政策：5-7 个工作日标准配送，满 50 美元免运费'
-> - '保修条款：2 年保修，60 天退货窗口'
-> - '退货政策：标准 30 天，缺陷商品 90 天'
+> Look at these others:
+> - 'Shipping policy: 5-7 business days standard shipping, free shipping over $50'
+> - 'Warranty terms: 2-year warranty, 60-day return window'
+> - 'Return policy: Standard 30 days, 90 days for defective items'
 >
-> 这些都是从真实业务对话中**自动提取**出来的。不是人工整理的 FAQ，而是 AI 系统自己从对话里学到的。
+> These were all **automatically extracted** from real business conversations. Not manually compiled FAQs, but what the AI system learned from conversations itself.
 >
-> **但重点是——每一条都有证据追溯。**
+> **But the key point is — every piece has evidence traceability.**
 >
-> 点进去，你能看到这条知识最初是从哪段对话里来的、是谁说的、什么时候说的。
+> Click in, and you can see where this knowledge originally came from, who said it, when it was said.
 >
-> 这就解决了我刚才说的第一个问题：**知识可追溯**。
+> This solves the first problem I mentioned: **knowledge traceability**.
 >
-> 以后如果 AI 说错话了，你可以回溯：这条知识是从哪来的？是哪个员工在哪次对话里说的？那次对话的上下文是什么？是不是本身就说错了？
+> If AI says something wrong in the future, you can trace back: Where did this knowledge come from? Which employee said it in which conversation? What was the context of that conversation? Was it originally wrong?
 >
-> **有了这个，你就可以做审计、做合规、做责任追溯。**"
+> **With this, you can do auditing, compliance, and accountability.**"
 
-### 可能的问题与回答
+### Possible Questions and Answers
 
-**Q: 这些知识是怎么自动提取的？**
+**Q: How is this knowledge automatically extracted?**
 
-> "我们有一套**语义提取引擎**，核心算法是确定性的——意思是同样的输入永远产生同样的输出，不会因为 AI 的随机性而变化。
+> "We have a **semantic extraction engine**. The core algorithm is deterministic — meaning the same input always produces the same output, unaffected by AI randomness.
 >
-> 提取过程分三层：
-> 1. 第一层提取关键词、实体、时间信息
-> 2. 第二层识别意图、关系
-> 3. 第三层生成句子级别的语义单元
+> Extraction happens in three layers:
+> 1. First layer extracts keywords, entities, temporal information
+> 2. Second layer identifies intent, relationships
+> 3. Third layer generates sentence-level semantic units
 >
-> 整个过程不依赖大模型，是纯算法的，所以结果是可重复、可验证的。"
+> The entire process doesn't rely on large models, it's pure algorithmic, so results are reproducible and verifiable."
 
-**Q: 准确率有多高？**
+**Q: What's the accuracy rate?**
 
-> "我们内部测试的准确率在 92% 以上。而且更重要的是——**所有提取结果都需要人工审核才能正式生效**。
+> "Our internal testing shows accuracy above 92%. And more importantly — **all extraction results require human review before becoming official**.
 >
-> 系统会先把提取结果放到'草稿'状态，业务人员审核确认后，才会正式提交到知识库。这就保证了即使算法有误差，最终入库的知识一定是人确认过的。"
-
----
-
-## 四、第二站：项目画布（知识工作台）
-
-### 操作步骤
-1. 点击左侧导航栏的**房子图标**（首页）
-2. 在项目列表中选择 "Customer Support Knowledge"（如果列表为空，直接访问 /project/proj_2fbc9aa1）
-3. 进入项目画布页面
-
-### 界面说明
-- 画布区域：可拖拽的节点图
-- 节点类型：对话节点（蓝色）、Commit 节点（绿色）、Leaf 节点（橙色）
-- 连线：表示数据流向（对话 → 提取 → Commit → 应用 → Leaf）
-
-### 话术
-
-> "现在我们进入一个具体的项目——'客服支持知识库'。
->
-> 这是 T3X 的**核心工作界面**，我们叫它'画布'。
->
-> **【指向整个画布】**
->
-> 大家可以把它理解成一张**知识流程图**。
->
-> 左边这些是**对话节点**——代表一次次与 AI 的对话，是知识的原始来源。
->
-> 中间这些是 **Commit 节点**——代表从对话中提取出来的结构化知识。就像程序员的代码提交一样，每次提取都是一个 Commit。
->
-> 右边这些是 **Leaf 节点**——代表基于知识生成的具体应用，比如一封邮件、一条推文、一个客服话术。
->
-> 节点之间的连线表示**数据流向**：
->
-> 对话 → 提取知识 → 形成 Commit → 应用到具体场景 → 生成 Leaf
->
-> **【用鼠标演示拖拽】**
->
-> 这些节点都可以自由拖拽，你可以按照自己的逻辑来组织画布布局。
->
-> **为什么要用画布这种形式？**
->
-> 因为知识管理不是线性的。一条知识可能来自多个对话，一个 Commit 可能分叉出多个应用场景，不同分支可能需要合并……
->
-> 画布能够直观地展示这种**复杂的知识关系**。
->
-> 这和 Git 的理念一样——Git 有分支、有合并、有冲突解决。T3X 的知识管理也是一样的。"
-
-### 关于分支的补充说明
-
-> "说到分支，我多解释一下。
->
-> 大家看这里（如果有多分支数据的话），有 'main' 分支和 'feature/warranty' 分支。
->
-> 这是什么意思呢？
->
-> 假设你们公司现在有一个标准的退货政策：30 天内可退。这是 main 分支上的知识。
->
-> 现在市场部想搞一个促销活动，把退货期延长到 60 天。但这只是一个试点，不想影响主流程。
->
-> 怎么办？**开一个新分支**。
->
-> 在 'feature/promotion' 分支上创建新的知识：退货期 60 天。
->
-> 促销期间，参与活动的客服机器人用这个分支的知识。活动结束后，可以选择合并到主分支，或者直接废弃这个分支。
->
-> **这就是 Git 思维在知识管理上的应用——你可以安全地实验，不影响生产环境。**"
+> The system first puts extraction results in 'draft' status. Only after business personnel review and confirm does it get formally submitted to the knowledge base. This ensures that even if the algorithm has errors, the final knowledge in the repository is human-verified."
 
 ---
 
-## 五、第三站：对话详情页（知识源头）
+## Part 4: Second Stop — Project Canvas (Knowledge Workspace)
 
-### 操作步骤
-1. 在画布上双击一个对话节点
-2. 或直接访问 /project/proj_2fbc9aa1/conversation/conv_3d7d48e8
-3. 进入对话详情页
+### Steps
+1. Click the **house icon** in the left navigation (home)
+2. Select "Customer Support Knowledge" from the project list (if list is empty, navigate directly to /project/proj_2fbc9aa1)
+3. Enter the project canvas page
 
-### 界面说明
-- 左侧主区域：对话气泡列表（USER / ASSISTANT 交替）
-- 右侧面板：Context 配置面板，显示当前使用的 Pin 数量
-- 每条消息显示：角色、时间戳、内容
+### Interface Description
+- Canvas area: Draggable node graph
+- Node types: Conversation nodes (blue), Commit nodes (green), Leaf nodes (orange)
+- Lines: Represent data flow (Conversation → Extraction → Commit → Application → Leaf)
 
-### 话术
+### Script
 
-> "现在我们来看一条具体的对话——'退货政策讨论'。
+> "Now we enter a specific project — 'Customer Support Knowledge Base.'
 >
-> **【指向对话气泡】**
+> This is T3X's **core work interface**, we call it the 'canvas.'
 >
-> 这是一个典型的客服对话：
+> **[Point to the entire canvas]**
 >
-> 用户问：'What is your return policy for electronics purchased online?'（电子产品网购的退货政策是什么？）
+> You can think of it as a **knowledge flow diagram**.
 >
-> 助手答：'Our standard return policy allows returns within 30 days of purchase. Electronics must be in original packaging with all accessories. A receipt or order confirmation is required for processing.'
+> On the left are **conversation nodes** — representing individual AI conversations, the original source of knowledge.
 >
-> （我们的标准退货政策允许在购买后 30 天内退货。电子产品必须保持原包装并附带所有配件。需要提供收据或订单确认。）
+> In the middle are **Commit nodes** — representing structured knowledge extracted from conversations. Like a programmer's code commits, each extraction is a Commit.
 >
-> 用户追问：'What if the item is defective? Is the policy different?'（如果商品有缺陷呢？政策有什么不同？）
+> On the right are **Leaf nodes** — representing specific applications generated from knowledge, like an email, a tweet, a customer service script.
 >
-> 助手答：'For defective items, we extend the return window to 90 days. We also cover return shipping costs for confirmed defects. You can choose between a full refund or replacement.'
+> The lines between nodes represent **data flow**:
 >
-> （对于有缺陷的商品，我们将退货窗口延长到 90 天。我们还承担确认缺陷的退货运费。您可以选择全额退款或更换。）
+> Conversation → Extract knowledge → Form Commit → Apply to specific scenario → Generate Leaf
 >
-> **这就是一段真实的业务对话。**
+> **[Demonstrate dragging with mouse]**
 >
-> T3X 做的事情是：**从这段对话中自动提取关键信息，形成结构化知识。**
+> All these nodes can be freely dragged. You can organize the canvas layout according to your own logic.
 >
-> 提取出来的知识是：
-> - '标准退货政策允许在购买后 30 天内退货'
-> - '缺陷商品的退货窗口延长到 90 天'
-> - '缺陷退货的运费由公司承担'
+> **Why use this canvas format?**
 >
-> 每一条知识都**精确定位到原文的哪一句话**——不是模糊的'这个对话里有关于退货的内容'，而是具体到第几句、第几个字符到第几个字符。
+> Because knowledge management isn't linear. One piece of knowledge might come from multiple conversations, one Commit might branch into multiple application scenarios, different branches might need merging...
 >
-> **【指向右侧 Context 面板】**
+> The canvas can intuitively display these **complex knowledge relationships**.
 >
-> 右边这个面板是 Context 配置。'Using 0 pins' 表示这个对话目前没有被其他地方引用。
->
-> 如果我想让 AI 在回答其他问题时'记住'这个对话的内容，我可以把它'Pin'起来——就像在浏览器里收藏网页一样。
->
-> 被 Pin 的对话会成为 AI 的**上下文记忆**。"
+> This is the same philosophy as Git — Git has branches, merges, conflict resolution. T3X's knowledge management works the same way."
 
-### 关于 Pin 系统的补充
+### Additional Explanation About Branches
 
-> "Pin 系统是我们设计的一个很重要的功能。
+> "Speaking of branches, let me explain further.
 >
-> 传统的 AI 系统是'全量记忆'——把所有数据都塞给 AI，让它自己判断哪些重要。这会导致两个问题：
+> Look here (if multi-branch data exists), there's a 'main' branch and a 'feature/warranty' branch.
 >
-> 1. **成本高**：Token 是按量计费的，全量输入成本很高
-> 2. **不精准**：AI 可能会被无关信息干扰，反而答错
+> What does this mean?
 >
-> T3X 的做法是**精准记忆**——你明确告诉 AI '这些是你需要记住的'，其他的不用管。
+> Suppose your company currently has a standard return policy: Returns within 30 days. This is the knowledge on the main branch.
 >
-> 这就像考试前划重点——老师不会让你把整本书都背下来，而是告诉你'这几章会考'。
+> Now marketing wants to run a promotion extending the return period to 60 days. But this is just a pilot, you don't want to affect the main workflow.
 >
-> **Pin 就是我们的'划重点'机制。**"
+> What do you do? **Create a new branch.**
+>
+> On the 'feature/promotion' branch, create new knowledge: Return period 60 days.
+>
+> During the promotion, participating customer service bots use this branch's knowledge. After the event ends, you can choose to merge to main branch, or simply abandon this branch.
+>
+> **This is applying Git thinking to knowledge management — you can experiment safely without affecting production.**"
 
 ---
 
-## 六、第四站：Leaf 详情页（核心差异化）
+## Part 5: Third Stop — Conversation Details Page (Knowledge Source)
 
-### 操作步骤
-1. 返回画布，双击一个 Leaf 节点
-2. 或直接访问 /project/proj_2fbc9aa1/leaf/leaf_2b4eb0ec2960
-3. 进入 Leaf 详情页
+### Steps
+1. Double-click a conversation node on the canvas
+2. Or navigate directly to /project/proj_2fbc9aa1/conversation/conv_3d7d48e8
+3. Enter the conversation details page
 
-### 界面说明
-- 标题栏：Leaf 名称、类型标签（email）、日期
-- 操作按钮：Generate & Verify、Re-validate、Export
-- Source Content & Constraints 区域：
-  - Source Context：来源对话内容，关键词高亮
-  - Must Have / Must Not Have：约束条件按钮
-  - 约束列表：require（必须包含）、exclude（不能包含）
-- Custom Instruction：自定义指令输入框
+### Interface Description
+- Left main area: Conversation bubble list (USER / ASSISTANT alternating)
+- Right panel: Context configuration panel, showing current Pin count
+- Each message shows: Role, timestamp, content
 
-### 话术
+### Script
 
-> "**这是 T3X 最核心的创新，也是我们和其他产品最大的差异点——Leaf 节点。**
+> "Now let's look at a specific conversation — 'Return Policy Discussion.'
 >
-> 先看标题：'Customer Return Policy Summary'——客户退货政策摘要。
+> **[Point to conversation bubbles]**
 >
-> 旁边有个标签 'email'——表示这是一封要发给客户的邮件。
+> This is a typical customer service conversation:
 >
-> Leaf 的类型有很多种：email（邮件）、tweet（推特）、weibo（微博）、wechat（微信）、article（文章）、deploy_agent（部署给 AI 客服）……
+> User asks: 'What is your return policy for electronics purchased online?'
 >
-> **Leaf 的作用是：基于已有的知识，生成特定格式、特定用途的内容。**
+> Assistant answers: 'Our standard return policy allows returns within 30 days of purchase. Electronics must be in original packaging with all accessories. A receipt or order confirmation is required for processing.'
 >
-> **【指向 Source Context 区域】**
+> User follows up: 'What if the item is defective? Is the policy different?'
 >
-> 上面这个区域是**知识来源**。
+> Assistant answers: 'For defective items, we extend the return window to 90 days. We also cover return shipping costs for confirmed defects. You can choose between a full refund or replacement.'
 >
-> 显示 '3 constraints highlighted'——有 3 个约束条件被高亮显示。
+> **This is a real business conversation.**
 >
-> 展开来看，这是我们之前那段退货政策对话的内容。注意看，有些词被**绿色高亮**了——'30 days'、'standard return policy'。
+> What T3X does is: **automatically extract key information from this conversation to form structured knowledge.**
 >
-> 这些高亮的词就是**约束条件的来源**。
+> The extracted knowledge is:
+> - 'Standard return policy allows returns within 30 days of purchase'
+> - 'Return window for defective items extended to 90 days'
+> - 'Company covers return shipping for defects'
 >
-> **【指向 MUST HAVE 区域】**
+> Each piece of knowledge **precisely locates which sentence in the original text** — not vaguely 'this conversation has content about returns,' but specifically which sentence, which character to which character.
 >
-> 下面是约束条件列表。
+> **[Point to right Context panel]**
 >
-> **MUST HAVE (2)**——必须包含的内容：
-> - '30 days'（30 天）——生成的邮件里必须提到 30 天
-> - 'defective'（缺陷）——必须提到缺陷商品的政策
+> The panel on the right is Context configuration. 'Using 0 pins' means this conversation isn't currently referenced elsewhere.
 >
-> **MUST NOT HAVE (1)**——绝对不能出现的内容：
-> - 'competitor'（竞品）——不能在邮件里提到任何竞争对手
+> If I want AI to 'remember' this conversation's content when answering other questions, I can 'Pin' it — like bookmarking a webpage in your browser.
 >
-> **【停顿，强调】**
->
-> **这就是 T3X 和普通 AI 系统的本质区别。**
->
-> 普通 AI 系统怎么做？给 AI 一段 prompt：'请记住我们的退货政策是 30 天，请不要提到竞争对手。'
->
-> AI 收到了，但它只是'尽量'遵守。有时候它会忘记，有时候它会混淆，有时候它会'创造性发挥'。
->
-> **你没有任何手段强制它。**
->
-> T3X 怎么做？
->
-> 1. 先生成内容
-> 2. **生成后自动验证**——检查生成的内容是否包含 '30 days'、是否包含 'defective'、是否（不小心）包含了 'competitor'
-> 3. 如果验证失败，**系统会拒绝这个输出**，并告诉你哪个约束没满足
->
-> **这不是'希望' AI 遵守，而是'强制' AI 必须遵守。**
->
-> **【指向 Generate & Verify 按钮】**
->
-> 点这个按钮，系统会生成邮件内容，并立即验证所有约束。如果有任何一条不满足，会在旁边显示红色警告。
->
-> **【指向 Re-validate 按钮】**
->
-> 如果你手动修改了生成的内容，点这个按钮可以重新验证。
->
-> **【指向 Export 按钮】**
->
-> 验证通过后，可以导出使用——发邮件、发布到客服系统、或者其他任何地方。"
+> Pinned conversations become AI's **contextual memory**."
 
-### 技术层面的补充（如果听众感兴趣）
+### Additional Explanation About Pin System
 
-> "技术上，我们的约束验证分两种模式：
+> "The Pin system is an important feature we designed.
 >
-> **Exact（精确匹配）**——检查生成内容里是否包含完全相同的字符串。比如 '30 days' 必须原封不动出现。
+> Traditional AI systems use 'full memory' — dumping all data to AI, letting it judge what's important. This causes two problems:
 >
-> **Semantic（语义匹配）**——检查生成内容是否表达了相同的意思。比如 '30 天' 和 'thirty days' 和 'a month' 语义上是等价的。
+> 1. **High cost**: Tokens are billed by volume, full input is expensive
+> 2. **Imprecise**: AI might be distracted by irrelevant information and answer incorrectly
 >
-> 语义匹配使用 embedding 向量比对，有相似度阈值控制。
+> T3X's approach is **precise memory** — you explicitly tell AI 'these are what you need to remember,' ignore the rest.
 >
-> 这两种模式可以针对不同约束分别配置。比如法律条款、金额数字用精确匹配，一般描述用语义匹配。"
-
-### 商业价值强调
-
-> "Leaf 节点的商业价值是什么？
+> It's like highlighting before an exam — the teacher doesn't make you memorize the entire book, but tells you 'these chapters will be tested.'
 >
-> **合规风控。**
->
-> 金融行业、医疗行业、教育行业，对 AI 输出内容有严格的监管要求。不能说错话、不能误导、不能有争议内容。
->
-> 有了 Leaf 的约束机制，企业可以**把监管要求转化为约束条件**，由系统自动验证。
->
-> 每一条输出都有验证记录，可以作为合规审计的证据。
->
-> **这是我们给企业客户讲的核心价值——让 AI 从'不可控的黑盒'变成'可审计的白盒'。**"
+> **Pin is our 'highlighting' mechanism.**"
 
 ---
 
-## 七、第五站：Agent Demo Chat（实际场景）
+## Part 6: Fourth Stop — Leaf Details Page (Core Differentiator)
 
-### 操作步骤
-1. 点击左侧导航栏的**机器人图标**
-2. 进入 Support Bot 聊天页面
+### Steps
+1. Return to canvas, double-click a Leaf node
+2. Or navigate directly to /project/proj_2fbc9aa1/leaf/leaf_2b4eb0ec2960
+3. Enter the Leaf details page
 
-### 界面说明
-- 顶部：Bot 名称（Support Bot）、部署版本（Deployed: v1）、Agent Optimiser 按钮
-- 中间：聊天区域，显示 "Start a conversation"
-- 底部：消息输入框和发送按钮
+### Interface Description
+- Title bar: Leaf name, type label (email), date
+- Action buttons: Generate & Verify, Re-validate, Export
+- Source Content & Constraints area:
+  - Source Context: Source conversation content, keywords highlighted
+  - Must Have / Must Not Have: Constraint buttons
+  - Constraint list: require (must include), exclude (must not include)
+- Custom Instruction: Custom instruction input box
 
-### 话术
+### Script
 
-> "前面讲的都是'管理端'——怎么管理知识、怎么设置约束。
+> "**This is T3X's most core innovation and our biggest differentiator from other products — the Leaf node.**
 >
-> 现在我们来看'用户端'——实际的 AI 客服是什么样的。
+> Look at the title: 'Customer Return Policy Summary' — a customer return policy summary.
 >
-> **【指向页面】**
+> Next to it is a label 'email' — indicating this is an email to be sent to customers.
 >
-> 这是一个叫 'Support Bot' 的客服机器人。
+> Leaf types include: email, tweet, weibo, wechat, article, deploy_agent (deploy to AI customer service)...
 >
-> 顶部显示 'Deployed: v1 (9f2c3d)'——当前生产环境运行的是 v1 版本，commit hash 是 9f2c3d。
+> **Leaf's purpose is: generate specific format, specific purpose content based on existing knowledge.**
 >
-> **这个版本号非常重要。**
+> **[Point to Source Context area]**
 >
-> 传统的 AI 系统，你问'现在线上跑的是什么版本'——没人知道。Prompt 改来改去，没有版本控制。
+> The area above is **knowledge source**.
 >
-> T3X 的每一次改动都有版本号，就像软件发版一样——v1、v2、v3……
+> Shows '3 constraints highlighted' — 3 constraints are highlighted.
 >
-> 如果 v2 出了问题，你可以立刻**回滚到 v1**。
+> Expanded, this is the content from our earlier return policy conversation. Notice some words are **highlighted in green** — '30 days', 'standard return policy'.
 >
-> **【演示对话】**
+> These highlighted words are **the source of constraints**.
 >
-> 我来发一条消息试试。
+> **[Point to MUST HAVE area]**
 >
-> （输入）'What is your return policy?'（你们的退货政策是什么？）
+> Below is the constraint list.
 >
-> （等待回复）
+> **MUST HAVE (2)** — content that must be included:
+> - '30 days' — the generated email must mention 30 days
+> - 'defective' — must mention the defective items policy
 >
-> 看，机器人回答了。它会基于我们之前设置的知识来回答——30 天退货、缺陷商品 90 天……
+> **MUST NOT HAVE (1)** — content that absolutely cannot appear:
+> - 'competitor' — cannot mention any competitors in the email
 >
-> **【指向评分功能，如果有的话】**
+> **[Pause, emphasize]**
 >
-> 每条回复旁边有评分功能——1 到 5 星。
+> **This is the fundamental difference between T3X and regular AI systems.**
 >
-> 这不是装饰，这是**反馈收集机制**。
+> What do regular AI systems do? Give AI a prompt: 'Please remember our return policy is 30 days, please don't mention competitors.'
 >
-> 运营人员或者测试人员可以对每条回复打分。低分的回复会被收集起来，用于后续的优化。
+> AI receives it, but it only 'tries' to comply. Sometimes it forgets, sometimes it confuses, sometimes it 'gets creative.'
 >
-> 这就引出了下一个功能——Agent Optimiser。"
+> **You have no means to enforce it.**
+>
+> What does T3X do?
+>
+> 1. First generate content
+> 2. **Automatically validate after generation** — check if the generated content includes '30 days', includes 'defective', and (accidentally) includes 'competitor'
+> 3. If validation fails, **the system rejects this output** and tells you which constraint wasn't met
+>
+> **This isn't 'hoping' AI complies, it's 'enforcing' AI must comply.**
+>
+> **[Point to Generate & Verify button]**
+>
+> Click this button, the system generates email content and immediately validates all constraints. If any one isn't met, a red warning appears next to it.
+>
+> **[Point to Re-validate button]**
+>
+> If you manually modify the generated content, click this button to re-validate.
+>
+> **[Point to Export button]**
+>
+> After validation passes, you can export for use — send email, publish to customer service system, or anywhere else."
 
----
+### Technical Supplement (If Audience Is Interested)
 
-## 八、第六站：Agent Optimiser（自动优化闭环）
+> "Technically, our constraint validation has two modes:
+>
+> **Exact (exact match)** — checks if the generated content contains the exact same string. For example, '30 days' must appear unchanged.
+>
+> **Semantic (semantic match)** — checks if the generated content expresses the same meaning. For example, '30 days' and 'thirty days' and 'a month' are semantically equivalent.
+>
+> Semantic matching uses embedding vector comparison with similarity threshold control.
+>
+> These two modes can be configured separately for different constraints. For example, legal terms and amounts use exact matching, general descriptions use semantic matching."
 
-### 操作步骤
-1. 点击右上角的 "Agent Optimiser" 按钮
-2. 进入优化器页面
+### Business Value Emphasis
 
-### 界面说明
-- 左侧卡片 - Feedback Summary：
-  - Conversations：对话总数
-  - Avg Rating：平均评分
-  - Low (1-2★)：低评分数量
-  - 底部说明："Feedback from Chat page is used for prompt optimisation"
-- 左侧卡片 - Optimisation Loop：
-  - 流程图：Collect feedback → Propose new prompt → Auto commit on sandbox → Review and deploy
-  - Run Optimisation 按钮
-- 中间卡片 - Sandbox Commits：沙盒版本列表
-- 右侧卡片 - Deployments：部署历史记录
-
-### 话术
-
-> "这是 T3X 的**自动优化引擎**——Agent Optimiser。
+> "What's Leaf node's business value?
 >
-> **【指向 Feedback Summary】**
+> **Compliance and risk control.**
 >
-> 左边是反馈统计：
-> - Conversations：总共收集了多少对话
-> - Avg Rating：平均评分是多少
-> - Low (1-2★)：有多少条低分回复
+> Financial, healthcare, education industries have strict regulatory requirements for AI output content. Can't say wrong things, can't mislead, can't have controversial content.
 >
-> 这些数据从哪来？就是刚才在 Chat 页面打的分。
+> With Leaf's constraint mechanism, enterprises can **convert regulatory requirements into constraints** for automatic system validation.
 >
-> **【指向 Optimisation Loop】**
+> Every output has a validation record that can serve as compliance audit evidence.
 >
-> 下面是优化流程，分四步：
->
-> **第一步：Collect feedback**——收集反馈
->
-> 系统会自动收集所有低分回复（1-2 星），分析用户为什么不满意。
->
-> **第二步：Propose new prompt**——生成新版 prompt
->
-> 基于收集到的问题，AI 会**自动分析问题模式**，提出改进方案。
->
-> 比如发现用户经常问配送时间，但机器人总是回答得不够具体。系统会建议：'在 prompt 里增加配送时间的详细说明'。
->
-> **第三步：Auto commit on sandbox**——提交到沙盒
->
-> 新版 prompt 不会直接上线，而是先保存到**沙盒环境**测试。
->
-> **第四步：Review and deploy**——审核后部署
->
-> 运营人员审核沙盒测试结果，确认没问题后，才正式部署到生产环境。
->
-> **【指向 Run Optimisation 按钮】**
->
-> 点这个按钮就会触发一轮优化。不过现在显示 'Rate at least one response in Chat to enable'——需要先在 Chat 页面至少打一个分才能启用。
->
-> **【指向 Sandbox Commits】**
->
-> 中间这块是沙盒版本列表。
->
-> 显示 'v1-sandbox'，状态是 'deployed'——说明这个版本已经从沙盒部署到生产了。
->
-> 下面有描述：'Initial prompt – baseline customer support'。
->
-> **【指向 Deployments】**
->
-> 右边是部署历史。
->
-> 'v1' 版本，状态 'succeeded'，时间 'Nov 28, 10:05 AM'。
->
-> 每一次部署都有记录——谁部署的、什么时候、用的哪个版本。
->
-> **【总结这个功能】**
->
-> 这个功能解决的是什么问题？
->
-> **迭代可持续。**
->
-> 传统做法是：AI 出错了 → 运营手动改 prompt → 改完不知道效果怎么样 → 过几天又出新问题 → 继续改……
->
-> 没有闭环、没有沉淀、改来改去也不知道哪个版本最好。
->
-> T3X 的做法是：
->
-> 反馈自动收集 → 问题自动分析 → 改进方案自动生成 → 沙盒自动测试 → 人工审核后部署 → 部署后继续收集反馈……
->
-> **这是一个完整的闭环。每一次改进都有数据支撑，每一个版本都有记录可查。**"
+> **This is the core value we present to enterprise customers — transforming AI from an 'uncontrollable black box' to an 'auditable white box.'**"
 
 ---
 
-## 九、第七站：Deploy & Monitor（企业级管控）
+## Part 7: Fifth Stop — Agent Demo Chat (Real Scenario)
 
-### 操作步骤
-1. 点击左侧导航栏的**火箭图标**
-2. 进入 Deploy & Monitor 页面
+### Steps
+1. Click the **robot icon** in the left navigation
+2. Enter the Support Bot chat page
 
-### 界面说明
-- 顶部右侧：Runner Connected 状态（绿色）
-- Deploy Agents 卡片：已注册的 Agent 列表，Add Agent 按钮
-- Quick E2E Test 卡片：
-  - Agent 选择下拉框
-  - Prompt Version 选择
-  - Prompt Preview 预览区
+### Interface Description
+- Top: Bot name (Support Bot), deployment version (Deployed: v1), Agent Optimiser button
+- Middle: Chat area showing "Start a conversation"
+- Bottom: Message input box and send button
 
-### 话术
+### Script
 
-> "最后一个功能——部署和监控。
+> "Everything we've covered has been the 'management side' — how to manage knowledge, how to set constraints.
 >
-> **【指向 Runner Connected】**
+> Now let's look at the 'user side' — what the actual AI customer service looks like.
 >
-> 右上角绿色的 'Runner Connected' 表示**评测引擎**已连接。
+> **[Point to page]**
 >
-> 评测引擎是什么？是一个专门跑自动化测试的服务。
+> This is a customer service bot called 'Support Bot.'
 >
-> **【指向 Deploy Agents 区域】**
+> The top shows 'Deployed: v1 (9f2c3d)' — the current production environment is running version v1, commit hash is 9f2c3d.
 >
-> 这里是已注册的 Agent 列表。目前显示 'No deploy agents registered'——还没有注册任何 Agent。
+> **This version number is very important.**
 >
-> 点 'Add Agent' 可以添加。需要填写 Agent 的名称和**服务地址**——就是 Agent 部署在哪台服务器上。
+> Traditional AI systems, you ask 'what version is running online' — nobody knows. Prompts get changed constantly, no version control.
 >
-> 注册之后，你就可以对这个 Agent 进行远程管理——更新 prompt、跑测试、查看日志……
+> Every change in T3X has a version number, just like software releases — v1, v2, v3...
 >
-> **【指向 Quick E2E Test 区域】**
+> If v2 has problems, you can immediately **roll back to v1**.
 >
-> 下面是快速端到端测试。
+> **[Demonstrate conversation]**
 >
-> Agent 下拉框——选择要测试哪个 Agent
+> Let me send a message to try.
 >
-> Prompt Version 下拉框——显示 'V1 (Baseline)'，可以选择不同版本的 prompt
+> (Type) 'What is your return policy?'
 >
-> Prompt Preview——预览当前 prompt 的内容
+> (Wait for response)
 >
-> 这里显示的 prompt 是：'You are a comprehensive weather research assistant. For ANY weather question, you MUST: 1. First use SearchTool to find background information about the location. 2. Then use WeatherTool to get current weather data. 3. Use CalculatorTool if any numbers need conversion or calculation. Always gather information from multiple sources before answering.'
+> Look, the bot responded. It answers based on the knowledge we set up earlier — 30-day returns, 90 days for defective items...
 >
-> 这是一个示例 prompt，定义了 Agent 的行为规范——必须用哪些工具、按什么顺序。
+> **[Point to rating feature if available]**
 >
-> **【解释企业价值】**
+> Next to each response is a rating feature — 1 to 5 stars.
 >
-> 这个功能对企业的意义是什么？
+> This isn't decoration, it's a **feedback collection mechanism**.
 >
-> **统一管控。**
+> Operations or testers can rate each response. Low-rated responses get collected for subsequent optimization.
 >
-> 大企业可能有几十个、几百个 AI Agent——客服、销售、技术支持、内部问答……
->
-> 每个 Agent 都有自己的 prompt、自己的知识库、自己的行为规范。
->
-> 如果没有统一的管理平台，就会变成'各自为政'——谁改了什么、现在是什么状态、哪个版本有问题——没人知道。
->
-> T3X 提供的是**集中式的 Agent 管理**：
-> - 所有 Agent 在一个地方注册
-> - 所有版本变更有记录
-> - 所有测试结果可追溯
-> - 出了问题可以快速定位和回滚
->
-> **这就是企业级的 AI 治理能力。**"
+> This leads us to the next feature — Agent Optimiser."
 
 ---
 
-## 十、收尾总结
+## Part 8: Sixth Stop — Agent Optimiser (Automatic Optimization Loop)
 
-### 话术
+### Steps
+1. Click the "Agent Optimiser" button in the top right
+2. Enter the optimizer page
 
-> "好，演示就到这里。我来总结一下 T3X 解决的核心问题和它的价值。
->
-> **【竖起三根手指】**
->
-> 我开场讲了企业 AI 的三个问题：
->
-> **第一，知识不可追溯。**
->
-> T3X 的解决方案——**Commit 系统**。每一条知识都有来源证据，可以追溯到原始对话。
->
-> **第二，输出不可管控。**
->
-> T3X 的解决方案——**Leaf 约束系统**。不是'希望' AI 遵守，而是'强制'验证。
->
-> **第三，迭代不可持续。**
->
-> T3X 的解决方案——**Optimiser 闭环**。反馈收集 → 自动分析 → 沙盒测试 → 审核部署。
->
-> **【停顿】**
->
-> 一句话总结：
->
-> **T3X 让企业的 AI 知识管理从'手工作坊'升级到'工业化生产'。**
->
-> 就像 20 年前 Git 改变了软件开发一样，T3X 要改变的是 AI 时代的知识管理方式。
->
-> 这个市场有多大？
->
-> 根据 Gartner 的预测，到 2025 年，75% 的企业会在生产环境中使用生成式 AI。
->
-> 每一个用 AI 的企业，都需要解决知识管理的问题。
->
-> **这就是 T3X 的机会。**"
+### Interface Description
+- Left card - Feedback Summary:
+  - Conversations: Total conversation count
+  - Avg Rating: Average rating
+  - Low (1-2★): Low rating count
+  - Bottom description: "Feedback from Chat page is used for prompt optimisation"
+- Left card - Optimisation Loop:
+  - Flowchart: Collect feedback → Propose new prompt → Auto commit on sandbox → Review and deploy
+  - Run Optimisation button
+- Middle card - Sandbox Commits: Sandbox version list
+- Right card - Deployments: Deployment history
 
----
+### Script
 
-## 十一、预设问答（Q&A 准备）
-
-### 商业类问题
-
-**Q: 你们的竞争对手是谁？**
-
-> "从功能上来说，我们有几类潜在竞品：
+> "This is T3X's **automatic optimization engine** — Agent Optimiser.
 >
-> 1. **RAG 平台**（如 LangChain、LlamaIndex）——但它们是开发框架，不是产品，需要大量定制开发
+> **[Point to Feedback Summary]**
 >
-> 2. **知识库工具**（如 Notion AI、Confluence）——但它们没有约束验证、没有版本控制
+> On the left is feedback statistics:
+> - Conversations: How many conversations collected in total
+> - Avg Rating: What's the average rating
+> - Low (1-2★): How many low-rated responses
 >
-> 3. **AI 监控工具**（如 Galileo、Arize）——但它们只做监控，不做知识管理
+> Where does this data come from? It's from the ratings on the Chat page.
 >
-> T3X 的差异点是**端到端**——从知识提取、到约束设置、到版本管理、到自动优化，是一个完整闭环。"
-
-**Q: 你们的商业模式是什么？**
-
-> "我们目前考虑的是 **SaaS 订阅制**：
+> **[Point to Optimisation Loop]**
 >
-> - **免费版**：单项目、有限存储
-> - **团队版**：多项目、团队协作、API 接入
-> - **企业版**：私有部署、SSO、审计日志、专属支持
+> Below is the optimization process, in four steps:
 >
-> 定价参考类似 Git 托管服务（GitHub、GitLab）的模式——按团队人数 + 使用量计费。"
-
-**Q: 你们的客户是谁？**
-
-> "我们的目标客户是**已经在用或计划用生成式 AI 的中大型企业**，特别是：
+> **Step 1: Collect feedback**
 >
-> - 有合规要求的行业：金融、医疗、教育、政府
-> - 有大量客服场景的企业：电商、航空、电信、银行
-> - 有多 Agent 管理需求的科技公司
+> The system automatically collects all low-rated responses (1-2 stars), analyzing why users were dissatisfied.
 >
-> 这些客户的共同特点是：**对 AI 输出的准确性和可控性有刚性需求**。"
-
-### 技术类问题
-
-**Q: 你们的技术栈是什么？**
-
-> "前端是 **Next.js 16**，使用 App Router 架构。
+> **Step 2: Propose new prompt**
 >
-> 后端是 **Hono**（一个轻量级的 Node.js 框架），支持 OpenAPI 规范。
+> Based on collected issues, AI **automatically analyzes problem patterns** and proposes improvements.
 >
-> 数据库是 **PostgreSQL**，本地开发用 PGLite（PostgreSQL 的 WASM 版本），生产环境可以用任何 PostgreSQL 兼容数据库。
+> For example, if users frequently ask about delivery times but the bot's answers are always too vague. The system will suggest: 'Add detailed delivery time information to the prompt.'
 >
-> 核心的语义提取算法是**纯 TypeScript 实现**，不依赖大模型，保证确定性。
+> **Step 3: Auto commit on sandbox**
 >
-> 整个项目是 **Monorepo** 架构，用 Turborepo 管理。"
-
-**Q: 约束验证的准确率有多高？**
-
-> "精确匹配是 100%——就是字符串比对，没有误差。
+> New prompts don't go live directly, but are first saved to a **sandbox environment** for testing.
 >
-> 语义匹配我们内部测试的准确率在 95% 以上，使用的是 text-embedding-3-large 模型。
+> **Step 4: Review and deploy**
 >
-> 而且语义匹配的阈值是可配置的——如果客户对准确率要求特别高，可以调高阈值（更严格），相应地召回率会下降。"
-
-**Q: 你们怎么保证系统本身的可靠性？**
-
-> "几个方面：
+> Operations personnel review sandbox test results, and only after confirming no issues do they formally deploy to production.
 >
-> 1. **核心算法是确定性的**——同样的输入永远产生同样的输出，不存在 AI 的随机性问题
+> **[Point to Run Optimisation button]**
 >
-> 2. **数据是 append-only**——所有记录只增不改，类似区块链的 hash 链，任何篡改都能被检测
+> Clicking this button triggers an optimization round. But it currently shows 'Rate at least one response in Chat to enable' — need to rate at least one response on the Chat page first.
 >
-> 3. **有完整的测试覆盖**——单元测试、集成测试、E2E 测试，CI/CD 自动跑
+> **[Point to Sandbox Commits]**
 >
-> 4. **支持私有部署**——企业可以把整套系统部署在自己的服务器上，数据不出内网"
+> The middle section is the sandbox version list.
+>
+> Shows 'v1-sandbox', status is 'deployed' — meaning this version has been deployed from sandbox to production.
+>
+> Below is the description: 'Initial prompt – baseline customer support'.
+>
+> **[Point to Deployments]**
+>
+> On the right is deployment history.
+>
+> 'v1' version, status 'succeeded', time 'Nov 28, 10:05 AM'.
+>
+> Every deployment has a record — who deployed, when, which version.
+>
+> **[Summarize this feature]**
+>
+> What problem does this feature solve?
+>
+> **Sustainable iteration.**
+>
+> Traditional approach: AI made a mistake → Operations manually modifies prompt → After modification don't know if it works → New problems appear in a few days → Keep modifying...
+>
+> No closed loop, no accumulation, after all the modifications don't know which version is best.
+>
+> T3X's approach:
+>
+> Automatic feedback collection → Automatic problem analysis → Automatic improvement proposals → Automatic sandbox testing → Manual review then deploy → Continue collecting feedback after deployment...
+>
+> **This is a complete closed loop. Every improvement is data-driven, every version has traceable records.**"
 
 ---
 
-## 十二、演示 Checklist
+## Part 9: Seventh Stop — Deploy & Monitor (Enterprise-Grade Control)
 
-演示前确认：
+### Steps
+1. Click the **rocket icon** in the left navigation
+2. Enter the Deploy & Monitor page
 
-- [ ] WebUI 正常运行 (localhost:3000)
-- [ ] API 正常运行 (localhost:8000)
-- [ ] 有演示数据（至少 1 个项目、2 个对话、1 个 Commit、1 个 Leaf）
-- [ ] Agent Demo 有部署版本
-- [ ] Insights 页面能正常显示 Commit 卡片
-- [ ] 网络稳定，页面加载流畅
-- [ ] 准备好应对 "Loading..." 的情况（如果页面加载慢，可以先跳过）
+### Interface Description
+- Top right: Runner Connected status (green)
+- Deploy Agents card: Registered Agent list, Add Agent button
+- Quick E2E Test card:
+  - Agent selection dropdown
+  - Prompt Version selection
+  - Prompt Preview area
 
-演示中注意：
+### Script
 
-- 语速适中，给听众消化时间
-- 每讲一个概念，用鼠标指向对应的界面元素
-- 多用类比（Git、代码版本、考试划重点……）
-- 商业价值和技术实现穿插讲，不要只讲技术
-- 预留提问时间
+> "The last feature — Deploy and Monitor.
+>
+> **[Point to Runner Connected]**
+>
+> The green 'Runner Connected' in the top right indicates the **evaluation engine** is connected.
+>
+> What's the evaluation engine? It's a service specifically for running automated tests.
+>
+> **[Point to Deploy Agents area]**
+>
+> Here is the registered Agent list. Currently shows 'No deploy agents registered' — no Agents registered yet.
+>
+> Click 'Add Agent' to add one. You need to fill in the Agent's name and **service address** — where the Agent is deployed.
+>
+> After registration, you can remotely manage this Agent — update prompts, run tests, view logs...
+>
+> **[Point to Quick E2E Test area]**
+>
+> Below is quick end-to-end testing.
+>
+> Agent dropdown — select which Agent to test
+>
+> Prompt Version dropdown — shows 'V1 (Baseline)', can select different prompt versions
+>
+> Prompt Preview — preview current prompt content
+>
+> The prompt shown here is: 'You are a comprehensive weather research assistant. For ANY weather question, you MUST: 1. First use SearchTool to find background information about the location. 2. Then use WeatherTool to get current weather data. 3. Use CalculatorTool if any numbers need conversion or calculation. Always gather information from multiple sources before answering.'
+>
+> This is a sample prompt defining the Agent's behavioral specifications — which tools to use, in what order.
+>
+> **[Explain enterprise value]**
+>
+> What's the significance of this feature for enterprises?
+>
+> **Unified control.**
+>
+> Large enterprises might have dozens or hundreds of AI Agents — customer service, sales, technical support, internal Q&A...
+>
+> Each Agent has its own prompts, its own knowledge base, its own behavioral specifications.
+>
+> Without a unified management platform, it becomes 'everyone doing their own thing' — who changed what, what's the current status, which version has problems — nobody knows.
+>
+> What T3X provides is **centralized Agent management**:
+> - All Agents registered in one place
+> - All version changes have records
+> - All test results are traceable
+> - Problems can be quickly located and rolled back
+>
+> **This is enterprise-grade AI governance capability.**"
 
 ---
 
-## 附录：关键概念速查
+## Part 10: Closing Summary
 
-| 概念 | 一句话解释 | 类比 |
-|------|-----------|------|
-| **Commit** | 从对话中提取的结构化知识 | Git 的代码提交 |
-| **Branch** | 知识的并行版本 | Git 的分支 |
-| **Leaf** | 基于知识生成的具体应用（邮件、话术等） | 用模板生成文档 |
-| **Constraint** | 对 AI 输出的强制约束 | 合同里的条款 |
-| **Pin** | 标记重要知识，让 AI 优先记住 | 浏览器收藏夹 |
-| **Sandbox** | 测试环境，不影响生产 | 软件的 staging 环境 |
-| **Optimiser** | 自动分析反馈、优化 prompt | 软件的自动化测试 |
+### Script
+
+> "Alright, that concludes the demo. Let me summarize the core problems T3X solves and its value.
+>
+> **[Hold up three fingers]**
+>
+> I opened with three problems with enterprise AI:
+>
+> **First, knowledge is untraceable.**
+>
+> T3X's solution — **Commit system**. Every piece of knowledge has source evidence, traceable to the original conversation.
+>
+> **Second, outputs are uncontrollable.**
+>
+> T3X's solution — **Leaf constraint system**. Not 'hoping' AI complies, but 'enforced' validation.
+>
+> **Third, iteration is unsustainable.**
+>
+> T3X's solution — **Optimiser closed loop**. Feedback collection → Automatic analysis → Sandbox testing → Review and deploy.
+>
+> **[Pause]**
+>
+> One sentence summary:
+>
+> **T3X upgrades enterprise AI knowledge management from 'craft workshop' to 'industrial production.'**
+>
+> Just like Git changed software development 20 years ago, T3X aims to change knowledge management for the AI era.
+>
+> How big is this market?
+>
+> According to Gartner predictions, by 2025, 75% of enterprises will use generative AI in production environments.
+>
+> Every company using AI needs to solve knowledge management problems.
+>
+> **This is T3X's opportunity.**"
 
 ---
 
-*最后更新：2026-02-04*
+## Part 11: Q&A Preparation
+
+### Business Questions
+
+**Q: Who are your competitors?**
+
+> "Functionally, we have several types of potential competitors:
+>
+> 1. **RAG platforms** (like LangChain, LlamaIndex) — but they're development frameworks, not products, requiring heavy customization
+>
+> 2. **Knowledge base tools** (like Notion AI, Confluence) — but they don't have constraint validation or version control
+>
+> 3. **AI monitoring tools** (like Galileo, Arize) — but they only do monitoring, not knowledge management
+>
+> T3X's differentiator is **end-to-end** — from knowledge extraction, to constraint setting, to version management, to automatic optimization, it's a complete closed loop."
+
+**Q: What's your business model?**
+
+> "We're currently considering a **SaaS subscription model**:
+>
+> - **Free tier**: Single project, limited storage
+> - **Team tier**: Multiple projects, team collaboration, API access
+> - **Enterprise tier**: Private deployment, SSO, audit logs, dedicated support
+>
+> Pricing references similar Git hosting services (GitHub, GitLab) — priced by team size + usage."
+
+**Q: Who are your customers?**
+
+> "Our target customers are **medium to large enterprises already using or planning to use generative AI**, especially:
+>
+> - Industries with compliance requirements: Finance, healthcare, education, government
+> - Companies with heavy customer service scenarios: E-commerce, airlines, telecom, banking
+> - Tech companies with multi-Agent management needs
+>
+> What these customers have in common is: **rigid requirements for AI output accuracy and controllability.**"
+
+### Technical Questions
+
+**Q: What's your tech stack?**
+
+> "Frontend is **Next.js 16**, using App Router architecture.
+>
+> Backend is **Hono** (a lightweight Node.js framework), supporting OpenAPI specification.
+>
+> Database is **PostgreSQL**. Local development uses PGLite (PostgreSQL WASM version), production can use any PostgreSQL-compatible database.
+>
+> The core semantic extraction algorithm is **pure TypeScript implementation**, doesn't rely on large models, ensuring determinism.
+>
+> The entire project is **Monorepo** architecture, managed by Turborepo."
+
+**Q: What's the accuracy of constraint validation?**
+
+> "Exact matching is 100% — it's string comparison, no margin for error.
+>
+> Semantic matching we've tested internally at above 95% accuracy, using the text-embedding-3-large model.
+>
+> And the semantic matching threshold is configurable — if customers have especially high accuracy requirements, they can raise the threshold (stricter), correspondingly recall rate will decrease."
+
+**Q: How do you ensure system reliability?**
+
+> "Several aspects:
+>
+> 1. **Core algorithms are deterministic** — same input always produces same output, no AI randomness issues
+>
+> 2. **Data is append-only** — all records only add, never modify, like blockchain hash chains, any tampering can be detected
+>
+> 3. **Complete test coverage** — unit tests, integration tests, E2E tests, CI/CD runs automatically
+>
+> 4. **Private deployment supported** — enterprises can deploy the entire system on their own servers, data doesn't leave the intranet"
+
+---
+
+## Part 12: Demo Checklist
+
+Pre-demo confirmation:
+
+- [ ] WebUI running normally (localhost:3000)
+- [ ] API running normally (localhost:8000)
+- [ ] Demo data exists (at least 1 project, 2 conversations, 1 Commit, 1 Leaf)
+- [ ] Agent Demo has deployed version
+- [ ] Insights page can display Commit cards normally
+- [ ] Network stable, pages load smoothly
+- [ ] Prepared to handle "Loading..." situations (if page loads slowly, can skip)
+
+During demo notes:
+
+- Moderate speaking pace, give audience time to digest
+- When explaining each concept, point mouse to corresponding UI elements
+- Use analogies frequently (Git, code versions, exam highlighting...)
+- Interweave business value and technical implementation, don't just talk tech
+- Reserve time for questions
+
+---
+
+## Appendix: Key Concepts Quick Reference
+
+| Concept | One-sentence Explanation | Analogy |
+|---------|-------------------------|---------|
+| **Commit** | Structured knowledge extracted from conversations | Git code commits |
+| **Branch** | Parallel versions of knowledge | Git branches |
+| **Leaf** | Specific applications generated from knowledge (emails, scripts, etc.) | Generating documents from templates |
+| **Constraint** | Mandatory constraints on AI output | Contract clauses |
+| **Pin** | Mark important knowledge for AI to prioritize remembering | Browser bookmarks |
+| **Sandbox** | Testing environment that doesn't affect production | Software staging environment |
+| **Optimiser** | Automatically analyze feedback, optimize prompts | Software automated testing |
+
+---
+
+*Last updated: 2026-02-04*

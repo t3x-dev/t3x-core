@@ -1,522 +1,522 @@
-# T3X 产品演示脚本 v2（投资人版）
+# T3X Product Demo Script v2 (Investor Version)
 
-> **核心改进**：通过多版本演示数据，让投资人亲眼看到"Git for Meaning"的版本迭代能力
+> **Core improvement**: Through multi-version demo data, let investors see the version iteration capability of "Git for Meaning" firsthand
 >
-> 目标受众：非技术背景决策者
-> 演示时长：15-20 分钟
-> 核心信息：T3X 让企业 AI 的知识管理像 Git 管理代码一样——可追溯、可对比、可回滚
-
----
-
-## 演示数据准备（重要！）
-
-### 场景设定：电商退货政策的三次迭代
-
-为了让投资人感受到"版本控制"的价值，我们需要准备一个**有故事的数据集**：
-
-```
-时间线：
-Day 1  → v1: 标准退货政策（30天）
-Day 15 → v2: 双十一促销，改成60天  ← 这里埋了一个"坑"
-Day 45 → v3: 促销结束，改回30天，但发现v2有问题
-```
-
-### 需要准备的数据
-
-**项目**：`退货政策知识库` (Return Policy Knowledge Base)
-
-**对话 1**：初始政策讨论（生成 v1）
-```
-User: 我们的标准退货政策是什么？
-Assistant: 标准退货政策是购买后30天内可退货，需要保持原包装...
-User: 缺陷商品呢？
-Assistant: 缺陷商品延长到90天，我们承担运费...
-```
-
-**对话 2**：促销政策讨论（生成 v2，在 feature/double11 分支）
-```
-User: 双十一要搞促销，退货期能不能延长？
-Assistant: 可以，建议延长到60天。但要注意，这只适用于促销期间购买的商品...
-User: 好，那就60天，另外能不能提一下我们比竞争对手更有优势？
-Assistant: 好的，我们的60天退货期比大多数竞争对手的30天更长...  ← 这里提到了竞争对手（违规！）
-```
-
-**对话 3**：政策回滚讨论（生成 v3，准备合并回 main）
-```
-User: 促销结束了，要改回30天
-Assistant: 好的，恢复标准30天政策...
-User: 等等，我看了一下v2的输出，好像提到竞争对手了？
-Assistant: 是的，那个版本确实有问题，我们应该...
-```
-
-**Commits**：
-- `main` 分支：v1 (hash: abc1234) → v3 (hash: ghi7890)
-- `feature/double11` 分支：从 v1 分出 → v2 (hash: def5678)
-
-**Leaf**：
-- 类型：`email`（客服邮件模板）
-- 约束：
-  - MUST HAVE: "30 days" 或 "60 days"（根据版本）
-  - MUST NOT HAVE: "competitor"（任何版本都不能提竞争对手）
+> Target audience: Non-technical decision makers
+> Demo duration: 15-20 minutes
+> Core message: T3X makes enterprise AI knowledge management like Git manages code — traceable, comparable, rollbackable
 
 ---
 
-## 演示脚本
+## Demo Data Preparation (Important!)
 
-### 第一幕：开场 - "AI 说错话了"（2分钟）
+### Scenario: Three Iterations of E-commerce Return Policy
 
-> **目的**：制造紧张感，让投资人意识到问题的严重性
+To help investors feel the value of "version control," we need to prepare a **dataset with a story**:
 
-#### 话术
+```
+Timeline:
+Day 1  → v1: Standard return policy (30 days)
+Day 15 → v2: Double 11 promotion, changed to 60 days  ← A "trap" is planted here
+Day 45 → v3: Promotion ends, changed back to 30 days, but discovered v2 has problems
+```
 
-> "在正式演示之前，我想给大家看一个'事故现场'。
->
-> 这是我们一个电商客户的真实案例（脱敏处理过）：
->
-> 他们的 AI 客服在双十一期间发了这封邮件给客户——"
+### Data to Prepare
 
-**【打开一封'出问题'的邮件截图或文档】**
+**Project**: `Return Policy Knowledge Base`
 
-> "看这里：'我们的 60 天退货期比大多数**竞争对手**的 30 天更长...'
->
-> 问题出在哪？**提到了竞争对手。**
->
-> 这在很多公司是严格禁止的——可能涉及不正当竞争、可能引发法律纠纷。
->
-> 客户发现这个问题的时候，已经发出去 2000 多封邮件了。
->
-> 他们想搞清楚三件事：
->
-> 1. **这个错误是什么时候引入的？**——是哪次修改出的问题？
-> 2. **能不能快速回到之前的正确版本？**——止血
-> 3. **以后怎么防止这种事再发生？**——建立防线
->
-> 传统的 AI 系统能回答这些问题吗？**不能。**
->
-> 因为没有版本记录、没有变更历史、没有约束验证。
->
-> 但 T3X 可以。让我来演示一下。"
+**Conversation 1**: Initial policy discussion (generates v1)
+```
+User: What is our standard return policy?
+Assistant: The standard return policy is returns within 30 days of purchase, must maintain original packaging...
+User: What about defective items?
+Assistant: Defective items extend to 90 days, we cover shipping costs...
+```
 
----
+**Conversation 2**: Promotion policy discussion (generates v2, on feature/double11 branch)
+```
+User: Double 11 promotion coming up, can we extend the return period?
+Assistant: Yes, recommend extending to 60 days. But note this only applies to items purchased during the promotion period...
+User: OK, then 60 days. Also can we mention we're better than competitors?
+Assistant: OK, our 60-day return period is longer than most competitors' 30 days...  ← This mentions competitors (violation!)
+```
 
-### 第二幕：版本历史 - "追溯问题源头"（3分钟）
+**Conversation 3**: Policy rollback discussion (generates v3, preparing to merge back to main)
+```
+User: Promotion is over, need to change back to 30 days
+Assistant: OK, restoring standard 30-day policy...
+User: Wait, I looked at v2's output, it seems to mention competitors?
+Assistant: Yes, that version did have problems, we should...
+```
 
-> **目的**：展示 commit history 和 diff 功能
+**Commits**:
+- `main` branch: v1 (hash: abc1234) → v3 (hash: ghi7890)
+- `feature/double11` branch: branched from v1 → v2 (hash: def5678)
 
-#### 操作步骤
-1. 打开项目画布 `/project/[projectId]`
-2. 点击有问题的 Commit 节点（v2）
-3. 打开右侧面板，点击 "View commit history"
-4. 在时间线中展示三个版本
-
-#### 话术
-
-> "这是 T3X 的项目画布。每个节点代表一次'知识提交'，就像 Git 的 commit。
->
-> **【点击 v2 节点，打开详情】**
->
-> 这是出问题的那个版本——v2，双十一促销版本。
->
-> 看右上角：分支是 `feature/double11`，不是 `main`。
->
-> 这说明这个版本是在一个**独立分支**上创建的，本来不应该影响主流程。
->
-> 但问题是，这个分支的内容最后被合并到了生产环境。
->
-> **【点击 View commit history】**
->
-> 现在我们来看版本历史。"
-
-**【展示 CommitHistoryPanel】**
-
-> "这是一个时间线视图，从上到下是从新到旧。
->
-> 最上面是 HEAD——当前版本，v3。
->
-> 中间是 v2——双十一版本，**就是这个版本出了问题**。
->
-> 最下面是 v1——原始的标准政策版本。
->
-> **【点击 v2，展示 diff】**
->
-> 我点击 v2，下面会显示这个版本和上一个版本的**差异对比**。
->
-> 看这里：
-> - 绿色是新增的内容
-> - 红色是删除的内容
-> - 黄色是修改的内容
->
-> **【指向具体的 diff】**
->
-> 找到了！看这一句：
->
-> '我们的 60 天退货期比大多数**竞争对手**的 30 天更长'
->
-> 这句话是 v2 新增的，而且包含了'竞争对手'这个词。
->
-> **【点击 View full diff，打开全屏 diff 视图】**
->
-> 打开全屏对比视图，可以看得更清楚。
->
-> 左边是 v1（原版），右边是 v2（问题版）。
->
-> 系统不仅告诉你哪些句子变了，还精确到**哪个词变了**——红色删除，绿色新增。
->
-> **【点击某个句子的 pin 图标，展示源追溯】**
->
-> 更重要的是，我点这个图标，可以看到这句话**最初是从哪段对话里来的**。
->
-> 看，这是当时的对话记录：
->
-> 用户说：'能不能提一下我们比竞争对手更有优势？'
->
-> AI 助手就照做了。
->
-> **问题找到了：是这次对话引入的错误。**"
+**Leaf**:
+- Type: `email` (customer service email template)
+- Constraints:
+  - MUST HAVE: "30 days" or "60 days" (depending on version)
+  - MUST NOT HAVE: "competitor" (no version should mention competitors)
 
 ---
 
-### 第三幕：约束验证 - "为什么没拦住？"（3分钟）
+## Demo Script
 
-> **目的**：展示 Leaf 的约束机制，解释为什么这次没拦住，以及怎么防止下次
+### Act 1: Opening - "AI Said Something Wrong" (2 minutes)
 
-#### 操作步骤
-1. 返回画布，点击关联的 Leaf 节点
-2. 打开 Leaf 详情页
-3. 展示约束配置
+> **Purpose**: Create tension, make investors realize the severity of the problem
 
-#### 话术
+#### Script
 
-> "知道问题在哪了，下一个问题是：**为什么系统没有自动拦住这个错误？**
+> "Before the formal demo, I want to show everyone an 'incident scene.'
 >
-> **【点击 Leaf 节点，打开详情】**
+> This is a real case from one of our e-commerce clients (anonymized):
 >
-> 这是基于 v2 生成的邮件模板。
+> Their AI customer service sent this email to customers during Double 11—"
+
+**[Open a screenshot or document of the 'problematic' email]**
+
+> "Look here: 'Our 60-day return period is longer than most **competitors'** 30 days...'
 >
-> 看下面的约束配置：
+> What's the problem? **Mentioned competitors.**
+>
+> This is strictly prohibited in many companies — could involve unfair competition, could trigger legal disputes.
+>
+> By the time the client discovered this problem, over 2,000 emails had already been sent.
+>
+> They wanted to figure out three things:
+>
+> 1. **When was this error introduced?** — Which modification caused the problem?
+> 2. **Can we quickly revert to the previous correct version?** — Stop the bleeding
+> 3. **How do we prevent this from happening again?** — Build a defense
+>
+> Can traditional AI systems answer these questions? **No.**
+>
+> Because there's no version records, no change history, no constraint validation.
+>
+> But T3X can. Let me demonstrate."
+
+---
+
+### Act 2: Version History - "Tracing the Problem Source" (3 minutes)
+
+> **Purpose**: Demonstrate commit history and diff functionality
+
+#### Steps
+1. Open project canvas `/project/[projectId]`
+2. Click the problematic Commit node (v2)
+3. Open right panel, click "View commit history"
+4. Show three versions in the timeline
+
+#### Script
+
+> "This is T3X's project canvas. Each node represents a 'knowledge commit,' just like Git commits.
+>
+> **[Click v2 node, open details]**
+>
+> This is the problematic version — v2, the Double 11 promotion version.
+>
+> Look at the top right: branch is `feature/double11`, not `main`.
+>
+> This means this version was created on an **independent branch**, originally shouldn't affect the main workflow.
+>
+> But the problem is, this branch's content eventually got merged to production.
+>
+> **[Click View commit history]**
+>
+> Now let's look at version history."
+
+**[Show CommitHistoryPanel]**
+
+> "This is a timeline view, from top to bottom is newest to oldest.
+>
+> At the top is HEAD — current version, v3.
+>
+> In the middle is v2 — Double 11 version, **this is the version with problems**.
+>
+> At the bottom is v1 — the original standard policy version.
+>
+> **[Click v2, show diff]**
+>
+> I click v2, below it shows the **difference comparison** between this version and the previous version.
+>
+> Look here:
+> - Green is added content
+> - Red is deleted content
+> - Yellow is modified content
+>
+> **[Point to specific diff]**
+>
+> Found it! Look at this sentence:
+>
+> 'Our 60-day return period is longer than most **competitors'** 30 days'
+>
+> This sentence was added in v2, and contains the word 'competitor.'
+>
+> **[Click View full diff, open fullscreen diff view]**
+>
+> Open the fullscreen comparison view for a clearer look.
+>
+> Left is v1 (original), right is v2 (problematic version).
+>
+> The system not only tells you which sentences changed, but precisely **which words changed** — red deleted, green added.
+>
+> **[Click pin icon on a sentence, show source tracing]**
+>
+> More importantly, I click this icon to see where this sentence **originally came from in which conversation**.
+>
+> Look, this is the conversation record from that time:
+>
+> User said: 'Can we mention we're better than competitors?'
+>
+> The AI assistant complied.
+>
+> **Problem found: This conversation introduced the error.**"
+
+---
+
+### Act 3: Constraint Validation - "Why Wasn't It Blocked?" (3 minutes)
+
+> **Purpose**: Demonstrate Leaf's constraint mechanism, explain why it wasn't blocked this time, and how to prevent it next time
+
+#### Steps
+1. Return to canvas, click the associated Leaf node
+2. Open Leaf details page
+3. Show constraint configuration
+
+#### Script
+
+> "We know where the problem is, the next question is: **Why didn't the system automatically block this error?**
+>
+> **[Click Leaf node, open details]**
+>
+> This is the email template generated from v2.
+>
+> Look at the constraint configuration below:
 >
 > MUST HAVE:
-> - '60 days'——必须提到60天 ✓ 满足
+> - '60 days' — must mention 60 days ✓ Satisfied
 >
 > MUST NOT HAVE:
-> - （空的）
+> - (empty)
 >
-> **问题就在这里——当时没有设置'不能提竞争对手'的约束。**
+> **The problem is right here — 'must not mention competitors' constraint wasn't set.**
 >
-> **【演示添加约束】**
+> **[Demonstrate adding constraint]**
 >
-> 现在我来加上这条约束：
+> Now let me add this constraint:
 >
-> 点击 MUST NOT HAVE → Add → 输入 'competitor' → Match mode 选 'Semantic'（语义匹配）
+> Click MUST NOT HAVE → Add → Enter 'competitor' → Match mode select 'Semantic'
 >
-> 这样，不管 AI 写的是 'competitor'、'竞争对手'、'友商'、还是 '同行'，系统都会识别出来并拦截。
+> This way, whether AI writes 'competitor', 'rival', 'peer', or 'other companies', the system will recognize and block it.
 >
-> **【点击 Re-validate】**
+> **[Click Re-validate]**
 >
-> 现在重新验证一下当前内容——
+> Now re-validate the current content—
 >
-> 看，红色警告出现了：'MUST NOT HAVE violation: competitor detected'
+> Look, a red warning appeared: 'MUST NOT HAVE violation: competitor detected'
 >
-> **这就是 T3X 和普通 AI 系统的本质区别。**
+> **This is the fundamental difference between T3X and regular AI systems.**
 >
-> 普通系统是'事后发现'——等用户投诉了才知道出问题了。
+> Regular systems are 'discover after the fact' — only know there's a problem when users complain.
 >
-> T3X 是'事前拦截'——内容生成后、发布前，系统自动验证，不符合约束的直接拦住。"
+> T3X is 'block beforehand' — after content is generated, before publishing, the system automatically validates, blocking anything that doesn't meet constraints."
 
 ---
 
-### 第四幕：分支合并 - "安全地迭代"（4分钟）
+### Act 4: Branch Merging - "Iterate Safely" (4 minutes)
 
-> **目的**：展示 merge workspace，这是最能体现"Git 思维"的功能
+> **Purpose**: Demonstrate merge workspace, this is the feature that best embodies "Git thinking"
 
-#### 操作步骤
-1. 返回画布
-2. 演示从 `feature/double11` 合并到 `main` 的场景（如果有 merge 入口）
-3. 或者打开一个已有的 merge workspace
+#### Steps
+1. Return to canvas
+2. Demonstrate merging from `feature/double11` to `main` (if there's a merge entry)
+3. Or open an existing merge workspace
 
-#### 话术
+#### Script
 
-> "刚才我们讲的是'出了问题怎么追溯'。
+> "What we just covered was 'how to trace when problems occur.'
 >
-> 现在我们讲'怎么安全地迭代，避免出问题'。
+> Now let's talk about 'how to iterate safely and avoid problems.'
 >
-> **【指向画布上的分支结构】**
+> **[Point to branch structure on canvas]**
 >
-> 看这个结构：
+> Look at this structure:
 >
-> `main` 分支是生产环境用的知识库——标准的 30 天退货政策。
+> `main` branch is the knowledge base used in production — standard 30-day return policy.
 >
-> `feature/double11` 分支是为促销活动创建的——60 天退货政策。
+> `feature/double11` branch was created for the promotion — 60-day return policy.
 >
-> 这就像软件开发里的 Git 分支：
-> - 主分支稳定运行
-> - 功能分支用来实验
-> - 实验成功了再合并回主分支
+> This is like Git branches in software development:
+> - Main branch runs stably
+> - Feature branches for experimentation
+> - After successful experiments, merge back to main branch
 >
-> **为什么要这样做？**
+> **Why do this?**
 >
-> 因为促销活动有风险——可能文案写错、可能政策有漏洞、可能违反合规要求。
+> Because promotion activities have risks — could have copy errors, policy loopholes, compliance violations.
 >
-> 如果直接在主分支上改，一旦出问题，生产环境立刻受影响。
+> If you modify directly on main branch, once there's a problem, production is immediately affected.
 >
-> 用分支的好处是：**在沙盒里先试，没问题了再合并。**
+> The benefit of branches is: **test in sandbox first, merge after no problems.**
 >
-> **【打开 Merge Workspace】**
+> **[Open Merge Workspace]**
 >
-> 现在促销结束了，我们要把一些有价值的内容（比如缺陷商品政策的优化）合并回主分支。
+> Now the promotion is over, we want to merge some valuable content (like defective item policy improvements) back to main branch.
 >
-> 点击'Merge'，进入合并工作区。
+> Click 'Merge' to enter the merge workspace.
 >
-> **【展示 Merge Workspace 界面】**
+> **[Show Merge Workspace interface]**
 >
-> 这个界面分三个区域：
+> This interface has three areas:
 >
-> 上面是**状态栏**：显示从哪个分支合并到哪个分支，还有多少个冲突未解决。
+> Top is **status bar**: Shows which branch merging to which branch, and how many conflicts remain unresolved.
 >
-> 中间是**冲突列表**：
-> - 绿色的是'相同的'——两边一样，自动保留
-> - 黄色的是'冲突的'——两边不一样，需要人工决定
-> - 蓝色的是'仅在某一边存在的'——可以选择保留或丢弃
+> Middle is **conflict list**:
+> - Green are 'identical' — both sides the same, automatically kept
+> - Yellow are 'conflicting' — both sides different, needs manual decision
+> - Blue are 'only on one side' — can choose to keep or discard
 >
-> 下面是**预览区**：显示合并后的最终结果
+> Bottom is **preview area**: Shows the final merged result
 >
-> **【演示解决一个冲突】**
+> **[Demonstrate resolving a conflict]**
 >
-> 看这个冲突：
+> Look at this conflict:
 >
-> 左边（source）：'退货期限延长至 60 天'
-> 右边（target）：'标准退货期限为 30 天'
+> Left (source): 'Return period extended to 60 days'
+> Right (target): 'Standard return period is 30 days'
 >
-> 系统甚至把**具体哪个词不一样**都标出来了——'60' vs '30'。
+> The system even marks **exactly which words are different** — '60' vs '30'.
 >
-> 我要选择哪个？促销结束了，应该选 'target'（30天）。
+> Which should I choose? Promotion is over, should choose 'target' (30 days).
 >
-> **【点击 target 按钮】**
+> **[Click target button]**
 >
-> 选好了，冲突解决。
+> Selected, conflict resolved.
 >
-> **【指向下面的预览区】**
+> **[Point to preview area below]**
 >
-> 看下面的预览，实时更新了——最终版本会包含 '30 天'。
+> Look at the preview below, updated in real-time — final version will contain '30 days'.
 >
-> **【如果有'competitor'相关的冲突，重点演示】**
+> **[If there's a 'competitor'-related conflict, emphasize this demo]**
 >
-> 再看这个：
+> Look at this one:
 >
-> source 里有一句提到'竞争对手'的话。
+> source has a sentence mentioning 'competitors.'
 >
-> 我选择'Discard'——丢弃，不合并这句话。
+> I choose 'Discard' — discard, don't merge this sentence.
 >
-> **这就是为什么分支 + 合并这么重要。**
+> **This is why branches + merging is so important.**
 >
-> 你可以在分支里大胆尝试，合并的时候再仔细审查。
+> You can experiment boldly on branches, carefully review when merging.
 >
-> 有问题的内容，合并时就可以过滤掉，不会进入主分支。"
+> Problematic content can be filtered out during merge, won't enter main branch."
 
 ---
 
-### 第五幕：全景总览 - "企业级知识治理"（2分钟）
+### Act 5: Overview - "Enterprise-Grade Knowledge Governance" (2 minutes)
 
-> **目的**：拉高视角，展示 T3X 作为企业级平台的全貌
+> **Purpose**: Raise perspective, show T3X's full picture as an enterprise platform
 
-#### 操作步骤
-1. 打开 Insights 页面
-2. 展示多个项目的知识卡片
+#### Steps
+1. Open Insights page
+2. Show knowledge cards from multiple projects
 
-#### 话术
+#### Script
 
-> "刚才我们深入看了一个项目的细节。
+> "Just now we looked at one project's details in depth.
 >
-> 现在我们拉高视角，看看 T3X 作为企业级平台是什么样的。
+> Now let's raise our perspective and see what T3X looks like as an enterprise platform.
 >
-> **【打开 Insights 页面】**
+> **[Open Insights page]**
 >
-> 这是 Insights 页面——企业知识的全景视图。
+> This is the Insights page — enterprise knowledge panoramic view.
 >
-> 每张卡片代表一条结构化知识：
-> - 退货政策
-> - 配送政策
-> - 保修条款
-> - 品牌调性指南
+> Each card represents a piece of structured knowledge:
+> - Return policy
+> - Shipping policy
+> - Warranty terms
+> - Brand voice guide
 > - ...
 >
-> 每条知识都显示：
-> - 属于哪个项目
-> - 在哪个分支
-> - 有多少条证据支撑
-> - 最后更新时间
+> Each piece of knowledge shows:
+> - Which project it belongs to
+> - Which branch
+> - How many pieces of supporting evidence
+> - Last update time
 >
-> **【指向不同的分支标签】**
+> **[Point to different branch labels]**
 >
-> 看这里，有的是 `main`，有的是 `feature/xxx`。
+> Look here, some are `main`, some are `feature/xxx`.
 >
-> 一眼就能看出：哪些是正式生效的知识，哪些还在实验阶段。
+> At a glance you can see: which is officially effective knowledge, which is still experimental.
 >
-> **这就是企业级知识治理的样子。**
+> **This is what enterprise-grade knowledge governance looks like.**
 >
-> 不是一堆散乱的文档、不是搞不清版本的 prompt、不是改来改去不知道谁改的。
+> Not scattered documents, not prompts with unclear versions, not changes where no one knows who made them.
 >
-> 而是：
-> - 每条知识有出处
-> - 每次变更有记录
-> - 每个版本可追溯
-> - 每个输出可验证"
+> But rather:
+> - Every piece of knowledge has a source
+> - Every change has a record
+> - Every version is traceable
+> - Every output is verifiable"
 
 ---
 
-### 第六幕：总结 - "Git for Meaning"（2分钟）
+### Act 6: Summary - "Git for Meaning" (2 minutes)
 
-#### 话术
+#### Script
 
-> "好，演示就到这里。
+> "Alright, that concludes the demo.
 >
-> 我来总结一下 T3X 的核心价值。
+> Let me summarize T3X's core value.
 >
-> **【竖起三根手指】**
+> **[Hold up three fingers]**
 >
-> 开场我讲了企业 AI 的三个问题：
+> I opened with three problems with enterprise AI:
 >
-> **第一，知识不可追溯。**
+> **First, knowledge is untraceable.**
 >
-> T3X 的方案：每条知识都有 commit hash，可以追溯到原始对话。
+> T3X's solution: Every piece of knowledge has a commit hash, traceable to original conversation.
 >
-> 就像你问程序员'这行代码谁写的'，他可以用 `git blame` 查出来。
+> Just like when you ask a programmer 'who wrote this line of code,' they can use `git blame` to find out.
 >
-> T3X 让你也能这样查：'这句话是哪次对话说的？谁说的？什么时候说的？'
+> T3X lets you do the same: 'Which conversation said this? Who said it? When?'
 >
-> **第二，输出不可管控。**
+> **Second, outputs are uncontrollable.**
 >
-> T3X 的方案：Leaf 约束系统——MUST HAVE、MUST NOT HAVE。
+> T3X's solution: Leaf constraint system — MUST HAVE, MUST NOT HAVE.
 >
-> 不是'希望' AI 遵守，而是生成后自动验证，不符合就拦截。
+> Not 'hoping' AI complies, but automatic validation after generation, blocking non-compliance.
 >
-> **第三，迭代不可持续。**
+> **Third, iteration is unsustainable.**
 >
-> T3X 的方案：分支 + 合并 + 版本历史。
+> T3X's solution: Branches + merging + version history.
 >
-> 想改？先开分支。改完？合并审查。出问题？追溯 diff。
+> Want to change? Open a branch first. Done changing? Merge review. Problems? Trace the diff.
 >
-> 每一次改动都有记录，每一个版本都可以对比。
+> Every change has a record, every version can be compared.
 >
-> **【停顿】**
+> **[Pause]**
 >
-> 一句话总结：
+> One sentence summary:
 >
-> **T3X 是 'Git for Meaning'——语义版本控制系统。**
+> **T3X is 'Git for Meaning' — a semantic version control system.**
 >
-> 程序员用 Git 管理代码，企业用 T3X 管理 AI 的知识。
+> Programmers use Git to manage code, enterprises use T3X to manage AI knowledge.
 >
-> 这不是一个功能，这是一种**范式转变**。
+> This isn't a feature, this is a **paradigm shift**.
 >
-> 谢谢大家，欢迎提问。"
+> Thank you everyone, questions are welcome."
 
 ---
 
-## 演示数据准备清单
+## Demo Data Preparation Checklist
 
-### 必须准备的数据
+### Required Data
 
-| 数据项 | 数量 | 说明 |
-|--------|------|------|
-| 项目 | 1 | "退货政策知识库" |
-| 对话 | 3 | v1/v2/v3 的源对话 |
+| Data Item | Quantity | Description |
+|-----------|----------|-------------|
+| Project | 1 | "Return Policy Knowledge Base" |
+| Conversations | 3 | Source conversations for v1/v2/v3 |
 | Commits | 3 | v1(main) → v2(feature/double11) → v3(main) |
 | Branches | 2 | main, feature/double11 |
-| Leaf | 1 | email 类型，带约束 |
-| Merge Draft | 1 | feature/double11 → main 的合并草稿（可选，用于演示 merge workspace） |
+| Leaf | 1 | email type, with constraints |
+| Merge Draft | 1 | Merge draft for feature/double11 → main (optional, for merge workspace demo) |
 
-### 关键内容
+### Key Content
 
-**v1 Commit 内容（main 分支）**：
+**v1 Commit content (main branch)**:
 ```
-- 标准退货政策允许在购买后 30 天内退货
-- 电子产品必须保持原包装并附带所有配件
-- 需要提供收据或订单确认
-- 缺陷商品的退货窗口延长到 90 天
-- 确认缺陷的退货运费由公司承担
-```
-
-**v2 Commit 内容（feature/double11 分支）**：
-```
-- 双十一促销期间退货期限延长至 60 天
-- 仅适用于促销期间购买的商品
-- 我们的 60 天退货期比大多数竞争对手的 30 天更长 ← 问题句子
-- 缺陷商品仍享受 90 天退货窗口
+- Standard return policy allows returns within 30 days of purchase
+- Electronics must maintain original packaging with all accessories
+- Receipt or order confirmation required
+- Return window for defective items extended to 90 days
+- Company covers return shipping for confirmed defects
 ```
 
-**v3 Commit 内容（main 分支，合并后）**：
+**v2 Commit content (feature/double11 branch)**:
 ```
-- 标准退货政策允许在购买后 30 天内退货
-- 电子产品必须保持原包装并附带所有配件
-- 需要提供收据或订单确认
-- 缺陷商品的退货窗口延长到 90 天
-- 确认缺陷的退货运费由公司承担
-- （移除了竞争对手相关内容）
+- Double 11 promotion extends return period to 60 days
+- Only applies to items purchased during promotion period
+- Our 60-day return period is longer than most competitors' 30 days ← Problem sentence
+- Defective items still enjoy 90-day return window
 ```
 
-**Leaf 约束配置**：
+**v3 Commit content (main branch, after merge)**:
+```
+- Standard return policy allows returns within 30 days of purchase
+- Electronics must maintain original packaging with all accessories
+- Receipt or order confirmation required
+- Return window for defective items extended to 90 days
+- Company covers return shipping for confirmed defects
+- (Removed competitor-related content)
+```
+
+**Leaf constraint configuration**:
 ```
 MUST HAVE:
 - "30 days" (exact match)
 - "defective" (semantic match)
 
 MUST NOT HAVE:
-- "competitor" (semantic match) ← 后来添加的
+- "competitor" (semantic match) ← Added later
 ```
 
 ---
 
-## 演示 Checklist
+## Demo Checklist
 
-### 演示前
+### Before Demo
 
-- [ ] 演示数据已准备好（3 个 commits，2 个 branches）
-- [ ] v2 commit 中确实包含"competitor"相关内容
-- [ ] Leaf 的 MUST NOT HAVE 约束**先留空**（演示时再添加）
-- [ ] Commit history 能正常显示 diff
-- [ ] Merge workspace 有可演示的合并草稿
-- [ ] WebUI 运行正常，无 loading 卡顿
+- [ ] Demo data prepared (3 commits, 2 branches)
+- [ ] v2 commit actually contains "competitor"-related content
+- [ ] Leaf's MUST NOT HAVE constraint **left empty initially** (add during demo)
+- [ ] Commit history can display diff normally
+- [ ] Merge workspace has demonstrable merge draft
+- [ ] WebUI running normally, no loading lag
 
-### 演示中
+### During Demo
 
-- [ ] 第一幕：展示"事故"，制造紧张感
-- [ ] 第二幕：用 commit history + diff 追溯问题
-- [ ] 第三幕：解释约束机制，演示添加约束
-- [ ] 第四幕：演示 merge workspace，重点展示冲突解决
-- [ ] 第五幕：Insights 全景，拉高视角
-- [ ] 第六幕：总结三个问题三个方案
+- [ ] Act 1: Show "incident," create tension
+- [ ] Act 2: Use commit history + diff to trace problem
+- [ ] Act 3: Explain constraint mechanism, demonstrate adding constraint
+- [ ] Act 4: Demonstrate merge workspace, focus on conflict resolution
+- [ ] Act 5: Insights overview, raise perspective
+- [ ] Act 6: Summarize three problems, three solutions
 
-### 关键演示动作
+### Key Demo Actions
 
-1. **Diff 对比**：一定要打开全屏 diff，展示红绿对比 + 源追溯
-2. **添加约束**：现场添加 MUST NOT HAVE，然后 Re-validate 显示红色警告
-3. **合并冲突**：展示 source vs target 的选择过程，特别是 word-level diff
-4. **丢弃问题内容**：演示 Discard 那句包含"competitor"的话
-
----
-
-## 备选演示路线
-
-如果时间紧张（10分钟版本）：
-
-```
-开场(1min) → Diff追溯(3min) → 约束验证(3min) → 总结(3min)
-```
-
-跳过：Merge workspace、Insights 全景
-
-如果投资人对技术感兴趣（加长版）：
-
-```
-基础演示(15min) → 技术架构讲解(5min) → 现场 Q&A(10min)
-```
-
-技术讲解内容：
-- 三层架构（Core / Storage / Agentic）
-- 确定性算法 vs LLM
-- Hash chain 数据完整性
-- Embedding 语义匹配
+1. **Diff comparison**: Must open fullscreen diff, show red-green comparison + source tracing
+2. **Adding constraint**: Add MUST NOT HAVE on the spot, then Re-validate shows red warning
+3. **Merge conflict**: Show source vs target selection process, especially word-level diff
+4. **Discard problematic content**: Demonstrate Discard on the sentence containing "competitor"
 
 ---
 
-*最后更新：2026-02-04*
+## Alternative Demo Routes
+
+If time is tight (10-minute version):
+
+```
+Opening (1min) → Diff tracing (3min) → Constraint validation (3min) → Summary (3min)
+```
+
+Skip: Merge workspace, Insights overview
+
+If investors are interested in technology (extended version):
+
+```
+Basic demo (15min) → Technical architecture explanation (5min) → Live Q&A (10min)
+```
+
+Technical explanation content:
+- Three-layer architecture (Core / Storage / Agentic)
+- Deterministic algorithms vs LLM
+- Hash chain data integrity
+- Embedding semantic matching
+
+---
+
+*Last updated: 2026-02-04*
