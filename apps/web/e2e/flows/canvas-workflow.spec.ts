@@ -85,7 +85,7 @@ test.describe('Canvas Workflow', () => {
 
     // Switch to Execution mode
     await executionBtn.first().click();
-    const executionView = page.locator('text=Execution Monitor').or(page.locator('main'));
+    const executionView = page.locator('text=Execution Monitor');
     await expect(executionView.first()).toBeVisible({ timeout: 10000 });
 
     // Switch back to Editor mode

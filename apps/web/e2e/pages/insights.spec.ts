@@ -52,15 +52,14 @@ test.describe('Insights Page', () => {
     await page.goto('/insights');
     await expect(page.locator('text=Insights').first()).toBeVisible({ timeout: 15000 });
 
-    // Ledger tab should be active or clickable
+    // Ledger tab should be visible — skip if not present
     const ledgerTab = page.locator('text=Ledger').first();
-    const isVisible = await ledgerTab.isVisible().catch(() => false);
-    if (isVisible) {
-      await ledgerTab.click();
-    }
+    const hasLedger = await ledgerTab.isVisible().catch(() => false);
+    test.skip(!hasLedger, 'Ledger tab not present on insights page');
+    await ledgerTab.click();
 
-    // Commit cards should appear (may take time to load)
-    const commitCard = page.locator('text=Insights test commit').or(page.locator('text=commit'));
+    // Commit card with our specific test message should appear
+    const commitCard = page.locator('text=Insights test commit');
     await expect(commitCard.first()).toBeVisible({ timeout: 15000 });
   });
 
@@ -84,30 +83,31 @@ test.describe('Insights Page', () => {
 
     await latestTab.click();
 
-    // Timeline items should be visible
-    const timelineItem = page
-      .locator('text=Timeline test commit')
-      .or(page.locator('text=/\\d+ sentence/'));
+    // Timeline item with our specific test message should be visible
+    const timelineItem = page.locator('text=Timeline test commit');
     await expect(timelineItem.first()).toBeVisible({ timeout: 15000 });
   });
 
-  // IN-04: Empty state when no data
-  test('IN-04: Empty state display', async ({ page }) => {
+  // IN-04: Page renders appropriate content (empty state or data tabs)
+  test('IN-04: Page renders content', async ({ page }) => {
     await page.goto('/insights');
     await expect(page.locator('text=Insights').first()).toBeVisible({ timeout: 15000 });
 
-    // Check if empty state is shown (only relevant if no projects exist)
-    const emptyState = page.locator('text=/No commits yet|No activity/i').first();
+    // Page should show either empty state message or content tabs
+    const emptyState = page.locator('text=/No commits yet|No activity|No data/i').first();
+    const contentTabs = page.locator('text=Ledger').or(page.locator('text=Latest Commits')).first();
+
     const hasEmpty = await emptyState.isVisible().catch(() => false);
+    const hasTabs = await contentTabs.isVisible().catch(() => false);
 
-    // Either empty state or commit data should be shown
-    const hasData = await page
-      .locator('text=commit')
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    expect(hasEmpty || hasData).toBe(true);
+    if (hasEmpty) {
+      await expect(emptyState).toBeVisible();
+    } else if (hasTabs) {
+      await expect(contentTabs).toBeVisible();
+    } else {
+      // Neither found — fail explicitly
+      expect(hasEmpty || hasTabs).toBe(true);
+    }
   });
 
   // IN-05: Load more pagination
@@ -130,14 +130,20 @@ test.describe('Insights Page', () => {
     const loadMoreBtn = page.locator('button:has-text("Load more")').first();
     const hasLoadMore = await loadMoreBtn.isVisible().catch(() => false);
 
+    // Count visible commit entries before pagination
+    const commitEntries = page.locator('text=/Pagination commit/');
+    const countBefore = await commitEntries.count();
+
     if (hasLoadMore) {
       await loadMoreBtn.click();
-      // Wait for new content to load after click
-      await page.waitForLoadState('networkidle');
+      // After clicking, more items should appear
+      await expect(async () => {
+        const countAfter = await commitEntries.count();
+        expect(countAfter).toBeGreaterThan(countBefore);
+      }).toPass({ timeout: 10000 });
+    } else {
+      // No pagination — all commits visible already
+      expect(countBefore).toBeGreaterThan(0);
     }
-
-    // Verify commits from test data are visible on the page
-    const commitEntry = page.locator('text=/Pagination commit/').first();
-    await expect(commitEntry).toBeVisible({ timeout: 10000 });
   });
 });

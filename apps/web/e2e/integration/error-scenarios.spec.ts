@@ -93,7 +93,11 @@ test.describe('Error Scenarios', () => {
     for (const route of routes) {
       errors.length = 0;
       await page.goto(route);
-      await page.waitForLoadState('networkidle');
+      // Wait for page to render by checking for any main content
+      await page
+        .locator('nav, [role="navigation"], h1, h2')
+        .first()
+        .waitFor({ state: 'visible', timeout: 15000 });
 
       const unexpectedErrors = errors.filter((e) => !isExpectedConsoleError(e));
       expect(

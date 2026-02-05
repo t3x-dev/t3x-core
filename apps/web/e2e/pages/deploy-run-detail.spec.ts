@@ -33,8 +33,8 @@ test.describe('Run Detail Page', () => {
 
     await page.goto(`/deploy/${runId}`);
 
-    // Wait for page to load
-    const heading = page.locator(`text=${runId}`).or(page.locator('text=Run'));
+    // Run ID should be displayed on the page
+    const heading = page.locator(`text=${runId}`);
     await expect(heading.first()).toBeVisible({ timeout: 15000 });
   });
 
@@ -44,11 +44,12 @@ test.describe('Run Detail Page', () => {
 
     await page.goto(`/deploy/${runId}`);
 
+    // Status badge should show one of the known run statuses (exact match)
     const statusBadge = page
-      .locator('text=Passed')
-      .or(page.locator('text=Failed'))
-      .or(page.locator('text=running'))
-      .or(page.locator('text=completed'));
+      .getByText('Passed', { exact: true })
+      .or(page.getByText('Failed', { exact: true }))
+      .or(page.getByText('Running', { exact: true }))
+      .or(page.getByText('Completed', { exact: true }));
     await expect(statusBadge.first()).toBeVisible({ timeout: 15000 });
   });
 
@@ -59,42 +60,24 @@ test.describe('Run Detail Page', () => {
     await page.goto(`/deploy/${runId}`);
 
     // Wait for initial load
-    const heading = page.locator(`text=${runId}`).or(page.locator('text=Run'));
+    const heading = page.locator(`text=${runId}`);
     await expect(heading.first()).toBeVisible({ timeout: 15000 });
 
-    // Check for tab buttons
-    const traceTab = page.locator('text=Trace').or(page.locator('button:has-text("Trace")'));
-    const hasTrace = await traceTab
-      .first()
-      .isVisible()
-      .catch(() => false);
+    // Trace tab should exist and show content when clicked
+    const traceTab = page.locator('button:has-text("Trace")');
+    await expect(traceTab.first()).toBeVisible({ timeout: 10000 });
+    await traceTab.first().click();
+    const traceContent = page.locator('text=Execution Trace');
+    await expect(traceContent.first()).toBeVisible({ timeout: 10000 });
 
-    if (hasTrace) {
-      await traceTab.first().click();
-      const traceContent = page.locator('text=Execution Trace').or(page.locator('text=Timeline'));
-      await expect(traceContent.first()).toBeVisible({ timeout: 10000 });
-    }
-
-    const assertionsTab = page
-      .locator('text=Assertions')
-      .or(page.locator('button:has-text("Assertions")'));
-    const hasAssertions = await assertionsTab
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    if (hasAssertions) {
-      await assertionsTab.first().click();
-      // Assertions content should load
-      const assertionContent = page
-        .locator('text=Assertion')
-        .or(page.locator('table'))
-        .or(page.locator('[class*="assertion"]'));
-      await expect(assertionContent.first()).toBeVisible({ timeout: 10000 });
-    }
-
-    // At least one tab must be available for the test to be meaningful
-    expect(hasTrace || hasAssertions).toBe(true);
+    // Assertions tab should exist and show content when clicked
+    const assertionsTab = page.locator('button:has-text("Assertions")');
+    await expect(assertionsTab.first()).toBeVisible({ timeout: 10000 });
+    await assertionsTab.first().click();
+    const assertionContent = page
+      .locator('text=Assertion')
+      .or(page.locator('[class*="assertion"]'));
+    await expect(assertionContent.first()).toBeVisible({ timeout: 10000 });
   });
 
   // RD-04: Score and metrics visible
@@ -103,25 +86,15 @@ test.describe('Run Detail Page', () => {
 
     await page.goto(`/deploy/${runId}`);
 
-    const heading = page.locator(`text=${runId}`).or(page.locator('text=Run'));
+    const heading = page.locator(`text=${runId}`);
     await expect(heading.first()).toBeVisible({ timeout: 15000 });
 
-    // Score should be visible
-    const score = page.locator('text=Score').or(page.locator('text=/%/'));
-    const hasScore = await score
-      .first()
-      .isVisible()
-      .catch(() => false);
+    // Both Score and Latency metrics should be present on a run detail page
+    const scoreLabel = page.locator('text=Score');
+    await expect(scoreLabel.first()).toBeVisible({ timeout: 10000 });
 
-    // Latency metric should be visible
-    const latency = page.locator('text=Latency').or(page.locator('text=/\\d+ms/'));
-    const hasLatency = await latency
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    // At least one metric should be present
-    expect(hasScore || hasLatency).toBe(true);
+    const latencyLabel = page.locator('text=Latency');
+    await expect(latencyLabel.first()).toBeVisible({ timeout: 10000 });
   });
 
   // RD-05: No unexpected console errors
@@ -134,7 +107,7 @@ test.describe('Run Detail Page', () => {
     });
 
     await page.goto(`/deploy/${runId}`);
-    const heading = page.locator(`text=${runId}`).or(page.locator('text=Run'));
+    const heading = page.locator(`text=${runId}`);
     await expect(heading.first()).toBeVisible({ timeout: 15000 });
 
     const unexpectedErrors = errors.filter((e) => !isExpectedConsoleError(e));
@@ -145,8 +118,8 @@ test.describe('Run Detail Page', () => {
   test('RD-06: Non-existent run shows error', async ({ page }) => {
     await page.goto('/deploy/run_nonexistent_999');
 
-    // Should show error or 404
-    const errorMsg = page.locator('text=/not found|error|404/i').or(page.locator('text=Run'));
+    // Should show error or 404 — not a generic page
+    const errorMsg = page.locator('text=/not found|error|404/i');
     await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
   });
 });

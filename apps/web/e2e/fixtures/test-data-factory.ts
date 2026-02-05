@@ -75,15 +75,22 @@ export function generateMergeConflictData(): {
  * Known console errors to ignore during E2E tests.
  * Shared across all test files for consistency (#11).
  *
- * Chrome's "Failed to load resource" messages don't include the URL
- * in msg.text(), so we match the generic 404/network pattern.
- * Real API errors are caught by test-level assertions, not console filtering.
+ * IMPORTANT: Patterns must be specific. Never match broad terms like "React"
+ * or "Warning" — those would suppress real errors.
  */
 export function isExpectedConsoleError(message: string): boolean {
-  return (
-    message.includes('React') ||
-    message.includes('Warning') ||
-    message.includes('hydration') ||
-    message.includes('Failed to load resource')
-  );
+  const expectedPatterns = [
+    // Next.js hydration mismatch warnings (non-critical in dev mode)
+    'Warning: Text content did not match',
+    'Warning: Expected server HTML to contain',
+    'Hydration failed because',
+    'There was an error while hydrating',
+    // React StrictMode double-render warnings
+    "Warning: Can't perform a React state update on an unmounted component",
+    'Warning: Cannot update a component',
+    // Static asset 404s (not API errors)
+    '/favicon.ico',
+    '/manifest.json',
+  ];
+  return expectedPatterns.some((pattern) => message.includes(pattern));
 }

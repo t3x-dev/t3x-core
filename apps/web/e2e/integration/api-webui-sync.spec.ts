@@ -58,9 +58,9 @@ test.describe('API-WebUI Sync', () => {
 
     // Reload and verify removal
     await page.reload();
-    await page.waitForLoadState('networkidle');
-    const stillVisible = await projectEntry.isVisible().catch(() => false);
-    expect(stillVisible).toBe(false);
+    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    await expect(navigation).toBeVisible({ timeout: 15000 });
+    await expect(projectEntry).toBeHidden({ timeout: 10000 });
   });
 
   // AS-03: Concurrent API operations remain consistent

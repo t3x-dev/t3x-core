@@ -23,8 +23,7 @@ test.describe('Agent Demo', () => {
     // Check if page loads (may redirect or show error if not configured)
     const chatInput = page
       .locator('textarea[placeholder*="message" i]')
-      .or(page.locator('text=Start a conversation'))
-      .or(page.locator('text=Agent'));
+      .or(page.locator('text=Start a conversation'));
     const loaded = await chatInput
       .first()
       .isVisible({ timeout: 15000 })
@@ -57,11 +56,11 @@ test.describe('Agent Demo', () => {
     const userMsg = page.locator('text=Hello, can you help me?');
     await expect(userMsg.first()).toBeVisible({ timeout: 10000 });
 
-    // Wait for bot response (typing indicator or response)
+    // Wait for bot response (typing indicator or assistant message)
     const botResponse = page
-      .locator('text=Bot')
-      .or(page.locator('[class*="typing"]'))
-      .or(page.locator('[class*="bounce"]'));
+      .locator('[class*="typing"]')
+      .or(page.locator('[class*="assistant"]'))
+      .or(page.locator('[class*="bot"]'));
     await expect(botResponse.first()).toBeVisible({ timeout: 30000 });
   });
 
@@ -150,16 +149,14 @@ test.describe('Agent Demo', () => {
     const promptSection = page.locator('text=Prompt').or(page.locator('pre'));
     await expect(promptSection.first()).toBeVisible({ timeout: 5000 });
 
-    // Close modal
+    // Close modal — button must exist if modal opened
     const closeBtn = page
       .locator('button:has-text("×")')
       .or(page.locator('button[aria-label*="close" i]'))
       .first();
-    const hasClose = await closeBtn.isVisible().catch(() => false);
-    if (hasClose) {
-      await closeBtn.click();
-      await expect(modal.first()).toBeHidden({ timeout: 5000 });
-    }
+    await expect(closeBtn).toBeVisible({ timeout: 5000 });
+    await closeBtn.click();
+    await expect(modal.first()).toBeHidden({ timeout: 5000 });
   });
 
   // AD-06: Run optimisation button state
@@ -183,8 +180,13 @@ test.describe('Agent Demo', () => {
       const requirement = page.locator('text=/rate at least/i');
       await expect(requirement.first()).toBeVisible({ timeout: 5000 });
     } else {
-      // Button is enabled — ready for optimisation
-      await expect(optimiseBtn).toBeEnabled();
+      // Button is enabled — requirement message should NOT be shown
+      const requirement = page.locator('text=/rate at least/i');
+      const hasRequirement = await requirement
+        .first()
+        .isVisible()
+        .catch(() => false);
+      expect(hasRequirement).toBe(false);
     }
   });
 
@@ -198,7 +200,7 @@ test.describe('Agent Demo', () => {
     await page.goto('/agent-demo/chat');
 
     // Wait for page content to render instead of fixed timeout
-    const pageContent = page.locator('textarea, text=Agent').first();
+    const pageContent = page.locator('textarea, text=Start a conversation').first();
     await pageContent.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
 
     const loaded = await pageContent.isVisible().catch(() => false);

@@ -69,10 +69,9 @@ test.describe('Leaf Workflow', () => {
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
 
-    // Source context section or sentence list should be present
+    // Source context section or actual source sentence should be present
     const sourceSection = page
       .locator('text=Source Context')
-      .or(page.locator('text=Constraints'))
       .or(page.locator(`text=${sentences[0].text}`));
     await expect(sourceSection.first()).toBeVisible({ timeout: 10000 });
   });
@@ -102,11 +101,14 @@ test.describe('Leaf Workflow', () => {
     const outputSection = page.locator('text=Output').first();
     await expect(outputSection).toBeVisible({ timeout: 30000 });
 
-    // Either output text appears, or an error about missing API key
-    const outputText = page.locator('pre, [class*="whitespace-pre"]').first();
-    const errorText = page.locator('text=/API key|error|failed/i').first();
+    // Check if we got an API key error (not a bug, just missing config)
+    const apiKeyError = page.locator('text=/API key/i').first();
+    const hasApiKeyError = await apiKeyError.isVisible().catch(() => false);
+    test.skip(hasApiKeyError, 'LLM API key not configured');
 
-    await expect(outputText.or(errorText).first()).toBeVisible({ timeout: 30000 });
+    // Verify actual output content appeared
+    const outputText = page.locator('pre, [class*="whitespace-pre"]').first();
+    await expect(outputText).toBeVisible({ timeout: 5000 });
   });
 
   // LW-04: Validate output shows assertions
