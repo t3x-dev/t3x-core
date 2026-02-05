@@ -178,6 +178,77 @@ export async function cleanupDeployAgent(
 }
 
 /**
+ * Create a branch
+ */
+export async function createTestBranch(
+  request: APIRequestContext,
+  projectId: string,
+  name: string,
+  options?: { parentBranch?: string; description?: string }
+): Promise<{ branchId: string; name: string }> {
+  const response = await request.post(`${API_BASE}/branches`, {
+    data: {
+      project_id: projectId,
+      name,
+      parent_branch: options?.parentBranch,
+      description: options?.description,
+    },
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to create branch: ${data.error?.message}`);
+  return { branchId: data.data.branch_id, name: data.data.name };
+}
+
+/**
+ * List branches for a project
+ */
+export async function listTestBranches(
+  request: APIRequestContext,
+  projectId: string
+): Promise<
+  Array<{ branch_id: string; name: string; is_current: boolean; head_commit_hash: string | null }>
+> {
+  const response = await request.get(`${API_BASE}/branches?project_id=${projectId}`);
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to list branches: ${data.error?.message}`);
+  return data.data.branches;
+}
+
+/**
+ * Switch to a branch
+ */
+export async function switchTestBranch(
+  request: APIRequestContext,
+  projectId: string,
+  branchName: string
+): Promise<{ branch_id: string; name: string; is_current: boolean }> {
+  const response = await request.post(`${API_BASE}/branches/switch`, {
+    data: { project_id: projectId, branch_name: branchName },
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to switch branch: ${data.error?.message}`);
+  return data.data;
+}
+
+/**
+ * Get current branch
+ */
+export async function getCurrentBranch(
+  request: APIRequestContext,
+  projectId: string
+): Promise<{
+  branch_id: string;
+  name: string;
+  is_current: boolean;
+  head_commit_hash: string | null;
+}> {
+  const response = await request.get(`${API_BASE}/branches/current?project_id=${projectId}`);
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to get current branch: ${data.error?.message}`);
+  return data.data;
+}
+
+/**
  * Create a run via API
  */
 export async function createTestRun(
