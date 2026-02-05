@@ -57,9 +57,12 @@ export class DeployPage {
   async deleteAgent(agentName: string): Promise<void> {
     const card = this.page.locator(`[class*="card"]:has-text("${agentName}")`);
     const deleteButton = card
-      .locator('button')
-      .filter({ hasText: /delete/i })
+      .locator('button:has(svg.lucide-trash-2)')
+      .or(card.locator('button:has(svg.lucide-trash)'))
+      .or(card.locator('button').filter({ hasText: /delete/i }))
       .or(card.locator('button[aria-label*="delete" i]'));
+    // Accept the native confirm() dialog that appears on delete
+    this.page.once('dialog', (dialog) => dialog.accept());
     await deleteButton.first().click();
   }
 
