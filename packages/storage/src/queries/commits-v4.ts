@@ -76,6 +76,7 @@ export class ParentNotFoundErrorV4 extends Error {
  *
  * Second-class fields (NOT in hash):
  * - project_id, message, branch, source_refs, position_x, position_y, created_at
+ * - Sentence.inherited_from (inheritance tracking, does not affect content identity)
  */
 export function computeCommitV4Hash(data: {
   schema: 't3x/commit/v4';
@@ -84,12 +85,23 @@ export function computeCommitV4Hash(data: {
   committed_at: string;
   content: { sentences: SentenceV4[] };
 }): string {
+  // Strip second-class fields from sentences before hashing.
+  // inherited_from is metadata about provenance, not part of content identity.
+  // Explicitly omit undefined optional fields to avoid relying on JCS stripping behavior.
+  const normalizedSentences = data.content.sentences.map((s) => {
+    const norm: Record<string, unknown> = { id: s.id, text: s.text };
+    if (s.confidence !== undefined) norm.confidence = s.confidence;
+    if (s.source_ref !== undefined) norm.source_ref = s.source_ref;
+    // inherited_from intentionally excluded from hash
+    return norm;
+  });
+
   return computeJCSHash({
     schema: data.schema,
     parents: data.parents,
     author: data.author,
     committed_at: data.committed_at,
-    content: data.content,
+    content: { sentences: normalizedSentences },
   });
 }
 

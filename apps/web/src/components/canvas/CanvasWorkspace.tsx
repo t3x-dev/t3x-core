@@ -625,7 +625,7 @@ function CanvasWorkspaceInner({
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
                 highlight?.mode !== 'main' &&
-                  'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
               )}
             >
               Main
@@ -644,7 +644,7 @@ function CanvasWorkspaceInner({
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
                 highlight?.mode !== 'branch' &&
-                  'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
               )}
             >
               Branch
@@ -686,7 +686,7 @@ function CanvasWorkspaceInner({
             data-action="memory"
             className={cn(
               'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary'
             )}
           >
@@ -700,7 +700,7 @@ function CanvasWorkspaceInner({
             title="Auto Layout"
             className={cn(
               'h-9 w-9 rounded-xl transition-all',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary',
               isLayouting && 'pointer-events-none'
             )}
@@ -736,7 +736,7 @@ function CanvasWorkspaceInner({
             title="Add Unit"
             className={cn(
               'h-9 w-9 rounded-xl transition-all',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary',
               isPending && 'pointer-events-none'
             )}

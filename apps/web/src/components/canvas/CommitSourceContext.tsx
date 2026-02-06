@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  GitFork,
   Leaf as LeafIcon,
   Loader2,
   MessageSquare,
@@ -309,9 +310,30 @@ export function CommitSourceContext({
     [sentences]
   );
 
-  // Sentences are only truly legacy if they have no source AND aren't attributable to leaf sources.
+  // Group sentences by inheritance status
+  const { inheritedSentences, inheritedByCommit } = useMemo(() => {
+    const inherited: CommitSentence[] = [];
+    const byCommit = new Map<string, CommitSentence[]>();
+
+    for (const sentence of sentences) {
+      if (sentence.inherited_from != null && sentence.inherited_from !== '') {
+        inherited.push(sentence);
+        const group = byCommit.get(sentence.inherited_from) || [];
+        group.push(sentence);
+        byCommit.set(sentence.inherited_from, group);
+      }
+    }
+
+    return { inheritedSentences: inherited, inheritedByCommit: byCommit };
+  }, [sentences]);
+
+  const hasInheritedSentences = inheritedSentences.length > 0;
+
+  // Sentences are only truly legacy if they have no source, aren't attributable to leaf sources,
+  // and aren't inherited from parent commits.
   const hasLeafSourceRefs = (sourceRefs ?? []).some((r) => r.type === 'leaf');
-  const allLegacy = withoutSource.length === sentences.length && !hasLeafSourceRefs;
+  const allLegacy =
+    withoutSource.length === sentences.length && !hasLeafSourceRefs && !hasInheritedSentences;
 
   // Get ordered list of unique turn hashes
   const turnHashes = useMemo(() => {
@@ -353,11 +375,16 @@ export function CommitSourceContext({
     return ordered;
   }, [sentences, sourceRefs]);
 
-  // All section keys (turns + leaves) for expand/collapse
-  const allSectionKeys = useMemo(
-    () => [...turnHashes, ...leafIds.map((id) => `leaf:${id}`)],
-    [turnHashes, leafIds]
-  );
+  // All section keys (inherited + turns + leaves) for expand/collapse
+  const allSectionKeys = useMemo(() => {
+    const keys: string[] = [];
+    if (hasInheritedSentences) {
+      keys.push('inherited');
+    }
+    keys.push(...turnHashes);
+    keys.push(...leafIds.map((id) => `leaf:${id}`));
+    return keys;
+  }, [hasInheritedSentences, turnHashes, leafIds]);
 
   // Initialize expanded state only on first mount (don't reset on data changes)
   useEffect(() => {
@@ -674,7 +701,7 @@ export function CommitSourceContext({
   const totalSections = turnHashes.length + leafIds.length;
   const showCollapseControls = !compact && totalSections > 1;
 
-  // Build summary text: "N sentences from M turns, K leaves"
+  // Build summary text: "N sentences (X inherited) from M turns, K leaves"
   const summaryParts: string[] = [];
   if (turnHashes.length > 0) {
     summaryParts.push(`${turnHashes.length} turn${turnHashes.length !== 1 ? 's' : ''}`);
@@ -682,10 +709,12 @@ export function CommitSourceContext({
   if (leafIds.length > 0) {
     summaryParts.push(`${leafIds.length} ${leafIds.length !== 1 ? 'leaves' : 'leaf'}`);
   }
+  const inheritedNote =
+    inheritedSentences.length > 0 ? ` (${inheritedSentences.length} inherited)` : '';
   const summaryText =
     summaryParts.length > 0
-      ? `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''} from ${summaryParts.join(', ')}`
-      : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}`;
+      ? `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote} from ${summaryParts.join(', ')}`
+      : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote}`;
 
   return (
     <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -728,8 +757,66 @@ export function CommitSourceContext({
         </div>
       </div>
 
-      {/* Turns list */}
+      {/* Sections list */}
       <div className="space-y-2">
+        {/* Inherited sentences section */}
+        {hasInheritedSentences && (
+          <div className="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('inherited')}
+              className="w-full flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-left"
+            >
+              {expandedTurns.has('inherited') || compact ? (
+                <ChevronDown size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
+              ) : (
+                <ChevronRight size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
+              )}
+              <GitFork size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
+              <span className="flex-1 text-sm font-medium text-blue-700 dark:text-blue-300">
+                Inherited from Parent
+              </span>
+              <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[0.65rem] rounded">
+                {inheritedSentences.length} sentence{inheritedSentences.length !== 1 ? 's' : ''}
+              </span>
+            </button>
+
+            {(expandedTurns.has('inherited') || compact) && (
+              <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20">
+                {/* Group by source commit */}
+                {Array.from(inheritedByCommit.entries()).map(([commitHash, groupSentences]) => (
+                  <div key={commitHash} className="mb-3 last:mb-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[0.65rem] font-mono text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {commitHash.slice(0, 16)}...
+                      </span>
+                      <span className="text-xs text-blue-500 dark:text-blue-400">
+                        {groupSentences.length} sentence{groupSentences.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {groupSentences.map((sentence) => (
+                        <li
+                          key={sentence.id}
+                          className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-blue-100 dark:border-blue-800"
+                        >
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                            {sentence.id}
+                          </span>
+                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                            {sentence.text}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Direct sentences - Turns list */}
         {hashesToRender.map((turnHash, idx) => {
           const data = turnData.get(turnHash);
           const isExpanded = expandedTurns.has(turnHash) || compact;

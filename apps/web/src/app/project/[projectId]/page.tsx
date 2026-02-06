@@ -236,7 +236,7 @@ export default function ProjectDetailPage() {
                   <p className="text-sm text-muted-foreground">Coming in v2.0</p>
                 </div>
 
-                <div className="space-y-3 opacity-60">
+                <div className="space-y-3">
                   <div className="flex items-center gap-3 rounded-md border p-3">
                     <Activity className="h-4 w-4 shrink-0" />
                     <span className="flex-1 text-sm">Agent started</span>

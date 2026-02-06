@@ -326,6 +326,12 @@ export const glass = {
   hover: 'hover:shadow-[var(--fx-shadow-hover)] hover:bg-[var(--hover-bg)]',
   /** Focus ring */
   focus: 'focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
+  /** Reading surface — reduced blur, higher opacity, for text-dense areas (Diff, Output) */
+  reading:
+    'bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)]',
+  /** Reading surface soft — slightly more transparent, for secondary text areas */
+  readingSoft:
+    'bg-[var(--glass-bg-reading-soft)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-default)] shadow-[var(--shadow-reading)]',
 } as const;
 
 // =============================================================================
