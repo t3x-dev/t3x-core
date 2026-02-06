@@ -38,6 +38,12 @@ export interface SentenceWithSource {
   text: string;
   /** Source reference (optional for legacy data) */
   source?: SourceRef;
+  /**
+   * The commit hash where this sentence was originally created.
+   * Set when a sentence is inherited from a parent commit.
+   * Undefined for sentences created directly in this commit.
+   */
+  inherited_from?: string;
 }
 
 /**

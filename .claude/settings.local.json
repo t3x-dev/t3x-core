@@ -175,7 +175,8 @@
       "Bash(gh pr checks:*)",
       "Bash(gh issue list:*)",
       "Bash(git status:*)",
-      "Bash(git -C /Users/heliuqi/t3x status --short)"
+      "Bash(git -C /Users/heliuqi/t3x status --short)",
+      "Bash(git -C /Users/heliuqi/t3x diff --stat)"
     ],
     "deny": [],
     "ask": []

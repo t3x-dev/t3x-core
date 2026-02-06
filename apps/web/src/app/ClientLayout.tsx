@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
 import { Sidebar } from '@/components/Sidebar';
 import { showToast } from '@/components/Toast';
@@ -65,31 +66,33 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <div className="flex min-h-screen bg-background">
-        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-        <main
-          className={cn(
-            'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-200 ease-[var(--ease-out-soft)]',
-            sidebarCollapsed ? 'ml-16' : 'ml-52'
-          )}
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: transitionDuration, ease: [0, 0, 0.2, 1] }}
-              className="flex flex-1 flex-col"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-        <Toaster position="bottom-right" richColors closeButton />
-        <CommandPalette />
-        <WelcomeModal />
-      </div>
+      <ErrorBoundary>
+        <div className="flex min-h-screen bg-background">
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          <main
+            className={cn(
+              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-200 ease-[var(--ease-out-soft)]',
+              sidebarCollapsed ? 'ml-16' : 'ml-52'
+            )}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: transitionDuration, ease: [0, 0, 0.2, 1] }}
+                className="flex flex-1 flex-col"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+          <Toaster position="bottom-right" richColors closeButton />
+          <CommandPalette />
+          <WelcomeModal />
+        </div>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

@@ -1,13 +1,13 @@
 'use client';
 
 import { CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
-import type { Sentence, WordDiffSegment } from '@/types/merge';
+import type { WordDiffSegment } from '@/types/merge';
 import { DiffSentenceLine } from './DiffSentenceLine';
-import { DiffSourceContextModal } from './DiffSourceContextModal';
 
 // ============================================================================
 // Types
@@ -27,7 +27,7 @@ interface DiffSideBySideProps {
   segmentDiffs: SegmentDiffItem[];
   baseSentences: CommitV4Sentence[];
   targetSentences: CommitV4Sentence[];
-  onSourceClick: (sentence: Sentence) => void;
+  projectId?: string;
 }
 
 export interface DiffSideBySideHandle {
@@ -47,22 +47,6 @@ interface UnifiedLine {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function toMergeSentence(s: CommitV4Sentence): Sentence {
-  return {
-    id: s.id,
-    text: s.text,
-    confidence: s.confidence,
-    // Only create source object if source_ref exists with turn_hash
-    source: s.source_ref?.turn_hash
-      ? {
-          turn_hash: s.source_ref.turn_hash,
-          start_char: s.source_ref.start_char,
-          end_char: s.source_ref.end_char,
-        }
-      : undefined,
-  };
-}
 
 /** Number of context lines to show before/after changes */
 const CONTEXT_LINES = 2;
@@ -208,10 +192,11 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
 
 export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySideProps>(
   function DiffSideBySide(
-    { segmentDiffs, baseSentences, targetSentences, onSourceClick: _onSourceClick },
+    { segmentDiffs, baseSentences, targetSentences, projectId },
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
 
     // Build unified lines
     const unifiedLines = useMemo(
@@ -257,33 +242,41 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const [expandedSegmentId, setExpandedSegmentId] = useState<string | null>(null);
     const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
     const [inlineContextLoading, setInlineContextLoading] = useState(false);
-
-    // Modal state
-    const [modalOpen, setModalOpen] = useState(false);
-    const [modalSentence, setModalSentence] = useState<Sentence | null>(null);
-    const [modalData, setModalData] = useState<TurnContextData | null>(null);
+    // Store source ref info for the expanded sentence
+    const [expandedTurnHash, setExpandedTurnHash] = useState<string | undefined>();
+    const [expandedHighlightStart, setExpandedHighlightStart] = useState<number | undefined>();
+    const [expandedHighlightEnd, setExpandedHighlightEnd] = useState<number | undefined>();
 
     const handleSourceToggle = useCallback(
       async (segmentId: string, sentence: CommitV4Sentence) => {
         if (expandedSegmentId === segmentId) {
           setExpandedSegmentId(null);
           setInlineContextData(null);
+          setExpandedTurnHash(undefined);
+          setExpandedHighlightStart(undefined);
+          setExpandedHighlightEnd(undefined);
           return;
         }
 
         if (!sentence.source_ref?.turn_hash) return;
 
+        const turnHash = sentence.source_ref.turn_hash;
+        const startChar = sentence.source_ref.start_char;
+        const endChar = sentence.source_ref.end_char;
+
         setExpandedSegmentId(segmentId);
+        setExpandedTurnHash(turnHash);
+        setExpandedHighlightStart(startChar);
+        setExpandedHighlightEnd(endChar);
         setInlineContextLoading(true);
         setInlineContextData(null);
-        setModalSentence(toMergeSentence(sentence));
 
         try {
-          const data = await api.fetchTurnContextCached(sentence.source_ref.turn_hash, {
+          const data = await api.fetchTurnContextCached(turnHash, {
             before: 2,
             after: 2,
-            highlightStart: sentence.source_ref.start_char,
-            highlightEnd: sentence.source_ref.end_char,
+            highlightStart: startChar,
+            highlightEnd: endChar,
           });
           setInlineContextData(data);
         } catch {
@@ -295,16 +288,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [expandedSegmentId]
     );
 
-    const handleExpandModal = useCallback(() => {
-      setModalData(inlineContextData);
-      setModalOpen(true);
-    }, [inlineContextData]);
-
-    const closeModal = useCallback(() => {
-      setModalOpen(false);
-      setModalSentence(null);
-      setModalData(null);
-    }, []);
+    const handleJumpToConversation = useCallback(
+      (conversationId: string) => {
+        if (projectId) {
+          router.push(`/project/${projectId}/conversation/${conversationId}`);
+        }
+      },
+      [projectId, router]
+    );
 
     // Render a unified line row
     const renderLine = (line: UnifiedLine, index: number) => {
@@ -367,7 +358,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 expanded={expandedSegmentId === baseId}
                 inlineContextData={inlineContextData}
                 inlineContextLoading={inlineContextLoading}
-                onExpandModal={handleExpandModal}
+                turnHash={expandedSegmentId === baseId ? expandedTurnHash : undefined}
+                highlightStart={expandedSegmentId === baseId ? expandedHighlightStart : undefined}
+                highlightEnd={expandedSegmentId === baseId ? expandedHighlightEnd : undefined}
+                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
               />
             )}
 
@@ -392,7 +386,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 expanded={expandedSegmentId === `target-${targetId}`}
                 inlineContextData={inlineContextData}
                 inlineContextLoading={inlineContextLoading}
-                onExpandModal={handleExpandModal}
+                turnHash={expandedSegmentId === `target-${targetId}` ? expandedTurnHash : undefined}
+                highlightStart={
+                  expandedSegmentId === `target-${targetId}` ? expandedHighlightStart : undefined
+                }
+                highlightEnd={
+                  expandedSegmentId === `target-${targetId}` ? expandedHighlightEnd : undefined
+                }
+                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
               />
             )}
           </div>
@@ -429,15 +430,6 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             className="py-20"
           />
         )}
-
-        {/* Source Context Modal */}
-        <DiffSourceContextModal
-          open={modalOpen}
-          onClose={closeModal}
-          sentence={modalSentence}
-          data={modalData}
-          loading={false}
-        />
       </div>
     );
   }
