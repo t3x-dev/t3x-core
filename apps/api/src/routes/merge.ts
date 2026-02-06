@@ -175,17 +175,19 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
       mergeCommit.branch = branch;
     }
 
-    // Save as V4 commit directly (source_ref preserved)
-    await createCommitV4(db, {
-      hash: mergeCommit.hash,
-      parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      committedAt: new Date(mergeCommit.committed_at),
-      content: mergeCommit.content,
-      projectId: project_id,
-      message: mergeCommit.message,
-      branch: mergeCommit.branch,
-    });
+    // Save as V4 commit (use correct CreateCommitV4Input format)
+    await createCommitV4(
+      db,
+      {
+        parents: mergeCommit.parents,
+        author: mergeCommit.author,
+        sentences: mergeCommit.content.sentences,
+        project_id: project_id,
+        message: mergeCommit.message,
+        branch: mergeCommit.branch,
+      },
+      { strictParents: false }
+    );
 
     // Update branch head if branch specified
     if (branch) {
@@ -385,17 +387,19 @@ mergeRoutes.post(
       const targetBranch = branch || draft.targetBranch || 'main';
       mergeCommit.branch = targetBranch;
 
-      // Save as V4 commit directly (source_ref preserved)
-      await createCommitV4(db, {
-        hash: mergeCommit.hash,
-        parents: mergeCommit.parents,
-        author: mergeCommit.author,
-        committedAt: new Date(mergeCommit.committed_at),
-        content: mergeCommit.content,
-        projectId: draft.projectId,
-        message: mergeCommit.message,
-        branch: mergeCommit.branch,
-      });
+      // Save as V4 commit (use correct CreateCommitV4Input format)
+      await createCommitV4(
+        db,
+        {
+          parents: mergeCommit.parents,
+          author: mergeCommit.author,
+          sentences: mergeCommit.content.sentences,
+          project_id: draft.projectId,
+          message: mergeCommit.message,
+          branch: mergeCommit.branch,
+        },
+        { strictParents: false }
+      );
 
       // Update branch head
       await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
