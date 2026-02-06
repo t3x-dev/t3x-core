@@ -10,9 +10,12 @@
  * - Merge preview before commit
  */
 
+import { AnimatePresence, motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
 import { MergePreview } from './MergePreview';
@@ -42,6 +45,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     previewExpanded,
     togglePreview,
   } = useMergeWorkspaceStore();
+
+  const [showCelebration, setShowCelebration] = useState(false);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -84,7 +89,9 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   const handleCommit = useCallback(async () => {
     try {
       await commitMerge();
-      // Redirect is handled by page component
+      setShowCelebration(true);
+      // Auto-dismiss after 1.5s — redirect is handled by page component
+      setTimeout(() => setShowCelebration(false), 1500);
     } catch {
       // Error is set in store
     }
@@ -97,7 +104,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
   if (!prepared) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <EmptyState
           icon={GitMerge}
           title="No merge data available"
@@ -111,7 +118,37 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   const unresolvedCount = getUnresolvedCount();
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="relative flex h-screen flex-col bg-[var(--surface-app)]">
+      {/* Merge Completion Overlay */}
+      <AnimatePresence>
+        {showCelebration && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className={cn(
+                'flex flex-col items-center gap-4 rounded-2xl px-10 py-8',
+                glass.cardBase,
+                glass.highlight
+              )}
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-commit)]/15">
+                <GitMerge className="h-7 w-7 text-[var(--accent-commit)]" />
+              </div>
+              <p className="text-lg font-semibold text-[var(--text-primary)]">Merge Complete</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Action Bar */}
       <MergeActionBar
         sourceBranch={sourceBranch || 'source'}
