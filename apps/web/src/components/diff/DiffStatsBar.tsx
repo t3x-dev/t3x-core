@@ -47,7 +47,7 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
           type="button"
           onClick={() => onJump?.(item.key)}
           disabled={item.count === 0}
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-opacity ${item.color} ${item.count === 0 ? 'opacity-40 cursor-default' : 'hover:opacity-80 cursor-pointer'}`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${item.color} ${item.count === 0 ? 'text-[var(--text-tertiary)] cursor-default' : 'hover:brightness-110 cursor-pointer'}`}
         >
           <span>{item.label}</span>
           <span>{item.count}</span>

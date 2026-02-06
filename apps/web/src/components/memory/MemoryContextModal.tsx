@@ -152,7 +152,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
       return (
         <div className="flex flex-col h-full min-h-0">
           <div className="shrink-0 px-4 py-3 border-b border-[var(--stroke-divider)]">
-            <h3 className="font-medium text-sm truncate">
+            <h3 className="font-medium text-sm truncate text-[var(--text-primary)]">
               {conv.title || 'Untitled Conversation'}
             </h3>
             <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
@@ -192,7 +192,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
         <div className="flex flex-col h-full min-h-0">
           <div className="shrink-0 px-4 py-3 border-b border-[var(--stroke-divider)]">
             <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm truncate">
+              <h3 className="font-medium text-sm truncate text-[var(--text-primary)]">
                 {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
               </h3>
               <span className="px-1.5 py-0.5 text-xs bg-[var(--hover-bg)] rounded shrink-0">
@@ -280,7 +280,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
       <DialogContent
         className={cn(
           'w-[95vw] h-[90vh] max-w-none sm:max-w-none flex flex-col p-0 gap-0 rounded-2xl',
-          glass.cardBase,
+          glass.elevatedBase,
           glass.highlight
         )}
       >
@@ -484,7 +484,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
 
           {/* Right panel: Detail */}
           <div
-            className={cn('flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden', glass.cardBase)}
+            className={cn('flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden', glass.reading)}
           >
             {renderDetailPanel()}
           </div>
