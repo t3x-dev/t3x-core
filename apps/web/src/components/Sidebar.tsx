@@ -8,6 +8,7 @@ import {
   FileText,
   Github,
   Home,
+  ListChecks,
   Rocket,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,7 +22,15 @@ import { cn } from '@/lib/utils';
 // T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)
 function LogoIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="T3X Logo"
+    >
       <defs>
         <radialGradient id="logoGradient" cx="32" cy="32" r="28" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#2563EB" />
@@ -57,6 +66,8 @@ function AgentIcon({ className }: { className?: string }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      role="img"
+      aria-label="Agent"
     >
       {/* Robot head */}
       <rect
@@ -117,13 +128,7 @@ function NavItem({ href, label, isActive, children, external, disabled, collapse
   const inner = (
     <>
       <span className="shrink-0">{children}</span>
-      {!collapsed && (
-        <span
-          className="text-sm font-medium truncate"
-        >
-          {label}
-        </span>
-      )}
+      {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
     </>
   );
 
@@ -245,6 +250,49 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* Bottom Navigation */}
         <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
+          {/* QuickStart Checklist Reopen */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('t3x-quickstart-dismissed');
+                    window.dispatchEvent(new Event('t3x-quickstart-reopen'));
+                  }}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                    'h-10 w-10 justify-center',
+                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <ListChecks className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Quick Start Checklist
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem('t3x-quickstart-dismissed');
+                window.dispatchEvent(new Event('t3x-quickstart-reopen'));
+              }}
+              className={cn(
+                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                'h-10 w-full px-3',
+                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+              )}
+            >
+              <span className="shrink-0">
+                <ListChecks className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-medium truncate">Quick Start</span>
+            </button>
+          )}
+
           <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
             <BarChart3 className="h-5 w-5" />
           </NavItem>

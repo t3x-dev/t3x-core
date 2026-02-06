@@ -2,9 +2,11 @@
 
 import { Activity, Cpu, Search, Zap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
+import { GuidedTour } from '@/components/onboarding/GuidedTour';
+import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -26,6 +28,19 @@ export default function ProjectDetailPage() {
   const canvasLoading = useCanvasStore((state) => state.loading);
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
+  const nodes = useCanvasStore((state) => state.nodes);
+
+  // Detect node types for QuickStart checklist
+  const nodeTypes = useMemo(() => {
+    const types = new Set(nodes.map((n) => n.type));
+    return {
+      hasConversation: types.has('conversation'),
+      hasCommit: types.has('commit') || types.has('pending'),
+      hasBranch: nodes.some((n) => n.data?.branch && n.data.branch !== 'main'),
+      hasLeaf: types.has('leaf'),
+      hasMerge: nodes.some((n) => n.data?.isMerge),
+    };
+  }, [nodes]);
 
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
@@ -100,8 +115,12 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const canvasReady = !canvasLoading && !canvasError && !!project;
+
   return (
     <div className="flex h-full flex-col">
+      <GuidedTour ready={canvasReady} />
+      <QuickStartChecklist nodeTypes={nodeTypes} />
       {mode === 'editor' ? (
         <CanvasWorkspace projectName={project.name} mode={mode} onModeChange={setMode} />
       ) : (
@@ -118,6 +137,7 @@ export default function ProjectDetailPage() {
                 style={{ transform: 'translateX(calc(100% + 2px))' }}
               />
               <button
+                type="button"
                 className={cn(
                   'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
                   'text-muted-foreground hover:text-foreground'
@@ -127,6 +147,7 @@ export default function ProjectDetailPage() {
                 Editor
               </button>
               <button
+                type="button"
                 className={cn(
                   'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
                   'text-foreground'
