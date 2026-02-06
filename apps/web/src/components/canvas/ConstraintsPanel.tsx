@@ -163,17 +163,17 @@ export default function ConstraintsPanel({
   ];
 
   return (
-    <div className="mt-5 border-t pt-5">
+    <div className="mt-5 border-t border-[var(--stroke-divider)] pt-5">
       <div className="mb-4">
-        <strong className="mb-1 block text-base text-foreground">Constraints</strong>
-        <span className="text-sm text-muted-foreground">From Conversation</span>
+        <strong className="mb-1 block text-base text-[var(--text-primary)]">Constraints</strong>
+        <span className="text-sm text-[var(--text-tertiary)]">From Conversation</span>
       </div>
 
       {/* Clauses Section */}
       <div className="mb-4">
         <Button
           variant="ghost"
-          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
           onClick={() => toggleSection('clauses')}
         >
           {expandedSections.clauses ? (
@@ -200,7 +200,7 @@ export default function ConstraintsPanel({
                 />
               ))}
             {totalKeepClauses === 0 && (
-              <p className="py-3 text-center text-xs text-muted-foreground">
+              <p className="py-3 text-center text-xs text-[var(--text-tertiary)]">
                 No sentences marked as "keep" in Conversation.
               </p>
             )}
@@ -212,7 +212,7 @@ export default function ConstraintsPanel({
       <div className="mb-4">
         <Button
           variant="ghost"
-          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
           onClick={() => toggleSection('mustHave')}
         >
           {expandedSections.mustHave ? (
@@ -270,7 +270,7 @@ export default function ConstraintsPanel({
               </div>
             )}
             {activeMustHave.length === 0 && !onUpdateOverrides && (
-              <p className="py-3 text-center text-xs text-muted-foreground">
+              <p className="py-3 text-center text-xs text-[var(--text-tertiary)]">
                 No must-have keywords defined.
               </p>
             )}
@@ -282,7 +282,7 @@ export default function ConstraintsPanel({
       <div className="mb-4">
         <Button
           variant="ghost"
-          className="flex w-full items-center justify-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
+          className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
           onClick={() => toggleSection('mustntHave')}
         >
           {expandedSections.mustntHave ? (
@@ -340,7 +340,7 @@ export default function ConstraintsPanel({
               </div>
             )}
             {activeMustntHave.length === 0 && !onUpdateOverrides && (
-              <p className="py-3 text-center text-xs text-muted-foreground">
+              <p className="py-3 text-center text-xs text-[var(--text-tertiary)]">
                 No mustn't-have keywords defined.
               </p>
             )}
@@ -363,11 +363,11 @@ function ClauseItem({ clause, isDisabled, onToggle, canToggle }: ClauseItemProps
   return (
     <div
       className={cn(
-        'flex items-start gap-2.5 rounded-lg border bg-background p-3 text-sm leading-relaxed',
-        isDisabled && 'bg-muted/50 opacity-50'
+        'flex items-start gap-2.5 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-sm leading-relaxed',
+        isDisabled && 'opacity-50'
       )}
     >
-      <span className="flex-1 text-muted-foreground">{clause.text}</span>
+      <span className="flex-1 text-[var(--text-secondary)]">{clause.text}</span>
       {canToggle && (
         <Button
           variant="ghost"
@@ -412,7 +412,7 @@ function KeywordTag({
         isMustHave
           ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
           : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
-        isRemoved && 'line-through opacity-40',
+        isRemoved && 'line-through text-[var(--text-tertiary)]',
         isAdditional && 'border border-dashed border-current bg-transparent'
       )}
     >

@@ -172,6 +172,34 @@ export const buttonHover = {
 };
 
 // ============================================
+// Celebration & Transition Presets
+// ============================================
+
+/** Commit success celebration — scale pulse with overshoot */
+export const commitCelebration = {
+  scale: [1, 1.06, 1],
+  transition: {
+    duration: 0.4,
+    times: [0, 0.35, 1],
+    ease: [0.34, 1.56, 0.64, 1],
+  },
+};
+
+/** Glow ring pulse — one-shot expanding ring */
+export const glowPulseKeyframes = (color: string) => ({
+  boxShadow: [`0 0 0 0px ${color}00`, `0 0 0 8px ${color}33`, `0 0 0 0px ${color}00`],
+  transition: { duration: 0.6, ease: 'easeOut' },
+});
+
+/** Page transition — simple opacity fade */
+export const pageTransition = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.15, ease: [0, 0, 0.2, 1] },
+};
+
+// ============================================
 // Stagger Helpers
 // ============================================
 

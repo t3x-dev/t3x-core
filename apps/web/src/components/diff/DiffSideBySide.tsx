@@ -1,13 +1,15 @@
 'use client';
 
 import { CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
-import type { Sentence, WordDiffSegment } from '@/types/merge';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
+import type { WordDiffSegment } from '@/types/merge';
 import { DiffSentenceLine } from './DiffSentenceLine';
-import { DiffSourceContextModal } from './DiffSourceContextModal';
 
 // ============================================================================
 // Types
@@ -27,7 +29,7 @@ interface DiffSideBySideProps {
   segmentDiffs: SegmentDiffItem[];
   baseSentences: CommitV4Sentence[];
   targetSentences: CommitV4Sentence[];
-  onSourceClick: (sentence: Sentence) => void;
+  projectId?: string;
 }
 
 export interface DiffSideBySideHandle {
@@ -47,22 +49,6 @@ interface UnifiedLine {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function toMergeSentence(s: CommitV4Sentence): Sentence {
-  return {
-    id: s.id,
-    text: s.text,
-    confidence: s.confidence,
-    // Only create source object if source_ref exists with turn_hash
-    source: s.source_ref?.turn_hash
-      ? {
-          turn_hash: s.source_ref.turn_hash,
-          start_char: s.source_ref.start_char,
-          end_char: s.source_ref.end_char,
-        }
-      : undefined,
-  };
-}
 
 /** Number of context lines to show before/after changes */
 const CONTEXT_LINES = 2;
@@ -188,13 +174,13 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
     <button
       type="button"
       onClick={onExpand}
-      className="w-full grid grid-cols-2 divide-x bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+      className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
     >
-      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
         <ChevronRight className="h-3 w-3" />
         <span>··· {count} unchanged ···</span>
       </div>
-      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
         <ChevronRight className="h-3 w-3" />
         <span>··· {count} unchanged ···</span>
       </div>
@@ -208,10 +194,11 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
 
 export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySideProps>(
   function DiffSideBySide(
-    { segmentDiffs, baseSentences, targetSentences, onSourceClick: _onSourceClick },
+    { segmentDiffs, baseSentences, targetSentences, projectId },
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
 
     // Build unified lines
     const unifiedLines = useMemo(
@@ -257,33 +244,41 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const [expandedSegmentId, setExpandedSegmentId] = useState<string | null>(null);
     const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
     const [inlineContextLoading, setInlineContextLoading] = useState(false);
-
-    // Modal state
-    const [modalOpen, setModalOpen] = useState(false);
-    const [modalSentence, setModalSentence] = useState<Sentence | null>(null);
-    const [modalData, setModalData] = useState<TurnContextData | null>(null);
+    // Store source ref info for the expanded sentence
+    const [expandedTurnHash, setExpandedTurnHash] = useState<string | undefined>();
+    const [expandedHighlightStart, setExpandedHighlightStart] = useState<number | undefined>();
+    const [expandedHighlightEnd, setExpandedHighlightEnd] = useState<number | undefined>();
 
     const handleSourceToggle = useCallback(
       async (segmentId: string, sentence: CommitV4Sentence) => {
         if (expandedSegmentId === segmentId) {
           setExpandedSegmentId(null);
           setInlineContextData(null);
+          setExpandedTurnHash(undefined);
+          setExpandedHighlightStart(undefined);
+          setExpandedHighlightEnd(undefined);
           return;
         }
 
         if (!sentence.source_ref?.turn_hash) return;
 
+        const turnHash = sentence.source_ref.turn_hash;
+        const startChar = sentence.source_ref.start_char;
+        const endChar = sentence.source_ref.end_char;
+
         setExpandedSegmentId(segmentId);
+        setExpandedTurnHash(turnHash);
+        setExpandedHighlightStart(startChar);
+        setExpandedHighlightEnd(endChar);
         setInlineContextLoading(true);
         setInlineContextData(null);
-        setModalSentence(toMergeSentence(sentence));
 
         try {
-          const data = await api.fetchTurnContextCached(sentence.source_ref.turn_hash, {
+          const data = await api.fetchTurnContextCached(turnHash, {
             before: 2,
             after: 2,
-            highlightStart: sentence.source_ref.start_char,
-            highlightEnd: sentence.source_ref.end_char,
+            highlightStart: startChar,
+            highlightEnd: endChar,
           });
           setInlineContextData(data);
         } catch {
@@ -295,16 +290,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [expandedSegmentId]
     );
 
-    const handleExpandModal = useCallback(() => {
-      setModalData(inlineContextData);
-      setModalOpen(true);
-    }, [inlineContextData]);
-
-    const closeModal = useCallback(() => {
-      setModalOpen(false);
-      setModalSentence(null);
-      setModalData(null);
-    }, []);
+    const handleJumpToConversation = useCallback(
+      (conversationId: string) => {
+        if (projectId) {
+          router.push(`/project/${projectId}/conversation/${conversationId}`);
+        }
+      },
+      [projectId, router]
+    );
 
     // Render a unified line row
     const renderLine = (line: UnifiedLine, index: number) => {
@@ -317,14 +310,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               key={`collapsed-${index}`}
               type="button"
               onClick={() => toggleSection(index)}
-              className="w-full grid grid-cols-2 divide-x bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+              className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
               data-line-index={index}
             >
-              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
                 <ChevronDown className="h-3 w-3" />
                 <span>··· {line.collapsedCount} unchanged (click to collapse) ···</span>
               </div>
-              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
                 <ChevronDown className="h-3 w-3" />
                 <span>··· {line.collapsedCount} unchanged ···</span>
               </div>
@@ -345,10 +338,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
       return (
         <div key={`line-${index}-${baseId || targetId}`} data-line-index={index}>
-          <div className="grid grid-cols-2 divide-x">
+          <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
             {/* Left (Base) side */}
             {line.type === 'added' ? (
-              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+              <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
               <DiffSentenceLine
                 text={line.baseSentence?.text || ''}
@@ -367,13 +360,16 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 expanded={expandedSegmentId === baseId}
                 inlineContextData={inlineContextData}
                 inlineContextLoading={inlineContextLoading}
-                onExpandModal={handleExpandModal}
+                turnHash={expandedSegmentId === baseId ? expandedTurnHash : undefined}
+                highlightStart={expandedSegmentId === baseId ? expandedHighlightStart : undefined}
+                highlightEnd={expandedSegmentId === baseId ? expandedHighlightEnd : undefined}
+                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
               />
             )}
 
             {/* Right (Target) side */}
             {line.type === 'removed' ? (
-              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+              <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
               <DiffSentenceLine
                 text={line.targetSentence?.text || ''}
@@ -392,7 +388,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 expanded={expandedSegmentId === `target-${targetId}`}
                 inlineContextData={inlineContextData}
                 inlineContextLoading={inlineContextLoading}
-                onExpandModal={handleExpandModal}
+                turnHash={expandedSegmentId === `target-${targetId}` ? expandedTurnHash : undefined}
+                highlightStart={
+                  expandedSegmentId === `target-${targetId}` ? expandedHighlightStart : undefined
+                }
+                highlightEnd={
+                  expandedSegmentId === `target-${targetId}` ? expandedHighlightEnd : undefined
+                }
+                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
               />
             )}
           </div>
@@ -401,19 +404,25 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     };
 
     return (
-      <div className="flex-1 overflow-auto" ref={containerRef}>
+      <div className={cn('flex-1 overflow-auto', glass.reading)} ref={containerRef}>
         {/* Column Headers */}
-        <div className="grid grid-cols-2 divide-x border-b bg-muted/20 sticky top-0 z-10">
-          <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Base (Source)
+        <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
+          <div className="px-4 py-2 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              Base (Source)
+            </span>
           </div>
-          <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Target
+          <div className="px-4 py-2 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              Target
+            </span>
           </div>
         </div>
 
         {/* Unified diff lines */}
-        <div className="divide-y">{unifiedLines.map((line, i) => renderLine(line, i))}</div>
+        <div className="divide-y divide-[var(--stroke-divider)]">
+          {unifiedLines.map((line, i) => renderLine(line, i))}
+        </div>
 
         {/* Empty state */}
         {segmentDiffs.length === 0 && (
@@ -423,15 +432,6 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             className="py-20"
           />
         )}
-
-        {/* Source Context Modal */}
-        <DiffSourceContextModal
-          open={modalOpen}
-          onClose={closeModal}
-          sentence={modalSentence}
-          data={modalData}
-          loading={false}
-        />
       </div>
     );
   }
