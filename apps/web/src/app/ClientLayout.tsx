@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from '@/components/Sidebar';
 import { showToast } from '@/components/Toast';
 import { Toaster } from '@/components/ui/sonner';
@@ -27,11 +28,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
-      <Sidebar />
-      <main className="ml-16 flex flex-1 flex-col overflow-hidden">{children}</main>
-      <Toaster position="bottom-right" richColors closeButton />
-      <CommandPalette />
-    </div>
+    <ErrorBoundary>
+      <div className="flex min-h-screen bg-muted/30">
+        <Sidebar />
+        <main className="ml-16 flex flex-1 flex-col overflow-hidden">{children}</main>
+        <Toaster position="bottom-right" richColors closeButton />
+        <CommandPalette />
+      </div>
+    </ErrorBoundary>
   );
 }
