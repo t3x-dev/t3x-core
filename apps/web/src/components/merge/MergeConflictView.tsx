@@ -58,8 +58,8 @@ export function MergeConflictView({
       className={cn(
         'rounded-lg border p-4 transition-colors',
         resolved
-          ? 'border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30'
-          : 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/30 dark:bg-yellow-950/30'
+          ? 'border-[var(--diff-added-line)]/20 bg-[var(--diff-added-bg)]'
+          : 'border-[var(--diff-modified-line)]/20 bg-[var(--diff-modified-bg)]'
       )}
     >
       {/* Header */}
@@ -72,8 +72,8 @@ export function MergeConflictView({
 
       {/* Word diff visualization */}
       {pair.wordDiff && pair.wordDiff.length > 0 && (
-        <div className="mb-4 bg-muted/50 rounded-md p-3">
-          <div className="text-xs text-muted-foreground mb-1">Changes:</div>
+        <div className="mb-4 bg-[var(--glass-bg-reading-soft)] rounded-md p-3">
+          <div className="text-xs text-[var(--text-tertiary)] mb-1">Changes:</div>
           <WordDiffDisplay segments={pair.wordDiff} />
         </div>
       )}
