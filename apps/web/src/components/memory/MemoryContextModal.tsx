@@ -1,7 +1,8 @@
 'use client';
 
-import { Brain, FileText, Loader2, MessageSquare, Pin, X } from 'lucide-react';
+import { Brain, Check, FileText, Loader2, MessageSquare, Pin, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { TurnBubble } from '@/components/shared/TurnBubble';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -11,11 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Conversation, Leaf } from '@/lib/api';
-import { listConversations, listLeavesByProject } from '@/lib/api';
+import type { Conversation, Leaf, Turn } from '@/lib/api';
+import { listConversations, listLeavesByProject, listTurns } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
+
+// Selected item type for detail panel
+type SelectedItem =
+  | { type: 'conversation'; id: string; data: Conversation }
+  | { type: 'leaf'; id: string; data: Leaf }
+  | null;
 
 interface MemoryContextModalProps {
   open: boolean;
@@ -31,12 +39,21 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   const [loadingLeaves, setLoadingLeaves] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
+  // Detail panel state
+  const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
+  const [detailTurns, setDetailTurns] = useState<Turn[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
   // Pin store
   const { pins, isPinned, addPin, removePin, getPinByRef, fetchPins } = usePinsStore();
 
   // Fetch data when modal opens
   useEffect(() => {
     if (!open || !projectId) return;
+
+    // Reset state when modal opens
+    setSelectedItem(null);
+    setDetailTurns([]);
 
     // Fetch pins for project
     fetchPins(projectId);
@@ -56,6 +73,20 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
       .finally(() => setLoadingLeaves(false));
   }, [open, projectId, fetchPins]);
 
+  // Load conversation turns when a conversation is selected
+  useEffect(() => {
+    if (!selectedItem || selectedItem.type !== 'conversation') {
+      setDetailTurns([]);
+      return;
+    }
+
+    setLoadingDetail(true);
+    listTurns(projectId, selectedItem.id)
+      .then((result) => setDetailTurns(result.turns))
+      .catch(() => setDetailTurns([]))
+      .finally(() => setLoadingDetail(false));
+  }, [selectedItem, projectId]);
+
   // Count pinned items
   const pinnedConversations = useMemo(
     () => pins.filter((p) => p.type === 'conversation').length,
@@ -63,8 +94,13 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   );
   const pinnedLeaves = useMemo(() => pins.filter((p) => p.type === 'leaf').length, [pins]);
 
-  // Handle pin toggle
-  const handleTogglePin = async (type: 'conversation' | 'leaf', refId: string) => {
+  // Handle pin toggle (called when clicking checkbox)
+  const handleTogglePin = async (
+    e: React.MouseEvent,
+    type: 'conversation' | 'leaf',
+    refId: string
+  ) => {
+    e.stopPropagation(); // Prevent row selection
     setTogglingId(refId);
     try {
       const pinned = isPinned(type, refId);
@@ -81,180 +117,360 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
     }
   };
 
+  // Handle row click (select item to show detail)
+  const handleSelectConversation = (conv: Conversation) => {
+    setSelectedItem({ type: 'conversation', id: conv.conversation_id, data: conv });
+  };
+
+  const handleSelectLeaf = (leaf: Leaf) => {
+    setSelectedItem({ type: 'leaf', id: leaf.id, data: leaf });
+  };
+
+  // Render detail panel content
+  const renderDetailPanel = () => {
+    if (!selectedItem) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
+          <p className="text-sm">Select an item to preview</p>
+        </div>
+      );
+    }
+
+    if (loadingDetail) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    // Conversation detail
+    if (selectedItem.type === 'conversation') {
+      const conv = selectedItem.data;
+      return (
+        <div className="flex flex-col h-full min-h-0">
+          <div className="shrink-0 px-4 py-3 border-b bg-muted/30">
+            <h3 className="font-medium text-sm truncate">
+              {conv.title || 'Untitled Conversation'}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {detailTurns.length} turns · {new Date(conv.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-4 space-y-3">
+              {detailTurns.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No turns in this conversation
+                </p>
+              ) : (
+                detailTurns.map((turn) => (
+                  <TurnBubble
+                    key={turn.turn_hash}
+                    turn={{
+                      turn_hash: turn.turn_hash,
+                      role: turn.role,
+                      content: turn.content,
+                      created_at: turn.created_at,
+                    }}
+                    showTargetRing={false}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      );
+    }
+
+    // Leaf detail
+    if (selectedItem.type === 'leaf') {
+      const leaf = selectedItem.data;
+      return (
+        <div className="flex flex-col h-full min-h-0">
+          <div className="shrink-0 px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-sm truncate">
+                {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
+              </h3>
+              <span className="px-1.5 py-0.5 text-xs bg-muted rounded shrink-0">{leaf.type}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {leaf.constraints?.length || 0} constraints ·{' '}
+              {new Date(leaf.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-4 space-y-4">
+              {/* Constraints */}
+              {leaf.constraints && leaf.constraints.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                    Constraints
+                  </h4>
+                  <div className="space-y-2">
+                    {leaf.constraints.map((c) => (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          'p-2 rounded border text-sm',
+                          c.type === 'require'
+                            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                            : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {c.type === 'require' ? (
+                            <Check className="h-3.5 w-3.5 text-green-600" />
+                          ) : (
+                            <XCircle className="h-3.5 w-3.5 text-red-600" />
+                          )}
+                          <span
+                            className={cn(
+                              'text-xs font-medium',
+                              c.type === 'require' ? 'text-green-700' : 'text-red-700'
+                            )}
+                          >
+                            {c.type === 'require' ? 'Require' : 'Exclude'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">({c.match_mode})</span>
+                        </div>
+                        <p className="text-sm">{c.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Output */}
+              {leaf.output && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                    Output
+                  </h4>
+                  <div className="p-3 rounded border bg-muted/30">
+                    <p className="text-sm whitespace-pre-wrap">{leaf.output}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* No content */}
+              {(!leaf.constraints || leaf.constraints.length === 0) && !leaf.output && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No constraints or output yet
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="w-[95vw] h-[90vh] max-w-none sm:max-w-none flex flex-col p-0 gap-0">
+        <DialogHeader className="shrink-0 px-6 pt-4 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             Memory Context
           </DialogTitle>
-          <DialogDescription>
-            Select conversations and leaves to include in AI memory. Pinned items will be used as
-            context for generating outputs.
+          <DialogDescription className="text-xs">
+            Select conversations and leaves to include in AI memory.
           </DialogDescription>
         </DialogHeader>
 
         {/* Summary */}
-        <div className="flex items-center gap-4 py-2 px-3 bg-muted/50 rounded-lg text-sm">
-          <div className="flex items-center gap-1.5">
-            <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+        <div className="shrink-0 flex items-center gap-3 py-1.5 px-3 mx-6 bg-muted/50 rounded-lg text-xs">
+          <div className="flex items-center gap-1">
+            <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
             <span className="font-medium">{pinnedConversations + pinnedLeaves}</span>
             <span className="text-muted-foreground">pinned</span>
           </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <MessageSquare className="h-3.5 w-3.5" />
+          <div className="h-3 w-px bg-border" />
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <MessageSquare className="h-3 w-3" />
             <span>{pinnedConversations} conversations</span>
           </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <FileText className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <FileText className="h-3 w-3" />
             <span>{pinnedLeaves} leaves</span>
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="conversations" className="flex-1 min-h-0 flex flex-col">
-          <TabsList className="w-full justify-start">
-            <TabsTrigger value="conversations" className="gap-1.5">
-              <MessageSquare className="h-4 w-4" />
-              Conversations
-              {pinnedConversations > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
-                  {pinnedConversations}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="leaves" className="gap-1.5">
-              <FileText className="h-4 w-4" />
-              Leaves
-              {pinnedLeaves > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
-                  {pinnedLeaves}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+        {/* Main content: Left-Right split */}
+        <div className="flex flex-1 min-h-0 mt-2 border-t overflow-hidden">
+          {/* Left panel: List */}
+          <div className="w-[320px] shrink-0 border-r flex flex-col">
+            <Tabs defaultValue="conversations" className="flex-1 min-h-0 flex flex-col">
+              <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-2 pt-2">
+                <TabsTrigger value="conversations" className="gap-1.5 data-[state=active]:bg-muted">
+                  <MessageSquare className="h-4 w-4" />
+                  Conversations
+                  {pinnedConversations > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                      {pinnedConversations}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="leaves" className="gap-1.5 data-[state=active]:bg-muted">
+                  <FileText className="h-4 w-4" />
+                  Leaves
+                  {pinnedLeaves > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                      {pinnedLeaves}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
 
-          {/* Conversations Tab */}
-          <TabsContent value="conversations" className="flex-1 overflow-auto mt-4">
-            {loadingConversations ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
-                <p>No conversations in this project</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {conversations.map((conv) => {
-                  const pinned = isPinned('conversation', conv.conversation_id);
-                  const isToggling = togglingId === conv.conversation_id;
-                  return (
-                    <div
-                      key={conv.conversation_id}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                        pinned &&
-                          'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
-                      )}
-                      onClick={() => handleTogglePin('conversation', conv.conversation_id)}
-                    >
-                      <Checkbox
-                        checked={pinned}
-                        disabled={isToggling}
-                        className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">
-                            {conv.title || 'Untitled Conversation'}
-                          </span>
-                          {pinned && (
-                            <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+              {/* Conversations Tab */}
+              <TabsContent value="conversations" className="flex-1 overflow-auto mt-0 p-2">
+                {loadingConversations ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-sm">No conversations</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {conversations.map((conv) => {
+                      const pinned = isPinned('conversation', conv.conversation_id);
+                      const isToggling = togglingId === conv.conversation_id;
+                      const isSelected =
+                        selectedItem?.type === 'conversation' &&
+                        selectedItem.id === conv.conversation_id;
+                      return (
+                        <div
+                          key={conv.conversation_id}
+                          className={cn(
+                            'flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
+                            pinned &&
+                              'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
+                            isSelected && 'ring-2 ring-primary ring-offset-1'
+                          )}
+                          onClick={() => handleSelectConversation(conv)}
+                        >
+                          <div
+                            onClick={(e) =>
+                              handleTogglePin(e, 'conversation', conv.conversation_id)
+                            }
+                            className="shrink-0"
+                          >
+                            <Checkbox
+                              checked={pinned}
+                              disabled={isToggling}
+                              className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-sm truncate">
+                                {conv.title || 'Untitled'}
+                              </span>
+                              {pinned && (
+                                <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>{conv.turns_count || 0} turns</span>
+                              <span>·</span>
+                              <span>{new Date(conv.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          {isToggling && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{conv.turns_count || 0} turns</span>
-                          <span>·</span>
-                          <span>{new Date(conv.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      {isToggling && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
 
-          {/* Leaves Tab */}
-          <TabsContent value="leaves" className="flex-1 overflow-auto mt-4">
-            {loadingLeaves ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : leaves.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <FileText className="h-8 w-8 mb-2 opacity-50" />
-                <p>No leaves in this project</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {leaves.map((leaf) => {
-                  const pinned = isPinned('leaf', leaf.id);
-                  const isToggling = togglingId === leaf.id;
-                  return (
-                    <div
-                      key={leaf.id}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                        pinned &&
-                          'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
-                      )}
-                      onClick={() => handleTogglePin('leaf', leaf.id)}
-                    >
-                      <Checkbox
-                        checked={pinned}
-                        disabled={isToggling}
-                        className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">
-                            {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
-                          </span>
-                          <span className="px-1.5 py-0.5 text-xs bg-muted rounded">
-                            {leaf.type}
-                          </span>
-                          {pinned && (
-                            <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+              {/* Leaves Tab */}
+              <TabsContent value="leaves" className="flex-1 overflow-auto mt-0 p-2">
+                {loadingLeaves ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : leaves.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <FileText className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-sm">No leaves</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {leaves.map((leaf) => {
+                      const pinned = isPinned('leaf', leaf.id);
+                      const isToggling = togglingId === leaf.id;
+                      const isSelected =
+                        selectedItem?.type === 'leaf' && selectedItem.id === leaf.id;
+                      return (
+                        <div
+                          key={leaf.id}
+                          className={cn(
+                            'flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
+                            pinned &&
+                              'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
+                            isSelected && 'ring-2 ring-primary ring-offset-1'
+                          )}
+                          onClick={() => handleSelectLeaf(leaf)}
+                        >
+                          <div
+                            onClick={(e) => handleTogglePin(e, 'leaf', leaf.id)}
+                            className="shrink-0"
+                          >
+                            <Checkbox
+                              checked={pinned}
+                              disabled={isToggling}
+                              className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-sm truncate">
+                                {leaf.title || `Leaf: ${leaf.id.slice(0, 8)}...`}
+                              </span>
+                              {pinned && (
+                                <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span className="px-1 py-0.5 bg-muted rounded text-[10px]">
+                                {leaf.type}
+                              </span>
+                              <span>·</span>
+                              <span>{new Date(leaf.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          {isToggling && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{leaf.constraints?.length || 0} constraints</span>
-                          <span>·</span>
-                          <span>{new Date(leaf.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      {isToggling && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Right panel: Detail */}
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-muted/10">
+            {renderDetailPanel()}
+          </div>
+        </div>
 
         {/* Footer */}
-        <div className="flex justify-end pt-4 border-t">
-          <Button variant="outline" onClick={onClose}>
+        <div className="shrink-0 flex justify-end px-6 py-3 border-t bg-background">
+          <Button variant="outline" size="sm" onClick={onClose}>
             Done
           </Button>
         </div>
