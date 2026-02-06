@@ -33,11 +33,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // 更新 state，下次渲染时显示错误 UI
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    // Hydration errors (e.g. browser extensions modifying DOM) — auto-recover
+    if (isHydrationError(error)) {
+      this.setState({ hasError: false, error: null });
+      return;
+    }
+
     if (process.env.NODE_ENV !== 'production') {
       console.error('[ErrorBoundary] Caught error:', error);
       console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
@@ -45,7 +50,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   handleRetry = (): void => {
-    // 重置错误状态，尝试重新渲染
     this.setState({ hasError: false, error: null });
   };
 
@@ -89,6 +93,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     return this.props.children;
   }
+}
+
+function isHydrationError(error: Error): boolean {
+  const msg = error.message || '';
+  return (
+    msg.includes('removeChild') ||
+    msg.includes('insertBefore') ||
+    msg.includes('Hydration failed') ||
+    msg.includes('hydrating') ||
+    msg.includes('server-rendered HTML')
+  );
 }
 
 export default ErrorBoundary;

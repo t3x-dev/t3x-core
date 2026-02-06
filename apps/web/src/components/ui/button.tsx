@@ -14,9 +14,9 @@ const buttonVariants = cva(
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
-          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
+          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/40 dark:border-input dark:hover:bg-input/60',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-[var(--hover-bg)]',
         link: 'text-primary underline-offset-4 hover:underline',
 
         // =============================================================================
@@ -37,11 +37,11 @@ const buttonVariants = cva(
 
         // Canvas ghost - Subtle for toolbar actions
         'canvas-ghost':
-          'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 active:bg-slate-200 dark:active:bg-slate-700',
+          'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-[var(--text-secondary)] dark:hover:bg-[var(--hover-bg-strong)] dark:hover:text-[var(--text-primary)] active:bg-slate-200 dark:active:bg-[var(--active-bg)]',
 
         // Canvas outline - For secondary canvas actions
         'canvas-outline':
-          'border border-slate-200 bg-white/80 text-slate-700 shadow-sm backdrop-blur-sm hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:border-slate-600',
+          'border border-slate-200 bg-white/80 text-slate-700 shadow-sm backdrop-blur-sm hover:bg-slate-50 hover:border-slate-300 dark:border-[var(--stroke-strong)] dark:bg-[var(--surface-card)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--hover-bg-strong)] dark:hover:border-[var(--stroke-strong)]',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

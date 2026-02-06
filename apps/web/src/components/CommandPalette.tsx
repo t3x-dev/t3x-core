@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { scaleIn } from '@/lib/motion';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 interface CommandPaletteProps {
@@ -73,33 +74,35 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
           >
             <Command
               className={cn(
-                'rounded-xl border border-border bg-popover shadow-2xl',
-                'overflow-hidden'
+                'rounded-xl overflow-hidden shadow-2xl',
+                glass.elevatedBase,
+                glass.highlight
               )}
               loop
             >
-              <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-                <Search size={18} className="text-muted-foreground" />
+              <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
+                <Search size={18} className="text-[var(--text-tertiary)]" />
                 <Command.Input
                   placeholder="Type a command or search..."
                   className={cn(
-                    'flex-1 bg-transparent text-base outline-none',
-                    'placeholder:text-muted-foreground'
+                    'flex-1 bg-transparent text-base text-[var(--text-primary)] outline-none',
+                    'placeholder:text-[var(--text-tertiary)]'
                   )}
                   autoFocus
                 />
-                <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+                <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 font-mono text-[10px] font-medium text-[var(--text-tertiary)] sm:flex">
                   <span className="text-xs">ESC</span>
                 </kbd>
               </div>
 
               <Command.List className="max-h-80 overflow-y-auto p-2">
-                <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-                  No results found.
+                <Command.Empty className="py-6 text-center">
+                  <p className="text-sm text-[var(--text-tertiary)]">No results found.</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">T3X — Git for Meaning</p>
                 </Command.Empty>
 
                 {/* Navigation Group */}
-                <Command.Group heading="Navigation" className="text-muted-foreground">
+                <Command.Group heading="Navigation" className="text-[var(--text-tertiary)]">
                   <CommandItem
                     icon={<Home size={16} />}
                     shortcut="⌘H"
@@ -125,7 +128,7 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                 </Command.Group>
 
                 {/* Actions Group */}
-                <Command.Group heading="Actions" className="text-muted-foreground">
+                <Command.Group heading="Actions" className="text-[var(--text-tertiary)]">
                   <CommandItem
                     icon={<MessageSquarePlus size={16} />}
                     shortcut="⌘N"
@@ -148,14 +151,14 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                 </Command.Group>
               </Command.List>
 
-              <div className="flex items-center justify-between border-t border-border px-4 py-2">
-                <span className="text-xs text-muted-foreground">T3X Command Palette</span>
-                <div className="flex gap-1.5 text-xs text-muted-foreground">
-                  <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+              <div className="flex items-center justify-between border-t border-[var(--stroke-divider)] px-4 py-2">
+                <span className="text-xs text-[var(--text-tertiary)]">T3X Command Palette</span>
+                <div className="flex gap-1.5 text-xs text-[var(--text-tertiary)]">
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px]">
                     ↑↓
                   </kbd>
                   <span>navigate</span>
-                  <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px]">
                     ↵
                   </kbd>
                   <span>select</span>
@@ -182,19 +185,19 @@ function CommandItem({ children, icon, shortcut, onSelect }: CommandItemProps) {
       onSelect={onSelect}
       className={cn(
         'flex cursor-pointer select-none items-center gap-3 rounded-lg px-3 py-2.5',
-        'text-sm text-foreground',
-        'aria-selected:bg-accent aria-selected:text-accent-foreground',
+        'text-sm text-[var(--text-primary)]',
+        'aria-selected:bg-[var(--hover-bg)] aria-selected:text-[var(--text-primary)]',
         'transition-colors'
       )}
     >
       {icon && (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--text-secondary)]">
           {icon}
         </span>
       )}
       <span className="flex-1">{children}</span>
       {shortcut && (
-        <kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+        <kbd className="ml-auto rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
           {shortcut}
         </kbd>
       )}

@@ -79,7 +79,7 @@ export function ConflictResolutionButtons({
       icon: <ArrowLeft className="h-4 w-4" />,
       label: `Keep ${sourceBranch}`,
       activeClass:
-        'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300',
+        'border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] ring-1 ring-[var(--diff-removed-line)]/40 bg-transparent',
       shortcut: 'A',
     },
     {
@@ -87,7 +87,7 @@ export function ConflictResolutionButtons({
       icon: <ArrowRight className="h-4 w-4" />,
       label: `Keep ${targetBranch}`,
       activeClass:
-        'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300',
+        'border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] ring-1 ring-[var(--diff-added-line)]/40 bg-transparent',
       shortcut: 'B',
     },
     {
@@ -95,7 +95,7 @@ export function ConflictResolutionButtons({
       icon: <Layers className="h-4 w-4" />,
       label: 'Keep Both',
       activeClass:
-        'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300',
+        'border-[var(--accent-commit)]/40 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/40 bg-transparent',
       shortcut: 'X',
     },
   ];
@@ -114,13 +114,13 @@ export function ConflictResolutionButtons({
               'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors',
               isActive
                 ? btn.activeClass
-                : 'border-muted-foreground/20 hover:bg-muted hover:border-muted-foreground/40'
+                : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:border-[var(--stroke-default)]'
             )}
           >
             {btn.icon}
             <span>{btn.label}</span>
             {enableKeyboard && (
-              <kbd className="ml-1 text-[0.65rem] font-mono bg-muted/50 px-1 rounded opacity-80">
+              <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-80">
                 {btn.shortcut}
               </kbd>
             )}

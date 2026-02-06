@@ -5,10 +5,10 @@
  */
 
 import { useEffect } from 'react';
+import { SourceContextView } from '@/components/shared/SourceContextView';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Sentence } from '@/types/merge';
-import { ConflictSourceContext } from './ConflictSourceContext';
 
 type SideType = 'source' | 'target';
 
@@ -23,14 +23,14 @@ interface ConflictSideProps {
 
 const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: string }> = {
   source: {
-    border: 'border-l-4 border-l-red-300 dark:border-l-red-700',
-    bg: 'bg-red-50/50 dark:bg-red-950/30',
-    selectedBg: 'bg-red-100 dark:bg-red-900/30 ring-2 ring-red-300 dark:ring-red-700',
+    border: 'border-l-2 border-l-[var(--diff-removed-line)]',
+    bg: 'bg-transparent',
+    selectedBg: 'bg-[var(--diff-removed-bg)] ring-1 ring-[var(--diff-removed-line)]/30',
   },
   target: {
-    border: 'border-l-4 border-l-green-300 dark:border-l-green-700',
-    bg: 'bg-green-50/50 dark:bg-green-950/30',
-    selectedBg: 'bg-green-100 dark:bg-green-900/30 ring-2 ring-green-300 dark:ring-green-700',
+    border: 'border-l-2 border-l-[var(--diff-added-line)]',
+    bg: 'bg-transparent',
+    selectedBg: 'bg-[var(--diff-added-bg)] ring-1 ring-[var(--diff-added-line)]/30',
   },
 };
 
@@ -87,7 +87,7 @@ export function ConflictSide({
     >
       {/* Side label */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
           {label}
         </span>
         {isSelected && (
@@ -96,18 +96,19 @@ export function ConflictSide({
       </div>
 
       {/* Sentence text */}
-      <p className="text-sm leading-relaxed">{sentence.text}</p>
+      <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{sentence.text}</p>
 
-      {/* Inline source context */}
+      {/* Inline source context via SourceContextView */}
       {turnHash && (
-        <ConflictSourceContext
+        <SourceContextView
           turnHash={turnHash}
-          sentenceText={sentence.text}
-          startChar={sentence.source?.start_char}
-          endChar={sentence.source?.end_char}
-          contextData={cachedContext ?? null}
+          highlightStart={sentence.source?.start_char}
+          highlightEnd={sentence.source?.end_char}
+          contextData={cachedContext ?? undefined}
+          autoFetch={false}
           loading={isLoading}
-          onJumpToConversation={onJumpToConversation}
+          showJumpLink={!!onJumpToConversation}
+          onJumpClick={onJumpToConversation}
         />
       )}
     </div>
