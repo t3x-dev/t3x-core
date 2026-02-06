@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
+import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
 import { Sidebar } from '@/components/Sidebar';
 import { showToast } from '@/components/Toast';
 import { Toaster } from '@/components/ui/sonner';
@@ -87,6 +88,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </main>
         <Toaster position="bottom-right" richColors closeButton />
         <CommandPalette />
+        <WelcomeModal />
       </div>
     </ThemeProvider>
   );
