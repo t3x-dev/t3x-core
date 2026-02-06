@@ -1,5 +1,12 @@
 import type { ColorMode, Node } from '@xyflow/react';
-import { Background, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
+import {
+  Background,
+  BackgroundVariant,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+} from '@xyflow/react';
 import {
   Brain,
   FileOutput,
@@ -36,6 +43,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { getLayoutedElements } from '@/lib/elkLayout';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -586,8 +594,14 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
   );
   return (
     <div className="relative flex h-full flex-col">
-      {/* Integrated Top Bar - Modern glassmorphism style */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-sm px-5">
+      {/* Integrated Top Bar - Glass style */}
+      <header
+        className={cn(
+          'flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-5',
+          glass.panelBase,
+          glass.highlight
+        )}
+      >
         <div className="flex items-center gap-5">
           <h2 className="text-base font-semibold tracking-tight text-foreground">{projectName}</h2>
           <div className="h-5 w-px bg-border/60" />
@@ -742,6 +756,11 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       <div
         ref={canvasRef}
         className={cn('relative flex-1', isPanMode && 'cursor-grab active:cursor-grabbing')}
+        style={{
+          background: 'var(--surface-app)',
+          backgroundImage:
+            'radial-gradient(ellipse at 50% 30%, var(--surface-radial), transparent 70%)',
+        }}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
@@ -780,18 +799,18 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             nodeStrokeWidth={3}
             pannable
             zoomable
-            className="!rounded-lg"
+            className={cn('!rounded-xl', glass.cardBase, glass.highlight)}
             style={{
-              backgroundColor:
-                colorMode === 'dark' ? 'rgba(30, 41, 59, 0.5)' : 'rgba(241, 245, 249, 0.5)',
+              backgroundColor: 'transparent',
             }}
             maskColor={colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
           />
           <ZoomSlider position="bottom-left" />
           <Background
-            gap={GRID_SIZE}
+            variant={BackgroundVariant.Dots}
+            gap={32}
             size={1}
-            color={colorMode === 'dark' ? '#374151' : '#cbd5e1'}
+            color={colorMode === 'dark' ? 'var(--stroke-grid)' : '#cbd5e1'}
           />
         </ReactFlow>
 
