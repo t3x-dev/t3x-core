@@ -1,4 +1,6 @@
 import { useCallback, useRef } from 'react';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeSimilarPair } from '@/types/merge';
 import { WordDiffDisplay } from './WordDiffDisplay';
@@ -41,11 +43,13 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
 
   return (
     <div
-      className={`border rounded-lg p-4 ${
+      className={cn(
+        'rounded-lg p-4',
+        glass.cardBase,
         isResolved
-          ? 'border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
-          : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30'
-      }`}
+          ? 'ring-1 ring-[var(--diff-added-line)]/30'
+          : 'ring-1 ring-[var(--diff-modified-line)]/30'
+      )}
     >
       {/* Diff visualization */}
       <div className="mb-3">
@@ -62,10 +66,15 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
           className="mt-1"
         />
         <div className="flex-1">
-          <div className="font-medium">Keep source</div>
-          <div className="text-sm text-muted-foreground">{pair.source.text}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[var(--text-primary)]">Keep source</span>
+            <span className="inline-flex items-center rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
+              Source
+            </span>
+          </div>
+          <div className="text-sm text-[var(--text-secondary)]">{pair.source.text}</div>
           {pair.sourceConstraints.length > 0 && (
-            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+            <div className="text-xs text-[var(--accent-commit)] mt-1">
               Constraints: {pair.sourceConstraints.map((c) => c.value).join(', ')}
             </div>
           )}
@@ -82,10 +91,15 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
           className="mt-1"
         />
         <div className="flex-1">
-          <div className="font-medium">Keep target</div>
-          <div className="text-sm text-muted-foreground">{pair.target.text}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[var(--text-primary)]">Keep target</span>
+            <span className="inline-flex items-center rounded-full border border-[var(--accent-pending)]/40 text-[var(--accent-pending)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
+              Target
+            </span>
+          </div>
+          <div className="text-sm text-[var(--text-secondary)]">{pair.target.text}</div>
           {pair.targetConstraints.length > 0 && (
-            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+            <div className="text-xs text-[var(--accent-commit)] mt-1">
               Constraints: {pair.targetConstraints.map((c) => c.value).join(', ')}
             </div>
           )}

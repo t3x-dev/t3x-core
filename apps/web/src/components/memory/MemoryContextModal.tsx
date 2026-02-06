@@ -16,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Conversation, Leaf, Turn } from '@/lib/api';
 import { listConversations, listLeavesByProject, listTurns } from '@/lib/api';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -130,7 +131,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   const renderDetailPanel = () => {
     if (!selectedItem) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+        <div className="flex flex-col items-center justify-center h-full text-[var(--text-tertiary)]">
           <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
           <p className="text-sm">Select an item to preview</p>
         </div>
@@ -140,7 +141,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
     if (loadingDetail) {
       return (
         <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
         </div>
       );
     }
@@ -150,18 +151,18 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
       const conv = selectedItem.data;
       return (
         <div className="flex flex-col h-full min-h-0">
-          <div className="shrink-0 px-4 py-3 border-b bg-muted/30">
+          <div className="shrink-0 px-4 py-3 border-b border-[var(--stroke-divider)]">
             <h3 className="font-medium text-sm truncate">
               {conv.title || 'Untitled Conversation'}
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
               {detailTurns.length} turns · {new Date(conv.created_at).toLocaleDateString()}
             </p>
           </div>
           <ScrollArea className="flex-1 min-h-0">
             <div className="p-4 space-y-3">
               {detailTurns.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
                   No turns in this conversation
                 </p>
               ) : (
@@ -189,14 +190,16 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
       const leaf = selectedItem.data;
       return (
         <div className="flex flex-col h-full min-h-0">
-          <div className="shrink-0 px-4 py-3 border-b bg-muted/30">
+          <div className="shrink-0 px-4 py-3 border-b border-[var(--stroke-divider)]">
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-sm truncate">
                 {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
               </h3>
-              <span className="px-1.5 py-0.5 text-xs bg-muted rounded shrink-0">{leaf.type}</span>
+              <span className="px-1.5 py-0.5 text-xs bg-[var(--hover-bg)] rounded shrink-0">
+                {leaf.type}
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
               {leaf.constraints?.length || 0} constraints ·{' '}
               {new Date(leaf.created_at).toLocaleDateString()}
             </p>
@@ -206,7 +209,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               {/* Constraints */}
               {leaf.constraints && leaf.constraints.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-2 uppercase tracking-wide">
                     Constraints
                   </h4>
                   <div className="space-y-2">
@@ -234,7 +237,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                           >
                             {c.type === 'require' ? 'Require' : 'Exclude'}
                           </span>
-                          <span className="text-xs text-muted-foreground">({c.match_mode})</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            ({c.match_mode})
+                          </span>
                         </div>
                         <p className="text-sm">{c.value}</p>
                       </div>
@@ -246,10 +251,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               {/* Output */}
               {leaf.output && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-2 uppercase tracking-wide">
                     Output
                   </h4>
-                  <div className="p-3 rounded border bg-muted/30">
+                  <div className="p-3 rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
                     <p className="text-sm whitespace-pre-wrap">{leaf.output}</p>
                   </div>
                 </div>
@@ -257,7 +262,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
 
               {/* No content */}
               {(!leaf.constraints || leaf.constraints.length === 0) && !leaf.output && (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
                   No constraints or output yet
                 </p>
               )}
@@ -272,7 +277,13 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="w-[95vw] h-[90vh] max-w-none sm:max-w-none flex flex-col p-0 gap-0">
+      <DialogContent
+        className={cn(
+          'w-[95vw] h-[90vh] max-w-none sm:max-w-none flex flex-col p-0 gap-0 rounded-2xl',
+          glass.cardBase,
+          glass.highlight
+        )}
+      >
         <DialogHeader className="shrink-0 px-6 pt-4 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
@@ -284,43 +295,54 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
         </DialogHeader>
 
         {/* Summary */}
-        <div className="shrink-0 flex items-center gap-3 py-1.5 px-3 mx-6 bg-muted/50 rounded-lg text-xs">
+        <div className="shrink-0 flex items-center gap-3 py-1.5 px-3 mx-6 bg-[var(--hover-bg)] rounded-lg text-xs">
           <div className="flex items-center gap-1">
             <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
-            <span className="font-medium">{pinnedConversations + pinnedLeaves}</span>
-            <span className="text-muted-foreground">pinned</span>
+            <span className="font-medium text-[var(--text-primary)]">
+              {pinnedConversations + pinnedLeaves}
+            </span>
+            <span className="text-[var(--text-tertiary)]">pinned</span>
           </div>
-          <div className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-1 text-muted-foreground">
+          <div className="h-3 w-px bg-[var(--stroke-divider)]" />
+          <div className="flex items-center gap-1 text-[var(--text-tertiary)]">
             <MessageSquare className="h-3 w-3" />
             <span>{pinnedConversations} conversations</span>
           </div>
-          <div className="flex items-center gap-1 text-muted-foreground">
+          <div className="flex items-center gap-1 text-[var(--text-tertiary)]">
             <FileText className="h-3 w-3" />
             <span>{pinnedLeaves} leaves</span>
           </div>
         </div>
 
         {/* Main content: Left-Right split */}
-        <div className="flex flex-1 min-h-0 mt-2 border-t overflow-hidden">
+        <div className="flex flex-1 min-h-0 mt-2 border-t border-[var(--stroke-default)] overflow-hidden">
           {/* Left panel: List */}
-          <div className="w-[320px] shrink-0 border-r flex flex-col">
+          <div
+            className="w-[320px] shrink-0 border-r border-[var(--stroke-default)] flex flex-col"
+            style={{ background: 'oklch(0.15 0.008 260 / 85%)' }}
+          >
             <Tabs defaultValue="conversations" className="flex-1 min-h-0 flex flex-col">
-              <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-2 pt-2">
-                <TabsTrigger value="conversations" className="gap-1.5 data-[state=active]:bg-muted">
+              <TabsList className="w-full justify-start rounded-none border-b border-[var(--stroke-divider)] bg-transparent px-2 pt-2 h-auto">
+                <TabsTrigger
+                  value="conversations"
+                  className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                >
                   <MessageSquare className="h-4 w-4" />
                   Conversations
                   {pinnedConversations > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-amber-500/40 text-amber-400 bg-transparent rounded-full">
                       {pinnedConversations}
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="leaves" className="gap-1.5 data-[state=active]:bg-muted">
+                <TabsTrigger
+                  value="leaves"
+                  className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                >
                   <FileText className="h-4 w-4" />
                   Leaves
                   {pinnedLeaves > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-amber-500/40 text-amber-400 bg-transparent rounded-full">
                       {pinnedLeaves}
                     </span>
                   )}
@@ -331,10 +353,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               <TabsContent value="conversations" className="flex-1 overflow-auto mt-0 p-2">
                 {loadingConversations ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
                   </div>
                 ) : conversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center py-8 text-[var(--text-tertiary)]">
                     <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
                     <p className="text-sm">No conversations</p>
                   </div>
@@ -350,10 +372,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                         <div
                           key={conv.conversation_id}
                           className={cn(
-                            'flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                            pinned &&
-                              'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-                            isSelected && 'ring-2 ring-primary ring-offset-1'
+                            'flex items-center gap-2 p-2 rounded-lg border border-transparent transition-colors cursor-pointer hover:bg-[var(--hover-bg)]',
+                            pinned && 'border-l-2 border-l-[var(--accent-branch)]',
+                            isSelected && 'ring-2 ring-[var(--accent-commit)]/50'
                           )}
                           onClick={() => handleSelectConversation(conv)}
                         >
@@ -378,14 +399,14 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                                 <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
                               <span>{conv.turns_count || 0} turns</span>
                               <span>·</span>
                               <span>{new Date(conv.created_at).toLocaleDateString()}</span>
                             </div>
                           </div>
                           {isToggling && (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                            <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)] shrink-0" />
                           )}
                         </div>
                       );
@@ -398,10 +419,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               <TabsContent value="leaves" className="flex-1 overflow-auto mt-0 p-2">
                 {loadingLeaves ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
                   </div>
                 ) : leaves.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center py-8 text-[var(--text-tertiary)]">
                     <FileText className="h-8 w-8 mb-2 opacity-50" />
                     <p className="text-sm">No leaves</p>
                   </div>
@@ -416,10 +437,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                         <div
                           key={leaf.id}
                           className={cn(
-                            'flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50',
-                            pinned &&
-                              'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-                            isSelected && 'ring-2 ring-primary ring-offset-1'
+                            'flex items-center gap-2 p-2 rounded-lg border border-transparent transition-colors cursor-pointer hover:bg-[var(--hover-bg)]',
+                            pinned && 'border-l-2 border-l-[var(--accent-branch)]',
+                            isSelected && 'ring-2 ring-[var(--accent-commit)]/50'
                           )}
                           onClick={() => handleSelectLeaf(leaf)}
                         >
@@ -442,8 +462,8 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                                 <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span className="px-1 py-0.5 bg-muted rounded text-[10px]">
+                            <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+                              <span className="px-1 py-0.5 bg-[var(--hover-bg)] rounded text-[10px]">
                                 {leaf.type}
                               </span>
                               <span>·</span>
@@ -451,7 +471,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             </div>
                           </div>
                           {isToggling && (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                            <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)] shrink-0" />
                           )}
                         </div>
                       );
@@ -463,13 +483,15 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
           </div>
 
           {/* Right panel: Detail */}
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-muted/10">
+          <div
+            className={cn('flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden', glass.cardBase)}
+          >
             {renderDetailPanel()}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 flex justify-end px-6 py-3 border-t bg-background">
+        <div className="shrink-0 flex justify-end px-6 py-3 border-t border-[var(--stroke-divider)]">
           <Button variant="outline" size="sm" onClick={onClose}>
             Done
           </Button>

@@ -709,7 +709,9 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
     <div
       className={cn(
         'flex items-start justify-between gap-2 rounded-md border p-3',
-        isRequire ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+        isRequire
+          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
+          : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
       )}
     >
       <div className="flex-1 min-w-0">
@@ -861,16 +863,16 @@ function OutputSection({ output, generatedAt }: OutputSectionProps) {
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Output</h2>
         {generatedAt && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-[var(--text-tertiary)]">
             Generated: {new Date(generatedAt).toLocaleString()}
           </span>
         )}
       </div>
       <div className="p-4">
         {output ? (
-          <div className="whitespace-pre-wrap rounded-md bg-muted p-4 text-sm">{output}</div>
+          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-4 text-sm text-[var(--text-secondary)]">{output}</div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-8">
+          <p className="text-sm text-[var(--text-tertiary)] text-center py-8">
             No output generated yet. Click &quot;Generate&quot; to create output.
           </p>
         )}
@@ -964,7 +966,9 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
     <div
       className={cn(
         'rounded-md border p-3',
-        assertion.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+        assertion.passed
+          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
+          : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
       )}
     >
       <div className="flex items-start gap-2">

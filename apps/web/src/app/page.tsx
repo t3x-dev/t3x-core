@@ -268,8 +268,8 @@ export default function SemanticLedgerPage() {
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
                   <FolderOpen className="h-6 w-6 text-primary" />
                 </div>
-                <p className="text-base font-medium text-foreground">No projects yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="text-base font-medium text-[var(--text-primary)]">No projects yet</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
                   Create one to start mapping conversations and drafts
                 </p>
               </CardContent>
@@ -301,14 +301,14 @@ export default function SemanticLedgerPage() {
                         className="shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                        <h3 className="font-semibold text-[var(--text-primary)] truncate">{project.name}</h3>
                         {project.description && (
-                          <p className="text-sm text-muted-foreground truncate">
+                          <p className="text-sm text-[var(--text-secondary)] truncate">
                             {project.description}
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-3 text-sm text-[var(--text-tertiary)]">
                         <div className="hidden sm:flex items-center gap-3">
                           <span className="flex items-center gap-1" title="Conversations">
                             <MessageSquare className="h-3.5 w-3.5" />
@@ -347,15 +347,15 @@ export default function SemanticLedgerPage() {
                     <Card className="transition-colors hover:border-primary/50">
                       <CardContent className="flex items-center gap-4 p-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                          <h3 className="font-semibold text-[var(--text-primary)] truncate">{project.name}</h3>
                           {project.description && (
-                            <p className="text-sm text-muted-foreground truncate">
+                            <p className="text-sm text-[var(--text-secondary)] truncate">
                               {project.description}
                             </p>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-3 text-sm text-[var(--text-tertiary)]">
                           <div className="hidden sm:flex items-center gap-3">
                             <span className="flex items-center gap-1" title="Conversations">
                               <MessageSquare className="h-3.5 w-3.5" />
@@ -389,7 +389,7 @@ export default function SemanticLedgerPage() {
                         <AnimatedButton
                           variant="ghost"
                           size="icon-sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-destructive"
                           onClick={(event) =>
                             handleDeleteProject(event as unknown as MouseEvent, project.id)
                           }
