@@ -451,11 +451,6 @@ function UnitNode(props: Props) {
     return `[${contextConfig.selected_pin_ids.length} context]`;
   };
 
-  // Assertion totals for leaves header
-  const totalPassed = data.leaves?.reduce((sum, l) => sum + (l.passedCount || 0), 0) || 0;
-  const totalFailed = data.leaves?.reduce((sum, l) => sum + (l.failedCount || 0), 0) || 0;
-  const totalAssertions = totalPassed + totalFailed;
-
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
@@ -533,11 +528,9 @@ function UnitNode(props: Props) {
     if (isCommitted && data.leaves && data.leaves.length > 0) {
       const firstLeaf = data.leaves[0];
       const leafHref = getLeafHref(firstLeaf);
-      const terminalStatuses = new Set(['passed', 'failed', 'stopped', 'error']);
-      const hasOutput = firstLeaf.status ? terminalStatuses.has(firstLeaf.status) : false;
       return {
-        label: hasOutput ? 'View Results' : 'Preview Output',
-        icon: hasOutput ? Eye : ArrowRight,
+        label: 'View Output',
+        icon: Eye,
         action: () => {
           if (leafHref) router.push(leafHref);
         },
@@ -817,13 +810,6 @@ function UnitNode(props: Props) {
             >
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Leaves ({data.leaves.length})
-                {totalAssertions > 0 && (
-                  <span className="ml-1.5 normal-case font-normal">
-                    <span className="text-green-600 dark:text-green-400">{totalPassed}</span>
-                    <span className="text-slate-300 dark:text-slate-600">/</span>
-                    <span className="text-slate-500 dark:text-slate-400">{totalAssertions}</span>
-                  </span>
-                )}
               </span>
               <ChevronRight
                 size={12}
