@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { DiffResultRaw } from '@/lib/api';
 import * as api from '@/lib/api';
+import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
@@ -167,26 +168,30 @@ export function CommittedCommitView({
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
+        <div
+          className={cn(
+            'flex flex-col w-[95vw] max-w-[1400px] h-[85vh] rounded-2xl overflow-hidden',
+            glass.cardBase,
+            glass.highlight
+          )}
+        >
           {/* Top Bar */}
-          <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
             <div className="flex items-center gap-3">
-              <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+              <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
                 Commit: {data.title || 'Untitled'}
               </h2>
-              <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                {data.entryId}
-              </span>
+              <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
               <Badge
                 className={cn(
-                  'text-xs gap-1',
+                  'text-xs gap-1 bg-transparent rounded-full',
                   branchLabel === 'main'
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-600'
-                    : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600'
+                    ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                    : cn(toneAccent.branch.border, toneAccent.branch.text)
                 )}
               >
                 <GitBranch size={12} />
@@ -199,7 +204,7 @@ export function CommittedCommitView({
                 size="icon"
                 onClick={onClose}
                 aria-label="Close"
-                className="h-9 w-9 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                className="h-9 w-9 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
               >
                 <X size={20} />
               </Button>
@@ -209,25 +214,25 @@ export function CommittedCommitView({
           <div className="flex flex-1 overflow-hidden min-h-0" ref={commitContainerRef}>
             {/* Left Sidebar - Meta & Lineage */}
             <aside
-              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50 dark:bg-gray-800"
+              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-[var(--surface-app)]"
               style={{ width: commitLeftWidth }}
             >
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+                <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
                   Version Info
                 </h4>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 dark:text-gray-400 mb-2">
-                  <GitBranch size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                  <GitBranch size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>
                     Branch: <strong>{branchLabel}</strong>
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 dark:text-gray-400 mb-2">
-                  <Clock size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                  <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>{data.timestamp}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-gray-600 dark:text-gray-400 mb-2">
-                  <Tag size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                  <Tag size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
                 </div>
               </div>
@@ -235,20 +240,20 @@ export function CommittedCommitView({
               <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
 
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+                <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
                   Lineage
                 </h4>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[0.85rem]">
                     <span className="text-gray-500 dark:text-gray-400">From Draft:</span>
-                    <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">
+                    <span className="text-[var(--text-secondary)] font-mono text-xs">
                       {data.entryId}
                     </span>
                   </div>
                   {data.baselineSummary && (
                     <div className="flex items-center gap-2 text-[0.85rem]">
                       <span className="text-gray-500 dark:text-gray-400">Upstream:</span>
-                      <span className="text-gray-700 dark:text-gray-300">Connected</span>
+                      <span className="text-[var(--text-secondary)]">Connected</span>
                     </div>
                   )}
                 </div>
@@ -292,14 +297,23 @@ export function CommittedCommitView({
 
                       {/* Tabbed view: Source Context | Source Excerpt | JSON */}
                       <Tabs defaultValue="context">
-                        <TabsList variant="pill" className="w-full">
-                          <TabsTrigger value="context" variant="pill">
+                        <TabsList className="w-full justify-start rounded-none border-b border-[var(--stroke-divider)] bg-transparent px-0 h-auto">
+                          <TabsTrigger
+                            value="context"
+                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                          >
                             Source Context
                           </TabsTrigger>
-                          <TabsTrigger value="excerpt" variant="pill">
+                          <TabsTrigger
+                            value="excerpt"
+                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                          >
                             Source Excerpt
                           </TabsTrigger>
-                          <TabsTrigger value="json" variant="pill">
+                          <TabsTrigger
+                            value="json"
+                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                          >
                             JSON
                           </TabsTrigger>
                         </TabsList>
@@ -313,25 +327,25 @@ export function CommittedCommitView({
                         </TabsContent>
 
                         <TabsContent value="excerpt">
-                          <div className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px]">
+                          <div className="p-3 bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-md min-h-[80px]">
                             {commitSourceExcerpt.length > 0 ? (
                               <div className="flex flex-col gap-2">
                                 {commitSourceExcerpt.map((excerpt, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-800"
+                                    className="flex items-start gap-2 p-2 bg-[var(--surface-app)] rounded border border-[var(--stroke-divider)]"
                                   >
-                                    <span className="text-gray-400 dark:text-gray-500 font-bold shrink-0">
+                                    <span className="text-[var(--text-tertiary)] font-bold shrink-0">
                                       &bull;
                                     </span>
-                                    <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                                    <span className="text-[0.875rem] leading-relaxed text-[var(--text-secondary)] break-words">
                                       {excerpt}
                                     </span>
                                   </div>
                                 ))}
                               </div>
                             ) : (
-                              <div className="flex items-center justify-center py-6 text-gray-400 dark:text-gray-500 text-sm">
+                              <div className="flex items-center justify-center py-6 text-[var(--text-tertiary)] text-sm">
                                 <span>No source excerpt recorded</span>
                               </div>
                             )}
@@ -339,7 +353,7 @@ export function CommittedCommitView({
                         </TabsContent>
 
                         <TabsContent value="json">
-                          <pre className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs font-mono text-gray-700 dark:text-gray-300 overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
+                          <pre className="p-4 bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-xs font-mono text-[var(--text-secondary)] overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
                             {JSON.stringify(commit, null, 2)}
                           </pre>
                         </TabsContent>
@@ -357,26 +371,24 @@ export function CommittedCommitView({
 
               {/* Generated Output - LLM generated content (only show if no commit data) */}
               {!data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                    <h3 className="font-semibold text-sm text-[var(--text-secondary)]">
                       Generated Output
                     </h3>
                   </div>
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[0.9rem] leading-relaxed text-gray-700 dark:text-gray-300">
+                  <div className="p-4 bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-[0.9rem] leading-relaxed text-[var(--text-secondary)]">
                     {data.summary || 'No generated content.'}
                   </div>
                 </div>
               )}
 
               {data.status && !data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
-                      Intent
-                    </h3>
+                    <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Intent</h3>
                   </div>
-                  <div className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-md text-[0.9rem] text-gray-700 dark:text-gray-300">
+                  <div className="p-3 bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-md text-[0.9rem] text-[var(--text-secondary)]">
                     {data.status}
                   </div>
                 </div>
@@ -384,12 +396,10 @@ export function CommittedCommitView({
 
               {/* Facets - Extracted semantic data (only show if no commit data) */}
               {!data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
-                      Facets
-                    </h3>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Facets</h3>
+                    <span className="text-xs text-[var(--text-tertiary)]">
                       {commitFacets.length} extracted
                     </span>
                   </div>
@@ -399,9 +409,9 @@ export function CommittedCommitView({
                         {Object.entries(facetsByType).map(([type, facets]) => (
                           <div
                             key={type}
-                            className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden"
+                            className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-md overflow-hidden"
                           >
-                            <h5 className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <h5 className="flex items-center gap-2 px-3 py-2 bg-[var(--surface-app)] border-b border-[var(--stroke-divider)] text-sm font-medium text-[var(--text-secondary)]">
                               <span>
                                 {type === 'keyword' && '\u{1F3F7}\u{FE0F}'}
                                 {type === 'preference' && '\u{1F496}'}
@@ -415,7 +425,7 @@ export function CommittedCommitView({
                                 {type === 'facet' && '\u{2728}'}
                               </span>
                               {type}
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                              <span className="text-xs text-[var(--text-tertiary)]">
                                 ({facets.length})
                               </span>
                             </h5>
@@ -427,7 +437,7 @@ export function CommittedCommitView({
                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                                     : facet.polarity === -1
                                       ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                                      : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300';
+                                      : 'bg-[var(--surface-app)] text-[var(--text-secondary)]';
 
                                 // Entity type icon mapping
                                 const entityIcon =
@@ -479,7 +489,7 @@ export function CommittedCommitView({
                         ))}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center py-6 text-gray-400 dark:text-gray-500 text-sm">
+                      <div className="flex items-center justify-center py-6 text-[var(--text-tertiary)] text-sm">
                         <span>No facets extracted</span>
                       </div>
                     )}
@@ -496,14 +506,14 @@ export function CommittedCommitView({
 
             {/* Right Sidebar - History & Compare */}
             <aside
-              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-gray-50 dark:bg-gray-800"
+              className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-[var(--surface-app)]"
               style={{ width: commitRightWidth }}
             >
               {/* History Section */}
               {data.commitV4 && data.commitHash && (
                 <>
                   <div className="mb-5">
-                    <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3 flex items-center gap-1.5">
                       <History size={14} />
                       History
                     </h4>
@@ -529,14 +539,14 @@ export function CommittedCommitView({
 
               {/* B-15: Simplified Diff Section */}
               <div className="mb-5">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3 flex items-center gap-1.5">
                   <GitCompare size={14} />
                   Compare
                 </h4>
 
                 <div className="flex flex-col gap-2">
                   <select
-                    className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     value={diffTargetCommit}
                     disabled={allCommittedCommits.length <= 1 || isDiffLoading}
                     onChange={(e) => {

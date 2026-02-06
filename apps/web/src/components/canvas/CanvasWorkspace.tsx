@@ -938,46 +938,89 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         size="icon"
         onClick={() => setShowShortcuts(true)}
         title="Keyboard Shortcuts (?)"
-        className="absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full border border-border/50 bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground"
+        className={cn(
+          'absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+          glass.cardBase
+        )}
       >
         <HelpCircle className="h-4 w-4" />
       </Button>
 
       {/* Keyboard shortcuts dialog */}
       <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={cn('sm:max-w-md rounded-2xl', glass.cardBase, glass.highlight)}>
           <DialogHeader>
-            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+            <DialogTitle className="text-[var(--text-primary)]">Keyboard Shortcuts</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Show this help</span>
-              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">?</kbd>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Delete selected node</span>
-              <div className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Backspace
-                </kbd>
-                <span className="text-xs text-muted-foreground">/</span>
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Delete
-                </kbd>
+          <div className="space-y-4 py-2">
+            {/* Navigation */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Navigation
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Show this help</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ?
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Command palette</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ⌘K
+                  </kbd>
+                </div>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Deselect all</span>
-              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Escape</kbd>
+            <div className="h-px bg-[var(--stroke-divider)]" />
+            {/* Canvas */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Canvas
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Select all</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      ⌘A
+                    </kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Deselect all</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    Escape
+                  </kbd>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Select all</span>
-              <div className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Ctrl+A
-                </kbd>
-                <span className="text-xs text-muted-foreground">/</span>
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Cmd+A</kbd>
+            <div className="h-px bg-[var(--stroke-divider)]" />
+            {/* Actions */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Actions
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Delete selected node</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      ⌫
+                    </kbd>
+                    <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      Del
+                    </kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Toggle sidebar</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ⌘\
+                  </kbd>
+                </div>
               </div>
             </div>
           </div>
