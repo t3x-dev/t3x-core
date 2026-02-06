@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
+import { motion } from 'framer-motion';
 import {
   Brain,
   FileOutput,
@@ -62,6 +63,10 @@ interface CanvasWorkspaceProps {
   projectName: string;
   mode: 'editor' | 'execution';
   onModeChange: (mode: 'editor' | 'execution') => void;
+  /** Initial viewport from URL params */
+  initialViewport?: { x: number; y: number; zoom: number };
+  /** Called when viewport changes (debounced externally) */
+  onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
 }
 
 // Wrapper component to provide ReactFlow context
@@ -73,7 +78,13 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
   );
 }
 
-function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspaceProps) {
+function CanvasWorkspaceInner({
+  projectName,
+  mode,
+  onModeChange,
+  initialViewport,
+  onViewportChange,
+}: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
   const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
@@ -784,9 +795,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           snapToGrid
           snapGrid={[GRID_SIZE, GRID_SIZE]}
           proOptions={{ hideAttribution: true }}
-          fitView
+          fitView={!initialViewport}
           fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
+          onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
           minZoom={0.25}
           maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
@@ -819,60 +831,60 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         {/* Empty state overlay - guided 3-step card */}
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <Card className="border-dashed border-2 border-border/60 bg-card/80 backdrop-blur-sm px-10 py-8 max-w-lg">
-              <p className="text-lg font-semibold text-foreground mb-6">Get started with T3X</p>
+            <Card
+              className={cn(
+                'border-dashed border-2 border-[var(--stroke-default)]/60 px-10 py-8 max-w-lg',
+                glass.cardBase,
+                glass.highlight
+              )}
+            >
+              <p className="text-lg font-semibold text-[var(--text-primary)] mb-6">
+                Get started with T3X
+              </p>
               <div className="flex flex-col gap-5">
-                {/* Step 1 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    1
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <MessageSquare className="h-5 w-5 text-primary" />
+                {[
+                  {
+                    icon: MessageSquare,
+                    title: 'Add Conversation',
+                    desc: 'Start by adding a conversation to extract knowledge from',
+                  },
+                  {
+                    icon: GitCommitHorizontal,
+                    title: 'Extract Knowledge',
+                    desc: 'Commit semantic content from your conversations',
+                  },
+                  {
+                    icon: FileOutput,
+                    title: 'Create Outputs',
+                    desc: 'Generate outputs for different platforms',
+                  },
+                ].map((step, i) => (
+                  <div key={step.title} className="flex items-start gap-4 text-left">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)] text-white text-sm font-bold">
+                      {i + 1}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Add Conversation</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Start by adding a conversation to extract knowledge from
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Step 2 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    2
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <GitCommitHorizontal className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Extract Knowledge</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Commit semantic content from your conversations
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Step 3 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    3
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <FileOutput className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Create Outputs</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Generate outputs for different platforms
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <motion.div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit)]/10"
+                        animate={{ y: [0, -2, 0] }}
+                        transition={{
+                          duration: 3,
+                          repeat: Number.POSITIVE_INFINITY,
+                          delay: i * 0.5,
+                          ease: 'easeInOut',
+                        }}
+                      >
+                        <step.icon className="h-5 w-5 text-[var(--accent-commit)]" />
+                      </motion.div>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                          {step.title}
+                        </p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{step.desc}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             </Card>
           </div>
