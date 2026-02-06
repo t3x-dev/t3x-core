@@ -6,6 +6,8 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import type { WordDiffSegment } from '@/types/merge';
 import { DiffSentenceLine } from './DiffSentenceLine';
 
@@ -402,9 +404,9 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     };
 
     return (
-      <div className="flex-1 overflow-auto" ref={containerRef}>
+      <div className={cn('flex-1 overflow-auto', glass.reading)} ref={containerRef}>
         {/* Column Headers */}
-        <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)] sticky top-0 z-10">
+        <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
           <div className="px-4 py-2 flex items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
               Base (Source)

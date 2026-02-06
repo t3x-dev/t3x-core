@@ -51,7 +51,7 @@ export function DiffSectionHeader({
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className={`w-full flex items-center gap-2 px-4 py-2.5 ${styles.bg} hover:opacity-80 transition-opacity`}
+        className={`w-full flex items-center gap-2 px-4 py-2.5 ${styles.bg} hover:brightness-95 transition-all`}
       >
         {collapsed ? (
           <ChevronRight className={`h-4 w-4 ${styles.text}`} />

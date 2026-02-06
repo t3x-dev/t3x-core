@@ -198,22 +198,22 @@
 
   /* ===== Surface System — four semantic layers ===== */
   --surface-app: oklch(0.11 0.005 260);
-  --surface-panel: oklch(0.14 0.008 260 / 80%);
-  --surface-card: oklch(0.19 0.008 260 / 90%);
-  --surface-elevated: oklch(0.2 0.008 260 / 90%);
+  --surface-panel: oklch(0.14 0.008 260 / 82%);
+  --surface-card: oklch(0.19 0.008 260 / 92%);
+  --surface-elevated: oklch(0.21 0.008 260 / 94%);
   --surface-radial: oklch(0.13 0.008 260);
 
   /* ===== Stroke System ===== */
   --stroke-default: oklch(1 0 0 / 12%);
   --stroke-strong: oklch(1 0 0 / 18%);
-  --stroke-divider: oklch(1 0 0 / 7%);
+  --stroke-divider: oklch(1 0 0 / 8%);
   --stroke-highlight-top: oklch(1 0 0 / 8%);
   --stroke-shadow-bottom: oklch(0 0 0 / 25%);
   --stroke-grid: oklch(1 0 0 / 4%);
 
   /* ===== FX System ===== */
   --fx-blur-panel: 8px;
-  --fx-blur-card: 6px;
+  --fx-blur-card: 4px;
   --fx-shadow-sm: 0 1px 2px oklch(0 0 0 / 20%), 0 0 0 1px oklch(1 0 0 / 5%);
   --fx-shadow-md: 0 4px 12px oklch(0 0 0 / 30%), 0 0 0 1px oklch(1 0 0 / 5%);
   --fx-shadow-lg: 0 8px 24px oklch(0 0 0 / 40%), 0 0 0 1px oklch(1 0 0 / 5%);
@@ -238,9 +238,9 @@
   --accent-conversation: oklch(0.65 0.14 290);
 
   /* ===== Text Hierarchy ===== */
-  --text-primary: oklch(0.93 0.005 260);
-  --text-secondary: oklch(0.74 0.01 260);
-  --text-tertiary: oklch(0.60 0.01 260);
+  --text-primary: oklch(0.94 0.005 260);
+  --text-secondary: oklch(0.78 0.01 260);
+  --text-tertiary: oklch(0.62 0.01 260);
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
@@ -249,37 +249,37 @@
 
   /* ===== Diff Markers ===== */
   --diff-added-line: oklch(0.55 0.15 155);
-  --diff-added-bg: oklch(0.55 0.15 155 / 12%);
+  --diff-added-bg: oklch(0.55 0.15 155 / 7%);
   --diff-removed-line: oklch(0.55 0.15 25);
-  --diff-removed-bg: oklch(0.55 0.15 25 / 12%);
+  --diff-removed-bg: oklch(0.55 0.15 25 / 7%);
   --diff-modified-line: oklch(0.65 0.12 80);
-  --diff-modified-bg: oklch(0.65 0.12 80 / 12%);
+  --diff-modified-bg: oklch(0.65 0.12 80 / 7%);
 
   /* ===== Reading Surfaces — readability first ===== */
   /* Used for: Diff columns, Output blocks, long text panels */
-  --glass-bg-reading: oklch(0.19 0.01 260 / 92%);
-  --glass-bg-reading-soft: oklch(0.18 0.01 260 / 88%);
-  --glass-blur-reading: 2px;
-  --shadow-reading: 0 6px 18px oklch(0 0 0 / 35%), 0 0 0 1px oklch(1 0 0 / 6%);
+  --glass-bg-reading: oklch(0.19 0.01 260 / 94%);
+  --glass-bg-reading-soft: oklch(0.18 0.01 260 / 90%);
+  --glass-blur-reading: 0px;
+  --shadow-reading: 0 10px 28px oklch(0 0 0 / 38%), 0 0 0 1px oklch(1 0 0 / 7%);
 
   /* ===== Noise ===== */
-  --noise-opacity: 0.02;
+  --noise-opacity: 0.015;
 
   /* shadcn tokens — aligned with four-layer surface system */
   --background: oklch(0.11 0.005 260); /* = surface-app */
-  --foreground: oklch(0.93 0.005 260); /* = text-primary */
+  --foreground: oklch(0.94 0.005 260); /* = text-primary */
   --card: oklch(0.19 0.008 260); /* = surface-card */
-  --card-foreground: oklch(0.93 0.005 260);
-  --popover: oklch(0.2 0.008 260); /* = surface-elevated */
-  --popover-foreground: oklch(0.93 0.005 260);
+  --card-foreground: oklch(0.94 0.005 260);
+  --popover: oklch(0.21 0.008 260); /* = surface-elevated */
+  --popover-foreground: oklch(0.94 0.005 260);
   --primary: oklch(0.65 0.2 260);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.14 0.008 260); /* = surface-panel */
-  --secondary-foreground: oklch(0.93 0.005 260);
+  --secondary-foreground: oklch(0.94 0.005 260);
   --muted: oklch(0.14 0.008 260);
-  --muted-foreground: oklch(0.60 0.01 260); /* = text-tertiary */
+  --muted-foreground: oklch(0.62 0.01 260); /* = text-tertiary */
   --accent: oklch(0.19 0.008 260);
-  --accent-foreground: oklch(0.93 0.005 260);
+  --accent-foreground: oklch(0.94 0.005 260);
   --destructive: oklch(0.6 0.2 25);
   --border: oklch(1 0 0 / 12%); /* = stroke-default */
   --input: oklch(1 0 0 / 15%);
@@ -290,11 +290,11 @@
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.14 0.008 260); /* = surface-panel */
-  --sidebar-foreground: oklch(0.93 0.005 260);
+  --sidebar-foreground: oklch(0.94 0.005 260);
   --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.93 0.005 260);
+  --sidebar-primary-foreground: oklch(0.94 0.005 260);
   --sidebar-accent: oklch(0.17 0.008 260);
-  --sidebar-accent-foreground: oklch(0.93 0.005 260);
+  --sidebar-accent-foreground: oklch(0.94 0.005 260);
   --sidebar-border: oklch(1 0 0 / 12%); /* = stroke-default */
   --sidebar-ring: oklch(0.65 0.15 260); /* = accent-commit */
 }
@@ -657,7 +657,7 @@ a {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 0;
   opacity: var(--noise-opacity);
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
