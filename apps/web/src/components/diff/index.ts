@@ -5,4 +5,3 @@
  */
 
 export { DiffDisplayView } from './DiffDisplayView';
-export { DiffSourceContextModal } from './DiffSourceContextModal';

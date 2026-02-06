@@ -2,7 +2,7 @@
  * Truncation Utilities
  *
  * Shared functions for smart text truncation with highlight preservation.
- * Used by CommitSourceContext, TruncatedCommitView, ConflictSourceContext.
+ * Used by CommitSourceContext, TruncatedCommitView, SourceContextView.
  *
  * Key features:
  * - Preserves highlighted sections fully visible
