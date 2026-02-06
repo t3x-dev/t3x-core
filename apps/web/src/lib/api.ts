@@ -1246,6 +1246,28 @@ export async function getCommitV4History(commitHash: string, limit = 50): Promis
 }
 
 /**
+ * Update V4 commit canvas position
+ */
+export async function updateCommitV4Position(
+  commitHash: string,
+  positionX: number,
+  positionY: number
+): Promise<CommitV4> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/position`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        position_x: positionX,
+        position_y: positionY,
+      }),
+    }
+  );
+  return handleResponse<CommitV4>(res);
+}
+
+/**
  * Create a V4 commit (pure knowledge - sentences only)
  *
  * V4 commits use sentences[] only. Constraints belong to Leaves.
