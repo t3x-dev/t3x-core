@@ -131,7 +131,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(state.prepared?.similarPairs[0].resolution).toBe('source');
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
-
   });
 
   describe('getUnresolvedCount', () => {
@@ -157,7 +156,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
 
       expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(0);
     });
-
   });
 
   describe('canCommit', () => {
