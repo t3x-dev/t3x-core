@@ -683,6 +683,7 @@ function CanvasWorkspaceInner({
             size="sm"
             onClick={() => setShowMemoryModal(true)}
             title="Memory Context"
+            data-action="memory"
             className={cn(
               'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
               'text-muted-foreground hover:text-foreground',

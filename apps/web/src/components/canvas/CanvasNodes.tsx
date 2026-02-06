@@ -600,6 +600,7 @@ function UnitNode(props: Props) {
         role="treeitem"
         aria-label={`${data.title} — ${isStaging ? 'Draft' : 'Committed'} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
         aria-selected={selected}
+        data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
         {/* ═══════════════════════════════════════════
@@ -702,6 +703,7 @@ function UnitNode(props: Props) {
           {nextStep && (
             <button
               type="button"
+              data-action="next-step"
               className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
               onClick={(e) => {
                 e.stopPropagation();
@@ -910,7 +912,11 @@ function UnitNode(props: Props) {
                         </>
                       );
                       return (
-                        <div key={leaf.id} className="group/leaf flex items-center gap-1">
+                        <div
+                          key={leaf.id}
+                          data-node-type="leaf"
+                          className="group/leaf flex items-center gap-1"
+                        >
                           {leafHref ? (
                             <Link
                               href={leafHref}
