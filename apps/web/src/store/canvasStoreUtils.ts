@@ -483,10 +483,12 @@ export function saveNodePosition(
           .catch(() => {
             // Error handled silently
           });
+      } else {
+        // Committed unit - save position to commit via API
+        api.updateCommitV4Position(nodeId, pending.position.x, pending.position.y).catch(() => {
+          // Error handled silently
+        });
       }
-      // Note: Committed unit position saving is disabled for now
-      // The commit position API endpoint doesn't exist yet
-      // Position is saved during commit creation instead
     }
   }, 500);
 

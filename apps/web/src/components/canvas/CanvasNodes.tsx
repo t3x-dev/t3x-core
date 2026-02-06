@@ -928,7 +928,6 @@ function UnitNode(props: Props) {
             </AnimatePresence>
           </div>
         )}
-
       </motion.div>
 
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
