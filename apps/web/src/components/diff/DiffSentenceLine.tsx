@@ -1,10 +1,10 @@
 'use client';
 
-import { Expand, Loader2, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
+import { SourceContextView } from '@/components/shared/SourceContextView';
 import type { TurnContextData } from '@/lib/api';
 import type { WordDiffSegment } from '@/types/merge';
-import { TurnBubble } from './DiffSourceContextModal';
 
 interface DiffSentenceLineProps {
   text: string;
@@ -16,7 +16,14 @@ interface DiffSentenceLineProps {
   expanded?: boolean;
   inlineContextData?: TurnContextData | null;
   inlineContextLoading?: boolean;
-  onExpandModal?: () => void;
+  /** Turn hash for SourceContextView */
+  turnHash?: string;
+  /** Highlight start char for SourceContextView */
+  highlightStart?: number;
+  /** Highlight end char for SourceContextView */
+  highlightEnd?: number;
+  /** Callback when "Jump to conversation" is clicked */
+  onJumpToConversation?: (conversationId: string) => void;
 }
 
 const lineStyles = {
@@ -49,7 +56,10 @@ export function DiffSentenceLine({
   expanded = false,
   inlineContextData,
   inlineContextLoading = false,
-  onExpandModal,
+  turnHash,
+  highlightStart,
+  highlightEnd,
+  onJumpToConversation,
 }: DiffSentenceLineProps) {
   const styles = lineStyles[type];
 
@@ -86,45 +96,19 @@ export function DiffSentenceLine({
         </button>
       </div>
 
-      {/* Inline source context */}
-      {expanded && (
-        <div className="mx-2 mb-1 rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40 bg-muted/50">
-            <span className="text-[0.65rem] font-medium text-muted-foreground uppercase tracking-wide">
-              Source Context
-            </span>
-            {onExpandModal && (
-              <button
-                type="button"
-                onClick={onExpandModal}
-                className="inline-flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-primary transition-colors"
-                title="Open in full modal"
-              >
-                <Expand size={10} />
-                Expand
-              </button>
-            )}
-          </div>
-          <div className="px-3 py-2 max-h-[200px] overflow-y-auto">
-            {inlineContextLoading && (
-              <div className="flex items-center gap-2 py-4 justify-center">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Loading context...</span>
-              </div>
-            )}
-            {!inlineContextLoading && inlineContextData && (
-              <div className="space-y-2">
-                {inlineContextData.context.map((turn, idx) => (
-                  <TurnBubble key={turn.turn_hash || idx} turn={turn} />
-                ))}
-              </div>
-            )}
-            {!inlineContextLoading && !inlineContextData && (
-              <div className="text-xs text-muted-foreground py-3 text-center">
-                Could not load conversation context.
-              </div>
-            )}
-          </div>
+      {/* Inline source context via SourceContextView */}
+      {expanded && turnHash && (
+        <div className="mx-2 mb-1">
+          <SourceContextView
+            turnHash={turnHash}
+            highlightStart={highlightStart}
+            highlightEnd={highlightEnd}
+            contextData={inlineContextData}
+            autoFetch={false}
+            loading={inlineContextLoading}
+            showJumpLink={!!onJumpToConversation}
+            onJumpClick={onJumpToConversation}
+          />
         </div>
       )}
     </div>
