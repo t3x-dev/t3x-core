@@ -756,6 +756,8 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       <div
         ref={canvasRef}
         className={cn('relative flex-1', isPanMode && 'cursor-grab active:cursor-grabbing')}
+        role="tree"
+        aria-label="Knowledge graph canvas"
         style={{
           background: 'var(--surface-app)',
           backgroundImage:

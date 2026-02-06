@@ -56,22 +56,22 @@ export function AnimatedEdge({
   };
 
   const getGlowWidth = () => {
-    if (selected) return 12;
-    if (isHovered) return 8;
+    if (selected) return 10;
+    if (isHovered) return 6;
     return 0;
   };
 
   const getGlowOpacity = () => {
-    if (selected) return 0.25;
-    if (isHovered) return 0.15;
+    if (selected) return 0.15;
+    if (isHovered) return 0.1;
     return 0;
   };
 
-  // Selected uses blue, hovered uses a softer slate-blue
+  // oklch-based stroke colors for dark mode consistency
   const getStrokeColor = () => {
-    if (selected) return 'var(--edge-selected-color, #2563eb)';
-    if (isHovered) return 'var(--edge-active-color, #3b82f6)';
-    return 'var(--edge-color, #94a3b8)';
+    if (selected) return 'oklch(1 0 0 / 30%)';
+    if (isHovered) return 'oklch(1 0 0 / 20%)';
+    return 'oklch(1 0 0 / 12%)';
   };
 
   const transitionStyle = prefersReducedMotion
