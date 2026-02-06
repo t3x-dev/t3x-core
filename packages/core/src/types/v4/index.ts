@@ -45,6 +45,20 @@ export interface Sentence {
 
   /** Where this sentence came from */
   source_ref?: SentenceSourceRef;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Second-class fields (NOT in hash calculation)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * The commit hash where this sentence was originally created.
+   * Set when a sentence is inherited from a parent commit.
+   * Undefined for sentences created directly in this commit.
+   *
+   * Second-class field: Does NOT participate in hash calculation.
+   * This preserves determinism while enabling inheritance tracking.
+   */
+  inherited_from?: string;
 }
 
 export interface SentenceSourceRef {

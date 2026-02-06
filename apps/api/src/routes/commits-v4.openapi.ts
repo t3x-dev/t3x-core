@@ -17,7 +17,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CommitV4 } from '@t3x/core';
+import type { CommitV4, Sentence } from '@t3x/core';
 import {
   createCommitV4,
   deleteCommitV4,
@@ -26,6 +26,7 @@ import {
   findCommitsV4ByProject,
   findCommitV4ByHash,
   findCommitV4History,
+  getCommitsV4ByHashes,
   MainBranchLinearityError,
   ParentNotFoundErrorV4,
   updateBranchHead,
@@ -413,10 +414,77 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       await validateMainBranchLinearity(db, body.project_id, body.branch, body.parents ?? []);
     }
 
+    // ============================================================
+    // Parent sentence inheritance
+    // ============================================================
+    // When inherit_parent_sentences is true (default), merge parent sentences
+    // with new sentences. New sentences with the same text take precedence.
+
+    // [C2] Strip inherited_from from user-supplied sentences to prevent forgery
+    const sanitizedSentences: Sentence[] = body.sentences.map(
+      ({ inherited_from: _, ...rest }) => rest
+    );
+
+    let finalSentences: Sentence[] = sanitizedSentences;
+
+    const shouldInherit = body.inherit_parent_sentences !== false;
+    const parents = body.parents ?? [];
+
+    if (shouldInherit && parents.length > 0) {
+      // Fetch all parent commits
+      const parentCommits = await getCommitsV4ByHashes(db, parents);
+
+      // [M1] Validate all parents were found to prevent silent sentence loss
+      if (parentCommits.length !== parents.length) {
+        const foundHashes = new Set(parentCommits.map((c) => c.hash));
+        const missing = parents.filter((h) => !foundHashes.has(h));
+        return errorResponse(
+          c,
+          'PARENT_NOT_FOUND',
+          `Parent commits not found for inheritance: ${missing.join(', ')}`
+        );
+      }
+
+      // Collect inherited sentences from all parents
+      const inheritedSentences: Sentence[] = [];
+      for (const parent of parentCommits) {
+        for (const sentence of parent.content.sentences) {
+          // [C1] Use ?? (nullish coalescing) to preserve empty-string inherited_from
+          const inheritedFrom = sentence.inherited_from ?? parent.hash;
+          inheritedSentences.push({
+            ...sentence,
+            inherited_from: inheritedFrom,
+          });
+        }
+      }
+
+      // Build set of new sentence texts for deduplication
+      const newTexts = new Set(sanitizedSentences.map((s) => s.text));
+
+      // Merge: new sentences override inherited ones (by text)
+      // Also deduplicate inherited sentences by text (first parent wins)
+      const seenInheritedTexts = new Set<string>();
+      const deduplicatedInherited: Sentence[] = [];
+      for (const inherited of inheritedSentences) {
+        if (!newTexts.has(inherited.text) && !seenInheritedTexts.has(inherited.text)) {
+          seenInheritedTexts.add(inherited.text);
+          deduplicatedInherited.push(inherited);
+        }
+      }
+
+      // [M3] Deduplicate by ID — if an inherited sentence has the same ID as a new one,
+      // keep the new one (it's already in sanitizedSentences)
+      const newIds = new Set(sanitizedSentences.map((s) => s.id));
+      const idSafeInherited = deduplicatedInherited.filter((s) => !newIds.has(s.id));
+
+      // Final sentences = new sentences + inherited (deduplicated by text and ID)
+      finalSentences = [...sanitizedSentences, ...idSafeInherited];
+    }
+
     const commit = await createCommitV4(db, {
       parents: body.parents,
       author: body.author,
-      sentences: body.sentences,
+      sentences: finalSentences,
       project_id: body.project_id,
       message: body.message,
       branch: body.branch,

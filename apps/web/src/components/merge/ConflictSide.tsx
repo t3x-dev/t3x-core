@@ -5,10 +5,10 @@
  */
 
 import { useEffect } from 'react';
+import { SourceContextView } from '@/components/shared/SourceContextView';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Sentence } from '@/types/merge';
-import { ConflictSourceContext } from './ConflictSourceContext';
 
 type SideType = 'source' | 'target';
 
@@ -98,16 +98,17 @@ export function ConflictSide({
       {/* Sentence text */}
       <p className="text-sm leading-relaxed">{sentence.text}</p>
 
-      {/* Inline source context */}
+      {/* Inline source context via SourceContextView */}
       {turnHash && (
-        <ConflictSourceContext
+        <SourceContextView
           turnHash={turnHash}
-          sentenceText={sentence.text}
-          startChar={sentence.source?.start_char}
-          endChar={sentence.source?.end_char}
-          contextData={cachedContext ?? null}
+          highlightStart={sentence.source?.start_char}
+          highlightEnd={sentence.source?.end_char}
+          contextData={cachedContext ?? undefined}
+          autoFetch={false}
           loading={isLoading}
-          onJumpToConversation={onJumpToConversation}
+          showJumpLink={!!onJumpToConversation}
+          onJumpClick={onJumpToConversation}
         />
       )}
     </div>
