@@ -172,7 +172,10 @@
       "Bash(pnpm next lint:*)",
       "Bash(pnpm --filter t3x-webui test -- --run src/__tests__/stores/mergeWorkspaceStore.test.ts)",
       "Bash(pnpm --filter t3x-webui test:*)",
-      "Bash(gh pr checks:*)"
+      "Bash(gh pr checks:*)",
+      "Bash(gh issue list:*)",
+      "Bash(git status:*)",
+      "Bash(git -C /Users/heliuqi/t3x status --short)"
     ],
     "deny": [],
     "ask": []
