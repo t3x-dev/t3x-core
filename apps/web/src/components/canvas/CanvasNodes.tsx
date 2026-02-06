@@ -380,7 +380,7 @@ function CommitV4Content({
                   type="button"
                   onClick={onViewFull}
                   className={cn(
-                    'inline-flex items-center gap-0.5 text-xs transition-colors hover:opacity-80',
+                    'inline-flex items-center gap-0.5 text-xs transition-colors hover:brightness-110',
                     toneAccent.commit.text
                   )}
                 >

@@ -39,22 +39,22 @@ interface MergeDiffLineProps {
 
 const lineStyles: Record<LineType, { bg: string; text: string; prefix: string; border: string }> = {
   context: {
-    bg: 'bg-muted/20',
-    text: 'text-foreground',
+    bg: 'bg-[var(--surface-app)]',
+    text: 'text-[var(--text-primary)]',
     prefix: ' ',
     border: 'border-transparent',
   },
   added: {
-    bg: 'bg-green-50 dark:bg-green-950/30',
-    text: 'text-green-900 dark:text-green-100',
+    bg: 'bg-[var(--diff-added-bg)]',
+    text: 'text-[var(--text-primary)]',
     prefix: '+',
-    border: 'border-green-300 dark:border-green-700',
+    border: 'border-[var(--diff-added-line)]',
   },
   removed: {
-    bg: 'bg-red-50 dark:bg-red-950/30',
-    text: 'text-red-900 dark:text-red-100',
+    bg: 'bg-[var(--diff-removed-bg)]',
+    text: 'text-[var(--text-secondary)] line-through',
     prefix: '-',
-    border: 'border-red-300 dark:border-red-700',
+    border: 'border-[var(--diff-removed-line)]',
   },
 };
 
@@ -99,7 +99,7 @@ export function MergeDiffLine({
           flex items-start gap-2 px-3 py-2 font-mono text-sm
           border-l-4 ${styles.border} ${styles.bg}
           ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''}
-          ${isDiscarded ? 'opacity-50' : ''}
+          ${isDiscarded ? 'text-[var(--text-tertiary)]' : ''}
           ${selectable ? 'cursor-pointer hover:brightness-95' : ''}
           ${expanded && hasSource ? 'rounded-t rounded-b-none' : 'rounded'}
         `}
@@ -124,7 +124,7 @@ export function MergeDiffLine({
               e.stopPropagation();
               onToggleKeep?.();
             }}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
           >
             {isKept ? (
               <CheckSquare className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -162,9 +162,9 @@ export function MergeDiffLine({
           className={`shrink-0 flex items-center gap-0.5 p-1 rounded transition-colors ${
             hasSource
               ? expanded
-                ? 'text-primary hover:bg-muted/50'
-                : 'text-muted-foreground hover:text-primary hover:bg-muted/50'
-              : 'text-muted-foreground/30 cursor-not-allowed'
+                ? 'text-[var(--accent-commit)] bg-[var(--hover-bg)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]'
+              : 'text-[var(--text-tertiary)]/30 cursor-not-allowed'
           }`}
           title={
             hasSource

@@ -412,7 +412,7 @@ function KeywordTag({
         isMustHave
           ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
           : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
-        isRemoved && 'line-through opacity-40',
+        isRemoved && 'line-through text-[var(--text-tertiary)]',
         isAdditional && 'border border-dashed border-current bg-transparent'
       )}
     >
