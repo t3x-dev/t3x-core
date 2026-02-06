@@ -10,6 +10,8 @@ import { AlertCircle, ArrowLeft, Check, GitMerge, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -41,7 +43,13 @@ export function MergeActionBar({
   onClose,
 }: MergeActionBarProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-background px-4">
+    <header
+      className={cn(
+        'flex h-14 shrink-0 items-center gap-4 px-4',
+        glass.panelBase,
+        'border-t-0 border-x-0 rounded-none'
+      )}
+    >
       {/* Back Button */}
       <Button variant="ghost" size="icon" onClick={onClose}>
         <ArrowLeft className="h-4 w-4" />
@@ -49,10 +57,10 @@ export function MergeActionBar({
 
       {/* Branch Info */}
       <div className="flex items-center gap-2">
-        <GitMerge className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium">{sourceBranch}</span>
-        <span className="text-muted-foreground">into</span>
-        <span className="font-medium">{targetBranch}</span>
+        <GitMerge className="h-4 w-4 text-[var(--text-tertiary)]" />
+        <span className="font-medium text-[var(--text-primary)]">{sourceBranch}</span>
+        <span className="text-[var(--text-tertiary)]">into</span>
+        <span className="font-medium text-[var(--text-primary)]">{targetBranch}</span>
       </div>
 
       {/* Unresolved Count */}
@@ -63,7 +71,7 @@ export function MergeActionBar({
       )}
 
       {/* Save Status */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
         {saveStatus === 'saving' && (
           <>
             <Loader2 className="h-3 w-3 animate-spin" />

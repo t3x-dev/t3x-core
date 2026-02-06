@@ -302,6 +302,82 @@ export const canvas = {
 } as const;
 
 // =============================================================================
+// GLASS COMPOSABLE CLASSES (Dark Mode)
+// =============================================================================
+
+/**
+ * Glass-morphism class helpers for dark mode.
+ * Consume CSS variables from the four-layer surface system.
+ */
+export const glass = {
+  /** Panel layer — semi-transparent + blur + border */
+  panelBase:
+    'bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)] border border-[var(--stroke-default)]',
+  /** Card layer — semi-transparent + blur + border */
+  cardBase:
+    'bg-[var(--surface-card)] backdrop-blur-[var(--fx-blur-card)] border border-[var(--stroke-default)]',
+  /** Node-specific card — no blur (performance), alpha + shadow only */
+  cardNode: 'bg-[var(--surface-card)] border border-[var(--stroke-default)]',
+  /** Elevated layer — popovers, dropdowns */
+  elevatedBase: 'bg-[var(--surface-elevated)] border border-[var(--stroke-strong)]',
+  /** Inset highlight — top bright / bottom dark edge */
+  highlight: 'shadow-[var(--fx-highlight-inset)]',
+  /** Hover effect — shadow lift + background brighten */
+  hover: 'hover:shadow-[var(--fx-shadow-hover)] hover:bg-[var(--hover-bg)]',
+  /** Focus ring */
+  focus: 'focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
+  /** Reading surface — reduced blur, higher opacity, for text-dense areas (Diff, Output) */
+  reading:
+    'bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)]',
+  /** Reading surface soft — slightly more transparent, for secondary text areas */
+  readingSoft:
+    'bg-[var(--glass-bg-reading-soft)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-default)] shadow-[var(--shadow-reading)]',
+} as const;
+
+// =============================================================================
+// TONE ACCENT CLASSES (Dark Mode — text / border / ring only, never bg)
+// =============================================================================
+
+export const toneAccent = {
+  commit: {
+    text: 'text-[var(--accent-commit)]',
+    border: 'border-[var(--accent-commit)]/40',
+    ring: 'ring-[var(--accent-commit)]/30',
+  },
+  pending: {
+    text: 'text-[var(--accent-pending)]',
+    border: 'border-[var(--accent-pending)]/40',
+    ring: 'ring-[var(--accent-pending)]/30',
+  },
+  branch: {
+    text: 'text-[var(--accent-branch)]',
+    border: 'border-[var(--accent-branch)]/40',
+    ring: 'ring-[var(--accent-branch)]/30',
+  },
+  leaf: {
+    text: 'text-[var(--accent-leaf)]',
+    border: 'border-[var(--accent-leaf)]/40',
+    ring: 'ring-[var(--accent-leaf)]/30',
+  },
+  conversation: {
+    text: 'text-[var(--accent-conversation)]',
+    border: 'border-[var(--accent-conversation)]/40',
+    ring: 'ring-[var(--accent-conversation)]/30',
+  },
+} as const;
+
+// =============================================================================
+// TONE GLOW (Dark Mode — shadow only, never bg)
+// =============================================================================
+
+export const toneGlow = {
+  commit: '0 0 12px oklch(0.65 0.15 260 / 10%)',
+  pending: '0 0 12px oklch(0.70 0.14 55 / 10%)',
+  branch: '0 0 12px oklch(0.70 0.12 80 / 10%)',
+  leaf: '0 0 12px oklch(0.65 0.14 155 / 10%)',
+} as const;
+
+// =============================================================================
 // TAILWIND CLASS HELPERS
 // =============================================================================
 

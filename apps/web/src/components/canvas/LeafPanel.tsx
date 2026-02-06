@@ -12,6 +12,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { staggerContainer, staggerItem } from '@/lib/motion';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { LeafType } from '@/types/nodes';
 import { LEAF_TYPES } from './CanvasNodes';
@@ -38,7 +40,7 @@ export function LeafPanel() {
 
   return (
     <Sheet open={leafPanelOpen} onOpenChange={(open) => !open && closeLeafPanel()}>
-      <SheetContent side="right" className="w-80 sm:max-w-80">
+      <SheetContent side="right" className={cn('w-80 sm:max-w-80', glass.panelBase)}>
         <SheetHeader>
           <SheetTitle>Output Destinations</SheetTitle>
           <SheetDescription>Select where to publish your content</SheetDescription>
@@ -55,7 +57,7 @@ export function LeafPanel() {
             >
               {/* Runner Section */}
               <motion.div variants={staggerItem}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Runner
                 </p>
                 <div className="flex flex-col gap-2">
@@ -83,7 +85,7 @@ export function LeafPanel() {
 
               {/* Output Section */}
               <motion.div variants={staggerItem}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Output
                 </p>
                 <div className="flex flex-col gap-2">

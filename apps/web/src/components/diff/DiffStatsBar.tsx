@@ -14,30 +14,33 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
       key: 'identical',
       label: 'Identical',
       count: identical,
-      color: 'bg-muted text-muted-foreground',
+      color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
     },
     {
       key: 'modified',
       label: 'Modified',
       count: modified,
-      color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+      color:
+        'border border-[var(--diff-modified-line)]/40 text-[var(--diff-modified-line)] bg-transparent',
     },
     {
       key: 'added',
       label: 'Added',
       count: added,
-      color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+      color:
+        'border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent',
     },
     {
       key: 'removed',
       label: 'Removed',
       count: removed,
-      color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+      color:
+        'border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent',
     },
   ];
 
   return (
-    <div className="flex items-center gap-3 px-6 py-3 bg-muted/30 border-b">
+    <div className="flex items-center gap-3 px-6 py-3 bg-[var(--surface-panel)] border-b border-[var(--stroke-divider)]">
       {items.map((item) => (
         <button
           key={item.key}

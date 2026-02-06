@@ -121,8 +121,8 @@ export function DiffFullScreen({
         {/* Main Content */}
         {commitsLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading commits...</span>
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+            <span className="ml-2 text-[var(--text-tertiary)]">Loading commits...</span>
           </div>
         ) : (
           <DiffSideBySide

@@ -1,17 +1,36 @@
 'use client';
 
-import { BarChart3, Command, FileText, Github, Home, Rocket } from 'lucide-react';
+import {
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Command,
+  FileText,
+  Github,
+  Home,
+  ListChecks,
+  Rocket,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 // T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)
 function LogoIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="T3X Logo"
+    >
       <defs>
         <radialGradient id="logoGradient" cx="32" cy="32" r="28" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#2563EB" />
@@ -47,6 +66,8 @@ function AgentIcon({ className }: { className?: string }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      role="img"
+      aria-label="Agent"
     >
       {/* Robot head */}
       <rect
@@ -74,21 +95,6 @@ function AgentIcon({ className }: { className?: string }) {
   );
 }
 
-const navItemClass = cn(
-  'flex h-10 w-10 items-center justify-center rounded-xl',
-  'text-muted-foreground transition-all duration-200',
-  'hover:bg-accent hover:text-accent-foreground hover:scale-105',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-  'active:scale-95'
-);
-
-const navItemActiveClass = cn(
-  navItemClass,
-  'bg-gradient-to-br from-primary/15 to-primary/5 text-primary',
-  'shadow-[0_0_0_1px_rgba(79,70,229,0.1),0_2px_8px_rgba(79,70,229,0.08)]',
-  'hover:from-primary/20 hover:to-primary/10 hover:text-primary'
-);
-
 interface NavItemProps {
   href: string;
   label: string;
@@ -96,45 +102,69 @@ interface NavItemProps {
   children: React.ReactNode;
   external?: boolean;
   disabled?: boolean;
+  collapsed: boolean;
 }
 
-function NavItem({ href, label, isActive, children, external, disabled }: NavItemProps) {
-  const content = (
+function NavItem({ href, label, isActive, children, external, disabled, collapsed }: NavItemProps) {
+  const baseClass = cn(
+    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+    collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
+    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
+    'active:scale-95'
+  );
+
+  const activeClass = cn(
+    baseClass,
+    'border-l-2 border-[var(--accent-commit)] bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
+  );
+
+  const inactiveClass = cn(
+    baseClass,
+    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+  );
+
+  const className = isActive ? activeClass : inactiveClass;
+
+  const inner = (
+    <>
+      <span className="shrink-0">{children}</span>
+      {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
+    </>
+  );
+
+  const linkElement = external ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+      {inner}
+    </a>
+  ) : disabled ? (
+    <Button variant="ghost" className={cn(className, 'cursor-not-allowed opacity-50')} disabled>
+      {inner}
+    </Button>
+  ) : (
+    <Link href={href} className={className}>
+      {inner}
+    </Link>
+  );
+
+  // In expanded mode, no tooltip needed since label is visible
+  if (!collapsed) return linkElement;
+
+  return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        {external ? (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={isActive ? navItemActiveClass : navItemClass}
-          >
-            {children}
-          </a>
-        ) : disabled ? (
-          <Button
-            variant="ghost"
-            className={cn(navItemClass, 'cursor-not-allowed opacity-50')}
-            disabled
-          >
-            {children}
-          </Button>
-        ) : (
-          <Link href={href} className={isActive ? navItemActiveClass : navItemClass}>
-            {children}
-          </Link>
-        )}
-      </TooltipTrigger>
+      <TooltipTrigger asChild>{linkElement}</TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
         {label}
       </TooltipContent>
     </Tooltip>
   );
-
-  return content;
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const isAgentDemo = pathname.startsWith('/agent-demo');
   const isDeploy = pathname.startsWith('/deploy') || pathname.startsWith('/eval');
@@ -143,55 +173,137 @@ export function Sidebar() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col items-center border-r border-border/50 bg-gradient-to-b from-background to-muted/30 py-4 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r py-4',
+          'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
+          glass.panelBase,
+          glass.highlight,
+          collapsed ? 'w-16 items-center' : 'w-52 px-3'
+        )}
+      >
         {/* Logo */}
-        <div className="mb-6 flex h-10 w-10 items-center justify-center">
+        <div
+          className={cn(
+            'mb-6 flex h-10 shrink-0 items-center',
+            collapsed ? 'justify-center' : 'px-1'
+          )}
+        >
           <LogoIcon />
+          {!collapsed && (
+            <span className="ml-3 text-sm font-semibold text-[var(--text-primary)] truncate">
+              T3X
+            </span>
+          )}
         </div>
 
         {/* Command Palette Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                // Simulate Cmd+K keypress to open command palette
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
-              }}
-              className={cn(navItemClass, 'mb-4 bg-muted/50 ring-1 ring-border/50')}
-              aria-label="Open command palette"
-            >
-              <Command className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
-            <span>Command Palette</span>
-            <Kbd>⌘K</Kbd>
-          </TooltipContent>
-        </Tooltip>
+        <div className={cn('mb-4', collapsed ? 'flex justify-center' : '')}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+                }}
+                className={cn(
+                  'rounded-xl bg-[var(--hover-bg)] ring-1 ring-[var(--stroke-default)]',
+                  'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg-strong)]',
+                  'transition-all duration-[var(--motion-base)]',
+                  collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-3 px-3'
+                )}
+                aria-label="Open command palette"
+              >
+                <Command className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="text-xs">Search...</span>}
+                {!collapsed && <Kbd className="ml-auto">⌘K</Kbd>}
+              </Button>
+            </TooltipTrigger>
+            {collapsed && (
+              <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
+                <span>Command Palette</span>
+                <Kbd>⌘K</Kbd>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </div>
 
         {/* Main Navigation */}
-        <nav className="flex flex-1 flex-col items-center gap-1.5">
-          <NavItem href="/" label="Projects" isActive={isHome}>
+        <nav className={cn('flex flex-1 flex-col gap-1', collapsed ? 'items-center' : '')}>
+          <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
             <Home className="h-5 w-5" />
           </NavItem>
 
-          <NavItem href="/agent-demo/chat" label="Agent Demo" isActive={isAgentDemo}>
+          <NavItem
+            href="/agent-demo/chat"
+            label="Agent Demo"
+            isActive={isAgentDemo}
+            collapsed={collapsed}
+          >
             <AgentIcon />
           </NavItem>
 
-          <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy}>
+          <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy} collapsed={collapsed}>
             <Rocket className="h-5 w-5" />
           </NavItem>
         </nav>
 
         {/* Bottom Navigation */}
-        <nav className="flex flex-col items-center gap-1.5">
-          <NavItem href="/insights" label="Insights" isActive={isInsights}>
+        <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
+          {/* QuickStart Checklist Reopen */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('t3x-quickstart-dismissed');
+                    window.dispatchEvent(new Event('t3x-quickstart-reopen'));
+                  }}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                    'h-10 w-10 justify-center',
+                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <ListChecks className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Quick Start Checklist
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem('t3x-quickstart-dismissed');
+                window.dispatchEvent(new Event('t3x-quickstart-reopen'));
+              }}
+              className={cn(
+                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                'h-10 w-full px-3',
+                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+              )}
+            >
+              <span className="shrink-0">
+                <ListChecks className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-medium truncate">Quick Start</span>
+            </button>
+          )}
+
+          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
             <BarChart3 className="h-5 w-5" />
           </NavItem>
 
-          <NavItem href="#" label="Docs (Coming Soon)" isActive={false} disabled>
+          <NavItem
+            href="#"
+            label="Docs (Coming Soon)"
+            isActive={false}
+            collapsed={collapsed}
+            disabled
+          >
             <FileText className="h-5 w-5" />
           </NavItem>
 
@@ -199,11 +311,47 @@ export function Sidebar() {
             href="https://github.com/anthropics/t3x"
             label="GitHub"
             isActive={false}
+            collapsed={collapsed}
             external
           >
             <Github className="h-5 w-5" />
           </NavItem>
         </nav>
+
+        {/* Collapse Toggle */}
+        <div
+          className={cn(
+            'mt-3 pt-3 border-t border-[var(--stroke-divider)]',
+            collapsed ? 'flex justify-center' : ''
+          )}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                className={cn(
+                  'h-8 w-8 rounded-lg text-[var(--text-tertiary)]',
+                  'hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
+                  'transition-all duration-[var(--motion-base)]'
+                )}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            {collapsed && (
+              <TooltipContent side="right" sideOffset={8}>
+                Expand (⌘\)
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </div>
       </aside>
     </TooltipProvider>
   );

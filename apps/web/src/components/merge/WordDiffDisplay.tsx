@@ -32,7 +32,7 @@ export function WordDiffDisplay({ segments }: WordDiffDisplayProps) {
             return (
               <span
                 key={i}
-                className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 line-through px-1 rounded"
+                className="bg-[var(--diff-removed-bg)] text-[var(--diff-removed-line)] line-through px-1 rounded"
               >
                 {segment.text}
               </span>
@@ -41,7 +41,7 @@ export function WordDiffDisplay({ segments }: WordDiffDisplayProps) {
             return (
               <span
                 key={i}
-                className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-1 rounded ml-1"
+                className="bg-[var(--diff-added-bg)] text-[var(--diff-added-line)] px-1 rounded ml-1"
               >
                 {segment.text}
               </span>
