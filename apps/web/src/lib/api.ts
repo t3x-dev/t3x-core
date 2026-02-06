@@ -1174,6 +1174,12 @@ export interface CommitV4Sentence {
   text: string;
   confidence?: number;
   source_ref?: CommitV4SentenceSourceRef;
+  /**
+   * The commit hash where this sentence was originally created.
+   * Set when a sentence is inherited from a parent commit.
+   * Undefined for sentences created directly in this commit.
+   */
+  inherited_from?: string;
 }
 
 // CommitV4 author from API
@@ -1272,6 +1278,9 @@ export async function updateCommitV4Position(
  *
  * V4 commits use sentences[] only. Constraints belong to Leaves.
  * source_ref in each sentence enables source context display with highlights.
+ *
+ * By default (inherit_parent_sentences=true), sentences from parent commits
+ * are automatically inherited into the new commit. Set to false to disable.
  */
 export async function createCommitV4(
   projectId: string,
@@ -1283,6 +1292,12 @@ export async function createCommitV4(
     position?: { x: number; y: number };
     author?: CommitV4Author;
     source_refs?: CommitV4SourceRef[];
+    /**
+     * If true (default), automatically inherit all sentences from parent commits.
+     * Inherited sentences will have inherited_from set to their original commit hash.
+     * New sentences with the same text will override inherited ones.
+     */
+    inherit_parent_sentences?: boolean;
   }
 ): Promise<CommitV4> {
   const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
@@ -1298,6 +1313,7 @@ export async function createCommitV4(
       position_y: options?.position?.y,
       author: options?.author ?? { type: 'human', name: 'User' },
       source_refs: options?.source_refs,
+      inherit_parent_sentences: options?.inherit_parent_sentences,
     }),
   });
   return handleResponse<CommitV4>(res);

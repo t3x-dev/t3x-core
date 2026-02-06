@@ -49,6 +49,12 @@ export const SentenceSchema = z.object({
       end_char: z.number(),
     })
     .optional(),
+  /**
+   * The commit hash where this sentence was originally created.
+   * Set when a sentence is inherited from a parent commit.
+   * Second-class field: does NOT participate in hash calculation.
+   */
+  inherited_from: z.string().optional(),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -126,6 +132,16 @@ export const CreateCommitV4Request = z
       .describe('References to source conversations or leaves'),
     position_x: z.number().optional().describe('Canvas X position'),
     position_y: z.number().optional().describe('Canvas Y position'),
+
+    // Inheritance control
+    inherit_parent_sentences: z
+      .boolean()
+      .default(true)
+      .describe(
+        'If true (default), automatically inherit all sentences from parent commits. ' +
+          'Inherited sentences will have inherited_from set to their original commit hash. ' +
+          'New sentences with the same text will override inherited ones.'
+      ),
 
     // V3/V4 detection fields (for validation error handling)
     schema: z.string().optional().describe('If provided, must be t3x/commit/v4'),
