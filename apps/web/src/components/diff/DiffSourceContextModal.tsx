@@ -15,6 +15,8 @@ import { Bot, ExternalLink, Loader2, Settings, Terminal, User } from 'lucide-rea
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import type { Sentence, TurnContextData, TurnWithContext } from '@/types/merge';
 
 const roleIcons: Record<string, React.ReactNode> = {
@@ -45,7 +47,9 @@ export function TurnBubble({ turn }: { turn: TurnWithContext }) {
     return (
       <>
         {before}
-        <mark className="bg-yellow-200 dark:bg-yellow-800/50 px-0.5 rounded">{highlighted}</mark>
+        <mark className="bg-[var(--accent-branch)]/20 text-[var(--text-primary)] px-0.5 rounded">
+          {highlighted}
+        </mark>
         {after}
       </>
     );
@@ -53,17 +57,17 @@ export function TurnBubble({ turn }: { turn: TurnWithContext }) {
 
   return (
     <div
-      className={`flex gap-3 p-3 rounded-lg ${turn.is_target ? 'ring-2 ring-yellow-400 dark:ring-yellow-600 ring-offset-2' : ''} ${isUser ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-muted'}`}
+      className={`flex gap-3 p-3 rounded-lg ${turn.is_target ? 'ring-2 ring-[var(--accent-branch)]/50 ring-offset-1 ring-offset-[var(--surface-card)]' : ''} ${isUser ? 'bg-[var(--accent-commit)]/8' : 'bg-[var(--surface-panel)]'}`}
     >
       <div
-        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isUser ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-muted-foreground/20 text-muted-foreground'}`}
+        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isUser ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]' : 'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'}`}
       >
         {roleIcons[turn.role] || <User className="h-4 w-4" />}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="font-medium text-sm">{roleLabels[turn.role] || turn.role}</span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-[var(--text-tertiary)]">
             {new Date(turn.created_at).toLocaleTimeString()}
           </span>
         </div>
@@ -112,13 +116,19 @@ export function DiffSourceContextModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent
+        className={cn(
+          'max-w-2xl max-h-[80vh] overflow-hidden flex flex-col rounded-2xl',
+          glass.elevatedBase,
+          glass.highlight
+        )}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
-              <DialogTitle>Source Context</DialogTitle>
+              <DialogTitle className="text-[var(--text-primary)]">Source Context</DialogTitle>
               {data && (
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-[var(--text-tertiary)] mt-1">
                   Conversation: {data.conversation_title || data.conversation_id}
                 </p>
               )}
@@ -140,8 +150,8 @@ export function DiffSourceContextModal({
         <div className="flex-1 overflow-auto py-4">
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading context...</span>
+              <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+              <span className="ml-2 text-[var(--text-tertiary)]">Loading context...</span>
             </div>
           )}
 
@@ -154,10 +164,10 @@ export function DiffSourceContextModal({
           )}
 
           {!loading && !data && sentence && (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 text-[var(--text-tertiary)]">
               <p>Could not load conversation context.</p>
               {sentence.source?.turn_hash && (
-                <p className="mt-2 text-sm font-mono break-all">
+                <p className="mt-2 text-sm font-mono break-all text-[var(--text-secondary)]">
                   Turn: {sentence.source.turn_hash}
                 </p>
               )}
