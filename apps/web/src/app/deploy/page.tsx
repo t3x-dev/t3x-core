@@ -229,7 +229,7 @@ export default function DeployPage() {
       }
 
       // Navigate to run detail page
-      router.push(`/deploy/${result.run_id}`);
+      router.push(`/deploy/eval/${result.run_id}`);
     } catch (_err) {
       showToast('Failed to run deploy agent', 'error');
 
@@ -409,7 +409,7 @@ export default function DeployPage() {
                       <p className="text-xs text-muted-foreground">
                         Last run:{' '}
                         <a
-                          href={`/deploy/${agent.last_run_id}`}
+                          href={`/deploy/eval/${agent.last_run_id}`}
                           className="text-primary hover:underline"
                         >
                           {agent.last_run_id}
@@ -439,7 +439,7 @@ export default function DeployPage() {
             // Filter options refresh is best-effort
           }
           // Navigate to run detail page
-          router.push(`/deploy/${runId}`);
+          router.push(`/deploy/eval/${runId}`);
         }}
       />
 
