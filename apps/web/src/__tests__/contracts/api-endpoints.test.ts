@@ -197,7 +197,7 @@ describe('Deploy Page API Usage', () => {
 });
 
 describe('Eval Page API Usage', () => {
-  const evalPagePath = path.join(__dirname, '../../app/eval/[runId]/page.tsx');
+  const evalPagePath = path.join(__dirname, '../../app/deploy/eval/[runId]/page.tsx');
   const evalPageCode = fs.readFileSync(evalPagePath, 'utf8');
 
   it('imports getEngineRun', () => {
