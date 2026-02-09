@@ -434,6 +434,11 @@ function UnitNode(props: Props) {
     return `[${contextConfig.selected_pin_ids.length} context]`;
   };
 
+  // Assertion totals for leaves header
+  const totalPassed = data.leaves?.reduce((sum, l) => sum + (l.passedCount || 0), 0) || 0;
+  const totalFailed = data.leaves?.reduce((sum, l) => sum + (l.failedCount || 0), 0) || 0;
+  const totalAssertions = totalPassed + totalFailed;
+
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
