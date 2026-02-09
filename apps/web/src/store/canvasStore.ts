@@ -374,7 +374,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           type: 'unit',
           position: snappedPosition,
           data: {
-            entryId: conversation.conversation_id.slice(0, 8),
+            entryId: conversation.conversation_id.replace(/^conv_/, '').slice(0, 8),
             title: conversation.title || 'Untitled Unit',
             summary: '0 turns',
             status: 'staging',
@@ -629,7 +629,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: 'unit',
         position,
         data: {
-          entryId: conversation.conversation_id.slice(0, 8),
+          entryId: conversation.conversation_id.replace(/^conv_/, '').slice(0, 8),
           title: conversation.title || title,
           summary: '0 turns',
           status: 'staging',

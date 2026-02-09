@@ -4,6 +4,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   deleteProject,
+  findBranchesByProject,
+  findCommitsV4ByProject,
+  findConversationsByProject,
   findProjects,
   findProjectWithStats,
   insertProject,
@@ -62,12 +65,25 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     const db = await getDB();
     const projects = await findProjects(db, { limit, offset });
 
-    const apiProjects = projects.map((p) => ({
-      project_id: p.projectId,
-      name: p.name,
-      created_at: p.createdAt.toISOString(),
-      metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
-    }));
+    // Enrich each project with counts (conversations, V4 commits, branches)
+    const apiProjects = await Promise.all(
+      projects.map(async (p) => {
+        const [convs, commits, branchesList] = await Promise.all([
+          findConversationsByProject(db, { projectId: p.projectId, limit: 10000 }),
+          findCommitsV4ByProject(db, p.projectId, { limit: 10000 }),
+          findBranchesByProject(db, { projectId: p.projectId, limit: 10000 }),
+        ]);
+        return {
+          project_id: p.projectId,
+          name: p.name,
+          created_at: p.createdAt.toISOString(),
+          metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
+          conversations_count: convs.length,
+          commits_count: commits.length,
+          branches_count: branchesList.length,
+        };
+      })
+    );
 
     return c.json({ success: true as const, data: { projects: apiProjects, limit, offset } }, 200);
   } catch (err) {
@@ -185,7 +201,10 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const project = await findProjectWithStats(db, id);
+    const [project, v4Commits] = await Promise.all([
+      findProjectWithStats(db, id),
+      findCommitsV4ByProject(db, id, { limit: 10000 }),
+    ]);
 
     if (!project) {
       return c.json(
@@ -204,7 +223,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
-      commits_count: project.stats.commitsCount,
+      commits_count: v4Commits.length || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
     };

@@ -192,7 +192,7 @@ export function MemoryContextSidebar({
             {conversationId && (
               <div className="flex items-center justify-between p-2 bg-background rounded border border-border mt-2">
                 <span className="text-xs text-muted-foreground truncate mr-2">
-                  conv#{conversationId.slice(0, 6)}
+                  conv#{conversationId.replace(/^conv_/, '').slice(0, 6)}
                 </span>
                 <PinButton
                   projectId={projectId}

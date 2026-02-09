@@ -188,7 +188,7 @@ function CommitGroup({
             <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-blue-100 text-blue-600">
               conv
             </span>
-            <span className="truncate">conv#{convId.slice(0, 8)}</span>
+            <span className="truncate">conv#{convId.replace(/^conv_/, '').slice(0, 8)}</span>
           </span>
         </DropdownMenuCheckboxItem>
       )}
