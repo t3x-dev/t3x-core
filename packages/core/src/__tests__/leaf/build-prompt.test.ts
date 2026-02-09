@@ -87,15 +87,6 @@ describe('getTypeInstructions', () => {
     expect(instructions.toLowerCase()).toContain('conversational');
   });
 
-  it('returns deploy_agent instructions', () => {
-    const instructions = getTypeInstructions('deploy_agent');
-    expect(instructions).toContain('agent');
-  });
-
-  it('returns eval instructions', () => {
-    const instructions = getTypeInstructions('eval');
-    expect(instructions).toContain('evaluation');
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

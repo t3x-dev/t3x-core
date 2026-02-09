@@ -430,7 +430,7 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'eval',
+          type: 'tweet',
           project_id: testProjectId,
         }),
       });
@@ -514,7 +514,7 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'eval',
+          type: 'tweet',
           constraints: [
             {
               type: 'require',
@@ -565,7 +565,7 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'eval',
+          type: 'tweet',
           constraints: [
             {
               id: 'cst_existing_123',

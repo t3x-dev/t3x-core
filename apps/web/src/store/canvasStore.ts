@@ -279,14 +279,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
               id: leaf.id,
               type: leaf.type,
               title: leaf.title || leaf.type,
-              status:
-                leaf.assertions && leaf.assertions.length > 0
-                  ? leaf.assertions.every((a) => a.passed)
-                    ? 'passed'
-                    : 'failed'
-                  : 'idle',
-              passedCount: leaf.assertions?.filter((a) => a.passed).length,
-              failedCount: leaf.assertions?.filter((a) => !a.passed).length,
               createdAt: leaf.created_at,
             };
             const existing = leavesByCommit.get(leaf.commit_hash) || [];
@@ -1243,15 +1235,8 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           ],
           // Leaves section - 2 outputs
           leaves: [
-            { id: 'leaf-1', type: 'deploy_agent', title: 'Production Agent', status: 'running' },
-            {
-              id: 'leaf-2',
-              type: 'eval',
-              title: 'Compliance Check',
-              status: 'passed',
-              passedCount: 18,
-              failedCount: 2,
-            },
+            { id: 'leaf-1', type: 'tweet', title: 'Twitter Post' },
+            { id: 'leaf-2', type: 'article', title: 'Blog Article' },
           ],
         },
       };

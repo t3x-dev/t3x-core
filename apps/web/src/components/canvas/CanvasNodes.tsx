@@ -10,7 +10,6 @@ import {
   Eye,
   FilePlus,
   FileText,
-  FlaskConical,
   GitCommit,
   GitMerge,
   Mail,
@@ -20,7 +19,6 @@ import {
   PenSquare,
   Pin,
   Plus,
-  Rocket,
   Trash2,
   Twitter,
   Users,
@@ -58,13 +56,8 @@ export const LEAF_TYPES: {
   type: LeafType;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  category?: 'output' | 'runner';
 }[] = [
-  // Runner category - deploy_agent and eval
-  { type: 'deploy_agent', label: 'Deploy', icon: Rocket, category: 'runner' },
-  { type: 'eval', label: 'Eval', icon: FlaskConical, category: 'runner' },
-  // Output category - social and content
-  { type: 'tweet', label: 'Twitter', icon: Twitter, category: 'output' },
+  { type: 'tweet', label: 'Twitter', icon: Twitter },
   {
     type: 'weibo',
     label: '微博',
@@ -79,11 +72,10 @@ export const LEAF_TYPES: {
         <path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.739 5.443zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.194.573zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.579-.18-.405-.649.381-1.017.422-1.896-.002-2.521-.789-1.161-2.948-1.098-5.418-.032 0 0-.776.34-.577-.277.379-1.207.324-2.218-.267-2.799-1.344-1.32-4.91.051-7.97 3.06C1.87 10.54.5 12.8.5 14.81c0 3.85 4.943 6.19 9.779 6.19 6.332 0 10.546-3.674 10.546-6.587 0-1.762-1.484-2.762-2.766-3.164z" />
       </svg>
     ),
-    category: 'output',
   },
-  { type: 'wechat', label: '朋友圈', icon: MessageCircle, category: 'output' },
-  { type: 'article', label: '文章', icon: FileText, category: 'output' },
-  { type: 'email', label: 'Email', icon: Mail, category: 'output' },
+  { type: 'wechat', label: '朋友圈', icon: MessageCircle },
+  { type: 'article', label: '文章', icon: FileText },
+  { type: 'email', label: 'Email', icon: Mail },
   {
     type: 'slack',
     label: 'Slack',
@@ -98,7 +90,6 @@ export const LEAF_TYPES: {
         <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
       </svg>
     ),
-    category: 'output',
   },
 ];
 
@@ -534,11 +525,9 @@ function UnitNode(props: Props) {
     if (isCommitted && data.leaves && data.leaves.length > 0) {
       const firstLeaf = data.leaves[0];
       const leafHref = getLeafHref(firstLeaf);
-      const terminalStatuses = new Set(['passed', 'failed', 'stopped', 'error']);
-      const hasOutput = firstLeaf.status ? terminalStatuses.has(firstLeaf.status) : false;
       return {
-        label: hasOutput ? 'View Results' : 'Preview Output',
-        icon: hasOutput ? Eye : ArrowRight,
+        label: 'View Output',
+        icon: Eye,
         action: () => {
           if (leafHref) router.push(leafHref);
         },
@@ -871,18 +860,10 @@ function UnitNode(props: Props) {
                   <div className="px-3 pb-2 space-y-1 nodrag">
                     {data.leaves.map((leaf) => {
                       const LeafIcon = getLeafIcon(leaf.type);
-                      const isRunner = leaf.type === 'deploy_agent' || leaf.type === 'eval';
                       const leafHref = getLeafHref(leaf);
                       const leafContent = (
                         <>
-                          <div
-                            className={cn(
-                              'w-5 h-5 rounded flex items-center justify-center',
-                              isRunner
-                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                            )}
-                          >
+                          <div className="w-5 h-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                             <LeafIcon size={12} />
                           </div>
                           <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">

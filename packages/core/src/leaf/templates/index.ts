@@ -16,9 +16,7 @@ export {
   articleDefaultTemplate,
   // Registry and helpers
   DEFAULT_TEMPLATES,
-  deployAgentDefaultTemplate,
   emailDefaultTemplate,
-  evalDefaultTemplate,
   getAllDefaultTemplates,
   getDefaultTemplate,
   slackDefaultTemplate,
