@@ -118,6 +118,10 @@ export interface EmbeddedLeaf {
   id: string;
   type: LeafType;
   title: string;
+  status?: 'idle' | 'pending' | 'running' | 'passed' | 'failed' | 'deploying' | 'stopped' | 'error' | 'skipped';
+  /** For eval leaves: pass/fail counts */
+  passedCount?: number;
+  failedCount?: number;
   /** When this leaf was created */
   createdAt?: string;
 }
