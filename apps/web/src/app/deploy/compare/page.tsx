@@ -839,7 +839,7 @@ function ComparePageContent() {
                             <TableRow
                               key={run.run_id}
                               className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => router.push(`/deploy/${run.run_id}`)}
+                              onClick={() => router.push(`/deploy/eval/${run.run_id}`)}
                             >
                               <TableCell>
                                 <Badge
@@ -899,7 +899,7 @@ function ComparePageContent() {
                                   className="h-7 px-2"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    router.push(`/deploy/${run.run_id}`);
+                                    router.push(`/deploy/eval/${run.run_id}`);
                                   }}
                                 >
                                   <Eye className="h-3.5 w-3.5" />

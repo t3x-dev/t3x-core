@@ -228,7 +228,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
                 {PROMPT_VERSIONS[lastRun.version].label} • {lastRun.timestamp.toLocaleTimeString()}
               </span>
               <a
-                href={`/deploy/${lastRun.runId}`}
+                href={`/deploy/eval/${lastRun.runId}`}
                 className="flex items-center gap-1 text-primary hover:underline"
               >
                 View Details
