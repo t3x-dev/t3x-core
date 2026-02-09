@@ -521,7 +521,9 @@ export const unitToNode = (
     type: 'unit',
     position: snapPosition(position),
     data: {
-      entryId: commit ? commit.commit_hash.slice(0, 12) : conv.conversation_id.slice(0, 8),
+      entryId: commit
+        ? commit.commit_hash.slice(0, 12)
+        : conv.conversation_id.replace(/^(conv_|orphan-)/, '').slice(0, 8),
       // Priority: commit.message (committed) > conv.title > fallback
       title: (isCommitted && commit?.message) || conv.title || 'Untitled Unit',
       summary: isCommitted
@@ -538,7 +540,7 @@ export const unitToNode = (
         {
           id: conv.conversation_id,
           type: 'conversation' as const,
-          label: `conv#${conv.conversation_id.slice(0, 4)}`,
+          label: `conv#${conv.conversation_id.replace(/^(conv_|orphan-)/, '').slice(0, 4)}`,
           title: conv.title || 'Conversation',
         },
       ],

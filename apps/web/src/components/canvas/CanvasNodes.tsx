@@ -660,16 +660,25 @@ function UnitNode(props: Props) {
             <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
               {data.title}
             </h4>
-            <span
-              className={cn(
-                'flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent',
-                data.branchType === 'main'
-                  ? cn(toneAccent.commit.border, toneAccent.commit.text)
-                  : cn(toneAccent.branch.border, toneAccent.branch.text)
-              )}
-            >
-              {branchLabel}
-            </span>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent',
+                      data.branchType === 'main'
+                        ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                        : cn(toneAccent.branch.border, toneAccent.branch.text)
+                    )}
+                  >
+                    {branchLabel}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {branchLabel}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Row 2: Self hash (committed only) */}
@@ -733,13 +742,15 @@ function UnitNode(props: Props) {
                         onClick={handleCopyHash}
                         className="inline-flex items-center gap-1 font-mono text-[var(--text-tertiary)] bg-[var(--hover-bg)] hover:bg-[var(--hover-bg-strong)] px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
                       >
-                        {data.commitV4?.hash
-                          ? data.commitV4.hash.slice(0, 7)
-                          : data.commitV3?.hash
-                            ? data.commitV3.hash.slice(0, 7)
-                            : data.commitHash
-                              ? data.commitHash.slice(0, 7)
-                              : data.entryId?.slice(0, 7)}
+                        {(
+                          data.commitV4?.hash ||
+                          data.commitV3?.hash ||
+                          data.commitHash ||
+                          data.entryId ||
+                          ''
+                        )
+                          .replace('sha256:', 'sha:')
+                          .slice(0, 11)}
                         {copiedHash ? (
                           <CheckCircle size={10} className="text-green-500 dark:text-green-400" />
                         ) : (
