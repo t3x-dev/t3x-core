@@ -7,7 +7,15 @@
  * DELETE /v1/projects/:id - Delete project
  */
 
-import { deleteProject, findProjectById, findProjects, insertProject } from '@t3x/storage/pglite';
+import {
+  deleteProject,
+  findBranchesByProject,
+  findCommitsV4ByProject,
+  findConversationsByProject,
+  findProjectById,
+  findProjects,
+  insertProject,
+} from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
@@ -25,14 +33,27 @@ projectRoutes.get('/v1/projects', async (c) => {
     const db = await getDB();
     const projects = await findProjects(db, { limit, offset });
 
-    const apiProjects = projects.map((p) => ({
-      project_id: p.projectId,
-      name: p.name,
-      created_at: p.createdAt.toISOString(),
-      metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
-    }));
+    // Fetch counts for each project in parallel
+    const enriched = await Promise.all(
+      projects.map(async (p) => {
+        const [convs, commits, branchesList] = await Promise.all([
+          findConversationsByProject(db, { projectId: p.projectId, limit: 10000 }),
+          findCommitsV4ByProject(db, p.projectId, { limit: 10000 }),
+          findBranchesByProject(db, { projectId: p.projectId, limit: 10000 }),
+        ]);
+        return {
+          project_id: p.projectId,
+          name: p.name,
+          created_at: p.createdAt.toISOString(),
+          metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
+          conversations_count: convs.length,
+          commits_count: commits.length,
+          branches_count: branchesList.length,
+        };
+      })
+    );
 
-    return jsonSuccess(c, { projects: apiProjects, limit, offset });
+    return jsonSuccess(c, { projects: enriched, limit, offset });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'LIST_FAILED', message, 500);
