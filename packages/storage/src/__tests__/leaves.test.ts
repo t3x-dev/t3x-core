@@ -134,7 +134,7 @@ describe('Leaves Storage', () => {
     it('creates a leaf with config', async () => {
       const input: CreateLeafInput = {
         commit_hash: testCommitHash,
-        type: 'deploy_agent',
+        type: 'article',
         config: {
           prompt_template: 'Generate a {{type}} about {{topic}}',
           model: 'claude-3-opus',
@@ -462,7 +462,7 @@ describe('Leaves Storage', () => {
     it('updates leaf config', async () => {
       const created = await createLeaf(db, {
         commit_hash: testCommitHash,
-        type: 'deploy_agent',
+        type: 'article',
         config: { model: 'old-model' },
         project_id: testProjectId,
       });
@@ -750,16 +750,9 @@ describe('Leaves Storage', () => {
   });
 
   describe('leaf types', () => {
-    it.each([
-      'deploy_agent',
-      'tweet',
-      'weibo',
-      'wechat',
-      'email',
-      'article',
-      'slack',
-      'eval',
-    ] as const)('supports leaf type: %s', async (type) => {
+    it.each(['tweet', 'weibo', 'wechat', 'email', 'article', 'slack'] as const)(
+      'supports leaf type: %s',
+      async (type) => {
       const created = await createLeaf(db, {
         commit_hash: testCommitHash,
         type,

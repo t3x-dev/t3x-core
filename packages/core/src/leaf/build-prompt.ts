@@ -64,17 +64,6 @@ ${config?.recipient ? `- Recipient: ${config.recipient}` : ''}`;
 - Be concise and scannable
 - Avoid overly formal language`;
 
-    case 'deploy_agent':
-      return `Format: Agent deployment configuration
-- Generate structured output suitable for agent consumption
-- Be precise and unambiguous
-- Include all necessary context`;
-
-    case 'eval':
-      return `Format: Evaluation content
-- Generate content suitable for evaluation purposes
-- Be comprehensive and cover all relevant aspects`;
-
     default:
       return `Format: General text output
 - Be clear and well-structured

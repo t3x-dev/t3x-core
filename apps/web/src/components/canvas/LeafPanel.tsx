@@ -34,10 +34,6 @@ export function LeafPanel() {
     }
   };
 
-  // Group leaf types by category
-  const runnerLeaves = LEAF_TYPES.filter((l) => l.category === 'runner');
-  const outputLeaves = LEAF_TYPES.filter((l) => l.category === 'output');
-
   return (
     <Sheet open={leafPanelOpen} onOpenChange={(open) => !open && closeLeafPanel()}>
       <SheetContent side="right" className={cn('w-80 sm:max-w-80', glass.panelBase)}>
@@ -55,41 +51,12 @@ export function LeafPanel() {
               animate="animate"
               exit="exit"
             >
-              {/* Runner Section */}
-              <motion.div variants={staggerItem}>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                  Runner
-                </p>
-                <div className="flex flex-col gap-2">
-                  {runnerLeaves.map(({ type, label, icon: Icon }) => (
-                    <motion.div key={type} variants={staggerItem}>
-                      <AnimatedButton
-                        variant="canvas-outline"
-                        className="h-auto w-full justify-start gap-3 px-4 py-3"
-                        onClick={() => handleSelectLeaf(type)}
-                        disabled={leafCreating}
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-900/30">
-                          {leafCreating ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400" />
-                          ) : (
-                            <Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          )}
-                        </div>
-                        <span className="font-medium">{label}</span>
-                      </AnimatedButton>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* Output Section */}
               <motion.div variants={staggerItem}>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Output
                 </p>
                 <div className="flex flex-col gap-2">
-                  {outputLeaves.map(({ type, label, icon: Icon }) => (
+                  {LEAF_TYPES.map(({ type, label, icon: Icon }) => (
                     <motion.div key={type} variants={staggerItem}>
                       <AnimatedButton
                         variant="canvas-outline"

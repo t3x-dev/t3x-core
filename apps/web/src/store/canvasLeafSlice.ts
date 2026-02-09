@@ -43,14 +43,12 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
     }
 
     const leafLabels: Record<LeafType, string> = {
-      deploy_agent: 'Deploy',
       tweet: 'Twitter',
       weibo: '微博',
       wechat: '朋友圈',
       email: 'Email',
       article: '文章',
       slack: 'Slack',
-      eval: 'Eval',
     };
 
     set({ leafCreating: true });
@@ -75,7 +73,6 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
           id: leaf.id,
           type: leafType,
           title: leafLabels[leafType],
-          status: 'idle',
           createdAt: leaf.created_at,
         };
 
