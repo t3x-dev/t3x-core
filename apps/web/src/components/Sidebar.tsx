@@ -167,7 +167,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const isAgentDemo = pathname.startsWith('/agent-demo');
-  const isDeploy = pathname.startsWith('/deploy') || pathname.startsWith('/eval');
+  const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
@@ -243,9 +243,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <AgentIcon />
           </NavItem>
 
-          <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy} collapsed={collapsed}>
-            <Rocket className="h-5 w-5" />
-          </NavItem>
+          {process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true' && (
+            <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy} collapsed={collapsed}>
+              <Rocket className="h-5 w-5" />
+            </NavItem>
+          )}
         </nav>
 
         {/* Bottom Navigation */}

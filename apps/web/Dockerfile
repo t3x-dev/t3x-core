@@ -33,6 +33,7 @@ RUN pnpm --filter @t3x/core build && \
 # Build webui
 # NEXT_PUBLIC_* vars must be set at build time (inlined into JS bundle)
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_RUNNER_ENABLED=true
 ENV NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
 RUN pnpm --filter t3x-webui build

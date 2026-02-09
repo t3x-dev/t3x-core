@@ -130,7 +130,7 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
     if (compareModeEnabled) {
       toggleRunSelection(run.run_id);
     } else {
-      router.push(`/deploy/${run.run_id}`);
+      router.push(`/deploy/eval/${run.run_id}`);
     }
   };
 
@@ -217,7 +217,7 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
                   className="h-auto"
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/deploy/${run.run_id}`);
+                    router.push(`/deploy/eval/${run.run_id}`);
                   }}
                 >
                   <Eye className="mr-1 h-3 w-3" />
