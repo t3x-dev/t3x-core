@@ -29,8 +29,8 @@ vi.mock('@/lib/api', () => ({
   createLeaf: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
-    type: 'deploy_agent',
-    title: 'Deploy',
+    type: 'tweet',
+    title: 'Twitter',
     constraints: [],
     config: {},
     output: null,
@@ -334,7 +334,7 @@ describe('Canvas Store - Unit Node Model', () => {
         projectId: 'proj_test123',
       });
 
-      await useCanvasStore.getState().addLeafNode('deploy_agent');
+      await useCanvasStore.getState().addLeafNode('tweet');
 
       const state = useCanvasStore.getState();
       // No new node created — leaf is embedded
@@ -345,9 +345,8 @@ describe('Canvas Store - Unit Node Model', () => {
       const unitNode = state.nodes[0];
       expect(unitNode.data.leaves).toBeDefined();
       expect(unitNode.data.leaves!.length).toBe(1);
-      expect(unitNode.data.leaves![0].type).toBe('deploy_agent');
-      expect(unitNode.data.leaves![0].title).toBe('Deploy');
-      expect(unitNode.data.leaves![0].status).toBe('idle');
+      expect(unitNode.data.leaves![0].type).toBe('tweet');
+      expect(unitNode.data.leaves![0].title).toBe('Twitter');
     });
 
     it('does nothing when leafPanelCommitId is not set', async () => {
@@ -358,7 +357,7 @@ describe('Canvas Store - Unit Node Model', () => {
         leafPanelCommitId: undefined,
       });
 
-      await useCanvasStore.getState().addLeafNode('deploy_agent');
+      await useCanvasStore.getState().addLeafNode('tweet');
 
       const state = useCanvasStore.getState();
       expect(state.nodes).toEqual([]);

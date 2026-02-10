@@ -193,7 +193,7 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
     <button
       type="button"
       onClick={onExpand}
-      className="w-full flex items-center gap-2 px-4 py-2 bg-muted/30 hover:bg-muted/50 transition-colors text-xs text-muted-foreground"
+      className="w-full flex items-center gap-2 px-4 py-2 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors text-xs text-[var(--text-tertiary)]"
     >
       <ChevronRight className="h-3 w-3" />
       <span>··· {count} unchanged sentences ···</span>
@@ -211,7 +211,7 @@ function ExpandedRowHeader({ count, onCollapse }: ExpandedRowProps) {
     <button
       type="button"
       onClick={onCollapse}
-      className="w-full flex items-center gap-2 px-4 py-1 bg-muted/20 hover:bg-muted/30 transition-colors text-xs text-muted-foreground"
+      className="w-full flex items-center gap-2 px-4 py-1 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors text-xs text-[var(--text-tertiary)]"
     >
       <ChevronDown className="h-3 w-3" />
       <span>··· {count} unchanged (click to collapse) ···</span>
@@ -426,15 +426,15 @@ export function UnifiedDiffView({
   return (
     <div className="max-w-4xl mx-auto">
       {/* Stats Header with View Toggle */}
-      <div className="flex items-center justify-between mb-4 px-2 py-2 bg-muted/30 rounded-lg text-sm">
+      <div className="flex items-center justify-between mb-4 px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
         <div className="flex items-center gap-4">
-          <span className="text-muted-foreground">{identical.length} identical</span>
+          <span className="text-[var(--text-tertiary)]">{identical.length} identical</span>
           {similarPairs.length > 0 && (
             <span
               className={
                 unresolvedCount > 0
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-green-600 dark:text-green-400'
+                  ? 'text-[var(--diff-modified-line)]'
+                  : 'text-[var(--diff-added-line)]'
               }
             >
               {similarPairs.length} conflicts
@@ -442,19 +442,17 @@ export function UnifiedDiffView({
             </span>
           )}
           {onlyInSource.length > 0 && (
-            <span className="text-blue-600 dark:text-blue-400">
-              +{onlyInSource.length} from source
-            </span>
+            <span className="text-[var(--accent-commit)]">+{onlyInSource.length} from source</span>
           )}
           {onlyInTarget.length > 0 && (
-            <span className="text-green-600 dark:text-green-400">
+            <span className="text-[var(--diff-added-line)]">
               +{onlyInTarget.length} from target
             </span>
           )}
         </div>
 
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 border rounded-md p-0.5">
+        <div className="flex items-center gap-1 border border-[var(--stroke-divider)] rounded-md p-0.5">
           <Button
             variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
             size="sm"
@@ -586,15 +584,15 @@ export function UnifiedDiffView({
 
       {/* Positional View */}
       {viewMode === 'positional' && (
-        <div className="space-y-2 border rounded-lg overflow-hidden">
+        <div className="space-y-2 border border-[var(--stroke-divider)] rounded-lg overflow-hidden">
           {loadingCommit ? (
-            <div className="p-4 text-center text-muted-foreground">
+            <div className="p-4 text-center text-[var(--text-tertiary)]">
               Loading document structure...
             </div>
           ) : positionalLines.length > 0 ? (
             positionalLines.map((line, i) => renderPositionalLine(line, i))
           ) : (
-            <div className="p-4 text-center text-muted-foreground">
+            <div className="p-4 text-center text-[var(--text-tertiary)]">
               Position data not available. Using grouped view is recommended.
             </div>
           )}

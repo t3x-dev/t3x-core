@@ -34,7 +34,7 @@ export function LeafCreationDialog({
 }: LeafCreationDialogProps) {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
-  const [selectedType, setSelectedType] = useState<LeafType>('deploy_agent');
+  const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [title, setTitle] = useState('');
 
   const handleCreate = async () => {
@@ -54,7 +54,7 @@ export function LeafCreationDialog({
 
       // Reset form
       setTitle('');
-      setSelectedType('deploy_agent');
+      setSelectedType('tweet');
 
       // Navigate to leaf detail page
       router.push(`/project/${projectId}/leaf/${leaf.id}`);
@@ -135,9 +135,6 @@ export function LeafCreationDialog({
                     />
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{leafType.label}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {leafType.category === 'runner' ? 'Runner' : 'Output'}
-                      </div>
                     </div>
                   </button>
                 );

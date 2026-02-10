@@ -1965,7 +1965,7 @@ export interface EngineRun {
   commit_ref: string | null;
   leaf: {
     id: string;
-    type: 'deploy_agent' | 'eval'; // V4 LeafType
+    type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
     content?: string;
   } | null;
   inputs: Record<string, unknown> | null;
@@ -2011,7 +2011,7 @@ export interface CreateEngineRunInput {
   commit_ref?: string;
   leaf?: {
     id: string;
-    type: 'deploy_agent' | 'eval'; // V4 LeafType (runner-related types only)
+    type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
     content?: string;
     rules_ref?: string; // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
   };
@@ -2432,15 +2432,7 @@ export async function getConversationMemory(conversationId: string): Promise<Bui
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 
-export type LeafType =
-  | 'deploy_agent'
-  | 'tweet'
-  | 'weibo'
-  | 'wechat'
-  | 'email'
-  | 'article'
-  | 'slack'
-  | 'eval';
+export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack';
 
 export interface RequireConstraint {
   id: string;

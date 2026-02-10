@@ -15,6 +15,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import type { CommitV4, DiffResultRaw } from '@/lib/api';
 import { getCommitV4 } from '@/lib/api';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
 import type { DiffSideBySideHandle } from './DiffSideBySide';
 import { DiffSideBySide } from './DiffSideBySide';
@@ -93,7 +95,7 @@ export function DiffFullScreen({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-[95vw] w-full max-h-[95vh] h-full p-0 flex flex-col overflow-hidden">
+      <DialogContent className={cn("max-w-[95vw] w-full max-h-[95vh] h-full p-0 flex flex-col overflow-hidden", glass.panelBase)}>
         {/* Header */}
         <DiffHeader
           baseCommit={{
@@ -121,8 +123,8 @@ export function DiffFullScreen({
         {/* Main Content */}
         {commitsLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading commits...</span>
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+            <span className="ml-2 text-[var(--text-tertiary)]">Loading commits...</span>
           </div>
         ) : (
           <DiffSideBySide

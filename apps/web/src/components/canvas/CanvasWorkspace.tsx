@@ -1,5 +1,13 @@
 import type { ColorMode, Node } from '@xyflow/react';
-import { Background, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
+import {
+  Background,
+  BackgroundVariant,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+} from '@xyflow/react';
+import { motion } from 'framer-motion';
 import {
   Brain,
   FileOutput,
@@ -36,6 +44,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { getLayoutedElements } from '@/lib/elkLayout';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -54,6 +63,10 @@ interface CanvasWorkspaceProps {
   projectName: string;
   mode: 'editor' | 'execution';
   onModeChange: (mode: 'editor' | 'execution') => void;
+  /** Initial viewport from URL params */
+  initialViewport?: { x: number; y: number; zoom: number };
+  /** Called when viewport changes (debounced externally) */
+  onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
 }
 
 // Wrapper component to provide ReactFlow context
@@ -65,7 +78,13 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
   );
 }
 
-function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspaceProps) {
+function CanvasWorkspaceInner({
+  projectName,
+  mode,
+  onModeChange,
+  initialViewport,
+  onViewportChange,
+}: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
   const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
@@ -586,8 +605,14 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
   );
   return (
     <div className="relative flex h-full flex-col">
-      {/* Integrated Top Bar - Modern glassmorphism style */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-sm px-5">
+      {/* Integrated Top Bar - Glass style */}
+      <header
+        className={cn(
+          'flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-5',
+          glass.panelBase,
+          glass.highlight
+        )}
+      >
         <div className="flex items-center gap-5">
           <h2 className="text-base font-semibold tracking-tight text-foreground">{projectName}</h2>
           <div className="h-5 w-px bg-border/60" />
@@ -600,7 +625,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
                 highlight?.mode !== 'main' &&
-                  'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
               )}
             >
               Main
@@ -619,7 +644,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
               className={cn(
                 'h-7 px-3 text-xs font-medium rounded-full transition-all',
                 highlight?.mode !== 'branch' &&
-                  'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
               )}
             >
               Branch
@@ -658,9 +683,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             size="sm"
             onClick={() => setShowMemoryModal(true)}
             title="Memory Context"
+            data-action="memory"
             className={cn(
               'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary'
             )}
           >
@@ -674,7 +700,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             title="Auto Layout"
             className={cn(
               'h-9 w-9 rounded-xl transition-all',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary',
               isLayouting && 'pointer-events-none'
             )}
@@ -710,7 +736,7 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             title="Add Unit"
             className={cn(
               'h-9 w-9 rounded-xl transition-all',
-              'text-muted-foreground hover:text-foreground',
+              'text-[var(--text-secondary)] hover:text-foreground',
               'hover:bg-primary/10 hover:text-primary',
               isPending && 'pointer-events-none'
             )}
@@ -742,6 +768,13 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
       <div
         ref={canvasRef}
         className={cn('relative flex-1', isPanMode && 'cursor-grab active:cursor-grabbing')}
+        role="tree"
+        aria-label="Knowledge graph canvas"
+        style={{
+          background: 'var(--surface-app)',
+          backgroundImage:
+            'radial-gradient(ellipse at 50% 30%, var(--surface-radial), transparent 70%)',
+        }}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
@@ -763,9 +796,10 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
           snapToGrid
           snapGrid={[GRID_SIZE, GRID_SIZE]}
           proOptions={{ hideAttribution: true }}
-          fitView
+          fitView={!initialViewport}
           fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
+          onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
           minZoom={0.25}
           maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
@@ -780,78 +814,78 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
             nodeStrokeWidth={3}
             pannable
             zoomable
-            className="!rounded-lg"
+            className={cn('!rounded-xl', glass.cardBase, glass.highlight)}
             style={{
-              backgroundColor:
-                colorMode === 'dark' ? 'rgba(30, 41, 59, 0.5)' : 'rgba(241, 245, 249, 0.5)',
+              backgroundColor: 'transparent',
             }}
             maskColor={colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
           />
           <ZoomSlider position="bottom-left" />
           <Background
-            gap={GRID_SIZE}
+            variant={BackgroundVariant.Dots}
+            gap={32}
             size={1}
-            color={colorMode === 'dark' ? '#374151' : '#cbd5e1'}
+            color={colorMode === 'dark' ? 'var(--stroke-grid)' : '#cbd5e1'}
           />
         </ReactFlow>
 
         {/* Empty state overlay - guided 3-step card */}
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <Card className="border-dashed border-2 border-border/60 bg-card/80 backdrop-blur-sm px-10 py-8 max-w-lg">
-              <p className="text-lg font-semibold text-foreground mb-6">Get started with T3X</p>
+            <Card
+              className={cn(
+                'border-dashed border-2 border-[var(--stroke-default)]/60 px-10 py-8 max-w-lg',
+                glass.cardBase,
+                glass.highlight
+              )}
+            >
+              <p className="text-lg font-semibold text-[var(--text-primary)] mb-6">
+                Get started with T3X
+              </p>
               <div className="flex flex-col gap-5">
-                {/* Step 1 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    1
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <MessageSquare className="h-5 w-5 text-primary" />
+                {[
+                  {
+                    icon: MessageSquare,
+                    title: 'Add Conversation',
+                    desc: 'Start by adding a conversation to extract knowledge from',
+                  },
+                  {
+                    icon: GitCommitHorizontal,
+                    title: 'Extract Knowledge',
+                    desc: 'Commit semantic content from your conversations',
+                  },
+                  {
+                    icon: FileOutput,
+                    title: 'Create Outputs',
+                    desc: 'Generate outputs for different platforms',
+                  },
+                ].map((step, i) => (
+                  <div key={step.title} className="flex items-start gap-4 text-left">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)] text-white text-sm font-bold">
+                      {i + 1}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Add Conversation</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Start by adding a conversation to extract knowledge from
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Step 2 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    2
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <GitCommitHorizontal className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Extract Knowledge</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Commit semantic content from your conversations
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Step 3 */}
-                <div className="flex items-start gap-4 text-left">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    3
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <FileOutput className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Create Outputs</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Generate outputs for different platforms
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <motion.div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit)]/10"
+                        animate={{ y: [0, -2, 0] }}
+                        transition={{
+                          duration: 3,
+                          repeat: Number.POSITIVE_INFINITY,
+                          delay: i * 0.5,
+                          ease: 'easeInOut',
+                        }}
+                      >
+                        <step.icon className="h-5 w-5 text-[var(--accent-commit)]" />
+                      </motion.div>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                          {step.title}
+                        </p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{step.desc}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             </Card>
           </div>
@@ -917,46 +951,89 @@ function CanvasWorkspaceInner({ projectName, mode, onModeChange }: CanvasWorkspa
         size="icon"
         onClick={() => setShowShortcuts(true)}
         title="Keyboard Shortcuts (?)"
-        className="absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full border border-border/50 bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground"
+        className={cn(
+          'absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+          glass.cardBase
+        )}
       >
         <HelpCircle className="h-4 w-4" />
       </Button>
 
       {/* Keyboard shortcuts dialog */}
       <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={cn('sm:max-w-md rounded-2xl', glass.cardBase, glass.highlight)}>
           <DialogHeader>
-            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+            <DialogTitle className="text-[var(--text-primary)]">Keyboard Shortcuts</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Show this help</span>
-              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">?</kbd>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Delete selected node</span>
-              <div className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Backspace
-                </kbd>
-                <span className="text-xs text-muted-foreground">/</span>
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Delete
-                </kbd>
+          <div className="space-y-4 py-2">
+            {/* Navigation */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Navigation
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Show this help</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ?
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Command palette</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ⌘K
+                  </kbd>
+                </div>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Deselect all</span>
-              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Escape</kbd>
+            <div className="h-px bg-[var(--stroke-divider)]" />
+            {/* Canvas */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Canvas
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Select all</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      ⌘A
+                    </kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Deselect all</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    Escape
+                  </kbd>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Select all</span>
-              <div className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  Ctrl+A
-                </kbd>
-                <span className="text-xs text-muted-foreground">/</span>
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">Cmd+A</kbd>
+            <div className="h-px bg-[var(--stroke-divider)]" />
+            {/* Actions */}
+            <div>
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                Actions
+              </h4>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Delete selected node</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      ⌫
+                    </kbd>
+                    <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      Del
+                    </kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Toggle sidebar</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    ⌘\
+                  </kbd>
+                </div>
               </div>
             </div>
           </div>

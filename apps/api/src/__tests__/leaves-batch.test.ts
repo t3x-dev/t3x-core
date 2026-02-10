@@ -151,8 +151,6 @@ describe('Batch Generation Routes', () => {
               { type: 'email' },
               { type: 'article' },
               { type: 'slack' },
-              { type: 'eval' },
-              { type: 'deploy_agent' },
             ],
             skip_generation: true,
           }),
@@ -163,8 +161,8 @@ describe('Batch Generation Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.results).toHaveLength(8);
-      expect(data.data.summary.succeeded).toBe(8);
+      expect(data.data.results).toHaveLength(6);
+      expect(data.data.summary.succeeded).toBe(6);
 
       // Verify each type
       const types = data.data.results.map((r: ApiResponse) => r.leaf.type);
@@ -174,8 +172,6 @@ describe('Batch Generation Routes', () => {
       expect(types).toContain('email');
       expect(types).toContain('article');
       expect(types).toContain('slack');
-      expect(types).toContain('eval');
-      expect(types).toContain('deploy_agent');
     });
 
     it('returns 400 for empty leaves array', async () => {

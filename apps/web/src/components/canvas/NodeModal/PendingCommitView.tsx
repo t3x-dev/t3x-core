@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import * as api from '@/lib/api';
+import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -1066,19 +1067,23 @@ export function PendingCommitView({
   if (commitSuccess) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
         role="dialog"
         aria-modal="true"
         onClick={onClose}
       >
         <div
-          className="flex flex-col w-[95vw] max-w-[520px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden relative"
+          className={cn(
+            'flex flex-col w-[95vw] max-w-[520px] rounded-2xl overflow-hidden relative',
+            glass.cardBase,
+            glass.highlight
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
           <button
             type="button"
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+            className="absolute top-4 right-4 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
             onClick={onClose}
             aria-label="Close"
           >
@@ -1094,14 +1099,14 @@ export function PendingCommitView({
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
                 Commit Created
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+              <p className="text-sm text-[var(--text-tertiary)] font-mono">
                 {commitSuccess.commitHash.slice(0, 12)}...
               </p>
             </div>
 
             {/* Diff stats summary */}
             {commitSuccess.diffStats && (
-              <div className="w-full flex items-center justify-center gap-4 py-3 px-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">
+              <div className="w-full flex items-center justify-center gap-4 py-3 px-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                 <span className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
                   <Plus size={14} />
                   {commitSuccess.diffStats.addedCount} added
@@ -1139,23 +1144,27 @@ export function PendingCommitView({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex flex-col w-[95vw] max-w-[1400px] h-[85vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
+      <div
+        className={cn(
+          'flex flex-col w-[95vw] max-w-[1400px] h-[85vh] rounded-2xl overflow-hidden',
+          glass.cardBase,
+          glass.highlight
+        )}
+      >
         {/* Top Bar */}
-        <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="text-[0.85rem] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1 rounded-md">
+            <div className="text-[0.85rem] font-bold text-[var(--accent-conversation)] bg-[var(--hover-bg)] px-2.5 py-1 rounded-md">
               t3x
             </div>
-            <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
               Commit: {data.title || 'Untitled'}
             </h2>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-              {data.entryId}
-            </span>
+            <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
             <Badge
               variant="outline"
               className="text-[0.65rem] text-slate-500 dark:text-slate-400 uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
@@ -1169,7 +1178,7 @@ export function PendingCommitView({
               size="icon"
               onClick={onClose}
               aria-label="Close"
-              className="h-9 w-9 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+              className="h-9 w-9 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
             >
               <X size={20} />
             </Button>
@@ -1179,7 +1188,7 @@ export function PendingCommitView({
         <div className="flex flex-1 min-h-0 overflow-hidden" ref={draftBodyRef}>
           {/* ========== LEFT SIDEBAR: Config Zone (STEP 1 + STEP 2) ========== */}
           <aside
-            className="min-w-[220px] max-w-[400px] p-5 bg-gray-50 dark:bg-gray-950/30 flex flex-col overflow-y-auto shrink-0"
+            className="min-w-[220px] max-w-[400px] p-5 bg-[var(--surface-app)] flex flex-col overflow-y-auto shrink-0"
             style={{ width: sidebarSourceDividerPos }}
           >
             {/* STEP 1: Configure (or Merge for merge drafts) */}
@@ -1190,21 +1199,21 @@ export function PendingCommitView({
               )}
             >
               <div className="flex flex-col gap-1">
-                <span className="text-[0.7rem] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                <span className="text-[0.7rem] font-bold text-[var(--text-tertiary)] uppercase tracking-widest">
                   {isMergeDraft ? 'MERGE' : 'STEP 1'}
                 </span>
-                <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+                <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-[var(--text-primary)]">
                   <span
                     className={cn(
                       'w-2 h-2 rounded-full',
                       !configLocked && !isMergeDraft
                         ? 'bg-emerald-500 dark:bg-emerald-400'
-                        : 'bg-gray-500 dark:bg-gray-400'
+                        : 'bg-[var(--text-tertiary)]'
                     )}
                   />
                   {isMergeDraft ? 'Analyze & Resolve' : 'Configure'}
                   {configLocked && !isMergeDraft && (
-                    <Lock size={12} className="text-gray-400 dark:text-gray-500 ml-1" />
+                    <Lock size={12} className="text-[var(--text-tertiary)] ml-1" />
                   )}
                 </span>
               </div>
@@ -1229,12 +1238,12 @@ export function PendingCommitView({
                   {/* Branch Selection - from real API data */}
                   {shouldShowBranchSelect && (
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex items-center">
+                      <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide flex items-center">
                         Branch
                         {branchesLoading && <Loader2 size={12} className="animate-spin ml-1" />}
                       </label>
                       <select
-                        className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-[0.85rem] bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
+                        className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
                         value={
                           // Default to 'main' when pendingBranch is undefined or 'main'
                           data.pendingBranch !== 'branch'
@@ -1290,7 +1299,7 @@ export function PendingCommitView({
                     data.pendingBranch === 'branch' &&
                     !branches.some((b) => b.name === data.pendingBranchName) && (
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                           New Branch Name
                         </label>
                         <Input
@@ -1304,11 +1313,11 @@ export function PendingCommitView({
 
                   {/* Template */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                       Template
                     </label>
                     <select
-                      className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-[0.85rem] bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
+                      className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
                       value={template}
                       onChange={(e) => setTemplate(e.target.value)}
                     >
@@ -1322,7 +1331,7 @@ export function PendingCommitView({
 
                   {/* Extract Intent */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                       What to extract
                     </label>
                     <Textarea
@@ -1340,21 +1349,21 @@ export function PendingCommitView({
 
                   {/* Cosine Threshold */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                       Filter Strictness
                     </label>
                     <input
                       type="range"
-                      className="w-full h-1.5 rounded-sm bg-gray-200 dark:bg-gray-700 accent-indigo-500 dark:accent-indigo-400 cursor-pointer"
+                      className="w-full h-1.5 rounded-sm bg-[var(--stroke-divider)] accent-indigo-500 dark:accent-indigo-400 cursor-pointer"
                       min="0"
                       max="1"
                       step="0.05"
                       value={cosineThreshold}
                       onChange={(e) => setCosineThreshold(Number.parseFloat(e.target.value))}
                     />
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
                       <span>More content</span>
-                      <span className="font-medium text-gray-600 dark:text-gray-400">
+                      <span className="font-medium text-[var(--text-secondary)]">
                         {(100 - cosineThreshold * 60).toFixed(0)}%
                       </span>
                       <span>Less content</span>
@@ -1363,12 +1372,12 @@ export function PendingCommitView({
 
                   {/* Curate Preview Status */}
                   {(isCurateLoading || curatePreview || curateError) && (
-                    <div className="flex flex-col gap-1.5 p-2 bg-gray-50 dark:bg-gray-950/30 rounded-md border border-gray-200 dark:border-gray-700">
-                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <div className="flex flex-col gap-1.5 p-2 bg-[var(--surface-app)] rounded-md border border-[var(--stroke-divider)]">
+                      <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                         Preview
                       </span>
                       {isCurateLoading ? (
-                        <div className="flex items-center gap-2 text-[0.8rem] text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-2 text-[0.8rem] text-[var(--text-tertiary)]">
                           <Loader2 size={14} className="animate-spin" />
                           <span>Computing embeddings...</span>
                         </div>
@@ -1378,7 +1387,7 @@ export function PendingCommitView({
                           <span>{curateError}</span>
                         </div>
                       ) : curatePreview ? (
-                        <div className="flex items-center gap-2 text-[0.8rem] text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2 text-[0.8rem] text-[var(--text-secondary)]">
                           <span>Auto-selected:</span>
                           <span className="font-medium text-emerald-600 dark:text-emerald-400">
                             {selectedChunksCount} / {curatePreview.chunks.length} sentences
@@ -1404,36 +1413,30 @@ export function PendingCommitView({
               ) : (
                 /* Locked state: Show read-only summary */
                 <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col gap-2 p-3 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                     {shouldShowBranchSelect && (
                       <div className="flex items-center gap-2 text-[0.85rem]">
-                        <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">
-                          Branch:
-                        </span>
-                        <span className="text-gray-800 dark:text-gray-200 font-medium">
+                        <span className="text-[var(--text-tertiary)] min-w-[70px]">Branch:</span>
+                        <span className="text-[var(--text-primary)] font-medium">
                           {data.pendingBranch || 'branch'}
                         </span>
                       </div>
                     )}
                     {requireBranchName && (
                       <div className="flex items-center gap-2 text-[0.85rem]">
-                        <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">Name:</span>
-                        <span className="text-gray-800 dark:text-gray-200 font-medium">
+                        <span className="text-[var(--text-tertiary)] min-w-[70px]">Name:</span>
+                        <span className="text-[var(--text-primary)] font-medium">
                           {data.pendingBranchName || '-'}
                         </span>
                       </div>
                     )}
                     <div className="flex items-center gap-2 text-[0.85rem]">
-                      <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">
-                        Template:
-                      </span>
-                      <span className="text-gray-800 dark:text-gray-200 font-medium">
-                        {template}
-                      </span>
+                      <span className="text-[var(--text-tertiary)] min-w-[70px]">Template:</span>
+                      <span className="text-[var(--text-primary)] font-medium">{template}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[0.85rem]">
-                      <span className="text-gray-500 dark:text-gray-400 min-w-[70px]">Cosine:</span>
-                      <span className="text-gray-800 dark:text-gray-200 font-medium">
+                      <span className="text-[var(--text-tertiary)] min-w-[70px]">Cosine:</span>
+                      <span className="text-[var(--text-primary)] font-medium">
                         {cosineThreshold.toFixed(2)}
                       </span>
                     </div>
@@ -1451,7 +1454,7 @@ export function PendingCommitView({
               )}
             </div>
 
-            <div className="h-px bg-gray-200 dark:bg-gray-700 my-5" />
+            <div className="h-px bg-[var(--stroke-divider)] my-5" />
 
             {/* STEP 2: Curate */}
             <div
@@ -1461,14 +1464,14 @@ export function PendingCommitView({
               )}
             >
               <div className="flex flex-col gap-1">
-                <span className="text-[0.7rem] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                <span className="text-[0.7rem] font-bold text-[var(--text-tertiary)] uppercase tracking-widest">
                   STEP 2
                 </span>
-                <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+                <span className="flex items-center gap-2 text-[0.95rem] font-semibold text-[var(--text-primary)]">
                   <span
                     className={cn(
                       'w-2 h-2 rounded-full',
-                      configLocked ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                      configLocked ? 'bg-emerald-500' : 'bg-[var(--stroke-divider)]'
                     )}
                   />
                   Curate
@@ -1477,7 +1480,7 @@ export function PendingCommitView({
 
               {!configLocked ? (
                 /* Disabled state: Show hint */
-                <div className="flex items-center gap-2 p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg text-gray-400 dark:text-gray-500 text-[0.85rem]">
+                <div className="flex items-center gap-2 p-4 bg-[var(--surface-app)] rounded-lg text-[var(--text-tertiary)] text-[0.85rem]">
                   <Lock size={16} />
                   <span>Complete Step 1 first</span>
                 </div>
@@ -1487,32 +1490,32 @@ export function PendingCommitView({
                   <div className="flex gap-4">
                     {hasNewSourceData ? (
                       <>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {selectionsCount} selections
                         </span>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {mustHaveKeywordsNew.length} must
                         </span>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {mustntHaveKeywordsNew.length} mustnt
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {includedPhrasesCount} phrases
                         </span>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {mustHaveKeywordsLegacy.length} must
                         </span>
-                        <span className="text-[0.85rem] text-gray-600 dark:text-gray-400">
+                        <span className="text-[0.85rem] text-[var(--text-secondary)]">
                           {mustntHaveKeywordsLegacy.length} mustnt
                         </span>
                       </>
                     )}
                   </div>
 
-                  <p className="text-sm text-gray-400 dark:text-gray-500">
+                  <p className="text-sm text-[var(--text-tertiary)]">
                     {hasNewSourceData
                       ? 'Drag to select text \u00b7 Click to mark keywords'
                       : 'Click phrases in SOURCE to toggle inclusion'}
@@ -1586,7 +1589,7 @@ export function PendingCommitView({
 
           {/* Sidebar | SOURCE Divider */}
           <div
-            className="w-1.5 bg-gray-200 dark:bg-gray-700 cursor-col-resize shrink-0 hover:bg-gray-300 dark:hover:bg-gray-600 active:bg-blue-500 dark:active:bg-blue-400 transition-colors relative group"
+            className="w-1.5 bg-[var(--stroke-divider)] cursor-col-resize shrink-0 hover:bg-[var(--hover-bg-strong)] active:bg-blue-500 dark:active:bg-blue-400 transition-colors relative group"
             onMouseDown={handleSidebarSourceDivider}
           >
             <div className="draft-svtz__divider-handle" />
@@ -1594,29 +1597,29 @@ export function PendingCommitView({
 
           {/* ========== MAIN CONTENT: SOURCE ========== */}
           <div
-            className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
+            className="flex-1 min-w-0 flex flex-col bg-[var(--surface-card)] overflow-hidden"
             ref={mainContentRef}
           >
             {/* SOURCE Column - Full Width */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/30 shrink-0">
-                <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="px-4 py-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] shrink-0">
+                <h3 className="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
                   {isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}
                 </h3>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 {/* Merge draft - legacy three-way merge UI removed */}
                 {isMergeDraft ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-col items-center justify-center py-16 text-center text-[var(--text-tertiary)]">
                     <GitCompare
                       size={48}
                       strokeWidth={1}
                       className="text-gray-300 dark:text-gray-600 mb-4"
                     />
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <h4 className="font-semibold text-[var(--text-secondary)] mb-2">
                       Merge via MergePanel
                     </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    <p className="text-sm text-[var(--text-tertiary)] mb-6">
                       Use the MergePanel component for two-way merge operations.
                     </p>
                     <div className="flex items-center gap-4 text-sm">
@@ -1624,16 +1627,16 @@ export function PendingCommitView({
                         <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
                           SOURCE
                         </Badge>
-                        <span className="text-gray-600 dark:text-gray-400">
+                        <span className="text-[var(--text-secondary)]">
                           {data?.mergeConfig?.sourceCommitTitle}
                         </span>
                       </div>
-                      <span className="text-gray-400 dark:text-gray-500">&rarr;</span>
+                      <span className="text-[var(--text-tertiary)]">&rarr;</span>
                       <div className="flex items-center gap-2">
                         <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
                           TARGET
                         </Badge>
-                        <span className="text-gray-600 dark:text-gray-400">
+                        <span className="text-[var(--text-secondary)]">
                           {data?.mergeConfig?.targetCommitTitle}
                         </span>
                       </div>
@@ -1651,11 +1654,9 @@ export function PendingCommitView({
                     onAnchorChange={handleAnchorChange}
                   />
                 ) : sourceBoxes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+                  <div className="flex flex-col items-center justify-center py-16 text-[var(--text-tertiary)]">
                     <MessageSquarePlus size={32} strokeWidth={1} className="mb-2" />
-                    <p className="font-medium text-gray-500 dark:text-gray-400">
-                      No source content
-                    </p>
+                    <p className="font-medium text-[var(--text-tertiary)]">No source content</p>
                     <span className="text-sm">Connect upstream conversation or commit</span>
                   </div>
                 ) : (
@@ -1663,17 +1664,17 @@ export function PendingCommitView({
                   sourceBoxes.map((box) => (
                     <div
                       key={box.id}
-                      className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-lg mb-3 overflow-hidden"
+                      className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-lg mb-3 overflow-hidden"
                     >
                       {/* Source Box Header */}
                       <div
-                        className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-gray-950/30 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2.5 bg-[var(--surface-app)] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
                         onClick={() => toggleSourceBoxExpand(box.id)}
                       >
-                        <span className="text-gray-500 dark:text-gray-400">
+                        <span className="text-[var(--text-tertiary)]">
                           {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </span>
-                        <span className="flex-1 text-[0.85rem] font-medium text-gray-700 dark:text-gray-300">
+                        <span className="flex-1 text-[0.85rem] font-medium text-[var(--text-secondary)]">
                           {box.title}
                         </span>
                         <Badge
@@ -1685,7 +1686,7 @@ export function PendingCommitView({
                       </div>
                       {/* Source Box Body with Phrases and Keyword Highlighting */}
                       {box.expanded && (
-                        <div className="p-3 text-[0.9rem] leading-[1.8] text-gray-700 dark:text-gray-300">
+                        <div className="p-3 text-[0.9rem] leading-[1.8] text-[var(--text-secondary)]">
                           {box.phrases.map((phrase) => {
                             const canToggle = configLocked;
                             return (
@@ -1734,7 +1735,7 @@ export function PendingCommitView({
         </div>
 
         {/* Bottom Legend */}
-        <footer className="flex items-center justify-center gap-6 px-6 py-3 bg-gray-50 dark:bg-gray-950/30 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+        <footer className="flex items-center justify-center gap-6 px-6 py-3 bg-[var(--surface-app)] border-t border-[var(--stroke-divider)] text-xs text-[var(--text-tertiary)] shrink-0">
           <span className="flex items-center gap-2">
             <span className="w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600" />
             green bg = included phrase

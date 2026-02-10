@@ -38,9 +38,16 @@ export const UpdateProjectSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
+// Project with counts (for list view — lighter than full stats)
+export const ProjectWithCountsSchema = ProjectSchema.extend({
+  conversations_count: z.number().int(),
+  commits_count: z.number().int(),
+  branches_count: z.number().int(),
+});
+
 // List projects response
 export const ListProjectsResponseSchema = z.object({
-  projects: z.array(ProjectSchema),
+  projects: z.array(ProjectWithCountsSchema),
   limit: z.number().int(),
   offset: z.number().int(),
 });

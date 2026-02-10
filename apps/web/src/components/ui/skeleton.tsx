@@ -8,7 +8,7 @@ function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
   return (
     <div
       data-slot="skeleton"
-      className={cn('animate-pulse rounded-md bg-muted', className)}
+      className={cn('animate-pulse rounded-md bg-[var(--surface-card)]', className)}
       {...props}
     />
   );
@@ -22,7 +22,7 @@ function SkeletonShimmer({ className, ...props }: React.HTMLAttributes<HTMLDivEl
     <div
       data-slot="skeleton-shimmer"
       className={cn(
-        'relative overflow-hidden rounded-md bg-muted',
+        'relative overflow-hidden rounded-md bg-[var(--surface-card)]',
         'before:absolute before:inset-0',
         'before:-translate-x-full',
         'before:animate-[shimmer_2s_infinite]',
@@ -85,7 +85,10 @@ function SkeletonCircle({
 function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-lg border border-border bg-card p-4 space-y-3', className)}
+      className={cn(
+        'rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 space-y-3',
+        className
+      )}
       {...props}
     >
       <div className="flex items-center gap-3">
@@ -107,7 +110,7 @@ function SkeletonProject({ className, ...props }: React.HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        'flex items-center gap-4 rounded-lg border border-border bg-card p-4',
+        'flex items-center gap-4 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4',
         className
       )}
       {...props}
@@ -131,7 +134,10 @@ function SkeletonProject({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 function SkeletonNode({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('w-72 rounded-2xl border-2 border-border bg-card p-4 space-y-3', className)}
+      className={cn(
+        'w-72 rounded-2xl border-2 border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 space-y-3',
+        className
+      )}
       {...props}
     >
       {/* Header */}
@@ -147,7 +153,7 @@ function SkeletonNode({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
         <Skeleton className="h-4 w-12" />
       </div>
       {/* Divider */}
-      <div className="h-px bg-border" />
+      <div className="h-px bg-[var(--stroke-divider)]" />
       {/* Commit section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

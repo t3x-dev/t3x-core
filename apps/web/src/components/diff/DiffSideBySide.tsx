@@ -6,6 +6,8 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import type { WordDiffSegment } from '@/types/merge';
 import { DiffSentenceLine } from './DiffSentenceLine';
 
@@ -172,13 +174,13 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
     <button
       type="button"
       onClick={onExpand}
-      className="w-full grid grid-cols-2 divide-x bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+      className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
     >
-      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
         <ChevronRight className="h-3 w-3" />
         <span>··· {count} unchanged ···</span>
       </div>
-      <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
         <ChevronRight className="h-3 w-3" />
         <span>··· {count} unchanged ···</span>
       </div>
@@ -308,14 +310,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               key={`collapsed-${index}`}
               type="button"
               onClick={() => toggleSection(index)}
-              className="w-full grid grid-cols-2 divide-x bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+              className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
               data-line-index={index}
             >
-              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
                 <ChevronDown className="h-3 w-3" />
                 <span>··· {line.collapsedCount} unchanged (click to collapse) ···</span>
               </div>
-              <div className="px-3 py-1 text-xs text-muted-foreground flex items-center gap-1">
+              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
                 <ChevronDown className="h-3 w-3" />
                 <span>··· {line.collapsedCount} unchanged ···</span>
               </div>
@@ -336,10 +338,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
       return (
         <div key={`line-${index}-${baseId || targetId}`} data-line-index={index}>
-          <div className="grid grid-cols-2 divide-x">
+          <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
             {/* Left (Base) side */}
             {line.type === 'added' ? (
-              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+              <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
               <DiffSentenceLine
                 text={line.baseSentence?.text || ''}
@@ -367,7 +369,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
             {/* Right (Target) side */}
             {line.type === 'removed' ? (
-              <div className="bg-muted/10 px-3 py-2 min-h-[2.5rem]" />
+              <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
               <DiffSentenceLine
                 text={line.targetSentence?.text || ''}
@@ -402,19 +404,25 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     };
 
     return (
-      <div className="flex-1 overflow-auto" ref={containerRef}>
+      <div className={cn('flex-1 overflow-auto', glass.reading)} ref={containerRef}>
         {/* Column Headers */}
-        <div className="grid grid-cols-2 divide-x border-b bg-muted/20 sticky top-0 z-10">
-          <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Base (Source)
+        <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
+          <div className="px-4 py-2 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              Base (Source)
+            </span>
           </div>
-          <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Target
+          <div className="px-4 py-2 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              Target
+            </span>
           </div>
         </div>
 
         {/* Unified diff lines */}
-        <div className="divide-y">{unifiedLines.map((line, i) => renderLine(line, i))}</div>
+        <div className="divide-y divide-[var(--stroke-divider)]">
+          {unifiedLines.map((line, i) => renderLine(line, i))}
+        </div>
 
         {/* Empty state */}
         {segmentDiffs.length === 0 && (
