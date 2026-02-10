@@ -8,6 +8,9 @@
 
 | Document | Description |
 |----------|-------------|
+| [Product Assessment](product-assessment.md) | Full product scoring (6.4/10) across 8 dimensions + hands-on test results, critical bugs, fix priorities |
+| [Competitive Analysis](competitive-analysis.md) | Langfuse comparison, market landscape, overlap matrix, strategic positioning |
+| [RFC: Langfuse Integration](rfcs/langfuse-integration.md) | Langfuse → T3X bridge: import traces/prompts, show semantic diff, governance layer |
 | [Product Strategy](product-strategy.md) | Product positioning, 3 gene lines, 8 reference products, milestone roadmap |
 | [Product Roadmap](product-roadmap.md) | Execution plan (Phase 0→3), dependency graph, parallel work timeline |
 | [Collaboration Protocol](collaboration-protocol.md) | Contract-first workflow, code ownership, task classification (F/B/FB) |
