@@ -1,10 +1,12 @@
 'use client';
 
 import { Activity, Cpu, Search, Zap } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
+import { GuidedTour } from '@/components/onboarding/GuidedTour';
+import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -17,15 +19,91 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const projectId = params.projectId as string;
 
+  const searchParams = useSearchParams();
+
   const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
   const projectsInitialized = useProjectStore((state) => state.initialized);
   const projectsLoading = useProjectStore((state) => state.loading);
-  const [mode, setMode] = useState<'editor' | 'execution'>('editor');
+  const [mode, setMode] = useState<'editor' | 'execution'>(() => {
+    const urlMode = searchParams.get('mode');
+    return urlMode === 'execution' ? 'execution' : 'editor';
+  });
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
+  const nodes = useCanvasStore((state) => state.nodes);
+
+  // Detect node types for QuickStart checklist
+  const nodeTypes = useMemo(() => {
+    const types = new Set(nodes.map((n) => n.type));
+    return {
+      hasConversation: types.has('conversation'),
+      hasCommit: types.has('commit') || types.has('pending'),
+      hasBranch: nodes.some((n) => n.data?.branch && n.data.branch !== 'main'),
+      hasLeaf: types.has('leaf'),
+      hasMerge: nodes.some((n) => n.data?.isMerge),
+    };
+  }, [nodes]);
+
+  // Parse initial viewport from URL params
+  const initialViewport = useMemo(() => {
+    const zoom = searchParams.get('zoom');
+    const x = searchParams.get('x');
+    const y = searchParams.get('y');
+    if (zoom !== null && x !== null && y !== null) {
+      return { x: Number(x), y: Number(y), zoom: Number(zoom) };
+    }
+    return undefined;
+  }, []); // intentionally empty — only read once on mount
+
+  // Open selected node from URL on first load
+  const selectedFromUrl = useRef(searchParams.get('selected'));
+  useEffect(() => {
+    if (selectedFromUrl.current && !canvasLoading && !canvasError) {
+      useCanvasStore.getState().openNodeModal(selectedFromUrl.current, 'commit');
+      selectedFromUrl.current = null;
+    }
+  }, [canvasLoading, canvasError]);
+
+  // Keep a stable ref to searchParams so callbacks don't re-create on every URL change
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+
+  // Debounced viewport → URL sync
+  const viewportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    return () => clearTimeout(viewportTimerRef.current);
+  }, []);
+  const handleViewportChange = useCallback(
+    (viewport: { x: number; y: number; zoom: number }) => {
+      clearTimeout(viewportTimerRef.current);
+      viewportTimerRef.current = setTimeout(() => {
+        const params = new URLSearchParams(searchParamsRef.current.toString());
+        params.set('zoom', viewport.zoom.toFixed(2));
+        params.set('x', Math.round(viewport.x).toString());
+        params.set('y', Math.round(viewport.y).toString());
+        router.replace(`?${params.toString()}`, { scroll: false });
+      }, 500);
+    },
+    [router]
+  );
+
+  // Sync mode → URL
+  const handleModeChange = useCallback(
+    (newMode: 'editor' | 'execution') => {
+      setMode(newMode);
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      if (newMode === 'execution') {
+        params.set('mode', 'execution');
+      } else {
+        params.delete('mode');
+      }
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
 
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
@@ -100,10 +178,20 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const canvasReady = !canvasLoading && !canvasError && !!project;
+
   return (
     <div className="flex h-full flex-col">
+      <GuidedTour ready={canvasReady} />
+      <QuickStartChecklist nodeTypes={nodeTypes} />
       {mode === 'editor' ? (
-        <CanvasWorkspace projectName={project.name} mode={mode} onModeChange={setMode} />
+        <CanvasWorkspace
+          projectName={project.name}
+          mode={mode}
+          onModeChange={handleModeChange}
+          initialViewport={initialViewport}
+          onViewportChange={handleViewportChange}
+        />
       ) : (
         <div className="relative flex h-full flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
@@ -118,20 +206,22 @@ export default function ProjectDetailPage() {
                 style={{ transform: 'translateX(calc(100% + 2px))' }}
               />
               <button
+                type="button"
                 className={cn(
                   'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
                   'text-muted-foreground hover:text-foreground'
                 )}
-                onClick={() => setMode('editor')}
+                onClick={() => handleModeChange('editor')}
               >
                 Editor
               </button>
               <button
+                type="button"
                 className={cn(
                   'relative z-10 rounded-full px-3 text-xs font-medium transition-colors',
                   'text-foreground'
                 )}
-                onClick={() => setMode('execution')}
+                onClick={() => handleModeChange('execution')}
               >
                 Execution
               </button>
@@ -146,7 +236,7 @@ export default function ProjectDetailPage() {
                   <p className="text-sm text-muted-foreground">Coming in v2.0</p>
                 </div>
 
-                <div className="space-y-3 opacity-60">
+                <div className="space-y-3">
                   <div className="flex items-center gap-3 rounded-md border p-3">
                     <Activity className="h-4 w-4 shrink-0" />
                     <span className="flex-1 text-sm">Agent started</span>

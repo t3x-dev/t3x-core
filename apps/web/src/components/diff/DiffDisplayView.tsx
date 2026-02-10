@@ -99,7 +99,7 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
 
   return (
     <div className="flex items-center gap-3 text-xs">
-      <span className="text-muted-foreground">{total} sentences</span>
+      <span className="text-[var(--text-tertiary)]">{total} sentences</span>
       {diff.identical.length > 0 && (
         <span className="text-slate-500 dark:text-slate-400">
           {diff.identical.length} unchanged
@@ -136,7 +136,7 @@ function TraceToSourceButton({ sentence, onClick }: TraceToSourceButtonProps) {
       className={`inline-flex items-center gap-1 text-[0.65rem] ml-2 transition-colors ${
         hasSource
           ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700'
-          : 'text-muted-foreground/30 cursor-not-allowed'
+          : 'text-[var(--text-tertiary)]/50 cursor-not-allowed'
       }`}
       title={hasSource ? 'View source context' : 'Source context not available'}
     >
@@ -158,16 +158,16 @@ interface InlineSourceContextProps {
 
 function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContextProps) {
   return (
-    <div className="mt-1 mb-2 ml-4 mr-2 rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
+    <div className="mt-1 mb-2 ml-4 mr-2 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40 bg-muted/50">
-        <span className="text-[0.65rem] font-medium text-muted-foreground uppercase tracking-wide">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
+        <span className="text-[0.65rem] font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
           Source Context
         </span>
         <button
           type="button"
           onClick={onOpenModal}
-          className="inline-flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-primary transition-colors"
+          className="inline-flex items-center gap-1 text-[0.6rem] text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] transition-colors"
           title="Open in full modal"
         >
           <Expand size={10} />
@@ -179,8 +179,8 @@ function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContext
       <div className="px-3 py-2 max-h-[200px] overflow-y-auto">
         {loading && (
           <div className="flex items-center gap-2 py-4 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Loading context...</span>
+            <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)]" />
+            <span className="text-xs text-[var(--text-tertiary)]">Loading context...</span>
           </div>
         )}
 
@@ -193,7 +193,7 @@ function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContext
         )}
 
         {!loading && !data && (
-          <div className="text-xs text-muted-foreground py-3 text-center">
+          <div className="text-xs text-[var(--text-tertiary)] py-3 text-center">
             Could not load conversation context.
           </div>
         )}
@@ -603,8 +603,8 @@ export function DiffDisplayView({
   if (loading) {
     return (
       <div className={cn('flex items-center justify-center py-12', className)}>
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Computing diff...</span>
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+        <span className="ml-2 text-[var(--text-tertiary)]">Computing diff...</span>
       </div>
     );
   }
@@ -653,18 +653,18 @@ export function DiffDisplayView({
       {/* Column Headers (side-by-side only) */}
       {viewMode === 'side-by-side' && (
         <div className="grid grid-cols-2 gap-1">
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground border-b">
+          <div className="px-2 py-1 text-xs font-medium text-[var(--text-secondary)] border-b border-[var(--stroke-divider)]">
             {sourceLabel}
             {sourceCommitHash && (
-              <span className="ml-2 font-mono text-[0.6rem] opacity-60">
+              <span className="ml-2 font-mono text-[0.6rem] text-[var(--text-tertiary)]">
                 {sourceCommitHash.slice(0, 12)}
               </span>
             )}
           </div>
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground border-b">
+          <div className="px-2 py-1 text-xs font-medium text-[var(--text-secondary)] border-b border-[var(--stroke-divider)]">
             {targetLabel}
             {targetCommitHash && (
-              <span className="ml-2 font-mono text-[0.6rem] opacity-60">
+              <span className="ml-2 font-mono text-[0.6rem] text-[var(--text-tertiary)]">
                 {targetCommitHash.slice(0, 12)}
               </span>
             )}

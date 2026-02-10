@@ -141,14 +141,14 @@ export function TurnBubble({
       className={`
         flex gap-3 p-3 rounded-lg
         ${ringClass}
-        ${isUser ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-muted'}
+        ${isUser ? 'bg-blue-50 dark:bg-[var(--surface-elevated)] dark:border-l-2 dark:border-l-[var(--accent-commit)]' : 'bg-muted dark:bg-[var(--surface-card)]'}
       `}
     >
       {/* Role Icon */}
       <div
         className={`
           shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          ${isUser ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-muted-foreground/20 text-muted-foreground'}
+          ${isUser ? 'bg-blue-100 dark:bg-[var(--accent-commit)]/15 text-blue-600 dark:text-[var(--accent-commit)]' : 'bg-muted-foreground/20 text-muted-foreground'}
         `}
       >
         {roleIcons[turn.role] || <User className="h-4 w-4" />}

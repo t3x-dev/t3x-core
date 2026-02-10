@@ -10,7 +10,6 @@ import {
   Eye,
   FilePlus,
   FileText,
-  FlaskConical,
   GitCommit,
   GitMerge,
   Mail,
@@ -20,7 +19,6 @@ import {
   PenSquare,
   Pin,
   Plus,
-  Rocket,
   Trash2,
   Twitter,
   Users,
@@ -28,11 +26,12 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ConversationContext, getConversationContext } from '@/lib/api';
-import { nodeEnter, springConfig } from '@/lib/motion';
+import { nodeEnter } from '@/lib/motion';
+import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -57,13 +56,8 @@ export const LEAF_TYPES: {
   type: LeafType;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  category?: 'output' | 'runner';
 }[] = [
-  // Runner category - deploy_agent and eval
-  { type: 'deploy_agent', label: 'Deploy', icon: Rocket, category: 'runner' },
-  { type: 'eval', label: 'Eval', icon: FlaskConical, category: 'runner' },
-  // Output category - social and content
-  { type: 'tweet', label: 'Twitter', icon: Twitter, category: 'output' },
+  { type: 'tweet', label: 'Twitter', icon: Twitter },
   {
     type: 'weibo',
     label: '微博',
@@ -78,11 +72,10 @@ export const LEAF_TYPES: {
         <path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.739 5.443zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.194.573zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.579-.18-.405-.649.381-1.017.422-1.896-.002-2.521-.789-1.161-2.948-1.098-5.418-.032 0 0-.776.34-.577-.277.379-1.207.324-2.218-.267-2.799-1.344-1.32-4.91.051-7.97 3.06C1.87 10.54.5 12.8.5 14.81c0 3.85 4.943 6.19 9.779 6.19 6.332 0 10.546-3.674 10.546-6.587 0-1.762-1.484-2.762-2.766-3.164z" />
       </svg>
     ),
-    category: 'output',
   },
-  { type: 'wechat', label: '朋友圈', icon: MessageCircle, category: 'output' },
-  { type: 'article', label: '文章', icon: FileText, category: 'output' },
-  { type: 'email', label: 'Email', icon: Mail, category: 'output' },
+  { type: 'wechat', label: '朋友圈', icon: MessageCircle },
+  { type: 'article', label: '文章', icon: FileText },
+  { type: 'email', label: 'Email', icon: Mail },
   {
     type: 'slack',
     label: 'Slack',
@@ -97,7 +90,6 @@ export const LEAF_TYPES: {
         <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
       </svg>
     ),
-    category: 'output',
   },
 ];
 
@@ -126,51 +118,22 @@ const sourceHandleStyle = {
   right: -9,
 };
 
-// Tone-based style configurations - Pro design with refined shadows and gradients
-const toneStyles = {
-  'main-latest': {
-    border: 'border-blue-400/50',
-    shadow: 'shadow-[0_4px_20px_-4px_rgba(59,130,246,0.25),0_0_0_1px_rgba(59,130,246,0.08)]',
-    accent: 'text-blue-600 dark:text-blue-400',
-    badgeBg: 'bg-gradient-to-r from-blue-600 to-indigo-600',
-    zIndex: 'z-[4]',
-  },
-  'main-history': {
-    border: 'border-blue-300/40 dark:border-blue-700/40',
-    shadow: 'shadow-[0_2px_12px_-4px_rgba(59,130,246,0.15),0_0_0_1px_rgba(59,130,246,0.05)]',
-    accent: 'text-blue-500 dark:text-blue-400',
-    badgeBg: 'bg-blue-500',
-    zIndex: 'z-[2]',
-  },
-  'branch-latest': {
-    border: 'border-amber-400/50',
-    shadow: 'shadow-[0_4px_20px_-4px_rgba(245,158,11,0.25),0_0_0_1px_rgba(245,158,11,0.08)]',
-    accent: 'text-amber-600 dark:text-amber-400',
-    badgeBg: 'bg-gradient-to-r from-amber-500 to-orange-500',
-    zIndex: 'z-[4]',
-  },
-  'branch-history': {
-    border: 'border-amber-300/40 dark:border-amber-700/40',
-    shadow: 'shadow-[0_2px_12px_-4px_rgba(245,158,11,0.15),0_0_0_1px_rgba(245,158,11,0.05)]',
-    accent: 'text-amber-500 dark:text-amber-400',
-    badgeBg: 'bg-amber-500',
-    zIndex: 'z-[2]',
-  },
-  staging: {
-    border: 'border-slate-300/60 border-dashed dark:border-slate-700/60',
-    shadow: 'shadow-[0_2px_12px_-4px_rgba(100,116,139,0.12),0_0_0_1px_rgba(100,116,139,0.06)]',
-    accent: 'text-slate-500 dark:text-slate-400',
-    badgeBg: 'bg-transparent border border-dashed border-slate-400 dark:border-slate-600',
-    zIndex: 'z-[3]',
-  },
-  default: {
-    border: 'border-slate-200 dark:border-slate-800',
-    shadow: 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]',
-    accent: 'text-blue-600 dark:text-blue-400',
-    badgeBg: 'bg-blue-600',
-    zIndex: 'z-[2]',
-  },
-};
+// Map canvas tone key to accent system key
+function getToneAccentKey(toneKey: string): 'commit' | 'pending' | 'branch' {
+  switch (toneKey) {
+    case 'main-latest':
+    case 'main-history':
+    case 'default':
+      return 'commit';
+    case 'branch-latest':
+    case 'branch-history':
+      return 'branch';
+    case 'staging':
+      return 'pending';
+    default:
+      return 'commit';
+  }
+}
 
 // Source type icon mapping
 const SOURCE_ICONS: Record<SourceType, ComponentType<{ size?: number; className?: string }>> = {
@@ -271,20 +234,20 @@ function CommitV3Content({
   const remainingConstraints = commit.constraints.length - PREVIEW_MAX_CONSTRAINTS;
 
   return (
-    <div className="commit-v3-content mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+    <div className="commit-v3-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-xs text-slate-400">by</span>
+        <span className="text-xs text-[var(--text-tertiary)]">by</span>
         <AuthorBadgeV3 author={commit.author} />
       </div>
 
       {/* Sentences - use TruncatedCommitView if source context available */}
       <div>
-        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
           Sentences ({commit.sentences.length})
         </div>
         {commit.sentences.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">No sentences</p>
+          <p className="text-xs text-[var(--text-tertiary)] italic">No sentences</p>
         ) : hasSourceContext ? (
           <TruncatedCommitView
             sentences={sentencesWithSource.map((s) => ({
@@ -304,12 +267,12 @@ function CommitV3Content({
         ) : (
           <ul className="space-y-0.5">
             {displaySentences.map((s) => (
-              <li key={s.id} className="text-xs text-slate-700 dark:text-slate-300 line-clamp-1">
+              <li key={s.id} className="text-xs text-[var(--text-secondary)] line-clamp-1">
                 • {s.text}
               </li>
             ))}
             {remainingSentences > 0 && (
-              <li className="text-xs text-slate-400">+{remainingSentences} more</li>
+              <li className="text-xs text-[var(--text-tertiary)]">+{remainingSentences} more</li>
             )}
           </ul>
         )}
@@ -318,7 +281,7 @@ function CommitV3Content({
       {/* Constraints (preview) */}
       {commit.constraints.length > 0 && (
         <div className="mt-2">
-          <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+          <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
             Constraints ({commit.constraints.length})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -326,7 +289,9 @@ function CommitV3Content({
               <ConstraintBadge key={c.id} constraint={c} />
             ))}
             {remainingConstraints > 0 && (
-              <span className="text-xs text-slate-400 px-1 py-0.5">+{remainingConstraints}</span>
+              <span className="text-xs text-[var(--text-tertiary)] px-1 py-0.5">
+                +{remainingConstraints}
+              </span>
             )}
           </div>
         </div>
@@ -356,38 +321,46 @@ function CommitV4Content({
   const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
 
   return (
-    <div className="commit-v4-content mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+    <div className="commit-v4-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-xs text-slate-400">by</span>
+        <span className="text-xs text-[var(--text-tertiary)]">by</span>
         <AuthorBadgeV4 author={commit.author} />
         {/* V4 badge */}
-        <span className="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+        <span
+          className={cn(
+            'text-[0.55rem] font-semibold px-1 py-0.5 rounded-full border bg-transparent',
+            toneAccent.conversation.border,
+            toneAccent.conversation.text
+          )}
+        >
           V4
         </span>
       </div>
 
       {/* Sentences (preview) */}
       <div>
-        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+        <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
           Sentences ({sentences.length})
         </div>
         {sentences.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-400 italic">No sentences</p>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No sentences</p>
         ) : (
           <>
             <ul className="mt-1 space-y-0.5">
               {displaySentences.map((s) => (
-                <li key={s.id} className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
-                  <span className="text-slate-400 font-mono text-xs mr-1">{s.id}</span>
+                <li key={s.id} className="text-xs text-[var(--text-secondary)] line-clamp-2">
+                  <span className="text-[var(--text-tertiary)] font-mono text-[11px] mr-1">
+                    {s.id}
+                  </span>
                   {s.text}
                 </li>
               ))}
             </ul>
             {/* Footer with +N more and View full */}
-            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)]">
               {remainingSentences > 0 ? (
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-[var(--text-tertiary)]">
                   +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
                 </span>
               ) : (
@@ -397,7 +370,10 @@ function CommitV4Content({
                 <button
                   type="button"
                   onClick={onViewFull}
-                  className="inline-flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  className={cn(
+                    'inline-flex items-center gap-0.5 text-xs transition-colors hover:brightness-110',
+                    toneAccent.commit.text
+                  )}
                 >
                   View full
                   <ChevronRight size={10} />
@@ -409,10 +385,8 @@ function CommitV4Content({
       </div>
 
       {/* V4: Constraints notice */}
-      <div className="mt-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800">
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          Constraints are defined in Leaves
-        </p>
+      <div className="mt-2 px-2 py-1.5 bg-[var(--hover-bg)] rounded border border-[var(--stroke-divider)]">
+        <p className="text-xs text-[var(--text-tertiary)]">Constraints are defined in Leaves</p>
       </div>
     </div>
   );
@@ -471,9 +445,22 @@ function UnitNode(props: Props) {
 
   const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN';
 
-  // Get tone-based styles
+  // Map tone to accent system
   const toneKey = isStaging ? 'staging' : tone || 'default';
-  const styles = toneStyles[toneKey as keyof typeof toneStyles] || toneStyles.default;
+  const accentKey = getToneAccentKey(toneKey);
+
+  // Commit celebration animation — triggers on staging → committed transition
+  const prevStatusRef = useRef(data.commitStatus);
+  const [celebrating, setCelebrating] = useState(false);
+
+  useEffect(() => {
+    if (prevStatusRef.current === 'staging' && data.commitStatus === 'committed') {
+      setCelebrating(true);
+      const timer = setTimeout(() => setCelebrating(false), 500);
+      return () => clearTimeout(timer);
+    }
+    prevStatusRef.current = data.commitStatus;
+  }, [data.commitStatus]);
 
   const handleAddUnit = () => {
     try {
@@ -494,10 +481,6 @@ function UnitNode(props: Props) {
       // Navigate to Merge Workspace
       router.push(`/project/${projectId}/merge/${draftId}`);
     }
-  };
-
-  const handleOpenLeafPanel = () => {
-    openLeafPanel(id);
   };
 
   // Copy commit hash to clipboard (V4/V3 hash takes priority)
@@ -542,11 +525,9 @@ function UnitNode(props: Props) {
     if (isCommitted && data.leaves && data.leaves.length > 0) {
       const firstLeaf = data.leaves[0];
       const leafHref = getLeafHref(firstLeaf);
-      const terminalStatuses = new Set(['passed', 'failed', 'stopped', 'error']);
-      const hasOutput = firstLeaf.status ? terminalStatuses.has(firstLeaf.status) : false;
       return {
-        label: hasOutput ? 'View Results' : 'Preview Output',
-        icon: hasOutput ? Eye : ArrowRight,
+        label: 'View Output',
+        icon: Eye,
         action: () => {
           if (leafHref) router.push(leafHref);
         },
@@ -570,47 +551,73 @@ function UnitNode(props: Props) {
       <motion.div
         variants={nodeEnter}
         initial="initial"
-        animate="animate"
+        animate={celebrating ? { scale: [1, 1.06, 1] } : 'animate'}
         exit="exit"
-        whileHover={{ scale: 1.01, transition: springConfig.smooth }}
+        transition={
+          celebrating
+            ? {
+                duration: 0.4,
+                times: [0, 0.35, 1],
+                ease: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
+              }
+            : undefined
+        }
+        whileHover={{ y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
         whileTap={{ scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-xl border overflow-visible text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900',
-          styles.border,
-          styles.shadow,
-          styles.zIndex,
-          selected && 'shadow-[0_0_0_2px_rgba(79,70,229,0.5),0_0_16px_rgba(79,70,229,0.1)]',
-          data.highlightMode === 'main' &&
-            'shadow-[0_0_0_2px_rgba(59,130,246,0.5),0_0_16px_rgba(59,130,246,0.1)]',
-          data.highlightMode === 'branch' &&
-            'shadow-[0_0_0_2px_rgba(245,158,11,0.5),0_0_16px_rgba(245,158,11,0.1)]'
+          'group w-72 rounded-xl overflow-visible',
+          glass.cardNode,
+          glass.highlight,
+          // Left accent line
+          'border-l-2',
+          isStaging && 'border-dashed',
+          accentKey === 'commit' && 'border-l-[var(--accent-commit)]',
+          accentKey === 'branch' && 'border-l-[var(--accent-branch)]',
+          accentKey === 'pending' && 'border-l-[var(--accent-pending)]',
+          // Hover
+          'hover:shadow-[var(--fx-shadow-hover)]',
+          // Selected state
+          selected && cn('ring-2', toneAccent[accentKey].ring),
+          // Highlight overrides
+          data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
+          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50'
         )}
-        style={{ willChange: 'transform' }}
+        style={{
+          willChange: 'transform',
+          ...(selected ? { boxShadow: toneGlow[accentKey as keyof typeof toneGlow] } : {}),
+        }}
+        role="treeitem"
+        aria-label={`${data.title} — ${isStaging ? 'Draft' : 'Committed'} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
+        aria-selected={selected}
+        data-node-type={isStaging ? 'conversation' : 'commit'}
+        tabIndex={0}
       >
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
         {data.sources && data.sources.length > 0 && (
           <div
-            className="px-3 py-2 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700 rounded-t-[11px] cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-700/80 transition-colors nodrag"
+            className="px-3 py-2 border-b border-[var(--stroke-divider)] rounded-t-[11px] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors nodrag"
             onClick={(e) => {
               e.stopPropagation();
               openNodeModal(id, 'conversation');
             }}
           >
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-medium text-slate-400 uppercase tracking-wider">Sources</span>
+            <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                SOURCES
+              </span>
               {/* Context indicator */}
               {(() => {
                 const ctxLabel = getContextLabel();
                 return ctxLabel ? (
                   <>
-                    <span className="text-slate-300 dark:text-slate-600">·</span>
-                    <span className="text-slate-400 font-medium">{ctxLabel}</span>
+                    <span className="text-[var(--text-tertiary)]/50">·</span>
+                    <span className="text-[var(--text-tertiary)] font-medium">{ctxLabel}</span>
                   </>
                 ) : null;
               })()}
-              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <span className="text-[var(--text-tertiary)]/50">·</span>
               <TooltipProvider delayDuration={200}>
                 {data.sources.map((source, idx) => {
                   const Icon = SOURCE_ICONS[source.type] || FileText;
@@ -618,9 +625,7 @@ function UnitNode(props: Props) {
                     source.type === 'conversation' && isPinned('conversation', source.id);
                   return (
                     <span key={source.id} className="inline-flex items-center gap-0.5">
-                      {idx > 0 && (
-                        <span className="text-slate-300 dark:text-slate-600 mx-0.5">·</span>
-                      )}
+                      {idx > 0 && <span className="text-[var(--text-tertiary)]/50 mx-0.5">·</span>}
                       {sourceIsPinned && (
                         <Pin
                           size={10}
@@ -630,7 +635,7 @@ function UnitNode(props: Props) {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="inline-flex items-center gap-0.5">
-                            <Icon size={10} className="text-slate-400" />
+                            <Icon size={10} className="text-[var(--text-tertiary)]" />
                             <span>{source.label}</span>
                           </span>
                         </TooltipTrigger>
@@ -652,24 +657,33 @@ function UnitNode(props: Props) {
         <div className="px-3 py-3">
           {/* Row 1: Title + Branch Badge */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h4 className="m-0 text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug flex-1 min-w-0">
+            <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
               {data.title}
             </h4>
-            <span
-              className={cn(
-                'flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded',
-                data.branchType === 'main'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-              )}
-            >
-              {branchLabel}
-            </span>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent',
+                      data.branchType === 'main'
+                        ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                        : cn(toneAccent.branch.border, toneAccent.branch.text)
+                    )}
+                  >
+                    {branchLabel}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {branchLabel}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Row 2: Self hash (committed only) */}
           {isCommitted && (data.commitV4?.hash || data.commitV3?.hash || data.commitHash) && (
-            <div className="text-xs font-mono text-slate-400 dark:text-slate-500 mb-1">
+            <div className="font-mono text-[11px] text-[var(--text-tertiary)] mb-1">
               {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '')
                 .replace('sha256:', 'sha:')
                 .slice(0, 11)}
@@ -678,7 +692,7 @@ function UnitNode(props: Props) {
 
           {/* B-8: Stats line (always visible in collapsed view) */}
           {sentenceCount > 0 && (
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+            <div className="text-xs text-[var(--text-secondary)] mb-2">
               {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
             </div>
           )}
@@ -687,6 +701,7 @@ function UnitNode(props: Props) {
           {nextStep && (
             <button
               type="button"
+              data-action="next-step"
               className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
               onClick={(e) => {
                 e.stopPropagation();
@@ -703,7 +718,7 @@ function UnitNode(props: Props) {
           {(data.commitV3 || data.commitV4 || data.commitHash) && (
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors nodrag"
+              className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-1 rounded hover:bg-[var(--hover-bg)] transition-colors nodrag"
               onClick={(e) => {
                 e.stopPropagation();
                 setContentExpanded((prev) => !prev);
@@ -718,26 +733,28 @@ function UnitNode(props: Props) {
           {contentExpanded && (
             <>
               {/* Hash + copy button */}
-              <div className="flex items-center gap-1.5 text-[0.7rem] text-slate-400 mb-2 mt-2 nodrag">
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-[var(--text-tertiary)] mb-2 mt-2 nodrag">
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={handleCopyHash}
-                        className="inline-flex items-center gap-1 font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 font-mono text-[var(--text-tertiary)] bg-[var(--hover-bg)] hover:bg-[var(--hover-bg-strong)] px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
                       >
-                        {data.commitV4?.hash
-                          ? data.commitV4.hash.slice(0, 7)
-                          : data.commitV3?.hash
-                            ? data.commitV3.hash.slice(0, 7)
-                            : data.commitHash
-                              ? data.commitHash.slice(0, 7)
-                              : data.entryId?.slice(0, 7)}
+                        {(
+                          data.commitV4?.hash ||
+                          data.commitV3?.hash ||
+                          data.commitHash ||
+                          data.entryId ||
+                          ''
+                        )
+                          .replace('sha256:', 'sha:')
+                          .slice(0, 11)}
                         {copiedHash ? (
                           <CheckCircle size={10} className="text-green-500 dark:text-green-400" />
                         ) : (
-                          <Copy size={10} className="text-slate-400" />
+                          <Copy size={10} className="text-[var(--text-tertiary)]" />
                         )}
                       </button>
                     </TooltipTrigger>
@@ -748,8 +765,8 @@ function UnitNode(props: Props) {
                 </TooltipProvider>
                 {data.isMergeCommit && (
                   <>
-                    <span className="text-slate-300 dark:text-slate-600">·</span>
-                    <span className="text-purple-600 dark:text-purple-400 font-medium">merge</span>
+                    <span className="text-[var(--text-tertiary)]/50">·</span>
+                    <span className={cn('font-medium', toneAccent.conversation.text)}>merge</span>
                   </>
                 )}
               </div>
@@ -758,18 +775,18 @@ function UnitNode(props: Props) {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   {isStaging ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <PenSquare size={12} className="text-amber-500 dark:text-amber-400" />
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                      <PenSquare size={12} className={toneAccent.pending.text} />
                       <span>Draft</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                       <GitCommit
                         size={12}
                         className={
                           data.branchType === 'main'
-                            ? 'text-blue-500 dark:text-blue-400'
-                            : 'text-amber-500 dark:text-amber-400'
+                            ? toneAccent.commit.text
+                            : toneAccent.branch.text
                         }
                       />
                       <span>Committed</span>
@@ -789,7 +806,7 @@ function UnitNode(props: Props) {
                     </span>
                   )}
                 {!data.commitV3 && !isStaging && data.summary && (
-                  <span className="text-xs text-slate-400 truncate max-w-[100px]">
+                  <span className="text-xs text-[var(--text-tertiary)] truncate max-w-[100px]">
                     {data.summary}
                   </span>
                 )}
@@ -818,26 +835,26 @@ function UnitNode(props: Props) {
             SECTION 3: LEAVES (if any)
             ═══════════════════════════════════════════ */}
         {data.leaves && data.leaves.length > 0 && (
-          <div className="border-t border-slate-100 dark:border-slate-700">
+          <div className="border-t border-[var(--stroke-divider)]">
             <button
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
               onClick={() => setLeavesExpanded((prev) => !prev)}
               type="button"
             >
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
                 Leaves ({data.leaves.length})
                 {totalAssertions > 0 && (
                   <span className="ml-1.5 normal-case font-normal">
                     <span className="text-green-600 dark:text-green-400">{totalPassed}</span>
-                    <span className="text-slate-300 dark:text-slate-600">/</span>
-                    <span className="text-slate-500 dark:text-slate-400">{totalAssertions}</span>
+                    <span className="text-[var(--text-tertiary)]/50">/</span>
+                    <span className="text-[var(--text-tertiary)]">{totalAssertions}</span>
                   </span>
                 )}
               </span>
               <ChevronRight
                 size={12}
                 className={cn(
-                  'text-slate-400 transition-transform duration-200',
+                  'text-[var(--text-tertiary)] transition-transform duration-200',
                   leavesExpanded && 'rotate-90'
                 )}
               />
@@ -854,21 +871,13 @@ function UnitNode(props: Props) {
                   <div className="px-3 pb-2 space-y-1 nodrag">
                     {data.leaves.map((leaf) => {
                       const LeafIcon = getLeafIcon(leaf.type);
-                      const isRunner = leaf.type === 'deploy_agent' || leaf.type === 'eval';
                       const leafHref = getLeafHref(leaf);
                       const leafContent = (
                         <>
-                          <div
-                            className={cn(
-                              'w-5 h-5 rounded flex items-center justify-center',
-                              isRunner
-                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                            )}
-                          >
+                          <div className="w-5 h-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                             <LeafIcon size={12} />
                           </div>
-                          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">
+                          <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">
                             {leaf.title}
                           </span>
                           {leaf.status && (
@@ -884,7 +893,7 @@ function UnitNode(props: Props) {
                                 leaf.status === 'pending' &&
                                   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
                                 leaf.status === 'idle' &&
-                                  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                  'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'
                               )}
                             >
                               {leaf.status === 'passed' && leaf.passedCount !== undefined
@@ -895,11 +904,15 @@ function UnitNode(props: Props) {
                         </>
                       );
                       return (
-                        <div key={leaf.id} className="group/leaf flex items-center gap-1">
+                        <div
+                          key={leaf.id}
+                          data-node-type="leaf"
+                          className="group/leaf flex items-center gap-1"
+                        >
                           {leafHref ? (
                             <Link
                               href={leafHref}
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100/80 dark:hover:bg-slate-700/80 transition-colors cursor-pointer flex-1 min-w-0"
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--hover-bg)] transition-colors cursor-pointer flex-1 min-w-0"
                             >
                               {leafContent}
                             </Link>
@@ -910,7 +923,7 @@ function UnitNode(props: Props) {
                           )}
                           <button
                             type="button"
-                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-all shrink-0"
+                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-[var(--text-tertiary)]/50 hover:text-red-500 dark:hover:text-red-400 transition-all shrink-0"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();

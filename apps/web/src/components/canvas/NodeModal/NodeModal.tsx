@@ -5,6 +5,8 @@ import { X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { glass } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
@@ -129,14 +131,20 @@ export function NodeModal({
   // Fallback for unknown node types
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex flex-col w-[80vw] max-w-[800px] max-h-[60vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
-        <header className="flex items-center justify-between h-14 px-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+      <div
+        className={cn(
+          'flex flex-col w-[80vw] max-w-[800px] max-h-[60vh] rounded-2xl overflow-hidden',
+          glass.cardBase,
+          glass.highlight
+        )}
+      >
+        <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-gray-800 dark:text-gray-200">
+            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
               {data?.title || 'Node'}
             </h2>
           </div>
@@ -146,13 +154,13 @@ export function NodeModal({
               size="icon"
               onClick={onClose}
               aria-label="Close"
-              className="h-9 w-9 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+              className="h-9 w-9 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
             >
               <X size={20} />
             </Button>
           </div>
         </header>
-        <div className="flex-1 p-6 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="flex-1 p-6 flex items-center justify-center text-[var(--text-tertiary)]">
           <p>Unknown node type</p>
         </div>
       </div>

@@ -371,129 +371,6 @@ Generate the Slack message based on the above source knowledge and constraints.`
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Deploy Agent Template
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const deployAgentDefaultTemplate: LeafTemplate = {
-  id: 'deploy_agent_default',
-  type: 'deploy_agent',
-  name: 'Deploy Agent Standard Template',
-  description: 'Standard template for agent deployment configuration output',
-  systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
-
-Key principles:
-1. Use ONLY the provided sentences as your source material
-2. Follow ALL constraints exactly - they are non-negotiable
-3. Adapt the content to the specified format
-4. Maintain accuracy and do not add information not present in the source
-
-Format: Agent deployment configuration
-- Generate structured output suitable for agent consumption
-- Be precise and unambiguous
-- Include all necessary context`,
-  userPrompt: `## Source Knowledge
-
-Use the following sentences as your source material:
-{{formattedSentences}}
-
-{{formattedConstraints}}
-{{#leafTitle}}
-## Context
-
-Title/Purpose: {{leafTitle}}
-{{/leafTitle}}
-{{#additionalInstructions}}
-## Additional Instructions
-
-{{additionalInstructions}}
-{{/additionalInstructions}}
-## Task
-
-Generate the agent deployment content based on the above source knowledge and constraints.`,
-  variables: [
-    {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
-      required: true,
-    },
-    {
-      name: 'formattedConstraints',
-      description: 'Formatted constraints section',
-      required: false,
-      defaultValue: '',
-    },
-    { name: 'leafTitle', description: 'Leaf title for context', required: false, defaultValue: '' },
-    {
-      name: 'additionalInstructions',
-      description: 'Extra instructions',
-      required: false,
-      defaultValue: '',
-    },
-  ],
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Eval Template
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const evalDefaultTemplate: LeafTemplate = {
-  id: 'eval_default',
-  type: 'eval',
-  name: 'Evaluation Standard Template',
-  description: 'Standard template for evaluation content generation',
-  systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
-
-Key principles:
-1. Use ONLY the provided sentences as your source material
-2. Follow ALL constraints exactly - they are non-negotiable
-3. Adapt the content to the specified format
-4. Maintain accuracy and do not add information not present in the source
-
-Format: Evaluation content
-- Generate content suitable for evaluation purposes
-- Be comprehensive and cover all relevant aspects`,
-  userPrompt: `## Source Knowledge
-
-Use the following sentences as your source material:
-{{formattedSentences}}
-
-{{formattedConstraints}}
-{{#leafTitle}}
-## Context
-
-Title/Purpose: {{leafTitle}}
-{{/leafTitle}}
-{{#additionalInstructions}}
-## Additional Instructions
-
-{{additionalInstructions}}
-{{/additionalInstructions}}
-## Task
-
-Generate the evaluation content based on the above source knowledge and constraints.`,
-  variables: [
-    {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
-      required: true,
-    },
-    {
-      name: 'formattedConstraints',
-      description: 'Formatted constraints section',
-      required: false,
-      defaultValue: '',
-    },
-    { name: 'leafTitle', description: 'Leaf title for context', required: false, defaultValue: '' },
-    {
-      name: 'additionalInstructions',
-      description: 'Extra instructions',
-      required: false,
-      defaultValue: '',
-    },
-  ],
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Default Templates Registry
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -509,8 +386,6 @@ export const DEFAULT_TEMPLATES: Record<LeafType, LeafTemplate> = {
   weibo: weiboDefaultTemplate,
   wechat: wechatDefaultTemplate,
   slack: slackDefaultTemplate,
-  deploy_agent: deployAgentDefaultTemplate,
-  eval: evalDefaultTemplate,
 };
 
 /**
