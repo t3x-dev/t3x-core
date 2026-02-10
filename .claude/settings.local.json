@@ -172,7 +172,14 @@
       "Bash(pnpm next lint:*)",
       "Bash(pnpm --filter t3x-webui test -- --run src/__tests__/stores/mergeWorkspaceStore.test.ts)",
       "Bash(pnpm --filter t3x-webui test:*)",
-      "Bash(gh pr checks:*)"
+      "Bash(gh pr checks:*)",
+      "Bash(while read hash msg)",
+      "Bash(do git show --stat $hash)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(if [ -f \"$f\" ])",
+      "Bash(then)",
+      "Bash(else)"
     ],
     "deny": [],
     "ask": []
