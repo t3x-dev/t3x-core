@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  Rocket,
   Trash2,
   X,
 } from 'lucide-react';
@@ -437,6 +438,17 @@ export default function LeafDetailPage() {
             </span>
             {isValidating ? 'Validating...' : 'Re-validate'}
           </Button>
+          {/* Deploy button — only when runner is enabled and leaf has output */}
+          {process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true' && leaf.output && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/deploy?leaf_id=${encodeURIComponent(leaf.id)}`)}
+            >
+              <Rocket className="mr-1 h-3 w-3" />
+              Deploy
+            </Button>
+          )}
           {/* Export dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
