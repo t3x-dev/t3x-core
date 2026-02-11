@@ -2009,6 +2009,7 @@ export interface EngineRun {
 export interface CreateEngineRunInput {
   project_id?: string;
   commit_ref?: string;
+  leaf_id?: string; // Reference to an existing Leaf — API resolves its output as prompt
   leaf?: {
     id: string;
     type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)

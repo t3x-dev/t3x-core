@@ -19,6 +19,7 @@ import {
   PenSquare,
   Pin,
   Plus,
+  Rocket,
   Trash2,
   Twitter,
   Users,
@@ -91,6 +92,7 @@ export const LEAF_TYPES: {
       </svg>
     ),
   },
+  { type: 'deploy_agent', label: 'Deploy Agent', icon: Rocket },
 ];
 
 type Props = NodeProps<CanvasNode>;
