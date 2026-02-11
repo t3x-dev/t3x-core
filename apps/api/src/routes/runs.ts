@@ -7,6 +7,7 @@
  */
 
 import {
+  findLeafById,
   findProjectById,
   getConfigurationStats,
   getRun,
@@ -39,6 +40,7 @@ export const runsRoutes = new Hono();
 const CreateRunSchema = z.object({
   project_id: z.string().optional(),
   commit_ref: z.string().optional(),
+  leaf_id: z.string().optional(), // Reference to an existing Leaf — resolve its output as prompt
   leaf: z
     .object({
       id: z.string(),
@@ -131,12 +133,47 @@ runsRoutes.post('/v1/runs', async (c) => {
       }
     }
 
+    // Resolve leaf_id → Leaf.output as prompt content
+    let resolvedLeaf = input.leaf;
+    let leafId: string | null = input.leaf_id || null;
+
+    if (input.leaf_id) {
+      const leaf = await findLeafById(db, input.leaf_id);
+      if (!leaf) {
+        return c.json(
+          {
+            success: false,
+            error: { code: 'LEAF_NOT_FOUND', message: `Leaf ${input.leaf_id} not found` },
+          },
+          400
+        );
+      }
+      if (!leaf.output) {
+        return c.json(
+          {
+            success: false,
+            error: { code: 'LEAF_NO_OUTPUT', message: `Leaf ${input.leaf_id} has no generated output yet` },
+          },
+          400
+        );
+      }
+      // Use leaf output as prompt content, merge with inline leaf config if provided
+      resolvedLeaf = {
+        id: input.leaf?.id || leaf.id,
+        type: input.leaf?.type || 'deploy',
+        content: leaf.output,
+        rules_ref: input.leaf?.rules_ref,
+      };
+      console.log(`[runs] Resolved leaf_id ${input.leaf_id} → output (${leaf.output.length} chars)`);
+    }
+
     await insertRun(db, {
       run_id,
       project_id: input.project_id || null,
       runner_run_id: null,
       commit_ref: input.commit_ref || null,
-      leaf_json: input.leaf ? JSON.stringify(input.leaf) : null,
+      leaf_id: leafId,
+      leaf_json: resolvedLeaf ? JSON.stringify(resolvedLeaf) : null,
       inputs_json: input.inputs ? JSON.stringify(input.inputs) : null,
       workflow_json: input.workflow ? JSON.stringify(input.workflow) : null,
       status: 'queued',
@@ -151,7 +188,7 @@ runsRoutes.post('/v1/runs', async (c) => {
     const runnerPayload = {
       run_id,
       commit_ref: input.commit_ref,
-      leaf: input.leaf,
+      leaf: resolvedLeaf,
       inputs: input.inputs,
       callback_url: RUNNER_CALLBACK_URL,
       engine_callback_url: ENGINE_CALLBACK_URL,
