@@ -246,6 +246,32 @@ export const LEAF_TYPES = [
 export type LeafType = (typeof LEAF_TYPES)[number];
 
 /**
+ * Deploy types — go through Runner pipeline, NOT template/prompt builder.
+ * Stored in the same `leaves` table but with separate type constraints.
+ */
+export const DEPLOY_TYPES = ['deploy_agent'] as const;
+
+export type DeployType = (typeof DEPLOY_TYPES)[number];
+
+/**
+ * All valid types for the `leaves` table `type` column.
+ * Union of text generation types + deploy types.
+ */
+export const ALL_LEAF_TYPES = [...LEAF_TYPES, ...DEPLOY_TYPES] as const;
+
+export type AnyLeafType = (typeof ALL_LEAF_TYPES)[number];
+
+/** Check if a type is a text generation leaf (tweet, email, etc.) */
+export function isGenerationLeaf(type: string): type is LeafType {
+  return (LEAF_TYPES as readonly string[]).includes(type);
+}
+
+/** Check if a type is a deploy leaf (deploy_agent) */
+export function isDeployLeaf(type: string): type is DeployType {
+  return (DEPLOY_TYPES as readonly string[]).includes(type);
+}
+
+/**
  * A Leaf is an application of committed knowledge with specific constraints.
  *
  * Key insight: Leaf owns constraints, not Commit.
@@ -258,8 +284,8 @@ export interface Leaf {
   /** The commit this leaf uses for knowledge */
   commit_hash: string;
 
-  /** Output type/channel */
-  type: LeafType;
+  /** Output type/channel (text generation or deploy) */
+  type: AnyLeafType;
 
   /** Human-readable title */
   title?: string;

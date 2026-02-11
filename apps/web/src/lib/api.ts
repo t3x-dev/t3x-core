@@ -2432,7 +2432,7 @@ export async function getConversationMemory(conversationId: string): Promise<Bui
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 
-export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack';
+export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack' | 'deploy_agent';
 
 export interface RequireConstraint {
   id: string;
