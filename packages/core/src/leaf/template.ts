@@ -12,7 +12,8 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { CommitV4, Constraint, Leaf, LeafType } from '../types/v4';
+import type { AnyLeafType, CommitV4, Constraint, Leaf } from '../types/v4';
+import { isGenerationLeaf } from '../types/v4';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
 import { getDefaultTemplate } from './templates';
 import type {
@@ -273,7 +274,7 @@ export function renderTemplate(options: RenderTemplateOptions): RenderedTemplate
  * 3. Default template for leaf type
  */
 function selectTemplate(
-  leafType: LeafType,
+  leafType: AnyLeafType,
   customTemplate?: LeafTemplate,
   _templateId?: string
 ): LeafTemplate {
@@ -286,8 +287,13 @@ function selectTemplate(
   // For now, we only support default templates, so templateId is ignored
   // This is where custom template registry lookup would go
 
-  // Priority 3: Default template for leaf type
-  return getDefaultTemplate(leafType);
+  // Priority 3: Default template for leaf type (text generation types only)
+  if (isGenerationLeaf(leafType)) {
+    return getDefaultTemplate(leafType);
+  }
+
+  // Fallback for deploy types: use article template as generic base
+  return getDefaultTemplate('article');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -347,7 +353,7 @@ export function validateTemplateSyntax(template: string): {
  * @param leafType - The leaf type for sample data
  * @returns Preview of rendered template
  */
-export function previewTemplate(template: LeafTemplate, leafType: LeafType): RenderedTemplate {
+export function previewTemplate(template: LeafTemplate, leafType: AnyLeafType): RenderedTemplate {
   // Create sample context
   const sampleContext: TemplateContext = {
     sentences: ['Sample sentence 1.', 'Sample sentence 2.', 'Sample sentence 3.'],

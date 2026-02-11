@@ -8,7 +8,7 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { Constraint, LeafType } from '../types/v4';
+import type { AnyLeafType, Constraint } from '../types/v4';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -18,7 +18,7 @@ import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 /**
  * Get format instructions for each leaf type.
  */
-export function getTypeInstructions(leafType: LeafType, config?: Record<string, unknown>): string {
+export function getTypeInstructions(leafType: AnyLeafType, config?: Record<string, unknown>): string {
   switch (leafType) {
     case 'tweet':
       return `Format: Twitter/X post
@@ -108,7 +108,7 @@ export function formatConstraints(constraints: Constraint[]): FormattedConstrain
 /**
  * Build the system prompt for a given leaf type.
  */
-export function buildSystemPrompt(leafType: LeafType): string {
+export function buildSystemPrompt(leafType: AnyLeafType): string {
   return `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:

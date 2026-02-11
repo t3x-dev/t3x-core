@@ -15,8 +15,8 @@ export type NodeKind = 'unit' | 'leaf';
 export type CommitStatus = 'staging' | 'committed';
 
 // Leaf node types for output destinations
-// Must match @t3x/core LeafType from V4 schema
-export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack';
+// Must match @t3x/core AnyLeafType from V4 schema
+export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack' | 'deploy_agent';
 
 export interface LeafNodeConfig {
   leafType: LeafType;

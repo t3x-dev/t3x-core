@@ -49,6 +49,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
       email: 'Email',
       article: '文章',
       slack: 'Slack',
+      deploy_agent: 'Deploy Agent',
     };
 
     set({ leafCreating: true });

@@ -18,6 +18,7 @@ export interface CreateRunInput {
   project_id?: string | null;
   runner_run_id?: string | null;
   commit_ref?: string | null;
+  leaf_id?: string | null;
   leaf_json?: string | null;
   inputs_json?: string | null;
   workflow_json?: string | null;
@@ -83,6 +84,7 @@ export async function insertRun(db: AnyDB, input: CreateRunInput): Promise<Run> 
       projectId: input.project_id || null,
       runnerRunId: input.runner_run_id || null,
       commitRef: input.commit_ref || null,
+      leafId: input.leaf_id || null,
       leafJson: input.leaf_json || null,
       inputsJson: input.inputs_json || null,
       workflowJson: input.workflow_json || null,
