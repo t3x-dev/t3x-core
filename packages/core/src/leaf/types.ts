@@ -13,7 +13,7 @@
  */
 
 import type { EmbeddingProvider } from '../providers/embedding/base';
-import type { Assertion, CommitV4, Constraint, Leaf, LeafType } from '../types/v4';
+import type { AnyLeafType, Assertion, CommitV4, Constraint, Leaf, LeafType } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Types (GEN-* uses)
@@ -265,7 +265,7 @@ export interface TemplateContext {
   leafTitle: string;
 
   /** Leaf type (Leaf 类型) */
-  leafType: LeafType;
+  leafType: AnyLeafType;
 
   /** Additional instructions (附加指令) */
   additionalInstructions: string;
