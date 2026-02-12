@@ -151,6 +151,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
       {/* Action Bar */}
       <MergeActionBar
+        projectId={projectId}
         sourceBranch={sourceBranch || 'source'}
         targetBranch={targetBranch || 'main'}
         unresolvedCount={unresolvedCount}

@@ -15,8 +15,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
+import { IconText } from '@/components/shared/IconText';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AlertDialog } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { AnimatedButton, Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -301,7 +302,9 @@ export default function SemanticLedgerPage() {
                         className="shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-[var(--text-primary)] truncate">{project.name}</h3>
+                        <h3 className="font-semibold text-[var(--text-primary)] truncate">
+                          {project.name}
+                        </h3>
                         {project.description && (
                           <p className="text-sm text-[var(--text-secondary)] truncate">
                             {project.description}
@@ -310,32 +313,17 @@ export default function SemanticLedgerPage() {
                       </div>
                       <div className="flex items-center gap-3 text-sm text-[var(--text-tertiary)]">
                         <div className="hidden sm:flex items-center gap-3">
-                          <span className="flex items-center gap-1" title="Conversations">
-                            <MessageSquare className="h-3.5 w-3.5" />
+                          <IconText icon={MessageSquare} size="sm">
                             {project.drafts}
-                          </span>
-                          <span className="flex items-center gap-1" title="Commits">
-                            <GitCommitHorizontal className="h-3.5 w-3.5" />
+                          </IconText>
+                          <IconText icon={GitCommitHorizontal} size="sm">
                             {project.commitsCount}
-                          </span>
-                          <span className="flex items-center gap-1" title="Branches">
-                            <GitBranch className="h-3.5 w-3.5" />
+                          </IconText>
+                          <IconText icon={GitBranch} size="sm">
                             {project.branchesCount}
-                          </span>
+                          </IconText>
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            project.status === 'active' &&
-                              'border-green-500/30 bg-green-500/10 text-green-600',
-                            project.status === 'draft' &&
-                              'border-amber-500/30 bg-amber-500/10 text-amber-600',
-                            project.status === 'paused' &&
-                              'border-gray-500/30 bg-gray-500/10 text-gray-600'
-                          )}
-                        >
-                          {project.status}
-                        </Badge>
+                        <StatusBadge status={project.status} />
                       </div>
                     </CardContent>
                   </Card>
@@ -347,7 +335,9 @@ export default function SemanticLedgerPage() {
                     <Card className="transition-colors hover:border-primary/50">
                       <CardContent className="flex items-center gap-4 p-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-[var(--text-primary)] truncate">{project.name}</h3>
+                          <h3 className="font-semibold text-[var(--text-primary)] truncate">
+                            {project.name}
+                          </h3>
                           {project.description && (
                             <p className="text-sm text-[var(--text-secondary)] truncate">
                               {project.description}
@@ -357,32 +347,17 @@ export default function SemanticLedgerPage() {
 
                         <div className="flex items-center gap-3 text-sm text-[var(--text-tertiary)]">
                           <div className="hidden sm:flex items-center gap-3">
-                            <span className="flex items-center gap-1" title="Conversations">
-                              <MessageSquare className="h-3.5 w-3.5" />
+                            <IconText icon={MessageSquare} size="sm">
                               {project.drafts}
-                            </span>
-                            <span className="flex items-center gap-1" title="Commits">
-                              <GitCommitHorizontal className="h-3.5 w-3.5" />
+                            </IconText>
+                            <IconText icon={GitCommitHorizontal} size="sm">
                               {project.commitsCount}
-                            </span>
-                            <span className="flex items-center gap-1" title="Branches">
-                              <GitBranch className="h-3.5 w-3.5" />
+                            </IconText>
+                            <IconText icon={GitBranch} size="sm">
                               {project.branchesCount}
-                            </span>
+                            </IconText>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              project.status === 'active' &&
-                                'border-green-500/30 bg-green-500/10 text-green-600',
-                              project.status === 'draft' &&
-                                'border-amber-500/30 bg-amber-500/10 text-amber-600',
-                              project.status === 'paused' &&
-                                'border-gray-500/30 bg-gray-500/10 text-gray-600'
-                            )}
-                          >
-                            {project.status}
-                          </Badge>
+                          <StatusBadge status={project.status} />
                           <span className="hidden md:inline text-xs">{project.updatedAt}</span>
                         </div>
 

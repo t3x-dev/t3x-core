@@ -5,12 +5,14 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { ContextPanelWrapper } from '@/components/conversation/ContextPanelWrapper';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { parseHighlightParam } from '@/components/shared/ViewSourceLink';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import type { Conversation, Turn } from '@/lib/api';
 import { getConversation, listTurns } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function ConversationPage() {
   const params = useParams();
@@ -18,6 +20,7 @@ export default function ConversationPage() {
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;
   const conversationId = params.conversationId as string;
+  const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
 
   // URL parameters for source navigation
   const targetTurnHash = searchParams.get('turn');
@@ -126,15 +129,13 @@ export default function ConversationPage() {
           <Button variant="ghost" size="icon" onClick={() => router.push(`/project/${projectId}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-lg font-semibold">
-              {conversation.title || 'Untitled Conversation'}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {turns.length} turns | Created:{' '}
-              {new Date(conversation.created_at).toLocaleDateString()}
-            </p>
-          </div>
+          <Breadcrumb
+            segments={[
+              { label: projectName || 'Project', href: `/project/${projectId}` },
+              { label: conversation.title || 'Untitled Conversation' },
+            ]}
+          />
+          <span className="text-xs text-muted-foreground">{turns.length} turns</span>
         </div>
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="conversation" refId={conversationId} />
