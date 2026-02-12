@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle,
+  CheckCircle2,
   Copy,
   Download,
   FileJson,
@@ -94,6 +95,7 @@ export default function LeafDetailPage() {
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
+  const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
 
   // Keep leafRef in sync with leaf state
   useEffect(() => {
@@ -306,6 +308,13 @@ export default function LeafDetailPage() {
       // The API now auto-validates and stores assertions, so re-fetch leaf to get full state
       const updatedLeaf = await getLeaf(leafId);
       setLeaf(updatedLeaf);
+
+      // Milestone feedback: show success banner with word count
+      if (updatedLeaf.output) {
+        const wordCount = updatedLeaf.output.trim().split(/\s+/).length;
+        setGenerateSuccessBanner(`Output ready — ${wordCount} words`);
+        setTimeout(() => setGenerateSuccessBanner(null), 3000);
+      }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Generation failed';
       setGenerateError(message);
@@ -576,6 +585,14 @@ export default function LeafDetailPage() {
             onSave={handleUpdateUserInstruction}
             saving={savingInstruction}
           />
+
+          {/* Generate Success Banner */}
+          {generateSuccessBanner && (
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] px-4 py-2.5 text-sm font-medium text-[var(--diff-added-text)]">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              {generateSuccessBanner}
+            </div>
+          )}
 
           {/* Output Section */}
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />

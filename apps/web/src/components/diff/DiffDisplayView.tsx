@@ -101,20 +101,18 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
     <div className="flex items-center gap-3 text-xs">
       <span className="text-[var(--text-tertiary)]">{total} sentences</span>
       {diff.identical.length > 0 && (
-        <span className="text-slate-500 dark:text-slate-400">
-          {diff.identical.length} unchanged
-        </span>
+        <span className="text-[var(--diff-identical-text)]">{diff.identical.length} unchanged</span>
       )}
       {diff.similar.length > 0 && (
-        <span className="text-amber-600 dark:text-amber-400">{diff.similar.length} modified</span>
+        <span className="text-[var(--diff-modified-accent)]">{diff.similar.length} modified</span>
       )}
       {diff.onlyInSource.length > 0 && (
-        <span className="text-red-600 dark:text-red-400">-{diff.onlyInSource.length} removed</span>
+        <span className="text-[var(--diff-removed-accent)]">
+          -{diff.onlyInSource.length} removed
+        </span>
       )}
       {diff.onlyInTarget.length > 0 && (
-        <span className="text-green-600 dark:text-green-400">
-          +{diff.onlyInTarget.length} added
-        </span>
+        <span className="text-[var(--diff-added-accent)]">+{diff.onlyInTarget.length} added</span>
       )}
     </div>
   );
@@ -233,34 +231,34 @@ function SideBySideRow({
 }: SideBySideRowProps) {
   const leftBg =
     type === 'removed'
-      ? 'bg-red-50 dark:bg-red-950/30'
+      ? 'bg-[var(--diff-removed-bg)]'
       : type === 'modified'
-        ? 'bg-amber-50/50 dark:bg-amber-950/30'
+        ? 'bg-[var(--diff-modified-bg)]'
         : type === 'identical'
-          ? 'bg-slate-50/50 dark:bg-slate-950/30'
+          ? 'bg-[var(--diff-identical-bg)]'
           : 'bg-transparent';
 
   const rightBg =
     type === 'added'
-      ? 'bg-green-50 dark:bg-green-950/30'
+      ? 'bg-[var(--diff-added-bg)]'
       : type === 'modified'
-        ? 'bg-amber-50/50 dark:bg-amber-950/30'
+        ? 'bg-[var(--diff-modified-bg)]'
         : type === 'identical'
-          ? 'bg-slate-50/50 dark:bg-slate-950/30'
+          ? 'bg-[var(--diff-identical-bg)]'
           : 'bg-transparent';
 
   const leftBorder =
     type === 'removed'
-      ? 'border-l-2 border-red-300 dark:border-red-700'
+      ? 'border-l-2 border-[var(--diff-removed-border)]'
       : type === 'modified'
-        ? 'border-l-2 border-amber-300 dark:border-amber-700'
+        ? 'border-l-2 border-[var(--diff-modified-border)]'
         : '';
 
   const rightBorder =
     type === 'added'
-      ? 'border-l-2 border-green-300 dark:border-green-700'
+      ? 'border-l-2 border-[var(--diff-added-border)]'
       : type === 'modified'
-        ? 'border-l-2 border-amber-300 dark:border-amber-700'
+        ? 'border-l-2 border-[var(--diff-modified-border)]'
         : '';
 
   // Check if either sentence is currently expanded inline
@@ -279,20 +277,20 @@ function SideBySideRow({
                 <div>
                   <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'added')} />
                   {similarity !== undefined && (
-                    <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
+                    <span className="text-[0.6rem] text-[var(--diff-modified-accent)] ml-2">
                       ({Math.round(similarity * 100)}% similar)
                     </span>
                   )}
                 </div>
               ) : (
-                <span className={type === 'removed' ? 'text-red-800 dark:text-red-200' : ''}>
+                <span className={type === 'removed' ? 'text-[var(--diff-removed-text)]' : ''}>
                   {sourceSentence.text}
                 </span>
               )}
               <TraceToSourceButton sentence={sourceSentence} onClick={onTraceSource} />
             </div>
           ) : (
-            <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+            <span className="text-muted-foreground/30 italic">—</span>
           )}
         </div>
 
@@ -306,20 +304,20 @@ function SideBySideRow({
                     segments={wordDiffSegments.filter((s) => s.type !== 'removed')}
                   />
                   {similarity !== undefined && (
-                    <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
+                    <span className="text-[0.6rem] text-[var(--diff-modified-accent)] ml-2">
                       ({Math.round(similarity * 100)}% similar)
                     </span>
                   )}
                 </div>
               ) : (
-                <span className={type === 'added' ? 'text-green-800 dark:text-green-200' : ''}>
+                <span className={type === 'added' ? 'text-[var(--diff-added-text)]' : ''}>
                   {targetSentence.text}
                 </span>
               )}
               <TraceToSourceButton sentence={targetSentence} onClick={onTraceSource} />
             </div>
           ) : (
-            <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+            <span className="text-muted-foreground/30 italic">—</span>
           )}
         </div>
       </div>
@@ -360,26 +358,26 @@ function UnifiedRow({
   const getBgClass = () => {
     switch (line.type) {
       case 'added':
-        return 'bg-green-50 dark:bg-green-950/30 border-l-2 border-green-300 dark:border-green-700';
+        return 'bg-[var(--diff-added-bg)] border-l-2 border-[var(--diff-added-border)]';
       case 'removed':
-        return 'bg-red-50 dark:bg-red-950/30 border-l-2 border-red-300 dark:border-red-700';
+        return 'bg-[var(--diff-removed-bg)] border-l-2 border-[var(--diff-removed-border)]';
       case 'modified':
-        return 'bg-amber-50 dark:bg-amber-950/30 border-l-2 border-amber-300 dark:border-amber-700';
+        return 'bg-[var(--diff-modified-bg)] border-l-2 border-[var(--diff-modified-border)]';
       default:
-        return 'bg-slate-50/50 dark:bg-slate-950/30';
+        return 'bg-[var(--diff-identical-bg)]';
     }
   };
 
   const getPrefix = () => {
     switch (line.type) {
       case 'added':
-        return <span className="text-green-600 dark:text-green-400 font-mono mr-2">+</span>;
+        return <span className="text-[var(--diff-added-accent)] font-mono mr-2">+</span>;
       case 'removed':
-        return <span className="text-red-600 dark:text-red-400 font-mono mr-2">−</span>;
+        return <span className="text-[var(--diff-removed-accent)] font-mono mr-2">−</span>;
       case 'modified':
-        return <span className="text-amber-600 dark:text-amber-400 font-mono mr-2">~</span>;
+        return <span className="text-[var(--diff-modified-accent)] font-mono mr-2">~</span>;
       default:
-        return <span className="text-slate-400 dark:text-slate-500 font-mono mr-2"> </span>;
+        return <span className="text-[var(--diff-identical-text)] font-mono mr-2"> </span>;
     }
   };
 
@@ -395,7 +393,7 @@ function UnifiedRow({
             <div>
               <WordDiffDisplay segments={line.wordDiff} />
               {line.similarity !== undefined && (
-                <span className="text-[0.6rem] text-amber-600 dark:text-amber-400 ml-2">
+                <span className="text-[0.6rem] text-[var(--diff-modified-accent)] ml-2">
                   ({Math.round(line.similarity * 100)}% similar)
                 </span>
               )}
@@ -404,9 +402,9 @@ function UnifiedRow({
             <span
               className={
                 line.type === 'added'
-                  ? 'text-green-800 dark:text-green-200'
+                  ? 'text-[var(--diff-added-text)]'
                   : line.type === 'removed'
-                    ? 'text-red-800 dark:text-red-200'
+                    ? 'text-[var(--diff-removed-text)]'
                     : ''
               }
             >

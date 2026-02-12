@@ -88,7 +88,7 @@ export function MergePanel() {
         </div>
 
         {/* B-12: Multi-step progress indicator */}
-        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
+        <div className="mb-6 p-3 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="text-sm font-medium">{preparePhases[prepareStep].label}</span>
@@ -162,13 +162,11 @@ export function MergePanel() {
         <div className="mb-6 p-3 bg-muted/50 rounded-lg text-sm">
           <div className="flex justify-between mb-1">
             <span>Identical (auto-kept):</span>
-            <span className="font-medium text-green-700 dark:text-green-400">
-              {counts.identical}
-            </span>
+            <span className="font-medium text-[var(--diff-added-accent)]">{counts.identical}</span>
           </div>
           <div className="flex justify-between mb-1">
             <span>Similar (need decision):</span>
-            <span className="font-medium text-amber-600 dark:text-amber-400">
+            <span className="font-medium text-[var(--diff-modified-accent)]">
               {counts.resolved}/{counts.similar}
             </span>
           </div>
@@ -181,7 +179,7 @@ export function MergePanel() {
             <span className="font-medium">{counts.onlyInTarget}</span>
           </div>
           {unresolvedCount > 0 && (
-            <div className="mt-2 pt-2 border-t border-border text-amber-600 dark:text-amber-400 font-medium">
+            <div className="mt-2 pt-2 border-t border-border text-[var(--diff-modified-accent)] font-medium">
               ⚠️ {unresolvedCount} unresolved conflict{unresolvedCount !== 1 ? 's' : ''}
             </div>
           )}
@@ -196,7 +194,7 @@ export function MergePanel() {
       {/* Similar pairs */}
       {prepared.similarPairs.length > 0 && (
         <div className="mb-4">
-          <h3 className="font-medium mb-2 text-amber-600 dark:text-amber-400">
+          <h3 className="font-medium mb-2 text-[var(--diff-modified-accent)]">
             Similar Sentences (Pick One)
           </h3>
           <div className="space-y-3">
@@ -274,7 +272,7 @@ export function MergePanel() {
         </div>
 
         {!canExecute && unresolvedCount > 0 && (
-          <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+          <p className="text-sm text-[var(--diff-modified-accent)] mt-2">
             Please resolve all similar pairs before executing
           </p>
         )}

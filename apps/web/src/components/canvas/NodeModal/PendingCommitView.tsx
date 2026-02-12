@@ -663,10 +663,7 @@ export function PendingCommitView({
         commitHash: commitHash,
       });
 
-      // Refresh canvas data
-      useCanvasStore.getState().loadProjectData(projectId);
-
-      // Show success page instead of immediately converting
+      // Show success page (defer loadProjectData until user dismisses celebration)
       setCommitSuccess({ commitHash, parentHash, diffStats });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -1047,11 +1044,19 @@ export function PendingCommitView({
   ]);
 
   // ========== B-7: Handle success page actions ==========
+  const handleSuccessClose = useCallback(() => {
+    // Refresh canvas data now that user has seen the celebration
+    useCanvasStore.getState().loadProjectData(projectId);
+    onClose();
+  }, [projectId, onClose]);
+
   const handleViewCommitDetails = useCallback(() => {
+    useCanvasStore.getState().loadProjectData(projectId);
     onConvertDraft?.();
-  }, [onConvertDraft]);
+  }, [projectId, onConvertDraft]);
 
   const handleCreateOutput = useCallback(() => {
+    useCanvasStore.getState().loadProjectData(projectId);
     onConvertDraft?.();
     // Open leaf panel after a tick so canvas state is updated
     if (node?.id) {
@@ -1059,7 +1064,7 @@ export function PendingCommitView({
         useCanvasStore.getState().openLeafPanel(commitSuccess?.commitHash || node.id);
       }, 100);
     }
-  }, [onConvertDraft, node?.id, commitSuccess?.commitHash]);
+  }, [projectId, onConvertDraft, node?.id, commitSuccess?.commitHash]);
 
   // ========== JSX ==========
 
@@ -1070,7 +1075,7 @@ export function PendingCommitView({
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
         role="dialog"
         aria-modal="true"
-        onClick={onClose}
+        onClick={handleSuccessClose}
       >
         <div
           className={cn(
@@ -1084,20 +1089,22 @@ export function PendingCommitView({
           <button
             type="button"
             className="absolute top-4 right-4 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            onClick={onClose}
+            onClick={handleSuccessClose}
             aria-label="Close"
           >
             <X size={20} />
           </button>
           <div className="flex flex-col items-center gap-5 px-8 py-10">
-            {/* Success icon */}
-            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-              <CheckCircle size={32} className="text-emerald-600 dark:text-emerald-400" />
+            {/* Success icon — blue gradient badge + checkmark draw animation */}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <path d="M9 16.5L14 21.5L23 11" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" pathLength="1" className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]" />
+              </svg>
             </div>
 
             <div className="text-center">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                Commit Created
+              <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+                Knowledge saved
               </h2>
               <p className="text-sm text-[var(--text-tertiary)] font-mono">
                 {commitSuccess.commitHash.slice(0, 12)}...
@@ -1107,15 +1114,15 @@ export function PendingCommitView({
             {/* Diff stats summary */}
             {commitSuccess.diffStats && (
               <div className="w-full flex items-center justify-center gap-4 py-3 px-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
-                <span className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="flex items-center gap-1 text-sm text-[var(--diff-added-accent)] font-medium">
                   <Plus size={14} />
                   {commitSuccess.diffStats.addedCount} added
                 </span>
-                <span className="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400 font-medium">
+                <span className="flex items-center gap-1 text-sm text-[var(--diff-modified-accent)] font-medium">
                   <Pencil size={14} />
                   {commitSuccess.diffStats.modifiedCount} modified
                 </span>
-                <span className="flex items-center gap-1 text-sm text-red-500 dark:text-red-400 font-medium">
+                <span className="flex items-center gap-1 text-sm text-[var(--diff-removed-accent)] font-medium">
                   <Minus size={14} />
                   {commitSuccess.diffStats.removedCount} removed
                 </span>

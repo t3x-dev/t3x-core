@@ -91,8 +91,8 @@ export function MergeActionBar({
         )}
         {saveStatus === 'saved' && (
           <>
-            <Check className="h-3 w-3 text-green-500" />
-            <span className="text-green-500">Saved</span>
+            <Check className="h-3 w-3 text-[var(--diff-added-accent)]" />
+            <span className="text-[var(--diff-added-accent)]">Saved</span>
           </>
         )}
         {saveStatus === 'error' && (

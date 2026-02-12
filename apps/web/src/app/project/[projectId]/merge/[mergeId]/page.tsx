@@ -18,7 +18,7 @@ export default function MergeWorkspacePage() {
   const projectId = params.projectId as string;
   const mergeId = params.mergeId as string;
 
-  const { loadDraft, loading, error, status, reset } = useMergeWorkspaceStore();
+  const { loadDraft, loading, error, reset } = useMergeWorkspaceStore();
 
   useEffect(() => {
     if (mergeId) {
@@ -32,12 +32,9 @@ export default function MergeWorkspacePage() {
     };
   }, [mergeId, loadDraft]);
 
-  // Redirect to canvas if merge is committed
-  useEffect(() => {
-    if (status === 'committed') {
-      router.push(`/project/${projectId}`);
-    }
-  }, [status, projectId, router]);
+  // Note: redirect after merge commit is handled by MergeWorkspace's
+  // celebration timeout → onClose → handleClose → router.push.
+  // An auto-redirect here would kill the celebration overlay.
 
   const handleClose = () => {
     reset();
@@ -63,6 +60,7 @@ export default function MergeWorkspacePage() {
           <h1 className="text-xl font-semibold mb-2">Failed to load merge</h1>
           <p className="text-muted-foreground mb-4">{error}</p>
           <button
+            type="button"
             onClick={handleClose}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
