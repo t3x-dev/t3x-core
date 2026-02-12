@@ -215,10 +215,16 @@ export {
   type ExcludeConstraint as ExcludeConstraintV4,
   // ID Prefixes
   ID_PREFIXES,
+  ALL_LEAF_TYPES,
+  DEPLOY_TYPES,
   LEAF_TYPES,
+  isDeployLeaf,
+  isGenerationLeaf,
   // Leaf (owns constraints)
+  type AnyLeafType,
   type Leaf,
   type LeafConfig,
+  type DeployType,
   // Leaf History
   type LeafHistory,
   type LeafType,

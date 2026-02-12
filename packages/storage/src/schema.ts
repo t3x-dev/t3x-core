@@ -245,6 +245,7 @@ export const runs = pgTable(
     projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
     runnerRunId: text('runner_run_id'),
     commitRef: text('commit_ref'),
+    leafId: text('leaf_id'), // Reference to leaves.id (source prompt for this run)
     leafJson: text('leaf_json'), // { id, type, content? }
     inputsJson: text('inputs_json'),
     workflowJson: text('workflow_json'), // { type, webhook_id? }

@@ -2009,6 +2009,7 @@ export interface EngineRun {
 export interface CreateEngineRunInput {
   project_id?: string;
   commit_ref?: string;
+  leaf_id?: string; // Reference to an existing Leaf — API resolves its output as prompt
   leaf?: {
     id: string;
     type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
@@ -2432,7 +2433,7 @@ export async function getConversationMemory(conversationId: string): Promise<Bui
 // Leaves (V4 - constraints, output, validation)
 // ============================================================================
 
-export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack';
+export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack' | 'deploy_agent';
 
 export interface RequireConstraint {
   id: string;

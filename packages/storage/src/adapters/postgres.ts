@@ -210,6 +210,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       runner_run_id TEXT,
       commit_ref TEXT,
+      leaf_id TEXT,
       leaf_json TEXT,
       inputs_json TEXT,
       workflow_json TEXT,
@@ -226,6 +227,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+
+    -- Migration: Add leaf_id column to existing runs tables (v2.2)
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS leaf_id TEXT;
 
     -- Commits V3 table (sentence-based semantic snapshots)
     -- NOTE: project_id is nullable by design (commits can be standalone/unattached).
@@ -349,6 +353,19 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       selected_pin_ids JSONB,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Leaf History table (generation history for leaves)
+    CREATE TABLE IF NOT EXISTS leaf_history (
+      id TEXT PRIMARY KEY,
+      leaf_id TEXT NOT NULL REFERENCES leaves(id) ON DELETE CASCADE,
+      output TEXT NOT NULL,
+      config JSONB NOT NULL,
+      model TEXT NOT NULL,
+      generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
+    CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

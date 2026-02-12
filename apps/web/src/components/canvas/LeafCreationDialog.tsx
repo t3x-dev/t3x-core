@@ -19,6 +19,8 @@ import { createLeaf, type LeafType } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { LEAF_TYPES } from './CanvasNodes';
 
+const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';
+
 interface LeafCreationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -107,7 +109,9 @@ export function LeafCreationDialog({
           <div className="space-y-2">
             <Label>Leaf Type</Label>
             <div className="grid grid-cols-2 gap-2">
-              {LEAF_TYPES.map((leafType) => {
+              {LEAF_TYPES.filter(
+                (lt) => isRunnerEnabled || lt.type !== 'deploy_agent'
+              ).map((leafType) => {
                 const Icon = leafType.icon;
                 const isSelected = selectedType === leafType.type;
                 return (
