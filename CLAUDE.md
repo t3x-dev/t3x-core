@@ -210,8 +210,8 @@ src/
 │   └── agentDemoStore.ts        # Agent demo state
 ├── hooks/                       # React hooks
 │   ├── useApi.ts                # API wrapper
-│   ├── useSourceContext.ts      # V4 source context fetching
-│   └── useBranchCommits.ts      # Branch commit data
+│   ├── useBranchCommits.ts      # Branch commit data
+│   └── useReducedMotion.ts      # Accessibility: reduced motion
 ├── lib/
 │   ├── api.ts                   # API client functions
 │   ├── db.ts                    # Database singleton
@@ -496,6 +496,8 @@ At the start of a new conversation, read relevant documentation based on task ty
 | Runner/Eval | `apps/runner/README.md` |
 | Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md` |
 | Docker / Deployment | `docs/docker.md` |
+| Go-to-Market / Growth | `docs/go-to-market/README.md`, `docs/go-to-market/01-market-assessment.md`, `docs/go-to-market/02-beachhead-scenarios.md`, `docs/go-to-market/03-buyer-path-analysis.md` |
+| Competitive Analysis | `docs/competitive-analysis.md`, `docs/rfcs/langfuse-integration.md` |
 
 ## Development Workflow
 
