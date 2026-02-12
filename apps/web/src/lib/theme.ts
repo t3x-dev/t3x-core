@@ -1,6 +1,11 @@
 /**
  * T3X Design System - Theme Tokens
  *
+ * Token Authority: This file is Priority 2 (Mapping Layer).
+ * It MUST only reference CSS variables, Tailwind tokens, or the `brand` palette below.
+ * Final truth for runtime values lives in globals.css (Priority 1).
+ * See: frontend-art-template.md §1.0
+ *
  * Brand Philosophy:
  * - Orange (Pending/Draft) → Blue (Committed) represents the flow from WIP to stable
  * - Matches the T3X bowtie logo gradient
@@ -56,6 +61,43 @@ export const brand = {
     900: '#0f172a',
     950: '#020617', // Logo background
   },
+
+  // Extended palettes — Tailwind colors used by semantic states
+  // These exist so semantic/badge/shadow values reference brand.* instead of raw hex
+
+  amber: {
+    50: '#fffbeb',
+    100: '#fef3c7',
+    200: '#fde68a',
+    400: '#fbbf24',
+    500: '#f59e0b',
+    800: '#92400e',
+    900: '#78350f',
+  },
+
+  indigo: {
+    50: '#eef2ff',
+    200: '#c7d2fe',
+    400: '#818cf8',
+    500: '#6366f1',
+    700: '#4338ca',
+  },
+
+  emerald: {
+    50: '#ecfdf5',
+    100: '#d1fae5',
+    200: '#a7f3d0',
+    400: '#34d399',
+    500: '#10b981',
+    800: '#065f46',
+  },
+
+  red: {
+    50: '#fef2f2',
+    200: '#fecaca',
+    500: '#ef4444',
+    800: '#991b1b',
+  },
 } as const;
 
 // =============================================================================
@@ -72,7 +114,7 @@ export const semantic = {
     text: brand.blue[700],
     accent: brand.blue[600],
     badge: {
-      bg: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+      bg: `linear-gradient(135deg, ${brand.blue[500]} 0%, ${brand.blue[600]} 100%)`,
       text: '#ffffff',
     },
   },
@@ -86,75 +128,75 @@ export const semantic = {
     text: brand.orange[700],
     accent: brand.orange[500],
     badge: {
-      bg: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+      bg: `linear-gradient(135deg, ${brand.orange[400]} 0%, ${brand.orange[500]} 100%)`,
       text: '#ffffff',
     },
   },
 
-  // Branch states (Amber - between orange and yellow)
+  // Branch states (Amber spectrum)
   branch: {
-    bg: '#fffbeb',
-    bgHover: '#fef3c7',
-    border: '#fde68a',
-    borderHover: '#fbbf24',
-    text: '#92400e',
-    accent: '#f59e0b',
+    bg: brand.amber[50],
+    bgHover: brand.amber[100],
+    border: brand.amber[200],
+    borderHover: brand.amber[400],
+    text: brand.amber[800],
+    accent: brand.amber[500],
     badge: {
-      bg: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-      text: '#78350f',
+      bg: `linear-gradient(135deg, ${brand.amber[400]} 0%, ${brand.amber[500]} 100%)`,
+      text: brand.amber[900],
     },
   },
 
-  // Conversation states (Indigo - semantic starting point)
+  // Conversation states (Indigo spectrum)
   conversation: {
     bg: brand.blue[50],
-    bgHover: '#eef2ff',
-    border: '#c7d2fe',
-    borderHover: '#818cf8',
-    text: '#4338ca',
-    accent: '#6366f1',
+    bgHover: brand.indigo[50],
+    border: brand.indigo[200],
+    borderHover: brand.indigo[400],
+    text: brand.indigo[700],
+    accent: brand.indigo[500],
     badge: {
-      bg: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)',
+      bg: `linear-gradient(135deg, ${brand.indigo[400]} 0%, ${brand.indigo[500]} 100%)`,
       text: '#ffffff',
     },
   },
 
-  // Leaf states (Emerald - output/result)
+  // Leaf states (Emerald spectrum)
   leaf: {
-    bg: '#ecfdf5',
-    bgHover: '#d1fae5',
-    border: '#a7f3d0',
-    borderHover: '#34d399',
-    text: '#065f46',
-    accent: '#10b981',
+    bg: brand.emerald[50],
+    bgHover: brand.emerald[100],
+    border: brand.emerald[200],
+    borderHover: brand.emerald[400],
+    text: brand.emerald[800],
+    accent: brand.emerald[500],
     badge: {
-      bg: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)',
+      bg: `linear-gradient(135deg, ${brand.emerald[400]} 0%, ${brand.emerald[500]} 100%)`,
       text: '#ffffff',
     },
   },
 
-  // Success states
+  // Success states (Emerald palette)
   success: {
-    bg: '#ecfdf5',
-    border: '#a7f3d0',
-    text: '#065f46',
-    accent: '#10b981',
+    bg: brand.emerald[50],
+    border: brand.emerald[200],
+    text: brand.emerald[800],
+    accent: brand.emerald[500],
   },
 
-  // Error states
+  // Error states (Red palette)
   error: {
-    bg: '#fef2f2',
-    border: '#fecaca',
-    text: '#991b1b',
-    accent: '#ef4444',
+    bg: brand.red[50],
+    border: brand.red[200],
+    text: brand.red[800],
+    accent: brand.red[500],
   },
 
-  // Warning states
+  // Warning states (Amber palette)
   warning: {
-    bg: '#fffbeb',
-    border: '#fde68a',
-    text: '#92400e',
-    accent: '#f59e0b',
+    bg: brand.amber[50],
+    border: brand.amber[200],
+    text: brand.amber[800],
+    accent: brand.amber[500],
   },
 } as const;
 
@@ -241,8 +283,8 @@ export const shadows = {
   // Focus rings
   ring: {
     default: '0 0 0 2px var(--color-primary), 0 0 0 4px rgba(59, 130, 246, 0.2)',
-    orange: '0 0 0 2px #f97316, 0 0 0 4px rgba(249, 115, 22, 0.2)',
-    error: '0 0 0 2px #ef4444, 0 0 0 4px rgba(239, 68, 68, 0.2)',
+    orange: `0 0 0 2px ${brand.orange[500]}, 0 0 0 4px rgba(249, 115, 22, 0.2)`,
+    error: `0 0 0 2px ${brand.red[500]}, 0 0 0 4px rgba(239, 68, 68, 0.2)`,
   },
 } as const;
 
@@ -291,12 +333,12 @@ export const canvas = {
   },
   edge: {
     color: {
-      light: '#94a3b8',
-      dark: '#475569',
+      light: brand.slate[400], // = --edge-color in globals.css
+      dark: brand.slate[600], // = --edge-color .dark in globals.css
     },
     activeColor: {
-      light: '#3b82f6',
-      dark: '#818cf8',
+      light: brand.blue[500], // = --edge-active-color in globals.css
+      dark: brand.indigo[400], // = --edge-active-color .dark in globals.css
     },
   },
 } as const;
