@@ -91,7 +91,7 @@ export function ConflictSide({
           {label}
         </span>
         {isSelected && (
-          <span className="text-xs font-medium text-green-600 dark:text-green-400">Selected</span>
+          <span className="text-xs font-medium text-[var(--diff-added-accent)]">Selected</span>
         )}
       </div>
 

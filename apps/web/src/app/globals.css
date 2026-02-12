@@ -300,12 +300,19 @@
   /* ===== Diff Token System (§1.1) — dark overrides ===== */
   --diff-added-bg: rgba(5, 46, 22, 0.3);
   --diff-added-border: #15803d;
+  --diff-added-text: #86efac;
+  --diff-added-accent: #4ade80;
   --diff-removed-bg: rgba(69, 10, 10, 0.3);
   --diff-removed-border: #b91c1c;
+  --diff-removed-text: #fca5a5;
+  --diff-removed-accent: #f87171;
   --diff-modified-bg: rgba(69, 26, 3, 0.3);
   --diff-modified-border: #b45309;
+  --diff-modified-text: #fcd34d;
+  --diff-modified-accent: #fbbf24;
   --diff-identical-bg: rgba(2, 6, 23, 0.3);
   --diff-identical-border: #334155;
+  --diff-identical-text: #94a3b8;
 
   /* ===== Highlight Token System (§1.1) — dark overrides ===== */
   --highlight-yellow-bg: rgba(133, 77, 14, 0.5);
@@ -433,6 +440,13 @@ a {
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+/* Governance milestone: checkmark stroke draw animation */
+@keyframes strokeDraw {
+  to {
+    stroke-dashoffset: 0;
   }
 }
 

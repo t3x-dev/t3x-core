@@ -363,7 +363,7 @@ function ClauseItem({ clause, isDisabled, onToggle, canToggle }: ClauseItemProps
   return (
     <div
       className={cn(
-        'flex items-start gap-2.5 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-sm leading-relaxed',
+        'flex items-center gap-2.5 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-sm leading-relaxed',
         isDisabled && 'opacity-50'
       )}
     >

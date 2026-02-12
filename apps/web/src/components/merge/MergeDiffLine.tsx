@@ -109,8 +109,8 @@ export function MergeDiffLine({
         <span
           className={`
             shrink-0 w-4 text-center font-bold
-            ${type === 'added' ? 'text-green-600 dark:text-green-400' : ''}
-            ${type === 'removed' ? 'text-red-600 dark:text-red-400' : ''}
+            ${type === 'added' ? 'text-[var(--diff-added-accent)]' : ''}
+            ${type === 'removed' ? 'text-[var(--diff-removed-accent)]' : ''}
           `}
         >
           {styles.prefix}
@@ -127,7 +127,7 @@ export function MergeDiffLine({
             className="shrink-0 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
           >
             {isKept ? (
-              <CheckSquare className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <CheckSquare className="h-4 w-4 text-[var(--diff-added-accent)]" />
             ) : (
               <Square className="h-4 w-4" />
             )}
