@@ -2,7 +2,7 @@
 
 Web frontend for T3X, a canvas-based semantic version control interface built with Next.js.
 
-**Last Updated:** 2026-01-29 (V4 Pins + Conversation Context)
+**Last Updated:** 2026-02-12
 
 ## Tech Stack
 
@@ -23,7 +23,9 @@ src/
 │   ├── page.tsx              # Home page (project list)
 │   ├── layout.tsx            # Root layout
 │   ├── project/[projectId]/  # Project canvas page
-│   │   └── merge/[mergeId]/  # Merge Workspace page (NEW)
+│   │   ├── leaf/[leafId]/    # Leaf detail page
+│   │   ├── merge/[mergeId]/  # Merge Workspace page
+│   │   └── conversation/[conversationId]/  # Conversation page
 │   ├── agent-demo/           # Agent Demo page
 │   ├── api/                  # API proxy routes
 │   ├── deploy/               # Deploy page (A/B Test Compare)
@@ -44,16 +46,40 @@ src/
 │   │   │   └── helpers.tsx           # Utility functions
 │   │   ├── AnimatedEdge.tsx      # Animated edge
 │   │   └── ...
-│   ├── merge/                # Merge UI components (NEW)
-│   │   ├── MergeWorkspace.tsx    # Main merge workspace
-│   │   ├── MergePanel.tsx        # Decision panel
+│   ├── merge/                # Merge UI components
+│   │   ├── MergeWorkspace.tsx        # Main merge workspace
+│   │   ├── MergePanel.tsx            # Decision panel
+│   │   ├── MergeActionBar.tsx        # Action bar
+│   │   ├── MergeCandidateList.tsx    # Candidate list
+│   │   ├── MergeConflictView.tsx     # Conflict view
+│   │   ├── MergeDiffSection.tsx      # Diff section
+│   │   ├── MergeDiffLine.tsx         # Diff line
+│   │   ├── MergeIdenticalSection.tsx # Identical section
+│   │   ├── MergePreview.tsx          # Preview panel
 │   │   ├── MergeSimilarPairCard.tsx  # Similar pair card
-│   │   ├── WordDiffDisplay.tsx   # Word-level diff display
-│   │   └── ...
-│   ├── optimiser/            # Agent Optimiser components (NEW)
-│   │   ├── RunsTable.tsx         # Runs list
-│   │   ├── E2ETestCard.tsx       # E2E test card
-│   │   └── ...
+│   │   ├── ConflictHeader.tsx        # Conflict header
+│   │   ├── ConflictSide.tsx          # Conflict side panel
+│   │   ├── ConflictEditPanel.tsx     # Conflict edit panel
+│   │   ├── ConflictResolutionButtons.tsx # Resolution buttons
+│   │   ├── UnifiedDiffView.tsx       # Unified diff view
+│   │   └── WordDiffDisplay.tsx       # Word-level diff display
+│   ├── optimiser/            # Agent Optimiser components
+│   │   ├── RunsTable.tsx             # Runs list
+│   │   ├── E2ETestCard.tsx           # E2E test card
+│   │   ├── AssertionsSection.tsx     # Assertions section
+│   │   ├── LeafSelector.tsx          # Leaf selector
+│   │   ├── charts/                   # Chart components
+│   │   │   ├── BarChart.tsx          # Bar chart
+│   │   │   ├── RadarChart.tsx        # Radar chart
+│   │   │   ├── DualChart.tsx         # Dual chart
+│   │   │   └── ChartToggle.tsx       # Chart toggle
+│   │   ├── metrics/                  # Metrics components
+│   │   │   ├── DimensionScoreCard.tsx # Dimension score card
+│   │   │   ├── MetricsDelta.tsx      # Metrics delta
+│   │   │   └── QuickStatsBar.tsx     # Quick stats bar
+│   │   └── trace/                    # Trace components
+│   │       ├── SpanCard.tsx          # Span card
+│   │       └── TraceTimeline.tsx     # Trace timeline
 │   ├── ui/                   # shadcn/ui components
 │   ├── Sidebar.tsx           # Sidebar
 │   └── CommandPalette.tsx    # Command palette
@@ -72,15 +98,21 @@ src/
 │   ├── api.ts                # API client
 │   ├── bridgeQueries.ts      # Bridge template query definitions
 │   ├── db.ts                 # Database utilities
+│   ├── diffUtils.ts          # Diff algorithm (Jaccard + LCS)
 │   ├── elkLayout.ts          # ELK auto layout
+│   ├── export.ts             # Export utilities
+│   ├── highlightUtils.ts     # Text highlighting
 │   ├── motion.ts             # Animation config
+│   ├── seedData.ts           # Seed data utilities
 │   ├── theme.ts              # Theme utilities
+│   ├── truncationUtils.ts    # Text truncation utilities
 │   ├── utils.ts              # General utilities
 │   └── providers/            # Provider wrappers
 ├── utils/
 │   └── tokenizer.ts          # Text tokenizer utilities
 ├── hooks/
 │   ├── useApi.ts             # Data fetching hook
+│   ├── useBranchCommits.ts   # Branch commit data hook
 │   └── useReducedMotion.ts   # Animation preference hook
 └── types/
     ├── nodes.ts              # Node type definitions
