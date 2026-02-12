@@ -96,7 +96,7 @@ export function MergeActionBar({
       <div className="flex-1" />
 
       {/* Merge Message Input */}
-      <div className="flex items-center gap-2 w-96">
+      <div className="flex items-center gap-2 min-w-[200px] max-w-96 flex-1">
         <Input
           placeholder="Merge message (required)"
           value={message}
@@ -106,7 +106,7 @@ export function MergeActionBar({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
