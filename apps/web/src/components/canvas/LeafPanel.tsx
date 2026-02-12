@@ -18,6 +18,8 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { LeafType } from '@/types/nodes';
 import { LEAF_TYPES } from './CanvasNodes';
 
+const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';
+
 export function LeafPanel() {
   const router = useRouter();
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
@@ -56,7 +58,9 @@ export function LeafPanel() {
                   Output
                 </p>
                 <div className="flex flex-col gap-2">
-                  {LEAF_TYPES.map(({ type, label, icon: Icon }) => (
+                  {LEAF_TYPES.filter(
+                    (lt) => isRunnerEnabled || lt.type !== 'deploy_agent'
+                  ).map(({ type, label, icon: Icon }) => (
                     <motion.div key={type} variants={staggerItem}>
                       <AnimatedButton
                         variant="canvas-outline"
