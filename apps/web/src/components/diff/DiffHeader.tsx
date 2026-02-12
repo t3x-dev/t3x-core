@@ -15,22 +15,32 @@ interface DiffHeaderProps {
   onClose: () => void;
 }
 
+/**
+ * CommitBadge — displays label + branch + hash-pill + message
+ *
+ * Layout priority (when space is tight):
+ *   Always visible:  label (BASE/TARGET), hash pill (8-char mono)
+ *   Truncates first:  message, then branch name
+ *
+ * The hash is inside its own shrink-0 bg-muted pill so it never
+ * overflows or merges with adjacent text.
+ */
 function CommitBadge({ label, commit }: { label: string; commit: CommitInfo }) {
+  const shortHash = commit.hash.replace('sha256:', '').slice(0, 8);
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
-      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted rounded-md">
-        {commit.branch && (
-          <span className="text-xs font-medium text-foreground">{commit.branch}</span>
-        )}
-        <span className="text-xs font-mono text-muted-foreground">
-          {commit.hash.replace('sha256:', '').slice(0, 8)}
-        </span>
-      </div>
+    <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+      <span className="text-xs text-muted-foreground uppercase tracking-wide shrink-0">
+        {label}
+      </span>
+      {commit.branch && (
+        <span className="text-xs font-medium text-foreground truncate">{commit.branch}</span>
+      )}
+      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
+        {shortHash}
+      </span>
       {commit.message && (
-        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-          {commit.message}
-        </span>
+        <span className="text-xs text-muted-foreground truncate">{commit.message}</span>
       )}
     </div>
   );
@@ -38,14 +48,16 @@ function CommitBadge({ label, commit }: { label: string; commit: CommitInfo }) {
 
 export function DiffHeader({ baseCommit, targetCommit, onClose }: DiffHeaderProps) {
   return (
-    <div className="flex items-center gap-4 px-6 py-3 border-b bg-background">
-      <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
+    <div className="flex items-center gap-3 pl-6 pr-12 py-3 border-b bg-background">
+      <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
         <ArrowLeft className="h-4 w-4" />
         Back
       </Button>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <CommitBadge label="Base" commit={baseCommit} />
-        <GitCompare className="h-4 w-4 text-muted-foreground shrink-0" />
+      </div>
+      <GitCompare className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="min-w-0 flex-1">
         <CommitBadge label="Target" commit={targetCommit} />
       </div>
     </div>
