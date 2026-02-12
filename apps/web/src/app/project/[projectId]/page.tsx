@@ -7,6 +7,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { GuidedTour } from '@/components/onboarding/GuidedTour';
 import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -240,12 +241,7 @@ export default function ProjectDetailPage() {
                   <div className="flex items-center gap-3 rounded-md border p-3">
                     <Activity className="h-4 w-4 shrink-0" />
                     <span className="flex-1 text-sm">Agent started</span>
-                    <Badge
-                      variant="outline"
-                      className="border-green-500/30 bg-green-500/10 text-green-600"
-                    >
-                      running
-                    </Badge>
+                    <StatusBadge status="running" />
                   </div>
                   <div className="flex items-center gap-3 rounded-md border p-3">
                     <Cpu className="h-4 w-4 shrink-0" />

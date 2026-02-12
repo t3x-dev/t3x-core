@@ -20,23 +20,23 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
   if (sentences.length === 0) return null;
 
   return (
-    <div className="border border-green-200 dark:border-green-800 rounded-lg bg-green-50 dark:bg-green-950/30 p-4">
+    <div className="border border-[var(--diff-added-border)] rounded-lg bg-[var(--diff-added-bg)] p-4">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex justify-between items-center w-full cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 rounded px-2 py-1 transition-colors"
+        className="flex w-full items-center justify-between rounded px-4 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
         type="button"
       >
-        <span className="font-medium text-green-800 dark:text-green-300">
+        <span className="font-semibold text-[var(--diff-added-text)]">
           ✓ Identical ({sentences.length} {sentences.length === 1 ? 'sentence' : 'sentences'}) —
           auto-kept
         </span>
-        <span className="text-green-600 dark:text-green-400 text-lg">{expanded ? '▲' : '▼'}</span>
+        <span className="text-[var(--diff-added-accent)] text-lg">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (
-        <ul className="mt-3 space-y-1 text-sm text-green-700 dark:text-green-400 pl-2">
+        <ul className="mt-3 space-y-1 text-sm text-[var(--diff-added-accent)] pl-2">
           {sentences.map((s) => (
-            <li key={s.id} className="py-1">
+            <li key={s.id} className="py-2">
               {s.text}
             </li>
           ))}

@@ -364,7 +364,7 @@ function DeployPageContent() {
               }}
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {deployAgents.map((agent) => (
                 <Card key={agent.deploy_agent_id} className="py-3">
                   <CardContent className="space-y-2">

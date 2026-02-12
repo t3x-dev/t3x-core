@@ -428,8 +428,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   saveDraft: async () => {
-    const { draftId, prepared, message, isDirty } = get();
-    if (!draftId || !isDirty) return;
+    const { draftId, prepared, message, isDirty, status } = get();
+    if (!draftId || !isDirty || status === 'committed') return;
 
     set({ saveStatus: 'saving' });
 
@@ -454,7 +454,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       }, 2000);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to save';
-      set({ saveStatus: 'error', error: errorMsg });
+      // Only set saveStatus indicator, NOT the page-level error
+      // (auto-save failure should not replace the entire workspace with error screen)
+      set({ saveStatus: 'error' });
+      console.warn('[MergeWorkspace] Auto-save failed:', errorMsg);
     }
   },
 
@@ -473,7 +476,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         }),
       });
 
-      set({ status: 'committed', loading: false });
+      set({ status: 'committed', loading: false, isDirty: false });
 
       // Force canvas to reload data by clearing its projectId
       // This ensures the new merge commit will be displayed

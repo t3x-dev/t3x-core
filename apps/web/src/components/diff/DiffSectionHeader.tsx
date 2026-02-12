@@ -18,19 +18,19 @@ const variantStyles = {
     badge: 'bg-muted text-muted-foreground',
   },
   modified: {
-    bg: 'bg-amber-50/50 dark:bg-amber-950/20',
-    text: 'text-amber-700 dark:text-amber-400',
-    badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    bg: 'bg-[var(--diff-modified-bg)]',
+    text: 'text-[var(--diff-modified-accent)]',
+    badge: 'bg-[var(--diff-modified-bg)] text-[var(--diff-modified-accent)]',
   },
   removed: {
-    bg: 'bg-red-50/50 dark:bg-red-950/20',
-    text: 'text-red-700 dark:text-red-400',
-    badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+    bg: 'bg-[var(--diff-removed-bg)]',
+    text: 'text-[var(--diff-removed-accent)]',
+    badge: 'bg-[var(--diff-removed-bg)] text-[var(--diff-removed-accent)]',
   },
   added: {
-    bg: 'bg-green-50/50 dark:bg-green-950/20',
-    text: 'text-green-700 dark:text-green-400',
-    badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    bg: 'bg-[var(--diff-added-bg)]',
+    text: 'text-[var(--diff-added-accent)]',
+    badge: 'bg-[var(--diff-added-bg)] text-[var(--diff-added-accent)]',
   },
 };
 
@@ -51,14 +51,14 @@ export function DiffSectionHeader({
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className={`w-full flex items-center gap-2 px-4 py-2.5 ${styles.bg} hover:brightness-95 transition-all`}
+        className={`w-full flex items-center gap-2 px-4 py-3 ${styles.bg} hover:brightness-95 transition-all`}
       >
         {collapsed ? (
           <ChevronRight className={`h-4 w-4 ${styles.text}`} />
         ) : (
           <ChevronDown className={`h-4 w-4 ${styles.text}`} />
         )}
-        <span className={`text-sm font-medium ${styles.text}`}>{title}</span>
+        <span className={`text-sm font-semibold ${styles.text}`}>{title}</span>
         <span className={`text-xs px-2 py-0.5 rounded-full ${styles.badge}`}>{count}</span>
       </button>
       {!collapsed && children}
