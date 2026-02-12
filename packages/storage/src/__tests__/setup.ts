@@ -270,6 +270,7 @@ CREATE TABLE IF NOT EXISTS runs (
   project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
   runner_run_id TEXT,
   commit_ref TEXT,
+  leaf_id TEXT,
   leaf_json TEXT,
   inputs_json TEXT,
   workflow_json TEXT,

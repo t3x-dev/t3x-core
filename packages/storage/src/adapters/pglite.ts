@@ -239,6 +239,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       runner_run_id TEXT,
       commit_ref TEXT,
+      leaf_id TEXT,
       leaf_json TEXT,
       inputs_json TEXT,
       workflow_json TEXT,
@@ -255,6 +256,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+
+    -- Migration: Add leaf_id column to existing runs tables (v2.2)
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS leaf_id TEXT;
 
     -- Commits V3 table (sentence-based semantic snapshots)
     -- NOTE: project_id is nullable by design (commits can be standalone/unattached).

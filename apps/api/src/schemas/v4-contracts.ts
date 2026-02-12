@@ -12,7 +12,7 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import { LEAF_TYPES } from '@t3x/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x/core';
 import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,6 +200,9 @@ export const ListCommitsV4Response = SuccessResponse(z.array(CommitV4Response));
 // Use LEAF_TYPES from @t3x/core as single source of truth
 const LeafTypeEnum = z.enum(LEAF_TYPES);
 
+// All valid types stored in leaves table (generation + deploy)
+const AnyLeafTypeEnum = z.enum(ALL_LEAF_TYPES);
+
 // POST /v1/leaves
 export const CreateLeafRequest = z.object({
   commit_hash: z.string(),
@@ -220,7 +223,7 @@ export const CreateLeafRequest = z.object({
 export const LeafResponse = z.object({
   id: z.string(),
   commit_hash: z.string(),
-  type: LeafTypeEnum,
+  type: AnyLeafTypeEnum,
   title: z.string().nullable(),
   constraints: z.array(ConstraintSchema),
   config: z.record(z.unknown()),

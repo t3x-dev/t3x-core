@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ChevronRight,
   CloudOff,
   ExternalLink,
   GitCompare,
@@ -11,9 +12,10 @@ import {
   Rocket,
   Trash2,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { E2ETestCard } from '@/components/optimiser/E2ETestCard';
+import { LeafSelector } from '@/components/optimiser/LeafSelector';
 import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
 import { RunsTable } from '@/components/optimiser/RunsTable';
 import { showToast } from '@/components/Toast';
@@ -42,7 +44,24 @@ import {
 } from '@/lib/api';
 
 export default function DeployPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
+      }
+    >
+      <DeployPageContent />
+    </Suspense>
+  );
+}
+
+function DeployPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialLeafId = searchParams.get('leaf_id') || undefined;
   const [runnerHealthy, setRunnerHealthy] = useState<boolean | null>(null);
   const [deployAgents, setDeployAgents] = useState<DeployAgent[]>([]);
   const [runs, setRuns] = useState<EngineRun[]>([]);
@@ -424,24 +443,46 @@ export default function DeployPage() {
         </CardContent>
       </Card>
 
-      {/* E2E Test Card */}
-      <E2ETestCard
+      {/* Leaf Selector — run from a Leaf's generated output */}
+      <LeafSelector
         agents={deployAgents}
         runnerHealthy={runnerHealthy === true}
+        initialLeafId={initialLeafId}
         onRunComplete={async (runId) => {
-          // Refresh runs list with current filters
           await loadRuns(filterModel, filterPromptVersion);
-          // Refresh filter options in case new model/prompt was used
           try {
             const options = await getRunFilterOptions();
             setFilterOptions(options);
           } catch (_err) {
             // Filter options refresh is best-effort
           }
-          // Navigate to run detail page
           router.push(`/deploy/eval/${runId}`);
         }}
       />
+
+      {/* E2E Quick Test (collapsible) */}
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+          Quick E2E Test (hardcoded prompt)
+        </summary>
+        <div className="mt-3">
+          <E2ETestCard
+            agents={deployAgents}
+            runnerHealthy={runnerHealthy === true}
+            onRunComplete={async (runId) => {
+              await loadRuns(filterModel, filterPromptVersion);
+              try {
+                const options = await getRunFilterOptions();
+                setFilterOptions(options);
+              } catch (_err) {
+                // Filter options refresh is best-effort
+              }
+              router.push(`/deploy/eval/${runId}`);
+            }}
+          />
+        </div>
+      </details>
 
       {/* Quick Stats */}
       <QuickStatsBar runs={runs} />
