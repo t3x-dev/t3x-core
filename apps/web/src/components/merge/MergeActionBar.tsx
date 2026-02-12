@@ -7,15 +7,18 @@
  */
 
 import { AlertCircle, ArrowLeft, Check, GitMerge, Loader2 } from 'lucide-react';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface MergeActionBarProps {
+  projectId: string;
   sourceBranch: string;
   targetBranch: string;
   unresolvedCount: number;
@@ -30,6 +33,7 @@ interface MergeActionBarProps {
 }
 
 export function MergeActionBar({
+  projectId,
   sourceBranch,
   targetBranch,
   unresolvedCount,
@@ -42,6 +46,7 @@ export function MergeActionBar({
   canCommit,
   onClose,
 }: MergeActionBarProps) {
+  const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
   return (
     <header
       className={cn(
@@ -55,7 +60,13 @@ export function MergeActionBar({
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
-      {/* Branch Info */}
+      {/* Breadcrumb + Branch Info */}
+      <Breadcrumb
+        segments={[
+          { label: projectName || 'Project', href: `/project/${projectId}` },
+          { label: 'Merge' },
+        ]}
+      />
       <div className="flex items-center gap-2">
         <GitMerge className="h-4 w-4 text-[var(--text-tertiary)]" />
         <span className="font-medium text-[var(--text-primary)]">{sourceBranch}</span>

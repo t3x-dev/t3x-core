@@ -20,6 +20,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
+import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -40,6 +42,7 @@ import {
 } from '@/lib/api';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 import type { SentenceWithSource } from '@/types/sourceContext';
 
 function getGenerateErrorMessage(error: string): {
@@ -69,6 +72,7 @@ export default function LeafDetailPage() {
   const router = useRouter();
   const projectId = params.projectId as string;
   const leafId = params.leafId as string;
+  const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
 
   const [leaf, setLeaf] = useState<Leaf | null>(null);
   const leafRef = useRef<Leaf | null>(null);
@@ -394,18 +398,19 @@ export default function LeafDetailPage() {
           <Button variant="ghost" size="icon" onClick={() => router.push(`/project/${projectId}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-lg font-semibold">
-              {leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...`}
-            </h1>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {leaf.type}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(leaf.created_at).toLocaleDateString()}
-              </span>
-            </div>
+          <Breadcrumb
+            segments={[
+              { label: projectName || 'Project', href: `/project/${projectId}` },
+              { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },
+            ]}
+          />
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {leaf.type}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {new Date(leaf.created_at).toLocaleDateString()}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -538,11 +543,11 @@ export default function LeafDetailPage() {
 
           {/* Source Context with constraint highlights + text selection */}
           {commitData && sentences.length > 0 && (
-            <section className="rounded-lg border bg-card p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <FileText className="h-4 w-4" />
-                Source Content &amp; Constraints
-              </h3>
+            <CollapsibleSection
+              title="Source Content & Constraints"
+              badge={sentences.length}
+              defaultOpen
+            >
               <LeafConstraintSourceContext
                 sentences={sentences}
                 constraints={leaf.constraints}
@@ -550,7 +555,7 @@ export default function LeafDetailPage() {
                 onRemove={handleRemoveConstraint}
                 saving={saving}
               />
-            </section>
+            </CollapsibleSection>
           )}
 
           {/* Fallback: manual constraints when commit data unavailable */}
@@ -882,7 +887,9 @@ function OutputSection({ output, generatedAt }: OutputSectionProps) {
       </div>
       <div className="p-4">
         {output ? (
-          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-4 text-sm text-[var(--text-secondary)]">{output}</div>
+          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-4 text-sm text-[var(--text-secondary)]">
+            {output}
+          </div>
         ) : (
           <p className="text-sm text-[var(--text-tertiary)] text-center py-8">
             No output generated yet. Click &quot;Generate&quot; to create output.
