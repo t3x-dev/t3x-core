@@ -566,11 +566,19 @@ leavesRoutes.openapi(createLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
+    // Auto-generate title from commit message if not provided
+    let title = body.title;
+    if (!title) {
+      const commit = await findCommitV4ByHash(db, body.commit_hash);
+      const msg = commit?.message || body.commit_hash.slice(0, 16);
+      title = `${msg} — ${body.type}`;
+    }
+
     // Create leaf in database (storage generates IDs for leaf and constraints)
     const leaf = await createLeaf(db, {
       commit_hash: body.commit_hash,
       type: body.type,
-      title: body.title,
+      title,
       constraints: body.constraints,
       config: body.config ?? {},
       project_id: body.project_id,
@@ -659,11 +667,13 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
     // 3. Process each leaf config sequentially (avoid rate limiting)
     for (const leafConfig of body.leaves) {
       try {
-        // 3a. Create leaf
+        // 3a. Create leaf (auto-generate title from commit message if not provided)
+        const leafTitle =
+          leafConfig.title || `${commit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
         const leaf = await createLeaf(db, {
           commit_hash: decodedHash,
           type: leafConfig.type,
-          title: leafConfig.title,
+          title: leafTitle,
           constraints: leafConfig.constraints,
           config: leafConfig.config ?? {},
           project_id: body.project_id,

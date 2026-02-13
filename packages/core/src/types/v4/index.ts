@@ -531,7 +531,7 @@ export interface CreateCommitV4Input {
  */
 export interface CreateLeafInput {
   commit_hash: string;
-  type: LeafType;
+  type: AnyLeafType;
   title?: string;
   constraints?: Constraint[];
   config?: LeafConfig;

@@ -23,9 +23,11 @@ import { type StepRecord, TraceTimeline } from '@/components/optimiser/trace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type EngineRun, getEngineRun } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { usePinsStore } from '@/store/pinsStore';
 
 // Types for parsed result data
 interface DimensionScores {
@@ -167,6 +169,7 @@ export default function RunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const fetchPins = usePinsStore((s) => s.fetchPins);
 
   // Load run data
   useEffect(() => {
@@ -176,6 +179,7 @@ export default function RunDetailPage() {
       try {
         const data = await getEngineRun(runId);
         setRun(data);
+        if (data.project_id) fetchPins(data.project_id);
       } catch (_err) {
         setError('Failed to load run data');
       } finally {
@@ -238,6 +242,9 @@ export default function RunDetailPage() {
             <code className="rounded bg-muted px-2 py-1 text-sm font-medium">{runId}</code>
           </div>
           <div className="flex items-center gap-2">
+            {run.project_id && run.leaf && (
+              <PinButton projectId={run.project_id} type="leaf" refId={run.leaf.id} />
+            )}
             <Button
               variant="outline"
               size="sm"
