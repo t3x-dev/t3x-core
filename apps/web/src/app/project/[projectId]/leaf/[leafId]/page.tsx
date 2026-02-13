@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  BookOpen,
   Check,
   CheckCircle,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  RefreshCw,
   Rocket,
   Trash2,
   X,
@@ -23,7 +25,9 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +46,9 @@ import {
   validateLeafOutput,
 } from '@/lib/api';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
+import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
+import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { SentenceWithSource } from '@/types/sourceContext';
 
@@ -97,6 +103,13 @@ export default function LeafDetailPage() {
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
 
+  // Assertion selection & Re-tune state
+  const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
+  const [retuning, setRetuning] = useState(false);
+  const { fetchPins, isPinned, getPinByRef } = usePinsStore();
+  const leafPinned = isPinned('leaf', leafId);
+  const existingPin = getPinByRef('leaf', leafId);
+
   // Keep leafRef in sync with leaf state
   useEffect(() => {
     leafRef.current = leaf;
@@ -128,6 +141,54 @@ export default function LeafDetailPage() {
 
     loadLeaf();
   }, [leafId]);
+
+  // Ensure pins are loaded for this project
+  useEffect(() => {
+    if (projectId) fetchPins(projectId);
+  }, [projectId, fetchPins]);
+
+  // Initialize selected assertions: default to failed ones
+  useEffect(() => {
+    if (leaf?.assertions) {
+      const failedIds = leaf.assertions.filter((a) => !a.passed).map((a) => a.id);
+      setSelectedAssertionIds(new Set(failedIds));
+    }
+  }, [leaf?.assertions]);
+
+  // Toggle a single assertion checkbox
+  const toggleAssertion = useCallback((id: string) => {
+    setSelectedAssertionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // Re-tune: pin selected assertions, create new conversation, navigate
+  const handleRetune = useCallback(async () => {
+    if (!leaf?.commit_hash || selectedAssertionIds.size === 0) return;
+
+    setRetuning(true);
+    try {
+      const { conversationId } = await createRetuneSession({
+        projectId,
+        leafId,
+        commitHash: leaf.commit_hash,
+        selectedAssertionIds: Array.from(selectedAssertionIds),
+        existingPinId: existingPin?.id,
+      });
+      await fetchPins(projectId);
+      router.push(`/project/${projectId}/conversation/${conversationId}`);
+    } catch (_err) {
+      // stay on page
+    } finally {
+      setRetuning(false);
+    }
+  }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins, router]);
 
   // Generate progress phase messages
   const generateProgressMessages = useMemo(
@@ -598,7 +659,36 @@ export default function LeafDetailPage() {
           <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
 
           {/* Assertions Section */}
-          <AssertionsSection assertions={leaf.assertions} constraints={leaf.constraints} />
+          <AssertionsSection
+            assertions={leaf.assertions}
+            constraints={leaf.constraints}
+            selectedIds={selectedAssertionIds}
+            onToggle={toggleAssertion}
+            footer={
+              leaf.assertions && leaf.assertions.length > 0 ? (
+                <div className="mt-4 flex items-center gap-3 border-t pt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedAssertionIds.size === 0 || retuning || !leaf.commit_hash}
+                    onClick={handleRetune}
+                  >
+                    {retuning ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Re-tune
+                    {selectedAssertionIds.size > 0 && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {selectedAssertionIds.size}
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+              ) : undefined
+            }
+          />
         </div>
       </div>
     </div>
@@ -926,9 +1016,12 @@ function OutputSection({ output, generatedAt }: OutputSectionProps) {
 interface AssertionsSectionProps {
   assertions: Assertion[] | null;
   constraints: Constraint[];
+  selectedIds?: Set<string>;
+  onToggle?: (id: string) => void;
+  footer?: React.ReactNode;
 }
 
-function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) {
+function AssertionsSection({ assertions, constraints, selectedIds, onToggle, footer }: AssertionsSectionProps) {
   if (!assertions || assertions.length === 0) {
     return (
       <section className="rounded-lg border bg-card elevation-1 elevation-hover">
@@ -988,8 +1081,17 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
       <div className="p-[var(--space-group)] space-y-[var(--space-item)]">
         {assertions.map((assertion) => {
           const constraint = constraintMap.get(assertion.constraint_id);
-          return <AssertionItem key={assertion.id} assertion={assertion} constraint={constraint} />;
+          return (
+            <AssertionItem
+              key={assertion.id}
+              assertion={assertion}
+              constraint={constraint}
+              selected={selectedIds?.has(assertion.id)}
+              onToggle={onToggle ? () => onToggle(assertion.id) : undefined}
+            />
+          );
         })}
+        {footer}
       </div>
     </section>
   );
@@ -998,9 +1100,11 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
 interface AssertionItemProps {
   assertion: Assertion;
   constraint: Constraint | undefined;
+  selected?: boolean;
+  onToggle?: () => void;
 }
 
-function AssertionItem({ assertion, constraint }: AssertionItemProps) {
+function AssertionItem({ assertion, constraint, selected, onToggle }: AssertionItemProps) {
   return (
     <div
       className={cn(
@@ -1011,6 +1115,13 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
       )}
     >
       <div className="flex items-start gap-2">
+        {onToggle && (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            className="mt-0.5"
+          />
+        )}
         {assertion.passed ? (
           <Check className="h-4 w-4 text-[var(--status-success)] shrink-0 mt-0.5" />
         ) : (
@@ -1041,7 +1152,13 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">{assertion.details}</p>
           {assertion.lesson && (
-            <p className="text-xs text-[var(--status-info)] mt-1">Lesson: {assertion.lesson}</p>
+            <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
+              <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+              <div>
+                <span className="font-medium text-amber-700">Lesson: </span>
+                <span className="text-amber-900">{assertion.lesson}</span>
+              </div>
+            </div>
           )}
         </div>
       </div>

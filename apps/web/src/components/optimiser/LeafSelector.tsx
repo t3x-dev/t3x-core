@@ -48,6 +48,10 @@ export function LeafSelector({
   // Agent selection
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
+  // Run config
+  const [testQuery, setTestQuery] = useState("What's the weather like in Beijing today?");
+  const [rulesRef, setRulesRef] = useState('weather-agent-eval');
+
   // Run state
   const [isRunning, setIsRunning] = useState(false);
 
@@ -138,7 +142,8 @@ export function LeafSelector({
       const result = await createEngineRun({
         project_id: selectedProjectId || undefined,
         leaf_id: leaf.id,
-        inputs: { test: true },
+        leaf: rulesRef ? { id: leaf.id, type: 'deploy_agent', rules_ref: rulesRef } : undefined,
+        inputs: { query: testQuery },
         workflow: {
           type: 'n8n',
           webhook_id: agent.endpoint,
@@ -265,6 +270,38 @@ export function LeafSelector({
               {selectedLeaf.output.length > 500
                 ? `${selectedLeaf.output.slice(0, 500)}...`
                 : selectedLeaf.output}
+            </div>
+          </div>
+        )}
+
+        {/* Run Config: Test Query & Eval Rules */}
+        {selectedLeaf && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium">Test Query</span>
+              <input
+                type="text"
+                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+                placeholder="What's the weather like in Beijing today?"
+                value={testQuery}
+                onChange={(e) => setTestQuery(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                The user message sent to the AI agent
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium">Eval Rules</span>
+              <input
+                type="text"
+                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+                placeholder="weather-agent-eval"
+                value={rulesRef}
+                onChange={(e) => setRulesRef(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Rules file in Runner's resources/rules/ directory
+              </p>
             </div>
           </div>
         )}
