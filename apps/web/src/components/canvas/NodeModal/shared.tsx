@@ -97,7 +97,7 @@ export function PinnedSourcesSection({
   }
 
   return (
-    <div className="p-4 bg-[var(--status-info-muted)] rounded-lg border border-[var(--status-info)]/20">
+    <div className="p-[var(--space-group)] bg-[var(--status-info-muted)] rounded-lg border border-[var(--status-info)]/20">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Pin size={14} className="text-[var(--status-info)]" />
@@ -107,7 +107,7 @@ export function PinnedSourcesSection({
           {sourceRefs.length} source{sourceRefs.length !== 1 ? 's' : ''}
         </span>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-[var(--space-item)]">
         {sourceRefs.map((ref, idx) => (
           <li
             key={ref.id || idx}
@@ -181,7 +181,7 @@ export function MemoryContextSidebar({
           <PinDropdownSelector projectId={projectId} branch={branch} />
         ) : (
           <>
-            <div className="flex items-center gap-2 text-[0.85rem] text-muted-foreground mb-2">
+            <div className="flex items-center gap-2 text-[0.85rem] text-muted-foreground mb-[var(--space-item)]">
               <Pin size={14} className="text-muted-foreground/70 shrink-0" />
               <span>
                 {totalCount === 0
@@ -214,7 +214,7 @@ export function MemoryContextSidebar({
  */
 export function V4ConstraintInfoMessage() {
   return (
-    <div className="p-4 bg-[var(--status-warning-muted)] rounded-lg border border-[var(--status-warning)]/25">
+    <div className="p-[var(--space-group)] bg-[var(--status-warning-muted)] rounded-lg border border-[var(--status-warning)]/25">
       <div className="flex items-start gap-3">
         <Info size={18} className="text-[var(--status-warning)] shrink-0 mt-0.5" />
         <div>
@@ -346,12 +346,12 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   }
 
   return (
-    <div className="p-4 bg-muted/50 rounded-lg border border-border">
+    <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm text-foreground">Sentences</h3>
         <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-[var(--space-item)]">
         {sentences.map((s) => (
           <li
             key={s.id}
@@ -391,7 +391,7 @@ export function CommitConstraintsAndLeaves({
   return (
     <>
       {isV4 ? (
-        <div className="space-y-3">
+        <div className="space-y-[var(--space-item)]">
           <V4ConstraintInfoMessage />
           {projectId && (
             <Button
@@ -406,7 +406,7 @@ export function CommitConstraintsAndLeaves({
           )}
         </div>
       ) : (
-        <div className="p-4 bg-muted/50 rounded-lg border border-border">
+        <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm text-foreground">Constraints</h3>
             <span className="text-xs text-muted-foreground/70">
@@ -427,7 +427,7 @@ export function CommitConstraintsAndLeaves({
       )}
 
       {isV4 && leaves && leaves.length > 0 && projectId && (
-        <div className="p-4 bg-[var(--status-success-muted)] rounded-lg border border-[var(--status-success)]/20">
+        <div className="p-[var(--space-group)] bg-[var(--status-success-muted)] rounded-lg border border-[var(--status-success)]/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Leaf size={14} className="text-[var(--status-success)]" />
@@ -439,7 +439,7 @@ export function CommitConstraintsAndLeaves({
               {leaves.length} leaf{leaves.length !== 1 ? 's' : ''}
             </span>
           </div>
-          <ul className="space-y-2">
+          <ul className="space-y-[var(--space-item)]">
             {leaves.map((leaf) => (
               <li key={leaf.id}>
                 <Link

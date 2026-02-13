@@ -508,10 +508,12 @@ export function LeafConstraintSourceContext({
   // Empty
   if (sentences.length === 0) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
         </div>
         <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No sentences</p>
       </div>
@@ -521,7 +523,7 @@ export function LeafConstraintSourceContext({
   // All legacy
   if (allLegacy) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
@@ -531,7 +533,7 @@ export function LeafConstraintSourceContext({
             Legacy format
           </span>
         </div>
-        <ul className="space-y-2">
+        <ul className="space-y-[var(--space-item)]">
           {sentences.map((s) => (
             <li
               key={s.id}
@@ -553,10 +555,12 @@ export function LeafConstraintSourceContext({
   // Loading
   if (isLoading) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
         </div>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -574,7 +578,7 @@ export function LeafConstraintSourceContext({
   // Fallback
   if (!hasAnyContext) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <XCircle size={14} className="text-[var(--color-text-muted)]" />
@@ -584,7 +588,7 @@ export function LeafConstraintSourceContext({
             Source unavailable
           </span>
         </div>
-        <ul className="space-y-2">
+        <ul className="space-y-[var(--space-item)]">
           {sentences.map((s) => (
             <li
               key={s.id}
@@ -609,12 +613,14 @@ export function LeafConstraintSourceContext({
   const constraintCount = constraints.length;
 
   return (
-    <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+    <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <MessageSquare size={14} className="text-[var(--status-success)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
           {constraintCount > 0 && (
             <span className="px-1.5 py-0.5 bg-[var(--status-success-muted)] text-[var(--status-success)] text-[0.65rem] rounded">
               {constraintCount} constraint{constraintCount !== 1 ? 's' : ''} highlighted
@@ -678,7 +684,9 @@ export function LeafConstraintSourceContext({
             <ShieldX className="h-3.5 w-3.5 mr-1.5" />
             Must Not Have
           </Button>
-          <span className="text-xs text-[var(--color-text-muted)] ml-2">Select text below to add a constraint</span>
+          <span className="text-xs text-[var(--color-text-muted)] ml-2">
+            Select text below to add a constraint
+          </span>
         </div>
       )}
 
@@ -703,7 +711,7 @@ export function LeafConstraintSourceContext({
       </div>
 
       {/* Turns list */}
-      <div className="space-y-2">
+      <div className="space-y-[var(--space-item)]">
         {hashesToRender.map((turnHash, idx) => {
           const data = turnData.get(turnHash);
           const isExpanded = expandedTurns.has(turnHash) || compact;
@@ -735,7 +743,7 @@ export function LeafConstraintSourceContext({
                 </button>
                 {isExpanded && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
-                    <ul className="space-y-2">
+                    <ul className="space-y-[var(--space-item)]">
                       {sentencesForTurn.map((sg) => (
                         <li
                           key={sg.sentence.id}
@@ -812,7 +820,9 @@ export function LeafConstraintSourceContext({
                   )}
                   <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
                     {data.context?.conversation_title || `Turn ${idx + 1}`}
-                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">({targetTurn.role})</span>
+                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                      ({targetTurn.role})
+                    </span>
                   </span>
                   {turnHasIntegrityIssues && (
                     <span
@@ -881,7 +891,7 @@ export function LeafConstraintSourceContext({
 
         {hasLegacyData && !allLegacy && (
           <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-[var(--space-item)]">
               <span className="text-xs text-[var(--color-text-muted)]">
                 {withoutSource.length} sentence{withoutSource.length !== 1 ? 's' : ''} without
                 source info

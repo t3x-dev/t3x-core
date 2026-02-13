@@ -166,7 +166,7 @@ export default function SemanticLedgerPage() {
   // Show loading state when not yet initialized (covers initial mount)
   if (!initialized) {
     return (
-      <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+      <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
         <header className="flex items-center justify-between">
           <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
           <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
@@ -196,7 +196,7 @@ export default function SemanticLedgerPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+    <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
       <motion.header
         className="flex items-center justify-between"
         initial={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -10 }}
@@ -268,14 +268,14 @@ export default function SemanticLedgerPage() {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="relative mb-4">
+                <div className="relative mb-[var(--space-group)]">
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
                   <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-muted to-muted/50 ring-1 ring-border/50">
                     <Folder className="h-8 w-8 text-muted-foreground" />
                   </div>
                 </div>
                 <p className="text-lg font-semibold text-foreground">{mc('emptyProject')}</p>
-                <p className="mt-2 mb-6 max-w-sm text-sm text-muted-foreground">
+                <p className="mt-2 mb-[var(--space-section)] max-w-sm text-sm text-muted-foreground">
                   Projects organize your AI conversations and extracted knowledge.
                 </p>
                 <ShimmerButton onClick={handleCreateProject}>New Project</ShimmerButton>

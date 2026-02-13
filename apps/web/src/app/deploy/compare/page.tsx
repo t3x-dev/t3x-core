@@ -352,7 +352,7 @@ function ComparePageContent() {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-[var(--space-group)]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full justify-between">
@@ -445,7 +445,7 @@ function ComparePageContent() {
   const canCompare = controlConfig && treatmentConfig;
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+    <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -769,7 +769,8 @@ function ComparePageContent() {
                     size="sm"
                     className={cn(
                       'h-7 px-2 text-xs',
-                      runFilter === 'b' && 'bg-[var(--status-success)] hover:bg-[var(--status-success)]'
+                      runFilter === 'b' &&
+                        'bg-[var(--status-success)] hover:bg-[var(--status-success)]'
                     )}
                     onClick={() => setRunFilter('b')}
                   >
@@ -878,7 +879,11 @@ function ComparePageContent() {
                               <TableCell className="text-right font-mono text-sm">
                                 {metrics.score !== null ? (
                                   <span
-                                    className={metrics.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'}
+                                    className={
+                                      metrics.passed
+                                        ? 'text-[var(--status-success)]'
+                                        : 'text-[var(--status-error)]'
+                                    }
                                   >
                                     {formatScore(metrics.score)}
                                   </span>
@@ -922,7 +927,7 @@ function ComparePageContent() {
       {!loading && !comparing && !canCompare && (
         <Card>
           <CardContent className="flex h-64 flex-col items-center justify-center text-center">
-            <ArrowLeftRight className="mb-4 h-12 w-12 text-muted-foreground/50" />
+            <ArrowLeftRight className="mb-[var(--space-group)] h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
               Choose a control configuration (A) and a treatment configuration (B) from the

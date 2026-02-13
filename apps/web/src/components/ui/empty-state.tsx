@@ -65,7 +65,7 @@ export function EmptyState({
       className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}
     >
       {/* Icon with gradient glow */}
-      <div className="relative mb-4">
+      <div className="relative mb-[var(--space-group)]">
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
         <div
           className={cn(
@@ -79,7 +79,7 @@ export function EmptyState({
       </div>
 
       {/* Title */}
-      <h3 className="mb-2 text-lg font-semibold text-foreground">{title}</h3>
+      <h3 className="mb-[var(--space-item)] text-lg font-semibold text-foreground">{title}</h3>
 
       {/* Description */}
       <p className="mb-6 max-w-sm text-sm text-muted-foreground">{description}</p>

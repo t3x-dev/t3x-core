@@ -171,9 +171,9 @@ export function LeafSelector({
           Run from Leaf
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-[var(--space-group)] pt-4">
         {/* Project Selection */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-[var(--space-group)] sm:grid-cols-3">
           <div className="space-y-1.5">
             <span className="text-sm font-medium">Project</span>
             <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
@@ -324,7 +324,8 @@ export function LeafSelector({
         {/* Hints */}
         {!runnerHealthy && (
           <p className="text-xs text-muted-foreground">
-            Runner is not available. Start it with <code className="rounded bg-muted px-1">pnpm dev:runner</code>
+            Runner is not available. Start it with{' '}
+            <code className="rounded bg-muted px-1">pnpm dev:runner</code>
           </p>
         )}
       </CardContent>

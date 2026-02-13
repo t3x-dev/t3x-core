@@ -40,7 +40,7 @@ export function ConflictEditPanel({
   const isEmpty = !text.trim();
 
   return (
-    <div className="mt-4 space-y-2">
+    <div className="mt-4 space-y-[var(--space-item)]">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-muted-foreground">
           Write your merged version:

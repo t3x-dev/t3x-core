@@ -303,10 +303,10 @@ export default function RunDetailPage() {
 
   if (error || !run) {
     return (
-      <div className="flex h-full flex-col gap-6 p-6">
+      <div className="flex h-full flex-col gap-[var(--space-section)] p-[var(--space-page)]">
         <Card className="mx-auto max-w-md">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <XCircle className="mb-4 h-12 w-12 text-red-500" />
+            <XCircle className="mb-[var(--space-group)] h-12 w-12 text-red-500" />
             <h2 className="text-lg font-semibold">Run not found</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               The run ID "<code className="rounded bg-muted px-1">{runId}</code>" could not be
@@ -331,7 +331,7 @@ export default function RunDetailPage() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+      <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
         {/* Header */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -434,7 +434,10 @@ export default function RunDetailPage() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Score:</span>
             <span
-              className={cn('font-mono font-semibold', passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]')}
+              className={cn(
+                'font-mono font-semibold',
+                passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
+              )}
             >
               {score !== undefined ? `${Math.round(score * 100)}%` : '-'}
             </span>
@@ -473,8 +476,11 @@ export default function RunDetailPage() {
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview" className="mt-4 space-y-6">
-            <div className="grid gap-6 lg:grid-cols-2">
+          <TabsContent
+            value="overview"
+            className="mt-[var(--space-group)] space-y-[var(--space-section)]"
+          >
+            <div className="grid gap-[var(--space-section)] lg:grid-cols-2">
               {/* Dimension Scores */}
               <Card>
                 <CardHeader className="pb-2">
@@ -498,7 +504,7 @@ export default function RunDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {traceSummary ? (
-                    <div className="space-y-4">
+                    <div className="space-y-[var(--space-group)]">
                       {/* Steps */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="rounded-lg border bg-muted/30 p-3 text-center">
@@ -525,7 +531,7 @@ export default function RunDetailPage() {
 
                       {/* Token breakdown */}
                       <div className="rounded-lg border p-3">
-                        <p className="mb-2 text-sm font-medium">Token Usage</p>
+                        <p className="mb-[var(--space-item)] text-sm font-medium">Token Usage</p>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Prompt</span>

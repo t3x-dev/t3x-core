@@ -15,13 +15,15 @@ const stageConfig = {
     label: 'Draft',
     Icon: GitBranch,
     variant: 'outline' as const,
-    className: 'bg-amber-500/10 text-[var(--status-warning)] border-amber-500/20 hover:bg-amber-500/15',
+    className:
+      'bg-amber-500/10 text-[var(--status-warning)] border-amber-500/20 hover:bg-amber-500/15',
   },
   turn: {
     label: 'Conversation',
     Icon: MessageSquare,
     variant: 'secondary' as const,
-    className: 'bg-emerald-500/10 text-[var(--status-success)] border-emerald-500/20 hover:bg-emerald-500/15',
+    className:
+      'bg-emerald-500/10 text-[var(--status-success)] border-emerald-500/20 hover:bg-emerald-500/15',
   },
 } as const;
 
@@ -34,7 +36,7 @@ export function SemanticCard({ entry }: SemanticCardProps) {
   const Icon = config.Icon;
 
   return (
-    <Card className="transition-shadow hover:shadow-md">
+    <Card className="elevation-1 elevation-hover">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">

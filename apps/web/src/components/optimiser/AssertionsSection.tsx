@@ -100,12 +100,14 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
 
           {/* Prompt Improvement Suggestion */}
           {suggestionText && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-[var(--space-group)]">
               <div className="flex items-start gap-3">
                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-info)]" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-[var(--status-info)]">Prompt Improvement</span>
+                  <div className="flex items-center gap-2 mb-[var(--space-item)]">
+                    <span className="text-sm font-medium text-[var(--status-info)]">
+                      Prompt Improvement
+                    </span>
                     {suggestionConfidence !== undefined && (
                       <span className="text-xs text-muted-foreground">
                         {Math.round(suggestionConfidence * 100)}% confidence

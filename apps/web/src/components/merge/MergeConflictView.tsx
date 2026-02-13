@@ -56,7 +56,7 @@ export function MergeConflictView({
   return (
     <div
       className={cn(
-        'rounded-lg border p-4 transition-colors',
+        'rounded-lg border p-[var(--space-group)] transition-colors elevation-1',
         resolved
           ? 'border-[var(--diff-added-line)]/20 bg-[var(--diff-added-bg)]'
           : 'border-[var(--diff-modified-line)]/20 bg-[var(--diff-modified-bg)]'
@@ -72,14 +72,14 @@ export function MergeConflictView({
 
       {/* Word diff visualization */}
       {pair.wordDiff && pair.wordDiff.length > 0 && (
-        <div className="mb-4 bg-[var(--glass-bg-reading-soft)] rounded-md p-3">
+        <div className="mb-[var(--space-group)] bg-[var(--glass-bg-reading-soft)] rounded-md p-3">
           <div className="text-xs text-[var(--text-tertiary)] mb-1">Changes:</div>
           <WordDiffDisplay segments={pair.wordDiff} />
         </div>
       )}
 
       {/* Two-column layout for source and target */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--space-group)]">
         <ConflictSide
           side="source"
           sentence={pair.source}

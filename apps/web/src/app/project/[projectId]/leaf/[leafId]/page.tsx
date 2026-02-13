@@ -602,8 +602,8 @@ export default function LeafDetailPage() {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
-        <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex-1 overflow-auto p-[var(--space-page)]">
+        <div className="mx-auto max-w-4xl space-y-[var(--space-section)]">
           {/* Commit load warning */}
           {commitLoadError && (
             <div className="rounded-md border border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--status-warning)]">
@@ -722,8 +722,8 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
   };
 
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b p-4">
+    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+      <div className="flex items-center justify-between border-b p-[var(--space-group)]">
         <h2 className="font-semibold">Constraints</h2>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{constraints.length} total</span>
@@ -738,7 +738,7 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
           </Button>
         </div>
       </div>
-      <div className="p-4 space-y-4">
+      <div className="p-[var(--space-group)] space-y-[var(--space-group)]">
         {/* Add constraint form */}
         {showAddForm && (
           <div className="rounded-md border border-dashed p-3 space-y-3">
@@ -775,10 +775,10 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
         {/* Require constraints */}
         {requireConstraints.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-[var(--status-success)] mb-2">
+            <h3 className="text-sm font-medium text-[var(--status-success)] mb-[var(--space-item)]">
               Must Have ({requireConstraints.length})
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-[var(--space-item)]">
               {requireConstraints.map((c) => (
                 <ConstraintItem
                   key={c.id}
@@ -794,10 +794,10 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
         {/* Exclude constraints */}
         {excludeConstraints.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-[var(--status-error)] mb-2">
+            <h3 className="text-sm font-medium text-[var(--status-error)] mb-[var(--space-item)]">
               Must Not Have ({excludeConstraints.length})
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-[var(--space-item)]">
               {excludeConstraints.map((c) => (
                 <ConstraintItem
                   key={c.id}
@@ -861,7 +861,9 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
           <p className="text-xs text-muted-foreground mt-1 ml-6">{constraint.description}</p>
         )}
         {constraint.type === 'exclude' && constraint.reason && (
-          <p className="text-xs text-[var(--status-error)] mt-1 ml-6">Reason: {constraint.reason}</p>
+          <p className="text-xs text-[var(--status-error)] mt-1 ml-6">
+            Reason: {constraint.reason}
+          </p>
         )}
       </div>
       <Button
@@ -908,8 +910,8 @@ function UserInstructionSection({ instruction, onSave, saving }: UserInstruction
   };
 
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b p-4">
+    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+      <div className="flex items-center justify-between border-b p-[var(--space-group)]">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-muted-foreground" />
           <h2 className="font-semibold">Generation Instructions</h2>
@@ -920,7 +922,7 @@ function UserInstructionSection({ instruction, onSave, saving }: UserInstruction
           </Button>
         )}
       </div>
-      <div className="p-4">
+      <div className="p-[var(--space-group)]">
         {isEditing || !instruction ? (
           <div className="space-y-3">
             <textarea
@@ -983,8 +985,8 @@ interface OutputSectionProps {
 
 function OutputSection({ output, generatedAt }: OutputSectionProps) {
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b p-4">
+    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+      <div className="flex items-center justify-between border-b p-[var(--space-group)]">
         <h2 className="font-semibold">Output</h2>
         {generatedAt && (
           <span className="text-xs text-[var(--text-tertiary)]">
@@ -992,9 +994,9 @@ function OutputSection({ output, generatedAt }: OutputSectionProps) {
           </span>
         )}
       </div>
-      <div className="p-4">
+      <div className="p-[var(--space-group)]">
         {output ? (
-          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-4 text-sm text-[var(--text-secondary)]">
+          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-[var(--space-group)] text-sm text-[var(--text-secondary)]">
             {output}
           </div>
         ) : (
@@ -1022,11 +1024,11 @@ interface AssertionsSectionProps {
 function AssertionsSection({ assertions, constraints, selectedIds, onToggle, footer }: AssertionsSectionProps) {
   if (!assertions || assertions.length === 0) {
     return (
-      <section className="rounded-lg border bg-card">
-        <div className="border-b p-4">
+      <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+        <div className="border-b p-[var(--space-group)]">
           <h2 className="font-semibold">Validation Results</h2>
         </div>
-        <div className="p-4">
+        <div className="p-[var(--space-group)]">
           <p className="text-sm text-muted-foreground text-center py-8">
             No validation results yet. Click &quot;Validate&quot; to check constraints.
           </p>
@@ -1046,10 +1048,11 @@ function AssertionsSection({ assertions, constraints, selectedIds, onToggle, foo
     <section
       className={cn(
         'rounded-lg border bg-card transition-all duration-500',
-        allPassed && 'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-500'
+        allPassed &&
+          'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-500'
       )}
     >
-      <div className="flex items-center justify-between border-b p-4">
+      <div className="flex items-center justify-between border-b p-[var(--space-group)]">
         <h2 className="font-semibold">Validation Results</h2>
         <div className="flex items-center gap-2">
           <span
@@ -1075,7 +1078,7 @@ function AssertionsSection({ assertions, constraints, selectedIds, onToggle, foo
           </span>
         </div>
       </div>
-      <div className="p-4 space-y-2">
+      <div className="p-[var(--space-group)] space-y-[var(--space-item)]">
         {assertions.map((assertion) => {
           const constraint = constraintMap.get(assertion.constraint_id);
           return (

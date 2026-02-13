@@ -31,24 +31,33 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Shared Header */}
-      <header className="flex items-center justify-between border-b px-6 py-4">
+      <header className="flex items-center justify-between border-b px-[var(--space-page)] py-[var(--space-group)]">
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5" />
           <h1 className="text-2xl font-bold tracking-tight">Deploy &amp; Monitor</h1>
         </div>
         <div>
           {loading ? (
-            <Badge variant="outline" className="border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]">
+            <Badge
+              variant="outline"
+              className="border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]"
+            >
               <Loader2 className="h-3 w-3 animate-spin" />
               Connecting...
             </Badge>
           ) : runnerHealthy ? (
-            <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]">
+            <Badge
+              variant="outline"
+              className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+            >
               <CheckCircle className="h-3 w-3" />
               Runner Connected
             </Badge>
           ) : (
-            <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
+            <Badge
+              variant="outline"
+              className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
+            >
               <AlertCircle className="h-3 w-3" />
               Runner Offline
             </Badge>

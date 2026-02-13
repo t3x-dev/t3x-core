@@ -88,11 +88,17 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   // If completed, show pass/fail based on eval result
   if (status === 'completed' && passed !== null) {
     return passed ? (
-      <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]">
+      <Badge
+        variant="outline"
+        className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+      >
         passed
       </Badge>
     ) : (
-      <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
+      <Badge
+        variant="outline"
+        className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
+      >
         failed
       </Badge>
     );
@@ -194,7 +200,11 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
               <TableCell>{getStatusBadge(run.status, metrics.passed)}</TableCell>
               <TableCell className="text-right font-mono">
                 {metrics.score !== null ? (
-                  <span className={metrics.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'}>
+                  <span
+                    className={
+                      metrics.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
+                    }
+                  >
                     {formatScore(metrics.score)}
                   </span>
                 ) : (

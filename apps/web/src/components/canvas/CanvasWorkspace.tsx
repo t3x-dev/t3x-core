@@ -842,7 +842,7 @@ function CanvasWorkspaceInner({
                 glass.highlight
               )}
             >
-              <p className="text-lg font-semibold text-[var(--text-primary)] mb-6">
+              <p className="text-lg font-semibold text-[var(--text-primary)] mb-[var(--space-section)]">
                 Get started with T3X
               </p>
               <div className="flex flex-col gap-5">
@@ -972,10 +972,10 @@ function CanvasWorkspaceInner({
           <DialogHeader>
             <DialogTitle className="text-[var(--text-primary)]">Keyboard Shortcuts</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-[var(--space-group)] py-2">
             {/* Navigation */}
             <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
                 Navigation
               </h4>
               <div className="grid gap-2">
@@ -996,7 +996,7 @@ function CanvasWorkspaceInner({
             <div className="h-px bg-[var(--stroke-divider)]" />
             {/* Canvas */}
             <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
                 Canvas
               </h4>
               <div className="grid gap-2">
@@ -1019,7 +1019,7 @@ function CanvasWorkspaceInner({
             <div className="h-px bg-[var(--stroke-divider)]" />
             {/* Actions */}
             <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
                 Actions
               </h4>
               <div className="grid gap-2">

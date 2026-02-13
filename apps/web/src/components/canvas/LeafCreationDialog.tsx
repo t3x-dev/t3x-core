@@ -92,9 +92,9 @@ export function LeafCreationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-[var(--space-group)] py-4">
           {/* Title input */}
-          <div className="space-y-2">
+          <div className="space-y-[var(--space-item)]">
             <Label htmlFor="leaf-title">Title (optional)</Label>
             <Input
               id="leaf-title"
@@ -106,48 +106,48 @@ export function LeafCreationDialog({
           </div>
 
           {/* Leaf type selection */}
-          <div className="space-y-2">
+          <div className="space-y-[var(--space-item)]">
             <Label>Leaf Type</Label>
             <div className="grid grid-cols-2 gap-2">
-              {LEAF_TYPES.filter(
-                (lt) => isRunnerEnabled || lt.type !== 'deploy_agent'
-              ).map((leafType) => {
-                const Icon = leafType.icon;
-                const isSelected = selectedType === leafType.type;
-                return (
-                  <button
-                    key={leafType.type}
-                    type="button"
-                    onClick={() => setSelectedType(leafType.type)}
-                    disabled={isCreating}
-                    className={cn(
-                      'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',
-                      isSelected
-                        ? 'border-[var(--accent-conversation)] bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]'
-                        : 'border-[var(--color-border)] bg-[var(--color-bg-white)] hover:border-[var(--color-border)] hover:bg-[var(--color-bg-subtle)]',
-                      isCreating && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    <Icon
-                      size={16}
+              {LEAF_TYPES.filter((lt) => isRunnerEnabled || lt.type !== 'deploy_agent').map(
+                (leafType) => {
+                  const Icon = leafType.icon;
+                  const isSelected = selectedType === leafType.type;
+                  return (
+                    <button
+                      key={leafType.type}
+                      type="button"
+                      onClick={() => setSelectedType(leafType.type)}
+                      disabled={isCreating}
                       className={cn(
-                        'shrink-0',
+                        'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',
                         isSelected
-                          ? 'text-[var(--accent-conversation)]'
-                          : 'text-[var(--color-text-muted)]'
+                          ? 'border-[var(--accent-conversation)] bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]'
+                          : 'border-[var(--color-border)] bg-[var(--color-bg-white)] hover:border-[var(--color-border)] hover:bg-[var(--color-bg-subtle)]',
+                        isCreating && 'opacity-50 cursor-not-allowed'
                       )}
-                    />
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm truncate">{leafType.label}</div>
-                    </div>
-                  </button>
-                );
-              })}
+                    >
+                      <Icon
+                        size={16}
+                        className={cn(
+                          'shrink-0',
+                          isSelected
+                            ? 'text-[var(--accent-conversation)]'
+                            : 'text-[var(--color-text-muted)]'
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{leafType.label}</div>
+                      </div>
+                    </button>
+                  );
+                }
+              )}
             </div>
           </div>
 
           {/* Commit hash display (read-only) */}
-          <div className="space-y-2">
+          <div className="space-y-[var(--space-item)]">
             <Label>From Commit</Label>
             <div className="p-2 bg-[var(--color-bg-subtle)] rounded-md border border-[var(--color-border)] overflow-hidden">
               <code className="text-xs font-mono text-[var(--color-text-secondary)] block truncate">

@@ -42,7 +42,7 @@ export function DeletionConfirmDialog() {
         </DialogHeader>
 
         <DialogDescription asChild>
-          <div className="space-y-2">
+          <div className="space-y-[var(--space-item)]">
             {message.split('\n').map((line, idx) => (
               <p key={idx} className="text-sm text-muted-foreground">
                 {line}

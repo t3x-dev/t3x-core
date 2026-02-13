@@ -164,13 +164,13 @@ export default function ConstraintsPanel({
 
   return (
     <div className="mt-5 border-t border-[var(--stroke-divider)] pt-5">
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <strong className="mb-1 block text-base text-[var(--text-primary)]">Constraints</strong>
         <span className="text-sm text-[var(--text-tertiary)]">From Conversation</span>
       </div>
 
       {/* Clauses Section */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <Button
           variant="ghost"
           className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
@@ -187,7 +187,7 @@ export default function ConstraintsPanel({
           </Badge>
         </Button>
         {expandedSections.clauses && (
-          <div className="pt-3 space-y-2">
+          <div className="pt-3 space-y-[var(--space-item)]">
             {constraints.clauses
               .filter((c) => c.status === 'keep')
               .map((clause) => (
@@ -209,7 +209,7 @@ export default function ConstraintsPanel({
       </div>
 
       {/* Must-Have Section */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <Button
           variant="ghost"
           className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
@@ -228,7 +228,7 @@ export default function ConstraintsPanel({
         </Button>
         {expandedSections.mustHave && (
           <div className="pt-3">
-            <div className="mb-2.5 flex flex-wrap gap-2">
+            <div className="mb-[var(--space-item)] flex flex-wrap gap-2">
               {constraints.must_have.map((kw) => (
                 <KeywordTag
                   key={kw}
@@ -279,7 +279,7 @@ export default function ConstraintsPanel({
       </div>
 
       {/* Mustn't-Have Section */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <Button
           variant="ghost"
           className="flex w-full items-center justify-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-transparent px-3 py-2.5 text-sm text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
@@ -298,7 +298,7 @@ export default function ConstraintsPanel({
         </Button>
         {expandedSections.mustntHave && (
           <div className="pt-3">
-            <div className="mb-2.5 flex flex-wrap gap-2">
+            <div className="mb-[var(--space-item)] flex flex-wrap gap-2">
               {constraints.mustnt_have.map((kw) => (
                 <KeywordTag
                   key={kw}

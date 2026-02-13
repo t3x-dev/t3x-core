@@ -36,7 +36,7 @@ export function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between p-4 text-left"
+        className="flex w-full items-center justify-between p-[var(--space-group)] text-left"
       >
         <span className={typo.subTitle}>{title}</span>
         <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export function CollapsibleSection({
             transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t p-4">{children}</div>
+            <div className="border-t p-[var(--space-group)]">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>

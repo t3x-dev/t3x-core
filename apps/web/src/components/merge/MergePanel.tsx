@@ -82,13 +82,13 @@ export function MergePanel() {
   // A-11: Loading skeleton during prepare phase
   if (preparing) {
     return (
-      <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background shadow-lg border-l overflow-y-auto p-4 sm:p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background elevation-3 border-l overflow-y-auto p-[var(--space-group)] sm:p-[var(--space-page)]">
+        <div className="flex justify-between items-center mb-[var(--space-group)]">
           <h2 className="text-xl font-bold">Merge Review</h2>
         </div>
 
         {/* B-12: Multi-step progress indicator */}
-        <div className="mb-6 p-3 bg-muted/50 rounded-lg">
+        <div className="mb-[var(--space-section)] p-3 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="text-sm font-medium">{preparePhases[prepareStep].label}</span>
@@ -143,9 +143,9 @@ export function MergePanel() {
   };
 
   return (
-    <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background shadow-lg border-l overflow-y-auto p-4 sm:p-6">
+    <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background elevation-3 border-l overflow-y-auto p-[var(--space-group)] sm:p-[var(--space-page)]">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-[var(--space-group)]">
         <h2 className="text-xl font-bold">Merge Review</h2>
         <button
           onClick={cancelMerge}
@@ -159,7 +159,7 @@ export function MergePanel() {
 
       {/* Progress summary */}
       {counts && (
-        <div className="mb-6 p-3 bg-muted/50 rounded-lg text-sm">
+        <div className="mb-[var(--space-section)] p-3 bg-muted/50 rounded-lg text-sm">
           <div className="flex justify-between mb-1">
             <span>Identical (auto-kept):</span>
             <span className="font-medium text-[var(--diff-added-accent)]">{counts.identical}</span>
@@ -187,14 +187,14 @@ export function MergePanel() {
       )}
 
       {/* Identical section */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <MergeIdenticalSection sentences={prepared.identical} />
       </div>
 
       {/* Similar pairs */}
       {prepared.similarPairs.length > 0 && (
-        <div className="mb-4">
-          <h3 className="font-medium mb-2 text-[var(--diff-modified-accent)]">
+        <div className="mb-[var(--space-group)]">
+          <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-modified-accent)]">
             Similar Sentences (Pick One)
           </h3>
           <div className="space-y-3">
@@ -210,7 +210,7 @@ export function MergePanel() {
       )}
 
       {/* Only in source */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <MergeCandidateList
           candidates={prepared.onlyInSource}
           side="source"
@@ -219,7 +219,7 @@ export function MergePanel() {
       </div>
 
       {/* Only in target */}
-      <div className="mb-4">
+      <div className="mb-[var(--space-group)]">
         <MergeCandidateList
           candidates={prepared.onlyInTarget}
           side="target"
@@ -228,8 +228,8 @@ export function MergePanel() {
       </div>
 
       {/* Execute section */}
-      <div className="mt-6 pt-6 border-t sticky bottom-0 bg-background">
-        <label htmlFor="merge-message" className="block mb-2 font-medium">
+      <div className="mt-[var(--space-section)] pt-[var(--space-section)] border-t sticky bottom-0 bg-background">
+        <label htmlFor="merge-message" className="block mb-[var(--space-item)] font-medium">
           Merge Message
         </label>
         <textarea

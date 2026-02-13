@@ -426,8 +426,8 @@ export function UnifiedDiffView({
   return (
     <div className="max-w-4xl mx-auto">
       {/* Stats Header with View Toggle */}
-      <div className="flex items-center justify-between mb-4 px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between mb-[var(--space-group)] px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
+        <div className="flex items-center gap-[var(--space-group)]">
           <span className="text-[var(--text-tertiary)]">{identical.length} identical</span>
           {similarPairs.length > 0 && (
             <span
@@ -476,7 +476,7 @@ export function UnifiedDiffView({
 
       {/* Grouped View (default) */}
       {viewMode === 'grouped' && (
-        <div className="space-y-6">
+        <div className="space-y-[var(--space-section)]">
           {/* Identical Sentences */}
           {identical.length > 0 && (
             <MergeDiffSection
@@ -510,7 +510,7 @@ export function UnifiedDiffView({
               subtitle={`${unresolvedCount} of ${similarPairs.length} need resolution`}
               variant={unresolvedCount > 0 ? 'warning' : 'success'}
             >
-              <div className="space-y-4">
+              <div className="space-y-[var(--space-group)]">
                 {similarPairs.map((pair, idx) => (
                   <MergeConflictView
                     key={`conflict-${pair.source.id}-${pair.target.id}`}
@@ -584,7 +584,7 @@ export function UnifiedDiffView({
 
       {/* Positional View */}
       {viewMode === 'positional' && (
-        <div className="space-y-2 border border-[var(--stroke-divider)] rounded-lg overflow-hidden">
+        <div className="space-y-[var(--space-item)] border border-[var(--stroke-divider)] rounded-lg overflow-hidden">
           {loadingCommit ? (
             <div className="p-4 text-center text-[var(--text-tertiary)]">
               Loading document structure...
