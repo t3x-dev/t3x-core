@@ -206,7 +206,7 @@ const AnyLeafTypeEnum = z.enum(ALL_LEAF_TYPES);
 // POST /v1/leaves
 export const CreateLeafRequest = z.object({
   commit_hash: z.string(),
-  type: LeafTypeEnum,
+  type: AnyLeafTypeEnum,
   title: z.string().optional(),
   constraints: z.array(ConstraintSchema).default([]),
   config: z

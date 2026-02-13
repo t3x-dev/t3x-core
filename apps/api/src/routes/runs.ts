@@ -7,6 +7,7 @@
  */
 
 import {
+  createLeafHistory,
   findLeafById,
   findProjectById,
   getConfigurationStats,
@@ -15,6 +16,7 @@ import {
   getRunFilterOptions,
   insertRun,
   listRuns,
+  updateLeafAssertions,
   updateRun,
 } from '@t3x/storage';
 import { randomUUID } from 'crypto';
@@ -301,6 +303,45 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
     console.log(
       `[runs] Updated run ${data.run_id} to ${data.status}, trace_summary: ${!!data.trace_summary}, full_trace: ${!!data.full_trace}, metadata: ${!!data.metadata}`
     );
+
+    // Phase 3: Write back assertions to Leaf + create history snapshot
+    const run = await getRun(db, data.run_id);
+    const leafId = run?.leafId as string | null;
+
+    if (leafId && data.assertions && data.assertions.length > 0) {
+      try {
+        // Defensive mapping: ensure each assertion has the required fields
+        const mappedAssertions = data.assertions.map((a: unknown, idx: number) => {
+          const raw = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
+          return {
+            id: typeof raw.id === 'string' ? raw.id : '',
+            constraint_id: typeof raw.constraint_id === 'string' ? raw.constraint_id : `unknown_${idx}`,
+            passed: typeof raw.passed === 'boolean' ? raw.passed : false,
+            details: typeof raw.details === 'string' ? raw.details : '',
+            lesson: typeof raw.lesson === 'string' ? raw.lesson : undefined,
+          };
+        });
+
+        await updateLeafAssertions(db, leafId, mappedAssertions);
+
+        // Create leaf history snapshot
+        const leaf = await findLeafById(db, leafId);
+        if (leaf?.output) {
+          await createLeafHistory(db, {
+            leaf_id: leafId,
+            output: leaf.output,
+            config: leaf.config ?? {},
+            model: (leaf.config as Record<string, unknown>)?.model as string ?? 'unknown',
+            created_by: 'runner-ingest',
+          });
+        }
+
+        console.log(`[runs] Wrote back ${mappedAssertions.length} assertions to leaf ${leafId}`);
+      } catch (err) {
+        // Non-fatal: log warning but don't fail the ingest
+        console.warn(`[runs] Failed to write back assertions to leaf ${leafId}:`, err);
+      }
+    }
 
     return c.json({ success: true, data: { ok: true } });
   } catch (error) {

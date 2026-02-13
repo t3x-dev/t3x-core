@@ -9,6 +9,19 @@
  */
 
 import { createGoogleAIEmbeddingProvider, type EmbeddingProvider } from '@t3x/core';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
+
+function getProxyFetch() {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (proxyUrl) {
+    const agent = new ProxyAgent(proxyUrl);
+    return (url: string | URL | Request, options?: RequestInit) =>
+      undiciFetch(url as string, { ...options, dispatcher: agent } as Parameters<
+        typeof undiciFetch
+      >[1]) as Promise<Response>;
+  }
+  return undefined;
+}
 
 // Singleton embedder instance (lazy initialization)
 let embedderInstance: EmbeddingProvider | null = null;
@@ -43,7 +56,11 @@ export function getEmbedder(): EmbeddingProvider | null {
   }
 
   try {
-    embedderInstance = createGoogleAIEmbeddingProvider({ apiKey });
+    const proxyFetch = getProxyFetch();
+    embedderInstance = createGoogleAIEmbeddingProvider({
+      apiKey,
+      ...(proxyFetch && { fetch: proxyFetch }),
+    });
     initialized = true;
     console.log(`[embedder] Initialized Google AI embedder (${embedderInstance.id})`);
     return embedderInstance;
