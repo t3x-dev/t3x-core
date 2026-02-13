@@ -38,17 +38,17 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
         </div>
         <div>
           {loading ? (
-            <Badge variant="outline" className="border-gray-500/30 bg-gray-500/10 text-gray-600">
+            <Badge variant="outline" className="border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]">
               <Loader2 className="h-3 w-3 animate-spin" />
               Connecting...
             </Badge>
           ) : runnerHealthy ? (
-            <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600">
+            <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]">
               <CheckCircle className="h-3 w-3" />
               Runner Connected
             </Badge>
           ) : (
-            <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-600">
+            <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
               <AlertCircle className="h-3 w-3" />
               Runner Offline
             </Badge>

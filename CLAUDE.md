@@ -483,20 +483,21 @@ At the start of a new conversation, read relevant documentation based on task ty
 
 | Task Type | Documentation to Read |
 |-----------|----------------------|
-| **Product & Strategy** | `docs/product-strategy.md`, `docs/product-roadmap.md` |
+| **Product & Strategy** | `docs/product-strategy.md`, `docs/product-roadmap.md`, `docs/product-assessment.md` |
 | **Product Overview** | `docs/product-overview/01-product-and-user-layer.md`, `docs/product-overview/02-architecture-and-design-layer.md`, `docs/product-overview/03-engineering-and-implementation-layer.md` |
-| **Team Collaboration** | `docs/collaboration-protocol.md` |
-| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md` |
-| API / Backend Development | `apps/api/README.md`, `apps/api/src/schemas/v4-contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md` |
+| **Team Collaboration** | `docs/collaboration-protocol.md`, `docs/phase0-protocol.md` |
+| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md`, `docs/frontend-ia-map.md` |
+| API / Backend Development | `apps/api/src/schemas/v4-contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/openapi-summary.md` |
 | V4 Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
 | Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
 | Diff / Merge Algorithms | `docs/specification/words-based-diff-merge-architecture.md` |
-| Core Algorithms | `packages/core/README.md`, `packages/core/src/types/` |
-| Storage Layer | `packages/storage/README.md`, `packages/storage/src/schema-v4.ts` |
-| Runner/Eval | `apps/runner/README.md` |
-| Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md` |
+| Core Algorithms | `packages/core/src/types/`, `docs/specification/ring-schema.md` |
+| Storage Layer | `packages/storage/src/schema-v4.ts`, `packages/storage/src/schema.ts` |
+| Runner/Eval | `apps/runner/docs/README.md`, `apps/runner/docs/ARCHITECTURE.md`, `apps/runner/docs/n8n-workflow-setup.md` |
+| Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md`, `docs/testing/e2e-test-plan.md` |
 | Docker / Deployment | `docs/docker.md` |
-| Go-to-Market / Growth | `docs/go-to-market/README.md`, `docs/go-to-market/01-market-assessment.md`, `docs/go-to-market/02-beachhead-scenarios.md`, `docs/go-to-market/03-buyer-path-analysis.md` |
+| Demo / Pitch | `docs/demo-script-investor-pitch-v2.md`, `docs/demo/demo-preparation.md` |
+| Go-to-Market / Growth | `docs/go-to-market/README.md` (index for all 8 GTM docs) |
 | Competitive Analysis | `docs/competitive-analysis.md`, `docs/rfcs/langfuse-integration.md` |
 
 ## Development Workflow

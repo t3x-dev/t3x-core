@@ -91,7 +91,7 @@ function CommitDetailModal({
             {isDeployed ? (
               <Badge
                 variant="outline"
-                className="gap-1.5 border-green-500/30 bg-green-500/10 text-green-600"
+                className="gap-1.5 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
               >
                 <Check className="h-3.5 w-3.5" />
                 Currently Deployed
@@ -111,9 +111,9 @@ function CommitDetailModal({
 
 // Status badge colors for deployments
 const deploymentStatusColors = {
-  succeeded: 'border-green-500/30 bg-green-500/10 text-green-600',
+  succeeded: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
   failed: 'border-destructive/30 bg-destructive/10 text-destructive',
-  pending: 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+  pending: 'border-amber-500/30 bg-amber-500/10 text-[var(--status-warning)]',
 } as const;
 
 export default function AgentDemoOptimiserPage() {
@@ -165,7 +165,7 @@ export default function AgentDemoOptimiserPage() {
           <span>
             Head: v{sandboxHeadVersion}-sandbox ({sandboxHeadCommitHash})
           </span>
-          <span className="flex items-center gap-2 font-medium text-green-600">
+          <span className="flex items-center gap-2 font-medium text-[var(--status-success)]">
             <Rocket className="h-3.5 w-3.5" />
             Deployed: v{deployedVersion} ({deployedCommitHash})
           </span>
@@ -285,7 +285,7 @@ export default function AgentDemoOptimiserPage() {
                     <GitCommit
                       className={cn(
                         'mt-0.5 h-4 w-4 shrink-0',
-                        isDeployed ? 'text-green-600' : 'text-muted-foreground'
+                        isDeployed ? 'text-[var(--status-success)]' : 'text-muted-foreground'
                       )}
                     />
                     <div className="min-w-0 flex-1">
@@ -295,7 +295,7 @@ export default function AgentDemoOptimiserPage() {
                         {isDeployed && (
                           <Badge
                             variant="outline"
-                            className="border-green-500/30 bg-green-500/10 text-green-600 text-[10px]"
+                            className="border-green-500/30 bg-green-500/10 text-[var(--status-success)] text-[10px]"
                           >
                             deployed
                           </Badge>

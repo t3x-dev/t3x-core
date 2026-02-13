@@ -337,7 +337,7 @@ function ComparePageContent() {
       : null;
 
     return (
-      <Card className={cn(showWinner && 'ring-2 ring-green-500/50')}>
+      <Card className={cn(showWinner && 'ring-2 ring-[var(--status-success)]/50')}>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Badge variant="outline" className={badgeColor}>
@@ -345,7 +345,7 @@ function ComparePageContent() {
             </Badge>
             {label}
             {showWinner && (
-              <Badge className="ml-auto bg-green-500/10 text-green-600 border-green-500/30">
+              <Badge className="ml-auto bg-green-500/10 text-[var(--status-success)] border-green-500/30">
                 <Trophy className="h-3 w-3 mr-1" />
                 Winner
               </Badge>
@@ -481,13 +481,13 @@ function ComparePageContent() {
             slot="a"
             selectedConfig={controlConfig}
             label="Control (Baseline)"
-            badgeColor="bg-blue-500/10 text-blue-600 border-blue-500/30"
+            badgeColor="bg-blue-500/10 text-[var(--status-info)] border-blue-500/30"
           />
           <ConfigSelector
             slot="b"
             selectedConfig={treatmentConfig}
             label="Treatment (Variant)"
-            badgeColor="bg-green-500/10 text-green-600 border-green-500/30"
+            badgeColor="bg-green-500/10 text-[var(--status-success)] border-green-500/30"
           />
         </div>
       )}
@@ -503,7 +503,7 @@ function ComparePageContent() {
       {/* Error State */}
       {error && (
         <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="py-6 text-center text-red-600">{error}</CardContent>
+          <CardContent className="py-6 text-center text-[var(--status-error)]">{error}</CardContent>
         </Card>
       )}
 
@@ -516,7 +516,7 @@ function ComparePageContent() {
               <CardTitle className="flex items-center justify-between text-base">
                 <span>Statistical Comparison</span>
                 {isWinner && (
-                  <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
+                  <Badge className="bg-green-500/10 text-[var(--status-success)] border-green-500/30">
                     <Trophy className="h-3 w-3 mr-1" />
                     Treatment (B) wins
                   </Badge>
@@ -594,7 +594,7 @@ function ComparePageContent() {
                           </td>
                           <td className="py-3 text-center">
                             {comparisonResult.comparison.pass_rate.isSignificant ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                              <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
                             ) : (
                               <span className="text-xs text-muted-foreground">─</span>
                             )}
@@ -649,7 +649,7 @@ function ComparePageContent() {
                           </td>
                           <td className="py-3 text-center">
                             {comparisonResult.comparison.avg_score.isSignificant ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                              <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
                             ) : (
                               <span className="text-xs text-muted-foreground">─</span>
                             )}
@@ -672,9 +672,9 @@ function ComparePageContent() {
                           className={cn(
                             'text-xs font-mono',
                             comparisonResult.comparison.avg_latency.delta < 0
-                              ? 'text-green-600'
+                              ? 'text-[var(--status-success)]'
                               : comparisonResult.comparison.avg_latency.delta > 0
-                                ? 'text-red-600'
+                                ? 'text-[var(--status-error)]'
                                 : 'text-muted-foreground'
                           )}
                         >
@@ -701,9 +701,9 @@ function ComparePageContent() {
                           className={cn(
                             'text-xs font-mono',
                             comparisonResult.comparison.avg_tokens.delta < 0
-                              ? 'text-green-600'
+                              ? 'text-[var(--status-success)]'
                               : comparisonResult.comparison.avg_tokens.delta > 0
-                                ? 'text-red-600'
+                                ? 'text-[var(--status-error)]'
                                 : 'text-muted-foreground'
                           )}
                         >
@@ -722,7 +722,7 @@ function ComparePageContent() {
               {/* Sample size warning */}
               {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
                 !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
-                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-[var(--status-warning)]">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
                     Sample size may be insufficient for reliable significance detection
@@ -758,7 +758,7 @@ function ComparePageContent() {
                     size="sm"
                     className={cn(
                       'h-7 px-2 text-xs',
-                      runFilter === 'a' && 'bg-blue-600 hover:bg-blue-700'
+                      runFilter === 'a' && 'bg-[var(--status-info)] hover:bg-[var(--status-info)]'
                     )}
                     onClick={() => setRunFilter('a')}
                   >
@@ -769,7 +769,7 @@ function ComparePageContent() {
                     size="sm"
                     className={cn(
                       'h-7 px-2 text-xs',
-                      runFilter === 'b' && 'bg-green-600 hover:bg-green-700'
+                      runFilter === 'b' && 'bg-[var(--status-success)] hover:bg-[var(--status-success)]'
                     )}
                     onClick={() => setRunFilter('b')}
                   >
@@ -847,8 +847,8 @@ function ComparePageContent() {
                                   className={cn(
                                     'text-xs',
                                     run.group === 'a'
-                                      ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
-                                      : 'bg-green-500/10 text-green-600 border-green-500/30'
+                                      ? 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30'
+                                      : 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
                                   )}
                                 >
                                   {run.group.toUpperCase()}
@@ -863,8 +863,8 @@ function ComparePageContent() {
                                     variant="outline"
                                     className={cn(
                                       metrics.passed
-                                        ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                                        : 'border-red-500/30 bg-red-500/10 text-red-600'
+                                        ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
+                                        : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
                                     )}
                                   >
                                     {metrics.passed ? 'passed' : 'failed'}
@@ -878,7 +878,7 @@ function ComparePageContent() {
                               <TableCell className="text-right font-mono text-sm">
                                 {metrics.score !== null ? (
                                   <span
-                                    className={metrics.passed ? 'text-green-600' : 'text-red-600'}
+                                    className={metrics.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'}
                                   >
                                     {formatScore(metrics.score)}
                                   </span>

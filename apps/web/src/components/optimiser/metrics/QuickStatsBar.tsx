@@ -108,7 +108,7 @@ export function QuickStatsBar({ runs }: QuickStatsBarProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        icon={<Activity className="h-5 w-5 text-blue-500" />}
+        icon={<Activity className="h-5 w-5 text-[var(--status-info)]" />}
         label="Total Runs"
         value={totalRuns}
         subValue={
@@ -116,7 +116,7 @@ export function QuickStatsBar({ runs }: QuickStatsBarProps) {
         }
       />
       <StatCard
-        icon={<CheckCircle className="h-5 w-5 text-green-500" />}
+        icon={<CheckCircle className="h-5 w-5 text-[var(--status-success)]" />}
         label="Passed"
         value={passedRuns}
         subValue={
@@ -126,13 +126,13 @@ export function QuickStatsBar({ runs }: QuickStatsBarProps) {
         }
       />
       <StatCard
-        icon={<Percent className="h-5 w-5 text-purple-500" />}
+        icon={<Percent className="h-5 w-5 text-[var(--accent-conversation)]" />}
         label="Avg Score"
         value={formatScore(avgScore)}
         subValue={scoresWithValues.length > 0 ? `from ${scoresWithValues.length} runs` : undefined}
       />
       <StatCard
-        icon={<Clock className="h-5 w-5 text-orange-500" />}
+        icon={<Clock className="h-5 w-5 text-[var(--accent-pending)]" />}
         label="Avg Latency"
         value={formatLatency(avgLatencyMs)}
         subValue={

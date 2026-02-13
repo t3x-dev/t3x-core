@@ -233,21 +233,21 @@ function LeafOutputWithHighlights({
     // No matches found — show output as plain text + sentence list
     return (
       <div className="space-y-3">
-        <div className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+        <div className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
           {output}
         </div>
-        <div className="border-t border-gray-100 dark:border-gray-800 pt-2">
-          <p className="text-xs text-gray-400 mb-1">Committed sentences:</p>
+        <div className="border-t border-[var(--color-border-light)] pt-2">
+          <p className="text-xs text-[var(--color-text-muted)] mb-1">Committed sentences:</p>
           <ul className="space-y-1">
             {sentences.map((sg) => (
               <li
                 key={sg.sentence.id}
-                className="flex items-start gap-2 p-1.5 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
+                className="flex items-start gap-2 p-1.5 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
               >
-                <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1 py-0.5 rounded shrink-0">
+                <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1 py-0.5 rounded shrink-0">
                   {sg.sentence.id}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 break-words">
+                <span className="text-xs text-[var(--color-text-secondary)] break-words">
                   {sg.sentence.text}
                 </span>
               </li>
@@ -273,12 +273,12 @@ function LeafOutputWithHighlights({
   }
 
   return (
-    <div className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+    <div className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
       {segments.map((seg) =>
         seg.highlighted ? (
           <mark
             key={`h-${seg.offset}`}
-            className="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100 rounded-sm px-0.5"
+            className="bg-[var(--status-success-muted)] text-[var(--color-text)] rounded-sm px-0.5"
           >
             {seg.text}
           </mark>
@@ -594,12 +594,12 @@ export function CommitSourceContext({
   // Handle empty sentences
   if (sentences.length === 0) {
     return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
-          <MessageSquare size={14} className="text-gray-400" />
-          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
+          <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
         </div>
-        <p className="text-center py-4 text-gray-400 text-sm">No sentences</p>
+        <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No sentences</p>
       </div>
     );
   }
@@ -607,13 +607,13 @@ export function CommitSourceContext({
   // All legacy data - show simple sentence list
   if (allLegacy) {
     return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <MessageSquare size={14} className="text-gray-400" />
-            <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Sentences</h3>
+            <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
+            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Sentences</h3>
           </div>
-          <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs rounded">
+          <span className="px-2 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-xs rounded">
             Legacy format
           </span>
         </div>
@@ -621,12 +621,12 @@ export function CommitSourceContext({
           {sentences.map((s) => (
             <li
               key={s.id}
-              className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
+              className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
             >
-              <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
               </span>
-              <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+              <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                 {s.text}
               </span>
             </li>
@@ -639,10 +639,10 @@ export function CommitSourceContext({
   // Loading state
   if (isLoading) {
     return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
-          <MessageSquare size={14} className="text-gray-400" />
-          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
+          <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
         </div>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -665,13 +665,13 @@ export function CommitSourceContext({
   // Fallback to sentence list if no context could be loaded
   if (!hasAnyContext) {
     return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <XCircle size={14} className="text-gray-400" />
-            <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Sentences</h3>
+            <XCircle size={14} className="text-[var(--color-text-muted)]" />
+            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Sentences</h3>
           </div>
-          <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-xs rounded">
+          <span className="px-2 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-xs rounded">
             Source unavailable
           </span>
         </div>
@@ -679,12 +679,12 @@ export function CommitSourceContext({
           {sentences.map((s) => (
             <li
               key={s.id}
-              className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
+              className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
             >
-              <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
               </span>
-              <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+              <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                 {s.text}
               </span>
             </li>
@@ -717,15 +717,15 @@ export function CommitSourceContext({
       : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote}`;
 
   return (
-    <div className="p-4 bg-gray-50 dark:bg-gray-950/30 rounded-lg border border-gray-200 dark:border-gray-700">
+    <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <MessageSquare size={14} className="text-green-600 dark:text-green-400" />
-          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Source Context</h3>
+          <MessageSquare size={14} className="text-[var(--status-success)]" />
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
           {hasIntegrityIssues && (
             <span
-              className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[0.65rem] rounded flex items-center gap-1"
+              className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
               title="Some source content may have changed since this commit"
             >
               <AlertTriangle size={10} />
@@ -739,21 +739,21 @@ export function CommitSourceContext({
               <button
                 type="button"
                 onClick={expandAll}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
               >
                 Expand all
               </button>
-              <span className="text-gray-300 dark:text-gray-700">|</span>
+              <span className="text-[var(--color-border)]">|</span>
               <button
                 type="button"
                 onClick={collapseAll}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
               >
                 Collapse
               </button>
             </div>
           )}
-          <span className="text-xs text-gray-400">{summaryText}</span>
+          <span className="text-xs text-[var(--color-text-muted)]">{summaryText}</span>
         </div>
       </div>
 
@@ -761,36 +761,36 @@ export function CommitSourceContext({
       <div className="space-y-2">
         {/* Inherited sentences section */}
         {hasInheritedSentences && (
-          <div className="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
+          <div className="rounded-lg border border-[var(--status-info)]/20 overflow-hidden">
             <button
               type="button"
               onClick={() => toggleSection('inherited')}
-              className="w-full flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-left"
+              className="w-full flex items-center gap-2 p-2 bg-[var(--status-info-muted)] hover:bg-[var(--status-info-muted)] transition-colors text-left"
             >
               {expandedTurns.has('inherited') || compact ? (
-                <ChevronDown size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
+                <ChevronDown size={14} className="text-[var(--status-info)] shrink-0" />
               ) : (
-                <ChevronRight size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
+                <ChevronRight size={14} className="text-[var(--status-info)] shrink-0" />
               )}
-              <GitFork size={14} className="text-blue-500 dark:text-blue-400 shrink-0" />
-              <span className="flex-1 text-sm font-medium text-blue-700 dark:text-blue-300">
+              <GitFork size={14} className="text-[var(--status-info)] shrink-0" />
+              <span className="flex-1 text-sm font-medium text-[var(--status-info)]">
                 Inherited from Parent
               </span>
-              <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[0.65rem] rounded">
+              <span className="px-1.5 py-0.5 bg-[var(--status-info-muted)] text-[var(--status-info)] text-[0.65rem] rounded">
                 {inheritedSentences.length} sentence{inheritedSentences.length !== 1 ? 's' : ''}
               </span>
             </button>
 
             {(expandedTurns.has('inherited') || compact) && (
-              <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20">
+              <div className="p-3 bg-[var(--status-info-muted)]">
                 {/* Group by source commit */}
                 {Array.from(inheritedByCommit.entries()).map(([commitHash, groupSentences]) => (
                   <div key={commitHash} className="mb-3 last:mb-0">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[0.65rem] font-mono text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                      <span className="text-[0.65rem] font-mono text-[var(--status-info)] bg-[var(--status-info-muted)] px-1.5 py-0.5 rounded">
                         {commitHash.slice(0, 16)}...
                       </span>
-                      <span className="text-xs text-blue-500 dark:text-blue-400">
+                      <span className="text-xs text-[var(--status-info)]">
                         {groupSentences.length} sentence{groupSentences.length !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -798,12 +798,12 @@ export function CommitSourceContext({
                       {groupSentences.map((sentence) => (
                         <li
                           key={sentence.id}
-                          className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-blue-100 dark:border-blue-800"
+                          className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-info)]/20"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                             {sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                             {sentence.text}
                           </span>
                         </li>
@@ -827,40 +827,40 @@ export function CommitSourceContext({
             return (
               <div
                 key={turnHash}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                className="rounded-lg border border-[var(--color-border)] overflow-hidden"
               >
                 {/* Collapsible header */}
                 <button
                   type="button"
                   onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
                 >
                   {isExpanded ? (
-                    <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   ) : (
-                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
                     Turn {idx + 1}
                   </span>
-                  <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
+                  <span className="px-1.5 py-0.5 bg-[var(--color-border)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">
                     Source unavailable
                   </span>
                 </button>
 
                 {/* Expanded content - show sentences */}
                 {isExpanded && (
-                  <div className="p-3 bg-white dark:bg-gray-900">
+                  <div className="p-3 bg-[var(--color-bg-white)]">
                     <ul className="space-y-2">
                       {sentencesForTurn.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
+                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -911,27 +911,27 @@ export function CommitSourceContext({
           return (
             <div
               key={turnHash}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="rounded-lg border border-[var(--color-border)] overflow-hidden"
             >
               {/* Collapsible header (not shown in compact mode for single turn) */}
               {!compact && (
                 <button
                   type="button"
                   onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
                 >
                   {isExpanded ? (
-                    <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   ) : (
-                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   )}
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
                     {data.context?.conversation_title || `Turn ${idx + 1}`}
-                    <span className="ml-2 text-xs text-gray-400">({targetTurn.role})</span>
+                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">({targetTurn.role})</span>
                   </span>
                   {turnHasIntegrityIssues && (
                     <span
-                      className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[0.65rem] rounded flex items-center gap-1"
+                      className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
                       title="Source content may have changed"
                     >
                       <AlertTriangle size={10} />
@@ -939,11 +939,11 @@ export function CommitSourceContext({
                     </span>
                   )}
                   {isLongTurn && (
-                    <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[0.65rem] rounded">
+                    <span className="px-1.5 py-0.5 bg-[var(--status-info-muted)] text-[var(--status-info)] text-[0.65rem] rounded">
                       Long turn
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-[var(--color-text-muted)]">
                     {data.sentences.length} sentence{data.sentences.length !== 1 ? 's' : ''}
                   </span>
                 </button>
@@ -951,17 +951,17 @@ export function CommitSourceContext({
 
               {/* Expanded content */}
               {isExpanded && (
-                <div className="p-2 bg-white dark:bg-gray-900">
+                <div className="p-2 bg-[var(--color-bg-white)]">
                   <TurnBubble turn={turnBubbleData} highlightColor="green" showTargetRing={false} />
 
                   {/* Content integrity warning */}
                   {turnHasIntegrityIssues && (
-                    <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-700">
-                      <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300 text-xs">
+                    <div className="mt-2 p-2 bg-[var(--status-warning-muted)] rounded border border-[var(--status-warning)]/25">
+                      <div className="flex items-start gap-2 text-[var(--status-warning)] text-xs">
                         <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                         <div>
                           <p className="font-medium">Source may have changed</p>
-                          <p className="text-amber-600 dark:text-amber-400 mt-0.5">
+                          <p className="text-[var(--status-warning)] mt-0.5">
                             The highlighted text positions may not match the original content.
                           </p>
                         </div>
@@ -971,7 +971,7 @@ export function CommitSourceContext({
 
                   {/* Long turn indicator - shown when truncated in compact mode */}
                   {shouldTruncate && (
-                    <div className="mt-2 text-center text-xs text-gray-500">
+                    <div className="mt-2 text-center text-xs text-[var(--color-text-muted)]">
                       Showing truncated content ({targetTurn.content.length.toLocaleString()} chars
                       total)
                     </div>
@@ -1000,38 +1000,38 @@ export function CommitSourceContext({
             return (
               <div
                 key={sectionKey}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                className="rounded-lg border border-[var(--color-border)] overflow-hidden"
               >
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
                 >
                   {isExpanded ? (
-                    <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   ) : (
-                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   )}
-                  <LeafIcon size={14} className="text-gray-400 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                  <LeafIcon size={14} className="text-[var(--color-text-muted)] shrink-0" />
+                  <span className="flex-1 text-sm text-[var(--color-text-secondary)] truncate">
                     {leafTitle}
                   </span>
-                  <span className="px-1.5 py-0.5 bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
+                  <span className="px-1.5 py-0.5 bg-[var(--color-border)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">
                     Source unavailable
                   </span>
                 </button>
                 {isExpanded && sentencesForLeaf.length > 0 && (
-                  <div className="p-3 bg-white dark:bg-gray-900">
+                  <div className="p-3 bg-[var(--color-bg-white)]">
                     <ul className="space-y-2">
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
+                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -1049,36 +1049,36 @@ export function CommitSourceContext({
           return (
             <div
               key={sectionKey}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="rounded-lg border border-[var(--color-border)] overflow-hidden"
             >
               {!compact && (
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="w-full flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-900/30 hover:bg-gray-150 dark:hover:bg-gray-800 transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
                 >
                   {isExpanded ? (
-                    <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   ) : (
-                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
                   )}
-                  <LeafIcon size={14} className="text-green-600 dark:text-green-400 shrink-0" />
-                  <span className="flex-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+                  <LeafIcon size={14} className="text-[var(--status-success)] shrink-0" />
+                  <span className="flex-1 text-sm text-[var(--color-text-secondary)] truncate">
                     {leafTitle}
                   </span>
                   {leafType && (
-                    <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[0.65rem] rounded">
+                    <span className="px-1.5 py-0.5 bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)] text-[0.65rem] rounded">
                       {leafType}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-[var(--color-text-muted)]">
                     {sentencesForLeaf.length} sentence{sentencesForLeaf.length !== 1 ? 's' : ''}
                   </span>
                 </button>
               )}
 
               {isExpanded && (
-                <div className="p-3 bg-white dark:bg-gray-900">
+                <div className="p-3 bg-[var(--color-bg-white)]">
                   {leafOutput ? (
                     <LeafOutputWithHighlights output={leafOutput} sentences={sentencesForLeaf} />
                   ) : (
@@ -1086,12 +1086,12 @@ export function CommitSourceContext({
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-100 dark:border-green-800"
+                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
                         >
-                          <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                             {sg.sentence.id}
                           </span>
-                          <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                             {sg.sentence.text}
                           </span>
                         </li>
@@ -1106,20 +1106,20 @@ export function CommitSourceContext({
 
         {/* Show indicator if there are more sections in compact mode */}
         {compact && totalSections > 2 && (
-          <div className="text-center py-2 text-xs text-gray-400">
+          <div className="text-center py-2 text-xs text-[var(--color-text-muted)]">
             +{totalSections - 2} more source{totalSections - 2 !== 1 ? 's' : ''}
           </div>
         )}
 
         {/* Legacy sentences without source info (only truly unresolved ones) */}
         {unresolvedSentences.length > 0 && !allLegacy && (
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[var(--color-text-muted)]">
                 {unresolvedSentences.length} sentence
                 {unresolvedSentences.length !== 1 ? 's' : ''} without source info
               </span>
-              <span className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 text-[0.65rem] rounded">
+              <span className="px-1.5 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">
                 Legacy
               </span>
             </div>
@@ -1127,12 +1127,12 @@ export function CommitSourceContext({
               {unresolvedSentences.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-start gap-2 p-2 bg-white dark:bg-gray-900 rounded border border-gray-100 dark:border-gray-800"
+                  className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
                 >
-                  <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-900/30 px-1.5 py-0.5 rounded shrink-0">
+                  <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
                     {s.id}
                   </span>
-                  <span className="text-[0.875rem] leading-relaxed text-gray-700 dark:text-gray-300 break-words">
+                  <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
                     {s.text}
                   </span>
                 </li>

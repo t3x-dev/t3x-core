@@ -488,7 +488,7 @@ export function ConversationView({
             {isStagingUnit && (
               <Badge
                 variant="outline"
-                className="text-[0.65rem] text-slate-500 dark:text-slate-400 uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
+                className="text-[0.65rem] text-[var(--color-text-muted)] uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
               >
                 staging
               </Badge>
@@ -677,7 +677,7 @@ export function ConversationView({
                   ))}
                   {/* Streaming response */}
                   {isChatStreaming && streamingContent && (
-                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-blue-50 dark:bg-blue-950/30 text-[var(--text-primary)]">
+                    <div className="max-w-[80%] self-start py-3 px-4 rounded-2xl rounded-bl-sm bg-[var(--status-info-muted)] text-[var(--text-primary)]">
                       <div className="text-[0.9rem] leading-relaxed whitespace-pre-wrap">
                         {streamingContent}
                         <span className="animate-pulse text-blue-500">▊</span>
@@ -695,7 +695,7 @@ export function ConversationView({
                   )}
                   {/* Chat error */}
                   {chatError && (
-                    <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-[0.85rem]">
+                    <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-[0.85rem]">
                       <AlertCircle size={16} />
                       <span>{chatError}</span>
                     </div>

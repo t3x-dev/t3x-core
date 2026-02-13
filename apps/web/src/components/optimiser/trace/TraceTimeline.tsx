@@ -80,15 +80,15 @@ function getSpanIcon(spanKind: SpanKind | undefined) {
 function getSpanColor(spanKind: SpanKind | undefined): string {
   switch (spanKind) {
     case 'llm':
-      return 'bg-purple-500';
+      return 'bg-[var(--accent-conversation)]';
     case 'tool':
-      return 'bg-blue-500';
+      return 'bg-[var(--status-info)]';
     case 'retriever':
-      return 'bg-green-500';
+      return 'bg-[var(--status-success)]';
     case 'workflow':
-      return 'bg-orange-500';
+      return 'bg-[var(--accent-pending)]';
     default:
-      return 'bg-gray-500 dark:bg-gray-400';
+      return 'bg-[var(--color-text-muted)]';
   }
 }
 
@@ -96,15 +96,15 @@ function getSpanColor(spanKind: SpanKind | undefined): string {
 function getSpanBadgeClass(spanKind: SpanKind | undefined): string {
   switch (spanKind) {
     case 'llm':
-      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30';
+      return 'bg-purple-500/10 text-[var(--accent-conversation)] border-purple-500/30';
     case 'tool':
-      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
+      return 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30';
     case 'retriever':
-      return 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30';
+      return 'bg-green-500/10 text-[var(--status-success)] border-green-500/30';
     case 'workflow':
-      return 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30';
+      return 'bg-orange-500/10 text-[var(--accent-pending)] border-orange-500/30';
     default:
-      return 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30';
+      return 'bg-gray-500/10 text-[var(--color-text-secondary)] border-gray-500/30';
   }
 }
 
@@ -220,7 +220,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
                       {step.span_kind || 'chain'}
                     </span>
                     {step.status === 'error' && (
-                      <span className="text-xs px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-red-600">
+                      <span className="text-xs px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
                         error
                       </span>
                     )}

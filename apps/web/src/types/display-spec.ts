@@ -42,7 +42,7 @@ export interface UnitNodeDisplaySpec {
      * Title: Primary display text
      * @source data.title
      * @format Truncate at 50 chars with ellipsis
-     * @style text-[0.95rem] font-semibold text-slate-800
+     * @style text-[0.95rem] font-semibold text-[var(--color-text)]
      */
     title: {
       source: 'data.title';
@@ -54,7 +54,7 @@ export interface UnitNodeDisplaySpec {
      * Timestamp: When created
      * @source data.timestamp
      * @format Relative time (e.g., "2h ago") or date
-     * @style text-[0.7rem] text-slate-400 bg-slate-100 rounded
+     * @style text-[0.7rem] text-[var(--color-text-muted)] bg-slate-100 rounded
      */
     timestamp: {
       source: 'data.timestamp';
@@ -65,7 +65,7 @@ export interface UnitNodeDisplaySpec {
      * Status: Brief status text
      * @source data.status
      * @format Short text (e.g., "Active", "3 turns")
-     * @style text-[0.7rem] text-slate-400
+     * @style text-[0.7rem] text-[var(--color-text-muted)]
      */
     status: {
       source: 'data.status';
@@ -136,7 +136,7 @@ export interface UnitNodeDisplaySpec {
      * Secondary info
      * @staging: Constraint count (e.g., "3✓ 2✗")
      * @committed: Summary or timestamp
-     * @style text-[0.7rem] text-slate-400/500
+     * @style text-[0.7rem] text-[var(--color-text-muted)]
      */
     secondaryInfo: {
       staging: {
@@ -157,7 +157,7 @@ export interface UnitNodeDisplaySpec {
      * Summary text (only shown when chevron clicked)
      * @source data.summary
      * @format Multi-line text, max 3 lines before scroll
-     * @style text-[0.82rem] text-slate-600
+     * @style text-[0.82rem] text-[var(--color-text-secondary)]
      */
     summary: {
       source: 'data.summary';
@@ -222,7 +222,7 @@ export interface LeafNodeDisplaySpec {
    * Title
    * @source data.title
    * @format Truncate with ellipsis
-   * @style text-xs font-medium text-slate-700
+   * @style text-xs font-medium text-[var(--color-text-secondary)]
    */
   title: {
     source: 'data.title';
@@ -363,10 +363,10 @@ export const CARD_TYPOGRAPHY = {
   badge: 'text-[0.65rem] font-bold uppercase tracking-wide',
 
   /** Secondary info */
-  secondary: 'text-[0.7rem] text-slate-400',
+  secondary: 'text-[0.7rem] text-[var(--color-text-muted)]',
 
   /** Expanded content */
-  body: 'text-[0.82rem] text-slate-600 leading-relaxed',
+  body: 'text-[0.82rem] text-[var(--color-text-secondary)] leading-relaxed',
 } as const;
 
 // ============================================

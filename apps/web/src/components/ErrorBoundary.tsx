@@ -63,10 +63,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       // 默认错误 UI
       return (
         <div className="flex h-full min-h-[200px] items-center justify-center p-6">
-          <Card className="max-w-md border-red-500/30 bg-red-500/5">
+          <Card className="max-w-md border-[var(--status-error)]/30 bg-[var(--status-error)]/5">
             <CardContent className="flex flex-col items-center py-8 text-center">
-              <AlertTriangle className="mb-4 h-12 w-12 text-red-500" />
-              <h2 className="text-lg font-semibold text-red-600">Something went wrong</h2>
+              <AlertTriangle className="mb-4 h-12 w-12 text-[var(--status-error)]" />
+              <h2 className="text-lg font-semibold text-[var(--status-error)]">Something went wrong</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 An error occurred while rendering this component.
               </p>
@@ -74,7 +74,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               {/* 开发模式下显示错误详情 */}
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <div className="mt-4 w-full rounded bg-muted/50 p-3 text-left">
-                  <p className="text-xs font-medium text-red-600">Error Details:</p>
+                  <p className="text-xs font-medium text-[var(--status-error)]">Error Details:</p>
                   <pre className="mt-1 overflow-auto text-xs text-muted-foreground">
                     {this.state.error.message}
                   </pre>

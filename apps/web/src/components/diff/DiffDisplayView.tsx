@@ -133,7 +133,7 @@ function TraceToSourceButton({ sentence, onClick }: TraceToSourceButtonProps) {
       disabled={!hasSource}
       className={`inline-flex items-center gap-1 text-[0.65rem] ml-2 transition-colors ${
         hasSource
-          ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700'
+          ? 'text-[var(--status-info)] hover:text-blue-700'
           : 'text-[var(--text-tertiary)]/50 cursor-not-allowed'
       }`}
       title={hasSource ? 'View source context' : 'Source context not available'}

@@ -447,15 +447,15 @@ export function SelectableTextBlock({
   // Token style helper
   const getTokenClasses = (state: TokenState, isDragging: boolean, isSeparator = false) => {
     if (isSeparator) {
-      return 'inline py-0.5 rounded transition-colors mx-0.5 text-slate-400';
+      return 'inline py-0.5 rounded transition-colors mx-0.5 text-[var(--color-text-muted)]';
     }
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
-      state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
+      state === 'normal' && 'hover:bg-[var(--hover-bg)]',
       state === 'selected' &&
-        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+        'bg-[var(--status-success-muted)] hover:bg-green-200 dark:hover:bg-green-700',
       state === 'excluded' &&
-        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
+        'bg-[var(--status-error-muted)] hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
@@ -467,15 +467,15 @@ export function SelectableTextBlock({
       state === 'anchor-mustnt' &&
         'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
       state === 'anchor-preferred' &&
-        'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
-      isDragging && state === 'normal' && 'bg-blue-100 dark:bg-blue-900/30'
+        'bg-[var(--status-info-muted)] text-[var(--status-info)] font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
+      isDragging && state === 'normal' && 'bg-[var(--status-info-muted)]'
     );
   };
 
   return (
     <div
       ref={containerRef}
-      className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+      className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]"
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onMouseLeave={() => {
@@ -542,7 +542,7 @@ export function SelectableTextBlock({
       </div>
 
       {!readOnly && (
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 text-center">
+        <div className="mt-3 pt-3 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)] text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击循环切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -602,32 +602,32 @@ function SourceBox({
   return (
     <div
       className={cn(
-        'border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden',
+        'border border-[var(--color-border)] rounded-lg overflow-hidden',
         isExpanded && 'shadow-sm'
       )}
     >
       {/* Box Header */}
       <div
-        className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="flex items-center gap-2 px-3 py-2.5 bg-[var(--color-bg-subtle)] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <span className="text-slate-400 dark:text-slate-400">
+        <span className="text-[var(--color-text-muted)]">
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <span className="w-6 h-6 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+        <span className="w-6 h-6 rounded flex items-center justify-center bg-[var(--status-info-muted)] text-[var(--status-info)]">
           {icon}
         </span>
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
           {typeLabel}:
         </span>
-        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+        <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">
           {title}
         </span>
       </div>
 
       {/* Box Content */}
       {isExpanded && (
-        <div className="p-4 bg-white dark:bg-slate-900">
+        <div className="p-4 bg-[var(--color-bg-white)]">
           {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
             // Unit with turns: Render with turn groups
             <ConversationTurnRenderer
@@ -915,11 +915,11 @@ function ConversationTurnRenderer({
   const getTokenClasses = (state: TokenState, isDragging: boolean) => {
     return cn(
       'inline py-0.5 rounded transition-colors cursor-pointer',
-      state === 'normal' && 'hover:bg-slate-100 dark:hover:bg-slate-800',
+      state === 'normal' && 'hover:bg-[var(--hover-bg)]',
       state === 'selected' &&
-        'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-700',
+        'bg-[var(--status-success-muted)] hover:bg-green-200 dark:hover:bg-green-700',
       state === 'excluded' &&
-        'bg-red-100/60 dark:bg-red-900/30 hover:bg-red-200/60 dark:hover:bg-red-800/30',
+        'bg-[var(--status-error-muted)] hover:bg-red-200/60 dark:hover:bg-red-800/30',
       state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
       state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
       // Anchor candidate: dotted underline (unconfirmed)
@@ -931,8 +931,8 @@ function ConversationTurnRenderer({
       state === 'anchor-mustnt' &&
         'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
       state === 'anchor-preferred' &&
-        'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
-      isDragging && state === 'normal' && 'bg-blue-100 dark:bg-blue-900/30'
+        'bg-[var(--status-info-muted)] text-[var(--status-info)] font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
+      isDragging && state === 'normal' && 'bg-[var(--status-info-muted)]'
     );
   };
 
@@ -998,10 +998,10 @@ function ConversationTurnRenderer({
           className={cn(
             'rounded-lg border p-3',
             group.turn?.role === 'user' &&
-              'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30',
+              'border-[var(--status-info)]/20 bg-[var(--status-info-muted)]',
             group.turn?.role === 'assistant' &&
-              'border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/30',
-            !group.turn && 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+              'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]',
+            !group.turn && 'border-[var(--color-border)] bg-[var(--color-bg-subtle)]'
           )}
         >
           {/* Turn header removed - [role]: prefix in content provides role info */}
@@ -1012,7 +1012,7 @@ function ConversationTurnRenderer({
       ))}
 
       {!readOnly && (
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 text-center">
+        <div className="mt-3 pt-3 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)] text-center">
           <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't</span>
         </div>
       )}
@@ -1068,7 +1068,7 @@ interface SourceExcerptViewerProps {
 export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
   if (!blocks || blocks.length === 0) {
     return (
-      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-sm text-slate-500 dark:text-slate-400 italic">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
         <span>No source excerpt recorded</span>
       </div>
     );
@@ -1105,15 +1105,15 @@ export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
 
   if (!excerptText.trim()) {
     return (
-      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-sm text-slate-500 dark:text-slate-400 italic">
+      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
         <span>No semantic content selected</span>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-      <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+    <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
         {excerptText}
       </div>
     </div>

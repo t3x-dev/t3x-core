@@ -43,13 +43,13 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
           {violations.length > 0 && (
             <div className="flex items-center gap-2 text-sm">
               {errorCount > 0 && (
-                <span className="flex items-center gap-1 text-red-600">
+                <span className="flex items-center gap-1 text-[var(--status-error)]">
                   <XCircle className="h-3.5 w-3.5" />
                   {errorCount} error{errorCount > 1 ? 's' : ''}
                 </span>
               )}
               {warningCount > 0 && (
-                <span className="flex items-center gap-1 text-yellow-600">
+                <span className="flex items-center gap-1 text-[var(--status-warning)]">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {warningCount} warning{warningCount > 1 ? 's' : ''}
                 </span>
@@ -72,9 +72,9 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
               )}
             >
               {v.severity === 'error' ? (
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-error)]" />
               ) : (
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-warning)]" />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -86,8 +86,8 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
                     className={cn(
                       'text-xs',
                       v.severity === 'error'
-                        ? 'border-red-500/30 text-red-600'
-                        : 'border-yellow-500/30 text-yellow-600'
+                        ? 'border-red-500/30 text-[var(--status-error)]'
+                        : 'border-yellow-500/30 text-[var(--status-warning)]'
                     )}
                   >
                     {v.severity}
@@ -102,10 +102,10 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
           {suggestionText && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
               <div className="flex items-start gap-3">
-                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-info)]" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-blue-600">Prompt Improvement</span>
+                    <span className="text-sm font-medium text-[var(--status-info)]">Prompt Improvement</span>
                     {suggestionConfidence !== undefined && (
                       <span className="text-xs text-muted-foreground">
                         {Math.round(suggestionConfidence * 100)}% confidence

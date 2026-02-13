@@ -1,6 +1,6 @@
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { type HTMLMotionProps, motion } from 'framer-motion';
+import { type HTMLMotionProps, motion, useReducedMotion } from 'framer-motion';
 import type * as React from 'react';
 import { buttonTap } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -95,14 +95,15 @@ function AnimatedButton({
   ...props
 }: Omit<HTMLMotionProps<'button'>, 'ref'> &
   VariantProps<typeof buttonVariants> & { disabled?: boolean }) {
+  const prefersReducedMotion = useReducedMotion();
   return (
     <motion.button
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      whileTap={disabled ? undefined : buttonTap}
+      whileTap={disabled || prefersReducedMotion ? undefined : buttonTap}
       whileHover={
-        disabled
+        disabled || prefersReducedMotion
           ? undefined
           : {
               scale: 1.02,
@@ -132,15 +133,17 @@ function PulseButton({
   ...props
 }: Omit<HTMLMotionProps<'button'>, 'ref'> &
   VariantProps<typeof buttonVariants> & { pulse?: boolean }) {
+  const prefersReducedMotion = useReducedMotion();
+  const shouldPulse = pulse && !prefersReducedMotion;
   return (
     <motion.button
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      whileTap={buttonTap}
-      whileHover={{ scale: 1.02 }}
+      whileTap={prefersReducedMotion ? undefined : buttonTap}
+      whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
       animate={
-        pulse
+        shouldPulse
           ? {
               boxShadow: [
                 '0 0 0 0 rgba(59, 130, 246, 0)',
@@ -151,7 +154,7 @@ function PulseButton({
           : undefined
       }
       transition={
-        pulse
+        shouldPulse
           ? {
               boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
               default: { type: 'spring', stiffness: 400, damping: 25 },

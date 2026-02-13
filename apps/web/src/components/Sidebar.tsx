@@ -16,6 +16,7 @@ import {
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -170,6 +171,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const isAgentDemo = pathname.startsWith('/agent-demo');
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
@@ -323,7 +326,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Github className="h-5 w-5" />
           </NavItem>
 
-          {/* Theme Toggle */}
+          {/* Theme Toggle — use mounted guard to avoid SSR hydration mismatch */}
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -335,9 +338,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     'h-10 w-10 justify-center',
                     'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
                   )}
-                  aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  aria-label={mounted ? (resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : 'Toggle theme'}
                 >
-                  {resolvedTheme === 'dark' ? (
+                  {mounted && resolvedTheme === 'dark' ? (
                     <Sun className="h-5 w-5" />
                   ) : (
                     <Moon className="h-5 w-5" />
@@ -345,7 +348,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8}>
-                {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -357,17 +360,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 'h-10 w-full px-3',
                 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
               )}
-              aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={mounted ? (resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : 'Toggle theme'}
             >
               <span className="shrink-0">
-                {resolvedTheme === 'dark' ? (
+                {mounted && resolvedTheme === 'dark' ? (
                   <Sun className="h-5 w-5" />
                 ) : (
                   <Moon className="h-5 w-5" />
                 )}
               </span>
               <span className="text-sm font-medium truncate">
-                {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
               </span>
             </button>
           )}

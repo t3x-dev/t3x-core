@@ -237,7 +237,7 @@ export function CommittedCommitView({
                 </div>
               </div>
 
-              <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
+              <div className="h-px bg-[var(--hover-bg)] my-4" />
 
               <div className="mb-5">
                 <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
@@ -245,14 +245,14 @@ export function CommittedCommitView({
                 </h4>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[0.85rem]">
-                    <span className="text-gray-500 dark:text-gray-400">From Draft:</span>
+                    <span className="text-[var(--color-text-muted)]">From Draft:</span>
                     <span className="text-[var(--text-secondary)] font-mono text-xs">
                       {data.entryId}
                     </span>
                   </div>
                   {data.baselineSummary && (
                     <div className="flex items-center gap-2 text-[0.85rem]">
-                      <span className="text-gray-500 dark:text-gray-400">Upstream:</span>
+                      <span className="text-[var(--color-text-muted)]">Upstream:</span>
                       <span className="text-[var(--text-secondary)]">Connected</span>
                     </div>
                   )}
@@ -268,7 +268,7 @@ export function CommittedCommitView({
 
             {/* Left Divider */}
             <div
-              className="w-1.5 bg-gray-200 dark:bg-gray-700 cursor-col-resize shrink-0 hover:bg-gray-300 dark:hover:bg-gray-600 active:bg-blue-500 transition-colors"
+              className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-blue-500 transition-colors"
               onMouseDown={handleCommitLeftDivider}
             />
 
@@ -434,9 +434,9 @@ export function CommittedCommitView({
                                 // Determine background color based on polarity
                                 const polarityClass =
                                   facet.polarity === 1
-                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                    ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
                                     : facet.polarity === -1
-                                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                      ? 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
                                       : 'bg-[var(--surface-app)] text-[var(--text-secondary)]';
 
                                 // Entity type icon mapping
@@ -500,7 +500,7 @@ export function CommittedCommitView({
 
             {/* Right Divider */}
             <div
-              className="w-1.5 bg-gray-200 dark:bg-gray-700 cursor-col-resize shrink-0 hover:bg-gray-300 dark:hover:bg-gray-600 active:bg-blue-500 transition-colors"
+              className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-blue-500 transition-colors"
               onMouseDown={handleCommitRightDivider}
             />
 
@@ -535,7 +535,7 @@ export function CommittedCommitView({
                 </>
               )}
 
-              <div className="h-px bg-gray-200 dark:bg-gray-700 my-4" />
+              <div className="h-px bg-[var(--hover-bg)] my-4" />
 
               {/* B-15: Simplified Diff Section */}
               <div className="mb-5">
@@ -546,7 +546,7 @@ export function CommittedCommitView({
 
                 <div className="flex flex-col gap-2">
                   <select
-                    className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2 px-3 border border-[var(--color-border)] rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     value={diffTargetCommit}
                     disabled={allCommittedCommits.length <= 1 || isDiffLoading}
                     onChange={(e) => {
@@ -571,14 +571,14 @@ export function CommittedCommitView({
                   </select>
 
                   {isDiffLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
                       <Loader2 size={14} className="animate-spin" />
                       <span>Comparing...</span>
                     </div>
                   )}
 
                   {diffError && (
-                    <div className="flex items-center gap-2 py-2 px-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 text-sm">
+                    <div className="flex items-center gap-2 py-2 px-3 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-md text-[var(--status-error)] text-sm">
                       <AlertCircle size={14} />
                       <span>{diffError}</span>
                     </div>

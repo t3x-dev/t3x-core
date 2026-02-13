@@ -11,7 +11,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { staggerContainer, staggerItem } from '@/lib/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -27,6 +28,12 @@ export function LeafPanel() {
   const addLeafNode = useCanvasStore((state) => state.addLeafNode);
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
+  const prefersReducedMotion = useReducedMotion();
+
+  const containerVariants = prefersReducedMotion
+    ? reducedMotion.staggerContainer
+    : staggerContainer;
+  const itemVariants = prefersReducedMotion ? reducedMotion.staggerItem : staggerItem;
 
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
@@ -44,16 +51,16 @@ export function LeafPanel() {
           <SheetDescription>Select where to publish your content</SheetDescription>
         </SheetHeader>
 
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {leafPanelOpen && (
             <motion.div
               className="flex flex-col gap-4 p-4"
-              variants={staggerContainer}
+              variants={containerVariants}
               initial="initial"
               animate="animate"
               exit="exit"
             >
-              <motion.div variants={staggerItem}>
+              <motion.div variants={itemVariants}>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Output
                 </p>
@@ -61,18 +68,18 @@ export function LeafPanel() {
                   {LEAF_TYPES.filter(
                     (lt) => isRunnerEnabled || lt.type !== 'deploy_agent'
                   ).map(({ type, label, icon: Icon }) => (
-                    <motion.div key={type} variants={staggerItem}>
+                    <motion.div key={type} variants={itemVariants}>
                       <AnimatedButton
                         variant="canvas-outline"
                         className="h-auto w-full justify-start gap-3 px-4 py-3"
                         onClick={() => handleSelectLeaf(type)}
                         disabled={leafCreating}
                       >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent-conversation)]/10">
                           {leafCreating ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+                            <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-conversation)]" />
                           ) : (
-                            <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                            <Icon className="h-4 w-4 text-[var(--accent-conversation)]" />
                           )}
                         </div>
                         <span className="font-medium">{label}</span>

@@ -59,7 +59,7 @@ export function ConflictEditPanel({
         placeholder="Enter your merged text here..."
         className={cn(
           'w-full min-h-[100px] p-3 text-sm rounded-md border resize-y',
-          'focus:outline-none focus:ring-2 focus:ring-purple-300 dark:focus:ring-purple-700 focus:border-purple-300 dark:focus:border-purple-700',
+          'focus:outline-none focus:ring-2 focus:ring-[var(--accent-conversation)] focus:border-[var(--accent-conversation)]',
           isEmpty
             ? 'border-[var(--diff-modified-border)] bg-[var(--diff-modified-bg)]'
             : 'border-muted bg-background'
@@ -87,7 +87,7 @@ export function ConflictEditPanel({
         <button
           type="button"
           onClick={() => onChange(combineTexts(sourceText, targetText))}
-          className="text-blue-600 dark:text-blue-400 hover:underline"
+          className="text-[var(--status-info)] hover:underline"
         >
           Combine both
         </button>
