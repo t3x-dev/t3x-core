@@ -15,6 +15,7 @@ import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -129,8 +130,15 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
   const unresolvedCount = getUnresolvedCount();
 
+  const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
+
   return (
-    <div className="relative flex h-screen flex-col bg-[var(--surface-app)]">
+    <motion.div
+      variants={containerVariants}
+      initial="initial"
+      animate="animate"
+      className="relative flex h-screen flex-col bg-[var(--surface-app)]"
+    >
       {/* Merge Completion Overlay */}
       <AnimatePresence>
         {showCelebration && (
@@ -209,6 +217,6 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         {/* Preview Panel */}
         <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
       </div>
-    </div>
+    </motion.div>
   );
 }

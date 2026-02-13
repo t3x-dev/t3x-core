@@ -128,6 +128,52 @@ export const slideDown: Variants = {
 };
 
 // ============================================
+// Demo Flow Transitions (§7.2)
+// ============================================
+
+/** Slide in from the right (branch node entry) */
+export const slideRight: Variants = {
+  initial: { opacity: 0, x: 24 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: springConfig.gentle,
+  },
+  exit: {
+    opacity: 0,
+    x: 24,
+    transition: { duration: duration.fast, ease: easing.in },
+  },
+};
+
+/** Full-screen enter — scale 0.97→1 with gentle spring (merge workspace) */
+export const fullScreenEnter: Variants = {
+  initial: { opacity: 0, scale: 0.97 },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    transition: { ...springConfig.gentle, duration: 0.3 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    transition: { duration: duration.normal, ease: easing.in },
+  },
+};
+
+/** Glow flash — one-shot glow for commit milestone */
+export const glowFlash = (color = 'rgba(59, 130, 246, 0.5)') => ({
+  boxShadow: [`0 0 0 0px ${color}`, `0 0 20px 4px ${color}`, `0 0 0 0px transparent`],
+  transition: { duration: 0.4, ease: 'easeOut' },
+});
+
+/** Count-up helper — returns keyframes array for animating a number */
+export const countUpTransition: Transition = {
+  duration: 0.6,
+  ease: easing.out,
+};
+
+// ============================================
 // Canvas Node Animations
 // ============================================
 
@@ -356,6 +402,18 @@ export const reducedMotion = {
     initial: { opacity: 1, y: 0 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: 0 },
+  } as Variants,
+
+  slideRight: {
+    initial: { opacity: 1, x: 0 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: 0 },
+  } as Variants,
+
+  fullScreenEnter: {
+    initial: { opacity: 1, scale: 1 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 1 },
   } as Variants,
 };
 

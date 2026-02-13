@@ -1,14 +1,17 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { GitCommit, Leaf, MessageSquare } from 'lucide-react';
+import { GitCommit, Leaf, Loader2, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
+import * as api from '@/lib/api';
 import { scaleIn, staggerContainer, staggerItem } from '@/lib/motion';
+import { demoSeedData } from '@/lib/seedData';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 
 const STORAGE_KEY = 't3x-onboarding-seen';
 
@@ -29,8 +32,10 @@ const highlights = [
 
 export function WelcomeModal() {
   const [open, setOpen] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
   const router = useRouter();
   const prefersReducedMotion = useReducedMotion();
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -50,11 +55,24 @@ export function WelcomeModal() {
     router.push('/');
   }, [dismiss, router]);
 
-  const handleExploreDemo = useCallback(() => {
-    dismiss();
-    // Navigate to homepage where demo can be loaded
-    router.push('/');
-  }, [dismiss, router]);
+  const handleExploreDemo = useCallback(async () => {
+    setLoadingDemo(true);
+    try {
+      const project = await api.createProject(demoSeedData.project.name, {
+        description: demoSeedData.project.description,
+        is_demo: true,
+      });
+      await fetchProjects();
+      dismiss();
+      router.push(`/project/${project.project_id}`);
+    } catch {
+      // Fallback: dismiss and go home
+      dismiss();
+      router.push('/');
+    } finally {
+      setLoadingDemo(false);
+    }
+  }, [dismiss, router, fetchProjects]);
 
   const motionProps = prefersReducedMotion
     ? { initial: { opacity: 1 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
@@ -160,10 +178,20 @@ export function WelcomeModal() {
               </ShimmerButton>
 
               <div className="flex flex-col items-center gap-1">
-                <Button variant="ghost" onClick={handleExploreDemo} className="text-sm">
-                  Explore Demo Project
+                <Button
+                  variant="ghost"
+                  onClick={handleExploreDemo}
+                  disabled={loadingDemo}
+                  className="text-sm gap-2"
+                >
+                  {loadingDemo && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loadingDemo ? 'Creating demo...' : 'Explore Demo Project'}
                 </Button>
-                <span className="text-xs text-[var(--text-tertiary)]">Takes about 60 seconds</span>
+                {!loadingDemo && (
+                  <span className="text-xs text-[var(--text-tertiary)]">
+                    Creates a sample project to explore
+                  </span>
+                )}
               </div>
             </div>
 
