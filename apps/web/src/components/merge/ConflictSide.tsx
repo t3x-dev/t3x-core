@@ -86,7 +86,7 @@ export function ConflictSide({
       )}
     >
       {/* Side label */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-[var(--space-item)]">
         <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
           {label}
         </span>

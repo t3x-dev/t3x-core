@@ -75,7 +75,12 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
           <span className="flex items-center gap-1.5">
-            <Pin size={12} className={cn(totalCount > 0 ? 'text-[var(--status-warning)]' : 'text-[var(--color-text-muted)]')} />
+            <Pin
+              size={12}
+              className={cn(
+                totalCount > 0 ? 'text-[var(--status-warning)]' : 'text-[var(--color-text-muted)]'
+              )}
+            />
             {summaryText}
           </span>
           <ChevronDown size={12} className="text-[var(--color-text-muted)]" />
@@ -84,7 +89,9 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
       <DropdownMenuContent className="w-72 max-h-80 overflow-y-auto" align="start">
         {/* Header actions */}
         <div className="flex items-center justify-between px-2 py-1.5">
-          <span className="text-xs font-semibold text-[var(--color-text-muted)]">Branch: {branch}</span>
+          <span className="text-xs font-semibold text-[var(--color-text-muted)]">
+            Branch: {branch}
+          </span>
           <div className="flex gap-1">
             <button
               type="button"
@@ -214,7 +221,9 @@ function CommitGroup({
 
       {/* No pinnable items under this commit */}
       {(!convId || !showConversation) && leaves.length === 0 && (
-        <div className="px-6 py-1 text-[0.65rem] text-[var(--color-text-muted)] italic">No pinnable items</div>
+        <div className="px-6 py-1 text-[0.65rem] text-[var(--color-text-muted)] italic">
+          No pinnable items
+        </div>
       )}
 
       {showSeparator && <DropdownMenuSeparator />}

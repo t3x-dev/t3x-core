@@ -106,7 +106,7 @@ export function QuickStatsBar({ runs }: QuickStatsBarProps) {
   };
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-[var(--space-group)] sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
         icon={<Activity className="h-5 w-5 text-[var(--status-info)]" />}
         label="Total Runs"

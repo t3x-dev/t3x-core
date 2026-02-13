@@ -14,7 +14,9 @@ const statusConfig = {
   active: { className: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]' },
   draft: { className: 'border-amber-500/30 bg-amber-500/10 text-[var(--status-warning)]' },
   paused: { className: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]' },
-  running: { className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)] animate-pulse' },
+  running: {
+    className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)] animate-pulse',
+  },
 } as const;
 
 type StatusVariant = keyof typeof statusConfig;

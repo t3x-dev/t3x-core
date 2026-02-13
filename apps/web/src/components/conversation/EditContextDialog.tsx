@@ -79,7 +79,7 @@ export function EditContextDialog({
           <DialogTitle>Edit Context</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-[var(--space-group)] py-4">
           {/* Use all option */}
           <div className="flex items-center gap-2">
             <Checkbox checked={useAll} onCheckedChange={() => handleUseAll()} />
@@ -89,8 +89,8 @@ export function EditContextDialog({
           <div className="border-t pt-4">
             {/* Conversations */}
             {convPins.length > 0 && (
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Conversations</div>
+              <div className="mb-[var(--space-group)]">
+                <div className="text-sm font-medium mb-[var(--space-item)]">Conversations</div>
                 {convPins.map((pin) => (
                   <div key={pin.id} className="flex items-center gap-2 py-1">
                     <Checkbox
@@ -107,7 +107,7 @@ export function EditContextDialog({
             {/* Leaves */}
             {leafPins.length > 0 && (
               <div>
-                <div className="text-sm font-medium mb-2">Leaves</div>
+                <div className="text-sm font-medium mb-[var(--space-item)]">Leaves</div>
                 {leafPins.map((pin) => (
                   <div key={pin.id} className="flex items-center gap-2 py-1">
                     <Checkbox

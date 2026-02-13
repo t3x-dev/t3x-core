@@ -126,9 +126,9 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
           Quick E2E Test
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-4 space-y-4">
+      <CardContent className="pt-4 space-y-[var(--space-group)]">
         {/* Agent Selection */}
-        <div className="space-y-2">
+        <div className="space-y-[var(--space-item)]">
           <span className="text-sm font-medium">Agent</span>
           <Select
             value={selectedAgentId}
@@ -151,7 +151,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         </div>
 
         {/* Prompt Version Selection */}
-        <div className="space-y-2">
+        <div className="space-y-[var(--space-item)]">
           <span className="text-sm font-medium">Prompt Version</span>
           <Select
             value={selectedVersion}
@@ -174,7 +174,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         </div>
 
         {/* Prompt Preview */}
-        <div className="space-y-2">
+        <div className="space-y-[var(--space-item)]">
           <span className="text-sm font-medium">Prompt Preview</span>
           <div className="rounded-md bg-muted/50 p-3 text-xs font-mono max-h-24 overflow-auto">
             {PROMPT_VERSIONS[selectedVersion].content}
@@ -205,7 +205,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
         {/* Last Run Info */}
         {lastRun && (
-          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <div className="rounded-md border bg-muted/30 p-3 space-y-[var(--space-item)]">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Last Run</span>
               <Badge
@@ -213,8 +213,10 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
                 className={cn(
                   lastRun.status === 'completed' &&
                     'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
-                  lastRun.status === 'failed' && 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
-                  lastRun.status === 'running' && 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]'
+                  lastRun.status === 'failed' &&
+                    'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
+                  lastRun.status === 'running' &&
+                    'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]'
                 )}
               >
                 {lastRun.status === 'running' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}

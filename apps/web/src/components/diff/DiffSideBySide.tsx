@@ -193,10 +193,7 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
 // ============================================================================
 
 export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySideProps>(
-  function DiffSideBySide(
-    { segmentDiffs, baseSentences, targetSentences, projectId },
-    ref
-  ) {
+  function DiffSideBySide({ segmentDiffs, baseSentences, targetSentences, projectId }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
 

@@ -156,7 +156,7 @@ interface InlineSourceContextProps {
 
 function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContextProps) {
   return (
-    <div className="mt-1 mb-2 ml-4 mr-2 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] overflow-hidden">
+    <div className="mt-1 mb-[var(--space-item)] ml-4 mr-2 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
         <span className="text-[0.65rem] font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
@@ -183,7 +183,7 @@ function InlineSourceContext({ data, loading, onOpenModal }: InlineSourceContext
         )}
 
         {!loading && data && (
-          <div className="space-y-2">
+          <div className="space-y-[var(--space-item)]">
             {data.context.map((turn, idx) => (
               <TurnBubble key={turn.turn_hash || idx} turn={turn} />
             ))}
@@ -619,7 +619,7 @@ export function DiffDisplayView({
   }
 
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn('space-y-[var(--space-group)]', className)}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <DiffStatsBadge diff={diff} />

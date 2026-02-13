@@ -555,7 +555,7 @@ export function ConversationView({
               <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
                 Metadata
               </h4>
-              <div className="mb-4">
+              <div className="mb-[var(--space-group)]">
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
                   Title
                 </label>
@@ -565,7 +565,7 @@ export function ConversationView({
                   onChange={(e) => onUpdate({ title: e.target.value })}
                 />
               </div>
-              <div className="mb-4">
+              <div className="mb-[var(--space-group)]">
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
                   Tags
                 </label>
@@ -591,11 +591,11 @@ export function ConversationView({
               <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
                 Info
               </h4>
-              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                 <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
                 <span>Created: {data.timestamp}</span>
               </div>
-              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                 <Link2 size={14} className="text-[var(--text-tertiary)] shrink-0" />
                 <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
               </div>
@@ -626,7 +626,7 @@ export function ConversationView({
           <div className="flex-1 min-w-0 flex flex-col h-full">
             <div
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-6 flex flex-col gap-4"
+              className="flex-1 overflow-y-auto p-[var(--space-page)] flex flex-col gap-[var(--space-group)]"
               onScroll={handleChatScroll}
             >
               {isChatLoading ? (

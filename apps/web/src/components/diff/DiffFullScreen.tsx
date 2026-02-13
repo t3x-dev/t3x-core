@@ -95,7 +95,12 @@ export function DiffFullScreen({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className={cn("max-w-[95vw] w-full max-h-[95vh] h-full p-0 flex flex-col overflow-hidden", glass.panelBase)}>
+      <DialogContent
+        className={cn(
+          'max-w-[95vw] w-full max-h-[95vh] h-full p-0 flex flex-col overflow-hidden',
+          glass.panelBase
+        )}
+      >
         {/* Header */}
         <DiffHeader
           baseCommit={{

@@ -54,38 +54,38 @@ export function LeafPanel() {
         <AnimatePresence initial={false}>
           {leafPanelOpen && (
             <motion.div
-              className="flex flex-col gap-4 p-4"
+              className="flex flex-col gap-[var(--space-group)] p-[var(--space-group)]"
               variants={containerVariants}
               initial="initial"
               animate="animate"
               exit="exit"
             >
               <motion.div variants={itemVariants}>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                <p className="mb-[var(--space-item)] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Output
                 </p>
                 <div className="flex flex-col gap-2">
-                  {LEAF_TYPES.filter(
-                    (lt) => isRunnerEnabled || lt.type !== 'deploy_agent'
-                  ).map(({ type, label, icon: Icon }) => (
-                    <motion.div key={type} variants={itemVariants}>
-                      <AnimatedButton
-                        variant="canvas-outline"
-                        className="h-auto w-full justify-start gap-3 px-4 py-3"
-                        onClick={() => handleSelectLeaf(type)}
-                        disabled={leafCreating}
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent-conversation)]/10">
-                          {leafCreating ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-conversation)]" />
-                          ) : (
-                            <Icon className="h-4 w-4 text-[var(--accent-conversation)]" />
-                          )}
-                        </div>
-                        <span className="font-medium">{label}</span>
-                      </AnimatedButton>
-                    </motion.div>
-                  ))}
+                  {LEAF_TYPES.filter((lt) => isRunnerEnabled || lt.type !== 'deploy_agent').map(
+                    ({ type, label, icon: Icon }) => (
+                      <motion.div key={type} variants={itemVariants}>
+                        <AnimatedButton
+                          variant="canvas-outline"
+                          className="h-auto w-full justify-start gap-3 px-4 py-3"
+                          onClick={() => handleSelectLeaf(type)}
+                          disabled={leafCreating}
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent-conversation)]/10">
+                            {leafCreating ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-conversation)]" />
+                            ) : (
+                              <Icon className="h-4 w-4 text-[var(--accent-conversation)]" />
+                            )}
+                          </div>
+                          <span className="font-medium">{label}</span>
+                        </AnimatedButton>
+                      </motion.div>
+                    )
+                  )}
                 </div>
               </motion.div>
             </motion.div>

@@ -69,7 +69,7 @@ export function NodePalette() {
         'absolute left-4 top-20 z-10 w-48',
         'flex flex-col gap-2 p-3',
         'bg-background/95 backdrop-blur-sm',
-        'border border-border/50 rounded-xl shadow-lg'
+        'border border-border/50 rounded-xl elevation-3'
       )}
     >
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">

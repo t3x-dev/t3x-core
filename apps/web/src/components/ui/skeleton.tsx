@@ -44,7 +44,7 @@ function SkeletonText({
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { lines?: number }) {
   return (
-    <div className={cn('space-y-2', className)} {...props}>
+    <div className={cn('space-y-[var(--space-item)]', className)} {...props}>
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton
           // biome-ignore lint/suspicious/noArrayIndexKey: simple iteration
@@ -86,14 +86,14 @@ function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        'rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 space-y-3',
+        'rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-[var(--space-group)] space-y-3',
         className
       )}
       {...props}
     >
       <div className="flex items-center gap-3">
         <SkeletonCircle size="md" />
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 space-y-[var(--space-item)]">
           <Skeleton className="h-4 w-1/2" />
           <Skeleton className="h-3 w-1/3" />
         </div>
@@ -110,12 +110,12 @@ function SkeletonProject({ className, ...props }: React.HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        'flex items-center gap-4 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4',
+        'flex items-center gap-[var(--space-group)] rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-[var(--space-group)]',
         className
       )}
       {...props}
     >
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-[var(--space-item)]">
         <Skeleton className="h-5 w-1/3" />
         <Skeleton className="h-4 w-1/2" />
       </div>
@@ -135,7 +135,7 @@ function SkeletonNode({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        'w-72 rounded-2xl border-2 border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 space-y-3',
+        'w-72 rounded-2xl border-2 border-[var(--stroke-divider)] bg-[var(--surface-card)] p-[var(--space-group)] space-y-3',
         className
       )}
       {...props}

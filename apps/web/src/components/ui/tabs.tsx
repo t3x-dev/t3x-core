@@ -21,7 +21,7 @@ const tabsListVariants = cva('inline-flex w-fit items-center justify-center', {
     variant: {
       default:
         'bg-muted text-muted-foreground h-9 rounded-lg p-[3px] dark:bg-transparent dark:rounded-none dark:p-0 dark:border-b dark:border-[var(--stroke-divider)]',
-      pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 shadow-lg backdrop-blur-md',
+      pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 elevation-2 backdrop-blur-md',
     },
   },
   defaultVariants: {

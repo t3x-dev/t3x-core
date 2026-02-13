@@ -475,7 +475,7 @@ export function SelectableTextBlock({
   return (
     <div
       ref={containerRef}
-      className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]"
+      className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]"
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onMouseLeave={() => {
@@ -603,7 +603,7 @@ function SourceBox({
     <div
       className={cn(
         'border border-[var(--color-border)] rounded-lg overflow-hidden',
-        isExpanded && 'shadow-sm'
+        isExpanded && 'elevation-1'
       )}
     >
       {/* Box Header */}
@@ -627,7 +627,7 @@ function SourceBox({
 
       {/* Box Content */}
       {isExpanded && (
-        <div className="p-4 bg-[var(--color-bg-white)]">
+        <div className="p-[var(--space-group)] bg-[var(--color-bg-white)]">
           {block.turnBoundaries && block.turnBoundaries.length > 0 ? (
             // Unit with turns: Render with turn groups
             <ConversationTurnRenderer
@@ -1068,7 +1068,7 @@ interface SourceExcerptViewerProps {
 export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
   if (!blocks || blocks.length === 0) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
         <span>No source excerpt recorded</span>
       </div>
     );
@@ -1105,14 +1105,14 @@ export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
 
   if (!excerptText.trim()) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
         <span>No semantic content selected</span>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+    <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
       <div className="text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
         {excerptText}
       </div>

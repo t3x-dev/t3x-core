@@ -16,7 +16,14 @@ export type CommitStatus = 'staging' | 'committed';
 
 // Leaf node types for output destinations
 // Must match @t3x/core AnyLeafType from V4 schema
-export type LeafType = 'tweet' | 'weibo' | 'wechat' | 'email' | 'article' | 'slack' | 'deploy_agent';
+export type LeafType =
+  | 'tweet'
+  | 'weibo'
+  | 'wechat'
+  | 'email'
+  | 'article'
+  | 'slack'
+  | 'deploy_agent';
 
 export interface LeafNodeConfig {
   leafType: LeafType;
@@ -118,7 +125,16 @@ export interface EmbeddedLeaf {
   id: string;
   type: LeafType;
   title: string;
-  status?: 'idle' | 'pending' | 'running' | 'passed' | 'failed' | 'deploying' | 'stopped' | 'error' | 'skipped';
+  status?:
+    | 'idle'
+    | 'pending'
+    | 'running'
+    | 'passed'
+    | 'failed'
+    | 'deploying'
+    | 'stopped'
+    | 'error'
+    | 'skipped';
   /** For eval leaves: pass/fail counts */
   passedCount?: number;
   failedCount?: number;

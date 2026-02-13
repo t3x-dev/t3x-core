@@ -65,8 +65,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="flex h-full min-h-[200px] items-center justify-center p-6">
           <Card className="max-w-md border-[var(--status-error)]/30 bg-[var(--status-error)]/5">
             <CardContent className="flex flex-col items-center py-8 text-center">
-              <AlertTriangle className="mb-4 h-12 w-12 text-[var(--status-error)]" />
-              <h2 className="text-lg font-semibold text-[var(--status-error)]">Something went wrong</h2>
+              <AlertTriangle className="mb-[var(--space-group)] h-12 w-12 text-[var(--status-error)]" />
+              <h2 className="text-lg font-semibold text-[var(--status-error)]">
+                Something went wrong
+              </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 An error occurred while rendering this component.
               </p>

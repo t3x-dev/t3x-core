@@ -129,6 +129,44 @@ export const toneAccent = {
 } as const;
 
 // =============================================================================
+// SPACING — Semantic layout rhythm helpers
+// =============================================================================
+
+export const spacing = {
+  /** Page-level padding — 24px */
+  page: 'p-[var(--space-page)]',
+  pagePx: 'px-[var(--space-page)]',
+  pagePy: 'py-[var(--space-page)]',
+  /** Between major sections — 24px */
+  section: 'gap-[var(--space-section)]',
+  sectionMb: 'mb-[var(--space-section)]',
+  sectionMt: 'mt-[var(--space-section)]',
+  /** Between related items — 16px */
+  group: 'gap-[var(--space-group)]',
+  groupMb: 'mb-[var(--space-group)]',
+  /** Between tightly coupled elements — 8px */
+  item: 'gap-[var(--space-item)]',
+  itemMb: 'mb-[var(--space-item)]',
+} as const;
+
+// =============================================================================
+// ELEVATION — Interactive shadow states
+// =============================================================================
+
+export const elevation = {
+  /** Flat — no shadow */
+  flat: 'elevation-0',
+  /** Resting card — subtle shadow */
+  card: 'elevation-1',
+  /** Raised — hovered/active card */
+  raised: 'elevation-2',
+  /** Floating — popovers, dropdowns */
+  floating: 'elevation-3',
+  /** Hover lift pattern — card goes from 1 → 2 on hover */
+  cardHover: 'elevation-1 elevation-hover',
+} as const;
+
+// =============================================================================
 // TONE GLOW (Dark Mode — shadow only, never bg)
 // =============================================================================
 

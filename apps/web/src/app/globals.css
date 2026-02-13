@@ -98,6 +98,12 @@
   --spacing-2xl: 32px;
   --spacing-3xl: 48px;
 
+  /* Semantic Spacing Aliases — intent-based, for layout rhythm */
+  --space-page: var(--spacing-xl); /* 24px — page-level padding */
+  --space-section: var(--spacing-xl); /* 24px — between major sections */
+  --space-group: var(--spacing-lg); /* 16px — between related items */
+  --space-item: var(--spacing-sm); /* 8px  — between tightly coupled elements */
+
   /* Border Radius - rounder, modern */
   --radius: 0.75rem;
   --radius-sm: 6px;
@@ -718,6 +724,33 @@ a {
   *:focus-visible {
     transition: none !important;
   }
+}
+
+/* ============================================
+   Elevation Utility Classes
+   Use: class="elevation-1" on any card/panel
+   Hover pattern: "elevation-1 hover:elevation-2"
+   ============================================ */
+.elevation-0 {
+  box-shadow: var(--elevation-0);
+  transition: box-shadow 200ms ease;
+}
+.elevation-1 {
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 200ms ease;
+}
+.elevation-2 {
+  box-shadow: var(--elevation-2);
+  transition: box-shadow 200ms ease;
+}
+.elevation-3 {
+  box-shadow: var(--elevation-3);
+  transition: box-shadow 200ms ease;
+}
+
+/* Hover elevation: card lifts on hover */
+.elevation-hover:hover {
+  box-shadow: var(--elevation-2);
 }
 
 /* ============================================

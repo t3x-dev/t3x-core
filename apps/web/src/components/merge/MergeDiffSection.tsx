@@ -47,7 +47,7 @@ export function MergeDiffSection({
   const styles = variantStyles[variant];
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-hidden elevation-1">
       {/* Section Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -63,7 +63,7 @@ export function MergeDiffSection({
       </button>
 
       {/* Section Content */}
-      {!collapsed && <div className="p-4 bg-background">{children}</div>}
+      {!collapsed && <div className="p-[var(--space-group)] bg-background">{children}</div>}
     </div>
   );
 }

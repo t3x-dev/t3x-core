@@ -64,7 +64,7 @@ function CommitDetailModal({
           </Button>
         </CardHeader>
 
-        <CardContent className="space-y-4 overflow-auto">
+        <CardContent className="space-y-[var(--space-group)] overflow-auto">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>{commit.createdAt}</span>
             {commit.feedbackBatchId > 0 && (
@@ -152,7 +152,7 @@ export default function AgentDemoOptimiserPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex shrink-0 items-center gap-5 border-b bg-background px-6 py-4">
+      <header className="flex shrink-0 items-center gap-5 border-b bg-background px-[var(--space-page)] py-[var(--space-group)]">
         <div className="flex items-center gap-3">
           <Bot className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">{agentName}</h2>
@@ -184,7 +184,7 @@ export default function AgentDemoOptimiserPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Feedback Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-[var(--space-group)]">
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
                   <span className="block text-2xl font-semibold">
@@ -222,7 +222,7 @@ export default function AgentDemoOptimiserPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Optimisation Loop</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-[var(--space-group)]">
               <div className="flex flex-wrap items-center gap-2">
                 {optimisationSteps.map((step, index) => (
                   <div key={step.id} className="flex items-center gap-2">
@@ -268,7 +268,7 @@ export default function AgentDemoOptimiserPage() {
             <h3 className="font-medium">Sandbox Commits</h3>
             <Badge variant="secondary">{sandboxCommits.length} commits</Badge>
           </div>
-          <div className="flex-1 overflow-auto p-4 space-y-2">
+          <div className="flex-1 overflow-auto p-[var(--space-group)] space-y-[var(--space-item)]">
             {sortedCommits.map((commit) => {
               const isDeployed = commit.commitHash === deployedCommitHash;
               return (
@@ -321,7 +321,7 @@ export default function AgentDemoOptimiserPage() {
             <h3 className="font-medium">Deployments</h3>
             <Badge variant="secondary">{deploymentHistory.length} records</Badge>
           </div>
-          <div className="flex-1 overflow-auto p-4 space-y-2">
+          <div className="flex-1 overflow-auto p-[var(--space-group)] space-y-[var(--space-item)]">
             {deploymentHistory.map((deployment: DeploymentRecord) => (
               <div key={deployment.id} className="rounded-lg border p-3">
                 <div className="flex items-center gap-2">
