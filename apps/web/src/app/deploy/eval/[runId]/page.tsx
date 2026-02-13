@@ -29,6 +29,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type EngineRun, getEngineRun, getLeaf, type Leaf } from '@/lib/api';
+import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -176,6 +177,7 @@ export default function RunDetailPage() {
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
   const [pinning, setPinning] = useState(false);
   const [pinSuccess, setPinSuccess] = useState(false);
+  const [retuning, setRetuning] = useState(false);
   const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
 
   // Load run data + associated leaf
@@ -266,6 +268,29 @@ export default function RunDetailPage() {
     addPin,
     updatePinAssertions,
   ]);
+
+  // Re-tune: pin selected assertions, create new conversation, and navigate to it
+  const handleRetune = useCallback(async () => {
+    if (!projectId || !leafId || !leaf?.commit_hash || selectedAssertionIds.size === 0) return;
+
+    setRetuning(true);
+    try {
+      const { conversationId } = await createRetuneSession({
+        projectId,
+        leafId,
+        commitHash: leaf.commit_hash,
+        selectedAssertionIds: Array.from(selectedAssertionIds),
+        existingPinId: existingPin?.id,
+      });
+      // Refresh pins store so other components see the new/updated pin
+      await fetchPins(projectId);
+      router.push(`/project/${projectId}/conversation/${conversationId}`);
+    } catch (_err) {
+      // Retuning failed — stay on current page
+    } finally {
+      setRetuning(false);
+    }
+  }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins, router]);
 
   if (loading) {
     return (
@@ -622,7 +647,7 @@ export default function RunDetailPage() {
                     ))}
                   </div>
 
-                  {/* Pin Selected Assertions 按钮 */}
+                  {/* Pin Selected & Re-tune buttons */}
                   <div className="mt-4 flex items-center gap-3 border-t pt-4">
                     <Button
                       size="sm"
@@ -638,6 +663,19 @@ export default function RunDetailPage() {
                       <Badge variant="secondary" className="ml-1 text-xs">
                         {selectedAssertionIds.size}
                       </Badge>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedAssertionIds.size === 0 || retuning || !leaf?.commit_hash}
+                      onClick={handleRetune}
+                    >
+                      {retuning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      Re-tune
                     </Button>
                     {pinSuccess && (
                       <span className="text-xs text-green-600">
