@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  BookOpen,
   CheckCircle,
   Clock,
   Coins,
@@ -25,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { type EngineRun, getEngineRun } from '@/lib/api';
+import { type Assertion, type EngineRun, type Leaf, getEngineRun, getLeaf } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -166,12 +167,13 @@ export default function RunDetailPage() {
   const router = useRouter();
 
   const [run, setRun] = useState<EngineRun | null>(null);
+  const [leaf, setLeaf] = useState<Leaf | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const fetchPins = usePinsStore((s) => s.fetchPins);
 
-  // Load run data
+  // Load run data + associated leaf
   useEffect(() => {
     async function loadRun() {
       if (!runId) return;
@@ -180,6 +182,16 @@ export default function RunDetailPage() {
         const data = await getEngineRun(runId);
         setRun(data);
         if (data.project_id) fetchPins(data.project_id);
+
+        // Fetch associated leaf (for structured assertions)
+        if (data.leaf?.id) {
+          try {
+            const leafData = await getLeaf(data.leaf.id);
+            setLeaf(leafData);
+          } catch {
+            // Leaf fetch failure is non-fatal
+          }
+        }
       } catch (_err) {
         setError('Failed to load run data');
       } finally {
@@ -471,8 +483,77 @@ export default function RunDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* Assertions Tab - LLM 生成的断言 */}
-          <TabsContent value="assertions" className="mt-4">
+          {/* Assertions Tab - LLM 生成的断言 + Leaf 结构化断言 */}
+          <TabsContent value="assertions" className="mt-4 space-y-6">
+            {/* Leaf Assertions — 写回到 Leaf 的结构化断言（用于 Pin 反馈回路） */}
+            {leaf?.assertions && leaf.assertions.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    Leaf Assertions
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {leaf.assertions.filter((a) => a.passed).length}/{leaf.assertions.length} passed
+                    </Badge>
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Structured assertions written back to Leaf from evaluation. Pin these to feed lessons into future conversations.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {leaf.assertions.map((assertion) => (
+                      <div
+                        key={assertion.id}
+                        className={cn(
+                          'rounded-lg border p-3',
+                          assertion.passed
+                            ? 'border-green-500/30 bg-green-500/5'
+                            : 'border-red-500/30 bg-red-500/5'
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          {assertion.passed ? (
+                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                          ) : (
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="text-xs">
+                                {assertion.constraint_id}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-xs',
+                                  assertion.passed
+                                    ? 'border-green-500/30 text-green-600'
+                                    : 'border-red-500/30 text-red-600'
+                                )}
+                              >
+                                {assertion.passed ? 'passed' : 'failed'}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-sm">{assertion.details}</p>
+                            {assertion.lesson && (
+                              <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
+                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                                <div>
+                                  <span className="font-medium text-amber-700">Lesson: </span>
+                                  <span className="text-amber-900">{assertion.lesson}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* LLM Assertions — Runner 原始断言 */}
             {llmAssertions.length > 0 ? (
               <Card>
                 <CardHeader className="pb-2">
@@ -536,13 +617,13 @@ export default function RunDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            ) : (
+            ) : !leaf?.assertions?.length ? (
               <Card>
                 <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  No LLM assertions available
+                  No assertions available
                 </CardContent>
               </Card>
-            )}
+            ) : null}
           </TabsContent>
         </Tabs>
       </div>
