@@ -486,7 +486,7 @@ At the start of a new conversation, read relevant documentation based on task ty
 | **Product & Strategy** | `docs/product-strategy.md`, `docs/product-roadmap.md`, `docs/product-assessment.md` |
 | **Product Overview** | `docs/product-overview/01-product-and-user-layer.md`, `docs/product-overview/02-architecture-and-design-layer.md`, `docs/product-overview/03-engineering-and-implementation-layer.md` |
 | **Team Collaboration** | `docs/collaboration-protocol.md`, `docs/phase0-protocol.md` |
-| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md` |
+| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md`, `docs/frontend-ia-map.md` |
 | API / Backend Development | `apps/api/src/schemas/v4-contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/openapi-summary.md` |
 | V4 Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
 | Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
