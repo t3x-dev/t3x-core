@@ -259,6 +259,43 @@ export default function RunDetailPage() {
           </div>
         </header>
 
+        {/* Milestone: Eval Complete Summary Card */}
+        {(run.status === 'completed' || run.status === 'failed') && llmAssertions.length > 0 && (
+          <div
+            className={cn(
+              'flex items-center gap-3 rounded-lg border px-4 py-3',
+              passed
+                ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)]'
+                : 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)]'
+            )}
+          >
+            {passed ? (
+              <CheckCircle className="h-5 w-5 shrink-0 text-[var(--diff-added-accent)]" />
+            ) : (
+              <XCircle className="h-5 w-5 shrink-0 text-[var(--diff-removed-accent)]" />
+            )}
+            <span
+              className={cn(
+                'text-sm font-medium',
+                passed ? 'text-[var(--diff-added-text)]' : 'text-[var(--diff-removed-text)]'
+              )}
+            >
+              Confidence report ready — {llmAssertions.filter((a) => a.type === 'pass').length}/
+              {llmAssertions.length} passed
+            </span>
+            {score !== undefined && (
+              <span
+                className={cn(
+                  'ml-auto font-mono text-sm font-semibold',
+                  passed ? 'text-[var(--diff-added-accent)]' : 'text-[var(--diff-removed-accent)]'
+                )}
+              >
+                {Math.round(score * 100)}%
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Status Bar */}
         <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/30 px-4 py-3">
           {/* Pass/Fail Badge */}

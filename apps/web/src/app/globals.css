@@ -4,8 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================
-   Modern Pro Design System (2025)
-   Inspired by Linear, Vercel, Raycast
+   T3X Design System — Token Authority Hierarchy
+   (See: frontend-art-template.md §1.0)
+
+   Priority 1 (Final truth):  globals.css CSS Variables — runtime values, dark mode overrides
+   Priority 2 (Mapping layer): lib/theme.ts TypeScript — semantic aliases, getNodeClasses()
+                                MUST only reference CSS variables or Tailwind tokens
+   Priority 3 (Consumer layer): Component Tailwind classes — use token classes
+
+   Bare color rule:
+     ✅ Allowed: bg-primary, text-muted-foreground, border-border  (token class)
+     ✅ Allowed: var(--diff-added-bg)                              (CSS variable)
+     ❌ Forbidden: bg-blue-500, text-red-700, border-green-300     (bare color)
+     Exceptions: badge.tsx semantic variants, getNodeClasses() in theme.ts,
+                 diff components during migration (annotate: // TODO: migrate to --diff-* token)
+
+   Conflict resolution:
+     CSS token vs Tailwind default mismatch → CSS token wins, use arbitrary value
+     theme.ts vs globals.css disagree       → globals.css wins, fix theme.ts
+     Multiple .dark blocks with hue conflict → unified hue 260, single block
    ============================================ */
 :root {
   /* Typography - Geist (Vercel's font) with optimal settings */
@@ -134,6 +151,39 @@
   --leaf-node-height: calc(var(--canvas-grid-size) * 4);
   --leaf-node-width: calc(var(--canvas-node-min-width) * 2 / 3);
 
+  /* Canvas Edge Colors */
+  --edge-color: #94a3b8;
+  --edge-active-color: #3b82f6;
+  --edge-selected-color: #2563eb;
+
+  /* ===== Diff Token System (§1.1) ===== */
+  /* Added/Removed/Modified/Identical — used by all diff & merge views */
+  --diff-added-bg: #f0fdf4;
+  --diff-added-border: #86efac;
+  --diff-added-text: #166534;
+  --diff-added-accent: #16a34a;
+  --diff-removed-bg: #fef2f2;
+  --diff-removed-border: #fca5a5;
+  --diff-removed-text: #991b1b;
+  --diff-removed-accent: #dc2626;
+  --diff-modified-bg: #fffbeb;
+  --diff-modified-border: #fcd34d;
+  --diff-modified-text: #92400e;
+  --diff-modified-accent: #d97706;
+  --diff-identical-bg: rgba(248, 250, 252, 0.5);
+  --diff-identical-border: #e2e8f0;
+  --diff-identical-text: #64748b;
+  /* Backward compat: --diff-*-line → --diff-*-accent (migrate to proper tokens in #360) */
+  --diff-added-line: var(--diff-added-accent);
+  --diff-removed-line: var(--diff-removed-accent);
+  --diff-modified-line: var(--diff-modified-accent);
+
+  /* ===== Highlight Token System (§1.1) ===== */
+  --highlight-yellow-bg: #fef08a;
+  --highlight-green-bg: #bbf7d0;
+  --highlight-deep-green-bg: #22c55e;
+  --highlight-deep-red-bg: #ef4444;
+
   /* shadcn/ui Colors (oklch) - refined */
   --background: oklch(0.99 0.002 250);
   --foreground: oklch(0.13 0.02 260);
@@ -247,13 +297,26 @@
   --scrollbar-thumb: oklch(1 0 0 / 15%);
   --scrollbar-thumb-hover: oklch(1 0 0 / 25%);
 
-  /* ===== Diff Markers ===== */
-  --diff-added-line: oklch(0.55 0.15 155);
-  --diff-added-bg: oklch(0.55 0.15 155 / 7%);
-  --diff-removed-line: oklch(0.55 0.15 25);
-  --diff-removed-bg: oklch(0.55 0.15 25 / 7%);
-  --diff-modified-line: oklch(0.65 0.12 80);
-  --diff-modified-bg: oklch(0.65 0.12 80 / 7%);
+  /* ===== Diff Token System (§1.1) — dark overrides ===== */
+  --diff-added-bg: rgba(5, 46, 22, 0.3);
+  --diff-added-border: #15803d;
+  --diff-added-text: #86efac;
+  --diff-added-accent: #4ade80;
+  --diff-removed-bg: rgba(69, 10, 10, 0.3);
+  --diff-removed-border: #b91c1c;
+  --diff-removed-text: #fca5a5;
+  --diff-removed-accent: #f87171;
+  --diff-modified-bg: rgba(69, 26, 3, 0.3);
+  --diff-modified-border: #b45309;
+  --diff-modified-text: #fcd34d;
+  --diff-modified-accent: #fbbf24;
+  --diff-identical-bg: rgba(2, 6, 23, 0.3);
+  --diff-identical-border: #334155;
+  --diff-identical-text: #94a3b8;
+
+  /* ===== Highlight Token System (§1.1) — dark overrides ===== */
+  --highlight-yellow-bg: rgba(133, 77, 14, 0.5);
+  --highlight-green-bg: rgba(22, 101, 52, 0.5);
 
   /* ===== Reading Surfaces — readability first ===== */
   /* Used for: Diff columns, Output blocks, long text panels */
@@ -297,6 +360,11 @@
   --sidebar-accent-foreground: oklch(0.94 0.005 260);
   --sidebar-border: oklch(1 0 0 / 12%); /* = stroke-default */
   --sidebar-ring: oklch(0.65 0.15 260); /* = accent-commit */
+
+  /* Canvas Edge Colors (dark) */
+  --edge-color: #475569;
+  --edge-active-color: #818cf8;
+  --edge-selected-color: #6366f1;
 }
 
 *,
@@ -375,17 +443,11 @@ a {
   }
 }
 
-/* CSS variables for edge colors */
-:root {
-  --edge-color: #94a3b8;
-  --edge-active-color: #3b82f6;
-  --edge-selected-color: #2563eb;
-}
-
-.dark {
-  --edge-color: #475569;
-  --edge-active-color: #818cf8;
-  --edge-selected-color: #6366f1;
+/* Governance milestone: checkmark stroke draw animation */
+@keyframes strokeDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* Controls - replaced with ZoomSlider component from React Flow UI */

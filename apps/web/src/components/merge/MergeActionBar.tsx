@@ -7,15 +7,18 @@
  */
 
 import { AlertCircle, ArrowLeft, Check, GitMerge, Loader2 } from 'lucide-react';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface MergeActionBarProps {
+  projectId: string;
   sourceBranch: string;
   targetBranch: string;
   unresolvedCount: number;
@@ -30,6 +33,7 @@ interface MergeActionBarProps {
 }
 
 export function MergeActionBar({
+  projectId,
   sourceBranch,
   targetBranch,
   unresolvedCount,
@@ -42,6 +46,7 @@ export function MergeActionBar({
   canCommit,
   onClose,
 }: MergeActionBarProps) {
+  const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
   return (
     <header
       className={cn(
@@ -55,7 +60,13 @@ export function MergeActionBar({
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
-      {/* Branch Info */}
+      {/* Breadcrumb + Branch Info */}
+      <Breadcrumb
+        segments={[
+          { label: projectName || 'Project', href: `/project/${projectId}` },
+          { label: 'Merge' },
+        ]}
+      />
       <div className="flex items-center gap-2">
         <GitMerge className="h-4 w-4 text-[var(--text-tertiary)]" />
         <span className="font-medium text-[var(--text-primary)]">{sourceBranch}</span>
@@ -80,8 +91,8 @@ export function MergeActionBar({
         )}
         {saveStatus === 'saved' && (
           <>
-            <Check className="h-3 w-3 text-green-500" />
-            <span className="text-green-500">Saved</span>
+            <Check className="h-3 w-3 text-[var(--diff-added-accent)]" />
+            <span className="text-[var(--diff-added-accent)]">Saved</span>
           </>
         )}
         {saveStatus === 'error' && (
@@ -96,7 +107,7 @@ export function MergeActionBar({
       <div className="flex-1" />
 
       {/* Merge Message Input */}
-      <div className="flex items-center gap-2 w-96">
+      <div className="flex items-center gap-2 min-w-[200px] max-w-96 flex-1">
         <Input
           placeholder="Merge message (required)"
           value={message}
@@ -106,7 +117,7 @@ export function MergeActionBar({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>

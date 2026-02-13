@@ -47,6 +47,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   } = useMergeWorkspaceStore();
 
   const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationCount, setCelebrationCount] = useState(0);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -88,14 +89,23 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
   const handleCommit = useCallback(async () => {
     try {
+      // Calculate sentence count before commit
+      const p = useMergeWorkspaceStore.getState().prepared;
+      const count = p
+        ? p.identical.length + p.similarPairs.length + p.onlyInSource.length + p.onlyInTarget.length
+        : 0;
       await commitMerge();
+      setCelebrationCount(count);
       setShowCelebration(true);
-      // Auto-dismiss after 1.5s — redirect is handled by page component
-      setTimeout(() => setShowCelebration(false), 1500);
+      // Auto-dismiss and redirect after 3s
+      setTimeout(() => {
+        setShowCelebration(false);
+        onClose();
+      }, 3000);
     } catch {
       // Error is set in store
     }
-  }, [commitMerge]);
+  }, [commitMerge, onClose]);
 
   const handleCancel = useCallback(async () => {
     await cancelMerge();
@@ -141,9 +151,13 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
               )}
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-commit)]/15">
-                <GitMerge className="h-7 w-7 text-[var(--accent-commit)]" />
+                <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                  <path d="M9 16.5L14 21.5L23 11" stroke="var(--accent-commit)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" pathLength="1" className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]" />
+                </svg>
               </div>
-              <p className="text-lg font-semibold text-[var(--text-primary)]">Merge Complete</p>
+              <p className="text-lg font-semibold text-[var(--text-primary)]">
+                Versions merged — {celebrationCount} sentences unified
+              </p>
             </motion.div>
           </motion.div>
         )}
@@ -151,6 +165,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
       {/* Action Bar */}
       <MergeActionBar
+        projectId={projectId}
         sourceBranch={sourceBranch || 'source'}
         targetBranch={targetBranch || 'main'}
         unresolvedCount={unresolvedCount}

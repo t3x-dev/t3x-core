@@ -24,6 +24,7 @@ import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
 import { canvasNodeTypes } from './CanvasNodes';
+import { CanvasStatusBar } from './CanvasStatusBar';
 import { NodePalette } from './NodePalette';
 
 // Custom edge types for xyflow
@@ -604,7 +605,7 @@ function CanvasWorkspaceInner({
     (node) => node.data.kind === 'unit' && node.data.branchType === 'branch'
   );
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Integrated Top Bar - Glass style */}
       <header
         className={cn(
@@ -891,6 +892,7 @@ function CanvasWorkspaceInner({
           </div>
         )}
       </div>
+      <CanvasStatusBar />
       {modalNode && (
         <NodeModal
           node={modalNode}
@@ -952,7 +954,7 @@ function CanvasWorkspaceInner({
         onClick={() => setShowShortcuts(true)}
         title="Keyboard Shortcuts (?)"
         className={cn(
-          'absolute bottom-4 right-4 z-10 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+          'absolute bottom-11 right-4 z-10 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
           glass.cardBase
         )}
       >

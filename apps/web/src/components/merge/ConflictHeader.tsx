@@ -17,12 +17,12 @@ const resolutionLabels: Record<string, { label: string; icon: React.ReactNode; c
   source: {
     label: 'Keep A',
     icon: <CheckCircle className="h-3.5 w-3.5" />,
-    color: 'text-red-600 dark:text-red-400',
+    color: 'text-[var(--diff-removed-accent)]',
   },
   target: {
     label: 'Keep B',
     icon: <CheckCircle className="h-3.5 w-3.5" />,
-    color: 'text-green-600 dark:text-green-400',
+    color: 'text-[var(--diff-added-accent)]',
   },
   both: {
     label: 'Keep Both',
@@ -48,9 +48,9 @@ export function ConflictHeader({
     <div className="flex items-center justify-between mb-3">
       <div className="flex items-center gap-2">
         {!resolution ? (
-          <AlertTriangle className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+          <AlertTriangle className="h-4 w-4 text-[var(--diff-modified-accent)]" />
         ) : (
-          <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" />
+          <CheckCircle className="h-4 w-4 text-[var(--diff-added-accent)]" />
         )}
         <span className="text-sm font-medium text-muted-foreground">Conflict {index + 1}</span>
         <span className="text-xs text-muted-foreground">
