@@ -19,7 +19,7 @@ interface ProgressBarProps {
 const colorMap = {
   blue: 'bg-blue-500',
   green: 'bg-emerald-500',
-  orange: 'bg-orange-500',
+  orange: 'bg-[var(--accent-pending)]',
 };
 
 export function ProgressBar({ value, max, label, color = 'blue' }: ProgressBarProps) {

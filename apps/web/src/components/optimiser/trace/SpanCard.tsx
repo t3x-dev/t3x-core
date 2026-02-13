@@ -56,7 +56,7 @@ function JsonViewer({
         </div>
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy}>
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-green-500" />
+            <Check className="h-3.5 w-3.5 text-[var(--status-success)]" />
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}
@@ -156,8 +156,8 @@ function ToolDetails({ tool }: { tool: NonNullable<StepRecord['tool']> }) {
             className={cn(
               'text-xs px-2 py-0.5 rounded border',
               tool.was_expected
-                ? 'bg-green-500/10 text-green-600 border-green-500/30'
-                : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
+                ? 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
+                : 'bg-yellow-500/10 text-[var(--status-warning)] border-yellow-500/30'
             )}
           >
             {tool.was_expected ? 'Expected' : 'Unexpected'}
@@ -213,8 +213,8 @@ export function SpanCard({ step, className }: SpanCardProps) {
       {/* Error Message */}
       {step.error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
-          <p className="text-xs font-medium text-red-600 mb-1">Error</p>
-          <p className="text-sm text-red-700">{step.error}</p>
+          <p className="text-xs font-medium text-[var(--status-error)] mb-1">Error</p>
+          <p className="text-sm text-[var(--status-error)]">{step.error}</p>
         </div>
       )}
 

@@ -8,7 +8,7 @@
    (See: frontend-art-template.md §1.0)
 
    Priority 1 (Final truth):  globals.css CSS Variables — runtime values, dark mode overrides
-   Priority 2 (Mapping layer): lib/theme.ts TypeScript — semantic aliases, getNodeClasses()
+   Priority 2 (Mapping layer): lib/theme.ts TypeScript — glass/toneAccent/toneGlow helpers
                                 MUST only reference CSS variables or Tailwind tokens
    Priority 3 (Consumer layer): Component Tailwind classes — use token classes
 
@@ -16,7 +16,7 @@
      ✅ Allowed: bg-primary, text-muted-foreground, border-border  (token class)
      ✅ Allowed: var(--diff-added-bg)                              (CSS variable)
      ❌ Forbidden: bg-blue-500, text-red-700, border-green-300     (bare color)
-     Exceptions: badge.tsx semantic variants, getNodeClasses() in theme.ts,
+     Exceptions: badge.tsx semantic variants,
                  diff components during migration (annotate: // TODO: migrate to --diff-* token)
 
    Conflict resolution:
@@ -184,6 +184,23 @@
   --highlight-deep-green-bg: #22c55e;
   --highlight-deep-red-bg: #ef4444;
 
+  /* ===== Accent Colors (light mode) ===== */
+  --accent-commit: #2563eb;
+  --accent-pending: #f97316;
+  --accent-leaf: #10b981;
+  --accent-branch: #f59e0b;
+  --accent-conversation: #6366f1;
+
+  /* ===== Status Colors (light mode) ===== */
+  --status-success: #16a34a;
+  --status-success-muted: #f0fdf4;
+  --status-error: #dc2626;
+  --status-error-muted: #fef2f2;
+  --status-warning: #d97706;
+  --status-warning-muted: #fffbeb;
+  --status-info: #2563eb;
+  --status-info-muted: #eff6ff;
+
   /* shadcn/ui Colors (oklch) - refined */
   --background: oklch(0.99 0.002 250);
   --foreground: oklch(0.13 0.02 260);
@@ -286,6 +303,16 @@
   --accent-leaf: oklch(0.65 0.14 155);
   --accent-branch: oklch(0.7 0.12 80);
   --accent-conversation: oklch(0.65 0.14 290);
+
+  /* ===== Status Colors (dark overrides) ===== */
+  --status-success: #4ade80;
+  --status-success-muted: rgba(5, 46, 22, 0.3);
+  --status-error: #f87171;
+  --status-error-muted: rgba(69, 10, 10, 0.3);
+  --status-warning: #fbbf24;
+  --status-warning-muted: rgba(69, 26, 3, 0.3);
+  --status-info: #60a5fa;
+  --status-info-muted: rgba(30, 58, 138, 0.3);
 
   /* ===== Text Hierarchy ===== */
   --text-primary: oklch(0.94 0.005 260);

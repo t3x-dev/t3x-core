@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { scaleIn } from '@/lib/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { reducedMotion, scaleIn } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,8 @@ interface CommandPaletteProps {
 export function CommandPalette({ projectId, onCreateConversation }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const prefersReducedMotion = useReducedMotion();
+  const dialogVariants = prefersReducedMotion ? reducedMotion.scaleIn : scaleIn;
 
   // Toggle command palette with Cmd+K / Ctrl+K
   useEffect(() => {
@@ -66,7 +69,7 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
 
           {/* Command Dialog */}
           <motion.div
-            variants={scaleIn}
+            variants={dialogVariants}
             initial="initial"
             animate="animate"
             exit="exit"

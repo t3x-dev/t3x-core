@@ -216,20 +216,20 @@ export function ConstraintTextSelector({
           <ShieldX className="h-3.5 w-3.5 mr-1.5" />
           Must Not Have
         </Button>
-        <span className="text-xs text-slate-400 ml-2">Select text below to add a constraint</span>
+        <span className="text-xs text-[var(--color-text-muted)] ml-2">Select text below to add a constraint</span>
       </div>
 
       {/* Merged text block */}
       <div
         ref={textRef}
-        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed cursor-text select-text whitespace-pre-wrap"
+        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm text-[var(--color-text-secondary)] leading-relaxed cursor-text select-text whitespace-pre-wrap"
         onMouseUp={handleMouseUp}
       >
         {segments}
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-slate-500">
+      <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm bg-green-700/20 border border-green-700/30" />
           Must Have
@@ -245,7 +245,7 @@ export function ConstraintTextSelector({
         <div className="space-y-3">
           {requireConstraints.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide mb-1.5">
+              <h4 className="text-xs font-semibold text-[var(--status-success)] uppercase tracking-wide mb-1.5">
                 Must Have ({requireConstraints.length})
               </h4>
               <div className="space-y-1">
@@ -263,7 +263,7 @@ export function ConstraintTextSelector({
           )}
           {excludeConstraints.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1.5">
+              <h4 className="text-xs font-semibold text-[var(--status-error)] uppercase tracking-wide mb-1.5">
                 Must Not Have ({excludeConstraints.length})
               </h4>
               <div className="space-y-1">
@@ -283,7 +283,7 @@ export function ConstraintTextSelector({
       )}
 
       {constraints.length === 0 && (
-        <p className="text-xs text-slate-400 italic">
+        <p className="text-xs text-[var(--color-text-muted)] italic">
           Select text above to create constraints. Switch mode with the buttons.
         </p>
       )}
@@ -313,16 +313,16 @@ function ConstraintRow({
       className={cn(
         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm',
         isRequire
-          ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
-          : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+          ? 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]'
+          : 'border-[var(--status-error)]/20 bg-[var(--status-error-muted)]'
       )}
       onMouseEnter={() => onHover(constraint.id)}
       onMouseLeave={() => onHover(null)}
     >
       {isRequire ? (
-        <CheckCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400 shrink-0" />
+        <CheckCircle className="h-3.5 w-3.5 text-[var(--status-success)] shrink-0" />
       ) : (
-        <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 shrink-0" />
+        <XCircle className="h-3.5 w-3.5 text-[var(--status-error)] shrink-0" />
       )}
       <span
         className={cn(
@@ -333,7 +333,7 @@ function ConstraintRow({
         {constraint.value}
       </span>
       {constraint.description && (
-        <span className="text-xs font-mono text-slate-400 shrink-0">
+        <span className="text-xs font-mono text-[var(--color-text-muted)] shrink-0">
           {constraint.description
             .replace('Selected from sentence ', '')
             .replace('Excluded from sentence ', '')}

@@ -27,8 +27,8 @@ function StarRating({
         <button
           key={star}
           className={cn(
-            'p-0.5 text-muted-foreground transition-colors hover:text-amber-500',
-            (hoverRating || rating || 0) >= star && 'text-amber-500'
+            'p-0.5 text-muted-foreground transition-colors hover:text-[var(--status-warning)]',
+            (hoverRating || rating || 0) >= star && 'text-[var(--status-warning)]'
           )}
           onClick={() => !disabled && onRate(star)}
           onMouseEnter={() => !disabled && setHoverRating(star)}
@@ -43,7 +43,7 @@ function StarRating({
           />
         </button>
       ))}
-      {rating && <span className="ml-2 text-xs text-green-600">Feedback recorded</span>}
+      {rating && <span className="ml-2 text-xs text-[var(--status-success)]">Feedback recorded</span>}
     </div>
   );
 }

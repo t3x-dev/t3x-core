@@ -294,7 +294,7 @@ export default function TestSourceContextPage() {
       </div>
 
       {/* Notes */}
-      <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+      <div className="mt-8 p-4 bg-[var(--status-info-muted)] rounded-lg">
         <h3 className="font-semibold mb-2">Testing Notes</h3>
         <ul className="text-sm space-y-1 text-muted-foreground">
           <li>- Toggle checkboxes above to simulate loading/error states</li>

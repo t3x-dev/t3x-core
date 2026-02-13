@@ -9,19 +9,19 @@ const stageConfig = {
     label: 'Commit',
     Icon: GitCommit,
     variant: 'default' as const,
-    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/15',
+    className: 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/20 hover:bg-blue-500/15',
   },
   draft: {
     label: 'Draft',
     Icon: GitBranch,
     variant: 'outline' as const,
-    className: 'bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/15',
+    className: 'bg-amber-500/10 text-[var(--status-warning)] border-amber-500/20 hover:bg-amber-500/15',
   },
   turn: {
     label: 'Conversation',
     Icon: MessageSquare,
     variant: 'secondary' as const,
-    className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/15',
+    className: 'bg-emerald-500/10 text-[var(--status-success)] border-emerald-500/20 hover:bg-emerald-500/15',
   },
 } as const;
 

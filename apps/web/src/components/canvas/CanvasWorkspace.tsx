@@ -20,6 +20,7 @@ import {
   MessageSquarePlus,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -96,6 +97,7 @@ function CanvasWorkspaceInner({
   const { resolvedTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -723,8 +725,8 @@ function CanvasWorkspaceInner({
               className={cn(
                 'h-9 px-3 rounded-xl transition-all text-xs',
                 'text-muted-foreground hover:text-foreground',
-                'hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400',
-                'border border-dashed border-amber-300 dark:border-amber-700'
+                'hover:bg-[var(--status-warning)]/10 hover:text-[var(--status-warning)]',
+                'border border-dashed border-[var(--status-warning)]'
               )}
             >
               Demo
@@ -868,13 +870,16 @@ function CanvasWorkspaceInner({
                     <div className="flex items-start gap-3">
                       <motion.div
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit)]/10"
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{
-                          duration: 3,
-                          repeat: Number.POSITIVE_INFINITY,
-                          delay: i * 0.5,
-                          ease: 'easeInOut',
-                        }}
+                        animate={prefersReducedMotion ? undefined : { y: [0, -2, 0] }}
+                        transition={
+                          prefersReducedMotion
+                            ? undefined
+                            : {
+                                duration: 3,
+                                delay: i * 0.5,
+                                ease: 'easeInOut',
+                              }
+                        }
                       >
                         <step.icon className="h-5 w-5 text-[var(--accent-commit)]" />
                       </motion.div>

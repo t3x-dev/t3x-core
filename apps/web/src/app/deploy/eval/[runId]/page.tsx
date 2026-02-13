@@ -305,8 +305,8 @@ export default function RunDetailPage() {
               className={cn(
                 'px-3 py-1 text-sm',
                 passed
-                  ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                  : 'border-red-500/30 bg-red-500/10 text-red-600'
+                  ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
+                  : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
               )}
             >
               {passed ? (
@@ -319,7 +319,7 @@ export default function RunDetailPage() {
           ) : (
             <Badge
               variant="outline"
-              className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-600"
+              className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-[var(--status-info)]"
             >
               <Loader2 className="mr-1 h-4 w-4 animate-spin" />
               {run.status}
@@ -332,7 +332,7 @@ export default function RunDetailPage() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Score:</span>
             <span
-              className={cn('font-mono font-semibold', passed ? 'text-green-600' : 'text-red-600')}
+              className={cn('font-mono font-semibold', passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]')}
             >
               {score !== undefined ? `${Math.round(score * 100)}%` : '-'}
             </span>
@@ -414,7 +414,7 @@ export default function RunDetailPage() {
                           <p className="text-xs text-muted-foreground">Tool Calls</p>
                         </div>
                         <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                          <p className="text-2xl font-bold text-red-600">
+                          <p className="text-2xl font-bold text-[var(--status-error)]">
                             {traceSummary.trajectory.failed_steps}
                           </p>
                           <p className="text-xs text-muted-foreground">Failed Steps</p>
@@ -510,10 +510,10 @@ export default function RunDetailPage() {
                                 className={cn(
                                   'text-xs',
                                   assertion.type === 'fail'
-                                    ? 'border-red-500/30 text-red-600'
+                                    ? 'border-red-500/30 text-[var(--status-error)]'
                                     : assertion.type === 'warning'
-                                      ? 'border-yellow-500/30 text-yellow-600'
-                                      : 'border-green-500/30 text-green-600'
+                                      ? 'border-yellow-500/30 text-[var(--status-warning)]'
+                                      : 'border-green-500/30 text-[var(--status-success)]'
                                 )}
                               >
                                 {assertion.type}

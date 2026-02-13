@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Bot,
   ChevronRight,
   CloudOff,
   ExternalLink,
@@ -9,7 +10,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Rocket,
   Trash2,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -355,11 +355,11 @@ function DeployPageContent() {
 
           {deployAgents.length === 0 ? (
             <EmptyState
-              icon={Rocket}
-              title="No deploy agents registered"
-              description="Add an agent to get started with deployments."
+              icon={Bot}
+              title="No agents deployed"
+              description="Deploy agents to evaluate content automatically."
               action={{
-                label: 'Add Agent',
+                label: 'Deploy Agent',
                 onClick: () => setShowAddAgent(true),
               }}
             />

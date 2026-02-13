@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { typo } from '@/lib/typography';
@@ -30,6 +30,7 @@ export function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const prefersReducedMotion = useReducedMotion();
   return (
     <div className="rounded-lg border bg-card">
       <button
@@ -58,7 +59,7 @@ export function CollapsibleSection({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden"
           >
             <div className="border-t p-4">{children}</div>

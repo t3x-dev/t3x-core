@@ -521,7 +521,7 @@ export default function LeafDetailPage() {
 
       {/* Semantic validation warning */}
       {semanticWarning && (
-        <div className="mx-4 mt-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30 px-4 py-2 text-sm text-yellow-800 dark:text-yellow-300">
+        <div className="mx-4 mt-2 rounded-md bg-[var(--status-warning-muted)] px-4 py-2 text-sm text-[var(--status-warning)]">
           Note: Semantic validation is not yet supported. Only exact match was used for validation.
         </div>
       )}
@@ -532,7 +532,7 @@ export default function LeafDetailPage() {
           className={cn(
             'mx-4 mt-2 rounded-md px-4 py-2 text-sm',
             exportMessage.type === 'success'
-              ? 'bg-green-100 text-green-800'
+              ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
               : 'bg-destructive/10 text-destructive'
           )}
         >
@@ -545,7 +545,7 @@ export default function LeafDetailPage() {
         <div className="mx-auto max-w-4xl space-y-6">
           {/* Commit load warning */}
           {commitLoadError && (
-            <div className="rounded-md border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+            <div className="rounded-md border border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--status-warning)]">
               Source commit data unavailable — constraints shown without source context.
             </div>
           )}
@@ -685,7 +685,7 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
         {/* Require constraints */}
         {requireConstraints.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-green-600 mb-2">
+            <h3 className="text-sm font-medium text-[var(--status-success)] mb-2">
               Must Have ({requireConstraints.length})
             </h3>
             <div className="space-y-2">
@@ -704,7 +704,7 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
         {/* Exclude constraints */}
         {excludeConstraints.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-red-600 mb-2">
+            <h3 className="text-sm font-medium text-[var(--status-error)] mb-2">
               Must Not Have ({excludeConstraints.length})
             </h3>
             <div className="space-y-2">
@@ -744,16 +744,16 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
       className={cn(
         'flex items-start justify-between gap-2 rounded-md border p-3',
         isRequire
-          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
-          : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
+          ? 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]'
+          : 'border-[var(--status-error)]/20 bg-[var(--status-error-muted)]'
       )}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {isRequire ? (
-            <Check className="h-4 w-4 text-green-600 shrink-0" />
+            <Check className="h-4 w-4 text-[var(--status-success)] shrink-0" />
           ) : (
-            <X className="h-4 w-4 text-red-600 shrink-0" />
+            <X className="h-4 w-4 text-[var(--status-error)] shrink-0" />
           )}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -771,7 +771,7 @@ function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps)
           <p className="text-xs text-muted-foreground mt-1 ml-6">{constraint.description}</p>
         )}
         {constraint.type === 'exclude' && constraint.reason && (
-          <p className="text-xs text-red-600 mt-1 ml-6">Reason: {constraint.reason}</p>
+          <p className="text-xs text-[var(--status-error)] mt-1 ml-6">Reason: {constraint.reason}</p>
         )}
       </div>
       <Button
@@ -953,7 +953,7 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
     <section
       className={cn(
         'rounded-lg border bg-card transition-all duration-500',
-        allPassed && 'ring-2 ring-green-400/50 animate-in fade-in zoom-in-95 duration-500'
+        allPassed && 'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-500'
       )}
     >
       <div className="flex items-center justify-between border-b p-4">
@@ -962,7 +962,7 @@ function AssertionsSection({ assertions, constraints }: AssertionsSectionProps) 
           <span
             className={cn(
               'flex items-center gap-1 text-sm font-medium',
-              allPassed ? 'text-green-600' : 'text-red-600'
+              allPassed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
             )}
           >
             {allPassed ? (
@@ -1003,15 +1003,15 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
       className={cn(
         'rounded-md border p-3',
         assertion.passed
-          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
-          : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
+          ? 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]'
+          : 'border-[var(--status-error)]/20 bg-[var(--status-error-muted)]'
       )}
     >
       <div className="flex items-start gap-2">
         {assertion.passed ? (
-          <Check className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+          <Check className="h-4 w-4 text-[var(--status-success)] shrink-0 mt-0.5" />
         ) : (
-          <X className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+          <X className="h-4 w-4 text-[var(--status-error)] shrink-0 mt-0.5" />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -1029,8 +1029,8 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
               className={cn(
                 'text-xs px-1.5 py-0.5 rounded',
                 assertion.passed
-                  ? 'bg-green-200 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                  : 'bg-red-200 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                  ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                  : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
               )}
             >
               {assertion.passed ? 'PASS' : 'FAIL'}
@@ -1038,7 +1038,7 @@ function AssertionItem({ assertion, constraint }: AssertionItemProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">{assertion.details}</p>
           {assertion.lesson && (
-            <p className="text-xs text-blue-600 mt-1">Lesson: {assertion.lesson}</p>
+            <p className="text-xs text-[var(--status-info)] mt-1">Lesson: {assertion.lesson}</p>
           )}
         </div>
       </div>

@@ -27,12 +27,12 @@ const resolutionLabels: Record<string, { label: string; icon: React.ReactNode; c
   both: {
     label: 'Keep Both',
     icon: <Layers className="h-3.5 w-3.5" />,
-    color: 'text-blue-600 dark:text-blue-400',
+    color: 'text-[var(--status-info)]',
   },
   edit: {
     label: 'Custom',
     icon: <Edit3 className="h-3.5 w-3.5" />,
-    color: 'text-purple-600 dark:text-purple-400',
+    color: 'text-[var(--accent-conversation)]',
   },
 };
 

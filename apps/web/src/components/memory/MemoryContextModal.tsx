@@ -219,20 +219,20 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                         className={cn(
                           'p-2 rounded border text-sm',
                           c.type === 'require'
-                            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
-                            : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+                            ? 'bg-[var(--status-success-muted)] border-[var(--status-success)]/20'
+                            : 'bg-[var(--status-error-muted)] border-[var(--status-error)]/20'
                         )}
                       >
                         <div className="flex items-center gap-1.5 mb-1">
                           {c.type === 'require' ? (
-                            <Check className="h-3.5 w-3.5 text-green-600" />
+                            <Check className="h-3.5 w-3.5 text-[var(--status-success)]" />
                           ) : (
-                            <XCircle className="h-3.5 w-3.5 text-red-600" />
+                            <XCircle className="h-3.5 w-3.5 text-[var(--status-error)]" />
                           )}
                           <span
                             className={cn(
                               'text-xs font-medium',
-                              c.type === 'require' ? 'text-green-700' : 'text-red-700'
+                              c.type === 'require' ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
                             )}
                           >
                             {c.type === 'require' ? 'Require' : 'Exclude'}
@@ -297,7 +297,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
         {/* Summary */}
         <div className="shrink-0 flex items-center gap-3 py-1.5 px-3 mx-6 bg-[var(--hover-bg)] rounded-lg text-xs">
           <div className="flex items-center gap-1">
-            <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
+            <Pin className="h-3 w-3 text-[var(--status-warning)] fill-[var(--status-warning)]" />
             <span className="font-medium text-[var(--text-primary)]">
               {pinnedConversations + pinnedLeaves}
             </span>
@@ -330,7 +330,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                   <MessageSquare className="h-4 w-4" />
                   Conversations
                   {pinnedConversations > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-amber-500/40 text-amber-400 bg-transparent rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-[var(--status-warning)]/40 text-[var(--status-warning)] bg-transparent rounded-full">
                       {pinnedConversations}
                     </span>
                   )}
@@ -342,7 +342,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                   <FileText className="h-4 w-4" />
                   Leaves
                   {pinnedLeaves > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-amber-500/40 text-amber-400 bg-transparent rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs border border-[var(--status-warning)]/40 text-[var(--status-warning)] bg-transparent rounded-full">
                       {pinnedLeaves}
                     </span>
                   )}
@@ -387,7 +387,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             <Checkbox
                               checked={pinned}
                               disabled={isToggling}
-                              className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
+                              className={cn(pinned && 'border-[var(--status-warning)] bg-[var(--status-warning)] text-white')}
                             />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -396,7 +396,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                                 {conv.title || 'Untitled'}
                               </span>
                               {pinned && (
-                                <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                                <Pin className="h-3 w-3 text-[var(--status-warning)] fill-[var(--status-warning)] shrink-0" />
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
@@ -450,7 +450,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             <Checkbox
                               checked={pinned}
                               disabled={isToggling}
-                              className={cn(pinned && 'border-amber-500 bg-amber-500 text-white')}
+                              className={cn(pinned && 'border-[var(--status-warning)] bg-[var(--status-warning)] text-white')}
                             />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -459,7 +459,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                                 {leaf.title || `Leaf: ${leaf.id.slice(0, 8)}...`}
                               </span>
                               {pinned && (
-                                <Pin className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                                <Pin className="h-3 w-3 text-[var(--status-warning)] fill-[var(--status-warning)] shrink-0" />
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">

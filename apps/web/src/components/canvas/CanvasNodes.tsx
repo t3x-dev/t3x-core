@@ -30,8 +30,9 @@ import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { type ConversationContext, getConversationContext } from '@/lib/api';
-import { nodeEnter } from '@/lib/motion';
+import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -164,8 +165,8 @@ function AuthorBadgeV3({ author }: { author: CommitV3Display['author'] }) {
     <span
       className={`text-xs px-1.5 py-0.5 rounded ${
         isVerified
-          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
+          ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+          : 'bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]'
       }`}
     >
       {author.name}
@@ -183,8 +184,8 @@ function AuthorBadgeV4({ author }: { author: CommitV4Display['author'] }) {
     <span
       className={`text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
         isAgent
-          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-          : 'bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400'
+          ? 'bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]'
+          : 'bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]'
       }`}
     >
       {author.name || author.id || 'Unknown'}
@@ -199,8 +200,8 @@ function ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
     <span
       className={`text-xs px-1.5 py-0.5 rounded ${
         isRequire
-          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700'
-          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 line-through'
+          ? 'bg-[var(--status-success-muted)] text-[var(--status-success)] border border-[var(--status-success)]/20'
+          : 'bg-[var(--status-error-muted)] text-[var(--status-error)] border border-[var(--status-error)]/20 line-through'
       }`}
     >
       {isRequire ? '✓' : '✗'} {constraint.value}
@@ -403,6 +404,7 @@ function UnitNode(props: Props) {
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
+  const prefersReducedMotion = useReducedMotion();
 
   const tone = useCanvasStore((state) => state.getCommitTone(id));
   const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
@@ -551,12 +553,12 @@ function UnitNode(props: Props) {
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
       <motion.div
-        variants={nodeEnter}
+        variants={prefersReducedMotion ? reducedMotion.scaleIn : nodeEnter}
         initial="initial"
-        animate={celebrating ? { scale: [1, 1.06, 1] } : 'animate'}
+        animate={celebrating && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
         exit="exit"
         transition={
-          celebrating
+          celebrating && !prefersReducedMotion
             ? {
                 duration: 0.4,
                 times: [0, 0.35, 1],
@@ -564,8 +566,12 @@ function UnitNode(props: Props) {
               }
             : undefined
         }
-        whileHover={{ y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
-        whileTap={{ scale: 0.995 }}
+        whileHover={
+          prefersReducedMotion
+            ? undefined
+            : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
+        }
+        whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
           'group w-72 rounded-xl overflow-visible',
           glass.cardNode,
@@ -754,7 +760,7 @@ function UnitNode(props: Props) {
                           .replace('sha256:', 'sha:')
                           .slice(0, 11)}
                         {copiedHash ? (
-                          <CheckCircle size={10} className="text-green-500 dark:text-green-400" />
+                          <CheckCircle size={10} className="text-[var(--status-success)]" />
                         ) : (
                           <Copy size={10} className="text-[var(--text-tertiary)]" />
                         )}
@@ -799,10 +805,10 @@ function UnitNode(props: Props) {
                   isStaging &&
                   (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
                     <span className="text-xs font-medium">
-                      <span className="text-green-600 dark:text-green-400">
+                      <span className="text-[var(--status-success)]">
                         {data.mustHave?.length || 0}✓
                       </span>{' '}
-                      <span className="text-red-500 dark:text-red-400">
+                      <span className="text-[var(--status-error)]">
                         {data.mustntHave?.length || 0}✗
                       </span>
                     </span>
@@ -847,7 +853,7 @@ function UnitNode(props: Props) {
                 Leaves ({data.leaves.length})
                 {totalAssertions > 0 && (
                   <span className="ml-1.5 normal-case font-normal">
-                    <span className="text-green-600 dark:text-green-400">{totalPassed}</span>
+                    <span className="text-[var(--status-success)]">{totalPassed}</span>
                     <span className="text-[var(--text-tertiary)]/50">/</span>
                     <span className="text-[var(--text-tertiary)]">{totalAssertions}</span>
                   </span>
@@ -867,7 +873,7 @@ function UnitNode(props: Props) {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
                   className="overflow-hidden"
                 >
                   <div className="px-3 pb-2 space-y-1 nodrag">
@@ -876,7 +882,7 @@ function UnitNode(props: Props) {
                       const leafHref = getLeafHref(leaf);
                       const leafContent = (
                         <>
-                          <div className="w-5 h-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                          <div className="w-5 h-5 rounded flex items-center justify-center bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]">
                             <LeafIcon size={12} />
                           </div>
                           <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">
@@ -887,13 +893,13 @@ function UnitNode(props: Props) {
                               className={cn(
                                 'text-xs font-medium px-1.5 py-0.5 rounded',
                                 leaf.status === 'running' &&
-                                  'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+                                  'bg-[var(--status-info-muted)] text-[var(--status-info)]',
                                 leaf.status === 'passed' &&
-                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+                                  'bg-[var(--status-success-muted)] text-[var(--status-success)]',
                                 leaf.status === 'failed' &&
-                                  'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+                                  'bg-[var(--status-error-muted)] text-[var(--status-error)]',
                                 leaf.status === 'pending' &&
-                                  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+                                  'bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
                                 leaf.status === 'idle' &&
                                   'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'
                               )}
@@ -925,7 +931,7 @@ function UnitNode(props: Props) {
                           )}
                           <button
                             type="button"
-                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-[var(--text-tertiary)]/50 hover:text-red-500 dark:hover:text-red-400 transition-all shrink-0"
+                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-[var(--status-error-muted)] text-[var(--text-tertiary)]/50 hover:text-[var(--status-error)] transition-all shrink-0"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -955,7 +961,7 @@ function UnitNode(props: Props) {
               <Button
                 variant="canvas-outline"
                 size="icon-sm"
-                className="rounded-full hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:border-blue-500 dark:hover:text-blue-400"
+                className="rounded-full hover:border-[var(--status-info)]/60 hover:bg-[var(--status-info-muted)] hover:text-[var(--status-info)]"
                 onClick={handleAddUnit}
                 aria-label="Add Unit"
               >
@@ -972,7 +978,7 @@ function UnitNode(props: Props) {
                 <Button
                   variant="canvas-outline"
                   size="icon-sm"
-                  className="rounded-full hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950 dark:hover:border-orange-500 dark:hover:text-orange-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-full hover:border-[var(--accent-pending)]/60 hover:bg-[var(--accent-pending)]/10 hover:text-[var(--accent-pending)] disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={handleMerge}
                   aria-label="Start Merge"
                   disabled={!canTriggerMerge}

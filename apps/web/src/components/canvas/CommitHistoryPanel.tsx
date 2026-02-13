@@ -220,7 +220,7 @@ export function CommitHistoryPanel({
                                 </span>
                               )}
                               {commit.branch && (
-                                <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-[var(--status-info)]">
                                   {commit.branch}
                                 </span>
                               )}
@@ -291,17 +291,17 @@ export function CommitHistoryPanel({
                         </span>
                       )}
                       {diffData.stats.addedCount > 0 && (
-                        <span className="text-green-600 dark:text-green-400">
+                        <span className="text-[var(--status-success)]">
                           +{diffData.stats.addedCount} added
                         </span>
                       )}
                       {diffData.stats.removedCount > 0 && (
-                        <span className="text-red-600 dark:text-red-400">
+                        <span className="text-[var(--status-error)]">
                           -{diffData.stats.removedCount} removed
                         </span>
                       )}
                       {diffData.stats.modifiedCount > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400">
+                        <span className="text-[var(--status-warning)]">
                           ~{diffData.stats.modifiedCount} modified
                         </span>
                       )}

@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import {
   Check,
-  FolderOpen,
+  Folder,
   GitBranch,
   GitCommitHorizontal,
   MessageSquare,
@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useMicrocopy } from '@/lib/microcopy';
 import {
   noHover,
   noTap,
@@ -42,6 +43,7 @@ export default function SemanticLedgerPage() {
   const { projects, loading, error, initialized, fetchProjects, addProject, deleteProject } =
     useProjectStore();
   const prefersReducedMotion = useReducedMotion();
+  const mc = useMicrocopy();
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -263,16 +265,20 @@ export default function SemanticLedgerPage() {
         animate="animate"
       >
         {projects.length === 0 && (
-          <motion.div variants={itemVariants}>
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                  <FolderOpen className="h-6 w-6 text-primary" />
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
+                  <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-muted to-muted/50 ring-1 ring-border/50">
+                    <Folder className="h-8 w-8 text-muted-foreground" />
+                  </div>
                 </div>
-                <p className="text-base font-medium text-[var(--text-primary)]">No projects yet</p>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Create one to start mapping conversations and drafts
+                <p className="text-lg font-semibold text-foreground">{mc('emptyProject')}</p>
+                <p className="mt-2 mb-6 max-w-sm text-sm text-muted-foreground">
+                  Projects organize your AI conversations and extracted knowledge.
                 </p>
+                <ShimmerButton onClick={handleCreateProject}>New Project</ShimmerButton>
               </CardContent>
             </Card>
           </motion.div>
