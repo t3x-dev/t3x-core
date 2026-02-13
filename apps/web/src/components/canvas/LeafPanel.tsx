@@ -11,7 +11,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { staggerContainer, staggerItem } from '@/lib/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -25,6 +26,12 @@ export function LeafPanel() {
   const addLeafNode = useCanvasStore((state) => state.addLeafNode);
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
+  const prefersReducedMotion = useReducedMotion();
+
+  const containerVariants = prefersReducedMotion
+    ? reducedMotion.staggerContainer
+    : staggerContainer;
+  const itemVariants = prefersReducedMotion ? reducedMotion.staggerItem : staggerItem;
 
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
@@ -42,22 +49,22 @@ export function LeafPanel() {
           <SheetDescription>Select where to publish your content</SheetDescription>
         </SheetHeader>
 
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {leafPanelOpen && (
             <motion.div
               className="flex flex-col gap-4 p-4"
-              variants={staggerContainer}
+              variants={containerVariants}
               initial="initial"
               animate="animate"
               exit="exit"
             >
-              <motion.div variants={staggerItem}>
+              <motion.div variants={itemVariants}>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Output
                 </p>
                 <div className="flex flex-col gap-2">
                   {LEAF_TYPES.map(({ type, label, icon: Icon }) => (
-                    <motion.div key={type} variants={staggerItem}>
+                    <motion.div key={type} variants={itemVariants}>
                       <AnimatedButton
                         variant="canvas-outline"
                         className="h-auto w-full justify-start gap-3 px-4 py-3"

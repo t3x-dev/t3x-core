@@ -2,6 +2,18 @@
  * Framer Motion Animation Presets
  * Reusable animation variants and spring configs for consistent motion design
  *
+ * Motion Budget Rules (§7.4):
+ *   - Page enter: max 1 animation (container fade only)
+ *   - User action: max 1 feedback animation
+ *   - Stagger: first load only (use AnimatePresence initial={false} to prevent re-trigger)
+ *   - State change: color transition only (no scale/position)
+ *   - Reduced Motion: opacity transitions only, no scale/slide/bounce
+ *   - Infinite animations: PROHIBITED (no repeat: Infinity)
+ *
+ * Reduced Motion Pattern:
+ *   const prefersReducedMotion = useReducedMotion()
+ *   const variants = prefersReducedMotion ? reducedMotion.fadeIn : fadeIn
+ *
  * Usage:
  *   import { fadeIn, scaleIn, springConfig } from '@/lib/motion'
  *   <motion.div variants={fadeIn} initial="initial" animate="animate" />

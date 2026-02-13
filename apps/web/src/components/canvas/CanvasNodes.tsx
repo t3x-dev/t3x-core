@@ -30,8 +30,9 @@ import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { type ConversationContext, getConversationContext } from '@/lib/api';
-import { nodeEnter } from '@/lib/motion';
+import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -403,6 +404,7 @@ function UnitNode(props: Props) {
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
+  const prefersReducedMotion = useReducedMotion();
 
   const tone = useCanvasStore((state) => state.getCommitTone(id));
   const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
@@ -551,12 +553,12 @@ function UnitNode(props: Props) {
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
       <motion.div
-        variants={nodeEnter}
+        variants={prefersReducedMotion ? reducedMotion.scaleIn : nodeEnter}
         initial="initial"
-        animate={celebrating ? { scale: [1, 1.06, 1] } : 'animate'}
+        animate={celebrating && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
         exit="exit"
         transition={
-          celebrating
+          celebrating && !prefersReducedMotion
             ? {
                 duration: 0.4,
                 times: [0, 0.35, 1],
@@ -564,8 +566,12 @@ function UnitNode(props: Props) {
               }
             : undefined
         }
-        whileHover={{ y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
-        whileTap={{ scale: 0.995 }}
+        whileHover={
+          prefersReducedMotion
+            ? undefined
+            : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
+        }
+        whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
           'group w-72 rounded-xl overflow-visible',
           glass.cardNode,
@@ -867,7 +873,7 @@ function UnitNode(props: Props) {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
                   className="overflow-hidden"
                 >
                   <div className="px-3 pb-2 space-y-1 nodrag">

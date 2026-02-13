@@ -14,6 +14,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -46,6 +47,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     togglePreview,
   } = useMergeWorkspaceStore();
 
+  const prefersReducedMotion = useReducedMotion();
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationCount, setCelebrationCount] = useState(0);
 
@@ -140,10 +142,14 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
             className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
+              transition={
+                prefersReducedMotion
+                  ? { duration: 0.15 }
+                  : { type: 'spring', stiffness: 400, damping: 25 }
+              }
               className={cn(
                 'flex flex-col items-center gap-4 rounded-2xl px-10 py-8',
                 glass.cardBase,
@@ -152,7 +158,15 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-commit)]/15">
                 <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-                  <path d="M9 16.5L14 21.5L23 11" stroke="var(--accent-commit)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" pathLength="1" className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]" />
+                  <path
+                    d="M9 16.5L14 21.5L23 11"
+                    stroke="var(--accent-commit)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    pathLength="1"
+                    className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]"
+                  />
                 </svg>
               </div>
               <p className="text-lg font-semibold text-[var(--text-primary)]">

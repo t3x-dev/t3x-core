@@ -1,8 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { AlertTriangle, Info, type LucideIcon, RefreshCw, X } from 'lucide-react';
-import { fadeIn } from '@/lib/motion';
+import { fadeIn, reducedMotion } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
 
@@ -80,10 +80,12 @@ export function ErrorGuidance({
 }: ErrorGuidanceProps) {
   const styles = variantStyles[variant];
   const IconComponent = icon ?? defaultIcons[variant];
+  const prefersReducedMotion = useReducedMotion();
+  const variants = prefersReducedMotion ? reducedMotion.fadeIn : fadeIn;
 
   return (
     <motion.div
-      variants={fadeIn}
+      variants={variants}
       initial="initial"
       animate="animate"
       data-slot="error-guidance"

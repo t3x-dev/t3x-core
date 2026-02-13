@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
-import { fadeIn, scaleIn } from '@/lib/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { fadeIn, reducedMotion } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
 
@@ -53,18 +54,18 @@ export function EmptyState({
   helpLink,
   className,
 }: EmptyStateProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const variants = prefersReducedMotion ? reducedMotion.fadeIn : fadeIn;
+
   return (
     <motion.div
-      variants={fadeIn}
+      variants={variants}
       initial="initial"
       animate="animate"
       className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}
     >
-      {/* Icon with subtle animation */}
-      <motion.div
-        variants={scaleIn}
-        initial="initial"
-        animate="animate"
+      {/* Icon */}
+      <div
         className={cn(
           'mb-4 flex h-14 w-14 items-center justify-center rounded-xl',
           'bg-gradient-to-br from-muted to-muted/50',
@@ -72,41 +73,36 @@ export function EmptyState({
         )}
       >
         <Icon className="h-7 w-7 text-muted-foreground" />
-      </motion.div>
+      </div>
 
       {/* Title */}
-      <motion.h3 variants={fadeIn} className="mb-2 text-lg font-semibold text-foreground">
-        {title}
-      </motion.h3>
+      <h3 className="mb-2 text-lg font-semibold text-foreground">{title}</h3>
 
       {/* Description */}
-      <motion.p variants={fadeIn} className="mb-6 max-w-sm text-sm text-muted-foreground">
-        {description}
-      </motion.p>
+      <p className="mb-6 max-w-sm text-sm text-muted-foreground">{description}</p>
 
       {/* Actions */}
       {(action || secondaryAction) && (
-        <motion.div variants={fadeIn} className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
           {action && <Button onClick={action.onClick}>{action.label}</Button>}
           {secondaryAction && (
             <Button variant="outline" onClick={secondaryAction.onClick}>
               {secondaryAction.label}
             </Button>
           )}
-        </motion.div>
+        </div>
       )}
 
       {/* Help Link */}
       {helpLink && (
-        <motion.a
-          variants={fadeIn}
+        <a
           href={helpLink.href}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-4 text-sm text-primary hover:underline"
         >
           {helpLink.label}
-        </motion.a>
+        </a>
       )}
     </motion.div>
   );
