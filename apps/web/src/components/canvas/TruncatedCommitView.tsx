@@ -214,7 +214,9 @@ export function TruncatedCommitView({
 
   // Handle empty sentences
   if (sentences.length === 0) {
-    return <div className="px-2 py-1.5 text-xs text-[var(--color-text-muted)] italic">No sentences</div>;
+    return (
+      <div className="px-2 py-1.5 text-xs text-[var(--color-text-muted)] italic">No sentences</div>
+    );
   }
 
   // All legacy data - show simple sentence list with legacy badge
@@ -222,9 +224,7 @@ export function TruncatedCommitView({
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1 text-[0.65rem] text-[var(--color-text-muted)]">
-          <span className="px-1 py-0.5 bg-[var(--hover-bg)] rounded text-[0.6rem]">
-            Legacy
-          </span>
+          <span className="px-1 py-0.5 bg-[var(--hover-bg)] rounded text-[0.6rem]">Legacy</span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div

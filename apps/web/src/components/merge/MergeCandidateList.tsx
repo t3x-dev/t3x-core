@@ -19,15 +19,15 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
   const keptCount = candidates.filter((c) => c.keep).length;
 
   return (
-    <div className="border rounded-lg p-4">
-      <div className="flex justify-between items-center mb-3">
+    <div className="border rounded-lg p-[var(--space-group)]">
+      <div className="flex justify-between items-center mb-[var(--space-item)]">
         <h3 className="font-medium">{title}</h3>
         <span className="text-sm text-muted-foreground">
           ({keptCount} / {candidates.length}) keeping
         </span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-[var(--space-item)]">
         {candidates.map((candidate, index) => (
           <label key={candidate.sentence.id} className="flex items-start gap-2 cursor-pointer">
             <input

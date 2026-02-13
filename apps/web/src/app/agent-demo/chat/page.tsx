@@ -43,7 +43,9 @@ function StarRating({
           />
         </button>
       ))}
-      {rating && <span className="ml-2 text-xs text-[var(--status-success)]">Feedback recorded</span>}
+      {rating && (
+        <span className="ml-2 text-xs text-[var(--status-success)]">Feedback recorded</span>
+      )}
     </div>
   );
 }
@@ -116,7 +118,7 @@ export default function AgentDemoChatPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header Section */}
-      <header className="flex shrink-0 items-center justify-between border-b bg-background px-6 py-3">
+      <header className="flex shrink-0 items-center justify-between border-b bg-background px-[var(--space-page)] py-3">
         <div className="flex items-center gap-3">
           <Bot className="h-5 w-5 text-primary" />
           <h2 className="font-semibold">{agentName}</h2>

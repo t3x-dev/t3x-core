@@ -239,7 +239,7 @@ function CommitV3Content({
   return (
     <div className="commit-v3-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
       {/* Author badge */}
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-1.5 mb-[var(--space-item)]">
         <span className="text-xs text-[var(--text-tertiary)]">by</span>
         <AuthorBadgeV3 author={commit.author} />
       </div>
@@ -326,7 +326,7 @@ function CommitV4Content({
   return (
     <div className="commit-v4-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
       {/* Author badge */}
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-1.5 mb-[var(--space-item)]">
         <span className="text-xs text-[var(--text-tertiary)]">by</span>
         <AuthorBadgeV4 author={commit.author} />
         {/* V4 badge */}
@@ -573,7 +573,7 @@ function UnitNode(props: Props) {
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-xl overflow-visible',
+          'group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
           glass.highlight,
           // Left accent line
@@ -664,7 +664,7 @@ function UnitNode(props: Props) {
             ═══════════════════════════════════════════ */}
         <div className="px-3 py-3">
           {/* Row 1: Title + Branch Badge */}
-          <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-start justify-between gap-2 mb-[var(--space-item)]">
             <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
               {data.title}
             </h4>
@@ -700,7 +700,7 @@ function UnitNode(props: Props) {
 
           {/* B-8: Stats line (always visible in collapsed view) */}
           {sentenceCount > 0 && (
-            <div className="text-xs text-[var(--text-secondary)] mb-2">
+            <div className="text-xs text-[var(--text-secondary)] mb-[var(--space-item)]">
               {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
             </div>
           )}
@@ -710,7 +710,7 @@ function UnitNode(props: Props) {
             <button
               type="button"
               data-action="next-step"
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-[var(--space-item)] rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
               onClick={(e) => {
                 e.stopPropagation();
                 nextStep.action();
@@ -741,7 +741,7 @@ function UnitNode(props: Props) {
           {contentExpanded && (
             <>
               {/* Hash + copy button */}
-              <div className="flex items-center gap-1.5 text-[0.7rem] text-[var(--text-tertiary)] mb-2 mt-2 nodrag">
+              <div className="flex items-center gap-1.5 text-[0.7rem] text-[var(--text-tertiary)] mb-[var(--space-item)] mt-2 nodrag">
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -780,7 +780,7 @@ function UnitNode(props: Props) {
               </div>
 
               {/* Status indicator */}
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-[var(--space-item)]">
                 <div className="flex items-center gap-1.5">
                   {isStaging ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">

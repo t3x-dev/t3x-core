@@ -145,11 +145,11 @@ export default function ConversationPage() {
       {/* Main content area with sidebar */}
       <div className="flex flex-1 overflow-hidden">
         {/* Conversation content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="mx-auto max-w-3xl space-y-4">
+        <main className="flex-1 overflow-auto p-[var(--space-page)]">
+          <div className="mx-auto max-w-3xl space-y-[var(--space-group)]">
             {turns.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <MessageSquare className="h-12 w-12 mb-4 opacity-50" />
+                <MessageSquare className="h-12 w-12 mb-[var(--space-group)] opacity-50" />
                 <p className="font-medium">Start a conversation to capture knowledge</p>
                 <p className="text-sm">Type your first message below</p>
               </div>
@@ -224,17 +224,16 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
     <div
       ref={ref}
       className={cn(
-        'rounded-lg p-4 transition-all duration-300',
+        'rounded-lg p-[var(--space-group)] transition-all duration-300',
         isUser && 'bg-primary/10 ml-8',
         isAssistant && 'bg-[var(--color-bg-subtle)] mr-8',
-        isSystem &&
-          'bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25',
+        isSystem && 'bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25',
         isTool &&
           'bg-[var(--status-info-muted)] border border-[var(--color-border)] font-mono text-sm',
         isTarget && 'ring-2 ring-blue-500 ring-offset-2'
       )}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-[var(--space-item)]">
         <span
           className={cn(
             'text-xs font-medium px-2 py-0.5 rounded',

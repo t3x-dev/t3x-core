@@ -594,10 +594,12 @@ export function CommitSourceContext({
   // Handle empty sentences
   if (sentences.length === 0) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
         </div>
         <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No sentences</p>
       </div>
@@ -607,7 +609,7 @@ export function CommitSourceContext({
   // All legacy data - show simple sentence list
   if (allLegacy) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
@@ -617,7 +619,7 @@ export function CommitSourceContext({
             Legacy format
           </span>
         </div>
-        <ul className="space-y-2">
+        <ul className="space-y-[var(--space-item)]">
           {sentences.map((s) => (
             <li
               key={s.id}
@@ -639,10 +641,12 @@ export function CommitSourceContext({
   // Loading state
   if (isLoading) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
         </div>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -665,7 +669,7 @@ export function CommitSourceContext({
   // Fallback to sentence list if no context could be loaded
   if (!hasAnyContext) {
     return (
-      <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <XCircle size={14} className="text-[var(--color-text-muted)]" />
@@ -675,7 +679,7 @@ export function CommitSourceContext({
             Source unavailable
           </span>
         </div>
-        <ul className="space-y-2">
+        <ul className="space-y-[var(--space-item)]">
           {sentences.map((s) => (
             <li
               key={s.id}
@@ -717,12 +721,14 @@ export function CommitSourceContext({
       : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote}`;
 
   return (
-    <div className="p-4 bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
+    <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <MessageSquare size={14} className="text-[var(--status-success)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Source Context</h3>
+          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+            Source Context
+          </h3>
           {hasIntegrityIssues && (
             <span
               className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
@@ -758,7 +764,7 @@ export function CommitSourceContext({
       </div>
 
       {/* Sections list */}
-      <div className="space-y-2">
+      <div className="space-y-[var(--space-item)]">
         {/* Inherited sentences section */}
         {hasInheritedSentences && (
           <div className="rounded-lg border border-[var(--status-info)]/20 overflow-hidden">
@@ -786,7 +792,7 @@ export function CommitSourceContext({
                 {/* Group by source commit */}
                 {Array.from(inheritedByCommit.entries()).map(([commitHash, groupSentences]) => (
                   <div key={commitHash} className="mb-3 last:mb-0">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-[var(--space-item)]">
                       <span className="text-[0.65rem] font-mono text-[var(--status-info)] bg-[var(--status-info-muted)] px-1.5 py-0.5 rounded">
                         {commitHash.slice(0, 16)}...
                       </span>
@@ -851,7 +857,7 @@ export function CommitSourceContext({
                 {/* Expanded content - show sentences */}
                 {isExpanded && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
-                    <ul className="space-y-2">
+                    <ul className="space-y-[var(--space-item)]">
                       {sentencesForTurn.map((sg) => (
                         <li
                           key={sg.sentence.id}
@@ -927,7 +933,9 @@ export function CommitSourceContext({
                   )}
                   <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
                     {data.context?.conversation_title || `Turn ${idx + 1}`}
-                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">({targetTurn.role})</span>
+                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                      ({targetTurn.role})
+                    </span>
                   </span>
                   {turnHasIntegrityIssues && (
                     <span
@@ -1022,7 +1030,7 @@ export function CommitSourceContext({
                 </button>
                 {isExpanded && sentencesForLeaf.length > 0 && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
-                    <ul className="space-y-2">
+                    <ul className="space-y-[var(--space-item)]">
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
@@ -1082,7 +1090,7 @@ export function CommitSourceContext({
                   {leafOutput ? (
                     <LeafOutputWithHighlights output={leafOutput} sentences={sentencesForLeaf} />
                   ) : (
-                    <ul className="space-y-2">
+                    <ul className="space-y-[var(--space-item)]">
                       {sentencesForLeaf.map((sg) => (
                         <li
                           key={sg.sentence.id}
@@ -1114,7 +1122,7 @@ export function CommitSourceContext({
         {/* Legacy sentences without source info (only truly unresolved ones) */}
         {unresolvedSentences.length > 0 && !allLegacy && (
           <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-[var(--space-item)]">
               <span className="text-xs text-[var(--color-text-muted)]">
                 {unresolvedSentences.length} sentence
                 {unresolvedSentences.length !== 1 ? 's' : ''} without source info

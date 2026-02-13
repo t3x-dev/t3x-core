@@ -137,7 +137,7 @@ export default function InsightsPage() {
 
   if (loadError) {
     return (
-      <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+      <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
         <header className="flex items-center gap-3">
           <Lightbulb className="h-5 w-5" />
           <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
@@ -150,7 +150,7 @@ export default function InsightsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+    <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
       <header className="flex items-center gap-3">
         <Lightbulb className="h-5 w-5" />
         <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
@@ -162,7 +162,7 @@ export default function InsightsPage() {
           <TabsTrigger value="latest">Latest Commits</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="ledger" className="mt-6 space-y-4">
+        <TabsContent value="ledger" className="mt-6 space-y-[var(--space-group)]">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Ledger</h2>
             <p className="text-sm text-muted-foreground">Semantic commits across all projects.</p>
@@ -216,7 +216,7 @@ export default function InsightsPage() {
                 {timeline.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                    className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 elevation-1 elevation-hover"
                   >
                     <Badge
                       variant="outline"

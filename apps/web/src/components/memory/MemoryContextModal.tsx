@@ -160,7 +160,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
             </p>
           </div>
           <ScrollArea className="flex-1 min-h-0">
-            <div className="p-4 space-y-3">
+            <div className="p-[var(--space-group)] space-y-3">
               {detailTurns.length === 0 ? (
                 <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
                   No turns in this conversation
@@ -205,14 +205,14 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
             </p>
           </div>
           <ScrollArea className="flex-1 min-h-0">
-            <div className="p-4 space-y-4">
+            <div className="p-[var(--space-group)] space-y-[var(--space-group)]">
               {/* Constraints */}
               {leaf.constraints && leaf.constraints.length > 0 && (
                 <div>
-                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-2 uppercase tracking-wide">
+                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-[var(--space-item)] uppercase tracking-wide">
                     Constraints
                   </h4>
-                  <div className="space-y-2">
+                  <div className="space-y-[var(--space-item)]">
                     {leaf.constraints.map((c) => (
                       <div
                         key={c.id}
@@ -232,7 +232,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                           <span
                             className={cn(
                               'text-xs font-medium',
-                              c.type === 'require' ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
+                              c.type === 'require'
+                                ? 'text-[var(--status-success)]'
+                                : 'text-[var(--status-error)]'
                             )}
                           >
                             {c.type === 'require' ? 'Require' : 'Exclude'}
@@ -251,7 +253,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               {/* Output */}
               {leaf.output && (
                 <div>
-                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-2 uppercase tracking-wide">
+                  <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-[var(--space-item)] uppercase tracking-wide">
                     Output
                   </h4>
                   <div className="p-3 rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
@@ -357,7 +359,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                   </div>
                 ) : conversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-[var(--text-tertiary)]">
-                    <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
+                    <MessageSquare className="h-8 w-8 mb-[var(--space-item)] opacity-50" />
                     <p className="text-sm">No conversations</p>
                   </div>
                 ) : (
@@ -387,7 +389,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             <Checkbox
                               checked={pinned}
                               disabled={isToggling}
-                              className={cn(pinned && 'border-[var(--status-warning)] bg-[var(--status-warning)] text-white')}
+                              className={cn(
+                                pinned &&
+                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-white'
+                              )}
                             />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -423,7 +428,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                   </div>
                 ) : leaves.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-[var(--text-tertiary)]">
-                    <FileText className="h-8 w-8 mb-2 opacity-50" />
+                    <FileText className="h-8 w-8 mb-[var(--space-item)] opacity-50" />
                     <p className="text-sm">No leaves</p>
                   </div>
                 ) : (
@@ -450,7 +455,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             <Checkbox
                               checked={pinned}
                               disabled={isToggling}
-                              className={cn(pinned && 'border-[var(--status-warning)] bg-[var(--status-warning)] text-white')}
+                              className={cn(
+                                pinned &&
+                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-white'
+                              )}
                             />
                           </div>
                           <div className="flex-1 min-w-0">

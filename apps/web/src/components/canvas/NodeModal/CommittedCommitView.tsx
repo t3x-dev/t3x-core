@@ -221,17 +221,17 @@ export function CommittedCommitView({
                 <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
                   Version Info
                 </h4>
-                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                   <GitBranch size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>
                     Branch: <strong>{branchLabel}</strong>
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                   <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>{data.timestamp}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-2">
+                <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                   <Tag size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>{data.tags.length > 0 ? data.tags.join(', ') : 'No tags'}</span>
                 </div>
@@ -273,7 +273,7 @@ export function CommittedCommitView({
             />
 
             {/* Main Content - Tabbed Source View & Generated Output */}
-            <div className="flex-1 min-w-0 overflow-y-auto p-6 flex flex-col gap-6">
+            <div className="flex-1 min-w-0 overflow-y-auto p-[var(--space-page)] flex flex-col gap-[var(--space-section)]">
               {/* Commit header + tabbed source view */}
               {(data.commitV3 || data.commitV4) &&
                 (() => {
@@ -284,7 +284,7 @@ export function CommittedCommitView({
                   const commitProjectId = routeProjectId || projectId || undefined;
 
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-[var(--space-group)]">
                       <CommitFullHeader commit={commit} branchName={branchName} />
 
                       {/* Pinned Sources - V4 only */}
@@ -353,7 +353,7 @@ export function CommittedCommitView({
                         </TabsContent>
 
                         <TabsContent value="json">
-                          <pre className="p-4 bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-xs font-mono text-[var(--text-secondary)] overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
+                          <pre className="p-[var(--space-group)] bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-xs font-mono text-[var(--text-secondary)] overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
                             {JSON.stringify(commit, null, 2)}
                           </pre>
                         </TabsContent>
@@ -371,20 +371,20 @@ export function CommittedCommitView({
 
               {/* Generated Output - LLM generated content (only show if no commit data) */}
               {!data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
+                <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-[var(--text-secondary)]">
                       Generated Output
                     </h3>
                   </div>
-                  <div className="p-4 bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-[0.9rem] leading-relaxed text-[var(--text-secondary)]">
+                  <div className="p-[var(--space-group)] bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-[0.9rem] leading-relaxed text-[var(--text-secondary)]">
                     {data.summary || 'No generated content.'}
                   </div>
                 </div>
               )}
 
               {data.status && !data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
+                <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Intent</h3>
                   </div>
@@ -396,7 +396,7 @@ export function CommittedCommitView({
 
               {/* Facets - Extracted semantic data (only show if no commit data) */}
               {!data.commitV3 && !data.commitV4 && (
-                <div className="p-4 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
+                <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Facets</h3>
                     <span className="text-xs text-[var(--text-tertiary)]">

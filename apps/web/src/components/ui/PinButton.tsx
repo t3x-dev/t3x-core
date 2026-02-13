@@ -41,7 +41,11 @@ export function PinButton({ projectId, type, refId, className }: PinButtonProps)
         <Button
           variant="ghost"
           size="icon"
-          className={cn('h-8 w-8', pinned && 'text-[var(--status-warning)] hover:text-amber-600', className)}
+          className={cn(
+            'h-8 w-8',
+            pinned && 'text-[var(--status-warning)] hover:text-amber-600',
+            className
+          )}
           onClick={handleClick}
           disabled={isLoading}
         >

@@ -58,13 +58,13 @@ export default function TestSourceContextPage() {
 
   return (
     <div className="container mx-auto p-8 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">SourceContextView Test Page</h1>
+      <h1 className="text-2xl font-bold mb-[var(--space-section)]">SourceContextView Test Page</h1>
       <p className="text-muted-foreground mb-8">
         This page demonstrates the SourceContextView component in various states.
       </p>
 
       {/* Controls */}
-      <div className="flex gap-4 mb-8 p-4 bg-muted rounded-lg">
+      <div className="flex gap-[var(--space-group)] mb-8 p-[var(--space-group)] bg-muted rounded-lg">
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -87,11 +87,11 @@ export default function TestSourceContextPage() {
 
       <div className="space-y-8">
         {/* Section 1: Compact Mode (Yellow - Merge Style) */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
             1. Compact Mode - Yellow Highlight (Merge Style)
           </h2>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Default compact mode with truncated content and yellow highlight. Click &quot;Show more
             context&quot; to expand.
           </p>
@@ -111,11 +111,11 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 2: Compact Mode (Green - Commit Style) */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
             2. Compact Mode - Green Highlight (Commit Style)
           </h2>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Same content with green highlight color for commit display.
           </p>
           <div className="bg-card border rounded p-3">
@@ -132,9 +132,11 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 3: Expanded Mode */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">3. Expanded Mode - Full Content</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
+            3. Expanded Mode - Full Content
+          </h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Full content displayed without truncation. Can collapse back.
           </p>
           <div className="bg-card border rounded p-3">
@@ -151,9 +153,11 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 4: Short Content (No expand button) */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">4. Short Content - No Expand Button</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
+            4. Short Content - No Expand Button
+          </h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Content shorter than threshold shows without expand/collapse button.
           </p>
           <div className="bg-card border rounded p-3">
@@ -168,9 +172,9 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 5: Without Header */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">5. Without Header</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">5. Without Header</h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Content displayed without conversation header.
           </p>
           <div className="bg-card border rounded p-3">
@@ -188,9 +192,9 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 6: With Jump Link */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">6. With Jump Link</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">6. With Jump Link</h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Shows &quot;Jump to conversation&quot; link in header.
           </p>
           <div className="bg-card border rounded p-3">
@@ -209,9 +213,9 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 7: Missing Turn Hash */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">7. Missing Turn Hash</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">7. Missing Turn Hash</h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Shows &quot;unavailable&quot; state when turnHash is empty.
           </p>
           <div className="bg-card border rounded p-3">
@@ -220,9 +224,9 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 8: No Context Data */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">8. No Context Data</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">8. No Context Data</h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Returns null when contextData is null (nothing rendered).
           </p>
           <div className="bg-card border rounded p-3 min-h-[40px] flex items-center justify-center text-muted-foreground text-sm">
@@ -239,9 +243,11 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 9: Different Compact Chars */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">9. Custom Compact Chars (100)</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
+            9. Custom Compact Chars (100)
+          </h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Shows more context around highlight with compactChars=100.
           </p>
           <div className="bg-card border rounded p-3">
@@ -259,14 +265,16 @@ export default function TestSourceContextPage() {
         </section>
 
         {/* Section 10: Comparison - Side by Side */}
-        <section className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">10. Side-by-Side Comparison</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+        <section className="border rounded-lg p-[var(--space-group)]">
+          <h2 className="text-lg font-semibold mb-[var(--space-item)]">
+            10. Side-by-Side Comparison
+          </h2>
+          <p className="text-sm text-muted-foreground mb-[var(--space-group)]">
             Yellow (merge) vs Green (commit) highlight colors.
           </p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-[var(--space-group)]">
             <div className="bg-card border rounded p-3">
-              <h3 className="text-sm font-medium mb-2">Merge Style (Yellow)</h3>
+              <h3 className="text-sm font-medium mb-[var(--space-item)]">Merge Style (Yellow)</h3>
               <SourceContextView
                 turnHash="sha256:mock123"
                 highlightStart={16}
@@ -278,7 +286,7 @@ export default function TestSourceContextPage() {
               />
             </div>
             <div className="bg-card border rounded p-3">
-              <h3 className="text-sm font-medium mb-2">Commit Style (Green)</h3>
+              <h3 className="text-sm font-medium mb-[var(--space-item)]">Commit Style (Green)</h3>
               <SourceContextView
                 turnHash="sha256:mock123"
                 highlightStart={16}
@@ -294,8 +302,8 @@ export default function TestSourceContextPage() {
       </div>
 
       {/* Notes */}
-      <div className="mt-8 p-4 bg-[var(--status-info-muted)] rounded-lg">
-        <h3 className="font-semibold mb-2">Testing Notes</h3>
+      <div className="mt-8 p-[var(--space-group)] bg-[var(--status-info-muted)] rounded-lg">
+        <h3 className="font-semibold mb-[var(--space-item)]">Testing Notes</h3>
         <ul className="text-sm space-y-1 text-muted-foreground">
           <li>- Toggle checkboxes above to simulate loading/error states</li>
           <li>- Click &quot;Show more context&quot; to expand truncated content</li>

@@ -78,7 +78,7 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
   return (
     <div className="space-y-3">
       {/* Model Info */}
-      <div className="flex flex-wrap gap-4 text-sm">
+      <div className="flex flex-wrap gap-[var(--space-group)] text-sm">
         <div>
           <span className="text-muted-foreground">Model: </span>
           <span className="font-medium">{llm.model}</span>
@@ -99,8 +99,8 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
 
       {/* Token Usage */}
       <div className="rounded-lg border p-3">
-        <p className="mb-2 text-sm font-medium">Token Usage</p>
-        <div className="grid grid-cols-3 gap-4 text-sm">
+        <p className="mb-[var(--space-item)] text-sm font-medium">Token Usage</p>
+        <div className="grid grid-cols-3 gap-[var(--space-group)] text-sm">
           <div className="text-center">
             <p className="text-muted-foreground">Prompt</p>
             <p className="font-mono font-medium">{llm.tokens.prompt.toLocaleString()}</p>
@@ -118,7 +118,7 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
 
       {/* Messages */}
       {llm.messages && llm.messages.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-[var(--space-item)]">
           <p className="text-sm font-medium">Messages</p>
           {llm.messages.map((msg, i) => (
             <div
@@ -146,7 +146,7 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
 function ToolDetails({ tool }: { tool: NonNullable<StepRecord['tool']> }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-[var(--space-group)] text-sm">
         <div>
           <span className="text-muted-foreground">Tool: </span>
           <span className="font-medium">{tool.tool_name}</span>
@@ -187,11 +187,11 @@ function RetrievalDetails({ retrieval }: { retrieval: NonNullable<StepRecord['re
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-[var(--space-item)]">
         <p className="text-sm font-medium">Documents ({retrieval.documents.length})</p>
         {retrieval.documents.map((doc, i) => (
           <div key={i} className="rounded-lg border p-3">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-[var(--space-item)]">
               <span className="text-xs text-muted-foreground">Document {i + 1}</span>
               {doc.score !== undefined && (
                 <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
@@ -209,7 +209,12 @@ function RetrievalDetails({ retrieval }: { retrieval: NonNullable<StepRecord['re
 
 export function SpanCard({ step, className }: SpanCardProps) {
   return (
-    <div className={cn('rounded-lg border bg-background p-4 space-y-4', className)}>
+    <div
+      className={cn(
+        'rounded-lg border bg-background p-[var(--space-group)] space-y-[var(--space-group)]',
+        className
+      )}
+    >
       {/* Error Message */}
       {step.error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
@@ -237,7 +242,7 @@ export function SpanCard({ step, className }: SpanCardProps) {
 
       {/* Legacy tokens display */}
       {step.tokens && !step.llm && (
-        <div className="flex gap-4 text-sm">
+        <div className="flex gap-[var(--space-group)] text-sm">
           <div>
             <span className="text-muted-foreground">Tokens In: </span>
             <span className="font-mono">{step.tokens.in}</span>
@@ -250,7 +255,7 @@ export function SpanCard({ step, className }: SpanCardProps) {
       )}
 
       {/* Step metadata */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground border-t pt-3">
+      <div className="flex flex-wrap gap-[var(--space-group)] text-xs text-muted-foreground border-t pt-3">
         <div>
           <span>Step ID: </span>
           <code className="font-mono bg-muted px-1 rounded">{step.step_id}</code>

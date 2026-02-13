@@ -89,7 +89,12 @@ export function ErrorGuidance({
       initial="initial"
       animate="animate"
       data-slot="error-guidance"
-      className={cn('w-full rounded-lg border p-4', styles.border, styles.bg, className)}
+      className={cn(
+        'w-full rounded-lg border p-[var(--space-group)]',
+        styles.border,
+        styles.bg,
+        className
+      )}
     >
       <div className="flex items-start gap-3">
         {/* Icon */}

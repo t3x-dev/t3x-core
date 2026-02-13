@@ -189,7 +189,7 @@ export function ConstraintTextSelector({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[var(--space-group)]">
       {/* Mode toggle */}
       <div className="flex items-center gap-2">
         <Button
@@ -216,7 +216,9 @@ export function ConstraintTextSelector({
           <ShieldX className="h-3.5 w-3.5 mr-1.5" />
           Must Not Have
         </Button>
-        <span className="text-xs text-[var(--color-text-muted)] ml-2">Select text below to add a constraint</span>
+        <span className="text-xs text-[var(--color-text-muted)] ml-2">
+          Select text below to add a constraint
+        </span>
       </div>
 
       {/* Merged text block */}

@@ -68,13 +68,13 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
       {/* Content - Collapsible */}
       {expanded && (
         <div className="px-6 pb-4 max-h-64 overflow-auto">
-          <div className="bg-[var(--surface-card)] rounded-lg border border-[var(--stroke-divider)] p-4">
+          <div className="bg-[var(--surface-card)] rounded-lg border border-[var(--stroke-divider)] p-[var(--space-group)] elevation-2">
             {sentences.length === 0 ? (
               <p className="text-center text-[var(--text-tertiary)] py-4">
                 No sentences selected for merge
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-[var(--space-item)]">
                 {sentences.map((sentence, idx) => (
                   <div key={sentence.id || idx} className="flex items-start gap-3 text-sm">
                     <span className="shrink-0 w-6 text-[var(--text-tertiary)] text-right">

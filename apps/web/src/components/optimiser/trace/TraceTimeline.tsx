@@ -163,7 +163,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
   return (
     <div className={className}>
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-[var(--space-group)] flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           Total:{' '}
           <span className="font-mono font-medium text-foreground">
@@ -253,7 +253,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
 
               {/* Expanded Details */}
               {isExpanded && (
-                <div className="ml-8 mt-1 mb-2">
+                <div className="ml-8 mt-1 mb-[var(--space-item)]">
                   <SpanCard step={step} />
                 </div>
               )}

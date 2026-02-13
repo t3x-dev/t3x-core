@@ -1098,7 +1098,15 @@ export function PendingCommitView({
             {/* Success icon — blue gradient badge + checkmark draw animation */}
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-                <path d="M9 16.5L14 21.5L23 11" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" pathLength="1" className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]" />
+                <path
+                  d="M9 16.5L14 21.5L23 11"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  pathLength="1"
+                  className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[strokeDraw_0.4s_ease-out_0.3s_forwards]"
+                />
               </svg>
             </div>
 
@@ -1201,7 +1209,7 @@ export function PendingCommitView({
             {/* STEP 1: Configure (or Merge for merge drafts) */}
             <div
               className={cn(
-                'flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto',
+                'flex flex-col gap-[var(--space-group)] flex-1 min-h-0 overflow-y-auto',
                 (configLocked || isMergeDraft) && 'opacity-95'
               )}
             >
@@ -1241,7 +1249,7 @@ export function PendingCommitView({
                 </div>
               ) : !configLocked ? (
                 /* Unlocked state: Show editable controls */
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-[var(--space-group)]">
                   {/* Branch Selection - from real API data */}
                   {shouldShowBranchSelect && (
                     <div className="flex flex-col gap-1.5">
@@ -1466,7 +1474,7 @@ export function PendingCommitView({
             {/* STEP 2: Curate */}
             <div
               className={cn(
-                'flex flex-col gap-4',
+                'flex flex-col gap-[var(--space-group)]',
                 !configLocked && 'opacity-50 pointer-events-none'
               )}
             >
@@ -1487,7 +1495,7 @@ export function PendingCommitView({
 
               {!configLocked ? (
                 /* Disabled state: Show hint */
-                <div className="flex items-center gap-2 p-4 bg-[var(--surface-app)] rounded-lg text-[var(--text-tertiary)] text-[0.85rem]">
+                <div className="flex items-center gap-2 p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg text-[var(--text-tertiary)] text-[0.85rem]">
                   <Lock size={16} />
                   <span>Complete Step 1 first</span>
                 </div>
@@ -1614,19 +1622,19 @@ export function PendingCommitView({
                   {isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}
                 </h3>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-[var(--space-group)]">
                 {/* Merge draft - legacy three-way merge UI removed */}
                 {isMergeDraft ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-[var(--text-tertiary)]">
                     <GitCompare
                       size={48}
                       strokeWidth={1}
-                      className="text-[var(--color-border)] mb-4"
+                      className="text-[var(--color-border)] mb-[var(--space-group)]"
                     />
-                    <h4 className="font-semibold text-[var(--text-secondary)] mb-2">
+                    <h4 className="font-semibold text-[var(--text-secondary)] mb-[var(--space-item)]">
                       Merge via MergePanel
                     </h4>
-                    <p className="text-sm text-[var(--text-tertiary)] mb-6">
+                    <p className="text-sm text-[var(--text-tertiary)] mb-[var(--space-section)]">
                       Use the MergePanel component for two-way merge operations.
                     </p>
                     <div className="flex items-center gap-4 text-sm">
@@ -1662,7 +1670,11 @@ export function PendingCommitView({
                   />
                 ) : sourceBoxes.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-[var(--text-tertiary)]">
-                    <MessageSquarePlus size={32} strokeWidth={1} className="mb-2" />
+                    <MessageSquarePlus
+                      size={32}
+                      strokeWidth={1}
+                      className="mb-[var(--space-item)]"
+                    />
                     <p className="font-medium text-[var(--text-tertiary)]">No source content</p>
                     <span className="text-sm">Connect upstream conversation or commit</span>
                   </div>

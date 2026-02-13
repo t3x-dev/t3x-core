@@ -13,9 +13,9 @@ import {
   Rocket,
   Sun,
 } from 'lucide-react';
-import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
@@ -205,7 +205,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* Command Palette Button */}
-        <div className={cn('mb-4', collapsed ? 'flex justify-center' : '')}>
+        <div className={cn('mb-[var(--space-group)]', collapsed ? 'flex justify-center' : '')}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -338,7 +338,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     'h-10 w-10 justify-center',
                     'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
                   )}
-                  aria-label={mounted ? (resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : 'Toggle theme'}
+                  aria-label={
+                    mounted
+                      ? resolvedTheme === 'dark'
+                        ? 'Switch to light mode'
+                        : 'Switch to dark mode'
+                      : 'Toggle theme'
+                  }
                 >
                   {mounted && resolvedTheme === 'dark' ? (
                     <Sun className="h-5 w-5" />
@@ -360,7 +366,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 'h-10 w-full px-3',
                 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
               )}
-              aria-label={mounted ? (resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : 'Toggle theme'}
+              aria-label={
+                mounted
+                  ? resolvedTheme === 'dark'
+                    ? 'Switch to light mode'
+                    : 'Switch to dark mode'
+                  : 'Toggle theme'
+              }
             >
               <span className="shrink-0">
                 {mounted && resolvedTheme === 'dark' ? (

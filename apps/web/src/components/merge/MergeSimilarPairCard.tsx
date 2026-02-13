@@ -44,7 +44,7 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
   return (
     <div
       className={cn(
-        'rounded-lg p-4',
+        'rounded-lg p-[var(--space-group)] elevation-1',
         glass.cardBase,
         isResolved
           ? 'ring-1 ring-[var(--diff-added-line)]/30'
@@ -52,7 +52,7 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
       )}
     >
       {/* Diff visualization */}
-      <div className="mb-3">
+      <div className="mb-[var(--space-item)]">
         <WordDiffDisplay segments={pair.wordDiff} />
       </div>
 

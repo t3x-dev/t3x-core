@@ -289,7 +289,7 @@ function DeployPageContent() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+    <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
       {/* Runner Offline Info */}
       {runnerHealthy === false && (
         <Card className="border-muted bg-muted/30">
@@ -321,7 +321,7 @@ function DeployPageContent() {
         </CardHeader>
         <CardContent className="pt-3 pb-3">
           {showAddAgent && (
-            <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+            <div className="mb-[var(--space-section)] rounded-lg border bg-muted/30 p-[var(--space-group)] elevation-1">
               <div className="grid gap-3 sm:grid-cols-3">
                 <Input
                   type="text"
@@ -367,7 +367,7 @@ function DeployPageContent() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {deployAgents.map((agent) => (
                 <Card key={agent.deploy_agent_id} className="py-3">
-                  <CardContent className="space-y-2">
+                  <CardContent className="space-y-[var(--space-item)]">
                     <div className="min-w-0">
                       <h3 className="truncate font-semibold">{agent.name}</h3>
                       <p className="truncate text-xs text-muted-foreground">

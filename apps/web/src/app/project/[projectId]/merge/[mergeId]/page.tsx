@@ -56,9 +56,9 @@ export default function MergeWorkspacePage() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center max-w-md">
-          <div className="text-4xl mb-4">:(</div>
-          <h1 className="text-xl font-semibold mb-2">Failed to load merge</h1>
-          <p className="text-muted-foreground mb-4">{error}</p>
+          <div className="text-4xl mb-[var(--space-group)]">:(</div>
+          <h1 className="text-xl font-semibold mb-[var(--space-item)]">Failed to load merge</h1>
+          <p className="text-muted-foreground mb-[var(--space-group)]">{error}</p>
           <button
             type="button"
             onClick={handleClose}
