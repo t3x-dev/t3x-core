@@ -105,7 +105,7 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.id).toMatch(/^leaf_/);
-      expect(data.data.title).toBeNull();
+      expect(data.data.title).toBe(`${testCommitHash.slice(0, 16)} — weibo`);
       expect(data.data.constraints).toEqual([]);
       expect(data.data.config).toEqual({});
     });
