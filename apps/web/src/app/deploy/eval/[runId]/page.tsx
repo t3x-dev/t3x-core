@@ -8,11 +8,12 @@ import {
   Coins,
   GitCompare,
   Loader2,
+  Pin,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   AssertionsSection,
@@ -24,9 +25,10 @@ import { type StepRecord, TraceTimeline } from '@/components/optimiser/trace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { type Assertion, type EngineRun, type Leaf, getEngineRun, getLeaf } from '@/lib/api';
+import { type EngineRun, getEngineRun, getLeaf, type Leaf } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -171,7 +173,10 @@ export default function RunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const fetchPins = usePinsStore((s) => s.fetchPins);
+  const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
+  const [pinning, setPinning] = useState(false);
+  const [pinSuccess, setPinSuccess] = useState(false);
+  const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
 
   // Load run data + associated leaf
   useEffect(() => {
@@ -201,6 +206,66 @@ export default function RunDetailPage() {
 
     loadRun();
   }, [runId]);
+
+  // Initialize selected assertions: default to failed ones (more actionable)
+  useEffect(() => {
+    if (leaf?.assertions) {
+      const failedIds = leaf.assertions.filter((a) => !a.passed).map((a) => a.id);
+      setSelectedAssertionIds(new Set(failedIds));
+    }
+  }, [leaf]);
+
+  // Toggle a single assertion checkbox
+  const toggleAssertion = useCallback((id: string) => {
+    setSelectedAssertionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setPinSuccess(false);
+  }, []);
+
+  // Pin selected assertions to the leaf
+  const leafId = run?.leaf?.id;
+  const projectId = run?.project_id;
+  const leafPinned = leafId ? isPinned('leaf', leafId) : false;
+  const existingPin = leafId ? getPinByRef('leaf', leafId) : undefined;
+
+  const handlePinAssertions = useCallback(async () => {
+    if (!projectId || !leafId || selectedAssertionIds.size === 0) return;
+
+    setPinning(true);
+    setPinSuccess(false);
+    try {
+      const ids = Array.from(selectedAssertionIds);
+
+      if (leafPinned && existingPin) {
+        // Already pinned — update selected_assertion_ids
+        await updatePinAssertions(existingPin.id, ids);
+      } else {
+        // Create pin, then set assertion IDs
+        const newPin = await addPin(projectId, 'leaf', leafId);
+        if (newPin) {
+          await updatePinAssertions(newPin.id, ids);
+        }
+      }
+      setPinSuccess(true);
+    } finally {
+      setPinning(false);
+    }
+  }, [
+    projectId,
+    leafId,
+    selectedAssertionIds,
+    leafPinned,
+    existingPin,
+    addPin,
+    updatePinAssertions,
+  ]);
 
   if (loading) {
     return (
@@ -492,11 +557,13 @@ export default function RunDetailPage() {
                   <CardTitle className="flex items-center gap-2 text-base">
                     Leaf Assertions
                     <Badge variant="outline" className="text-xs font-normal">
-                      {leaf.assertions.filter((a) => a.passed).length}/{leaf.assertions.length} passed
+                      {leaf.assertions.filter((a) => a.passed).length}/{leaf.assertions.length}{' '}
+                      passed
                     </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Structured assertions written back to Leaf from evaluation. Pin these to feed lessons into future conversations.
+                    Structured assertions written back to Leaf from evaluation. Pin these to feed
+                    lessons into future conversations.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -512,6 +579,11 @@ export default function RunDetailPage() {
                         )}
                       >
                         <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedAssertionIds.has(assertion.id)}
+                            onCheckedChange={() => toggleAssertion(assertion.id)}
+                            className="mt-0.5"
+                          />
                           {assertion.passed ? (
                             <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
                           ) : (
@@ -548,6 +620,30 @@ export default function RunDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Pin Selected Assertions 按钮 */}
+                  <div className="mt-4 flex items-center gap-3 border-t pt-4">
+                    <Button
+                      size="sm"
+                      disabled={selectedAssertionIds.size === 0 || pinning || !projectId}
+                      onClick={handlePinAssertions}
+                    >
+                      {pinning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Pin className="h-4 w-4" />
+                      )}
+                      {leafPinned ? 'Update Pin' : 'Pin Selected'}
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {selectedAssertionIds.size}
+                      </Badge>
+                    </Button>
+                    {pinSuccess && (
+                      <span className="text-xs text-green-600">
+                        Pinned — lessons will be available in future conversations.
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
