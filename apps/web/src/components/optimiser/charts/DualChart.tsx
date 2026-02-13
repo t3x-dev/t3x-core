@@ -86,8 +86,8 @@ function CustomTooltip({
             <span
               className={cn(
                 'font-mono font-medium',
-                v2.value > v1.value && 'text-green-600',
-                v2.value < v1.value && 'text-red-600'
+                v2.value > v1.value && 'text-[var(--status-success)]',
+                v2.value < v1.value && 'text-[var(--status-error)]'
               )}
             >
               {v2.value > v1.value ? '+' : ''}

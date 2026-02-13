@@ -95,7 +95,7 @@ export interface SourceContextViewProps {
 
 const highlightColorClasses: Record<HighlightColor, string> = {
   yellow: 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100',
-  green: 'bg-green-200 dark:bg-green-800/50 text-green-900 dark:text-green-100',
+  green: 'bg-green-200 dark:bg-green-800/50 text-[var(--color-text)]',
   deepGreen: 'bg-green-500 text-white',
   deepRed: 'bg-red-500 text-white',
 };
@@ -186,7 +186,7 @@ export function SourceContextView({
 
   // Error state
   if (error) {
-    return <div className="text-xs text-amber-600 dark:text-amber-400 mt-2">{error}</div>;
+    return <div className="text-xs text-[var(--status-warning)] mt-2">{error}</div>;
   }
 
   // No context data
@@ -280,7 +280,7 @@ export function SourceContextView({
               <button
                 type="button"
                 onClick={() => onJumpClick(contextData.conversation_id)}
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-[var(--status-info)] hover:underline"
               >
                 Jump to conversation
               </button>
@@ -299,7 +299,7 @@ export function SourceContextView({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+          className="flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-blue-700 dark:hover:text-blue-300"
         >
           {expanded ? (
             <>

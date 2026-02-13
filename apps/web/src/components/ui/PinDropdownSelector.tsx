@@ -75,20 +75,20 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
           <span className="flex items-center gap-1.5">
-            <Pin size={12} className={cn(totalCount > 0 ? 'text-amber-500' : 'text-gray-400')} />
+            <Pin size={12} className={cn(totalCount > 0 ? 'text-[var(--status-warning)]' : 'text-[var(--color-text-muted)]')} />
             {summaryText}
           </span>
-          <ChevronDown size={12} className="text-gray-400" />
+          <ChevronDown size={12} className="text-[var(--color-text-muted)]" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72 max-h-80 overflow-y-auto" align="start">
         {/* Header actions */}
         <div className="flex items-center justify-between px-2 py-1.5">
-          <span className="text-xs font-semibold text-gray-500">Branch: {branch}</span>
+          <span className="text-xs font-semibold text-[var(--color-text-muted)]">Branch: {branch}</span>
           <div className="flex gap-1">
             <button
               type="button"
-              className="text-[0.65rem] text-blue-600 hover:underline"
+              className="text-[0.65rem] text-[var(--status-info)] hover:underline"
               onClick={handleSelectAll}
             >
               Select all
@@ -96,7 +96,7 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
             <span className="text-gray-300">|</span>
             <button
               type="button"
-              className="text-[0.65rem] text-blue-600 hover:underline"
+              className="text-[0.65rem] text-[var(--status-info)] hover:underline"
               onClick={handleDeselectAll}
             >
               Deselect all
@@ -108,14 +108,14 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
         {/* Loading state */}
         {loading && (
           <div className="flex items-center justify-center py-4">
-            <Loader2 size={16} className="animate-spin text-gray-400" />
-            <span className="ml-2 text-xs text-gray-400">Loading commits...</span>
+            <Loader2 size={16} className="animate-spin text-[var(--color-text-muted)]" />
+            <span className="ml-2 text-xs text-[var(--color-text-muted)]">Loading commits...</span>
           </div>
         )}
 
         {/* Empty state */}
         {!loading && (!data || data.length === 0) && (
-          <div className="px-2 py-4 text-center text-xs text-gray-400">
+          <div className="px-2 py-4 text-center text-xs text-[var(--color-text-muted)]">
             No commits on this branch
           </div>
         )}
@@ -169,11 +169,11 @@ function CommitGroup({
 
   return (
     <DropdownMenuGroup>
-      <DropdownMenuLabel className="flex items-center gap-1.5 text-[0.7rem] text-gray-500 px-2 py-1">
+      <DropdownMenuLabel className="flex items-center gap-1.5 text-[0.7rem] text-[var(--color-text-muted)] px-2 py-1">
         <GitCommit size={12} className="shrink-0" />
         <span className="font-mono">{hashShort}</span>
         <span className="truncate flex-1">{message}</span>
-        <span className="shrink-0 text-gray-400">{time}</span>
+        <span className="shrink-0 text-[var(--color-text-muted)]">{time}</span>
       </DropdownMenuLabel>
 
       {/* Conversation pin (deduplicated: only shown once per conversation) */}
@@ -185,7 +185,7 @@ function CommitGroup({
           className="text-xs pl-6"
         >
           <span className="inline-flex items-center gap-1">
-            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-blue-100 text-blue-600">
+            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-[var(--status-info-muted)] text-[var(--status-info)]">
               conv
             </span>
             <span className="truncate">conv#{convId.replace(/^conv_/, '').slice(0, 8)}</span>
@@ -203,10 +203,10 @@ function CommitGroup({
           className="text-xs pl-6"
         >
           <span className="inline-flex items-center gap-1">
-            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-purple-100 text-purple-600">
+            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-[var(--accent-conversation)]/15 text-[var(--accent-conversation)]">
               leaf
             </span>
-            <LeafIcon size={10} className="text-purple-400" />
+            <LeafIcon size={10} className="text-[var(--accent-conversation)]" />
             <span className="truncate">{leaf.title || leaf.id.slice(0, 10)}</span>
           </span>
         </DropdownMenuCheckboxItem>
@@ -214,7 +214,7 @@ function CommitGroup({
 
       {/* No pinnable items under this commit */}
       {(!convId || !showConversation) && leaves.length === 0 && (
-        <div className="px-6 py-1 text-[0.65rem] text-gray-400 italic">No pinnable items</div>
+        <div className="px-6 py-1 text-[0.65rem] text-[var(--color-text-muted)] italic">No pinnable items</div>
       )}
 
       {showSeparator && <DropdownMenuSeparator />}

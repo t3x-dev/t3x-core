@@ -382,9 +382,9 @@ export default function ManageMode({
               className={cn(
                 'relative inline-flex items-center px-1 py-0.5 rounded cursor-pointer transition-colors group',
                 keyword.constraint === 'must_have' &&
-                  'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
+                  'bg-[var(--status-success-muted)] hover:bg-[var(--status-success-muted)]/80',
                 keyword.constraint === 'mustnt_have' &&
-                  'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50',
+                  'bg-[var(--status-error-muted)] hover:bg-[var(--status-error-muted)]/80',
                 keyword.constraint === 'neutral' && 'bg-muted hover:bg-muted/80',
                 isLocked && 'cursor-default'
               )}
@@ -397,7 +397,7 @@ export default function ManageMode({
                       'w-4 h-4 rounded flex items-center justify-center transition-colors',
                       keyword.constraint === 'must_have'
                         ? 'bg-green-500 text-white'
-                        : 'hover:bg-green-100 dark:hover:bg-green-800 text-slate-500 dark:text-slate-400 hover:text-green-600 dark:hover:text-green-400'
+                        : 'hover:bg-[var(--status-success-muted)] text-[var(--color-text-muted)] hover:text-[var(--status-success)]'
                     )}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -412,7 +412,7 @@ export default function ManageMode({
                       'w-4 h-4 rounded flex items-center justify-center transition-colors',
                       keyword.constraint === 'mustnt_have'
                         ? 'bg-red-500 text-white'
-                        : 'hover:bg-red-100 dark:hover:bg-red-800 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400'
+                        : 'hover:bg-[var(--status-error-muted)] text-[var(--color-text-muted)] hover:text-[var(--status-error)]'
                     )}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -435,7 +435,7 @@ export default function ManageMode({
     <div className="flex flex-col h-full">
       {/* Locked banner */}
       {isLocked && (
-        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-sm">
+        <div className="px-4 py-2 bg-[var(--status-warning-muted)] border-b border-[var(--status-warning)]/25 text-[var(--status-warning)] text-sm">
           <span>
             This conversation has been used in drafts. Editing is locked. You can only adjust in the
             Draft view.
@@ -444,7 +444,7 @@ export default function ManageMode({
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-[var(--color-bg-subtle)]">
         <div className="flex items-center gap-3">
           <label
             className={cn(
@@ -457,7 +457,7 @@ export default function ManageMode({
               checked={selectedClauseIds.size === clauses.length && clauses.length > 0}
               onChange={toggleSelectAll}
               disabled={isLocked}
-              className="w-4 h-4 rounded border-slate-300 dark:border-slate-700"
+              className="w-4 h-4 rounded border-[var(--color-border)]"
             />
             <span>Select All</span>
           </label>
@@ -471,7 +471,7 @@ export default function ManageMode({
             size="sm"
             onClick={markSelectedAsKeep}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
+            className="text-[var(--status-success)] hover:text-[var(--status-success)] hover:bg-[var(--status-success-muted)]"
           >
             <Bookmark size={14} />
             <span>Keep</span>
@@ -481,7 +481,7 @@ export default function ManageMode({
             size="sm"
             onClick={markSelectedAsDiscard}
             disabled={selectedClauseIds.size === 0 || isLocked}
-            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30"
+            className="text-[var(--status-error)] hover:text-[var(--status-error)] hover:bg-[var(--status-error-muted)]"
           >
             <Trash2 size={14} />
             <span>Discard</span>
@@ -500,16 +500,16 @@ export default function ManageMode({
 
       {/* Stats bar */}
       <div className="flex items-center gap-4 px-4 py-2 bg-background border-b text-xs">
-        <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+        <span className="inline-flex items-center gap-1 text-[var(--status-success)]">
           <Bookmark size={12} /> {stats.keepCount} kept
         </span>
-        <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+        <span className="inline-flex items-center gap-1 text-[var(--status-error)]">
           <Trash2 size={12} /> {stats.discardCount} discarded
         </span>
-        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 text-[var(--status-success)]">
           <Check size={12} /> {stats.mustHaveCount} must-have
         </span>
-        <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
+        <span className="inline-flex items-center gap-1 text-[var(--status-error)]">
           <X size={12} /> {stats.mustntHaveCount} mustn't-have
         </span>
       </div>
@@ -522,11 +522,11 @@ export default function ManageMode({
             className={cn(
               'rounded-lg border p-3 transition-colors',
               clause.status === 'keep' &&
-                'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800',
+                'bg-[var(--status-success-muted)] border-[var(--status-success)]/20',
               clause.status === 'discard' &&
-                'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800',
+                'bg-[var(--status-error-muted)] border-[var(--status-error)]/20',
               clause.status === 'neutral' && 'bg-background border-border',
-              selectedClauseIds.has(clause.id) && 'ring-2 ring-blue-500',
+              selectedClauseIds.has(clause.id) && 'ring-2 ring-[var(--status-info)]',
               isLocked && 'opacity-70'
             )}
           >
@@ -537,7 +537,7 @@ export default function ManageMode({
                   checked={selectedClauseIds.has(clause.id)}
                   onChange={() => toggleClauseSelection(clause.id)}
                   disabled={isLocked}
-                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-700"
+                  className="w-4 h-4 rounded border-[var(--color-border)]"
                 />
               </label>
               <div className="flex-1 min-w-0">{renderSentenceWithKeywords(clause)}</div>
@@ -546,9 +546,9 @@ export default function ManageMode({
                   className={cn(
                     'shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase',
                     clause.status === 'keep' &&
-                      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                      'bg-[var(--status-success-muted)] text-[var(--status-success)]',
                     clause.status === 'discard' &&
-                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                      'bg-[var(--status-error-muted)] text-[var(--status-error)]'
                   )}
                 >
                   {clause.status}
@@ -560,7 +560,7 @@ export default function ManageMode({
       </div>
 
       {clauses.length === 0 && (
-        <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400 p-10 text-center">
+        <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)] p-10 text-center">
           No sentences found. Add some content to the conversation first.
         </div>
       )}

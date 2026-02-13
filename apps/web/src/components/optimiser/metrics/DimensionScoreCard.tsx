@@ -27,12 +27,12 @@ const DIMENSION_LABELS: Record<keyof DimensionScores, string> = {
 // Get color classes based on score value
 function getScoreColorClasses(value: number): { bar: string; text: string } {
   if (value >= 0.7) {
-    return { bar: 'bg-green-500', text: 'text-green-600' };
+    return { bar: 'bg-green-500', text: 'text-[var(--status-success)]' };
   }
   if (value >= 0.4) {
-    return { bar: 'bg-yellow-500', text: 'text-yellow-600' };
+    return { bar: 'bg-yellow-500', text: 'text-[var(--status-warning)]' };
   }
-  return { bar: 'bg-red-500', text: 'text-red-600' };
+  return { bar: 'bg-red-500', text: 'text-[var(--status-error)]' };
 }
 
 export function DimensionScoreCard({ scores, className }: DimensionScoreCardProps) {

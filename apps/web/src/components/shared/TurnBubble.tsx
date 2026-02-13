@@ -39,8 +39,8 @@ const roleLabels: Record<string, string> = {
 };
 
 const highlightColors: Record<HighlightColor, string> = {
-  yellow: 'bg-yellow-200 dark:bg-yellow-800/50',
-  green: 'bg-green-200 dark:bg-green-800/50',
+  yellow: 'bg-[var(--status-warning-muted)]',
+  green: 'bg-[var(--status-success-muted)]',
   deepGreen: 'bg-green-500 text-white',
   deepRed: 'bg-red-500 text-white',
 };
@@ -128,10 +128,10 @@ export function TurnBubble({
   };
 
   const ringColorMap: Record<HighlightColor, string> = {
-    yellow: 'ring-2 ring-yellow-400 dark:ring-yellow-600 ring-offset-2',
-    green: 'ring-2 ring-green-400 dark:ring-green-600 ring-offset-2',
-    deepGreen: 'ring-2 ring-green-600 ring-offset-2',
-    deepRed: 'ring-2 ring-red-600 ring-offset-2',
+    yellow: 'ring-2 ring-[var(--status-warning)] ring-offset-2',
+    green: 'ring-2 ring-[var(--status-success)] ring-offset-2',
+    deepGreen: 'ring-2 ring-[var(--status-success)] ring-offset-2',
+    deepRed: 'ring-2 ring-[var(--status-error)] ring-offset-2',
   };
 
   const ringClass = showTargetRing && turn.is_target ? ringColorMap[highlightColor] : '';

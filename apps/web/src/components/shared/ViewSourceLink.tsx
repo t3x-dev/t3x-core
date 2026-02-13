@@ -73,7 +73,7 @@ export function ViewSourceLink({
       href={href}
       className={
         className ||
-        'inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline'
+        'inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline'
       }
     >
       {children || 'View Source'}

@@ -27,8 +27,8 @@ const variantStyles: Record<SectionVariant, { header: string; icon: string }> = 
     icon: 'text-[var(--diff-modified-accent)]',
   },
   info: {
-    header: 'text-blue-700 dark:text-blue-300',
-    icon: 'text-blue-500',
+    header: 'text-[var(--status-info)]',
+    icon: 'text-[var(--status-info)]',
   },
   default: {
     header: 'text-foreground',

@@ -212,7 +212,7 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
     return (
       <>
         {before}
-        <mark className="bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100 px-0.5 rounded-sm">
+        <mark className="bg-[var(--status-success-muted)] text-[var(--color-text)] px-0.5 rounded-sm">
           {highlighted}
         </mark>
         {after}
@@ -226,11 +226,11 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
       className={cn(
         'rounded-lg p-4 transition-all duration-300',
         isUser && 'bg-primary/10 ml-8',
-        isAssistant && 'bg-muted dark:bg-slate-800/60 mr-8',
+        isAssistant && 'bg-[var(--color-bg-subtle)] mr-8',
         isSystem &&
-          'bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800',
+          'bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25',
         isTool &&
-          'bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 font-mono text-sm',
+          'bg-[var(--status-info-muted)] border border-[var(--color-border)] font-mono text-sm',
         isTarget && 'ring-2 ring-blue-500 ring-offset-2'
       )}
     >
@@ -240,8 +240,8 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
             'text-xs font-medium px-2 py-0.5 rounded',
             isUser && 'bg-primary/20 text-primary',
             isAssistant && 'bg-muted-foreground/20 text-muted-foreground',
-            isSystem && 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200',
-            isTool && 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+            isSystem && 'bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
+            isTool && 'bg-[var(--status-info-muted)] text-[var(--status-info)]'
           )}
         >
           {turn.role.toUpperCase()}
@@ -250,7 +250,7 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
           {new Date(turn.created_at).toLocaleTimeString()}
         </span>
         {isTarget && (
-          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+          <span className="text-xs bg-[var(--status-info-muted)] text-[var(--status-info)] px-1.5 py-0.5 rounded">
             Source
           </span>
         )}

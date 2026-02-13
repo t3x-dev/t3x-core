@@ -237,7 +237,7 @@ export function MergePanel() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Describe this merge..."
-          className="w-full border rounded p-2 mb-3 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-background"
+          className="w-full border rounded p-2 mb-3 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--status-info)] bg-background"
           disabled={mergeLoading}
         />
 
@@ -247,7 +247,7 @@ export function MergePanel() {
             disabled={!canExecute || mergeLoading}
             className={`flex-1 py-2 px-4 rounded font-medium transition-colors ${
               canExecute && !mergeLoading
-                ? 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                ? 'bg-[var(--status-info)] text-white hover:bg-[var(--status-info)]/90'
                 : 'bg-muted text-muted-foreground cursor-not-allowed'
             }`}
             type="button"

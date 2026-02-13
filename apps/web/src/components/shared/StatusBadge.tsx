@@ -11,10 +11,10 @@ import { cn } from '@/lib/utils';
  */
 
 const statusConfig = {
-  active: { className: 'border-green-500/30 bg-green-500/10 text-green-600' },
-  draft: { className: 'border-amber-500/30 bg-amber-500/10 text-amber-600' },
-  paused: { className: 'border-gray-500/30 bg-gray-500/10 text-gray-600' },
-  running: { className: 'border-blue-500/30 bg-blue-500/10 text-blue-600 animate-pulse' },
+  active: { className: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]' },
+  draft: { className: 'border-amber-500/30 bg-amber-500/10 text-[var(--status-warning)]' },
+  paused: { className: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]' },
+  running: { className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)] animate-pulse' },
 } as const;
 
 type StatusVariant = keyof typeof statusConfig;

@@ -88,11 +88,11 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   // If completed, show pass/fail based on eval result
   if (status === 'completed' && passed !== null) {
     return passed ? (
-      <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-600">
+      <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]">
         passed
       </Badge>
     ) : (
-      <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-600">
+      <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
         failed
       </Badge>
     );
@@ -100,11 +100,11 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
 
   // Otherwise show status
   const variants: Record<string, string> = {
-    queued: 'border-gray-500/30 bg-gray-500/10 text-gray-600 dark:text-gray-400',
-    running: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    completed: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
-    failed: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-    timeout: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+    queued: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]',
+    running: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]',
+    completed: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
+    failed: 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
+    timeout: 'border-yellow-500/30 bg-yellow-500/10 text-[var(--status-warning)]',
   };
 
   return (
@@ -194,7 +194,7 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
               <TableCell>{getStatusBadge(run.status, metrics.passed)}</TableCell>
               <TableCell className="text-right font-mono">
                 {metrics.score !== null ? (
-                  <span className={metrics.passed ? 'text-green-600' : 'text-red-600'}>
+                  <span className={metrics.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'}>
                     {formatScore(metrics.score)}
                   </span>
                 ) : (

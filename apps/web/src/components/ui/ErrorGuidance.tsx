@@ -21,14 +21,14 @@ const variantStyles: Record<
   warning: {
     border: 'border-yellow-500/30',
     bg: 'bg-yellow-500/5',
-    text: 'text-yellow-700 dark:text-yellow-400',
-    textMuted: 'text-yellow-600/80 dark:text-yellow-500/80',
+    text: 'text-[var(--status-warning)]',
+    textMuted: 'text-[var(--status-warning)]/80',
   },
   info: {
     border: 'border-blue-500/30',
     bg: 'bg-blue-500/5',
-    text: 'text-blue-700 dark:text-blue-400',
-    textMuted: 'text-blue-600/80 dark:text-blue-500/80',
+    text: 'text-[var(--status-info)]',
+    textMuted: 'text-[var(--status-info)]/80',
   },
 };
 

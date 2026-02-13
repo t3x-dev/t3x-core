@@ -190,7 +190,7 @@ export function ContextPanel({
               <div className="text-xs text-muted-foreground mb-1">Conversations</div>
               {convPins.map((pin) => (
                 <div key={pin.id} className="flex items-center gap-1">
-                  <span className="text-amber-500">📌</span>
+                  <span className="text-[var(--status-warning)]">📌</span>
                   <span className="truncate">{pin.ref_id}</span>
                 </div>
               ))}
@@ -203,7 +203,7 @@ export function ContextPanel({
               <div className="text-xs text-muted-foreground mb-1">Leaves</div>
               {leafPins.map((pin) => (
                 <div key={pin.id} className="flex items-center gap-1">
-                  <span className="text-amber-500">📌</span>
+                  <span className="text-[var(--status-warning)]">📌</span>
                   <span className="truncate">{pin.ref_id}</span>
                 </div>
               ))}

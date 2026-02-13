@@ -725,8 +725,8 @@ function CanvasWorkspaceInner({
               className={cn(
                 'h-9 px-3 rounded-xl transition-all text-xs',
                 'text-muted-foreground hover:text-foreground',
-                'hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400',
-                'border border-dashed border-amber-300 dark:border-amber-700'
+                'hover:bg-[var(--status-warning)]/10 hover:text-[var(--status-warning)]',
+                'border border-dashed border-[var(--status-warning)]'
               )}
             >
               Demo

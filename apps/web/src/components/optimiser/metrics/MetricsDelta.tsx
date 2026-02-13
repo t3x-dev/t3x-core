@@ -41,8 +41,8 @@ export function MetricsDelta({
     <span
       className={cn(
         'inline-flex items-center gap-1 font-mono text-xs',
-        isImproved && 'text-green-600',
-        isRegressed && 'text-red-600',
+        isImproved && 'text-[var(--status-success)]',
+        isRegressed && 'text-[var(--status-error)]',
         className
       )}
     >

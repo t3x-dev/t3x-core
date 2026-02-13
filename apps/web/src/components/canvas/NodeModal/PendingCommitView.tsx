@@ -1174,7 +1174,7 @@ export function PendingCommitView({
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
             <Badge
               variant="outline"
-              className="text-[0.65rem] text-slate-500 dark:text-slate-400 uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
+              className="text-[0.65rem] text-[var(--color-text-muted)] uppercase tracking-wider border-dashed border-[var(--color-border)] bg-[var(--color-text-muted)]/15"
             >
               pending
             </Badge>
@@ -1227,15 +1227,15 @@ export function PendingCommitView({
 
               {/* Merge Draft: Legacy three-way merge UI removed */}
               {isMergeDraft ? (
-                <div className="flex flex-col gap-3 p-3 bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-700 rounded-lg flex-1 min-h-0 overflow-y-auto">
-                  <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                <div className="flex flex-col gap-3 p-3 bg-[var(--color-bg-subtle)] border border-[var(--color-border)] rounded-lg flex-1 min-h-0 overflow-y-auto">
+                  <div className="flex items-center gap-2 font-semibold text-[var(--color-text-secondary)]">
                     <GitCompare size={16} />
                     <span>
                       Merge: {data?.mergeConfig?.sourceCommitTitle} →{' '}
                       {data?.mergeConfig?.targetCommitTitle}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                  <div className="text-sm text-[var(--color-text-muted)]">
                     Use the MergePanel for two-way merge operations.
                   </div>
                 </div>
@@ -1288,7 +1288,7 @@ export function PendingCommitView({
                       </select>
                       {/* Warning when main branch selection is invalid */}
                       {isMainBranchInvalid && (
-                        <div className="flex items-start gap-2 mt-1.5 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded text-amber-700 dark:text-amber-300 text-xs">
+                        <div className="flex items-start gap-2 mt-1.5 p-2 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25 rounded text-[var(--status-warning)] text-xs">
                           <AlertCircle size={14} className="mt-0.5 shrink-0" />
                           <span>
                             {!data.sourceCommitHash
@@ -1348,7 +1348,7 @@ export function PendingCommitView({
                       onChange={(e) => setExtractIntent(e.target.value)}
                     />
                     {!extractIntent.trim() && (
-                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                      <span className="text-xs text-[var(--status-warning)]">
                         Required: describe what to extract
                       </span>
                     )}
@@ -1389,14 +1389,14 @@ export function PendingCommitView({
                           <span>Computing embeddings...</span>
                         </div>
                       ) : curateError ? (
-                        <div className="flex items-center gap-2 text-[0.8rem] text-red-500 dark:text-red-400">
+                        <div className="flex items-center gap-2 text-[0.8rem] text-[var(--status-error)]">
                           <AlertCircle size={14} />
                           <span>{curateError}</span>
                         </div>
                       ) : curatePreview ? (
                         <div className="flex items-center gap-2 text-[0.8rem] text-[var(--text-secondary)]">
                           <span>Auto-selected:</span>
-                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                          <span className="font-medium text-[var(--status-success)]">
                             {selectedChunksCount} / {curatePreview.chunks.length} sentences
                           </span>
                         </div>
@@ -1530,7 +1530,7 @@ export function PendingCommitView({
 
                   {/* Commit error */}
                   {commitError && (
-                    <div className="flex items-center gap-2 py-2 px-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 text-sm">
+                    <div className="flex items-center gap-2 py-2 px-3 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-md text-[var(--status-error)] text-sm">
                       <AlertCircle size={14} />
                       <span>{commitError}</span>
                     </div>
@@ -1540,7 +1540,7 @@ export function PendingCommitView({
                   <div className="flex flex-col gap-2 mt-2">
                     {isMergeDraft ? (
                       /* Legacy merge UI disabled - use MergePanel for two-way merge */
-                      <div className="text-sm text-slate-500 dark:text-slate-400 text-center py-2">
+                      <div className="text-sm text-[var(--color-text-muted)] text-center py-2">
                         Use MergePanel for merge operations
                       </div>
                     ) : hasSourceConversation || hasSourceTurnWindow ? (
@@ -1576,11 +1576,11 @@ export function PendingCommitView({
                       </Button>
                     ) : (
                       /* No valid source - cannot commit */
-                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-md text-amber-700 dark:text-amber-300">
+                      <div className="flex items-start gap-2 p-3 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25 rounded-md text-[var(--status-warning)]">
                         <AlertCircle size={14} className="mt-0.5 shrink-0" />
                         <div className="flex flex-col gap-1">
                           <span className="font-medium text-sm">Cannot commit</span>
-                          <span className="text-xs text-amber-600 dark:text-amber-400">
+                          <span className="text-xs text-[var(--status-warning)]">
                             {!data.sourceConversationId && !data.sourceTurnWindow
                               ? 'Source commit is missing turn window data (legacy commit). Please create a new conversation from this commit first, then create a commit from that conversation.'
                               : 'No source conversation or turn window available.'}
@@ -1621,7 +1621,7 @@ export function PendingCommitView({
                     <GitCompare
                       size={48}
                       strokeWidth={1}
-                      className="text-gray-300 dark:text-gray-600 mb-4"
+                      className="text-[var(--color-border)] mb-4"
                     />
                     <h4 className="font-semibold text-[var(--text-secondary)] mb-2">
                       Merge via MergePanel
@@ -1631,7 +1631,7 @@ export function PendingCommitView({
                     </p>
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                        <Badge className="bg-[var(--status-info-muted)] text-[var(--status-info)]">
                           SOURCE
                         </Badge>
                         <span className="text-[var(--text-secondary)]">
@@ -1640,7 +1640,7 @@ export function PendingCommitView({
                       </div>
                       <span className="text-[var(--text-tertiary)]">&rarr;</span>
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                        <Badge className="bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]">
                           TARGET
                         </Badge>
                         <span className="text-[var(--text-secondary)]">
@@ -1686,7 +1686,7 @@ export function PendingCommitView({
                         </span>
                         <Badge
                           variant="outline"
-                          className="text-[0.65rem] text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/30"
+                          className="text-[0.65rem] text-[var(--status-info)] border-[var(--status-info)]/20 bg-[var(--status-info-muted)]"
                         >
                           {box.type}
                         </Badge>
@@ -1702,8 +1702,8 @@ export function PendingCommitView({
                                 className={cn(
                                   'inline-block py-1.5 px-2.5 m-1 rounded-md transition-colors cursor-pointer leading-[1.6] max-w-full',
                                   phrase.included
-                                    ? 'bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 hover:bg-green-200 dark:hover:bg-green-700'
-                                    : 'bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600 hover:bg-red-200 dark:hover:bg-red-700',
+                                    ? 'bg-[var(--status-success-muted)] border border-[var(--status-success)]/20 hover:bg-green-200 dark:hover:bg-green-700'
+                                    : 'bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 hover:bg-red-200 dark:hover:bg-red-700',
                                   !canToggle && 'opacity-70 cursor-default'
                                 )}
                                 onClick={(e) => {
@@ -1744,11 +1744,11 @@ export function PendingCommitView({
         {/* Bottom Legend */}
         <footer className="flex items-center justify-center gap-6 px-6 py-3 bg-[var(--surface-app)] border-t border-[var(--stroke-divider)] text-xs text-[var(--text-tertiary)] shrink-0">
           <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600" />
+            <span className="w-4 h-4 rounded bg-[var(--status-success-muted)] border border-[var(--status-success)]/20" />
             green bg = included phrase
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600" />
+            <span className="w-4 h-4 rounded bg-[var(--status-error-muted)] border border-[var(--status-error)]/20" />
             red bg = excluded phrase
           </span>
           <span className="flex items-center gap-2">

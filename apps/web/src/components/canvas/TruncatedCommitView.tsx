@@ -214,37 +214,37 @@ export function TruncatedCommitView({
 
   // Handle empty sentences
   if (sentences.length === 0) {
-    return <div className="px-2 py-1.5 text-xs text-slate-400 italic">No sentences</div>;
+    return <div className="px-2 py-1.5 text-xs text-[var(--color-text-muted)] italic">No sentences</div>;
   }
 
   // All legacy data - show simple sentence list with legacy badge
   if (allLegacy) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
-          <span className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[0.6rem]">
+        <div className="flex items-center gap-1 text-[0.65rem] text-[var(--color-text-muted)]">
+          <span className="px-1 py-0.5 bg-[var(--hover-bg)] rounded text-[0.6rem]">
             Legacy
           </span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
-            className="text-xs text-slate-700 dark:text-slate-300 bg-green-100 dark:bg-green-900/30 px-1.5 py-1 rounded line-clamp-2"
+            className="text-xs text-[var(--color-text-secondary)] bg-[var(--status-success-muted)] px-1.5 py-1 rounded line-clamp-2"
           >
             {s.text}
           </div>
         ))}
         {hiddenCount > 0 && (
-          <div className="text-[0.65rem] text-slate-400 dark:text-slate-500">
+          <div className="text-[0.65rem] text-[var(--color-text-muted)]">
             +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
-          <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
+          <div className="pt-1 border-t border-[var(--color-border-light)]">
             <button
               type="button"
               onClick={onViewFull}
-              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-[var(--status-info)] transition-colors"
             >
               View full
               <ChevronRight size={10} />
@@ -259,8 +259,8 @@ export function TruncatedCommitView({
   if (isLoading || externalLoading) {
     return (
       <div className="flex items-center gap-2 px-2 py-2">
-        <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-        <span className="text-xs text-slate-400">Loading...</span>
+        <Loader2 className="h-3 w-3 animate-spin text-[var(--color-text-muted)]" />
+        <span className="text-xs text-[var(--color-text-muted)]">Loading...</span>
       </div>
     );
   }
@@ -272,30 +272,30 @@ export function TruncatedCommitView({
   if (!hasAnyContext) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
-          <span className="px-1 py-0.5 bg-slate-300 dark:bg-slate-700 rounded text-[0.6rem]">
+        <div className="flex items-center gap-1 text-[0.65rem] text-[var(--color-text-muted)]">
+          <span className="px-1 py-0.5 bg-[var(--color-border)] rounded text-[0.6rem]">
             Source unavailable
           </span>
         </div>
         {sentences.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
-            className="text-xs text-slate-700 dark:text-slate-300 bg-green-100 dark:bg-green-900/30 px-1.5 py-1 rounded line-clamp-2"
+            className="text-xs text-[var(--color-text-secondary)] bg-[var(--status-success-muted)] px-1.5 py-1 rounded line-clamp-2"
           >
             {s.text}
           </div>
         ))}
         {hiddenCount > 0 && (
-          <div className="text-[0.65rem] text-slate-400 dark:text-slate-500">
+          <div className="text-[0.65rem] text-[var(--color-text-muted)]">
             +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
-          <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
+          <div className="pt-1 border-t border-[var(--color-border-light)]">
             <button
               type="button"
               onClick={onViewFull}
-              className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              className="inline-flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-[var(--status-info)] transition-colors"
             >
               View full
               <ChevronRight size={10} />
@@ -329,7 +329,7 @@ export function TruncatedCommitView({
           <div key={turnHash} className="text-xs leading-relaxed">
             {/* Role indicator + View Source link */}
             <div className="flex items-center justify-between">
-              <span className="text-[0.6rem] font-medium text-slate-400 uppercase tracking-wider">
+              <span className="text-[0.6rem] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">
                 {turn.role}
               </span>
               {projectId && conversationId && (
@@ -339,18 +339,18 @@ export function TruncatedCommitView({
                   turnHash={turnHash}
                   startChar={firstHighlight?.start}
                   endChar={firstHighlight?.end}
-                  className="text-[0.6rem] text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  className="text-[0.6rem] text-[var(--status-info)] hover:text-[var(--status-info)]"
                 >
                   View Source
                 </ViewSourceLink>
               )}
             </div>
             {/* Truncated content with highlights */}
-            <div className="mt-0.5 text-slate-700 dark:text-slate-300">
+            <div className="mt-0.5 text-[var(--color-text-secondary)]">
               {segments.map((seg, idx) => {
                 if (seg.type === 'ellipsis') {
                   return (
-                    <span key={idx} className="text-slate-400">
+                    <span key={idx} className="text-[var(--color-text-muted)]">
                       {seg.content}
                     </span>
                   );
@@ -373,15 +373,15 @@ export function TruncatedCommitView({
       })}
 
       {/* Footer: +N more + View full */}
-      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700">
-        <span className="text-[0.65rem] text-slate-400">
+      <div className="flex items-center justify-between pt-1 border-t border-[var(--color-border-light)]">
+        <span className="text-[0.65rem] text-[var(--color-text-muted)]">
           {hiddenCount > 0 && `+${hiddenCount} sentence${hiddenCount !== 1 ? 's' : ''}`}
         </span>
         {onViewFull && (
           <button
             type="button"
             onClick={onViewFull}
-            className="inline-flex items-center gap-0.5 text-[0.65rem] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+            className="inline-flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-[var(--status-info)] transition-colors"
           >
             View full
             <ChevronRight size={10} />
