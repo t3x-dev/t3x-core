@@ -2,6 +2,8 @@ import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
 import * as api from '@/lib/api';
+import { getMicrocopy } from '@/lib/microcopy';
+import { useModeStore } from '@/store/modeStore';
 import type {
   BranchType,
   CanvasNodeData,
@@ -485,6 +487,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           latestMainCommitId: branchType === 'main' ? id : latestMainId,
         };
       });
+
+      const mode = useModeStore.getState().copyMode;
+      notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
     },
 
     addPendingCommitFromConversation: async (conversationId) => {

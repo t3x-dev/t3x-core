@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useMicrocopy } from '@/lib/microcopy';
 import {
   noHover,
   noTap,
@@ -42,6 +43,7 @@ export default function SemanticLedgerPage() {
   const { projects, loading, error, initialized, fetchProjects, addProject, deleteProject } =
     useProjectStore();
   const prefersReducedMotion = useReducedMotion();
+  const mc = useMicrocopy();
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -263,7 +265,7 @@ export default function SemanticLedgerPage() {
         animate="animate"
       >
         {projects.length === 0 && (
-          <motion.div variants={itemVariants}>
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="relative mb-4">
@@ -272,7 +274,7 @@ export default function SemanticLedgerPage() {
                     <Folder className="h-8 w-8 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-lg font-semibold text-foreground">Start your first project</p>
+                <p className="text-lg font-semibold text-foreground">{mc('emptyProject')}</p>
                 <p className="mt-2 mb-6 max-w-sm text-sm text-muted-foreground">
                   Projects organize your AI conversations and extracted knowledge.
                 </p>
