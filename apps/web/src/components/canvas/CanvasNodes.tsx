@@ -862,7 +862,7 @@ function UnitNode(props: Props) {
               <ChevronRight
                 size={12}
                 className={cn(
-                  'text-[var(--text-tertiary)] transition-transform duration-200',
+                  'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
                   leavesExpanded && 'rotate-90'
                 )}
               />

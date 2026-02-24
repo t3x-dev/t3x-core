@@ -76,7 +76,10 @@ export function AnimatedEdge({
 
   const transitionStyle = prefersReducedMotion
     ? {}
-    : { transition: 'opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease' };
+    : {
+        transition:
+          'opacity var(--duration-normal) ease, stroke-width var(--duration-normal) ease, stroke var(--duration-normal) ease',
+      };
 
   return (
     <g

@@ -47,7 +47,7 @@ export function CollapsibleSection({
           )}
           <ChevronDown
             className={cn(
-              'h-4 w-4 text-muted-foreground transition-transform duration-200',
+              'h-4 w-4 text-muted-foreground transition-transform duration-[var(--duration-normal)]',
               open && 'rotate-180'
             )}
           />

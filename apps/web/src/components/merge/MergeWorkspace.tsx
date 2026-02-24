@@ -158,7 +158,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Diff View */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-[var(--space-page)]">
           <UnifiedDiffView
             prepared={prepared}
             onResolvePair={resolvePair}

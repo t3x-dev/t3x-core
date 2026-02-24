@@ -722,7 +722,7 @@ export function LeafConstraintSourceContext({
             return (
               <div
                 key={turnHash}
-                className="rounded-lg border border-[var(--color-border)] overflow-hidden"
+                className="rounded-lg border border-[var(--color-border)] overflow-hidden elevation-1"
               >
                 <button
                   type="button"
@@ -805,7 +805,7 @@ export function LeafConstraintSourceContext({
           return (
             <div
               key={turnHash}
-              className="rounded-lg border border-[var(--color-border)] overflow-hidden"
+              className="rounded-lg border border-[var(--color-border)] overflow-hidden elevation-1"
             >
               {!compact && (
                 <button

@@ -1055,9 +1055,9 @@ function AssertionsSection({
   return (
     <section
       className={cn(
-        'rounded-lg border bg-card transition-all duration-500',
+        'rounded-lg border bg-card transition-all duration-[var(--duration-emphasis)]',
         allPassed &&
-          'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-500'
+          'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-[var(--duration-emphasis)]'
       )}
     >
       <div className="flex items-center justify-between border-b p-[var(--space-group)]">

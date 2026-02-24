@@ -44,7 +44,7 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
   return (
     <div
       className={cn(
-        'rounded-lg p-[var(--space-group)] elevation-1',
+        'rounded-lg p-[var(--space-group)] elevation-1 elevation-hover',
         glass.cardBase,
         isResolved
           ? 'ring-1 ring-[var(--diff-added-line)]/30'

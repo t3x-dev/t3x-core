@@ -64,12 +64,14 @@ export const brand = {
 } as const;
 
 // =============================================================================
-// GLASS COMPOSABLE CLASSES (Dark Mode)
+// GLASS COMPOSABLE CLASSES (Adaptive: Light + Dark)
 // =============================================================================
 
 /**
- * Glass-morphism class helpers for dark mode.
+ * Glass-morphism class helpers.
  * Consume CSS variables from the four-layer surface system.
+ * Light mode: opaque surfaces, no blur, subtle shadows.
+ * Dark mode: semi-transparent surfaces, backdrop blur, glass effect.
  */
 export const glass = {
   /** Panel layer — semi-transparent + blur + border */

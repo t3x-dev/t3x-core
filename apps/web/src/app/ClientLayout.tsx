@@ -57,13 +57,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <ErrorBoundary>
         <div className="flex min-h-screen bg-background">
           <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main
             className={cn(
-              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-200 ease-[var(--ease-out-soft)]',
+              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
               sidebarCollapsed ? 'ml-16' : 'ml-52'
             )}
           >
