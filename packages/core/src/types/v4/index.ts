@@ -25,7 +25,7 @@ export const ID_PREFIXES = {
   leaf_history: 'lhist_',
   pin: 'pin_',
   api_key: 'ak_',
-  share_token: 'stk_',
+  share_token: 'share_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
@@ -657,7 +657,7 @@ export interface ApiKey {
  * A share token grants read-only access to a specific entity (e.g., Leaf).
  */
 export interface ShareToken {
-  /** Unique ID, format: "stk_" + nanoid(12) */
+  /** Unique ID, format: "share_" + nanoid(12) */
   id: string;
 
   /** Random URL-safe token for the share link */

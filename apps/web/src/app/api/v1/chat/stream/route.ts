@@ -9,17 +9,22 @@
 import type { NextRequest } from 'next/server';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     // Forward to Hono API (routes are under /api prefix)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (API_KEY) {
+      headers.Authorization = `Bearer ${API_KEY}`;
+    }
     const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 

@@ -22,18 +22,12 @@ import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ShareLinkButtonProps {
-  entityType: 'leaf' | 'commit';
+  entityType: 'leaf';
   entityId: string;
-  projectId: string;
   className?: string;
 }
 
-export function ShareLinkButton({
-  entityType,
-  entityId,
-  projectId,
-  className,
-}: ShareLinkButtonProps) {
+export function ShareLinkButton({ entityType, entityId, className }: ShareLinkButtonProps) {
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -54,7 +48,7 @@ export function ShareLinkButton({
   const handleCreate = useCallback(async () => {
     setLoading(true);
     try {
-      const link = await api.createShareLink(entityType, entityId, projectId);
+      const link = await api.createShareLink(entityType, entityId);
       setLinks((prev) => [...prev, link]);
 
       // Auto-copy
@@ -66,7 +60,7 @@ export function ShareLinkButton({
     } finally {
       setLoading(false);
     }
-  }, [entityType, entityId, projectId, shareUrl]);
+  }, [entityType, entityId, shareUrl]);
 
   const handleCopy = useCallback(
     async (token: string) => {

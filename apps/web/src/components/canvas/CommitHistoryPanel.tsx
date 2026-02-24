@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4, DiffResultRaw } from '@/lib/api';
 import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ export function CommitHistoryPanel({
   onSelectCommit,
   projectId,
 }: CommitHistoryPanelProps) {
+  const { t } = useTerminology();
   const [history, setHistory] = useState<CommitV4[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export function CommitHistoryPanel({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <GitCommit className="size-4" />
-              Commit History
+              {t('commit')} History
             </SheetTitle>
             <SheetDescription>
               {commitHash ? `From ${shortHash(commitHash)}` : 'Select a commit'}
@@ -211,7 +213,7 @@ export function CommitHistoryPanel({
                               </code>
                               {isHead && (
                                 <span className="rounded bg-primary/10 px-1 py-0.5 text-[10px] font-medium text-primary">
-                                  HEAD
+                                  {t('head')}
                                 </span>
                               )}
                               {isRoot && !isHead && (

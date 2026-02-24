@@ -15,7 +15,7 @@ import { type ShareTokenRecord, shareTokens } from '../schema-v4';
 // Constants
 // ============================================================
 
-const ID_PREFIX = 'stk_';
+const ID_PREFIX = 'share_';
 const ID_RANDOM_LENGTH = 12;
 const TOKEN_LENGTH = 32; // URL-safe random token
 

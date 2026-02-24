@@ -1,7 +1,7 @@
 /**
  * useTerminology — Dual-mode noun/verb mapping for UI text.
  *
- * In default mode, uses governance-friendly terms (e.g., "Save", "Review").
+ * In default mode, uses governance-friendly terms (e.g., "Snapshot", "Review").
  * In developer mode, uses Git-oriented terms (e.g., "Commit", "Merge").
  *
  * Only applies to user-visible UI text — not variable names or code identifiers.
@@ -9,19 +9,32 @@
 
 import { useSettingsStore } from '@/store/settingsStore';
 
-const TERMINOLOGY: Record<string, { default: string; developer: string }> = {
+interface TermEntry {
+  default: string;
+  developer: string;
+  /** Whether to show this term's UI block. Default: always. Some terms (e.g., hash) only show in developer mode. */
+  showInDefault?: boolean;
+}
+
+const TERMINOLOGY: Record<string, TermEntry> = {
   // Nouns
-  commit: { default: 'Snapshot', developer: 'Commit' },
-  branch: { default: 'Version', developer: 'Branch' },
-  merge: { default: 'Combine', developer: 'Merge' },
-  diff: { default: 'Changes', developer: 'Diff' },
-  repository: { default: 'Project', developer: 'Repository' },
-  head: { default: 'Latest', developer: 'HEAD' },
-  hash: { default: 'ID', developer: 'Hash' },
-  staging: { default: 'Draft', developer: 'Staging' },
-  checkout: { default: 'Switch', developer: 'Checkout' },
-  revert: { default: 'Undo', developer: 'Revert' },
-  conflict: { default: 'Difference', developer: 'Conflict' },
+  commit: { default: '快照', developer: 'Commit' },
+  commits: { default: '快照', developer: 'Commits' },
+  branch: { default: '变体', developer: 'Branch' },
+  branches: { default: '变体', developer: 'Branches' },
+  merge: { default: '合并', developer: 'Merge' },
+  diff: { default: '对比', developer: 'Diff' },
+  head: { default: '最新版', developer: 'HEAD' },
+  hash: { default: 'Hash', developer: 'Hash', showInDefault: false },
+  draft: { default: '草稿', developer: 'Draft' },
+  committed: { default: '已保存', developer: 'Committed' },
+  pending: { default: '进行中', developer: 'Pending' },
+
+  // Merge sentence categories
+  identical_sentences: { default: '未变化', developer: 'Identical' },
+  modified_sentences: { default: '已修改', developer: 'Modified' },
+  added_sentences: { default: '新增', developer: 'Added' },
+  removed_sentences: { default: '已移除', developer: 'Removed' },
 
   // Verbs / Actions
   commitAction: { default: 'Save', developer: 'Commit' },
@@ -40,22 +53,39 @@ const TERMINOLOGY: Record<string, { default: string; developer: string }> = {
 
 export type TermKey = keyof typeof TERMINOLOGY;
 
+export interface TermItem {
+  text: string;
+  show: boolean;
+}
+
 /**
- * Returns the appropriate term for the current mode.
+ * Returns terminology helpers bound to the current developer mode setting.
  *
  * @example
- * const t = useTerminology();
- * t('commit')       // "Snapshot" (default) or "Commit" (developer)
- * t('mergeAction')  // "Combine Versions" or "Merge"
+ * const { t, term, isDeveloperMode } = useTerminology();
+ * t('commit')           // "快照" (default) or "Commit" (developer)
+ * term('hash')          // { text: "Hash", show: false } in default mode
+ * term('hash').show     // false in default, true in developer
  */
 export function useTerminology() {
-  const isDeveloper = useSettingsStore((s) => s.developerMode);
+  const isDeveloperMode = useSettingsStore((s) => s.developerMode);
 
-  return (key: TermKey): string => {
+  const t = (key: TermKey): string => {
     const entry = TERMINOLOGY[key];
     if (!entry) return key;
-    return isDeveloper ? entry.developer : entry.default;
+    return isDeveloperMode ? entry.developer : entry.default;
   };
+
+  const term = (key: TermKey): TermItem => {
+    const entry = TERMINOLOGY[key];
+    if (!entry) return { text: key, show: true };
+    return {
+      text: isDeveloperMode ? entry.developer : entry.default,
+      show: isDeveloperMode || entry.showInDefault !== false,
+    };
+  };
+
+  return { t, term, isDeveloperMode };
 }
 
 /**
@@ -65,4 +95,16 @@ export function getTerminology(key: TermKey, developerMode: boolean): string {
   const entry = TERMINOLOGY[key];
   if (!entry) return key;
   return developerMode ? entry.developer : entry.default;
+}
+
+/**
+ * Non-hook version of term() for use outside React components.
+ */
+export function getTermItem(key: TermKey, developerMode: boolean): TermItem {
+  const entry = TERMINOLOGY[key];
+  if (!entry) return { text: key, show: true };
+  return {
+    text: developerMode ? entry.developer : entry.default,
+    show: developerMode || entry.showInDefault !== false,
+  };
 }

@@ -435,7 +435,7 @@ export type ApiKeyInsert = typeof apiKeys.$inferInsert;
 export const shareTokens = pgTable(
   'share_tokens',
   {
-    /** Unique ID: "stk_" + nanoid(12) */
+    /** Unique ID: "share_" + nanoid(12) */
     id: text('id').primaryKey(),
 
     /** Random URL-safe token for the share link */

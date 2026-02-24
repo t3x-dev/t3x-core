@@ -25,7 +25,7 @@ function Segment({ children, border = true }: { children: React.ReactNode; borde
 
 export function CanvasStatusBar() {
   const nodes = useCanvasStore((s) => s.nodes);
-  const t = useTerminology();
+  const { t } = useTerminology();
 
   const stats = useMemo(() => {
     let commits = 0;
