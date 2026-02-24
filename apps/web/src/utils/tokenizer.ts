@@ -125,27 +125,31 @@ export function extractWithThresholds(
   // Extract keywords based on keywordsThreshold
   // Higher threshold = fewer but more important keywords
   const minWordLength = Math.floor(3 + keywordsThreshold * 4); // 3-7 chars
-  const keywords: KeywordMarker[] = [];
-  let kwCount = 0;
   const maxKeywords = Math.ceil((1 - keywordsThreshold) * 8) + 2; // 2-10 keywords
 
+  // Collect all candidate words with deterministic scores (longer words score higher)
+  const candidates: { tokenIndex: number; score: number }[] = [];
+  const seenLower = new Set<string>();
   for (const sel of selections) {
-    for (let i = sel.startIndex; i <= sel.endIndex && kwCount < maxKeywords; i++) {
+    for (let i = sel.startIndex; i <= sel.endIndex; i++) {
       const token = tokens[i];
-      // Only consider actual words (not punctuation)
       if (/^[a-zA-Z\u4e00-\u9fff]+$/.test(token.text) && token.text.length >= minWordLength) {
-        // Mock: select ~30% of qualifying words as keywords
-        if (Math.random() < 0.3) {
-          keywords.push({
-            id: `kw-${id}-${kwCount}`,
-            tokenIndex: i,
-            constraint: 'must_have',
-          });
-          kwCount++;
+        const lower = token.text.toLowerCase();
+        if (!seenLower.has(lower)) {
+          seenLower.add(lower);
+          candidates.push({ tokenIndex: i, score: token.text.length });
         }
       }
     }
   }
+
+  // Select top N by score (deterministic: longest words first, position as tiebreaker)
+  candidates.sort((a, b) => b.score - a.score || a.tokenIndex - b.tokenIndex);
+  const keywords: KeywordMarker[] = candidates.slice(0, maxKeywords).map((c, idx) => ({
+    id: `kw-${id}-${idx}`,
+    tokenIndex: c.tokenIndex,
+    constraint: 'must_have' as const,
+  }));
 
   return {
     id,
