@@ -8,6 +8,7 @@
  */
 
 import { ChevronDown, ChevronUp, FileText, Layers } from 'lucide-react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -18,6 +19,7 @@ interface MergePreviewProps {
 }
 
 export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
+  const { t } = useTerminology();
   const { getPreviewSentences, prepared, getResolutionStats } = useMergeWorkspaceStore();
   const sentences = getPreviewSentences();
 
@@ -37,9 +39,9 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
       >
         <div className="flex items-center gap-3">
           <FileText className="h-4 w-4 text-[var(--text-tertiary)]" />
-          <span className="font-medium text-[var(--text-primary)]">Merge Preview</span>
+          <span className="font-medium text-[var(--text-primary)]">{t('mergePreview')}</span>
           <span className="text-sm text-[var(--text-tertiary)]">
-            {sentences.length} sentences will be in final commit
+            {sentences.length} sentences will be in final {t('commit').toLowerCase()}
           </span>
         </div>
 

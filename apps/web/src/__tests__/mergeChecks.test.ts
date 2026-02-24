@@ -109,7 +109,7 @@ describe('getMergeChecks', () => {
     expect(ids).toContain('message');
     expect(ids).toContain('sentences');
     expect(ids).toContain('target_branch');
-    expect(ids).toContain('impact_scope');
+    expect(ids).toContain('preview_computed');
   });
 
   // --------------------------------------------------------------------------
@@ -355,10 +355,10 @@ describe('getMergeChecks', () => {
   });
 
   // --------------------------------------------------------------------------
-  // 'impact_scope' check (always passes, informational)
+  // 'preview_computed' check (always passes, informational)
   // --------------------------------------------------------------------------
 
-  describe("'impact_scope' check", () => {
+  describe("'preview_computed' check", () => {
     it('always passes', () => {
       useMergeWorkspaceStore.setState({
         prepared: makePrepared(),
@@ -367,7 +367,7 @@ describe('getMergeChecks', () => {
       });
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
-      const impactCheck = checks.find((c: MergeCheck) => c.id === 'impact_scope');
+      const impactCheck = checks.find((c: MergeCheck) => c.id === 'preview_computed');
       expect(impactCheck?.passed).toBe(true);
     });
 
@@ -398,7 +398,7 @@ describe('getMergeChecks', () => {
       });
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
-      const impactCheck = checks.find((c: MergeCheck) => c.id === 'impact_scope');
+      const impactCheck = checks.find((c: MergeCheck) => c.id === 'preview_computed');
       expect(impactCheck?.detail).toBe('1 kept, 1 conflicts, 1 unique');
     });
   });

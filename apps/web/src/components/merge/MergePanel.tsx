@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
+import { useTerminology } from '@/hooks/useTerminology';
 import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
 import { MergeCandidateList } from './MergeCandidateList';
 import { MergeIdenticalSection } from './MergeIdenticalSection';
@@ -30,6 +31,7 @@ import { MergeSimilarPairCard } from './MergeSimilarPairCard';
  * - Cancel merge option
  */
 export function MergePanel() {
+  const { t } = useTerminology();
   const mergeState = useCanvasStore((s) => s.mergeState);
   const executeMerge = useCanvasStore((s) => s.executeMerge);
   const cancelMerge = useCanvasStore((s) => s.cancelMerge);
@@ -84,7 +86,7 @@ export function MergePanel() {
     return (
       <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background elevation-3 border-l overflow-y-auto p-[var(--space-group)] sm:p-[var(--space-page)]">
         <div className="flex justify-between items-center mb-[var(--space-group)]">
-          <h2 className="text-xl font-bold">Merge Review</h2>
+          <h2 className="text-xl font-bold">{t('mergeReview')}</h2>
         </div>
 
         {/* B-12: Multi-step progress indicator */}
@@ -146,7 +148,7 @@ export function MergePanel() {
     <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-background elevation-3 border-l overflow-y-auto p-[var(--space-group)] sm:p-[var(--space-page)]">
       {/* Header */}
       <div className="flex justify-between items-center mb-[var(--space-group)]">
-        <h2 className="text-xl font-bold">Merge Review</h2>
+        <h2 className="text-xl font-bold">{t('mergeReview')}</h2>
         <button
           onClick={cancelMerge}
           className="text-muted-foreground hover:text-foreground text-2xl leading-none"
@@ -288,7 +290,7 @@ export function MergePanel() {
             </div>
           </div>
           <DialogHeader>
-            <DialogTitle className="text-center">Confirm Merge</DialogTitle>
+            <DialogTitle className="text-center">{t('mergeConfirm')}</DialogTitle>
             <DialogDescription className="text-center">
               This will create a new merge commit combining the selected sentences from both
               branches. This action cannot be undone.
