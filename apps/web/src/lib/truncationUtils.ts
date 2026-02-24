@@ -13,7 +13,12 @@
  * @see docs/specification/commit-source-context-presentation.md
  */
 
-import type { HighlightRange, TruncatedSegment, TruncationOptions } from '@/types/sourceContext';
+import type {
+  ColoredHighlightRange,
+  HighlightRange,
+  TruncatedSegment,
+  TruncationOptions,
+} from '@/types/sourceContext';
 import { mergeHighlightRanges } from './highlightUtils';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -151,6 +156,41 @@ export function adjustHighlightsForTruncation(
     start: h.start - offset,
     end: h.end - offset,
   }));
+}
+
+/**
+ * Adjust colored highlight positions after truncation.
+ * Same logic as adjustHighlightsForTruncation but preserves color info
+ * and filters out ranges that fall outside the truncated content.
+ */
+export function adjustColoredHighlightsForTruncation(
+  coloredHighlights: ColoredHighlightRange[],
+  content: string,
+  highlights: HighlightRange[],
+  options?: TruncationOptions
+): ColoredHighlightRange[] {
+  const maxLength = options?.maxLength ?? DEFAULT_MAX_LENGTH;
+  const contextChars = options?.contextChars ?? DEFAULT_CONTEXT_CHARS;
+
+  if (content.length <= maxLength) return coloredHighlights;
+  if (highlights.length === 0) return [];
+
+  const minStart = Math.min(...highlights.map((h) => h.start));
+  const maxEnd = Math.max(...highlights.map((h) => h.end));
+  const visibleStart = Math.max(0, minStart - contextChars);
+  const visibleEnd = Math.min(content.length, maxEnd + contextChars);
+
+  // Account for leading "..." (3 characters)
+  const offset = visibleStart > 0 ? visibleStart - 3 : 0;
+
+  return coloredHighlights
+    .filter((ch) => ch.end > visibleStart && ch.start < visibleEnd)
+    .map((ch) => ({
+      start: Math.max(ch.start, visibleStart) - offset,
+      end: Math.min(ch.end, visibleEnd) - offset,
+      color: ch.color,
+    }))
+    .filter((ch) => ch.start < ch.end);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

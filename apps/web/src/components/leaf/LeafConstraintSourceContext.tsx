@@ -31,7 +31,7 @@ import { Button } from '@/components/ui/button';
 import type { Constraint, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import {
-  adjustHighlightsForTruncation,
+  adjustColoredHighlightsForTruncation,
   checkContentIntegrity,
   DEFAULT_CONTEXT_CHARS,
   DEFAULT_MAX_LENGTH,
@@ -252,11 +252,11 @@ export function buildColoredHighlights(
     }
   }
 
-  // Step 4: Add constraint ranges that fall outside all sentence ranges
+  // Step 4: Add constraint ranges that fall completely outside all sentence ranges
   // (from Strategy 3 — full turn content search)
   for (const cr of constraintRanges) {
-    const insideBase = baseRanges.some((b) => cr.start >= b.start && cr.end <= b.end);
-    if (!insideBase) {
+    const overlapsAnyBase = baseRanges.some((b) => cr.start < b.end && cr.end > b.start);
+    if (!overlapsAnyBase) {
       result.push({ start: cr.start, end: cr.end, color: cr.color });
     }
   }
@@ -699,11 +699,11 @@ export function LeafConstraintSourceContext({
         {constraintCount > 0 && (
           <>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-green-500" />
+              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 dark:bg-emerald-800" />
               Must Have
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-red-500" />
+              <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-800" />
               Must Not Have
             </span>
           </>
@@ -781,25 +781,27 @@ export function LeafConstraintSourceContext({
             sentences
           );
 
+          const truncationOpts = {
+            maxLength: MAX_TURN_LENGTH,
+            contextChars: TRUNCATION_CONTEXT,
+          };
+
           const turnBubbleData: TurnBubbleData = {
             turn_hash: targetTurn.turn_hash,
             role: targetTurn.role,
             content: shouldTruncate
-              ? truncateLongContent(targetTurn.content, data.highlights, {
-                  maxLength: MAX_TURN_LENGTH,
-                  contextChars: TRUNCATION_CONTEXT,
-                })
+              ? truncateLongContent(targetTurn.content, data.highlights, truncationOpts)
               : targetTurn.content,
             created_at: targetTurn.created_at,
             is_target: true,
-            coloredHighlights: shouldTruncate ? undefined : coloredHighlights,
-            // Fallback to uniform green when truncated (truncation adjusts plain ranges)
-            highlights: shouldTruncate
-              ? adjustHighlightsForTruncation(data.highlights, targetTurn.content, {
-                  maxLength: MAX_TURN_LENGTH,
-                  contextChars: TRUNCATION_CONTEXT,
-                })
-              : undefined,
+            coloredHighlights: shouldTruncate
+              ? adjustColoredHighlightsForTruncation(
+                  coloredHighlights,
+                  targetTurn.content,
+                  data.highlights,
+                  truncationOpts
+                )
+              : coloredHighlights,
           };
 
           return (
