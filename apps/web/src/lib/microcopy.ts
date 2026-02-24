@@ -9,8 +9,9 @@
  * Button text, headers, labels remain concise and direct regardless of mode.
  */
 
-import type { CopyMode } from '@/store/modeStore';
-import { useModeStore } from '@/store/modeStore';
+import { useSettingsStore } from '@/store/settingsStore';
+
+export type CopyMode = 'default' | 'developer';
 
 type CopyValue = string | ((params: Record<string, string | number>) => string);
 
@@ -48,6 +49,18 @@ const MICROCOPY: Record<string, MicrocopyEntry> = {
     default: (p) => `${p.n} constraints need attention`,
     developer: (p) => `${p.n} assertions failed`,
   },
+  mergeReviewTitle: {
+    default: 'Review Merge',
+    developer: 'Merge Review',
+  },
+  mergeReviewConfirm: {
+    default: 'Confirm Merge',
+    developer: 'Execute Merge',
+  },
+  mergeReviewCancel: {
+    default: 'Go Back',
+    developer: 'Cancel',
+  },
 };
 
 export type MicrocopyScenario =
@@ -57,7 +70,10 @@ export type MicrocopyScenario =
   | 'emptyProject'
   | 'loading'
   | 'constraintsAllPass'
-  | 'constraintsFail';
+  | 'constraintsFail'
+  | 'mergeReviewTitle'
+  | 'mergeReviewConfirm'
+  | 'mergeReviewCancel';
 
 /**
  * Get microcopy string for a given scenario and mode.
@@ -83,7 +99,7 @@ export function getMicrocopy(
  * mc('commitSuccess', { hash_short: 'abc123' }) // (ignored in default mode)
  */
 export function useMicrocopy() {
-  const mode = useModeStore((s) => s.copyMode);
+  const mode: CopyMode = useSettingsStore((s) => (s.developerMode ? 'developer' : 'default'));
   return (scenario: MicrocopyScenario, params?: Record<string, string | number>) =>
     getMicrocopy(scenario, mode, params);
 }

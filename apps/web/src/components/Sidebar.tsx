@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import { SettingsToggle } from '@/components/shared/SettingsToggle';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -325,6 +326,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           >
             <Github className="h-5 w-5" />
           </NavItem>
+
+          {/* Developer Mode Toggle */}
+          <SettingsToggle collapsed={collapsed} />
 
           {/* Theme Toggle — use mounted guard to avoid SSR hydration mismatch */}
           {collapsed ? (

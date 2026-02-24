@@ -3,7 +3,7 @@ import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
 import * as api from '@/lib/api';
 import { getMicrocopy } from '@/lib/microcopy';
-import { useModeStore } from '@/store/modeStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import type {
   BranchType,
   CanvasNodeData,
@@ -488,7 +488,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         };
       });
 
-      const mode = useModeStore.getState().copyMode;
+      const mode = useSettingsStore.getState().developerMode ? 'developer' : 'default';
       notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
     },
 

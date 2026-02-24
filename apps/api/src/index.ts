@@ -13,8 +13,10 @@ import { apiReference } from '@scalar/hono-api-reference';
 import { Hono } from 'hono';
 import { closeDB, getDB } from './lib/db';
 import { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
+import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware } from './middleware/logger';
+import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import {
   agentDraftRoutes,
   branchRoutes,
@@ -34,8 +36,10 @@ import {
   statusRoutes,
   turnRoutes,
 } from './routes';
+import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
+import { shareRoutes } from './routes/share.openapi';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -74,9 +78,12 @@ loadEnvLocal();
 
 const app = new Hono();
 
-// Global middleware
+// Global middleware (order: CORS → Logger → L1 Rate Limit → Auth → L2 Rate Limit)
 app.use('*', corsMiddleware);
 app.use('*', loggerMiddleware);
+app.use('*', rateLimitL1);
+app.use('*', authMiddleware);
+app.use('*', rateLimitL2);
 
 // Health check at root (not under /api)
 app.route('/', healthRoutes); // /health
@@ -118,6 +125,8 @@ api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
 api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
+api.route('/', apiKeysRoutes); // /v1/api-keys
+api.route('/', shareRoutes); // /v1/share
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -145,6 +154,8 @@ api.doc('/openapi.json', {
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
     { name: 'Runner', description: 'Grey-box agent evaluation' },
+    { name: 'API Keys', description: 'API key management (create, list, revoke)' },
+    { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
     {

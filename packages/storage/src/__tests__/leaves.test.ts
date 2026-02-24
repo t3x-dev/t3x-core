@@ -750,9 +750,14 @@ describe('Leaves Storage', () => {
   });
 
   describe('leaf types', () => {
-    it.each(['tweet', 'weibo', 'wechat', 'email', 'article', 'slack'] as const)(
-      'supports leaf type: %s',
-      async (type) => {
+    it.each([
+      'tweet',
+      'weibo',
+      'wechat',
+      'email',
+      'article',
+      'slack',
+    ] as const)('supports leaf type: %s', async (type) => {
       const created = await createLeaf(db, {
         commit_hash: testCommitHash,
         type,

@@ -286,9 +286,7 @@ export function LeafSelector({
                 value={testQuery}
                 onChange={(e) => setTestQuery(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                The user message sent to the AI agent
-              </p>
+              <p className="text-xs text-muted-foreground">The user message sent to the AI agent</p>
             </div>
             <div className="space-y-1.5">
               <span className="text-sm font-medium">Eval Rules</span>
