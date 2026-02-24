@@ -259,6 +259,7 @@ export default function SemanticLedgerPage() {
       </motion.header>
 
       <motion.div
+        key="projects"
         className="flex flex-col gap-3"
         variants={containerVariants}
         initial="initial"
