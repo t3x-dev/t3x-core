@@ -1294,7 +1294,7 @@ export function PendingCommitView({
                               {branch.is_current ? ' (current)' : ''}
                             </option>
                           ))}
-                        <option value="__new__">+ New branch...</option>
+                        <option value="__new__">+ New {t('branch').toLowerCase()}...</option>
                       </select>
                       {/* Warning when main branch selection is invalid */}
                       {isMainBranchInvalid && (
