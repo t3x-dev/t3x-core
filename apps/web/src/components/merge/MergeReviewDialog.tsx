@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
+import { useMicrocopy } from '@/lib/microcopy';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
@@ -42,6 +43,7 @@ export function MergeReviewDialog({
   onBackToCanvas,
 }: MergeReviewDialogProps) {
   const { t } = useTerminology();
+  const mc = useMicrocopy();
   const prefersReducedMotion = useReducedMotion();
   const [state, setState] = useState<'review' | 'committing' | 'success' | 'error'>('review');
   const [errorMsg, setErrorMsg] = useState('');
@@ -108,10 +110,10 @@ export function MergeReviewDialog({
               </p>
               <div className="flex gap-3 mt-2">
                 <Button variant="outline" onClick={onBackToCanvas}>
-                  Back to Canvas
+                  {mc('backToCanvas')}
                 </Button>
                 <Button variant="ghost" onClick={onClose}>
-                  Stay here
+                  {mc('stayHere')}
                 </Button>
               </div>
               <p className="text-xs text-[var(--text-tertiary)]">Auto-closing in 5s...</p>

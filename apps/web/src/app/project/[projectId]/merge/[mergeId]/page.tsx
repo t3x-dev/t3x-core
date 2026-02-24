@@ -10,6 +10,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
+import { useMicrocopy } from '@/lib/microcopy';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
 export default function MergeWorkspacePage() {
@@ -18,6 +19,7 @@ export default function MergeWorkspacePage() {
   const projectId = params.projectId as string;
   const mergeId = params.mergeId as string;
 
+  const mc = useMicrocopy();
   const { loadDraft, loading, error, reset } = useMergeWorkspaceStore();
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function MergeWorkspacePage() {
             onClick={handleClose}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
-            Back to Canvas
+            {mc('backToCanvas')}
           </button>
         </div>
       </div>

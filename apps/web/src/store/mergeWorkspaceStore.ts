@@ -750,8 +750,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         detail: targetBranch || undefined,
       },
       {
-        id: 'impact_scope',
-        label: 'Impact scope reviewed',
+        id: 'preview_computed',
+        label: 'Preview computed',
         passed: true, // Always passes — informational
         detail: prepared
           ? `${prepared.identical.length} kept, ${prepared.similarPairs.length} conflicts, ${prepared.onlyInSource.length + prepared.onlyInTarget.length} unique`
