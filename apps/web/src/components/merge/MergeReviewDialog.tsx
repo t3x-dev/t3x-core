@@ -41,7 +41,7 @@ export function MergeReviewDialog({
   sentenceCount,
   onBackToCanvas,
 }: MergeReviewDialogProps) {
-  const t = useTerminology();
+  const { t } = useTerminology();
   const prefersReducedMotion = useReducedMotion();
   const [state, setState] = useState<'review' | 'committing' | 'success' | 'error'>('review');
   const [errorMsg, setErrorMsg] = useState('');

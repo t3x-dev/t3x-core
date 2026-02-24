@@ -486,7 +486,7 @@ export default function LeafDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
-          <ShareLinkButton entityType="leaf" entityId={leafId} projectId={projectId} />
+          <ShareLinkButton entityType="leaf" entityId={leafId} />
           {/* Generate button */}
           <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
             <span className="mr-1 inline-flex h-3 w-3">

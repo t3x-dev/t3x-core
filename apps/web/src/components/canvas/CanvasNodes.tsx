@@ -31,6 +31,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
@@ -406,6 +407,7 @@ function UnitNode(props: Props) {
   const projectId = params?.projectId as string | undefined;
   const prefersReducedMotion = useReducedMotion();
 
+  const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
   const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
@@ -595,7 +597,7 @@ function UnitNode(props: Props) {
           ...(selected ? { boxShadow: toneGlow[accentKey as keyof typeof toneGlow] } : {}),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isStaging ? 'Draft' : 'Committed'} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
+        aria-label={`${data.title} — ${isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
         aria-selected={selected}
         data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
@@ -785,7 +787,7 @@ function UnitNode(props: Props) {
                   {isStaging ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                       <PenSquare size={12} className={toneAccent.pending.text} />
-                      <span>Draft</span>
+                      <span>{t('draft')}</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
@@ -797,7 +799,7 @@ function UnitNode(props: Props) {
                             : toneAccent.branch.text
                         }
                       />
-                      <span>Committed</span>
+                      <span>{t('committed')}</span>
                     </span>
                   )}
                 </div>
@@ -988,7 +990,9 @@ function UnitNode(props: Props) {
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={4}>
                 <p className="text-xs">
-                  {canTriggerMerge ? 'Merge branch to main' : 'Merge requires main branch commit'}
+                  {canTriggerMerge
+                    ? `${t('merge')} ${t('branch')} to main`
+                    : `${t('merge')} requires main ${t('branch')} ${t('commit')}`}
                 </p>
               </TooltipContent>
             </Tooltip>

@@ -6,7 +6,9 @@
  */
 
 import { create } from 'zustand';
+import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
+import { useSettingsStore } from '@/store/settingsStore';
 import type {
   CommitV3,
   Merge2WayResult,
@@ -717,17 +719,19 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { prepared, message, targetBranch } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewSentences = get().getPreviewSentences();
+    const dev = useSettingsStore.getState().developerMode;
+    const tm = (key: TermKey) => getTerminology(key, dev);
 
     return [
       {
         id: 'resolved',
-        label: 'All conflicts resolved',
+        label: `All conflicts resolved`,
         passed: unresolvedCount === 0,
         detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
       },
       {
         id: 'message',
-        label: 'Merge message provided',
+        label: `${tm('merge')} message provided`,
         passed: message.trim().length > 0,
       },
       {
@@ -741,7 +745,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       },
       {
         id: 'target_branch',
-        label: 'Target branch identified',
+        label: `Target ${tm('branch').toLowerCase()} identified`,
         passed: !!targetBranch,
         detail: targetBranch || undefined,
       },

@@ -48,7 +48,7 @@ export default function SharePage() {
     api
       .resolveShareLink(token)
       .then((result) => {
-        setEntityType(result.entity_type);
+        setEntityType(result.token_info.entity_type);
         setEntity(result.entity);
         setLoading(false);
       })

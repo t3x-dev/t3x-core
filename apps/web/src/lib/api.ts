@@ -494,6 +494,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return json.data as T;
 }
 
+// API key for authenticated requests (optional, for production use)
+const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
+
 // Single fetch attempt with timeout + abort support
 async function fetchOnce(
   url: string,
@@ -508,9 +511,16 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
+  // Inject Authorization header if API key is configured
+  const headers = new Headers(options?.headers);
+  if (API_KEY && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${API_KEY}`);
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
+      headers,
       signal: controller.signal,
     });
     return response;
@@ -2901,15 +2911,13 @@ export interface ShareLink {
 }
 
 export interface ShareResolveResult {
-  entity_type: string;
-  entity_id: string;
+  token_info: ShareLink;
   entity: unknown;
 }
 
 export async function createShareLink(
-  entityType: 'leaf' | 'commit',
-  entityId: string,
-  projectId: string
+  entityType: 'leaf',
+  entityId: string
 ): Promise<ShareLink> {
   const res = await fetchWithTimeout(`${API_V1}/share`, {
     method: 'POST',
@@ -2917,7 +2925,6 @@ export async function createShareLink(
     body: JSON.stringify({
       entity_type: entityType,
       entity_id: entityId,
-      project_id: projectId,
     }),
   });
   return handleResponse<ShareLink>(res);

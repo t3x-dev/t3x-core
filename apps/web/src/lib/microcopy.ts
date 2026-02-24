@@ -61,6 +61,18 @@ const MICROCOPY: Record<string, MicrocopyEntry> = {
     default: 'Go Back',
     developer: 'Cancel',
   },
+  reviewAndMerge: {
+    default: '审查并合并',
+    developer: 'Review & Merge',
+  },
+  backToCanvas: {
+    default: '返回画布',
+    developer: 'Back to Canvas',
+  },
+  stayHere: {
+    default: '留在此页',
+    developer: 'Stay Here',
+  },
 };
 
 export type MicrocopyScenario =
@@ -73,7 +85,10 @@ export type MicrocopyScenario =
   | 'constraintsFail'
   | 'mergeReviewTitle'
   | 'mergeReviewConfirm'
-  | 'mergeReviewCancel';
+  | 'mergeReviewCancel'
+  | 'reviewAndMerge'
+  | 'backToCanvas'
+  | 'stayHere';
 
 /**
  * Get microcopy string for a given scenario and mode.

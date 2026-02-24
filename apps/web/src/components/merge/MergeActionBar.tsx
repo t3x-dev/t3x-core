@@ -48,7 +48,7 @@ export function MergeActionBar({
   onClose,
 }: MergeActionBarProps) {
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
-  const t = useTerminology();
+  const { t } = useTerminology();
   return (
     <header
       className={cn(
