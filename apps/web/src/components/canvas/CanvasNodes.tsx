@@ -776,7 +776,7 @@ function UnitNode(props: Props) {
                 {data.isMergeCommit && (
                   <>
                     <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className={cn('font-medium', toneAccent.conversation.text)}>merge</span>
+                    <span className={cn('font-medium', toneAccent.conversation.text)}>{t('merge').toLowerCase()}</span>
                   </>
                 )}
               </div>

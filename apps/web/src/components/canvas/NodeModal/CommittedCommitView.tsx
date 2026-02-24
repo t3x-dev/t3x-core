@@ -525,7 +525,7 @@ export function CommittedCommitView({
                       className="w-full gap-2"
                     >
                       <History size={14} />
-                      <span>View commit history</span>
+                      <span>View {t('commit').toLowerCase()} history</span>
                     </Button>
                   </div>
                   <CommitHistoryPanel
