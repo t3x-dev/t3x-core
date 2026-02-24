@@ -16,9 +16,10 @@ function getProxyFetch() {
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
     return (url: string | URL | Request, options?: RequestInit) =>
-      undiciFetch(url as string, { ...options, dispatcher: agent } as Parameters<
-        typeof undiciFetch
-      >[1]) as Promise<Response>;
+      undiciFetch(
+        url as string,
+        { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]
+      ) as Promise<Response>;
   }
   return undefined;
 }

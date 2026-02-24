@@ -376,3 +376,100 @@ export type PinInsert = typeof pins.$inferInsert;
 
 export type ConversationContextRecord = typeof conversationContexts.$inferSelect;
 export type ConversationContextInsert = typeof conversationContexts.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// api_keys: Authentication
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * API keys for authenticating API requests.
+ *
+ * The full key value is only shown once at creation.
+ * We store a SHA-256 hash for verification and a short prefix for display.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    /** Unique ID: "ak_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** First 8 chars of the key value for display */
+    keyPrefix: text('key_prefix').notNull(),
+
+    /** SHA-256 hash of the full key value */
+    keyHash: text('key_hash').notNull(),
+
+    /** Human-readable label */
+    name: text('name').notNull(),
+
+    /** Project scope (null = global) */
+    projectId: text('project_id').references(() => projects.projectId, {
+      onDelete: 'cascade',
+    }),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+    /** Last usage time */
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+
+    /** Revocation time (soft delete) */
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => ({
+    keyHashIdx: uniqueIndex('idx_api_keys_hash').on(table.keyHash),
+    projectIdx: index('idx_api_keys_project').on(table.projectId),
+  })
+);
+
+export type ApiKeyRecord = typeof apiKeys.$inferSelect;
+export type ApiKeyInsert = typeof apiKeys.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// share_tokens: Share Links
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Share tokens grant read-only access to specific entities via URL.
+ */
+export const shareTokens = pgTable(
+  'share_tokens',
+  {
+    /** Unique ID: "stk_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Random URL-safe token for the share link */
+    token: text('token').notNull(),
+
+    /** Entity type being shared */
+    entityType: text('entity_type').notNull(),
+
+    /** ID of the shared entity */
+    entityId: text('entity_id').notNull(),
+
+    /** Associated project */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** Who created the share link */
+    createdBy: text('created_by'),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+    /** Expiration time (null = never) */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+
+    /** Revocation time (soft delete) */
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => ({
+    tokenIdx: uniqueIndex('idx_share_tokens_token').on(table.token),
+    entityIdx: index('idx_share_tokens_entity').on(table.entityType, table.entityId),
+    projectIdx: index('idx_share_tokens_project').on(table.projectId),
+  })
+);
+
+export type ShareTokenRecord = typeof shareTokens.$inferSelect;
+export type ShareTokenInsert = typeof shareTokens.$inferInsert;

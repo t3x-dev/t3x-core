@@ -34,24 +34,38 @@ const { chromium } = require('@playwright/test');
 
   // Fetch conversation IDs via API
   const apiPage = await context.newPage();
-  const convData = await (await apiPage.request.get('http://localhost:8000/api/v1/conversations?project_id=proj_1da080be')).json();
-  const convIds = (convData.data.conversations || []).map(function(c) { return c.conversation_id; });
+  const convData = await (
+    await apiPage.request.get('http://localhost:8000/api/v1/conversations?project_id=proj_1da080be')
+  ).json();
+  const convIds = (convData.data.conversations || []).map((c) => c.conversation_id);
   console.log('Conversations: ' + JSON.stringify(convIds));
 
-  const commitData = await (await apiPage.request.get('http://localhost:8000/api/v1/commits-v4?project_id=proj_1da080be')).json();
+  const commitData = await (
+    await apiPage.request.get('http://localhost:8000/api/v1/commits-v4?project_id=proj_1da080be')
+  ).json();
   const commits = commitData.data.commits || [];
-  console.log('Commits: ' + JSON.stringify(commits.map(function(c) {
-    return { h: c.hash.slice(0,25), b: c.branch, s: (c.content.sentences || []).length };
-  })));
+  console.log(
+    'Commits: ' +
+      JSON.stringify(
+        commits.map((c) => ({
+          h: c.hash.slice(0, 25),
+          b: c.branch,
+          s: (c.content.sentences || []).length,
+        }))
+      )
+  );
   await apiPage.close();
 
   // Conversation detail
   if (convIds.length > 0) {
     const p = await context.newPage();
     try {
-      await p.goto('http://localhost:3000/project/proj_1da080be/conversation/' + convIds[0], { waitUntil: 'networkidle', timeout: 15000 });
+      await p.goto('http://localhost:3000/project/proj_1da080be/conversation/' + convIds[0], {
+        waitUntil: 'networkidle',
+        timeout: 15000,
+      });
       await p.waitForTimeout(2000);
-    } catch(e) {}
+    } catch (e) {}
     await p.screenshot({ path: '/tmp/t3x-assessment/07-conversation.png' });
     console.log('OK: conversation');
     await p.close();

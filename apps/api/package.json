@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "lint": "biome lint src"
+    "lint": "biome lint src",
+    "seed:api-key": "tsx src/scripts/seed-api-key.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.15.2",

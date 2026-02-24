@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { GitCommit, Leaf, Loader2, MessageSquare } from 'lucide-react';
+import { GitCommit, Leaf, Loader2, MessageSquare, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -102,6 +102,16 @@ export function WelcomeModal() {
               glass.highlight
             )}
           >
+            {/* Dismiss Button */}
+            <button
+              type="button"
+              onClick={dismiss}
+              className="absolute right-4 top-4 rounded-lg p-1 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-colors"
+              aria-label="Close welcome dialog"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
             {/* Logo */}
             <svg
               width="48"

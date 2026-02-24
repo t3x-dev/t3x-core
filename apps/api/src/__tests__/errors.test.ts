@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 30 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(30);
+  it('has 36 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(36);
   });
 
   it('key equals value for every code', () => {
@@ -22,6 +22,8 @@ describe('ErrorCodes', () => {
   it('matches snapshot to prevent accidental changes', () => {
     expect(ErrorCodes).toMatchInlineSnapshot(`
       {
+        "API_KEY_NOT_FOUND": "API_KEY_NOT_FOUND",
+        "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
@@ -30,6 +32,7 @@ describe('ErrorCodes', () => {
         "DATABASE_ERROR": "DATABASE_ERROR",
         "DELETE_FAILED": "DELETE_FAILED",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
+        "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
@@ -50,6 +53,9 @@ describe('ErrorCodes', () => {
         "RATE_LIMITED": "RATE_LIMITED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
+        "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
+        "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "UNAUTHORIZED": "UNAUTHORIZED",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
       }

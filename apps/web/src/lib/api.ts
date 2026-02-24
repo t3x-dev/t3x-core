@@ -2883,3 +2883,59 @@ export async function curatePreview(
   );
   return handleResponse<CuratePreviewResponse>(res);
 }
+
+// ============================================================================
+// Share Links
+// ============================================================================
+
+export interface ShareLink {
+  id: string;
+  token: string;
+  entity_type: string;
+  entity_id: string;
+  project_id: string;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ShareResolveResult {
+  entity_type: string;
+  entity_id: string;
+  entity: unknown;
+}
+
+export async function createShareLink(
+  entityType: 'leaf' | 'commit',
+  entityId: string,
+  projectId: string
+): Promise<ShareLink> {
+  const res = await fetchWithTimeout(`${API_V1}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entity_type: entityType,
+      entity_id: entityId,
+      project_id: projectId,
+    }),
+  });
+  return handleResponse<ShareLink>(res);
+}
+
+export async function resolveShareLink(token: string): Promise<ShareResolveResult> {
+  const res = await fetchWithTimeout(`${API_V1}/share/${token}`);
+  return handleResponse<ShareResolveResult>(res);
+}
+
+export async function revokeShareLink(id: string): Promise<ShareLink> {
+  const res = await fetchWithTimeout(`${API_V1}/share/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<ShareLink>(res);
+}
+
+export async function listShareLinks(entityType: string, entityId: string): Promise<ShareLink[]> {
+  const res = await fetchWithTimeout(`${API_V1}/share/entity/${entityType}/${entityId}`);
+  return handleResponse<ShareLink[]>(res);
+}

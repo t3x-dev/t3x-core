@@ -71,6 +71,16 @@ export const ErrorCodes = {
   RATE_LIMITED: 'RATE_LIMITED',
   AUTH_ERROR: 'AUTH_ERROR',
 
+  // Authentication errors
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  API_KEY_NOT_FOUND: 'API_KEY_NOT_FOUND',
+  API_KEY_REVOKED: 'API_KEY_REVOKED',
+
+  // Share errors
+  SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
+  SHARE_ENTITY_NOT_FOUND: 'SHARE_ENTITY_NOT_FOUND',
+
   // Validation errors (VAL-2)
   NO_OUTPUT: 'NO_OUTPUT',
   SEMANTIC_NOT_SUPPORTED: 'SEMANTIC_NOT_SUPPORTED',
@@ -134,6 +144,16 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   RATE_LIMITED: 429,
   AUTH_ERROR: 401,
 
+  // Authentication errors
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  API_KEY_NOT_FOUND: 404,
+  API_KEY_REVOKED: 400,
+
+  // Share errors
+  SHARE_TOKEN_NOT_FOUND: 404,
+  SHARE_ENTITY_NOT_FOUND: 404,
+
   // Validation errors (VAL-2)
   NO_OUTPUT: 400,
   SEMANTIC_NOT_SUPPORTED: 400,
@@ -184,7 +204,10 @@ export function errorResponse(
   details?: Record<string, unknown>
 ) {
   const statusCode = ErrorStatusCodes[code];
-  return c.json(createError(code, message, details), statusCode as 400 | 404 | 409 | 500);
+  return c.json(
+    createError(code, message, details),
+    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500
+  );
 }
 
 /**

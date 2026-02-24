@@ -193,6 +193,12 @@ export type {
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  ALL_LEAF_TYPES,
+  // Leaf (owns constraints)
+  type AnyLeafType,
+  API_KEY_VALUE_PREFIX,
+  // API Key
+  type ApiKey,
   // Assertion
   type Assertion,
   // Built Context
@@ -212,19 +218,16 @@ export {
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
+  DEPLOY_TYPES,
+  type DeployType,
   type ExcludeConstraint as ExcludeConstraintV4,
   // ID Prefixes
   ID_PREFIXES,
-  ALL_LEAF_TYPES,
-  DEPLOY_TYPES,
-  LEAF_TYPES,
   isDeployLeaf,
   isGenerationLeaf,
-  // Leaf (owns constraints)
-  type AnyLeafType,
+  LEAF_TYPES,
   type Leaf,
   type LeafConfig,
-  type DeployType,
   // Leaf History
   type LeafHistory,
   type LeafType,
@@ -239,5 +242,7 @@ export {
   // Sentence
   type Sentence as SentenceV4,
   type SentenceSourceRef,
+  // Share Token
+  type ShareToken,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

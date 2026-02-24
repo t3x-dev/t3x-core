@@ -24,7 +24,12 @@ export const ID_PREFIXES = {
   leaf: 'leaf_',
   leaf_history: 'lhist_',
   pin: 'pin_',
+  api_key: 'ak_',
+  share_token: 'stk_',
 } as const;
+
+/** Prefix for raw API key values (visible once at creation) */
+export const API_KEY_VALUE_PREFIX = 't3xk_';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence (Knowledge Unit)
@@ -234,14 +239,7 @@ export interface Assertion {
  * Leaf types represent different output formats/channels.
  * Single source of truth - used by both TypeScript types and Zod schemas.
  */
-export const LEAF_TYPES = [
-  'tweet',
-  'weibo',
-  'wechat',
-  'email',
-  'article',
-  'slack',
-] as const;
+export const LEAF_TYPES = ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack'] as const;
 
 export type LeafType = (typeof LEAF_TYPES)[number];
 
@@ -613,4 +611,76 @@ export interface MergeV4Result {
 
   /** Sentences only in target commit */
   only_in_target: MergeV4Candidate[];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API Key (Authentication)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * An API key grants access to the T3X API.
+ *
+ * The full key value (t3xk_...) is only shown once at creation time.
+ * We store a SHA-256 hash + short prefix for lookup/display.
+ */
+export interface ApiKey {
+  /** Unique ID, format: "ak_" + nanoid(12) */
+  id: string;
+
+  /** First 8 chars of the key value, for display (e.g., "t3xk_abc1...") */
+  key_prefix: string;
+
+  /** SHA-256 hash of the full key value */
+  key_hash: string;
+
+  /** Human-readable label */
+  name: string;
+
+  /** Scope: if set, key is scoped to this project. null = global */
+  project_id: string | null;
+
+  /** When the key was created, ISO8601 */
+  created_at: string;
+
+  /** When the key was last used, ISO8601 */
+  last_used_at: string | null;
+
+  /** When the key was revoked (soft-delete), ISO8601 */
+  revoked_at: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Share Token (Share Link)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A share token grants read-only access to a specific entity (e.g., Leaf).
+ */
+export interface ShareToken {
+  /** Unique ID, format: "stk_" + nanoid(12) */
+  id: string;
+
+  /** Random URL-safe token for the share link */
+  token: string;
+
+  /** What entity type is being shared */
+  entity_type: 'leaf' | 'commit';
+
+  /** ID of the shared entity */
+  entity_id: string;
+
+  /** Associated project */
+  project_id: string;
+
+  /** Who created the share link */
+  created_by: string | null;
+
+  /** When created, ISO8601 */
+  created_at: string;
+
+  /** Optional expiration, ISO8601. null = never expires */
+  expires_at: string | null;
+
+  /** When revoked (soft-delete), ISO8601 */
+  revoked_at: string | null;
 }

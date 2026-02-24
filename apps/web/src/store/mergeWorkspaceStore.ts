@@ -128,6 +128,17 @@ interface MergeWorkspaceState {
   getResolutionStats: () => ResolutionStats;
   canCommit: () => boolean;
   getPreviewSentences: () => Sentence[];
+  getMergeChecks: () => MergeCheck[];
+}
+
+/**
+ * Merge check item for the Review Dialog checklist
+ */
+export interface MergeCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail?: string;
 }
 
 // ============================================================================
@@ -700,6 +711,49 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       }));
       return null;
     }
+  },
+
+  getMergeChecks: (): MergeCheck[] => {
+    const { prepared, message, targetBranch } = get();
+    const unresolvedCount = get().getUnresolvedCount();
+    const previewSentences = get().getPreviewSentences();
+
+    return [
+      {
+        id: 'resolved',
+        label: 'All conflicts resolved',
+        passed: unresolvedCount === 0,
+        detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
+      },
+      {
+        id: 'message',
+        label: 'Merge message provided',
+        passed: message.trim().length > 0,
+      },
+      {
+        id: 'sentences',
+        label: 'Result has sentences',
+        passed: previewSentences.length > 0,
+        detail:
+          previewSentences.length > 0
+            ? `${previewSentences.length} sentences`
+            : 'No sentences in result',
+      },
+      {
+        id: 'target_branch',
+        label: 'Target branch identified',
+        passed: !!targetBranch,
+        detail: targetBranch || undefined,
+      },
+      {
+        id: 'impact_scope',
+        label: 'Impact scope reviewed',
+        passed: true, // Always passes — informational
+        detail: prepared
+          ? `${prepared.identical.length} kept, ${prepared.similarPairs.length} conflicts, ${prepared.onlyInSource.length + prepared.onlyInTarget.length} unique`
+          : undefined,
+      },
+    ];
   },
 
   getEffectiveResolution: (index: number) => {

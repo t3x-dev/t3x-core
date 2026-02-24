@@ -5,6 +5,16 @@
  * All functions take a database instance as first parameter.
  */
 
+// API Keys
+export {
+  type CreateApiKeyInput,
+  createApiKey,
+  findApiKeyById,
+  findApiKeyByValue,
+  listApiKeys,
+  revokeApiKey,
+  touchLastUsed,
+} from './api-keys';
 // Branches
 export {
   type CreateBranchInput,
@@ -206,6 +216,15 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Share Tokens
+export {
+  type CreateShareTokenInput,
+  createShareToken,
+  findShareTokenById,
+  findShareTokenByToken,
+  findShareTokensByEntity,
+  revokeShareToken,
+} from './share-tokens';
 // Turns
 export {
   type CreateTurnInput,
