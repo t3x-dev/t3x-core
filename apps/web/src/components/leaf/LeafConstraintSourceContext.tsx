@@ -252,11 +252,13 @@ export function buildColoredHighlights(
     }
   }
 
-  // Step 4: Add constraint ranges that fall completely outside all sentence ranges
+  // Step 4: Add constraint ranges not fully inside any sentence range
   // (from Strategy 3 — full turn content search)
+  // Partial overlaps with base ranges may cause duplicate coverage, but
+  // TurnBubble's overlap handling (Math.max(rawStart, lastEnd)) resolves this.
   for (const cr of constraintRanges) {
-    const overlapsAnyBase = baseRanges.some((b) => cr.start < b.end && cr.end > b.start);
-    if (!overlapsAnyBase) {
+    const insideBase = baseRanges.some((b) => cr.start >= b.start && cr.end <= b.end);
+    if (!insideBase) {
       result.push({ start: cr.start, end: cr.end, color: cr.color });
     }
   }
