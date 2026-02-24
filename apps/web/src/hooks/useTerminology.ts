@@ -43,7 +43,8 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   pushAction: { default: 'Publish', developer: 'Push' },
   pullAction: { default: 'Sync', developer: 'Pull' },
 
-  // Merge Review
+  // Merge Review / Preview
+  mergePreview: { default: '合并预览', developer: 'Merge Preview' },
   mergeReview: { default: 'Review Changes', developer: 'Merge Review' },
   mergeConfirm: { default: 'Confirm', developer: 'Execute Merge' },
   mergeReviewCancel: { default: 'Go Back', developer: 'Cancel' },

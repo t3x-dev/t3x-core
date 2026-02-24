@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTerminology } from '@/hooks/useTerminology';
 import { createLeaf, type LeafType } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { LEAF_TYPES } from './CanvasNodes';
@@ -34,6 +35,7 @@ export function LeafCreationDialog({
   commitHash,
   projectId,
 }: LeafCreationDialogProps) {
+  const { t } = useTerminology();
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
@@ -85,7 +87,7 @@ export function LeafCreationDialog({
         overlayClassName="z-[60]"
       >
         <DialogHeader>
-          <DialogTitle>Create Leaf from Commit</DialogTitle>
+          <DialogTitle>Create Leaf from {t('commit')}</DialogTitle>
           <DialogDescription>
             Create a new leaf to apply constraints and generate output from this commit&apos;s
             knowledge.
@@ -148,7 +150,7 @@ export function LeafCreationDialog({
 
           {/* Commit hash display (read-only) */}
           <div className="space-y-[var(--space-item)]">
-            <Label>From Commit</Label>
+            <Label>From {t('commit')}</Label>
             <div className="p-2 bg-[var(--color-bg-subtle)] rounded-md border border-[var(--color-border)] overflow-hidden">
               <code className="text-xs font-mono text-[var(--color-text-secondary)] block truncate">
                 {commitHash}

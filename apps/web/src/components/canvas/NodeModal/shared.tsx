@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 import type {
@@ -385,6 +386,7 @@ export function CommitConstraintsAndLeaves({
   leaves?: EmbeddedLeaf[];
   projectId?: string;
 }) {
+  const { t } = useTerminology();
   const [showCreateLeaf, setShowCreateLeaf] = useState(false);
   const isV4 = isCommitV4(commit);
 
@@ -401,7 +403,7 @@ export function CommitConstraintsAndLeaves({
               className="w-full border-[var(--accent-conversation)]/20 text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/10 hover:border-[var(--accent-conversation)]/30"
             >
               <Plus size={16} className="mr-1" />
-              Create Leaf from This Commit
+              Create Leaf from This {t('commit')}
             </Button>
           )}
         </div>
