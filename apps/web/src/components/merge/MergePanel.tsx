@@ -98,7 +98,7 @@ export function MergePanel() {
             {preparePhases.map((_, i) => (
               <div
                 key={`phase-${i}`}
-                className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-[var(--duration-slow)] ${
                   i <= prepareStep ? 'bg-primary' : 'bg-muted'
                 }`}
               />

@@ -224,7 +224,7 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
     <div
       ref={ref}
       className={cn(
-        'rounded-lg p-[var(--space-group)] transition-all duration-300',
+        'rounded-lg p-[var(--space-group)] transition-all duration-[var(--duration-slow)]',
         isUser && 'bg-primary/10 ml-8',
         isAssistant && 'bg-[var(--color-bg-subtle)] mr-8',
         isSystem && 'bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25',

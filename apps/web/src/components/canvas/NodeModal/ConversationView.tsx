@@ -664,7 +664,7 @@ export function ConversationView({
                     <div
                       key={msg.id}
                       className={cn(
-                        'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-200',
+                        'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-[var(--duration-normal)]',
                         msg.role === 'user'
                           ? 'self-end bg-blue-500 text-white rounded-br-sm'
                           : 'self-start bg-[var(--hover-bg)] text-[var(--text-primary)] rounded-bl-sm'

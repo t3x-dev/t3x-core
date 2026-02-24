@@ -41,7 +41,7 @@ function PaletteNode({ item }: { item: PaletteItem }) {
         'flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-grab',
         'bg-background border border-border/50',
         'hover:border-primary/30 hover:bg-primary/5',
-        'transition-all duration-200',
+        'transition-all duration-[var(--duration-normal)]',
         'active:cursor-grabbing active:scale-95',
         'select-none'
       )}
