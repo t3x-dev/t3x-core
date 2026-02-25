@@ -14,7 +14,7 @@ interface ViewSwitcherProps {
 const views: { value: ViewMode; icon: typeof LayoutGrid; label: string; disabled?: boolean }[] = [
   { value: 'canvas', icon: LayoutGrid, label: 'Canvas' },
   { value: 'timeline', icon: Clock, label: 'Timeline' },
-  { value: 'list', icon: List, label: 'List (coming soon)', disabled: true },
+  { value: 'list', icon: List, label: 'List' },
 ];
 
 export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {

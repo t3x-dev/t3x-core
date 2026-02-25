@@ -1,7 +1,14 @@
 'use client';
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
+
+const variantIcon = {
+  identical: Check,
+  modified: Pencil,
+  removed: Minus,
+  added: Plus,
+} as const;
 
 interface DiffSectionHeaderProps {
   title: string;
@@ -43,6 +50,7 @@ export function DiffSectionHeader({
 }: DiffSectionHeaderProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = variantStyles[variant];
+  const Icon = variantIcon[variant];
 
   if (count === 0) return null;
 
@@ -58,6 +66,7 @@ export function DiffSectionHeader({
         ) : (
           <ChevronDown className={`h-4 w-4 ${styles.text}`} />
         )}
+        <Icon className={`h-3.5 w-3.5 ${styles.text}`} />
         <span className={`text-sm font-semibold ${styles.text}`}>{title}</span>
         <span className={`text-xs px-2 py-0.5 rounded-full ${styles.badge}`}>{count}</span>
       </button>
