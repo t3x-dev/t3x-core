@@ -16,7 +16,7 @@ import {
   getRunFilterOptions,
   insertRun,
   listRuns,
-  updateLeafAssertions,
+  updateLeafRunnerAssertions,
   updateRun,
 } from '@t3x/storage';
 import { randomUUID } from 'crypto';
@@ -46,7 +46,7 @@ const CreateRunSchema = z.object({
   leaf: z
     .object({
       id: z.string(),
-      type: z.enum(['deploy', 'eval']),
+      type: z.enum(['deploy', 'deploy_agent', 'eval']),
       content: z.string().optional(), // prompt（给 n8n AI Agent）
       rules_ref: z.string().optional(), // 规则文件引用名（指向 Runner 的 resources/rules/ 目录）
     })
@@ -328,7 +328,7 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
           };
         });
 
-        await updateLeafAssertions(db, leafId, mappedAssertions);
+        await updateLeafRunnerAssertions(db, leafId, mappedAssertions);
 
         // Create leaf history snapshot
         const leaf = await findLeafById(db, leafId);

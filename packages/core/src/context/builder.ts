@@ -137,8 +137,9 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
       }
 
       // Include selected assertion lessons
+      // Prefer runner_assertions (richer lessons from evaluation), fall back to assertions
       const selectedIds = pin.selected_assertion_ids;
-      const assertions = leaf.assertions ?? [];
+      const assertions = leaf.runner_assertions ?? leaf.assertions ?? [];
       for (const assertion of assertions) {
         // If selectedIds is defined, only include selected assertions
         if (selectedIds && !selectedIds.includes(assertion.id)) continue;

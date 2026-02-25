@@ -139,6 +139,7 @@ export {
   updateLeafAssertions,
   updateLeafAtomic,
   updateLeafOutput,
+  updateLeafRunnerAssertions,
 } from './leaves';
 // Merge Drafts (Pending merge operations)
 export {

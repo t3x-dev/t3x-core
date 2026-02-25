@@ -202,9 +202,21 @@ export const leaves = pgTable(
     // Validation
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Validation results */
+    /** Validation results (local Generate & Verify / Re-validate) */
     assertions:
       jsonb('assertions').$type<
+        Array<{
+          id: string;
+          constraint_id: string;
+          passed: boolean;
+          details: string;
+          lesson?: string;
+        }>
+      >(),
+
+    /** Runner evaluation results (written back by Runner ingest) */
+    runnerAssertions:
+      jsonb('runner_assertions').$type<
         Array<{
           id: string;
           constraint_id: string;

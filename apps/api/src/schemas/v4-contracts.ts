@@ -230,6 +230,7 @@ export const LeafResponse = z.object({
   output: z.string().nullable(),
   generated_at: z.string().nullable(),
   assertions: z.array(AssertionSchema).nullable(),
+  runner_assertions: z.array(AssertionSchema).nullable(),
   project_id: z.string(),
   created_at: z.string(),
   created_by: z.string().nullable(),

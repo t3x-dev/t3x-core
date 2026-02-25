@@ -367,6 +367,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
     CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
 
+    -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
+    ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.

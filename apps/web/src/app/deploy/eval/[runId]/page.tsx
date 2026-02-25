@@ -209,10 +209,11 @@ export default function RunDetailPage() {
     loadRun();
   }, [runId]);
 
-  // Initialize selected assertions: default to failed ones (more actionable)
+  // Initialize selected assertions: default to failed ones from runner_assertions (more actionable)
   useEffect(() => {
-    if (leaf?.assertions) {
-      const failedIds = leaf.assertions.filter((a) => !a.passed).map((a) => a.id);
+    const source = leaf?.runner_assertions ?? leaf?.assertions;
+    if (source) {
+      const failedIds = source.filter((a) => !a.passed).map((a) => a.id);
       setSelectedAssertionIds(new Set(failedIds));
     }
   }, [leaf]);
@@ -581,25 +582,25 @@ export default function RunDetailPage() {
 
           {/* Assertions Tab - LLM 生成的断言 + Leaf 结构化断言 */}
           <TabsContent value="assertions" className="mt-4 space-y-6">
-            {/* Leaf Assertions — 写回到 Leaf 的结构化断言（用于 Pin 反馈回路） */}
-            {leaf?.assertions && leaf.assertions.length > 0 && (
+            {/* Runner Assertions — 写回到 Leaf 的结构化断言（用于 Pin 反馈回路） */}
+            {leaf?.runner_assertions && leaf.runner_assertions.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    Leaf Assertions
+                    Runner Evaluation
                     <Badge variant="outline" className="text-xs font-normal">
-                      {leaf.assertions.filter((a) => a.passed).length}/{leaf.assertions.length}{' '}
+                      {leaf.runner_assertions.filter((a) => a.passed).length}/{leaf.runner_assertions.length}{' '}
                       passed
                     </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Structured assertions written back to Leaf from evaluation. Pin these to feed
-                    lessons into future conversations.
+                    Structured assertions written back to Leaf from Runner evaluation. Pin these to
+                    feed lessons into future conversations.
                   </p>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {leaf.assertions.map((assertion) => (
+                    {leaf.runner_assertions.map((assertion) => (
                       <div
                         key={assertion.id}
                         className={cn(
@@ -757,7 +758,7 @@ export default function RunDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            ) : !leaf?.assertions?.length ? (
+            ) : !leaf?.runner_assertions?.length ? (
               <Card>
                 <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
                   No assertions available

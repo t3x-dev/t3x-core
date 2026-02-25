@@ -2497,6 +2497,7 @@ export interface Leaf {
   output: string | null;
   generated_at: string | null;
   assertions: Assertion[] | null;
+  runner_assertions: Assertion[] | null;
   project_id: string;
   created_at: string;
   created_by: string | null;

@@ -412,6 +412,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
+    -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
+    ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.
