@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4 } from '@/lib/api';
 import { getCommitV4 } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -242,6 +243,7 @@ export function UnifiedDiffView({
   const { getUnresolvedCount, contextCache, contextLoadingStates, projectId, sourceHash } =
     useMergeWorkspaceStore();
   const router = useRouter();
+  const { t } = useTerminology();
 
   // View mode state (default: grouped)
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
@@ -428,7 +430,9 @@ export function UnifiedDiffView({
       {/* Stats Header with View Toggle */}
       <div className="flex items-center justify-between mb-[var(--space-group)] px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
         <div className="flex items-center gap-[var(--space-group)]">
-          <span className="text-[var(--text-tertiary)]">{identical.length} identical</span>
+          <span className="text-[var(--text-tertiary)]">
+            {identical.length} {t('identical_sentences').toLowerCase()}
+          </span>
           {similarPairs.length > 0 && (
             <span
               className={
@@ -437,16 +441,18 @@ export function UnifiedDiffView({
                   : 'text-[var(--diff-added-line)]'
               }
             >
-              {similarPairs.length} conflicts
-              {unresolvedCount > 0 && ` (${unresolvedCount} unresolved)`}
+              {similarPairs.length} {t('conflicts').toLowerCase()}
+              {unresolvedCount > 0 && ` (${unresolvedCount} ${t('unresolved').toLowerCase()})`}
             </span>
           )}
           {onlyInSource.length > 0 && (
-            <span className="text-[var(--accent-commit)]">+{onlyInSource.length} from source</span>
+            <span className="text-[var(--accent-commit)]">
+              +{onlyInSource.length} from {t('source').toLowerCase()}
+            </span>
           )}
           {onlyInTarget.length > 0 && (
             <span className="text-[var(--diff-added-line)]">
-              +{onlyInTarget.length} from target
+              +{onlyInTarget.length} from {t('target').toLowerCase()}
             </span>
           )}
         </div>
@@ -480,8 +486,8 @@ export function UnifiedDiffView({
           {/* Identical Sentences */}
           {identical.length > 0 && (
             <MergeDiffSection
-              title="Identical"
-              subtitle={`${identical.length} sentences (auto-kept)`}
+              title={t('identical_sentences')}
+              subtitle={`${identical.length} sentences (${t('auto_kept').toLowerCase()})`}
               variant="success"
               defaultCollapsed
             >
@@ -506,7 +512,7 @@ export function UnifiedDiffView({
           {/* Conflicts */}
           {similarPairs.length > 0 && (
             <MergeDiffSection
-              title="Conflicts"
+              title={t('conflicts')}
               subtitle={`${unresolvedCount} of ${similarPairs.length} need resolution`}
               variant={unresolvedCount > 0 ? 'warning' : 'success'}
             >
@@ -527,8 +533,8 @@ export function UnifiedDiffView({
           {/* Source-Only */}
           {onlyInSource.length > 0 && (
             <MergeDiffSection
-              title="Source Only"
-              subtitle={`${onlyInSource.length} sentences from source branch`}
+              title={t('only_in_source')}
+              subtitle={`${onlyInSource.length} sentences from ${t('source').toLowerCase()}`}
               variant="info"
             >
               <div className="space-y-1">
@@ -555,8 +561,8 @@ export function UnifiedDiffView({
           {/* Target-Only */}
           {onlyInTarget.length > 0 && (
             <MergeDiffSection
-              title="Target Only"
-              subtitle={`${onlyInTarget.length} sentences from target branch`}
+              title={t('only_in_target')}
+              subtitle={`${onlyInTarget.length} sentences from ${t('target').toLowerCase()}`}
               variant="info"
             >
               <div className="space-y-1">

@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   message TEXT,
   branch TEXT,
   source_refs JSONB,
+  merge_summary JSONB,
   position_x REAL,
   position_y REAL,
 
@@ -280,6 +281,9 @@ CREATE TABLE IF NOT EXISTS runs (
   trace_policy TEXT DEFAULT 'on_failure',
   full_trace_json TEXT,
   metadata_json TEXT,
+  title TEXT,
+  description TEXT,
+  tags JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -301,6 +305,38 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+CREATE TABLE IF NOT EXISTS saved_comparisons (
+  comparison_id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  control_config JSONB NOT NULL,
+  treatment_config JSONB NOT NULL,
+  control_run_ids JSONB NOT NULL DEFAULT '[]',
+  treatment_run_ids JSONB NOT NULL DEFAULT '[]',
+  result_snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
+CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
+
+-- Templates
+CREATE TABLE IF NOT EXISTS templates (
+  template_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  category TEXT NOT NULL,
+  leaf_type TEXT NOT NULL,
+  system_prompt TEXT NOT NULL,
+  user_prompt TEXT NOT NULL,
+  variables JSONB NOT NULL,
+  tags JSONB NOT NULL DEFAULT '[]',
+  is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
+CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 `;
 
 /**

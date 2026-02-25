@@ -1,3 +1,4 @@
+import type { MergeSummaryData } from '@t3x/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import type { CommitV3 } from '../types/merge';
@@ -155,7 +156,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         throw new Error(json.error?.message || 'Failed to execute merge');
       }
 
-      const mergeCommit = json.data as CommitV3;
+      const mergeCommit = json.data as CommitV3 & { merge_summary?: MergeSummaryData };
 
       // Get current nodes and edges to add the merge commit node
       const { nodes, edges } = get();
@@ -201,6 +202,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           // Commit data
           commitStatus: 'committed',
           commitHash: mergeCommit.hash,
+          isMergeCommit: true,
           // Use targetBranch as fallback if mergeCommit.branch is not set
           branchType: (mergeCommit.branch || targetBranch) === 'main' ? 'main' : 'branch',
           branchName:
@@ -217,6 +219,17 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
             mergeCommit.content.constraints
               ?.filter((c) => c.type === 'exclude')
               .map((c) => c.value) ?? undefined,
+          // V4 commit data including merge summary
+          commitV4: {
+            hash: mergeCommit.hash,
+            schema: 't3x/commit/v4' as const,
+            author: { type: 'human' as const, ...mergeCommit.author },
+            committed_at: mergeCommit.committed_at,
+            content: { sentences: mergeCommit.content.sentences },
+            message: mergeCommit.message,
+            branch: mergeCommit.branch,
+            merge_summary: mergeCommit.merge_summary,
+          },
         },
       };
 

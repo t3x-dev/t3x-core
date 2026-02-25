@@ -327,18 +327,18 @@
 
   /* ===== Surface System — four semantic layers ===== */
   --surface-app: oklch(0.11 0.005 260);
-  --surface-panel: oklch(0.14 0.008 260 / 82%);
-  --surface-card: oklch(0.19 0.008 260 / 92%);
-  --surface-elevated: oklch(0.21 0.008 260 / 94%);
+  --surface-panel: oklch(0.15 0.008 260 / 84%);
+  --surface-card: oklch(0.2 0.008 260 / 93%);
+  --surface-elevated: oklch(0.22 0.008 260 / 95%);
   --surface-radial: oklch(0.15 0.012 260);
 
-  /* ===== Stroke System ===== */
-  --stroke-default: oklch(1 0 0 / 12%);
-  --stroke-strong: oklch(1 0 0 / 18%);
-  --stroke-divider: oklch(1 0 0 / 8%);
-  --stroke-highlight-top: oklch(1 0 0 / 8%);
+  /* ===== Stroke System — WCAG AA: 3:1 for borders ===== */
+  --stroke-default: oklch(1 0 0 / 14%);
+  --stroke-strong: oklch(1 0 0 / 22%);
+  --stroke-divider: oklch(1 0 0 / 10%);
+  --stroke-highlight-top: oklch(1 0 0 / 10%);
   --stroke-shadow-bottom: oklch(0 0 0 / 25%);
-  --stroke-grid: oklch(1 0 0 / 4%);
+  --stroke-grid: oklch(1 0 0 / 5%);
 
   /* ===== FX System ===== */
   --fx-blur-panel: 8px;
@@ -376,10 +376,10 @@
   --status-info: #60a5fa;
   --status-info-muted: rgba(30, 58, 138, 0.3);
 
-  /* ===== Text Hierarchy ===== */
-  --text-primary: oklch(0.94 0.005 260);
-  --text-secondary: oklch(0.78 0.01 260);
-  --text-tertiary: oklch(0.62 0.01 260);
+  /* ===== Text Hierarchy — WCAG AA: 4.5:1 body text ===== */
+  --text-primary: oklch(0.95 0.005 260);
+  --text-secondary: oklch(0.8 0.01 260);
+  --text-tertiary: oklch(0.65 0.01 260);
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
@@ -419,19 +419,19 @@
 
   /* shadcn tokens — aligned with four-layer surface system */
   --background: oklch(0.11 0.005 260); /* = surface-app */
-  --foreground: oklch(0.94 0.005 260); /* = text-primary */
+  --foreground: oklch(0.95 0.005 260); /* = text-primary */
   --card: oklch(0.19 0.008 260); /* = surface-card */
-  --card-foreground: oklch(0.94 0.005 260);
+  --card-foreground: oklch(0.95 0.005 260);
   --popover: oklch(0.21 0.008 260); /* = surface-elevated */
-  --popover-foreground: oklch(0.94 0.005 260);
+  --popover-foreground: oklch(0.95 0.005 260);
   --primary: oklch(0.65 0.2 260);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.14 0.008 260); /* = surface-panel */
-  --secondary-foreground: oklch(0.94 0.005 260);
+  --secondary-foreground: oklch(0.95 0.005 260);
   --muted: oklch(0.14 0.008 260);
-  --muted-foreground: oklch(0.62 0.01 260); /* = text-tertiary */
+  --muted-foreground: oklch(0.65 0.01 260); /* = text-tertiary */
   --accent: oklch(0.19 0.008 260);
-  --accent-foreground: oklch(0.94 0.005 260);
+  --accent-foreground: oklch(0.95 0.005 260);
   --destructive: oklch(0.6 0.2 25);
   --border: oklch(1 0 0 / 12%); /* = stroke-default */
   --input: oklch(1 0 0 / 15%);
@@ -685,6 +685,8 @@ a {
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Keyboard focus ring — handled by UnitNode's tone-aware ring-2 classes */
 
 /* Selection is handled by the inner motion.div with rounded corners via Tailwind ring */
 
@@ -952,4 +954,26 @@ a {
    ============================================ */
 .dark .react-flow__background {
   --xy-background-color-default: var(--surface-app);
+}
+
+/* ============================================
+   Information Density: Compact Mode
+   ============================================ */
+[data-density="compact"] {
+  --space-page: 16px;
+  --space-section: 12px;
+  --space-group: 10px;
+  --space-item: 4px;
+  --space-inline: 4px;
+  --text-body: 13px;
+  --text-sm: 11px;
+  --text-xs: 10px;
+}
+
+[data-density="compact"] .react-flow__node {
+  font-size: 12px;
+}
+
+[data-density="compact"] table {
+  font-size: 12px;
 }

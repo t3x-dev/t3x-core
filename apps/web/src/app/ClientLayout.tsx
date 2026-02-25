@@ -4,6 +4,8 @@ import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog';
+import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog';
 import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
 import { Sidebar } from '@/components/Sidebar';
 import { showToast } from '@/components/Toast';
@@ -12,11 +14,18 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
+  const density = useSettingsStore((s) => s.density);
+
+  // Sync density attribute to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-density', density);
+  }, [density]);
 
   // Sidebar collapsed state — lifted here so main content margin can follow
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -71,7 +80,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </main>
           <Toaster position="bottom-right" richColors closeButton />
           <CommandPalette />
+          <KeyboardShortcutsDialog />
           <WelcomeModal />
+          <OnboardingDialog />
         </div>
       </ErrorBoundary>
     </ThemeProvider>

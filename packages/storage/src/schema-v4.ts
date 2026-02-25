@@ -107,6 +107,16 @@ export const commitsV4 = pgTable(
         }>
       >(),
 
+    /** Merge summary statistics (only present on merge commits) */
+    mergeSummary: jsonb('merge_summary').$type<{
+      kept_identical: number;
+      resolved_conflicts: number;
+      kept_from_source: number;
+      kept_from_target: number;
+      discarded: number;
+      total_sentences: number;
+    }>(),
+
     /** Canvas position */
     positionX: real('position_x'),
     positionY: real('position_y'),
@@ -473,3 +483,51 @@ export const shareTokens = pgTable(
 
 export type ShareTokenRecord = typeof shareTokens.$inferSelect;
 export type ShareTokenInsert = typeof shareTokens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// webhooks: Event Subscription System
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Webhooks for subscribing to T3X events.
+ *
+ * Receives POST callbacks when events occur (commit.created, merge.completed, etc.).
+ * Secret is stored as plaintext (needed for HMAC signing).
+ */
+export const webhooks = pgTable(
+  'webhooks',
+  {
+    /** Unique ID: "wh_" + nanoid(12) */
+    webhookId: text('webhook_id').primaryKey(),
+
+    /** Project scope (null = global — receives events from all projects) */
+    projectId: text('project_id').references(() => projects.projectId, {
+      onDelete: 'cascade',
+    }),
+
+    /** Target URL to receive POST callbacks */
+    url: text('url').notNull(),
+
+    /** List of event types to subscribe to (JSONB) */
+    events: jsonb('events').notNull().$type<string[]>(),
+
+    /** Secret for HMAC-SHA256 signature (null = no signing) */
+    secret: text('secret'),
+
+    /** Whether the webhook is active */
+    active: text('active').notNull().default('true'),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+    /** Last update time */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_webhooks_project').on(table.projectId),
+    activeIdx: index('idx_webhooks_active').on(table.active),
+  })
+);
+
+export type WebhookRecord = typeof webhooks.$inferSelect;
+export type WebhookInsert = typeof webhooks.$inferInsert;

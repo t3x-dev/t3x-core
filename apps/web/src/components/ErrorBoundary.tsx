@@ -70,10 +70,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 Something went wrong
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                An error occurred while rendering this component.
+                {getRecoverySuggestion(this.state.error)}
               </p>
 
-              {/* 开发模式下显示错误详情 */}
+              {/* Show error details in development */}
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <div className="mt-4 w-full rounded bg-muted/50 p-3 text-left">
                   <p className="text-xs font-medium text-[var(--status-error)]">Error Details:</p>
@@ -83,10 +83,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </div>
               )}
 
-              <Button variant="outline" size="sm" className="mt-6" onClick={this.handleRetry}>
-                <RefreshCw className="h-4 w-4" />
-                Try Again
-              </Button>
+              <div className="mt-6 flex gap-2">
+                <Button variant="outline" size="sm" onClick={this.handleRetry}>
+                  <RefreshCw className="h-4 w-4" />
+                  Try Again
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -106,6 +111,22 @@ function isHydrationError(error: Error): boolean {
     msg.includes('hydrating') ||
     msg.includes('server-rendered HTML')
   );
+}
+
+function getRecoverySuggestion(error: Error | null): string {
+  if (!error) return 'An unexpected error occurred. Try refreshing the page.';
+  const msg = error.message || '';
+
+  if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed to fetch')) {
+    return 'A network error occurred. Check your connection and try again.';
+  }
+  if (msg.includes('chunk') || msg.includes('Loading chunk')) {
+    return 'A code loading error occurred. This usually resolves with a page reload.';
+  }
+  if (msg.includes('localStorage') || msg.includes('quota')) {
+    return 'Browser storage is full. Try clearing site data in your browser settings.';
+  }
+  return 'An error occurred while rendering this component. Try again or reload the page.';
 }
 
 export default ErrorBoundary;

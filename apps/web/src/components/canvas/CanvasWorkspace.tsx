@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -69,6 +70,8 @@ interface CanvasWorkspaceProps {
   initialViewport?: { x: number; y: number; zoom: number };
   /** Called when viewport changes (debounced externally) */
   onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
+  /** Optional view switcher element rendered in the toolbar */
+  viewSwitcher?: React.ReactNode;
 }
 
 // Wrapper component to provide ReactFlow context
@@ -86,6 +89,7 @@ function CanvasWorkspaceInner({
   onModeChange,
   initialViewport,
   onViewportChange,
+  viewSwitcher,
 }: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
   const [highlight, setHighlight] = useState<PathHighlight>(null);
@@ -98,6 +102,7 @@ function CanvasWorkspaceInner({
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+  const { t } = useTerminology();
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -304,6 +309,32 @@ function CanvasWorkspaceInner({
         return;
       }
 
+      // Tab: cycle through nodes
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const currentNodes = getNodes();
+        if (currentNodes.length === 0) return;
+        const selectedIdx = currentNodes.findIndex((n) => n.selected);
+        const nextIdx = event.shiftKey
+          ? selectedIdx <= 0
+            ? currentNodes.length - 1
+            : selectedIdx - 1
+          : (selectedIdx + 1) % currentNodes.length;
+        setNodes(currentNodes.map((node, i) => ({ ...node, selected: i === nextIdx })));
+        return;
+      }
+
+      // Enter: open selected node
+      if (event.key === 'Enter') {
+        const currentNodes = getNodes();
+        const selectedNode = currentNodes.find((n) => n.selected);
+        if (selectedNode) {
+          event.preventDefault();
+          openNodeModal(selectedNode.id, 'commit');
+        }
+        return;
+      }
+
       // Arrow key navigation
       if (event.key === 'ArrowUp') {
         event.preventDefault();
@@ -342,7 +373,7 @@ function CanvasWorkspaceInner({
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [selectAllNodes, deselectAllNodes, navigateToNode]);
+  }, [selectAllNodes, deselectAllNodes, navigateToNode, getNodes, setNodes, openNodeModal]);
 
   // Keyboard shortcut help dialog toggle (? key)
   useEffect(() => {
@@ -666,10 +697,10 @@ function CanvasWorkspaceInner({
               disabled={!hasBranchCommits}
             >
               <SelectTrigger className="h-7 w-[130px] text-xs rounded-full border-border/50 bg-muted/50 hover:bg-muted transition-colors">
-                <SelectValue placeholder="All branches" />
+                <SelectValue placeholder={t('all_branches')} />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="all">All branches</SelectItem>
+                <SelectItem value="all">{t('all_branches')}</SelectItem>
                 {branchNames.map((name) => (
                   <SelectItem key={name} value={name}>
                     {name}
@@ -681,6 +712,7 @@ function CanvasWorkspaceInner({
         </div>
 
         <div className="flex items-center gap-2">
+          {viewSwitcher}
           <Button
             variant="ghost"
             size="sm"

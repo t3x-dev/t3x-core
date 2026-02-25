@@ -15,6 +15,14 @@ export {
   revokeApiKey,
   touchLastUsed,
 } from './api-keys';
+// Comparisons (saved A/B comparison snapshots)
+export {
+  type CreateComparisonInput,
+  createComparison,
+  deleteComparison,
+  getComparison,
+  listComparisons,
+} from './comparisons';
 // Branches
 export {
   type CreateBranchInput,
@@ -216,6 +224,15 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Templates (reusable prompt templates)
+export {
+  type CreateTemplateInput,
+  createTemplate,
+  deleteTemplate,
+  findTemplateById,
+  type ListTemplatesOptions,
+  listTemplates,
+} from './templates';
 // Share Tokens
 export {
   type CreateShareTokenInput,
@@ -225,6 +242,18 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
+// Webhooks (event subscriptions)
+export {
+  type CreateWebhookInput as CreateWebhookStorageInput,
+  type UpdateWebhookInput as UpdateWebhookStorageInput,
+  type WebhookOutput,
+  createWebhook,
+  deleteWebhook,
+  findWebhookById,
+  findWebhooksByEvent,
+  listWebhooks,
+  updateWebhook,
+} from './webhooks';
 // Turns
 export {
   type CreateTurnInput,

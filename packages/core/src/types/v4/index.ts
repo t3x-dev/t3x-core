@@ -132,6 +132,9 @@ export interface CommitV4 {
 
   /** Database record creation timestamp, ISO8601 */
   created_at?: string;
+
+  /** Merge summary statistics (only present on merge commits) */
+  merge_summary?: MergeSummaryData;
 }
 
 export interface CommitV4Content {
@@ -493,6 +496,34 @@ export interface ContextSource {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Merge Summary (Second-class metadata for merge commits)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Summary statistics for a merge commit, persisted as a second-class field.
+ * Computed at merge execution time from the Merge2WayResult.
+ */
+export interface MergeSummaryData {
+  /** Sentences identical in both branches (auto-kept) */
+  kept_identical: number;
+
+  /** Similar pairs that were resolved (source or target chosen) */
+  resolved_conflicts: number;
+
+  /** Sentences kept from source-only */
+  kept_from_source: number;
+
+  /** Sentences kept from target-only */
+  kept_from_target: number;
+
+  /** Sentences discarded during merge */
+  discarded: number;
+
+  /** Total sentences in the merged commit */
+  total_sentences: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Helper Types
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -522,6 +553,7 @@ export interface CreateCommitV4Input {
   source_refs?: CommitSourceRef[];
   position_x?: number;
   position_y?: number;
+  merge_summary?: MergeSummaryData;
 }
 
 /**

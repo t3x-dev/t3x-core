@@ -6,15 +6,17 @@ import {
   Folder,
   GitBranch,
   GitCommitHorizontal,
+  Loader2,
   MessageSquare,
   Plus,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { BookIllustration } from '@/components/illustrations/BookIllustration';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type MouseEvent, useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
 import { IconText } from '@/components/shared/IconText';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -51,6 +53,10 @@ export default function SemanticLedgerPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Import state
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // AlertDialog state
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -84,6 +90,37 @@ export default function SemanticLedgerPage() {
     const project = await addProject(name);
     resetCanvas();
     router.push(`/project/${project.id}`);
+  };
+
+  const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const cfpack = JSON.parse(text);
+
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${apiBase}/api/v1/import/cfpack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfpack),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        await fetchProjects();
+        router.push(`/project/${data.data.project_id}`);
+      } else {
+        window.alert(`Import failed: ${data.error?.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      window.alert(`Import failed: ${err instanceof Error ? err.message : 'Invalid file'}`);
+    } finally {
+      setIsImporting(false);
+      if (event.target) event.target.value = '';
+    }
   };
 
   const handleDeleteProject = (event: MouseEvent, id: string) => {
@@ -245,6 +282,27 @@ export default function SemanticLedgerPage() {
                   Select
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="gap-2"
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                Import
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,.cfpack"
+                className="hidden"
+                onChange={handleImportProject}
+              />
               <ShimmerButton
                 onClick={handleCreateProject}
                 background="linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)"

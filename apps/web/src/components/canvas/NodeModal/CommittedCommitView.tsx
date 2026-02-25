@@ -1,15 +1,35 @@
 'use client';
 
 import type { Node } from '@xyflow/react';
-import { AlertCircle, Clock, GitBranch, GitCompare, History, Loader2, Tag, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Clock,
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  GitBranch,
+  GitCompare,
+  History,
+  Loader2,
+  Tag,
+  X,
+} from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DiffResultRaw } from '@/lib/api';
+import type { CommitV4, DiffResultRaw } from '@/lib/api';
 import * as api from '@/lib/api';
+import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -92,6 +112,16 @@ export function CommittedCommitView({
   );
 
   // ========== Callbacks ==========
+
+  // Export commit
+  const handleCommitExport = useCallback(
+    async (format: CommitExportFormat) => {
+      const commit = data.commitV4 as CommitV4 | undefined;
+      if (!commit) return;
+      await exportCommit(commit, format);
+    },
+    [data.commitV4]
+  );
 
   // B-15: Simplified diff - select target and auto-run + open fullscreen
   const handleDiffTargetSelect = useCallback(
@@ -185,7 +215,7 @@ export function CommittedCommitView({
           <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
             <div className="flex items-center gap-3">
               <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
-                Commit: {data.title || 'Untitled'}
+                {t('commit')}: {data.title || 'Untitled'}
               </h2>
               <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
               <Badge
@@ -201,6 +231,34 @@ export function CommittedCommitView({
               </Badge>
             </div>
             <div className="flex items-center gap-2">
+              {data.commitV4 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                      aria-label="Export"
+                    >
+                      <Download size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleCommitExport('clipboard')}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy Sentences
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCommitExport('markdown')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Export as Markdown
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCommitExport('json')}>
+                      <FileJson className="mr-2 h-4 w-4" />
+                      Export as JSON
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -226,7 +284,7 @@ export function CommittedCommitView({
                 <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                   <GitBranch size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>
-                    Branch: <strong>{branchLabel}</strong>
+                    {t('branch')}: <strong>{branchLabel}</strong>
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
@@ -561,7 +619,9 @@ export function CommittedCommitView({
                     }}
                   >
                     <option value="">
-                      {allCommittedCommits.length <= 1 ? 'Need 2+ commits' : 'Select a commit...'}
+                      {allCommittedCommits.length <= 1
+                        ? `Need 2+ ${t('commits').toLowerCase()}`
+                        : `Select a ${t('commit').toLowerCase()}...`}
                     </option>
                     {allCommittedCommits
                       .filter((c) => c.data.commitHash !== data.commitHash)

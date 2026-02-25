@@ -1,6 +1,7 @@
 'use client';
 
 import { useCountUp } from '@/hooks/useCountUp';
+import { useTerminology } from '@/hooks/useTerminology';
 
 interface DiffStatsBarProps {
   identical: number;
@@ -11,6 +12,7 @@ interface DiffStatsBarProps {
 }
 
 export function DiffStatsBar({ identical, modified, added, removed, onJump }: DiffStatsBarProps) {
+  const { t } = useTerminology();
   const aIdentical = useCountUp(identical);
   const aModified = useCountUp(modified);
   const aAdded = useCountUp(added);
@@ -19,27 +21,27 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
   const items = [
     {
       key: 'identical',
-      label: 'Identical',
+      label: t('identical_sentences'),
       count: aIdentical,
       color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
     },
     {
       key: 'modified',
-      label: 'Modified',
+      label: t('modified_sentences'),
       count: aModified,
       color:
         'border border-[var(--diff-modified-line)]/40 text-[var(--diff-modified-line)] bg-transparent',
     },
     {
       key: 'added',
-      label: 'Added',
+      label: t('added_sentences'),
       count: aAdded,
       color:
         'border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent',
     },
     {
       key: 'removed',
-      label: 'Removed',
+      label: t('removed_sentences'),
       count: aRemoved,
       color:
         'border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent',

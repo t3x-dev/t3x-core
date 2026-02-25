@@ -5,15 +5,15 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { LeafResponse } from './v4-contracts';
-
 // ============================================================
 // Request Schemas
 // ============================================================
 
 export const CreateShareLinkRequest = z
   .object({
-    entity_type: z.enum(['leaf']).openapi({ description: 'Type of entity to share' }),
+    entity_type: z
+      .enum(['leaf', 'run', 'comparison'])
+      .openapi({ description: 'Type of entity to share' }),
     entity_id: z.string().min(1).openapi({ description: 'ID of the entity to share' }),
   })
   .openapi('CreateShareLinkRequest');
@@ -39,6 +39,6 @@ export const ShareLinkResponse = z
 export const ShareResolveResponse = z
   .object({
     token_info: ShareLinkResponse,
-    entity: LeafResponse,
+    entity: z.unknown().openapi({ description: 'The shared entity (Leaf or Run)' }),
   })
   .openapi('ShareResolveResponse');

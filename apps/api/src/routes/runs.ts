@@ -585,6 +585,90 @@ runsRoutes.delete('/v1/runs/:id', async (c) => {
   }
 });
 
+// v2.3: Request schema for updating run metadata (Report asset)
+const UpdateRunSchema = z.object({
+  title: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+});
+
+/**
+ * PATCH /runs/:id - Update run metadata (title, description, tags)
+ *
+ * v2.3: Report asset — allows naming and tagging runs as reports.
+ */
+runsRoutes.patch('/v1/runs/:id', async (c) => {
+  try {
+    const runId = c.req.param('id');
+    const body = await c.req.json();
+
+    // Validate request body
+    const parsed = UpdateRunSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: parsed.error.issues.map((i) => i.message).join(', '),
+          },
+        },
+        400
+      );
+    }
+
+    const input = parsed.data;
+
+    // Require at least one field
+    if (input.title === undefined && input.description === undefined && input.tags === undefined) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: 'At least one field (title, description, tags) must be provided',
+          },
+        },
+        400
+      );
+    }
+
+    const db = await getDB();
+
+    // Check run exists
+    const existing = await getRun(db, runId);
+    if (!existing) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: `Run not found: ${runId}` },
+        },
+        404
+      );
+    }
+
+    const updated = await updateRun(db, runId, {
+      title: input.title,
+      description: input.description,
+      tags: input.tags,
+    });
+
+    return c.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('[runs] Error updating run:', error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
 // Request schema for A/B test comparison
 const CompareRunsSchema = z.object({
   control: z.object({

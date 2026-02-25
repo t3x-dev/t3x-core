@@ -15,8 +15,9 @@ import { closeDB, getDB } from './lib/db';
 import { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
-import { loggerMiddleware } from './middleware/logger';
+import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
+import { requestIdMiddleware } from './middleware/request-id';
 import {
   agentDraftRoutes,
   branchRoutes,
@@ -37,9 +38,13 @@ import {
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { comparisonsRoutes } from './routes/comparisons.openapi';
+import { importRoutes } from './routes/import.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { shareRoutes } from './routes/share.openapi';
+import { templatesRoutes } from './routes/templates.openapi';
+import { webhooksRoutes } from './routes/webhooks.openapi';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -78,7 +83,8 @@ loadEnvLocal();
 
 const app = new Hono();
 
-// Global middleware (order: CORS → Logger → L1 Rate Limit → Auth → L2 Rate Limit)
+// Global middleware (order: RequestId → CORS → Logger → L1 Rate Limit → Auth → L2 Rate Limit)
+app.use('*', requestIdMiddleware);
 app.use('*', corsMiddleware);
 app.use('*', loggerMiddleware);
 app.use('*', rateLimitL1);
@@ -127,6 +133,10 @@ api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
 api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
 api.route('/', apiKeysRoutes); // /v1/api-keys
 api.route('/', shareRoutes); // /v1/share
+api.route('/', comparisonsRoutes); // /v1/comparisons
+api.route('/', templatesRoutes); // /v1/templates
+api.route('/', webhooksRoutes); // /v1/webhooks
+api.route('/', importRoutes); // /v1/import
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -156,12 +166,16 @@ api.doc('/openapi.json', {
     { name: 'Runner', description: 'Grey-box agent evaluation' },
     { name: 'API Keys', description: 'API key management (create, list, revoke)' },
     { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
+    { name: 'Comparisons', description: 'Saved A/B comparison snapshots' },
+    { name: 'Templates', description: 'Reusable prompt templates for leaf generation' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
     {
       name: 'Commits V4',
       description: 'Commits v4 (pure knowledge, sentences only, no constraints)',
     },
+    { name: 'Webhooks', description: 'Webhook event subscriptions' },
+    { name: 'Import', description: 'Import project data from archives' },
   ],
 });
 
@@ -194,7 +208,7 @@ app.notFound((c) => {
 
 // Error handler
 app.onError((err, c) => {
-  console.error('Unhandled error:', err);
+  pinoLogger.error({ err }, 'Unhandled error');
   return c.json(
     {
       success: false,
@@ -213,9 +227,9 @@ const port = parseInt(process.env.PORT || '8000', 10);
 // Initialize database on startup
 async function start() {
   try {
-    console.log('Initializing database...');
+    pinoLogger.info('Initializing database...');
     await getDB();
-    console.log('Database initialized');
+    pinoLogger.info('Database initialized');
 
     // Start background tasks
     startTimeoutChecker();
@@ -225,23 +239,20 @@ async function start() {
       port,
     });
 
-    console.log(`T3X API server running on http://localhost:${port}`);
-    console.log('─── Configuration ───');
-    console.log(
-      `  ANTHROPIC_API_KEY:      ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set'}`
+    pinoLogger.info({ port, url: `http://localhost:${port}` }, 'T3X API server running');
+    pinoLogger.info(
+      {
+        anthropic_key: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set',
+        google_ai_key: process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set',
+        database: process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)',
+        runner_url: process.env.RUNNER_BASE_URL || 'not set',
+      },
+      'Configuration'
     );
-    console.log(
-      `  GOOGLE_AI_STUDIO_KEY:   ${process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set'}`
-    );
-    console.log(
-      `  Database:               ${process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)'}`
-    );
-    console.log(`  RUNNER_BASE_URL:        ${process.env.RUNNER_BASE_URL || 'not set'}`);
-    console.log('─────────────────────');
 
     // Graceful shutdown
     const shutdown = async () => {
-      console.log('Shutting down...');
+      pinoLogger.info('Shutting down...');
       stopTimeoutChecker();
       await closeDB();
       process.exit(0);
@@ -252,7 +263,7 @@ async function start() {
 
     return server;
   } catch (error) {
-    console.error('Failed to start server:', error);
+    pinoLogger.fatal({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }

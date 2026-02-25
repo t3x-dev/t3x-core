@@ -146,6 +146,63 @@ export function ErrorGuidance({
 }
 
 /**
+ * Map HTTP status codes to user-friendly guidance
+ */
+export function getErrorGuidance(statusCode: number): { title: string; description: string } {
+  switch (statusCode) {
+    case 401:
+      return {
+        title: 'Authentication required',
+        description: 'Your session may have expired. Try refreshing the page or signing in again.',
+      };
+    case 404:
+      return {
+        title: 'Resource not found',
+        description:
+          'The item you are looking for may have been moved or deleted. Check the URL or navigate back.',
+      };
+    case 422:
+      return {
+        title: 'Invalid data',
+        description: 'The submitted data could not be processed. Check your input and try again.',
+      };
+    case 429:
+      return {
+        title: 'Too many requests',
+        description: 'You are sending requests too quickly. Wait a moment and try again.',
+      };
+    case 500:
+      return {
+        title: 'Server error',
+        description:
+          'Something went wrong on the server. This is usually temporary — try again in a moment.',
+      };
+    case 503:
+      return {
+        title: 'Service unavailable',
+        description: 'The server is temporarily unavailable. Please try again later.',
+      };
+    default:
+      if (statusCode >= 400 && statusCode < 500) {
+        return {
+          title: 'Request error',
+          description: 'There was a problem with the request. Check your input and try again.',
+        };
+      }
+      if (statusCode >= 500) {
+        return {
+          title: 'Server error',
+          description: 'A server error occurred. Please try again later.',
+        };
+      }
+      return {
+        title: 'Something went wrong',
+        description: 'An unexpected error occurred. Try again or reload the page.',
+      };
+  }
+}
+
+/**
  * ErrorGuidanceInline - A compact inline error for smaller areas
  */
 export function ErrorGuidanceInline({
