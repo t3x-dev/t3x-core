@@ -4,7 +4,6 @@ import { create } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { getMicrocopy } from '@/lib/microcopy';
-import { sound } from '@/lib/sound';
 import { useSettingsStore } from '@/store/settingsStore';
 import type {
   BranchType,
@@ -495,7 +494,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
       const mode = useSettingsStore.getState().developerMode ? 'developer' : 'default';
       notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
-      sound.playCommit();
     },
 
     addPendingCommitFromConversation: async (conversationId) => {
