@@ -6,23 +6,37 @@ import {
   ArrowLeftRight,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Eye,
+  History,
   Loader2,
+  Save,
+  Trash2,
   Trophy,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
+import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -35,9 +49,14 @@ import {
   type ComparisonResult,
   type ConfigurationStats,
   compareConfigurations,
+  createSavedComparison,
+  deleteSavedComparison,
   type EngineRun,
   getConfigurations,
+  getSavedComparison,
   listEngineRuns,
+  listSavedComparisons,
+  type SavedComparison,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -167,6 +186,7 @@ function ComparePageContent() {
   // Parse URL params
   const controlParam = searchParams.get('a');
   const treatmentParam = searchParams.get('b');
+  const savedParam = searchParams.get('saved');
   const controlConfig = parseConfigParam(controlParam);
   const treatmentConfig = parseConfigParam(treatmentParam);
 
@@ -183,6 +203,13 @@ function ComparePageContent() {
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [runFilter, setRunFilter] = useState<'all' | 'a' | 'b'>('all');
 
+  // Save comparison state
+  const [savedComparisons, setSavedComparisons] = useState<SavedComparison[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveTitle, setSaveTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedSnapshotId, setSavedSnapshotId] = useState<string | null>(savedParam);
+
   // Load available configurations
   useEffect(() => {
     async function loadConfigurations() {
@@ -198,8 +225,47 @@ function ComparePageContent() {
     loadConfigurations();
   }, []);
 
-  // Load comparison when both configs are selected
+  // Load saved comparisons list
   useEffect(() => {
+    // We load all saved comparisons (no project filter for now)
+    listSavedComparisons('')
+      .then(setSavedComparisons)
+      .catch(() => {});
+  }, []);
+
+  // Load saved snapshot if URL has saved=comp_xxx
+  useEffect(() => {
+    if (!savedParam) {
+      setSavedSnapshotId(null);
+      return;
+    }
+    setSavedSnapshotId(savedParam);
+    setComparing(true);
+    getSavedComparison(savedParam)
+      .then((saved) => {
+        const snap = saved.result_snapshot as {
+          control: ConfigurationStats;
+          treatment: ConfigurationStats;
+          comparison: ComparisonResult['comparison'];
+        };
+        setComparisonResult({
+          control: snap.control,
+          treatment: snap.treatment,
+          comparison: snap.comparison,
+        });
+      })
+      .catch(() => {
+        setError('Failed to load saved comparison');
+      })
+      .finally(() => {
+        setComparing(false);
+      });
+  }, [savedParam]);
+
+  // Load comparison when both configs are selected (skip if viewing saved snapshot)
+  useEffect(() => {
+    if (savedParam) return;
+
     async function loadComparison() {
       if (!controlConfig || !treatmentConfig) {
         setComparisonResult(null);
@@ -226,7 +292,49 @@ function ComparePageContent() {
     controlConfig?.prompt_version,
     treatmentConfig?.model,
     treatmentConfig?.prompt_version,
+    savedParam,
   ]);
+
+  // Save comparison handler
+  const handleSave = useCallback(async () => {
+    if (!comparisonResult || !controlConfig || !treatmentConfig) return;
+    setSaving(true);
+    try {
+      const saved = await createSavedComparison({
+        project_id: '', // global for now
+        title: saveTitle,
+        control_config: controlConfig,
+        treatment_config: treatmentConfig,
+        control_run_ids: controlRuns.map((r) => r.run_id),
+        treatment_run_ids: treatmentRuns.map((r) => r.run_id),
+        result_snapshot: comparisonResult as unknown as Record<string, unknown>,
+      });
+      setSavedComparisons((prev) => [saved, ...prev]);
+      setSaveDialogOpen(false);
+      setSaveTitle('');
+    } catch {
+      // Save failed — keep dialog open
+    } finally {
+      setSaving(false);
+    }
+  }, [comparisonResult, controlConfig, treatmentConfig, controlRuns, treatmentRuns, saveTitle]);
+
+  // Delete saved comparison
+  const handleDeleteSaved = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        await deleteSavedComparison(id);
+        setSavedComparisons((prev) => prev.filter((c) => c.comparison_id !== id));
+        if (savedSnapshotId === id) {
+          router.push('/deploy/compare');
+        }
+      } catch {
+        // Delete failed
+      }
+    },
+    [savedSnapshotId, router]
+  );
 
   // Load individual runs when configurations are selected
   useEffect(() => {
@@ -454,18 +562,128 @@ function ComparePageContent() {
             Back
           </Button>
           <div className="h-4 w-px bg-border" />
-          <h1 className="text-lg font-semibold">A/B Test Comparison</h1>
+          <h1 className="text-lg font-semibold">
+            {savedSnapshotId ? 'Saved Comparison' : 'A/B Test Comparison'}
+          </h1>
+          {savedSnapshotId && (
+            <Badge variant="outline" className="text-xs">
+              <Clock className="h-3 w-3 mr-1" />
+              Snapshot
+            </Badge>
+          )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={swapConfigs}
-          disabled={!controlParam && !treatmentParam}
-        >
-          <ArrowLeftRight className="h-4 w-4" />
-          Swap A ⇄ B
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Save button — only when comparing live data */}
+          {!savedSnapshotId && comparisonResult && controlConfig && treatmentConfig && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const now = new Date().toLocaleDateString();
+                setSaveTitle(`${controlConfig.model} vs ${treatmentConfig.model} · ${now}`);
+                setSaveDialogOpen(true);
+              }}
+            >
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
+          )}
+          {/* Share button for saved snapshots */}
+          {savedSnapshotId && (
+            <ShareLinkButton entityType="comparison" entityId={savedSnapshotId} />
+          )}
+          {/* History dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <History className="h-4 w-4" />
+                History
+                {savedComparisons.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {savedComparisons.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 max-h-72 overflow-auto">
+              {savedComparisons.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground text-center">
+                  No saved comparisons yet
+                </div>
+              ) : (
+                savedComparisons.map((sc) => (
+                  <DropdownMenuItem
+                    key={sc.comparison_id}
+                    className={cn(
+                      'flex items-center justify-between',
+                      savedSnapshotId === sc.comparison_id && 'bg-muted'
+                    )}
+                    onClick={() => router.push(`/deploy/compare?saved=${sc.comparison_id}`)}
+                  >
+                    <div className="flex-1 min-w-0 mr-2">
+                      <div className="text-sm font-medium truncate">{sc.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(sc.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-destructive"
+                      onClick={(e) => handleDeleteSaved(sc.comparison_id, e)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuItem>
+                ))
+              )}
+              {savedSnapshotId && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push('/deploy/compare')}>
+                    Back to live comparison
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={swapConfigs}
+            disabled={!!savedSnapshotId || (!controlParam && !treatmentParam)}
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            Swap A ⇄ B
+          </Button>
+        </div>
       </header>
+
+      {/* Save Dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Comparison</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Comparison title"
+            value={saveTitle}
+            onChange={(e) => setSaveTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && saveTitle.trim()) handleSave();
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving || !saveTitle.trim()}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Loading configurations */}
       {loading && (

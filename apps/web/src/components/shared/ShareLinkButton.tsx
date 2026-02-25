@@ -22,7 +22,7 @@ import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ShareLinkButtonProps {
-  entityType: 'leaf';
+  entityType: 'leaf' | 'run' | 'comparison';
   entityId: string;
   className?: string;
 }

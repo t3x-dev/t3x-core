@@ -145,7 +145,8 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
       <TableHeader>
         <TableRow>
           {compareModeEnabled && <TableHead className="w-12"></TableHead>}
-          <TableHead>Run ID</TableHead>
+          <TableHead>Report</TableHead>
+          <TableHead>Tags</TableHead>
           <TableHead>Agent</TableHead>
           <TableHead>Model</TableHead>
           <TableHead>Prompt</TableHead>
@@ -190,7 +191,27 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
                 </TableCell>
               )}
               <TableCell>
-                <code className="text-xs">{run.run_id}</code>
+                {run.title ? (
+                  <span className="text-sm font-medium">{run.title}</span>
+                ) : (
+                  <code className="text-xs text-muted-foreground">{run.run_id}</code>
+                )}
+              </TableCell>
+              <TableCell>
+                {run.tags && run.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {run.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {run.tags.length > 3 && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                        +{run.tags.length - 3}
+                      </Badge>
+                    )}
+                  </div>
+                ) : null}
               </TableCell>
               <TableCell>{run.leaf?.id || '-'}</TableCell>
               <TableCell className="text-muted-foreground">{run.metadata?.model || '-'}</TableCell>

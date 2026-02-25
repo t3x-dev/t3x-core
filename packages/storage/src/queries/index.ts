@@ -15,6 +15,14 @@ export {
   revokeApiKey,
   touchLastUsed,
 } from './api-keys';
+// Comparisons (saved A/B comparison snapshots)
+export {
+  type CreateComparisonInput,
+  createComparison,
+  deleteComparison,
+  getComparison,
+  listComparisons,
+} from './comparisons';
 // Branches
 export {
   type CreateBranchInput,

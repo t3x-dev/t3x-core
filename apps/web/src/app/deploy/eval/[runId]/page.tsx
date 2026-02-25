@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   Coins,
+  Download,
   GitCompare,
   Loader2,
   Pin,
@@ -21,14 +22,23 @@ import {
   type Violation,
 } from '@/components/optimiser/AssertionsSection';
 import { ChartToggle } from '@/components/optimiser/charts/ChartToggle';
+import { ReportHeader } from '@/components/optimiser/ReportHeader';
 import { type StepRecord, TraceTimeline } from '@/components/optimiser/trace';
+import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { type EngineRun, getEngineRun, getLeaf, type Leaf } from '@/lib/api';
+import { type EngineRun, getEngineRun, getLeaf, type Leaf, updateEngineRun } from '@/lib/api';
+import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
@@ -270,6 +280,26 @@ export default function RunDetailPage() {
   ]);
 
   // Re-tune: pin selected assertions, create new conversation, and navigate to it
+  // Update run metadata (ReportHeader)
+  const handleUpdateRun = useCallback(
+    async (patch: { title?: string; description?: string; tags?: string[] }) => {
+      if (!run) return;
+      await updateEngineRun(runId, patch);
+      // Optimistic: update local state
+      setRun((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: patch.title !== undefined ? patch.title || null : prev.title,
+              description: patch.description !== undefined ? patch.description || null : prev.description,
+              tags: patch.tags !== undefined ? patch.tags : prev.tags,
+            }
+          : prev
+      );
+    },
+    [run, runId]
+  );
+
   const handleRetune = useCallback(async () => {
     if (!projectId || !leafId || !leaf?.commit_hash || selectedAssertionIds.size === 0) return;
 
@@ -333,32 +363,55 @@ export default function RunDetailPage() {
     <ErrorBoundary>
       <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
         {/* Header */}
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <header className="space-y-3">
+          <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" onClick={() => router.push('/deploy')}>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
-            <div className="h-4 w-px bg-border" />
-            <span className="text-sm text-muted-foreground">Run:</span>
-            <code className="rounded bg-muted px-2 py-1 text-sm font-medium">{runId}</code>
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportRunAsMarkdown(run)}>
+                    Export as Markdown
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportRunAsJSON(run)}>
+                    Export as JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ShareLinkButton entityType="run" entityId={runId} />
+              {run.project_id && run.leaf && (
+                <PinButton projectId={run.project_id} type="leaf" refId={run.leaf.id} />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/deploy/compare?v1=${runId}`)}
+              >
+                <GitCompare className="h-4 w-4" />
+                Compare
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {run.project_id && run.leaf && (
-              <PinButton projectId={run.project_id} type="leaf" refId={run.leaf.id} />
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/deploy/compare?v1=${runId}`)}
-            >
-              <GitCompare className="h-4 w-4" />
-              Compare
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <ReportHeader
+            runId={runId}
+            title={run.title}
+            description={run.description}
+            tags={run.tags}
+            status={run.status}
+            createdAt={run.created_at}
+            onUpdate={handleUpdateRun}
+          />
         </header>
 
         {/* Milestone: Eval Complete Summary Card */}
