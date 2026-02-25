@@ -28,6 +28,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
+import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExecuteMergeRequestSchema,
@@ -285,6 +286,15 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     if (branch && projectId) {
       await updateBranchHead(db, projectId, branch, mergeCommit.hash);
     }
+
+    // Fire webhook event (fire-and-forget)
+    webhookDispatcher.dispatch('merge.completed', {
+      commit_hash: mergeCommit.hash,
+      project_id: projectId,
+      source_hash,
+      target_hash,
+      branch: branch || null,
+    }, projectId);
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },

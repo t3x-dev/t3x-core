@@ -242,6 +242,18 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
+// Webhooks (event subscriptions)
+export {
+  type CreateWebhookInput as CreateWebhookStorageInput,
+  type UpdateWebhookInput as UpdateWebhookStorageInput,
+  type WebhookOutput,
+  createWebhook,
+  deleteWebhook,
+  findWebhookById,
+  findWebhooksByEvent,
+  listWebhooks,
+  updateWebhook,
+} from './webhooks';
 // Turns
 export {
   type CreateTurnInput,

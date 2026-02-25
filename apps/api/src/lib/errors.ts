@@ -81,6 +81,9 @@ export const ErrorCodes = {
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
   SHARE_ENTITY_NOT_FOUND: 'SHARE_ENTITY_NOT_FOUND',
 
+  // Webhook errors
+  WEBHOOK_NOT_FOUND: 'WEBHOOK_NOT_FOUND',
+
   // Validation errors (VAL-2)
   NO_OUTPUT: 'NO_OUTPUT',
   SEMANTIC_NOT_SUPPORTED: 'SEMANTIC_NOT_SUPPORTED',
@@ -153,6 +156,9 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   // Share errors
   SHARE_TOKEN_NOT_FOUND: 404,
   SHARE_ENTITY_NOT_FOUND: 404,
+
+  // Webhook errors
+  WEBHOOK_NOT_FOUND: 404,
 
   // Validation errors (VAL-2)
   NO_OUTPUT: 400,

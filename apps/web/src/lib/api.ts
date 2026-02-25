@@ -3110,3 +3110,71 @@ export async function deleteTemplate(id: string): Promise<{ deleted: true }> {
   });
   return handleResponse<{ deleted: true }>(res);
 }
+
+// ============================================================================
+// Webhooks
+// ============================================================================
+
+export interface WebhookData {
+  webhook_id: string;
+  project_id: string | null;
+  url: string;
+  events: string[];
+  secret: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateWebhookInput {
+  url: string;
+  events: string[];
+  secret?: string;
+  project_id?: string;
+  active?: boolean;
+}
+
+export interface UpdateWebhookInput {
+  url?: string;
+  events?: string[];
+  secret?: string;
+  project_id?: string | null;
+  active?: boolean;
+}
+
+export async function listWebhooks(): Promise<WebhookData[]> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks`);
+  return handleResponse<WebhookData[]>(res);
+}
+
+export async function createWebhook(input: CreateWebhookInput): Promise<WebhookData> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<WebhookData>(res);
+}
+
+export async function updateWebhook(id: string, input: UpdateWebhookInput): Promise<WebhookData> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<WebhookData>(res);
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
+export async function testWebhook(id: string): Promise<{ status: number; ok: boolean }> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}/test`, {
+    method: 'POST',
+  });
+  return handleResponse<{ status: number; ok: boolean }>(res);
+}

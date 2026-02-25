@@ -46,6 +46,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   BatchGenerateRequest,
@@ -584,6 +585,14 @@ leavesRoutes.openapi(createLeafRoute, async (c) => {
       project_id: body.project_id,
     });
 
+    // Fire webhook event (fire-and-forget)
+    webhookDispatcher.dispatch('leaf.created', {
+      leaf_id: leaf.id,
+      project_id: body.project_id,
+      type: body.type,
+      commit_hash: body.commit_hash,
+    }, body.project_id);
+
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 201);
   } catch (err) {
     // Handle PostgreSQL foreign key violation (commit or project not found)
@@ -947,6 +956,12 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       // Log but don't fail - history is supplementary
       console.warn('Failed to save generation history:', historyErr);
     }
+
+    // Fire webhook event (fire-and-forget)
+    webhookDispatcher.dispatch('leaf.generated', {
+      leaf_id: id,
+      project_id: leaf.project_id,
+    }, leaf.project_id);
 
     // Return response according to contract (v4-contracts.ts)
     // Use the generated_at from the updated leaf for consistency
