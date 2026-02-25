@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Eye, Play } from 'lucide-react';
+import { Check, Clock, Eye, Loader2, Play, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,31 +90,50 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
     return passed ? (
       <Badge
         variant="outline"
-        className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+        className="gap-1 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
       >
+        <Check className="h-3 w-3" />
         passed
       </Badge>
     ) : (
       <Badge
         variant="outline"
-        className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
+        className="gap-1 border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
       >
+        <X className="h-3 w-3" />
         failed
       </Badge>
     );
   }
 
-  // Otherwise show status
-  const variants: Record<string, string> = {
-    queued: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]',
-    running: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]',
-    completed: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
-    failed: 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
-    timeout: 'border-yellow-500/30 bg-yellow-500/10 text-[var(--status-warning)]',
+  // Otherwise show status with icon
+  const variants: Record<string, { className: string; icon: React.ReactNode }> = {
+    queued: {
+      className: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]',
+      icon: <Clock className="h-3 w-3" />,
+    },
+    running: {
+      className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]',
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+    completed: {
+      className: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
+      icon: <Check className="h-3 w-3" />,
+    },
+    failed: {
+      className: 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
+      icon: <X className="h-3 w-3" />,
+    },
+    timeout: {
+      className: 'border-yellow-500/30 bg-yellow-500/10 text-[var(--status-warning)]',
+      icon: <Clock className="h-3 w-3" />,
+    },
   };
 
+  const v = variants[status];
   return (
-    <Badge variant="outline" className={variants[status] || ''}>
+    <Badge variant="outline" className={cn('gap-1', v?.className || '')}>
+      {v?.icon}
       {status}
     </Badge>
   );

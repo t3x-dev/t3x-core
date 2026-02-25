@@ -3,15 +3,18 @@ import { Handle, NodeToolbar, Position } from '@xyflow/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
+  Check,
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  Clock,
   Copy,
   Eye,
   FilePlus,
   FileText,
   GitCommit,
   GitMerge,
+  Loader2,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -23,6 +26,7 @@ import {
   Trash2,
   Twitter,
   Users,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -912,7 +916,7 @@ function UnitNode(props: Props) {
                           {leaf.status && (
                             <span
                               className={cn(
-                                'text-xs font-medium px-1.5 py-0.5 rounded',
+                                'inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded',
                                 leaf.status === 'running' &&
                                   'bg-[var(--status-info-muted)] text-[var(--status-info)]',
                                 leaf.status === 'passed' &&
@@ -925,6 +929,12 @@ function UnitNode(props: Props) {
                                   'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'
                               )}
                             >
+                              {leaf.status === 'running' && (
+                                <Loader2 size={10} className="animate-spin" />
+                              )}
+                              {leaf.status === 'passed' && <Check size={10} />}
+                              {leaf.status === 'failed' && <X size={10} />}
+                              {leaf.status === 'pending' && <Clock size={10} />}
                               {leaf.status === 'passed' && leaf.passedCount !== undefined
                                 ? `${leaf.passedCount}/${(leaf.passedCount || 0) + (leaf.failedCount || 0)}`
                                 : leaf.status}

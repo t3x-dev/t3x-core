@@ -1,6 +1,7 @@
 'use client';
 
-import { Play } from 'lucide-react';
+import { ClipboardPaste, Download, FileJson, FileText, Play } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,8 +12,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Template } from '@/lib/api';
+import { exportTemplate, type TemplateExportFormat } from '@/lib/exportTemplate';
 
 interface TemplatePreviewDialogProps {
   template: Template | null;
@@ -50,6 +58,17 @@ export function TemplatePreviewDialog({
   onOpenChange,
   onUse,
 }: TemplatePreviewDialogProps) {
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  const handleExport = async (format: TemplateExportFormat) => {
+    if (!template) return;
+    const result = await exportTemplate(template, format);
+    if (result.success) {
+      setExportMsg(result.message);
+      setTimeout(() => setExportMsg(null), 2000);
+    }
+  };
+
   if (!template) return null;
 
   return (
@@ -134,7 +153,33 @@ export function TemplatePreviewDialog({
           </TabsContent>
         </Tabs>
 
+        {exportMsg && (
+          <p className="text-xs text-[var(--status-success)] text-center">{exportMsg}</p>
+        )}
+
         <DialogFooter>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1">
+                <Download className="h-3 w-3" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => handleExport('clipboard')}>
+                <ClipboardPaste className="mr-2 h-4 w-4" />
+                Copy Prompt
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('markdown')}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('json')}>
+                <FileJson className="mr-2 h-4 w-4" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
