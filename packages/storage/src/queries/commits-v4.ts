@@ -16,6 +16,7 @@ import type {
   CommitSourceRef,
   CommitV4,
   CreateCommitV4Input,
+  MergeSummaryData,
   SentenceV4,
 } from '@t3x/core';
 import { computeJCSHash } from '@t3x/core';
@@ -164,6 +165,7 @@ export async function createCommitV4(
       message: input.message ?? null,
       branch: input.branch ?? null,
       sourceRefs: input.source_refs ?? null,
+      mergeSummary: input.merge_summary ?? null,
       positionX: input.position_x ?? null,
       positionY: input.position_y ?? null,
     })
@@ -430,6 +432,7 @@ function rowToCommitV4(row: CommitV4Record): CommitV4 {
     message: row.message ?? undefined,
     branch: row.branch ?? undefined,
     source_refs: row.sourceRefs as CommitSourceRef[] | undefined,
+    merge_summary: (row.mergeSummary as MergeSummaryData) ?? undefined,
     position_x: row.positionX ?? undefined,
     position_y: row.positionY ?? undefined,
     created_at: row.createdAt.toISOString(),

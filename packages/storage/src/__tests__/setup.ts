@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   message TEXT,
   branch TEXT,
   source_refs JSONB,
+  merge_summary JSONB,
   position_x REAL,
   position_y REAL,
 

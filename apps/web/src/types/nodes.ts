@@ -105,7 +105,15 @@ export type {
  */
 export type CommitV4Display = Pick<
   CommitV4,
-  'hash' | 'schema' | 'author' | 'committed_at' | 'content' | 'message' | 'branch' | 'source_refs'
+  | 'hash'
+  | 'schema'
+  | 'author'
+  | 'committed_at'
+  | 'content'
+  | 'message'
+  | 'branch'
+  | 'source_refs'
+  | 'merge_summary'
 >;
 
 /**

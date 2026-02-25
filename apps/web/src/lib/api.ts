@@ -1221,6 +1221,14 @@ export interface CommitV4 {
   message: string | null;
   branch: string | null;
   source_refs: CommitV4SourceRef[] | null;
+  merge_summary?: {
+    kept_identical: number;
+    resolved_conflicts: number;
+    kept_from_source: number;
+    kept_from_target: number;
+    discarded: number;
+    total_sentences: number;
+  } | null;
   position_x: number | null;
   position_y: number | null;
   created_at: string;

@@ -12,7 +12,7 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input } from '@t3x/core';
+import type { CreateCommitV4Input, MergeSummaryData } from '@t3x/core';
 import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
 import {
   commitMergeDraft,
@@ -252,6 +252,21 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       mergeCommit.branch = branch;
     }
 
+    // Compute merge summary from prepared data
+    const keptFromSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
+    const keptFromTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
+    const discardedSource = prepared.onlyInSource.filter((c: { keep: boolean }) => !c.keep).length;
+    const discardedTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => !c.keep).length;
+    const mergeSummary: MergeSummaryData = {
+      kept_identical: prepared.identical.length,
+      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
+        .length,
+      kept_from_source: keptFromSource,
+      kept_from_target: keptFromTarget,
+      discarded: discardedSource + discardedTarget,
+      total_sentences: mergeCommit.content.sentences.length,
+    };
+
     // Convert to CreateCommitV4Input format
     const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
@@ -260,6 +275,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       project_id: projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
+      merge_summary: mergeSummary,
     };
 
     // Save to storage as V4 commit
@@ -270,7 +286,10 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       await updateBranchHead(db, projectId, branch, mergeCommit.hash);
     }
 
-    return c.json({ success: true as const, data: mergeCommit }, 200);
+    return c.json(
+      { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },
+      200
+    );
   } catch (error) {
     return c.json(
       {
@@ -646,6 +665,25 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     const targetBranch = branch || draft.targetBranch || 'main';
     mergeCommit.branch = targetBranch;
 
+    // Compute merge summary from prepared data
+    const draftKeptSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
+    const draftKeptTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
+    const draftDiscardedSource = prepared.onlyInSource.filter(
+      (c: { keep: boolean }) => !c.keep
+    ).length;
+    const draftDiscardedTarget = prepared.onlyInTarget.filter(
+      (c: { keep: boolean }) => !c.keep
+    ).length;
+    const draftMergeSummary: MergeSummaryData = {
+      kept_identical: prepared.identical.length,
+      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
+        .length,
+      kept_from_source: draftKeptSource,
+      kept_from_target: draftKeptTarget,
+      discarded: draftDiscardedSource + draftDiscardedTarget,
+      total_sentences: mergeCommit.content.sentences.length,
+    };
+
     // Convert to CreateCommitV4Input format
     const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
@@ -654,6 +692,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       project_id: draft.projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
+      merge_summary: draftMergeSummary,
     };
 
     // Save to storage as V4 commit
@@ -665,7 +704,10 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     // Mark draft as committed
     await commitMergeDraft(db, id);
 
-    return c.json({ success: true as const, data: mergeCommit }, 200);
+    return c.json(
+      { success: true as const, data: { ...mergeCommit, merge_summary: draftMergeSummary } },
+      200
+    );
   } catch (error) {
     return c.json(
       {
