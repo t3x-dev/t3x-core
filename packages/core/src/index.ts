@@ -107,6 +107,8 @@ export {
   type ConstraintCheckResult,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
+  // Default templates
+  DEFAULT_TEMPLATES,
   formatConstraints,
   type GenerateOptions,
   type GenerateResult,
@@ -114,8 +116,11 @@ export {
   generateAssertionId,
   // Generation (GEN-2)
   generateLeafOutput,
+  getAllDefaultTemplates,
+  getDefaultTemplate,
   getTypeInstructions,
   isGenerationConfigured,
+  type LeafTemplate,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
@@ -124,6 +129,7 @@ export {
   // Validation (VAL-1, VAL-2)
   validateConstraints,
   validateConstraintsExactOnly,
+  validateTemplateSyntax,
 } from './leaf';
 // LLM Provider (interface)
 export {

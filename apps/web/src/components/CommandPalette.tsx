@@ -6,6 +6,7 @@ import {
   FileText,
   GitBranch,
   Home,
+  LayoutGrid,
   MessageSquarePlus,
   Search,
   Settings,
@@ -124,6 +125,12 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                       Go to Project Canvas
                     </CommandItem>
                   )}
+                  <CommandItem
+                    icon={<LayoutGrid size={16} />}
+                    onSelect={() => handleSelect(() => router.push('/templates'))}
+                  >
+                    Browse Templates
+                  </CommandItem>
                   <CommandItem
                     icon={<Settings size={16} />}
                     onSelect={() => handleSelect(() => router.push('/insights'))}

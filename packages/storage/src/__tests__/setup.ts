@@ -319,6 +319,24 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
 );
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
+
+-- Templates
+CREATE TABLE IF NOT EXISTS templates (
+  template_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  category TEXT NOT NULL,
+  leaf_type TEXT NOT NULL,
+  system_prompt TEXT NOT NULL,
+  user_prompt TEXT NOT NULL,
+  variables JSONB NOT NULL,
+  tags JSONB NOT NULL DEFAULT '[]',
+  is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
+CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 `;
 
 /**

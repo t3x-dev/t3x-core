@@ -8,6 +8,7 @@
  */
 
 import {
+  boolean,
   customType,
   index,
   integer,
@@ -369,6 +370,40 @@ export const savedComparisons = pgTable(
   ]
 );
 
+/**
+ * Templates - Reusable prompt templates for leaf generation
+ */
+export const templates = pgTable(
+  'templates',
+  {
+    templateId: text('template_id').primaryKey(), // tmpl_xxxxxxxxxxxx
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    category: text('category').notNull(), // social|business|technical|creative
+    leafType: text('leaf_type').notNull(), // tweet|article|email|weibo|wechat|slack
+    systemPrompt: text('system_prompt').notNull(),
+    userPrompt: text('user_prompt').notNull(),
+    variables: jsonb('variables')
+      .notNull()
+      .$type<
+        Array<{
+          name: string;
+          description: string;
+          required: boolean;
+          defaultValue?: string;
+        }>
+      >(),
+    tags: jsonb('tags').$type<string[]>().notNull().default([]),
+    isBuiltin: boolean('is_builtin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_templates_category').on(table.category),
+    index('idx_templates_leaf_type').on(table.leafType),
+  ]
+);
+
 // ============================================================
 // Type Exports (for use in application code)
 // ============================================================
@@ -408,3 +443,6 @@ export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
 
 export type SavedComparison = typeof savedComparisons.$inferSelect;
 export type NewSavedComparison = typeof savedComparisons.$inferInsert;
+
+export type Template = typeof templates.$inferSelect;
+export type NewTemplate = typeof templates.$inferInsert;

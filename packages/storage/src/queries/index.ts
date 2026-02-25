@@ -224,6 +224,15 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Templates (reusable prompt templates)
+export {
+  type CreateTemplateInput,
+  createTemplate,
+  deleteTemplate,
+  findTemplateById,
+  type ListTemplatesOptions,
+  listTemplates,
+} from './templates';
 // Share Tokens
 export {
   type CreateShareTokenInput,

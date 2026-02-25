@@ -3035,3 +3035,79 @@ export async function listShareLinks(entityType: string, entityId: string): Prom
   const res = await fetchWithTimeout(`${API_V1}/share/entity/${entityType}/${entityId}`);
   return handleResponse<ShareLink[]>(res);
 }
+
+// ============================================================================
+// Templates
+// ============================================================================
+
+export interface TemplateVariable {
+  name: string;
+  description: string;
+  required: boolean;
+  defaultValue?: string;
+}
+
+export interface Template {
+  template_id: string;
+  title: string;
+  description: string;
+  category: 'social' | 'business' | 'technical' | 'creative';
+  leaf_type: string;
+  system_prompt: string;
+  user_prompt: string;
+  variables: TemplateVariable[];
+  tags: string[];
+  is_builtin: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTemplateInput {
+  title: string;
+  description: string;
+  category: 'social' | 'business' | 'technical' | 'creative';
+  leaf_type: string;
+  system_prompt: string;
+  user_prompt: string;
+  variables: TemplateVariable[];
+  tags: string[];
+}
+
+export async function listTemplates(opts?: {
+  category?: string;
+  leaf_type?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Template[]> {
+  const params = new URLSearchParams();
+  if (opts?.category) params.set('category', opts.category);
+  if (opts?.leaf_type) params.set('leaf_type', opts.leaf_type);
+  if (opts?.search) params.set('search', opts.search);
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.offset) params.set('offset', String(opts.offset));
+  const qs = params.toString();
+  const res = await fetchWithTimeout(`${API_V1}/templates${qs ? `?${qs}` : ''}`);
+  return handleResponse<Template[]>(res);
+}
+
+export async function getTemplate(id: string): Promise<Template> {
+  const res = await fetchWithTimeout(`${API_V1}/templates/${id}`);
+  return handleResponse<Template>(res);
+}
+
+export async function createTemplate(input: CreateTemplateInput): Promise<Template> {
+  const res = await fetchWithTimeout(`${API_V1}/templates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<Template>(res);
+}
+
+export async function deleteTemplate(id: string): Promise<{ deleted: true }> {
+  const res = await fetchWithTimeout(`${API_V1}/templates/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<{ deleted: true }>(res);
+}
