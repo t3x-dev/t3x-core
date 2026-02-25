@@ -7,6 +7,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { GuidedTour } from '@/components/onboarding/GuidedTour';
 import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
+import { ListView } from '@/components/project/ListView';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -204,13 +205,17 @@ export default function ProjectDetailPage() {
           onViewportChange={handleViewportChange}
           viewSwitcher={<ViewSwitcher value={viewMode} onChange={setViewMode} />}
         />
-      ) : mode === 'editor' && viewMode === 'timeline' ? (
+      ) : mode === 'editor' && (viewMode === 'timeline' || viewMode === 'list') ? (
         <div className="flex h-full flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{project.name}</h2>
             <ViewSwitcher value={viewMode} onChange={setViewMode} />
           </header>
-          <TimelineView projectId={projectId} />
+          {viewMode === 'timeline' ? (
+            <TimelineView projectId={projectId} />
+          ) : (
+            <ListView projectId={projectId} />
+          )}
         </div>
       ) : (
         <div className="relative flex h-full flex-col">

@@ -7,11 +7,13 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  Circle,
   Clock,
   Copy,
   Eye,
   FilePlus,
   FileText,
+  GitBranch,
   GitCommit,
   GitMerge,
   Loader2,
@@ -679,12 +681,13 @@ function UnitNode(props: Props) {
                 <TooltipTrigger asChild>
                   <span
                     className={cn(
-                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent',
+                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
                       data.branchType === 'main'
                         ? cn(toneAccent.commit.border, toneAccent.commit.text)
                         : cn(toneAccent.branch.border, toneAccent.branch.text)
                     )}
                   >
+                    {data.branchType === 'main' ? <GitCommit size={10} /> : <GitBranch size={10} />}
                     {branchLabel}
                   </span>
                 </TooltipTrigger>
@@ -935,6 +938,7 @@ function UnitNode(props: Props) {
                               {leaf.status === 'passed' && <Check size={10} />}
                               {leaf.status === 'failed' && <X size={10} />}
                               {leaf.status === 'pending' && <Clock size={10} />}
+                              {leaf.status === 'idle' && <Circle size={10} />}
                               {leaf.status === 'passed' && leaf.passedCount !== undefined
                                 ? `${leaf.passedCount}/${(leaf.passedCount || 0) + (leaf.failedCount || 0)}`
                                 : leaf.status}

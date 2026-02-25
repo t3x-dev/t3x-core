@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle, ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { EmptyStateInline } from '@/components/ui/empty-state';
@@ -405,12 +405,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         {/* Column Headers */}
         <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
           <div className="px-4 py-2 flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              <Minus className="h-2.5 w-2.5" />
               Base (Source)
             </span>
           </div>
           <div className="px-4 py-2 flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+              <Plus className="h-2.5 w-2.5" />
               Target
             </span>
           </div>

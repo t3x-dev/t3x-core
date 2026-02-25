@@ -1,3 +1,4 @@
+import { CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTerminology } from '@/hooks/useTerminology';
 
@@ -28,8 +29,9 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
         className="flex w-full items-center justify-between rounded px-4 py-2.5 transition-colors hover:bg-[var(--hover-bg)]"
         type="button"
       >
-        <span className="font-semibold text-[var(--diff-added-text)]">
-          ✓ {t('identical_sentences')} ({sentences.length}{' '}
+        <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--diff-added-text)]">
+          <CheckCircle2 className="h-4 w-4" />
+          {t('identical_sentences')} ({sentences.length}{' '}
           {sentences.length === 1 ? 'sentence' : 'sentences'}) —{t('auto_kept').toLowerCase()}
         </span>
         <span className="text-[var(--diff-added-accent)] text-lg">{expanded ? '▲' : '▼'}</span>
