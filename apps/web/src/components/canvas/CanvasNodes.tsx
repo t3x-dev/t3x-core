@@ -36,6 +36,7 @@ import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -455,18 +456,27 @@ function UnitNode(props: Props) {
   const toneKey = isStaging ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // Commit celebration animation — triggers on staging → committed transition
+  // Seal animation — triggers on staging → committed transition
   const prevStatusRef = useRef(data.commitStatus);
-  const [celebrating, setCelebrating] = useState(false);
+  const [sealing, setSealing] = useState(false);
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const [nodeHeight, setNodeHeight] = useState(160);
 
   useEffect(() => {
     if (prevStatusRef.current === 'staging' && data.commitStatus === 'committed') {
-      setCelebrating(true);
-      const timer = setTimeout(() => setCelebrating(false), 500);
-      return () => clearTimeout(timer);
+      setSealing(true);
     }
     prevStatusRef.current = data.commitStatus;
   }, [data.commitStatus]);
+
+  useEffect(() => {
+    if (!nodeRef.current) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setNodeHeight(entry.contentRect.height);
+    });
+    ro.observe(nodeRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const handleAddUnit = () => {
     try {
@@ -555,12 +565,13 @@ function UnitNode(props: Props) {
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
       <motion.div
+        ref={nodeRef}
         variants={prefersReducedMotion ? reducedMotion.scaleIn : nodeEnter}
         initial="initial"
-        animate={celebrating && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
+        animate={sealing && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
         exit="exit"
         transition={
-          celebrating && !prefersReducedMotion
+          sealing && !prefersReducedMotion
             ? {
                 duration: 0.4,
                 times: [0, 0.35, 1],
@@ -575,7 +586,7 @@ function UnitNode(props: Props) {
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-xl overflow-visible elevation-1',
+          'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
           glass.highlight,
           // Left accent line
@@ -602,6 +613,15 @@ function UnitNode(props: Props) {
         data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
+        {/* Seal animation overlay */}
+        <SealAnimation
+          width={288}
+          height={nodeHeight}
+          borderRadius={16}
+          isActive={sealing}
+          onComplete={() => setSealing(false)}
+        />
+
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
@@ -776,7 +796,9 @@ function UnitNode(props: Props) {
                 {data.isMergeCommit && (
                   <>
                     <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className={cn('font-medium', toneAccent.conversation.text)}>{t('merge').toLowerCase()}</span>
+                    <span className={cn('font-medium', toneAccent.conversation.text)}>
+                      {t('merge').toLowerCase()}
+                    </span>
                   </>
                 )}
               </div>
