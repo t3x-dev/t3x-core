@@ -50,6 +50,19 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   mergeReviewCancel: { default: 'Go Back', developer: 'Cancel' },
   unresolved: { default: 'Needs Decision', developer: 'Unresolved' },
   resolved: { default: 'Decided', developer: 'Resolved' },
+
+  // Batch 4: Command palette, tooltips, empty states
+  search_command: { default: '搜索命令...', developer: 'Search commands...' },
+  no_results: { default: '没有找到结果', developer: 'No results found' },
+  empty_project: {
+    default: '还没有内容，开始你的第一个对话',
+    developer: 'Empty project. Create a conversation to start',
+  },
+  loading: { default: '加载中...', developer: 'Loading...' },
+  all_branches: { default: '全部变体', developer: 'All branches' },
+  configure_and_commit: { default: '配置并保存', developer: 'Configure and commit this unit' },
+  new_branch_name: { default: '输入新变体名称', developer: 'Enter new branch name' },
+  draft_from: { default: '草稿来自', developer: 'Draft from' },
 };
 
 export type TermKey = keyof typeof TERMINOLOGY;

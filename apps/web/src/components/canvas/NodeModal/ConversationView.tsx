@@ -510,7 +510,7 @@ export function ConversationView({
             {isStagingUnit && (
               <Button
                 onClick={onShowCommitConfig}
-                title="Configure and commit this unit"
+                title={t('configure_and_commit')}
                 className="gap-1.5"
               >
                 <Check size={16} />
