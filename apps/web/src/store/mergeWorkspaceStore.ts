@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
+import { sound } from '@/lib/sound';
 import { useSettingsStore } from '@/store/settingsStore';
 import type {
   CommitV3,
@@ -493,6 +494,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       });
 
       set({ status: 'committed', isDirty: false });
+      sound.playMerge();
 
       // Force canvas to reload data by clearing its projectId
       // This ensures the new merge commit will be displayed
