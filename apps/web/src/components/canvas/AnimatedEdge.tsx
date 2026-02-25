@@ -1,5 +1,5 @@
 import { BaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * AnimatedEdge - A smooth step edge with subtle flow animation
@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
  * - Distinct hover vs selected visual states
  * - Glow effect on hover/select
  * - Animated gradient flow
+ * - Pulse glow on newly created edges
  * - Respects prefers-reduced-motion
  * - Smooth opacity transitions
  */
@@ -20,11 +21,16 @@ export function AnimatedEdge({
   sourcePosition,
   targetPosition,
   style,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   markerEnd: _markerEnd,
   selected,
+  data: rawData,
 }: EdgeProps) {
+  const data = rawData as { createdAt?: number } | undefined;
   const [isHovered, setIsHovered] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [isNew, setIsNew] = useState(false);
+  const hasAnimatedRef = useRef(false);
 
   // Check for reduced motion preference
   useEffect(() => {
@@ -35,6 +41,17 @@ export function AnimatedEdge({
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
+
+  // Detect newly created edges and trigger one-shot pulse
+  useEffect(() => {
+    if (hasAnimatedRef.current || prefersReducedMotion) return;
+    if (data?.createdAt && Date.now() - data.createdAt < 2000) {
+      hasAnimatedRef.current = true;
+      setIsNew(true);
+      const timer = setTimeout(() => setIsNew(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [data?.createdAt, prefersReducedMotion]);
 
   const [edgePath] = getSmoothStepPath({
     sourceX,
@@ -142,6 +159,21 @@ export function AnimatedEdge({
             animation: 'edge-flow 1.5s linear infinite',
             opacity: isActive ? 1 : 0.5,
             ...transitionStyle,
+          }}
+        />
+      )}
+
+      {/* Pulse glow on newly created edges — CSS stroke-dashoffset animation */}
+      {isNew && (
+        <path
+          d={edgePath}
+          fill="none"
+          strokeWidth={6}
+          stroke="#3b82f6"
+          strokeLinecap="round"
+          className="edge-birth-pulse"
+          style={{
+            filter: 'blur(2px) drop-shadow(0 0 6px rgba(59,130,246,0.8))',
           }}
         />
       )}

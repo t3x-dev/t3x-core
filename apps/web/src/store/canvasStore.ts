@@ -604,6 +604,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
+        data: { createdAt: Date.now() },
       };
 
       set({
@@ -656,6 +657,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
+        data: { createdAt: Date.now() },
       };
 
       set({
@@ -1196,6 +1198,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
+        data: { createdAt: Date.now() },
       };
 
       set({ edges: [...edges, newEdge] });

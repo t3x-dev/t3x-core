@@ -514,6 +514,30 @@ a {
   }
 }
 
+/* Edge birth pulse — bright glow that sweeps along a new edge then fades */
+@keyframes edge-birth-pulse {
+  0% {
+    stroke-dashoffset: 200;
+    opacity: 0.9;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    opacity: 0.7;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+.edge-birth-pulse {
+  stroke-dasharray: 200;
+  animation: edge-birth-pulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-birth-pulse { animation: none !important; opacity: 0 !important; }
+}
+
 /* Subtle pulse for active connections */
 @keyframes handle-pulse {
   0%,
