@@ -614,11 +614,6 @@ a {
   box-shadow: 0 0 0 1px oklch(0.65 0.14 155 / 0.15), 0 0 12px 0 oklch(0.65 0.14 155 / 0.08);
 }
 
-/* 9.3 Edge Brightness — make edges more visible in dark mode */
-.dark .react-flow__edge path {
-  stroke-opacity: 0.35;
-}
-
 /* ═══════════════════════════════════════════
    Drag Micro-interactions — lift, shadow, bounce-back
    ═══════════════════════════════════════════ */

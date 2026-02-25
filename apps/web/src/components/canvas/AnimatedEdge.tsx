@@ -180,7 +180,7 @@ export function AnimatedEdge({
   const getStrokeColor = () => {
     if (selected) return 'oklch(0.75 0.15 250)';
     if (isHovered) return 'oklch(0.65 0.08 250)';
-    return 'oklch(1 0 0 / 14%)';
+    return 'oklch(0.55 0.02 250 / 45%)';
   };
 
   const transitionStyle = prefersReducedMotion
