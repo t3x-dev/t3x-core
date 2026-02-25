@@ -27,6 +27,7 @@ import {
 } from '@t3x/storage';
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
+import { computeMergeChecks } from '../lib/merge-checks';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExecuteMergeRequestSchema,
@@ -727,4 +728,68 @@ mergeRoutes.openapi(deleteDraftRoute, async (c) => {
   }
 
   return c.json({ success: true as const, data: { deleted: true } }, 200);
+});
+
+// ============================================================================
+// GET /v1/merge/drafts/:id/checks - Get merge validation checks
+// ============================================================================
+
+const MergeCheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  passed: z.boolean(),
+  detail: z.string().optional(),
+});
+
+const getDraftChecksRoute = createRoute({
+  method: 'get',
+  path: '/v1/merge/drafts/{id}/checks',
+  tags: ['Merge'],
+  summary: 'Get merge validation checks for a draft',
+  description: `
+Returns server-side validation checks for a merge draft:
+- **constraints_satisfied**: Whether merged text satisfies all Leaf constraints
+- **evidence_chain_complete**: Whether all sentences have source references
+- **eval_passed**: (Optional) Latest evaluation run status for associated Leaves
+  `.trim(),
+  request: {
+    params: DraftIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Merge checks computed',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.array(MergeCheckSchema)),
+        },
+      },
+    },
+    404: {
+      description: 'Draft not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+mergeRoutes.openapi(getDraftChecksRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const db = await getDB();
+
+  const draft = await getMergeDraft(db, id);
+  if (!draft) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
+  }
+
+  const checks = await computeMergeChecks(db, draft);
+  return c.json({ success: true as const, data: checks }, 200);
 });
