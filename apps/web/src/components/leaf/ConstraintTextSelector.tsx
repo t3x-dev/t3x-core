@@ -224,7 +224,7 @@ export function ConstraintTextSelector({
       {/* Merged text block */}
       <div
         ref={textRef}
-        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm text-[var(--color-text-secondary)] leading-relaxed cursor-text select-text whitespace-pre-wrap"
+        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm text-[var(--text-primary)] leading-relaxed cursor-text select-text whitespace-pre-wrap"
         onMouseUp={handleMouseUp}
       >
         {segments}
