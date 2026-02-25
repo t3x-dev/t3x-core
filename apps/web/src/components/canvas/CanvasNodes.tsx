@@ -619,6 +619,7 @@ function UnitNode(props: Props) {
             transition: 'box-shadow 0.3s ease',
           }}
           role="treeitem"
+          tabIndex={0}
           aria-label={`${data.title} (minified)`}
           aria-selected={selected}
         />
