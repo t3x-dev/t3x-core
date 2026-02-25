@@ -490,6 +490,20 @@ export type UpdateConversationContextRequestType = z.infer<typeof UpdateConversa
 export type ConversationContextResponseType = z.infer<typeof ConversationContextResponse>;
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Merge Checks API
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const MergeCheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  passed: z.boolean(),
+  detail: z.string().optional(),
+});
+
+export const MergeChecksResponse = SuccessResponse(z.array(MergeCheckSchema));
+export type MergeCheckType = z.infer<typeof MergeCheckSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Merge V4 API
 // ═══════════════════════════════════════════════════════════════════════════
 
