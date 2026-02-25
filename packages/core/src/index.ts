@@ -231,6 +231,8 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
+  // Merge summary
+  type MergeSummaryData,
   type MergeV4Candidate,
   // Merge V4 types
   type MergeV4Result,

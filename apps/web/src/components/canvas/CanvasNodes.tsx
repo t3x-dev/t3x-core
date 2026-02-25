@@ -776,10 +776,29 @@ function UnitNode(props: Props) {
                 {data.isMergeCommit && (
                   <>
                     <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className={cn('font-medium', toneAccent.conversation.text)}>{t('merge').toLowerCase()}</span>
+                    <span className={cn('font-medium', toneAccent.conversation.text)}>
+                      {t('merge').toLowerCase()}
+                    </span>
                   </>
                 )}
               </div>
+
+              {/* Merge summary one-liner */}
+              {data.isMergeCommit &&
+                data.commitV4?.merge_summary &&
+                (() => {
+                  const ms = data.commitV4.merge_summary;
+                  const parts = [
+                    `${ms.total_sentences} kept`,
+                    `${ms.resolved_conflicts} ${t('resolved').toLowerCase()}`,
+                  ];
+                  if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);
+                  return (
+                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 truncate">
+                      {parts.join(' · ')}
+                    </div>
+                  );
+                })()}
 
               {/* Status indicator */}
               <div className="flex items-center justify-between mb-[var(--space-item)]">
