@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 
 interface MergeIdenticalSectionProps {
   sentences: { id: string; text: string }[];
@@ -16,6 +17,7 @@ interface MergeIdenticalSectionProps {
  */
 export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useTerminology();
 
   if (sentences.length === 0) return null;
 
@@ -27,8 +29,8 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
         type="button"
       >
         <span className="font-semibold text-[var(--diff-added-text)]">
-          ✓ Identical ({sentences.length} {sentences.length === 1 ? 'sentence' : 'sentences'}) —
-          auto-kept
+          ✓ {t('identical_sentences')} ({sentences.length}{' '}
+          {sentences.length === 1 ? 'sentence' : 'sentences'}) —{t('auto_kept').toLowerCase()}
         </span>
         <span className="text-[var(--diff-added-accent)] text-lg">{expanded ? '▲' : '▼'}</span>
       </button>

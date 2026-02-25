@@ -43,6 +43,19 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   pushAction: { default: 'Publish', developer: 'Push' },
   pullAction: { default: 'Sync', developer: 'Pull' },
 
+  // Diff / Merge labels
+  source: { default: '原版', developer: 'Source' },
+  target: { default: '新版', developer: 'Target' },
+  only_in_source: { default: '仅在原版', developer: 'Only in Source' },
+  only_in_target: { default: '仅在新版', developer: 'Only in Target' },
+  conflicts: { default: '冲突', developer: 'Conflicts' },
+  keep_source: { default: '保留原版', developer: 'Keep Source' },
+  keep_target: { default: '保留新版', developer: 'Keep Target' },
+  keep_both: { default: '全部保留', developer: 'Keep Both' },
+  similarity: { default: '相似度', developer: 'Similarity' },
+  auto_kept: { default: '自动保留', developer: 'Auto-kept' },
+  preview: { default: '预览', developer: 'Preview' },
+
   // Merge Review / Preview
   mergePreview: { default: '合并预览', developer: 'Merge Preview' },
   mergeReview: { default: 'Review Changes', developer: 'Merge Review' },
