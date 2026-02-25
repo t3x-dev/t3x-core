@@ -13,6 +13,7 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4, DiffResultRaw } from '@/lib/api';
 import { getCommitV4 } from '@/lib/api';
 import { glass } from '@/lib/theme';
@@ -50,6 +51,7 @@ export function DiffFullScreen({
   const [baseCommit, setBaseCommit] = useState<CommitV4 | null>(null);
   const [targetCommit, setTargetCommit] = useState<CommitV4 | null>(null);
   const [commitsLoading, setCommitsLoading] = useState(false);
+  const { t } = useTerminology();
 
   const sideBySideRef = useRef<DiffSideBySideHandle>(null);
 
@@ -129,7 +131,7 @@ export function DiffFullScreen({
         {commitsLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-            <span className="ml-2 text-[var(--text-tertiary)]">Loading commits...</span>
+            <span className="ml-2 text-[var(--text-tertiary)]">{t('loading')}</span>
           </div>
         ) : (
           <DiffSideBySide

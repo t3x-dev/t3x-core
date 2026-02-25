@@ -583,6 +583,7 @@ export const unitToNode = (
             },
             message: originalV4.message ?? undefined,
             branch: originalV4.branch ?? undefined,
+            merge_summary: originalV4.merge_summary ?? undefined,
           }
         : undefined,
     },

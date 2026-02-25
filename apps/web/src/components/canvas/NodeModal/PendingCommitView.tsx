@@ -736,7 +736,8 @@ export function PendingCommitView({
   // Initialize source boxes (legacy) from baseline summary
   useEffect(() => {
     if (data?.baselineSummary) {
-      const sourceTitle = `Unit \u2013 ${data.title?.replace('Draft from ', '') || 'Source'}`;
+      const draftPrefix = `${t('draft_from')} `;
+      const sourceTitle = `Unit \u2013 ${data.title?.replace(draftPrefix, '') || 'Source'}`;
 
       const initialBox: SourceBox = {
         id: 'source-1',
@@ -1323,7 +1324,7 @@ export function PendingCommitView({
                           type="text"
                           value={data.pendingBranchName || ''}
                           onChange={(e) => onBranchNameChange?.(e.target.value)}
-                          placeholder="Enter new branch name"
+                          placeholder={t('new_branch_name')}
                         />
                       </div>
                     )}

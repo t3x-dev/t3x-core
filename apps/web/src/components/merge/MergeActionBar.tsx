@@ -79,7 +79,7 @@ export function MergeActionBar({
       {/* Unresolved Count */}
       {unresolvedCount > 0 && (
         <Badge variant="destructive" className="ml-2">
-          {unresolvedCount} unresolved
+          {unresolvedCount} {t('unresolved').toLowerCase()}
         </Badge>
       )}
 

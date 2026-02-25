@@ -107,6 +107,16 @@ export const commitsV4 = pgTable(
         }>
       >(),
 
+    /** Merge summary statistics (only present on merge commits) */
+    mergeSummary: jsonb('merge_summary').$type<{
+      kept_identical: number;
+      resolved_conflicts: number;
+      kept_from_source: number;
+      kept_from_target: number;
+      discarded: number;
+      total_sentences: number;
+    }>(),
+
     /** Canvas position */
     positionX: real('position_x'),
     positionY: real('position_y'),

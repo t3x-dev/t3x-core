@@ -100,7 +100,13 @@ interface MergeWorkspaceState {
   // Key: turn_hash, Value: loading state
   contextLoadingStates: Record<string, boolean>;
 
+  // Server-side merge checks (from backend API)
+  serverChecks: MergeCheck[];
+  serverChecksLoading: boolean;
+  serverChecksError: string | null;
+
   // Actions
+  fetchServerChecks: () => Promise<void>;
   loadDraft: (draftId: string) => Promise<void>;
   createDraft: (
     projectId: string,
@@ -319,6 +325,9 @@ const initialState = {
   extendedResolutions: {} as Record<string, ExtendedResolutionData>,
   contextCache: {} as Record<string, CachedTurnContext>,
   contextLoadingStates: {} as Record<string, boolean>,
+  serverChecks: [] as MergeCheck[],
+  serverChecksLoading: false,
+  serverChecksError: null,
 };
 
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
@@ -534,6 +543,26 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   // ============================================================================
+  // Server Checks
+  // ============================================================================
+
+  fetchServerChecks: async () => {
+    const { draftId } = get();
+    if (!draftId) return;
+
+    set({ serverChecksLoading: true, serverChecksError: null });
+    try {
+      const result = await fetchApi<MergeCheck[]>(`/merge/drafts/${draftId}/checks`);
+      set({ serverChecks: result, serverChecksLoading: false });
+    } catch (err) {
+      set({
+        serverChecksLoading: false,
+        serverChecksError: err instanceof Error ? err.message : 'Failed to fetch server checks',
+      });
+    }
+  },
+
+  // ============================================================================
   // Computed Getters
   // ============================================================================
 
@@ -716,16 +745,16 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   getMergeChecks: (): MergeCheck[] => {
-    const { prepared, message, targetBranch } = get();
+    const { prepared, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewSentences = get().getPreviewSentences();
     const dev = useSettingsStore.getState().developerMode;
     const tm = (key: TermKey) => getTerminology(key, dev);
 
-    return [
+    const frontendChecks: MergeCheck[] = [
       {
         id: 'resolved',
-        label: `All conflicts resolved`,
+        label: 'All conflicts resolved',
         passed: unresolvedCount === 0,
         detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
       },
@@ -758,6 +787,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
           : undefined,
       },
     ];
+
+    // Append server-side checks (graceful: failed server checks don't block merge)
+    return [...frontendChecks, ...serverChecks];
   },
 
   getEffectiveResolution: (index: number) => {

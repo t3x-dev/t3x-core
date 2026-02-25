@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
+import type { MergeSummary } from '@/lib/mergeSummary';
 import { useMicrocopy } from '@/lib/microcopy';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,10 @@ interface MergeReviewDialogProps {
   sourceBranch: string;
   targetBranch: string;
   sentenceCount: number;
+  /** Merge summary stats (from computeMergeSummary) */
+  summary: MergeSummary | null;
+  /** Whether server-side checks are still loading */
+  serverChecksLoading?: boolean;
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
 }
@@ -40,6 +45,8 @@ export function MergeReviewDialog({
   sourceBranch,
   targetBranch,
   sentenceCount,
+  summary,
+  serverChecksLoading,
   onBackToCanvas,
 }: MergeReviewDialogProps) {
   const { t } = useTerminology();
@@ -147,6 +154,40 @@ export function MergeReviewDialog({
                 </div>
               )}
 
+              {/* Merge Summary */}
+              {summary && (
+                <div className="mb-4 grid grid-cols-4 gap-3 rounded-lg bg-[var(--hover-bg)] px-3 py-3">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--text-secondary)]">
+                      {summary.kept_identical}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">
+                      {t('identical_sentences')}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--accent-commit)]">
+                      {summary.resolved_conflicts}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">{t('resolved')}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--diff-removed-accent)]">
+                      {summary.discarded}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">
+                      {t('removed_sentences')}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--text-primary)]">
+                      {summary.total_sentences}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">Total</div>
+                  </div>
+                </div>
+              )}
+
               {/* Checklist */}
               <div className="space-y-2 mb-6">
                 {checks.map((check) => (
@@ -175,6 +216,14 @@ export function MergeReviewDialog({
                     </div>
                   </div>
                 ))}
+                {serverChecksLoading && (
+                  <div className="flex items-center gap-2.5">
+                    <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin text-[var(--text-tertiary)]" />
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      Loading server checks...
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Error */}

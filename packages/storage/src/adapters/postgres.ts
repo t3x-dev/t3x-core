@@ -295,6 +295,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       message TEXT,
       branch TEXT,
       source_refs JSONB,
+      merge_summary JSONB,
       position_x REAL,
       position_y REAL,
 

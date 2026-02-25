@@ -74,7 +74,9 @@ export function CanvasStatusBar() {
       </Segment>
       {stats.staging > 0 && (
         <Segment>
-          <span className="text-[var(--accent-pending)]">{stats.staging} pending</span>
+          <span className="text-[var(--accent-pending)]">
+            {stats.staging} {t('pending').toLowerCase()}
+          </span>
         </Segment>
       )}
       <Segment border={false}>
