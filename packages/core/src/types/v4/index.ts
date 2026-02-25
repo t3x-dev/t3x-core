@@ -26,6 +26,9 @@ export const ID_PREFIXES = {
   pin: 'pin_',
   api_key: 'ak_',
   share_token: 'share_',
+  draft: 'draft_',
+  draft_sentence: 'ds_',
+  draft_constraint: 'dc_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
@@ -715,4 +718,146 @@ export interface ShareToken {
 
   /** When revoked (soft-delete), ISO8601 */
   revoked_at: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Draft (Workbench — Pre-commit Working Area)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Draft status lifecycle: editing → committed | abandoned
+ */
+export type DraftStatus = 'editing' | 'committed' | 'abandoned';
+
+/**
+ * Distinguishes how a sentence entered the Draft (RFC §13 Issue A).
+ */
+export type DraftSentenceOrigin =
+  | { type: 'extracted'; segment_id: string; confidence: number }
+  | { type: 'selected' }
+  | { type: 'manual' };
+
+/**
+ * A sentence within a Draft. Uses ds_ prefix IDs.
+ * Converted to CommitV4 Sentence (s_) on commit.
+ */
+export interface DraftSentence {
+  /** Unique ID, format: "ds_" + nanoid(12) */
+  id: string;
+
+  /** The sentence text */
+  text: string;
+
+  /** How the sentence was added */
+  origin: DraftSentenceOrigin;
+
+  /** Source reference (only for extracted/selected, manual has none) */
+  source?: {
+    conversation_id: string;
+    conversation_title?: string;
+    turn_hash: string;
+    role: string;
+    start_char: number;
+    end_char: number;
+  };
+
+  /** Display order position */
+  position: number;
+
+  /** Whether included in the final commit */
+  included: boolean;
+}
+
+/**
+ * A constraint within a Draft. Uses dc_ prefix IDs.
+ * Converted to Leaf Constraint (cst_) on commit.
+ */
+export interface DraftConstraint {
+  /** Unique ID, format: "dc_" + nanoid(12) */
+  id: string;
+
+  type: 'require' | 'exclude';
+
+  match_mode: 'exact' | 'semantic';
+
+  /** The constraint value */
+  value: string;
+
+  /** Why this is excluded (for exclude constraints) */
+  reason?: string;
+}
+
+/**
+ * A Draft is a pre-commit working area (like Git's working directory).
+ * Users edit sentences, constraints, and preview output before committing.
+ */
+export interface Draft {
+  /** Unique ID, format: "draft_" + nanoid(12) */
+  id: string;
+
+  /** Associated project */
+  project_id: string;
+
+  /** Human-readable title */
+  title: string;
+
+  /** Optional goal/intent description */
+  goal?: string;
+
+  /** Parent commit to build upon */
+  parent_commit_hash?: string;
+
+  /** Source draft ID if forked from a committed draft (RFC §13 Issue B) */
+  forked_from?: string;
+
+  /** Editable sentences */
+  sentences: DraftSentence[];
+
+  /** Editable constraints */
+  constraints: DraftConstraint[];
+
+  /** Free-form instructions for generation */
+  instructions?: string;
+
+  /** Leaf type for preview generation */
+  preview_type?: string;
+
+  /** Cached preview output */
+  preview_output?: string;
+
+  /** When preview was generated, ISO8601 */
+  preview_generated_at?: string;
+
+  /** Lifecycle status */
+  status: DraftStatus;
+
+  /** Commit hash after committing */
+  committed_as?: string;
+
+  /** Leaf ID created on commit */
+  committed_leaf_id?: string;
+
+  /** Target branch for commit */
+  target_branch?: string;
+
+  /** Optimistic lock revision counter */
+  revision: number;
+
+  /** Creation timestamp, ISO8601 */
+  created_at: string;
+
+  /** Last update timestamp, ISO8601 */
+  updated_at: string;
+}
+
+/**
+ * Input for creating a new Draft.
+ */
+export interface CreateDraftInput {
+  project_id: string;
+  title: string;
+  goal?: string;
+  parent_commit_hash?: string;
+  target_branch?: string;
+  preview_type?: string;
 }

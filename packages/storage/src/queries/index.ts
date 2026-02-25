@@ -15,14 +15,6 @@ export {
   revokeApiKey,
   touchLastUsed,
 } from './api-keys';
-// Comparisons (saved A/B comparison snapshots)
-export {
-  type CreateComparisonInput,
-  createComparison,
-  deleteComparison,
-  getComparison,
-  listComparisons,
-} from './comparisons';
 // Branches
 export {
   type CreateBranchInput,
@@ -77,6 +69,14 @@ export {
   updateCommitV4Position,
   validateMainBranchLinearity,
 } from './commits-v4';
+// Comparisons (saved A/B comparison snapshots)
+export {
+  type CreateComparisonInput,
+  createComparison,
+  deleteComparison,
+  getComparison,
+  listComparisons,
+} from './comparisons';
 // Conversation Contexts (per-conversation context customization)
 export {
   deleteConversationContext,
@@ -107,7 +107,7 @@ export {
   updateDeployAgent,
   updateDeployAgentRunStatus,
 } from './deployAgents';
-// Drafts
+// Agent Drafts (formerly drafts_v2)
 export {
   adoptDraft,
   type CreateDraftInput,
@@ -123,6 +123,21 @@ export {
   updateDraft,
   updateDraftStatus,
 } from './drafts';
+// Drafts V3 (Workbench)
+export {
+  abandonDraftV3,
+  ConflictError,
+  commitDraftV3,
+  deleteDraftV3,
+  findDraftV3ById,
+  forkDraftV3,
+  insertDraftV3,
+  type ListDraftV3Options,
+  listDraftV3ByProject,
+  type UpdateDraftV3Input,
+  updateDraftV3,
+  updateDraftV3Preview,
+} from './drafts-v3';
 // Leaf History (generation history for leaves)
 export {
   countHistoryByLeafId,
@@ -224,15 +239,6 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
-// Templates (reusable prompt templates)
-export {
-  type CreateTemplateInput,
-  createTemplate,
-  deleteTemplate,
-  findTemplateById,
-  type ListTemplatesOptions,
-  listTemplates,
-} from './templates';
 // Share Tokens
 export {
   type CreateShareTokenInput,
@@ -242,18 +248,15 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
-// Webhooks (event subscriptions)
+// Templates (reusable prompt templates)
 export {
-  type CreateWebhookInput as CreateWebhookStorageInput,
-  type UpdateWebhookInput as UpdateWebhookStorageInput,
-  type WebhookOutput,
-  createWebhook,
-  deleteWebhook,
-  findWebhookById,
-  findWebhooksByEvent,
-  listWebhooks,
-  updateWebhook,
-} from './webhooks';
+  type CreateTemplateInput,
+  createTemplate,
+  deleteTemplate,
+  findTemplateById,
+  type ListTemplatesOptions,
+  listTemplates,
+} from './templates';
 // Turns
 export {
   type CreateTurnInput,
@@ -268,3 +271,15 @@ export {
   type ListTurnsOptions,
   TurnWindowError,
 } from './turns';
+// Webhooks (event subscriptions)
+export {
+  type CreateWebhookInput as CreateWebhookStorageInput,
+  createWebhook,
+  deleteWebhook,
+  findWebhookById,
+  findWebhooksByEvent,
+  listWebhooks,
+  type UpdateWebhookInput as UpdateWebhookStorageInput,
+  updateWebhook,
+  type WebhookOutput,
+} from './webhooks';

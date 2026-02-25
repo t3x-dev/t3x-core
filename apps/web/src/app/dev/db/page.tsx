@@ -28,7 +28,7 @@ const EXAMPLE_QUERIES = [
   { label: 'Conversations', sql: 'SELECT * FROM conversations ORDER BY created_at DESC LIMIT 10' },
   {
     label: 'Drafts',
-    sql: 'SELECT draft_id, bridge_id, status, LEFT(text, 50) as preview FROM drafts_v2 ORDER BY created_at DESC LIMIT 10',
+    sql: 'SELECT draft_id, bridge_id, status, LEFT(text, 50) as preview FROM agent_drafts ORDER BY created_at DESC LIMIT 10',
   },
 ];
 

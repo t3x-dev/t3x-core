@@ -8,10 +8,10 @@ import { generateProjectId } from '@t3x/core';
 import { desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
+  agentDrafts,
   branches,
   commitsV3,
   conversations,
-  drafts,
   type NewProject,
   type Project,
   projects,
@@ -157,8 +157,8 @@ export async function findProjectWithStats(
 
   const [draftCount] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(drafts)
-    .where(eq(drafts.projectId, projectId));
+    .from(agentDrafts)
+    .where(eq(agentDrafts.projectId, projectId));
 
   return {
     ...project,

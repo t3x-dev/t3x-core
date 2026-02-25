@@ -182,7 +182,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
     ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
 
     -- Drafts V2 table
-    CREATE TABLE IF NOT EXISTS drafts_v2 (
+    CREATE TABLE IF NOT EXISTS agent_drafts (
       draft_id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
@@ -198,8 +198,11 @@ async function initializeSchema(client: PGlite): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL,
       completed_at TIMESTAMPTZ
     );
-    CREATE INDEX IF NOT EXISTS idx_drafts_v2_project ON drafts_v2(project_id);
-    CREATE INDEX IF NOT EXISTS idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
+
+    -- Migration: rename drafts_v2 → agent_drafts for existing databases
+    ALTER TABLE IF EXISTS drafts_v2 RENAME TO agent_drafts;
 
     -- Segment Embeddings table
     CREATE TABLE IF NOT EXISTS segment_embeddings (
@@ -485,6 +488,31 @@ async function initializeSchema(client: PGlite): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+
+    -- Drafts V3 table (Workbench / pre-commit working area)
+    CREATE TABLE IF NOT EXISTS drafts_v3 (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      goal TEXT,
+      parent_commit_hash TEXT,
+      forked_from TEXT,
+      sentences_json JSONB NOT NULL DEFAULT '[]',
+      constraints_json JSONB NOT NULL DEFAULT '[]',
+      instructions TEXT,
+      preview_type TEXT,
+      preview_output TEXT,
+      preview_generated_at TIMESTAMPTZ,
+      status TEXT NOT NULL DEFAULT 'editing',
+      committed_as TEXT,
+      committed_leaf_id TEXT,
+      target_branch TEXT DEFAULT 'main',
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
