@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import * as schema from '../schema';
+import { seedBuiltinTemplates } from '../seed/templates';
 
 export type PGLiteDB = PgliteDatabase<typeof schema>;
 
@@ -54,6 +55,9 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
 
   // Run migrations/schema creation
   await initializeSchema(client);
+
+  // Seed builtin templates
+  await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
 
   return db;
 }
@@ -432,6 +436,24 @@ async function initializeSchema(client: PGlite): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
+
+    -- Templates table (reusable prompt templates for leaf generation)
+    CREATE TABLE IF NOT EXISTS templates (
+      template_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      leaf_type TEXT NOT NULL,
+      system_prompt TEXT NOT NULL,
+      user_prompt TEXT NOT NULL,
+      variables JSONB NOT NULL,
+      tags JSONB NOT NULL DEFAULT '[]',
+      is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
+    CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

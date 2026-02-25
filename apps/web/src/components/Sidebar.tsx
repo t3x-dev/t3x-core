@@ -8,6 +8,7 @@ import {
   FileText,
   Github,
   Home,
+  LayoutGrid,
   ListChecks,
   Moon,
   Rocket,
@@ -177,6 +178,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAgentDemo = pathname.startsWith('/agent-demo');
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
+  const isTemplates = pathname.startsWith('/templates');
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
   return (
@@ -240,6 +242,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <nav className={cn('flex flex-1 flex-col gap-1', collapsed ? 'items-center' : '')}>
           <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
             <Home className="h-5 w-5" />
+          </NavItem>
+
+          <NavItem
+            href="/templates"
+            label="Templates"
+            isActive={isTemplates}
+            collapsed={collapsed}
+          >
+            <LayoutGrid className="h-5 w-5" />
           </NavItem>
 
           <NavItem

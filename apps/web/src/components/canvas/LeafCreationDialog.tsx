@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2, Plus } from 'lucide-react';
+import { LayoutGrid, Loader2, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -160,6 +161,14 @@ export function LeafCreationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
+          <Link
+            href="/templates"
+            className="mr-auto flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+            onClick={() => onOpenChange(false)}
+          >
+            <LayoutGrid className="h-3 w-3" />
+            Or create from a template
+          </Link>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>
             Cancel
           </Button>
