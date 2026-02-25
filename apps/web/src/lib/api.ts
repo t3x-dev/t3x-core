@@ -1221,6 +1221,14 @@ export interface CommitV4 {
   message: string | null;
   branch: string | null;
   source_refs: CommitV4SourceRef[] | null;
+  merge_summary?: {
+    kept_identical: number;
+    resolved_conflicts: number;
+    kept_from_source: number;
+    kept_from_target: number;
+    discarded: number;
+    total_sentences: number;
+  } | null;
   position_x: number | null;
   position_y: number | null;
   created_at: string;
@@ -2013,6 +2021,10 @@ export interface EngineRun {
     workflow_id?: string;
     test_case?: string;
   } | null;
+  // v2.3: Report asset fields
+  title: string | null;
+  description: string | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -2086,6 +2098,10 @@ interface EngineRunRaw {
   fullTraceJson: string | null;
   // v2.1: Metadata for A/B test filtering
   metadataJson: string | null;
+  // v2.3: Report asset fields
+  title: string | null;
+  description: string | null;
+  tags: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2116,6 +2132,9 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
     status: raw.status,
     result: mergedResult as EngineRun['result'],
     metadata: safeJsonParse(raw.metadataJson, null),
+    title: raw.title ?? null,
+    description: raw.description ?? null,
+    tags: raw.tags ?? [],
     created_at: raw.createdAt,
     updated_at: raw.updatedAt,
   };
@@ -2126,6 +2145,24 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
  */
 export async function getEngineRun(runId: string): Promise<EngineRun> {
   const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`);
+  const data = await handleResponse<EngineRunRaw>(res);
+  return parseEngineRun(data);
+}
+
+/**
+ * Update run metadata (title, description, tags)
+ *
+ * v2.3: Report asset — partial update for run metadata.
+ */
+export async function updateEngineRun(
+  runId: string,
+  patch: { title?: string; description?: string; tags?: string[] }
+): Promise<EngineRun> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
   const data = await handleResponse<EngineRunRaw>(res);
   return parseEngineRun(data);
 }
@@ -2276,6 +2313,57 @@ export async function compareConfigurations(
     }),
   });
   return handleResponse<ComparisonResult>(res);
+}
+
+// ============================================================================
+// Saved Comparisons (A/B comparison snapshots)
+// ============================================================================
+
+export interface SavedComparison {
+  comparison_id: string;
+  project_id: string | null;
+  title: string;
+  control_config: { model: string; prompt_version: string };
+  treatment_config: { model: string; prompt_version: string };
+  control_run_ids: string[];
+  treatment_run_ids: string[];
+  result_snapshot: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function createSavedComparison(input: {
+  project_id?: string | null;
+  title: string;
+  control_config: { model: string; prompt_version: string };
+  treatment_config: { model: string; prompt_version: string };
+  control_run_ids: string[];
+  treatment_run_ids: string[];
+  result_snapshot: Record<string, unknown>;
+}): Promise<SavedComparison> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<SavedComparison>(res);
+}
+
+export async function listSavedComparisons(projectId?: string): Promise<SavedComparison[]> {
+  const params = projectId ? `?${buildQueryString({ project_id: projectId })}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/comparisons${params}`);
+  return handleResponse<SavedComparison[]>(res);
+}
+
+export async function getSavedComparison(comparisonId: string): Promise<SavedComparison> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`);
+  return handleResponse<SavedComparison>(res);
+}
+
+export async function deleteSavedComparison(comparisonId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
 }
 
 // ============================================================================
@@ -2918,7 +3006,7 @@ export interface ShareResolveResult {
 }
 
 export async function createShareLink(
-  entityType: 'leaf',
+  entityType: 'leaf' | 'run' | 'comparison',
   entityId: string
 ): Promise<ShareLink> {
   const res = await fetchWithTimeout(`${API_V1}/share`, {
@@ -2947,4 +3035,148 @@ export async function revokeShareLink(id: string): Promise<ShareLink> {
 export async function listShareLinks(entityType: string, entityId: string): Promise<ShareLink[]> {
   const res = await fetchWithTimeout(`${API_V1}/share/entity/${entityType}/${entityId}`);
   return handleResponse<ShareLink[]>(res);
+}
+
+// ============================================================================
+// Templates
+// ============================================================================
+
+export interface TemplateVariable {
+  name: string;
+  description: string;
+  required: boolean;
+  defaultValue?: string;
+}
+
+export interface Template {
+  template_id: string;
+  title: string;
+  description: string;
+  category: 'social' | 'business' | 'technical' | 'creative';
+  leaf_type: string;
+  system_prompt: string;
+  user_prompt: string;
+  variables: TemplateVariable[];
+  tags: string[];
+  is_builtin: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTemplateInput {
+  title: string;
+  description: string;
+  category: 'social' | 'business' | 'technical' | 'creative';
+  leaf_type: string;
+  system_prompt: string;
+  user_prompt: string;
+  variables: TemplateVariable[];
+  tags: string[];
+}
+
+export async function listTemplates(opts?: {
+  category?: string;
+  leaf_type?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Template[]> {
+  const params = new URLSearchParams();
+  if (opts?.category) params.set('category', opts.category);
+  if (opts?.leaf_type) params.set('leaf_type', opts.leaf_type);
+  if (opts?.search) params.set('search', opts.search);
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.offset) params.set('offset', String(opts.offset));
+  const qs = params.toString();
+  const res = await fetchWithTimeout(`${API_V1}/templates${qs ? `?${qs}` : ''}`);
+  return handleResponse<Template[]>(res);
+}
+
+export async function getTemplate(id: string): Promise<Template> {
+  const res = await fetchWithTimeout(`${API_V1}/templates/${id}`);
+  return handleResponse<Template>(res);
+}
+
+export async function createTemplate(input: CreateTemplateInput): Promise<Template> {
+  const res = await fetchWithTimeout(`${API_V1}/templates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<Template>(res);
+}
+
+export async function deleteTemplate(id: string): Promise<{ deleted: true }> {
+  const res = await fetchWithTimeout(`${API_V1}/templates/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<{ deleted: true }>(res);
+}
+
+// ============================================================================
+// Webhooks
+// ============================================================================
+
+export interface WebhookData {
+  webhook_id: string;
+  project_id: string | null;
+  url: string;
+  events: string[];
+  secret: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateWebhookInput {
+  url: string;
+  events: string[];
+  secret?: string;
+  project_id?: string;
+  active?: boolean;
+}
+
+export interface UpdateWebhookInput {
+  url?: string;
+  events?: string[];
+  secret?: string;
+  project_id?: string | null;
+  active?: boolean;
+}
+
+export async function listWebhooks(): Promise<WebhookData[]> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks`);
+  return handleResponse<WebhookData[]>(res);
+}
+
+export async function createWebhook(input: CreateWebhookInput): Promise<WebhookData> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<WebhookData>(res);
+}
+
+export async function updateWebhook(id: string, input: UpdateWebhookInput): Promise<WebhookData> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<WebhookData>(res);
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
+export async function testWebhook(id: string): Promise<{ status: number; ok: boolean }> {
+  const res = await fetchWithTimeout(`${API_V1}/webhooks/${id}/test`, {
+    method: 'POST',
+  });
+  return handleResponse<{ status: number; ok: boolean }>(res);
 }

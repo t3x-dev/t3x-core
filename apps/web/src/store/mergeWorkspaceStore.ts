@@ -100,7 +100,13 @@ interface MergeWorkspaceState {
   // Key: turn_hash, Value: loading state
   contextLoadingStates: Record<string, boolean>;
 
+  // Server-side merge checks (from backend API)
+  serverChecks: MergeCheck[];
+  serverChecksLoading: boolean;
+  serverChecksError: string | null;
+
   // Actions
+  fetchServerChecks: () => Promise<void>;
   loadDraft: (draftId: string) => Promise<void>;
   createDraft: (
     projectId: string,
@@ -141,6 +147,8 @@ export interface MergeCheck {
   label: string;
   passed: boolean;
   detail?: string;
+  /** 'frontend' checks gate merge; 'server' checks are advisory only */
+  source?: 'frontend' | 'server';
 }
 
 // ============================================================================
@@ -319,6 +327,9 @@ const initialState = {
   extendedResolutions: {} as Record<string, ExtendedResolutionData>,
   contextCache: {} as Record<string, CachedTurnContext>,
   contextLoadingStates: {} as Record<string, boolean>,
+  serverChecks: [] as MergeCheck[],
+  serverChecksLoading: false,
+  serverChecksError: null,
 };
 
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
@@ -478,7 +489,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { draftId, message, targetBranch } = get();
     if (!draftId) throw new Error('No draft to commit');
 
-    set({ loading: true, error: null });
+    // Don't set loading: true here — the MergeReviewDialog has its own
+    // 'committing' state. Setting loading would unmount MergeWorkspace
+    // (the page shows a spinner when loading=true) and kill the dialog.
+    set({ error: null });
 
     try {
       const commitResult = await fetchApi<CommitV3>(`/merge/drafts/${draftId}/commit`, {
@@ -489,7 +503,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         }),
       });
 
-      set({ status: 'committed', loading: false, isDirty: false });
+      set({ status: 'committed', isDirty: false });
 
       // Force canvas to reload data by clearing its projectId
       // This ensures the new merge commit will be displayed
@@ -501,7 +515,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       return commitResult;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
-      set({ loading: false, error: errorMsg });
+      set({ error: errorMsg });
       throw err;
     }
   },
@@ -531,6 +545,26 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   togglePreview: () => {
     set((state) => ({ previewExpanded: !state.previewExpanded }));
+  },
+
+  // ============================================================================
+  // Server Checks
+  // ============================================================================
+
+  fetchServerChecks: async () => {
+    const { draftId } = get();
+    if (!draftId) return;
+
+    set({ serverChecksLoading: true, serverChecksError: null });
+    try {
+      const result = await fetchApi<MergeCheck[]>(`/merge/drafts/${draftId}/checks`);
+      set({ serverChecks: result, serverChecksLoading: false });
+    } catch (err) {
+      set({
+        serverChecksLoading: false,
+        serverChecksError: err instanceof Error ? err.message : 'Failed to fetch server checks',
+      });
+    }
   },
 
   // ============================================================================
@@ -716,23 +750,25 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   getMergeChecks: (): MergeCheck[] => {
-    const { prepared, message, targetBranch } = get();
+    const { prepared, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewSentences = get().getPreviewSentences();
     const dev = useSettingsStore.getState().developerMode;
     const tm = (key: TermKey) => getTerminology(key, dev);
 
-    return [
+    const frontendChecks: MergeCheck[] = [
       {
         id: 'resolved',
-        label: `All conflicts resolved`,
+        label: 'All conflicts resolved',
         passed: unresolvedCount === 0,
         detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
+        source: 'frontend',
       },
       {
         id: 'message',
         label: `${tm('merge')} message provided`,
         passed: message.trim().length > 0,
+        source: 'frontend',
       },
       {
         id: 'sentences',
@@ -742,12 +778,14 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
           previewSentences.length > 0
             ? `${previewSentences.length} sentences`
             : 'No sentences in result',
+        source: 'frontend',
       },
       {
         id: 'target_branch',
         label: `Target ${tm('branch').toLowerCase()} identified`,
         passed: !!targetBranch,
         detail: targetBranch || undefined,
+        source: 'frontend',
       },
       {
         id: 'preview_computed',
@@ -756,8 +794,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         detail: prepared
           ? `${prepared.identical.length} kept, ${prepared.similarPairs.length} conflicts, ${prepared.onlyInSource.length + prepared.onlyInTarget.length} unique`
           : undefined,
+        source: 'frontend',
       },
     ];
+
+    // Append server-side checks (advisory: failed server checks don't block merge)
+    const taggedServerChecks = serverChecks.map((c) => ({ ...c, source: 'server' as const }));
+    return [...frontendChecks, ...taggedServerChecks];
   },
 
   getEffectiveResolution: (index: number) => {

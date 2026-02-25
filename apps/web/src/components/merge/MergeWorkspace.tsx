@@ -13,8 +13,11 @@
 import { motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
+import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
@@ -47,9 +50,13 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     togglePreview,
     getMergeChecks,
     getPreviewSentences,
+    extendedResolutions,
+    fetchServerChecks,
+    serverChecksLoading,
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
+  const { t } = useTerminology();
   const [showReviewDialog, setShowReviewDialog] = useState(false);
 
   // Auto-save when dirty (debounced)
@@ -92,7 +99,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
   const handleOpenReview = useCallback(() => {
     setShowReviewDialog(true);
-  }, []);
+    fetchServerChecks();
+  }, [fetchServerChecks]);
 
   const handleConfirmMerge = useCallback(async () => {
     await commitMerge();
@@ -108,15 +116,17 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <EmptyState
           icon={GitMerge}
-          title="No merge data available"
-          description="There is no merge in progress. Start a merge from the canvas by selecting two branches to compare."
+          title={`No ${t('merge').toLowerCase()} data available`}
+          description={`There is no ${t('merge').toLowerCase()} in progress. Start a ${t('merge').toLowerCase()} from the canvas by selecting two ${t('branches').toLowerCase()} to compare.`}
           action={{ label: 'Go Back', onClick: onClose }}
+          customIcon={<MergeIllustration />}
         />
       </div>
     );
   }
 
   const unresolvedCount = getUnresolvedCount();
+  const summary = prepared ? computeMergeSummary(prepared, extendedResolutions) : null;
   const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
 
   return (
@@ -136,6 +146,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         sourceBranch={sourceBranch || 'source'}
         targetBranch={targetBranch || 'main'}
         sentenceCount={getPreviewSentences().length}
+        summary={summary}
+        serverChecksLoading={serverChecksLoading}
         onBackToCanvas={onClose}
       />
 

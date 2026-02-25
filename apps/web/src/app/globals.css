@@ -327,18 +327,18 @@
 
   /* ===== Surface System — four semantic layers ===== */
   --surface-app: oklch(0.11 0.005 260);
-  --surface-panel: oklch(0.14 0.008 260 / 82%);
-  --surface-card: oklch(0.19 0.008 260 / 92%);
-  --surface-elevated: oklch(0.21 0.008 260 / 94%);
-  --surface-radial: oklch(0.13 0.008 260);
+  --surface-panel: oklch(0.15 0.008 260 / 84%);
+  --surface-card: oklch(0.2 0.008 260 / 93%);
+  --surface-elevated: oklch(0.22 0.008 260 / 95%);
+  --surface-radial: oklch(0.15 0.012 260);
 
-  /* ===== Stroke System ===== */
-  --stroke-default: oklch(1 0 0 / 12%);
-  --stroke-strong: oklch(1 0 0 / 18%);
-  --stroke-divider: oklch(1 0 0 / 8%);
-  --stroke-highlight-top: oklch(1 0 0 / 8%);
+  /* ===== Stroke System — WCAG AA: 3:1 for borders ===== */
+  --stroke-default: oklch(1 0 0 / 14%);
+  --stroke-strong: oklch(1 0 0 / 22%);
+  --stroke-divider: oklch(1 0 0 / 10%);
+  --stroke-highlight-top: oklch(1 0 0 / 10%);
   --stroke-shadow-bottom: oklch(0 0 0 / 25%);
-  --stroke-grid: oklch(1 0 0 / 4%);
+  --stroke-grid: oklch(1 0 0 / 5%);
 
   /* ===== FX System ===== */
   --fx-blur-panel: 8px;
@@ -376,10 +376,10 @@
   --status-info: #60a5fa;
   --status-info-muted: rgba(30, 58, 138, 0.3);
 
-  /* ===== Text Hierarchy ===== */
-  --text-primary: oklch(0.94 0.005 260);
-  --text-secondary: oklch(0.78 0.01 260);
-  --text-tertiary: oklch(0.62 0.01 260);
+  /* ===== Text Hierarchy — WCAG AA: 4.5:1 body text ===== */
+  --text-primary: oklch(0.95 0.005 260);
+  --text-secondary: oklch(0.8 0.01 260);
+  --text-tertiary: oklch(0.65 0.01 260);
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
@@ -419,19 +419,19 @@
 
   /* shadcn tokens — aligned with four-layer surface system */
   --background: oklch(0.11 0.005 260); /* = surface-app */
-  --foreground: oklch(0.94 0.005 260); /* = text-primary */
+  --foreground: oklch(0.95 0.005 260); /* = text-primary */
   --card: oklch(0.19 0.008 260); /* = surface-card */
-  --card-foreground: oklch(0.94 0.005 260);
+  --card-foreground: oklch(0.95 0.005 260);
   --popover: oklch(0.21 0.008 260); /* = surface-elevated */
-  --popover-foreground: oklch(0.94 0.005 260);
+  --popover-foreground: oklch(0.95 0.005 260);
   --primary: oklch(0.65 0.2 260);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.14 0.008 260); /* = surface-panel */
-  --secondary-foreground: oklch(0.94 0.005 260);
+  --secondary-foreground: oklch(0.95 0.005 260);
   --muted: oklch(0.14 0.008 260);
-  --muted-foreground: oklch(0.62 0.01 260); /* = text-tertiary */
+  --muted-foreground: oklch(0.65 0.01 260); /* = text-tertiary */
   --accent: oklch(0.19 0.008 260);
-  --accent-foreground: oklch(0.94 0.005 260);
+  --accent-foreground: oklch(0.95 0.005 260);
   --destructive: oklch(0.6 0.2 25);
   --border: oklch(1 0 0 / 12%); /* = stroke-default */
   --input: oklch(1 0 0 / 15%);
@@ -504,14 +504,19 @@ a {
   border-radius: 8px 4px 4px 8px;
 }
 
-/* Edge flow animation */
-@keyframes edge-flow {
-  from {
-    stroke-dashoffset: 24;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+/* Edge birth glow — bright pulse on new edges then fade out */
+@keyframes edge-birth-glow {
+  0% { opacity: 0; }
+  15% { opacity: 0.9; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+.edge-birth-glow {
+  animation: edge-birth-glow 1.2s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-birth-glow { animation: none !important; opacity: 0 !important; }
 }
 
 /* Subtle pulse for active connections */
@@ -536,6 +541,106 @@ a {
 @keyframes strokeDraw {
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* Node breathing glow — committed nodes pulse with border + shadow */
+:root {
+  --breathe-base: oklch(0.30 0 0 / 25%);
+  --breathe-commit-peak: oklch(0.50 0.20 260 / 60%);
+  --breathe-leaf-peak: oklch(0.50 0.18 155 / 60%);
+  --breathe-commit-glow: 0 0 8px 0 oklch(0.55 0.20 260 / 30%);
+  --breathe-leaf-glow: 0 0 8px 0 oklch(0.55 0.18 155 / 30%);
+}
+.dark {
+  --breathe-base: oklch(1 0 0 / 15%);
+  --breathe-commit-peak: oklch(0.60 0.20 260 / 50%);
+  --breathe-leaf-peak: oklch(0.60 0.18 155 / 50%);
+  --breathe-commit-glow: 0 0 12px 0 oklch(0.55 0.20 260 / 25%);
+  --breathe-leaf-glow: 0 0 12px 0 oklch(0.55 0.18 155 / 25%);
+}
+
+@keyframes node-breathe-commit {
+  0%, 100% {
+    border-color: var(--breathe-base);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    border-color: var(--breathe-commit-peak);
+    box-shadow: var(--breathe-commit-glow);
+  }
+}
+@keyframes node-breathe-leaf {
+  0%, 100% {
+    border-color: var(--breathe-base);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    border-color: var(--breathe-leaf-peak);
+    box-shadow: var(--breathe-leaf-glow);
+  }
+}
+.node-breathe-commit { animation: node-breathe-commit 4s ease-in-out infinite; }
+.node-breathe-leaf { animation: node-breathe-leaf 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .node-breathe-commit,
+  .node-breathe-leaf { animation: none !important; }
+}
+
+/* Marching ants — flowing dashed border for staging nodes */
+@keyframes march {
+  to { stroke-dashoffset: -12; }
+}
+.marching-ants { animation: march 0.8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .marching-ants { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════
+   Dark Mode Atmosphere — semantic node glow & edge brightness
+   All .dark scoped, zero impact on light mode
+   ═══════════════════════════════════════════ */
+
+/* 9.2 Node Semantic Glow — subtle halo per node type */
+.dark .node-glow-committed {
+  box-shadow: 0 0 0 1px oklch(0.55 0.15 260 / 0.15), 0 0 12px 0 oklch(0.55 0.15 260 / 0.08);
+}
+.dark .node-glow-pending {
+  box-shadow: 0 0 0 1px oklch(0.7 0.14 55 / 0.15), 0 0 12px 0 oklch(0.7 0.14 55 / 0.08);
+}
+.dark .node-glow-leaf {
+  box-shadow: 0 0 0 1px oklch(0.65 0.14 155 / 0.15), 0 0 12px 0 oklch(0.65 0.14 155 / 0.08);
+}
+
+/* ═══════════════════════════════════════════
+   Drag Micro-interactions — lift, shadow, bounce-back
+   ═══════════════════════════════════════════ */
+
+/* Lift: elevate and scale up when dragging */
+.react-flow__node.dragging { z-index: 1000 !important; }
+.react-flow__node.dragging > div {
+  transform: scale(1.02);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* Bounce-back: overshoot easing on drop */
+.react-flow__node:not(.dragging) > div {
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease;
+}
+
+/* Dark mode drag glow */
+.dark .react-flow__node.dragging > div {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2), 0 0 20px rgba(59,130,246,0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.dragging > div,
+  .react-flow__node:not(.dragging) > div {
+    transition: none !important;
+    transform: none !important;
   }
 }
 
@@ -580,6 +685,8 @@ a {
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Keyboard focus ring — handled by UnitNode's tone-aware ring-2 classes */
 
 /* Selection is handled by the inner motion.div with rounded corners via Tailwind ring */
 
@@ -847,4 +954,26 @@ a {
    ============================================ */
 .dark .react-flow__background {
   --xy-background-color-default: var(--surface-app);
+}
+
+/* ============================================
+   Information Density: Compact Mode
+   ============================================ */
+[data-density="compact"] {
+  --space-page: 16px;
+  --space-section: 12px;
+  --space-group: 10px;
+  --space-item: 4px;
+  --space-inline: 4px;
+  --text-body: 13px;
+  --text-sm: 11px;
+  --text-xs: 10px;
+}
+
+[data-density="compact"] .react-flow__node {
+  font-size: 12px;
+}
+
+[data-density="compact"] table {
+  font-size: 12px;
 }

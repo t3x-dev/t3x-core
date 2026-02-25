@@ -22,7 +22,7 @@ import {
   updateDraftStatus,
 } from '../queries/drafts';
 import { insertProject } from '../queries/projects';
-import { drafts } from '../schema';
+import { agentDrafts as drafts } from '../schema';
 import { createTestDB, testData } from './setup';
 
 describe('Drafts Storage', () => {

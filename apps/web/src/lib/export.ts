@@ -288,11 +288,27 @@ function getExportFilename(leaf: Leaf, extension: string): string {
 // Export Actions (convenience functions)
 // ============================================================================
 
-export type ExportFormat = 'clipboard' | 'markdown' | 'json';
+export type ExportFormat = 'clipboard' | 'markdown' | 'json' | 'prompt';
 
 export interface ExportResult {
   success: boolean;
   message: string;
+}
+
+/**
+ * Format a leaf as prompt text (system + user prompt from config)
+ */
+export function formatLeafAsPrompt(leaf: Leaf): string {
+  const lines: string[] = [];
+
+  const promptTemplate = leaf.config?.prompt_template;
+  if (promptTemplate) {
+    lines.push(promptTemplate);
+  } else if (leaf.output) {
+    lines.push(leaf.output);
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -312,6 +328,17 @@ export async function exportLeaf(leaf: Leaf, format: ExportFormat): Promise<Expo
         const copied = await copyToClipboard(text);
         return copied
           ? { success: true, message: 'Output copied to clipboard' }
+          : { success: false, message: 'Failed to copy to clipboard' };
+      }
+
+      case 'prompt': {
+        const prompt = formatLeafAsPrompt(leaf);
+        if (!prompt) {
+          return { success: false, message: 'No prompt to copy' };
+        }
+        const copied = await copyToClipboard(prompt);
+        return copied
+          ? { success: true, message: 'Prompt copied to clipboard' }
           : { success: false, message: 'Failed to copy to clipboard' };
       }
 

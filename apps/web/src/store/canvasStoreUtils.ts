@@ -40,7 +40,7 @@ export const getNodeCounter = () => nodeCounter;
 export const nextNodeId = () => `node-${nodeCounter++}`;
 export const nextEdgeId = () => `edge-${edgeCounter++}`;
 export const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 };
-export const edgeType: Edge['type'] = 'smoothstep';
+export const edgeType: Edge['type'] = 'animated';
 export const conversationCommitOffset = 300;
 export const commitQuickOffset = conversationCommitOffset + 40;
 const reactFlowGridSize = 16;
@@ -583,6 +583,7 @@ export const unitToNode = (
             },
             message: originalV4.message ?? undefined,
             branch: originalV4.branch ?? undefined,
+            merge_summary: originalV4.merge_summary ?? undefined,
           }
         : undefined,
     },

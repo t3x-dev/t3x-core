@@ -1,0 +1,152 @@
+{
+  "name": "T3X: Merge Notify (Slack)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "merge-notify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "b2c3d4e5-0002-4000-8000-ffffffffffff"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "event",
+              "value": "={{ $json.body ? $json.body.event : $json.event }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "commit_hash",
+              "value": "={{ $json.body ? $json.body.payload.commit_hash : $json.payload.commit_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "project_id",
+              "value": "={{ $json.body ? $json.body.payload.project_id : $json.payload.project_id }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "source_branch",
+              "value": "={{ $json.body ? $json.body.payload.source_branch : $json.payload.source_branch }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "target_branch",
+              "value": "={{ $json.body ? $json.body.payload.target_branch : $json.payload.target_branch }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "slack_text",
+              "value": "=:merged: *T3X Merge Completed*\n\n*Project:* `{{ $json.body ? $json.body.payload.project_id : $json.payload.project_id }}`\n*Branches:* `{{ $json.body ? $json.body.payload.source_branch : $json.payload.source_branch }}` → `{{ $json.body ? $json.body.payload.target_branch : $json.payload.target_branch }}`\n*Commit:* `{{ ($json.body ? $json.body.payload.commit_hash : $json.payload.commit_hash).substring(0, 16) }}...`",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000002",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body ? ($('Webhook').item.json.body.slack_webhook_url || 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL') : ($('Webhook').item.json.slack_webhook_url || 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL') }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.slack_text }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"T3X Merge Completed\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Project:*\\n`{{ $json.project_id }}`\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Commit:*\\n`{{ $json.commit_hash.substring(0, 16) }}...`\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Source:*\\n`{{ $json.source_branch }}`\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Target:*\\n`{{ $json.target_branch }}`\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000003",
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Slack notification sent\", \"project_id\": $('Format Message').item.json.project_id, \"commit_hash\": $('Format Message').item.json.commit_hash } }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000004",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Slack Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "t3x",
+      "id": "t3x-tag-1"
+    },
+    {
+      "name": "notification",
+      "id": "t3x-tag-3"
+    }
+  ]
+}

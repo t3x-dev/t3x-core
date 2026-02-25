@@ -7,6 +7,9 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { GuidedTour } from '@/components/onboarding/GuidedTour';
 import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
+import { ListView } from '@/components/project/ListView';
+import { TimelineView } from '@/components/project/TimelineView';
+import { ViewSwitcher } from '@/components/project/ViewSwitcher';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useSettingsStore, type ViewMode } from '@/store/settingsStore';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -28,6 +32,13 @@ export default function ProjectDetailPage() {
   const [mode, setMode] = useState<'editor' | 'execution'>(() => {
     const urlMode = searchParams.get('mode');
     return urlMode === 'execution' ? 'execution' : 'editor';
+  });
+
+  const defaultView = useSettingsStore((s) => s.defaultView);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const urlView = searchParams.get('view');
+    if (urlView === 'timeline' || urlView === 'list') return urlView;
+    return defaultView;
   });
 
   // Canvas store for loading project data
@@ -185,14 +196,27 @@ export default function ProjectDetailPage() {
     <div className="flex h-full flex-col">
       <GuidedTour ready={canvasReady} />
       <QuickStartChecklist nodeTypes={nodeTypes} />
-      {mode === 'editor' ? (
+      {mode === 'editor' && viewMode === 'canvas' ? (
         <CanvasWorkspace
           projectName={project.name}
           mode={mode}
           onModeChange={handleModeChange}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
+          viewSwitcher={<ViewSwitcher value={viewMode} onChange={setViewMode} />}
         />
+      ) : mode === 'editor' && (viewMode === 'timeline' || viewMode === 'list') ? (
+        <div className="flex h-full flex-col">
+          <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{project.name}</h2>
+            <ViewSwitcher value={viewMode} onChange={setViewMode} />
+          </header>
+          {viewMode === 'timeline' ? (
+            <TimelineView projectId={projectId} />
+          ) : (
+            <ListView projectId={projectId} />
+          )}
+        </div>
       ) : (
         <div className="relative flex h-full flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">

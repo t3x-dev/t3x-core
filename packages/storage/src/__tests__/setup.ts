@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Drafts (drafts_v2)
-CREATE TABLE IF NOT EXISTS drafts_v2 (
+-- Agent Drafts (formerly drafts_v2)
+CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   message TEXT,
   branch TEXT,
   source_refs JSONB,
+  merge_summary JSONB,
   position_x REAL,
   position_y REAL,
 
@@ -203,8 +204,8 @@ CREATE INDEX IF NOT EXISTS idx_commits_v2_project ON commits_v2(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v2_branch ON commits_v2(branch);
 CREATE INDEX IF NOT EXISTS idx_commits_v2_draft ON commits_v2(draft_id);
 CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v2_project ON drafts_v2(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
+CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
+CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
@@ -281,6 +282,9 @@ CREATE TABLE IF NOT EXISTS runs (
   trace_policy TEXT DEFAULT 'on_failure',
   full_trace_json TEXT,
   metadata_json TEXT,
+  title TEXT,
+  description TEXT,
+  tags JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -302,6 +306,63 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+CREATE TABLE IF NOT EXISTS saved_comparisons (
+  comparison_id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  control_config JSONB NOT NULL,
+  treatment_config JSONB NOT NULL,
+  control_run_ids JSONB NOT NULL DEFAULT '[]',
+  treatment_run_ids JSONB NOT NULL DEFAULT '[]',
+  result_snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
+CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
+
+-- Templates
+CREATE TABLE IF NOT EXISTS templates (
+  template_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  category TEXT NOT NULL,
+  leaf_type TEXT NOT NULL,
+  system_prompt TEXT NOT NULL,
+  user_prompt TEXT NOT NULL,
+  variables JSONB NOT NULL,
+  tags JSONB NOT NULL DEFAULT '[]',
+  is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
+CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
+
+-- Drafts V3 (Workbench / pre-commit working area)
+CREATE TABLE IF NOT EXISTS drafts_v3 (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  goal TEXT,
+  parent_commit_hash TEXT,
+  forked_from TEXT,
+  sentences_json JSONB NOT NULL DEFAULT '[]',
+  constraints_json JSONB NOT NULL DEFAULT '[]',
+  instructions TEXT,
+  preview_type TEXT,
+  preview_output TEXT,
+  preview_generated_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'editing',
+  committed_as TEXT,
+  committed_leaf_id TEXT,
+  target_branch TEXT DEFAULT 'main',
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 `;
 
 /**

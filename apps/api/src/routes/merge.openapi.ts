@@ -12,7 +12,7 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input } from '@t3x/core';
+import type { CreateCommitV4Input, MergeSummaryData } from '@t3x/core';
 import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
 import {
   commitMergeDraft,
@@ -27,6 +27,8 @@ import {
 } from '@t3x/storage';
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
+import { computeMergeChecks } from '../lib/merge-checks';
+import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExecuteMergeRequestSchema,
@@ -251,6 +253,21 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       mergeCommit.branch = branch;
     }
 
+    // Compute merge summary from prepared data
+    const keptFromSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
+    const keptFromTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
+    const discardedSource = prepared.onlyInSource.filter((c: { keep: boolean }) => !c.keep).length;
+    const discardedTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => !c.keep).length;
+    const mergeSummary: MergeSummaryData = {
+      kept_identical: prepared.identical.length,
+      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
+        .length,
+      kept_from_source: keptFromSource,
+      kept_from_target: keptFromTarget,
+      discarded: discardedSource + discardedTarget,
+      total_sentences: mergeCommit.content.sentences.length,
+    };
+
     // Convert to CreateCommitV4Input format
     const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
@@ -259,6 +276,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       project_id: projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
+      merge_summary: mergeSummary,
     };
 
     // Save to storage as V4 commit
@@ -269,7 +287,19 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       await updateBranchHead(db, projectId, branch, mergeCommit.hash);
     }
 
-    return c.json({ success: true as const, data: mergeCommit }, 200);
+    // Fire webhook event (fire-and-forget)
+    webhookDispatcher.dispatch('merge.completed', {
+      commit_hash: mergeCommit.hash,
+      project_id: projectId,
+      source_hash,
+      target_hash,
+      branch: branch || null,
+    }, projectId);
+
+    return c.json(
+      { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },
+      200
+    );
   } catch (error) {
     return c.json(
       {
@@ -645,6 +675,25 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     const targetBranch = branch || draft.targetBranch || 'main';
     mergeCommit.branch = targetBranch;
 
+    // Compute merge summary from prepared data
+    const draftKeptSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
+    const draftKeptTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
+    const draftDiscardedSource = prepared.onlyInSource.filter(
+      (c: { keep: boolean }) => !c.keep
+    ).length;
+    const draftDiscardedTarget = prepared.onlyInTarget.filter(
+      (c: { keep: boolean }) => !c.keep
+    ).length;
+    const draftMergeSummary: MergeSummaryData = {
+      kept_identical: prepared.identical.length,
+      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
+        .length,
+      kept_from_source: draftKeptSource,
+      kept_from_target: draftKeptTarget,
+      discarded: draftDiscardedSource + draftDiscardedTarget,
+      total_sentences: mergeCommit.content.sentences.length,
+    };
+
     // Convert to CreateCommitV4Input format
     const commitInput: CreateCommitV4Input = {
       parents: mergeCommit.parents,
@@ -653,6 +702,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       project_id: draft.projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
+      merge_summary: draftMergeSummary,
     };
 
     // Save to storage as V4 commit
@@ -664,7 +714,10 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     // Mark draft as committed
     await commitMergeDraft(db, id);
 
-    return c.json({ success: true as const, data: mergeCommit }, 200);
+    return c.json(
+      { success: true as const, data: { ...mergeCommit, merge_summary: draftMergeSummary } },
+      200
+    );
   } catch (error) {
     return c.json(
       {
@@ -727,4 +780,68 @@ mergeRoutes.openapi(deleteDraftRoute, async (c) => {
   }
 
   return c.json({ success: true as const, data: { deleted: true } }, 200);
+});
+
+// ============================================================================
+// GET /v1/merge/drafts/:id/checks - Get merge validation checks
+// ============================================================================
+
+const MergeCheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  passed: z.boolean(),
+  detail: z.string().optional(),
+});
+
+const getDraftChecksRoute = createRoute({
+  method: 'get',
+  path: '/v1/merge/drafts/{id}/checks',
+  tags: ['Merge'],
+  summary: 'Get merge validation checks for a draft',
+  description: `
+Returns server-side validation checks for a merge draft:
+- **constraints_satisfied**: Whether merged text satisfies all Leaf constraints
+- **evidence_chain_complete**: Whether all sentences have source references
+- **eval_passed**: (Optional) Latest evaluation run status for associated Leaves
+  `.trim(),
+  request: {
+    params: DraftIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Merge checks computed',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.array(MergeCheckSchema)),
+        },
+      },
+    },
+    404: {
+      description: 'Draft not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+mergeRoutes.openapi(getDraftChecksRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const db = await getDB();
+
+  const draft = await getMergeDraft(db, id);
+  if (!draft) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
+  }
+
+  const checks = await computeMergeChecks(db, draft);
+  return c.json({ success: true as const, data: checks }, 200);
 });

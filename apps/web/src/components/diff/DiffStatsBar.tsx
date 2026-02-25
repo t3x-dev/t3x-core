@@ -1,5 +1,9 @@
 'use client';
 
+import { useCountUp } from '@/hooks/useCountUp';
+import { Check, Minus, Pencil, Plus } from 'lucide-react';
+import { useTerminology } from '@/hooks/useTerminology';
+
 interface DiffStatsBarProps {
   identical: number;
   modified: number;
@@ -9,33 +13,43 @@ interface DiffStatsBarProps {
 }
 
 export function DiffStatsBar({ identical, modified, added, removed, onJump }: DiffStatsBarProps) {
+  const { t } = useTerminology();
+  const aIdentical = useCountUp(identical);
+  const aModified = useCountUp(modified);
+  const aAdded = useCountUp(added);
+  const aRemoved = useCountUp(removed);
+
   const items = [
     {
       key: 'identical',
-      label: 'Identical',
-      count: identical,
+      label: t('identical_sentences'),
+      count: aIdentical,
       color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
+      icon: Check,
     },
     {
       key: 'modified',
-      label: 'Modified',
-      count: modified,
+      label: t('modified_sentences'),
+      count: aModified,
       color:
         'border border-[var(--diff-modified-line)]/40 text-[var(--diff-modified-line)] bg-transparent',
+      icon: Pencil,
     },
     {
       key: 'added',
-      label: 'Added',
-      count: added,
+      label: t('added_sentences'),
+      count: aAdded,
       color:
         'border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent',
+      icon: Plus,
     },
     {
       key: 'removed',
-      label: 'Removed',
-      count: removed,
+      label: t('removed_sentences'),
+      count: aRemoved,
       color:
         'border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent',
+      icon: Minus,
     },
   ];
 
@@ -49,6 +63,7 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
           disabled={item.count === 0}
           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${item.color} ${item.count === 0 ? 'text-[var(--text-tertiary)] cursor-default' : 'hover:brightness-110 cursor-pointer'}`}
         >
+          <item.icon className="h-3 w-3" />
           <span>{item.label}</span>
           <span>{item.count}</span>
         </button>

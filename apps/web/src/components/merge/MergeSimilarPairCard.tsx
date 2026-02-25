@@ -1,4 +1,6 @@
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useCallback, useRef } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -22,6 +24,7 @@ interface MergeSimilarPairCardProps {
  */
 export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps) {
   const resolveSimilarPair = useCanvasStore((s) => s.resolveSimilarPair);
+  const { t } = useTerminology();
   const isResolved = pair.resolution !== undefined;
   const isUpdatingRef = useRef(false);
 
@@ -67,9 +70,10 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
         />
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-[var(--text-primary)]">Keep source</span>
-            <span className="inline-flex items-center rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
-              Source
+            <span className="font-medium text-[var(--text-primary)]">{t('keep_source')}</span>
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
+              <ArrowLeft className="h-2.5 w-2.5" />
+              {t('source')}
             </span>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">{pair.source.text}</div>
@@ -92,9 +96,10 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
         />
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-[var(--text-primary)]">Keep target</span>
-            <span className="inline-flex items-center rounded-full border border-[var(--accent-pending)]/40 text-[var(--accent-pending)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
-              Target
+            <span className="font-medium text-[var(--text-primary)]">{t('keep_target')}</span>
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--accent-pending)]/40 text-[var(--accent-pending)] bg-transparent px-1.5 py-0 text-[10px] font-medium">
+              <ArrowRight className="h-2.5 w-2.5" />
+              {t('target')}
             </span>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">{pair.target.text}</div>

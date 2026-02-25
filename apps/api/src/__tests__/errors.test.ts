@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 36 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(36);
+  it('has 37 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(37);
   });
 
   it('key equals value for every code', () => {
@@ -58,6 +58,7 @@ describe('ErrorCodes', () => {
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
+        "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
       }
     `);
   });

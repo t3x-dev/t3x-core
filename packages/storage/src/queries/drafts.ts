@@ -7,7 +7,11 @@
 import { computeTextHash, generateDraftId } from '@t3x/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type Draft, drafts, type NewDraft } from '../schema';
+import { type AgentDraft, agentDrafts, type NewAgentDraft } from '../schema';
+
+/** @deprecated Use AgentDraft instead */
+type Draft = AgentDraft;
+const drafts = agentDrafts;
 
 export type DraftStatus = 'ephemeral' | 'adopted' | 'superseded';
 
@@ -119,7 +123,7 @@ export async function updateDraft(
   const existing = await findDraftById(db, draftId);
   if (!existing) return null;
 
-  const updates: Partial<NewDraft> = {};
+  const updates: Partial<NewAgentDraft> = {};
   if (input.text !== undefined) updates.text = input.text;
   if (input.mustHave !== undefined) updates.mustHaveJson = JSON.stringify(input.mustHave);
   if (input.bridgePayload !== undefined)

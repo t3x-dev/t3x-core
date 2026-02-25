@@ -55,26 +55,25 @@ export function CanvasStatusBar() {
     return { commits, staging, branches: branches.size, leaves };
   }, [nodes]);
 
-  const branchLabel = t('branch').toLowerCase();
-  const commitLabel = t('commit').toLowerCase();
-
   return (
     <footer className="flex h-7 shrink-0 items-center border-t border-border/50 bg-muted/80 text-xs text-muted-foreground backdrop-blur-sm">
       <Segment>
         <GitBranch className="h-3 w-3" />
         <span>
-          {stats.branches} {stats.branches === 1 ? branchLabel : `${branchLabel}s`}
+          {stats.branches} {t(stats.branches === 1 ? 'branch' : 'branches').toLowerCase()}
         </span>
       </Segment>
       <Segment>
         <GitCommitHorizontal className="h-3 w-3" />
         <span>
-          {stats.commits} {stats.commits === 1 ? commitLabel : `${commitLabel}s`}
+          {stats.commits} {t(stats.commits === 1 ? 'commit' : 'commits').toLowerCase()}
         </span>
       </Segment>
       {stats.staging > 0 && (
         <Segment>
-          <span className="text-[var(--accent-pending)]">{stats.staging} pending</span>
+          <span className="text-[var(--accent-pending)]">
+            {stats.staging} {t('pending').toLowerCase()}
+          </span>
         </Segment>
       )}
       <Segment border={false}>

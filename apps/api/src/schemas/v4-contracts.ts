@@ -491,6 +491,20 @@ export type UpdateConversationContextRequestType = z.infer<typeof UpdateConversa
 export type ConversationContextResponseType = z.infer<typeof ConversationContextResponse>;
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Merge Checks API
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const MergeCheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  passed: z.boolean(),
+  detail: z.string().optional(),
+});
+
+export const MergeChecksResponse = SuccessResponse(z.array(MergeCheckSchema));
+export type MergeCheckType = z.infer<typeof MergeCheckSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Merge V4 API
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -550,3 +564,125 @@ export type BatchLeafConfigType = z.infer<typeof BatchLeafConfig>;
 export type BatchGenerateRequestType = z.infer<typeof BatchGenerateRequest>;
 export type BatchLeafResultType = z.infer<typeof BatchLeafResult>;
 export type BatchGenerateResponseType = z.infer<typeof BatchGenerateResponse>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Draft V3 API (Workbench)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const DraftSentenceOriginSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('extracted'),
+    segment_id: z.string(),
+    confidence: z.number().min(0).max(1),
+  }),
+  z.object({ type: z.literal('selected') }),
+  z.object({ type: z.literal('manual') }),
+]);
+
+export const DraftSentenceSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  origin: DraftSentenceOriginSchema,
+  source: z
+    .object({
+      conversation_id: z.string(),
+      conversation_title: z.string().optional(),
+      turn_hash: z.string(),
+      role: z.string(),
+      start_char: z.number(),
+      end_char: z.number(),
+    })
+    .optional(),
+  position: z.number().int().min(0),
+  included: z.boolean(),
+});
+
+export const DraftConstraintSchema = z.object({
+  id: z.string(),
+  type: z.enum(['require', 'exclude']),
+  match_mode: z.enum(['exact', 'semantic']),
+  value: z.string().min(1),
+  reason: z.string().optional(),
+});
+
+// POST /v1/drafts
+export const CreateDraftRequest = z.object({
+  project_id: z.string().min(1),
+  title: z.string().min(1).max(500),
+  goal: z.string().max(2000).optional(),
+  parent_commit_hash: z.string().optional(),
+  target_branch: z.string().optional(),
+  preview_type: z.string().optional(),
+});
+
+// PATCH /v1/drafts/:id
+export const UpdateDraftRequest = z.object({
+  title: z.string().min(1).max(500).optional(),
+  goal: z.string().max(2000).optional(),
+  sentences: z.array(DraftSentenceSchema).optional(),
+  constraints: z.array(DraftConstraintSchema).optional(),
+  instructions: z.string().max(5000).optional(),
+  preview_type: z.string().optional(),
+  target_branch: z.string().optional(),
+  if_revision: z.number().int().min(1),
+});
+
+// Response
+export const DraftResponse = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  title: z.string(),
+  goal: z.string().nullable(),
+  parent_commit_hash: z.string().nullable(),
+  forked_from: z.string().nullable(),
+  sentences: z.array(DraftSentenceSchema),
+  constraints: z.array(DraftConstraintSchema),
+  instructions: z.string().nullable(),
+  preview_type: z.string().nullable(),
+  preview_output: z.string().nullable(),
+  preview_generated_at: z.string().nullable(),
+  status: z.enum(['editing', 'committed', 'abandoned']),
+  committed_as: z.string().nullable(),
+  committed_leaf_id: z.string().nullable(),
+  target_branch: z.string().nullable(),
+  revision: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+// POST /v1/drafts/:id/preview
+export const PreviewDraftRequest = z
+  .object({
+    preview_type: z.string().optional(),
+  })
+  .optional();
+
+export const PreviewDraftResponse = SuccessResponse(
+  z.object({
+    output: z.string(),
+    model_used: z.string(),
+    token_count: z.number(),
+    cached: z.boolean(),
+  })
+);
+
+// POST /v1/drafts/:id/commit
+export const CommitDraftRequest = z.object({
+  message: z.string().optional(),
+});
+
+export const CommitDraftResponse = SuccessResponse(
+  z.object({
+    commit: CommitV4Response,
+    leaf: LeafResponse.nullable(),
+    draft_status: z.literal('committed'),
+  })
+);
+
+// POST /v1/drafts/:id/fork
+export const ForkDraftResponse = SuccessResponse(DraftResponse);
+
+// Type exports
+export type CreateDraftRequestType = z.infer<typeof CreateDraftRequest>;
+export type UpdateDraftRequestType = z.infer<typeof UpdateDraftRequest>;
+export type DraftResponseType = z.infer<typeof DraftResponse>;

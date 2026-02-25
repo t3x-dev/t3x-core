@@ -30,6 +30,18 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   committed: { default: '已保存', developer: 'Committed' },
   pending: { default: '进行中', developer: 'Pending' },
 
+  // Extended nouns / labels
+  create_commit: { default: 'Save Knowledge', developer: 'Create Commit' },
+  create_branch: { default: 'Create Version', developer: 'Create Branch' },
+  select_branch: { default: 'Select Version', developer: 'Select Branch' },
+  commit_history: { default: 'History', developer: 'Commit History' },
+  commit_hash: { default: 'ID', developer: 'Hash', showInDefault: false },
+  parent_commit: { default: 'Previous', developer: 'Parent Commit' },
+  branch_name: { default: 'Version', developer: 'Branch' },
+  pending_changes: { default: 'In Progress', developer: 'Pending Changes' },
+  conversation: { default: 'Conversation', developer: 'Conversation' },
+  empty_canvas: { default: 'Start your first conversation', developer: 'Empty canvas' },
+
   // Merge sentence categories
   identical_sentences: { default: '未变化', developer: 'Identical' },
   modified_sentences: { default: '已修改', developer: 'Modified' },
@@ -43,6 +55,19 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   pushAction: { default: 'Publish', developer: 'Push' },
   pullAction: { default: 'Sync', developer: 'Pull' },
 
+  // Diff / Merge labels
+  source: { default: '原版', developer: 'Source' },
+  target: { default: '新版', developer: 'Target' },
+  only_in_source: { default: '仅在原版', developer: 'Only in Source' },
+  only_in_target: { default: '仅在新版', developer: 'Only in Target' },
+  conflicts: { default: '冲突', developer: 'Conflicts' },
+  keep_source: { default: '保留原版', developer: 'Keep Source' },
+  keep_target: { default: '保留新版', developer: 'Keep Target' },
+  keep_both: { default: '全部保留', developer: 'Keep Both' },
+  similarity: { default: '相似度', developer: 'Similarity' },
+  auto_kept: { default: '自动保留', developer: 'Auto-kept' },
+  preview: { default: '预览', developer: 'Preview' },
+
   // Merge Review / Preview
   mergePreview: { default: '合并预览', developer: 'Merge Preview' },
   mergeReview: { default: 'Review Changes', developer: 'Merge Review' },
@@ -50,6 +75,19 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   mergeReviewCancel: { default: 'Go Back', developer: 'Cancel' },
   unresolved: { default: 'Needs Decision', developer: 'Unresolved' },
   resolved: { default: 'Decided', developer: 'Resolved' },
+
+  // Batch 4: Command palette, tooltips, empty states
+  search_command: { default: '搜索命令...', developer: 'Search commands...' },
+  no_results: { default: '没有找到结果', developer: 'No results found' },
+  empty_project: {
+    default: '还没有内容，开始你的第一个对话',
+    developer: 'Empty project. Create a conversation to start',
+  },
+  loading: { default: '加载中...', developer: 'Loading...' },
+  all_branches: { default: '全部变体', developer: 'All branches' },
+  configure_and_commit: { default: '配置并保存', developer: 'Configure and commit this unit' },
+  new_branch_name: { default: '输入新变体名称', developer: 'Enter new branch name' },
+  draft_from: { default: '草稿来自', developer: 'Draft from' },
 };
 
 export type TermKey = keyof typeof TERMINOLOGY;

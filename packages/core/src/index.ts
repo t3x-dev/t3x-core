@@ -107,6 +107,8 @@ export {
   type ConstraintCheckResult,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
+  // Default templates
+  DEFAULT_TEMPLATES,
   formatConstraints,
   type GenerateOptions,
   type GenerateResult,
@@ -114,8 +116,11 @@ export {
   generateAssertionId,
   // Generation (GEN-2)
   generateLeafOutput,
+  getAllDefaultTemplates,
+  getDefaultTemplate,
   getTypeInstructions,
   isGenerationConfigured,
+  type LeafTemplate,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
@@ -124,6 +129,7 @@ export {
   // Validation (VAL-1, VAL-2)
   validateConstraints,
   validateConstraintsExactOnly,
+  validateTemplateSyntax,
 } from './leaf';
 // LLM Provider (interface)
 export {
@@ -215,11 +221,18 @@ export {
   type ConversationContext,
   // Input types
   type CreateCommitV4Input,
+  // Draft (Workbench)
+  type CreateDraftInput as CreateDraftV3Input,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
   DEPLOY_TYPES,
   type DeployType,
+  type Draft,
+  type DraftConstraint,
+  type DraftSentence,
+  type DraftSentenceOrigin,
+  type DraftStatus as DraftV4Status,
   type ExcludeConstraint as ExcludeConstraintV4,
   // ID Prefixes
   ID_PREFIXES,
@@ -231,6 +244,8 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
+  // Merge summary
+  type MergeSummaryData,
   type MergeV4Candidate,
   // Merge V4 types
   type MergeV4Result,

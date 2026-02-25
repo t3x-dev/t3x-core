@@ -15,6 +15,8 @@ import {
   findShareTokenById,
   findShareTokenByToken,
   findShareTokensByEntity,
+  getComparison,
+  getRun,
   revokeShareToken,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
@@ -80,6 +82,22 @@ shareRoutes.openapi(createShareRoute, async (c) => {
         return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Leaf not found: ${body.entity_id}`);
       }
       projectId = leaf.project_id;
+    } else if (body.entity_type === 'run') {
+      const run = await getRun(db, body.entity_id);
+      if (!run) {
+        return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Run not found: ${body.entity_id}`);
+      }
+      projectId = run.projectId ?? undefined;
+    } else if (body.entity_type === 'comparison') {
+      const comparison = await getComparison(db, body.entity_id);
+      if (!comparison) {
+        return errorResponse(
+          c,
+          'SHARE_ENTITY_NOT_FOUND',
+          `Comparison not found: ${body.entity_id}`
+        );
+      }
+      projectId = comparison.projectId || undefined;
     }
 
     if (!projectId) {
@@ -148,12 +166,19 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
       return errorResponse(c, 'SHARE_TOKEN_NOT_FOUND', 'Share link not found or expired');
     }
 
-    // Fetch the entity (v0: leaf only)
-    if (shareToken.entity_type !== 'leaf') {
+    // Fetch the entity based on type
+    let entity: unknown;
+
+    if (shareToken.entity_type === 'leaf') {
+      entity = await findLeafById(db, shareToken.entity_id);
+    } else if (shareToken.entity_type === 'run') {
+      entity = await getRun(db, shareToken.entity_id);
+    } else if (shareToken.entity_type === 'comparison') {
+      entity = await getComparison(db, shareToken.entity_id);
+    } else {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Unsupported entity type');
     }
 
-    const entity = await findLeafById(db, shareToken.entity_id);
     if (!entity) {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Shared entity no longer exists');
     }
@@ -240,7 +265,9 @@ const listShareRoute = createRoute({
   description: 'Returns all active (non-revoked) share links for a specific entity.',
   request: {
     params: z.object({
-      entityType: z.enum(['leaf']).openapi({ description: 'Type of shared entity' }),
+      entityType: z
+        .enum(['leaf', 'run', 'comparison'])
+        .openapi({ description: 'Type of shared entity' }),
       entityId: z.string().min(1),
     }),
   },

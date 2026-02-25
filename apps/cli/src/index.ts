@@ -7,7 +7,10 @@
 import { Command } from 'commander';
 import { registerBranchCommands } from './commands/branches.js';
 import { registerCommitCommands } from './commands/commits.js';
+import { registerExportCommands } from './commands/export.js';
+import { registerLeafCommands } from './commands/leaves.js';
 import { registerProjectCommands } from './commands/projects.js';
+import { registerShareCommands } from './commands/share.js';
 import { registerStatusCommands } from './commands/status.js';
 
 const program = new Command();
@@ -23,6 +26,9 @@ registerStatusCommands(program);
 registerProjectCommands(program);
 registerCommitCommands(program);
 registerBranchCommands(program);
+registerLeafCommands(program);
+registerShareCommands(program);
+registerExportCommands(program);
 
 // Parse arguments
 program.parse();

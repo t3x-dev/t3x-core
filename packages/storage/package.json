@@ -25,6 +25,16 @@
       "types": "./dist/supabase.d.ts",
       "import": "./dist/supabase.js",
       "require": "./dist/supabase.js"
+    },
+    "./backup": {
+      "types": "./dist/backup/index.d.ts",
+      "import": "./dist/backup/index.js",
+      "require": "./dist/backup/index.js"
+    },
+    "./seed/templates": {
+      "types": "./dist/seed/templates.d.ts",
+      "import": "./dist/seed/templates.js",
+      "require": "./dist/seed/templates.js"
     }
   },
   "files": [

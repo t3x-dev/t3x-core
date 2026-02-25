@@ -269,3 +269,98 @@ export interface ChatProvider {
   name: string;
   models: string[];
 }
+
+// Leaf types
+export interface Leaf {
+  id: string;
+  commit_hash: string;
+  type: string;
+  title: string | null;
+  constraints: unknown[];
+  config: Record<string, unknown> | null;
+  output: string | null;
+  assertions: unknown[];
+  project_id: string;
+  created_at: string;
+}
+
+export interface CreateLeafInput {
+  commit_hash: string;
+  type: string;
+  title?: string;
+  constraints?: unknown[];
+  config?: Record<string, unknown>;
+  project_id: string;
+}
+
+export interface GenerateLeafInput {
+  model?: string;
+  provider?: string;
+}
+
+export type ListLeavesResponse = Leaf[];
+
+// Share types
+export interface ShareToken {
+  id: string;
+  token: string;
+  entity_type: string;
+  entity_id: string;
+  project_id: string;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface CreateShareTokenInput {
+  entity_type: string;
+  entity_id: string;
+  project_id: string;
+  expires_in_hours?: number;
+}
+
+// Webhook types
+export interface Webhook {
+  webhook_id: string;
+  project_id: string | null;
+  url: string;
+  events: string[];
+  secret: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateWebhookInput {
+  url: string;
+  events: string[];
+  secret?: string;
+  project_id?: string;
+}
+
+export interface UpdateWebhookInput {
+  url?: string;
+  events?: string[];
+  secret?: string;
+  active?: boolean;
+}
+
+// Import types
+export interface ImportCfpackResult {
+  project_id: string;
+  turns_imported: number;
+  commits_imported: number;
+}
+
+// Backup types
+export interface BackupResult {
+  project_id: string;
+  file_path: string;
+}
+
+export interface VerifyResult {
+  valid: boolean;
+  total: number;
+  errors: string[];
+}

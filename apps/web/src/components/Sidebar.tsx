@@ -8,9 +8,11 @@ import {
   FileText,
   Github,
   Home,
+  LayoutGrid,
   ListChecks,
   Moon,
   Rocket,
+  Settings,
   Sun,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -177,6 +179,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAgentDemo = pathname.startsWith('/agent-demo');
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
+  const isTemplates = pathname.startsWith('/templates');
+  const isSettings = pathname.startsWith('/settings');
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
   return (
@@ -242,6 +246,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Home className="h-5 w-5" />
           </NavItem>
 
+          <NavItem href="/templates" label="Templates" isActive={isTemplates} collapsed={collapsed}>
+            <LayoutGrid className="h-5 w-5" />
+          </NavItem>
+
           <NavItem
             href="/agent-demo/chat"
             label="Agent Demo"
@@ -305,6 +313,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
             <BarChart3 className="h-5 w-5" />
+          </NavItem>
+
+          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
+            <Settings className="h-5 w-5" />
           </NavItem>
 
           <NavItem

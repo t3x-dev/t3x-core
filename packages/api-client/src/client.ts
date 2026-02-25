@@ -17,26 +17,35 @@ import type {
   CreateCommitInput,
   CreateConversationInput,
   CreateDraftInput,
+  CreateLeafInput,
   CreateProjectInput,
+  CreateShareTokenInput,
   CreateTurnInput,
+  CreateWebhookInput,
   DiffResult,
   Draft,
   ExportCfpackInput,
   ExportLedgerInput,
+  GenerateLeafInput,
   HealthResponse,
+  Leaf,
   ListBranchesResponse,
   ListCommitsResponse,
   ListConversationsResponse,
   ListDraftsResponse,
+  ListLeavesResponse,
   ListProjectsResponse,
   ListTurnsResponse,
   PaginationParams,
   Project,
   ProjectWithStats,
+  ShareToken,
   StatusResponse,
   Turn,
   TwoWayDiffInput,
   UpdateProjectInput,
+  UpdateWebhookInput,
+  Webhook,
 } from './types.js';
 
 export interface T3xClientConfig {
@@ -106,8 +115,13 @@ export class T3xClient {
   // Health & Status
   // ============================================
 
+  /** Root URL (strips /api suffix from baseUrl for root-level endpoints) */
+  private get rootUrl(): string {
+    return this.baseUrl.replace(/\/api$/, '');
+  }
+
   async health(): Promise<HealthResponse> {
-    const response = await this.fetchFn(`${this.baseUrl}/health`, {
+    const response = await this.fetchFn(`${this.rootUrl}/health`, {
       headers: this.headers,
     });
     return response.json() as Promise<HealthResponse>;
@@ -349,6 +363,99 @@ export class T3xClient {
 
   async listChatProviders(): Promise<ChatProvider[]> {
     return this.request<ChatProvider[]>('GET', '/v1/chat/providers');
+  }
+
+  // ============================================
+  // Leaves
+  // ============================================
+
+  async listLeaves(projectId: string): Promise<ListLeavesResponse> {
+    return this.request<ListLeavesResponse>('GET', `/v1/projects/${projectId}/leaves`);
+  }
+
+  async getLeaf(id: string): Promise<Leaf> {
+    return this.request<Leaf>('GET', `/v1/leaves/${id}`);
+  }
+
+  async createLeaf(input: CreateLeafInput): Promise<Leaf> {
+    return this.request<Leaf>('POST', '/v1/leaves', input);
+  }
+
+  async generateLeaf(id: string, input?: GenerateLeafInput): Promise<Leaf> {
+    return this.request<Leaf>('POST', `/v1/leaves/${id}/generate`, input);
+  }
+
+  async deleteLeaf(id: string): Promise<void> {
+    await this.request<void>('DELETE', `/v1/leaves/${id}`);
+  }
+
+  // ============================================
+  // Share Tokens
+  // ============================================
+
+  async createShareToken(input: CreateShareTokenInput): Promise<ShareToken> {
+    return this.request<ShareToken>('POST', '/v1/share', input);
+  }
+
+  async listShareTokensByEntity(entityType: string, entityId: string): Promise<ShareToken[]> {
+    return this.request<ShareToken[]>('GET', `/v1/share/entity/${entityType}/${entityId}`);
+  }
+
+  async revokeShareToken(id: string): Promise<void> {
+    await this.request<void>('DELETE', `/v1/share/${id}`);
+  }
+
+  // ============================================
+  // Webhooks
+  // ============================================
+
+  async listWebhooks(projectId?: string): Promise<Webhook[]> {
+    return this.request<Webhook[]>('GET', '/v1/webhooks', undefined, {
+      project_id: projectId,
+    });
+  }
+
+  async createWebhook(input: CreateWebhookInput): Promise<Webhook> {
+    return this.request<Webhook>('POST', '/v1/webhooks', input);
+  }
+
+  async updateWebhook(id: string, input: UpdateWebhookInput): Promise<Webhook> {
+    return this.request<Webhook>('PATCH', `/v1/webhooks/${id}`, input);
+  }
+
+  async deleteWebhook(id: string): Promise<void> {
+    await this.request<void>('DELETE', `/v1/webhooks/${id}`);
+  }
+
+  async testWebhook(id: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>('POST', `/v1/webhooks/${id}/test`);
+  }
+
+  // ============================================
+  // Import
+  // ============================================
+
+  async importCfpack(data: unknown): Promise<{ project_id: string }> {
+    return this.request<{ project_id: string }>('POST', '/v1/import/cfpack', data);
+  }
+
+  // ============================================
+  // Readiness
+  // ============================================
+
+  async ready(): Promise<{ status: string; checks: { database: string } }> {
+    const response = await this.fetchFn(`${this.rootUrl}/ready`, {
+      headers: this.headers,
+    });
+    const json = (await response.json()) as ApiResponse<{
+      status: string;
+      checks: { database: string };
+    }>;
+    if (!response.ok || !json.success) {
+      const err = !json.success ? json.error : { code: 'NOT_READY', message: 'Service not ready' };
+      throw new T3xApiError(err.code, err.message, response.status);
+    }
+    return (json as ApiSuccessResponse<{ status: string; checks: { database: string } }>).data;
   }
 }
 

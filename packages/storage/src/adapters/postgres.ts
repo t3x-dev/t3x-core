@@ -8,6 +8,7 @@
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
+import { seedBuiltinTemplates } from '../seed/templates';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;
 
@@ -35,6 +36,9 @@ export async function createPostgresStorage(config: PostgresConfig): Promise<Pos
 
   // Initialize schema (create tables if not exist)
   await initializeSchema(client);
+
+  // Seed builtin templates
+  await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
 
   return db;
 }
@@ -148,8 +152,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Note: ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL 9.6+
     ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
 
-    -- Drafts V2 table
-    CREATE TABLE IF NOT EXISTS drafts_v2 (
+    -- Agent Drafts table (formerly drafts_v2)
+    CREATE TABLE IF NOT EXISTS agent_drafts (
       draft_id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
@@ -165,8 +169,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL,
       completed_at TIMESTAMPTZ
     );
-    CREATE INDEX IF NOT EXISTS idx_drafts_v2_project ON drafts_v2(project_id);
-    CREATE INDEX IF NOT EXISTS idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
+
+    -- Migration: rename drafts_v2 → agent_drafts for existing databases
+    ALTER TABLE IF EXISTS drafts_v2 RENAME TO agent_drafts;
 
     -- Segment Embeddings table
     CREATE TABLE IF NOT EXISTS segment_embeddings (
@@ -230,6 +237,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add leaf_id column to existing runs tables (v2.2)
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS leaf_id TEXT;
+
+    -- Migration: Add report asset fields to existing runs tables (v2.3)
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS title TEXT;
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]';
 
     -- Commits V3 table (sentence-based semantic snapshots)
     -- NOTE: project_id is nullable by design (commits can be standalone/unattached).
@@ -295,6 +307,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       message TEXT,
       branch TEXT,
       source_refs JSONB,
+      merge_summary JSONB,
       position_x REAL,
       position_y REAL,
 
@@ -369,6 +382,64 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
     ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
+
+    -- Saved Comparisons table (persisted A/B comparison snapshots)
+    CREATE TABLE IF NOT EXISTS saved_comparisons (
+      comparison_id TEXT PRIMARY KEY,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      control_config JSONB NOT NULL,
+      treatment_config JSONB NOT NULL,
+      control_run_ids JSONB NOT NULL DEFAULT '[]',
+      treatment_run_ids JSONB NOT NULL DEFAULT '[]',
+      result_snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
+    CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
+
+    -- Templates table (reusable prompt templates for leaf generation)
+    CREATE TABLE IF NOT EXISTS templates (
+      template_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      leaf_type TEXT NOT NULL,
+      system_prompt TEXT NOT NULL,
+      user_prompt TEXT NOT NULL,
+      variables JSONB NOT NULL,
+      tags JSONB NOT NULL DEFAULT '[]',
+      is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
+    CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
+
+    -- Drafts V3 table (Workbench / pre-commit working area)
+    CREATE TABLE IF NOT EXISTS drafts_v3 (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      goal TEXT,
+      parent_commit_hash TEXT,
+      forked_from TEXT,
+      sentences_json JSONB NOT NULL DEFAULT '[]',
+      constraints_json JSONB NOT NULL DEFAULT '[]',
+      instructions TEXT,
+      preview_type TEXT,
+      preview_output TEXT,
+      preview_generated_at TIMESTAMPTZ,
+      status TEXT NOT NULL DEFAULT 'editing',
+      committed_as TEXT,
+      committed_leaf_id TEXT,
+      target_branch TEXT DEFAULT 'main',
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
