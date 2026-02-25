@@ -1,11 +1,14 @@
 'use client';
 
-import { Settings, Webhook } from 'lucide-react';
+import { Settings, SlidersHorizontal, Webhook } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-const NAV_ITEMS = [{ href: '/settings/webhooks', label: 'Webhooks', icon: Webhook }] as const;
+const NAV_ITEMS = [
+  { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
+  { href: '/settings/webhooks', label: 'Webhooks', icon: Webhook },
+] as const;
 
 interface SettingsLayoutProps {
   children: React.ReactNode;

@@ -106,15 +106,20 @@ export function GuidedTour({ ready }: GuidedTourProps) {
     const seen = localStorage.getItem('t3x-onboarding-seen') === 'true';
     // Only auto-start tour if onboarding was seen but tour not completed
     if (seen && !completed) {
+      // Filter steps to only those whose target exists in the DOM
+      const hasTargets = tourSteps.some(
+        (step) => typeof step.target === 'string' && document.querySelector(step.target)
+      );
+      if (!hasTargets) return;
       // Small delay to let canvas settle after fitView
       const timer = setTimeout(() => setRun(true), 500);
       return () => clearTimeout(timer);
     }
-  }, [ready]);
+  }, [ready, tourSteps]);
 
   const handleCallback = useCallback((data: CallBackProps) => {
-    const { status } = data;
-    if (status === 'finished' || status === 'skipped') {
+    const { status, action } = data;
+    if (status === 'finished' || status === 'skipped' || action === 'close') {
       setRun(false);
       localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
       if (status === 'finished') {
@@ -130,6 +135,8 @@ export function GuidedTour({ ready }: GuidedTourProps) {
       continuous
       showSkipButton
       showProgress
+      spotlightClicks
+      disableOverlayClose={false}
       callback={handleCallback}
       styles={tourStyles}
       locale={{
