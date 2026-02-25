@@ -141,10 +141,12 @@ export function CommitHistoryPanel({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <GitCommit className="size-4" />
-              {t('commit')} History
+              {t('commit_history')}
             </SheetTitle>
             <SheetDescription>
-              {commitHash ? `From ${shortHash(commitHash)}` : 'Select a commit'}
+              {commitHash
+                ? `From ${shortHash(commitHash)}`
+                : `Select a ${t('commit').toLowerCase()}`}
               {' · Click a commit to view diff with its parent'}
             </SheetDescription>
           </SheetHeader>
@@ -165,7 +167,7 @@ export function CommitHistoryPanel({
             {!loading && !error && history.length === 0 && (
               <EmptyStateInline
                 icon={History}
-                message="No commits in this history chain. Commits will appear here once created."
+                message={`No ${t('commits').toLowerCase()} in this history chain. They will appear here once created.`}
               />
             )}
 

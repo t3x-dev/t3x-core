@@ -30,6 +30,18 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   committed: { default: '已保存', developer: 'Committed' },
   pending: { default: '进行中', developer: 'Pending' },
 
+  // Extended nouns / labels
+  create_commit: { default: 'Save Knowledge', developer: 'Create Commit' },
+  create_branch: { default: 'Create Version', developer: 'Create Branch' },
+  select_branch: { default: 'Select Version', developer: 'Select Branch' },
+  commit_history: { default: 'History', developer: 'Commit History' },
+  commit_hash: { default: 'ID', developer: 'Hash', showInDefault: false },
+  parent_commit: { default: 'Previous', developer: 'Parent Commit' },
+  branch_name: { default: 'Version', developer: 'Branch' },
+  pending_changes: { default: 'In Progress', developer: 'Pending Changes' },
+  conversation: { default: 'Conversation', developer: 'Conversation' },
+  empty_canvas: { default: 'Start your first conversation', developer: 'Empty canvas' },
+
   // Merge sentence categories
   identical_sentences: { default: '未变化', developer: 'Identical' },
   modified_sentences: { default: '已修改', developer: 'Modified' },

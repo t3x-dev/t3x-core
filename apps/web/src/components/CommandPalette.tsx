@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import { reducedMotion, scaleIn } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const prefersReducedMotion = useReducedMotion();
+  const { t } = useTerminology();
   const dialogVariants = prefersReducedMotion ? reducedMotion.scaleIn : scaleIn;
 
   // Toggle command palette with Cmd+K / Ctrl+K
@@ -143,7 +145,7 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                     icon={<GitBranch size={16} />}
                     onSelect={() => handleSelect(() => {})}
                   >
-                    Create Branch
+                    {t('create_branch')}
                   </CommandItem>
                   <CommandItem
                     icon={<Sparkles size={16} />}

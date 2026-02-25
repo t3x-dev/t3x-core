@@ -516,7 +516,7 @@ function UnitNode(props: Props) {
     }
     if (isStaging && data.conversationId) {
       return {
-        label: 'Create Commit',
+        label: t('create_commit'),
         icon: GitCommit,
         action: () => openNodeModal(id, 'commit'),
       };
@@ -776,7 +776,9 @@ function UnitNode(props: Props) {
                 {data.isMergeCommit && (
                   <>
                     <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className={cn('font-medium', toneAccent.conversation.text)}>{t('merge').toLowerCase()}</span>
+                    <span className={cn('font-medium', toneAccent.conversation.text)}>
+                      {t('merge').toLowerCase()}
+                    </span>
                   </>
                 )}
               </div>
