@@ -7,6 +7,7 @@ import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { DiffResultRaw } from '@/lib/api';
 import * as api from '@/lib/api';
 import { glass, toneAccent } from '@/lib/theme';
@@ -41,6 +42,7 @@ export function CommittedCommitView({
   routeProjectId,
   quickActions: _quickActions,
 }: CommittedCommitViewProps) {
+  const { t } = useTerminology();
   const data = node.data;
 
   // ========== Internal State ==========
@@ -245,7 +247,7 @@ export function CommittedCommitView({
                 </h4>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[0.85rem]">
-                    <span className="text-[var(--color-text-muted)]">From Draft:</span>
+                    <span className="text-[var(--color-text-muted)]">From {t('draft')}:</span>
                     <span className="text-[var(--text-secondary)] font-mono text-xs">
                       {data.entryId}
                     </span>
@@ -523,7 +525,7 @@ export function CommittedCommitView({
                       className="w-full gap-2"
                     >
                       <History size={14} />
-                      <span>View commit history</span>
+                      <span>View {t('commit').toLowerCase()} history</span>
                     </Button>
                   </div>
                   <CommitHistoryPanel

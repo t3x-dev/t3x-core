@@ -2,6 +2,7 @@
 
 import { GitBranch, GitCommitHorizontal, Leaf } from 'lucide-react';
 import { useMemo } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -24,6 +25,7 @@ function Segment({ children, border = true }: { children: React.ReactNode; borde
 
 export function CanvasStatusBar() {
   const nodes = useCanvasStore((s) => s.nodes);
+  const { t } = useTerminology();
 
   const stats = useMemo(() => {
     let commits = 0;
@@ -53,18 +55,21 @@ export function CanvasStatusBar() {
     return { commits, staging, branches: branches.size, leaves };
   }, [nodes]);
 
+  const branchLabel = t('branch').toLowerCase();
+  const commitLabel = t('commit').toLowerCase();
+
   return (
     <footer className="flex h-7 shrink-0 items-center border-t border-border/50 bg-muted/80 text-xs text-muted-foreground backdrop-blur-sm">
       <Segment>
         <GitBranch className="h-3 w-3" />
         <span>
-          {stats.branches} {stats.branches === 1 ? 'branch' : 'branches'}
+          {stats.branches} {stats.branches === 1 ? branchLabel : `${branchLabel}s`}
         </span>
       </Segment>
       <Segment>
         <GitCommitHorizontal className="h-3 w-3" />
         <span>
-          {stats.commits} {stats.commits === 1 ? 'commit' : 'commits'}
+          {stats.commits} {stats.commits === 1 ? commitLabel : `${commitLabel}s`}
         </span>
       </Segment>
       {stats.staging > 0 && (

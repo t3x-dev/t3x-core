@@ -203,7 +203,7 @@ export default function ProjectDetailPage() {
           <div className="absolute left-1/2 top-12 z-10 -translate-x-1/2 -translate-y-1/2">
             <div className="relative flex h-8 rounded-full border bg-muted/80 p-0.5 shadow-sm backdrop-blur-sm">
               <div
-                className="absolute inset-y-0.5 w-[calc(50%-2px)] rounded-full bg-background shadow-sm transition-transform duration-200"
+                className="absolute inset-y-0.5 w-[calc(50%-2px)] rounded-full bg-background shadow-sm transition-transform duration-[var(--duration-normal)]"
                 style={{ transform: 'translateX(calc(100% + 2px))' }}
               />
               <button

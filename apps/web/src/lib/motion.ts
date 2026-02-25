@@ -44,10 +44,11 @@ export const springConfig = {
 // ============================================
 
 export const duration = {
-  instant: 0.1,
-  fast: 0.15,
-  normal: 0.25,
-  slow: 0.4,
+  instant: 0.1, // CSS: --duration-instant (100ms)
+  fast: 0.15, // CSS: --duration-fast (150ms)
+  normal: 0.25, // CSS: --duration-normal (250ms)
+  slow: 0.4, // CSS: --duration-slow (400ms)
+  emphasis: 0.5, // CSS: --duration-emphasis (500ms)
 } as const;
 
 // ============================================

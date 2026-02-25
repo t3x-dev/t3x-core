@@ -494,6 +494,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return json.data as T;
 }
 
+// API key for authenticated requests (optional, for production use)
+const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
+
 // Single fetch attempt with timeout + abort support
 async function fetchOnce(
   url: string,
@@ -508,9 +511,16 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
+  // Inject Authorization header if API key is configured
+  const headers = new Headers(options?.headers);
+  if (API_KEY && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${API_KEY}`);
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
+      headers,
       signal: controller.signal,
     });
     return response;
@@ -2882,4 +2892,57 @@ export async function curatePreview(
     signal
   );
   return handleResponse<CuratePreviewResponse>(res);
+}
+
+// ============================================================================
+// Share Links
+// ============================================================================
+
+export interface ShareLink {
+  id: string;
+  token: string;
+  entity_type: string;
+  entity_id: string;
+  project_id: string;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ShareResolveResult {
+  token_info: ShareLink;
+  entity: unknown;
+}
+
+export async function createShareLink(
+  entityType: 'leaf',
+  entityId: string
+): Promise<ShareLink> {
+  const res = await fetchWithTimeout(`${API_V1}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entity_type: entityType,
+      entity_id: entityId,
+    }),
+  });
+  return handleResponse<ShareLink>(res);
+}
+
+export async function resolveShareLink(token: string): Promise<ShareResolveResult> {
+  const res = await fetchWithTimeout(`${API_V1}/share/${token}`);
+  return handleResponse<ShareResolveResult>(res);
+}
+
+export async function revokeShareLink(id: string): Promise<ShareLink> {
+  const res = await fetchWithTimeout(`${API_V1}/share/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<ShareLink>(res);
+}
+
+export async function listShareLinks(entityType: string, entityId: string): Promise<ShareLink[]> {
+  const res = await fetchWithTimeout(`${API_V1}/share/entity/${entityType}/${entityId}`);
+  return handleResponse<ShareLink[]>(res);
 }

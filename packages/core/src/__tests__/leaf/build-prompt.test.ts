@@ -86,7 +86,6 @@ describe('getTypeInstructions', () => {
     expect(instructions).toContain('Slack');
     expect(instructions.toLowerCase()).toContain('conversational');
   });
-
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

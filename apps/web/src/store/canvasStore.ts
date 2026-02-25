@@ -1,9 +1,10 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
+import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { getMicrocopy } from '@/lib/microcopy';
-import { useModeStore } from '@/store/modeStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import type {
   BranchType,
   CanvasNodeData,
@@ -461,7 +462,10 @@ export const useCanvasStore = create<CanvasState>((...a) => {
             ...node.data,
             kind: 'unit',
             entryId: `UNIT-${getNumericId(id)}`,
-            status: 'Committed · awaiting diff',
+            status: (() => {
+              const dev = useSettingsStore.getState().developerMode;
+              return `${getTerminology('committed', dev)} · awaiting ${getTerminology('diff', dev).toLowerCase()}`;
+            })(),
             tags: Array.from(
               new Set([...node.data.tags, 'unit', ...(isMergeCommit ? ['merge'] : [])])
             ),
@@ -488,7 +492,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         };
       });
 
-      const mode = useModeStore.getState().copyMode;
+      const mode = useSettingsStore.getState().developerMode ? 'developer' : 'default';
       notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
     },
 

@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,7 @@ export function PendingCommitView({
   onBranchNameChange,
   quickActions: _quickActions,
 }: PendingCommitViewProps) {
+  const { t } = useTerminology();
   const data = node.data;
 
   // ========== Config state (STEP 1) ==========
@@ -1141,7 +1143,7 @@ export function PendingCommitView({
             <div className="w-full flex flex-col gap-2 mt-2">
               <Button onClick={handleViewCommitDetails} variant="outline" className="w-full gap-2">
                 <GitCompare size={16} />
-                <span>View Commit Details</span>
+                <span>View {t('commit')} Details</span>
               </Button>
               <Button
                 onClick={handleCreateOutput}
@@ -1254,7 +1256,7 @@ export function PendingCommitView({
                   {shouldShowBranchSelect && (
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide flex items-center">
-                        Branch
+                        {t('branch')}
                         {branchesLoading && <Loader2 size={12} className="animate-spin ml-1" />}
                       </label>
                       <select
@@ -1292,7 +1294,7 @@ export function PendingCommitView({
                               {branch.is_current ? ' (current)' : ''}
                             </option>
                           ))}
-                        <option value="__new__">+ New branch...</option>
+                        <option value="__new__">+ New {t('branch').toLowerCase()}...</option>
                       </select>
                       {/* Warning when main branch selection is invalid */}
                       {isMainBranchInvalid && (
@@ -1315,7 +1317,7 @@ export function PendingCommitView({
                     !branches.some((b) => b.name === data.pendingBranchName) && (
                       <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
-                          New Branch Name
+                          New {t('branch')} Name
                         </label>
                         <Input
                           type="text"
@@ -1431,7 +1433,9 @@ export function PendingCommitView({
                   <div className="flex flex-col gap-2 p-3 bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)]">
                     {shouldShowBranchSelect && (
                       <div className="flex items-center gap-2 text-[0.85rem]">
-                        <span className="text-[var(--text-tertiary)] min-w-[70px]">Branch:</span>
+                        <span className="text-[var(--text-tertiary)] min-w-[70px]">
+                          {t('branch')}:
+                        </span>
                         <span className="text-[var(--text-primary)] font-medium">
                           {data.pendingBranch || 'branch'}
                         </span>
@@ -1578,7 +1582,7 @@ export function PendingCommitView({
                         ) : (
                           <>
                             <Check size={16} />
-                            <span>Commit</span>
+                            <span>{t('commitAction')}</span>
                           </>
                         )}
                       </Button>

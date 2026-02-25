@@ -23,7 +23,7 @@ export function MergeIdenticalSection({ sentences }: MergeIdenticalSectionProps)
     <div className="border border-[var(--diff-added-border)] rounded-lg bg-[var(--diff-added-bg)] p-[var(--space-group)]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between rounded px-4 py-2.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+        className="flex w-full items-center justify-between rounded px-4 py-2.5 transition-colors hover:bg-[var(--hover-bg)]"
         type="button"
       >
         <span className="font-semibold text-[var(--diff-added-text)]">

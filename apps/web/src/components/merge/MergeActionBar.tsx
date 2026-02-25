@@ -11,6 +11,7 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
@@ -47,6 +48,7 @@ export function MergeActionBar({
   onClose,
 }: MergeActionBarProps) {
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
+  const { t } = useTerminology();
   return (
     <header
       className={cn(
@@ -64,7 +66,7 @@ export function MergeActionBar({
       <Breadcrumb
         segments={[
           { label: projectName || 'Project', href: `/project/${projectId}` },
-          { label: 'Merge' },
+          { label: t('merge') },
         ]}
       />
       <div className="flex items-center gap-2">
@@ -109,7 +111,7 @@ export function MergeActionBar({
       {/* Merge Message Input */}
       <div className="flex items-center gap-2 min-w-[200px] max-w-96 flex-1">
         <Input
-          placeholder="Merge message (required)"
+          placeholder={`${t('merge')} message (required)`}
           value={message}
           onChange={(e) => onMessageChange(e.target.value)}
           className="h-8"
@@ -123,7 +125,7 @@ export function MergeActionBar({
         </Button>
         <Button size="sm" onClick={onCommit} disabled={!canCommit} className="gap-1">
           <GitMerge className="h-3 w-3" />
-          Commit Merge
+          {t('mergeConfirm')}
         </Button>
       </div>
     </header>

@@ -41,8 +41,8 @@ const roleLabels: Record<string, string> = {
 const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-[var(--status-warning-muted)]',
   green: 'bg-[var(--status-success-muted)]',
-  deepGreen: 'bg-green-500 text-white',
-  deepRed: 'bg-red-500 text-white',
+  deepGreen: 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100',
+  deepRed: 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100',
 };
 
 export function TurnBubble({
@@ -70,7 +70,11 @@ export function TurnBubble({
       let lastEnd = 0;
 
       for (let i = 0; i < sorted.length; i++) {
-        const { start, end, color } = sorted[i];
+        const { start: rawStart, end, color } = sorted[i];
+        // Adjust for overlapping ranges: skip already-rendered text
+        const start = Math.max(rawStart, lastEnd);
+        if (start >= end) continue; // Completely overlapped by previous range
+
         if (start > lastEnd) {
           segments.push(turn.content.slice(lastEnd, start));
         }

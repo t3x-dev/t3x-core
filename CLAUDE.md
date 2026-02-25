@@ -534,8 +534,9 @@ Before writing code, must first answer: Does the project already have something 
 ## Prohibited Actions
 
 - **Don't commit without asking**: Always ask the user for confirmation before running `git commit` or `git push`
-- **Don't add Co-Authored-By**: Never include `Co-Authored-By` tag or Claude's email in commit messages
+- **Don't add AI markers**: Never include `Co-Authored-By`, Claude's email, or any AI-generated attribution tags in commit messages, PR titles, or PR descriptions. No "Generated with Claude Code" footer in PR body either
 - **Use English only**: All commit messages, PR titles, and PR descriptions must be in English
+- **Always reference issues**: When changes relate to GitHub issues, commit messages must include `(#issue)` and PR body must include `Resolves #issue` (or `Closes #issue`) so merging auto-closes them
 - **Don't guess code locations**: Use Grep/Glob to search first
 - **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
 - **Don't rush to modify**: Read code first, understand context, confirm impact scope

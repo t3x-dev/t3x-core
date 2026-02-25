@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import type { NextConfig } from 'next';
 import path from 'node:path';
+import type { NextConfig } from 'next';
 
 // Load .env from monorepo root so NEXT_PUBLIC_* vars are available in local dev
 const rootEnvPath = path.resolve(__dirname, '../../.env');

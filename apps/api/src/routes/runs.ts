@@ -137,7 +137,7 @@ runsRoutes.post('/v1/runs', async (c) => {
 
     // Resolve leaf_id → Leaf.output as prompt content
     let resolvedLeaf = input.leaf;
-    let leafId: string | null = input.leaf_id || null;
+    const leafId: string | null = input.leaf_id || null;
 
     if (input.leaf_id) {
       const leaf = await findLeafById(db, input.leaf_id);
@@ -154,7 +154,10 @@ runsRoutes.post('/v1/runs', async (c) => {
         return c.json(
           {
             success: false,
-            error: { code: 'LEAF_NO_OUTPUT', message: `Leaf ${input.leaf_id} has no generated output yet` },
+            error: {
+              code: 'LEAF_NO_OUTPUT',
+              message: `Leaf ${input.leaf_id} has no generated output yet`,
+            },
           },
           400
         );
@@ -166,7 +169,9 @@ runsRoutes.post('/v1/runs', async (c) => {
         content: leaf.output,
         rules_ref: input.leaf?.rules_ref,
       };
-      console.log(`[runs] Resolved leaf_id ${input.leaf_id} → output (${leaf.output.length} chars)`);
+      console.log(
+        `[runs] Resolved leaf_id ${input.leaf_id} → output (${leaf.output.length} chars)`
+      );
     }
 
     await insertRun(db, {
@@ -315,7 +320,8 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
           const raw = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
           return {
             id: typeof raw.id === 'string' ? raw.id : '',
-            constraint_id: typeof raw.constraint_id === 'string' ? raw.constraint_id : `unknown_${idx}`,
+            constraint_id:
+              typeof raw.constraint_id === 'string' ? raw.constraint_id : `unknown_${idx}`,
             passed: typeof raw.passed === 'boolean' ? raw.passed : false,
             details: typeof raw.details === 'string' ? raw.details : '',
             lesson: typeof raw.lesson === 'string' ? raw.lesson : undefined,
@@ -331,7 +337,7 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
             leaf_id: leafId,
             output: leaf.output,
             config: leaf.config ?? {},
-            model: (leaf.config as Record<string, unknown>)?.model as string ?? 'unknown',
+            model: ((leaf.config as Record<string, unknown>)?.model as string) ?? 'unknown',
             created_by: 'runner-ingest',
           });
         }

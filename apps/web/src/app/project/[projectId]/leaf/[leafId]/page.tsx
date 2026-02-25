@@ -25,6 +25,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
+import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -485,6 +486,7 @@ export default function LeafDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
+          <ShareLinkButton entityType="leaf" entityId={leafId} />
           {/* Generate button */}
           <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
             <span className="mr-1 inline-flex h-3 w-3">
@@ -1021,7 +1023,13 @@ interface AssertionsSectionProps {
   footer?: React.ReactNode;
 }
 
-function AssertionsSection({ assertions, constraints, selectedIds, onToggle, footer }: AssertionsSectionProps) {
+function AssertionsSection({
+  assertions,
+  constraints,
+  selectedIds,
+  onToggle,
+  footer,
+}: AssertionsSectionProps) {
   if (!assertions || assertions.length === 0) {
     return (
       <section className="rounded-lg border bg-card elevation-1 elevation-hover">
@@ -1047,9 +1055,9 @@ function AssertionsSection({ assertions, constraints, selectedIds, onToggle, foo
   return (
     <section
       className={cn(
-        'rounded-lg border bg-card transition-all duration-500',
+        'rounded-lg border bg-card transition-all duration-[var(--duration-emphasis)]',
         allPassed &&
-          'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-500'
+          'ring-2 ring-[var(--status-success)]/50 animate-in fade-in zoom-in-95 duration-[var(--duration-emphasis)]'
       )}
     >
       <div className="flex items-center justify-between border-b p-[var(--space-group)]">
@@ -1115,13 +1123,7 @@ function AssertionItem({ assertion, constraint, selected, onToggle }: AssertionI
       )}
     >
       <div className="flex items-start gap-2">
-        {onToggle && (
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onToggle}
-            className="mt-0.5"
-          />
-        )}
+        {onToggle && <Checkbox checked={selected} onCheckedChange={onToggle} className="mt-0.5" />}
         {assertion.passed ? (
           <Check className="h-4 w-4 text-[var(--status-success)] shrink-0 mt-0.5" />
         ) : (

@@ -18,7 +18,10 @@ import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 /**
  * Get format instructions for each leaf type.
  */
-export function getTypeInstructions(leafType: AnyLeafType, config?: Record<string, unknown>): string {
+export function getTypeInstructions(
+  leafType: AnyLeafType,
+  config?: Record<string, unknown>
+): string {
   switch (leafType) {
     case 'tweet':
       return `Format: Twitter/X post

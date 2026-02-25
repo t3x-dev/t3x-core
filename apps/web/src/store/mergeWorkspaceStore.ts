@@ -6,7 +6,9 @@
  */
 
 import { create } from 'zustand';
+import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
+import { useSettingsStore } from '@/store/settingsStore';
 import type {
   CommitV3,
   Merge2WayResult,
@@ -128,6 +130,17 @@ interface MergeWorkspaceState {
   getResolutionStats: () => ResolutionStats;
   canCommit: () => boolean;
   getPreviewSentences: () => Sentence[];
+  getMergeChecks: () => MergeCheck[];
+}
+
+/**
+ * Merge check item for the Review Dialog checklist
+ */
+export interface MergeCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail?: string;
 }
 
 // ============================================================================
@@ -700,6 +713,51 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       }));
       return null;
     }
+  },
+
+  getMergeChecks: (): MergeCheck[] => {
+    const { prepared, message, targetBranch } = get();
+    const unresolvedCount = get().getUnresolvedCount();
+    const previewSentences = get().getPreviewSentences();
+    const dev = useSettingsStore.getState().developerMode;
+    const tm = (key: TermKey) => getTerminology(key, dev);
+
+    return [
+      {
+        id: 'resolved',
+        label: `All conflicts resolved`,
+        passed: unresolvedCount === 0,
+        detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
+      },
+      {
+        id: 'message',
+        label: `${tm('merge')} message provided`,
+        passed: message.trim().length > 0,
+      },
+      {
+        id: 'sentences',
+        label: 'Result has sentences',
+        passed: previewSentences.length > 0,
+        detail:
+          previewSentences.length > 0
+            ? `${previewSentences.length} sentences`
+            : 'No sentences in result',
+      },
+      {
+        id: 'target_branch',
+        label: `Target ${tm('branch').toLowerCase()} identified`,
+        passed: !!targetBranch,
+        detail: targetBranch || undefined,
+      },
+      {
+        id: 'preview_computed',
+        label: 'Preview computed',
+        passed: true, // Always passes — informational
+        detail: prepared
+          ? `${prepared.identical.length} kept, ${prepared.similarPairs.length} conflicts, ${prepared.onlyInSource.length + prepared.onlyInTarget.length} unique`
+          : undefined,
+      },
+    ];
   },
 
   getEffectiveResolution: (index: number) => {

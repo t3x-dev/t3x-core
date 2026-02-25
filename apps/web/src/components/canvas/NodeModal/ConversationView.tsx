@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -70,6 +71,7 @@ export function ConversationView({
   quickActions,
   onShowCommitConfig,
 }: ConversationViewProps) {
+  const { t } = useTerminology();
   const data = node.data;
 
   // Get projectId from route params for sidebar links
@@ -512,7 +514,7 @@ export function ConversationView({
                 className="gap-1.5"
               >
                 <Check size={16} />
-                <span>Commit</span>
+                <span>{t('commitAction')}</span>
               </Button>
             )}
             {/* For committed units: show Create Unit button */}
@@ -664,7 +666,7 @@ export function ConversationView({
                     <div
                       key={msg.id}
                       className={cn(
-                        'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-200',
+                        'max-w-[80%] py-3 px-4 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-[var(--duration-normal)]',
                         msg.role === 'user'
                           ? 'self-end bg-blue-500 text-white rounded-br-sm'
                           : 'self-start bg-[var(--hover-bg)] text-[var(--text-primary)] rounded-bl-sm'
