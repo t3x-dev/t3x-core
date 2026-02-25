@@ -456,6 +456,9 @@ function UnitNode(props: Props) {
   const toneKey = isStaging ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
+  // Breathing glow for committed nodes
+  const breatheClass = isCommitted ? 'node-breathe-commit' : '';
+
   // Seal animation — triggers on staging → committed transition
   const prevStatusRef = useRef(data.commitStatus);
   const [sealing, setSealing] = useState(false);
@@ -601,7 +604,8 @@ function UnitNode(props: Props) {
           selected && cn('ring-2', toneAccent[accentKey].ring),
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
-          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50'
+          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
+          breatheClass
         )}
         style={{
           willChange: 'transform',

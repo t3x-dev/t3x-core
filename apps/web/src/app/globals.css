@@ -539,6 +539,50 @@ a {
   }
 }
 
+/* Node breathing glow — committed nodes pulse with border + shadow */
+:root {
+  --breathe-base: oklch(0.30 0 0 / 25%);
+  --breathe-commit-peak: oklch(0.50 0.20 260 / 60%);
+  --breathe-leaf-peak: oklch(0.50 0.18 155 / 60%);
+  --breathe-commit-glow: 0 0 8px 0 oklch(0.55 0.20 260 / 30%);
+  --breathe-leaf-glow: 0 0 8px 0 oklch(0.55 0.18 155 / 30%);
+}
+.dark {
+  --breathe-base: oklch(1 0 0 / 15%);
+  --breathe-commit-peak: oklch(0.60 0.20 260 / 50%);
+  --breathe-leaf-peak: oklch(0.60 0.18 155 / 50%);
+  --breathe-commit-glow: 0 0 12px 0 oklch(0.55 0.20 260 / 25%);
+  --breathe-leaf-glow: 0 0 12px 0 oklch(0.55 0.18 155 / 25%);
+}
+
+@keyframes node-breathe-commit {
+  0%, 100% {
+    border-color: var(--breathe-base);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    border-color: var(--breathe-commit-peak);
+    box-shadow: var(--breathe-commit-glow);
+  }
+}
+@keyframes node-breathe-leaf {
+  0%, 100% {
+    border-color: var(--breathe-base);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    border-color: var(--breathe-leaf-peak);
+    box-shadow: var(--breathe-leaf-glow);
+  }
+}
+.node-breathe-commit { animation: node-breathe-commit 4s ease-in-out infinite; }
+.node-breathe-leaf { animation: node-breathe-leaf 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .node-breathe-commit,
+  .node-breathe-leaf { animation: none !important; }
+}
+
 /* Controls - replaced with ZoomSlider component from React Flow UI */
 
 /* MiniMap - refined styling */
