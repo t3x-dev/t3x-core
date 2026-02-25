@@ -147,6 +147,8 @@ export interface MergeCheck {
   label: string;
   passed: boolean;
   detail?: string;
+  /** 'frontend' checks gate merge; 'server' checks are advisory only */
+  source?: 'frontend' | 'server';
 }
 
 // ============================================================================
@@ -760,11 +762,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         label: 'All conflicts resolved',
         passed: unresolvedCount === 0,
         detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
+        source: 'frontend',
       },
       {
         id: 'message',
         label: `${tm('merge')} message provided`,
         passed: message.trim().length > 0,
+        source: 'frontend',
       },
       {
         id: 'sentences',
@@ -774,12 +778,14 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
           previewSentences.length > 0
             ? `${previewSentences.length} sentences`
             : 'No sentences in result',
+        source: 'frontend',
       },
       {
         id: 'target_branch',
         label: `Target ${tm('branch').toLowerCase()} identified`,
         passed: !!targetBranch,
         detail: targetBranch || undefined,
+        source: 'frontend',
       },
       {
         id: 'preview_computed',
@@ -788,11 +794,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         detail: prepared
           ? `${prepared.identical.length} kept, ${prepared.similarPairs.length} conflicts, ${prepared.onlyInSource.length + prepared.onlyInTarget.length} unique`
           : undefined,
+        source: 'frontend',
       },
     ];
 
-    // Append server-side checks (graceful: failed server checks don't block merge)
-    return [...frontendChecks, ...serverChecks];
+    // Append server-side checks (advisory: failed server checks don't block merge)
+    const taggedServerChecks = serverChecks.map((c) => ({ ...c, source: 'server' as const }));
+    return [...frontendChecks, ...taggedServerChecks];
   },
 
   getEffectiveResolution: (index: number) => {

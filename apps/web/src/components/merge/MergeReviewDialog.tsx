@@ -74,7 +74,10 @@ export function MergeReviewDialog({
   }, [state, onBackToCanvas]);
 
   const animatedCount = useCountUp(sentenceCount, 400, state === 'success');
-  const allChecksPassed = checks.every((c) => c.passed);
+  // Only frontend checks gate merge; server checks are advisory warnings
+  const allChecksPassed = checks
+    .filter((c) => c.source !== 'server')
+    .every((c) => c.passed);
 
   const handleConfirm = useCallback(async () => {
     setState('committing');
