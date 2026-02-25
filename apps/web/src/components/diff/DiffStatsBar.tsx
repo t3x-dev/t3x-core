@@ -1,5 +1,7 @@
 'use client';
 
+import { useCountUp } from '@/hooks/useCountUp';
+
 interface DiffStatsBarProps {
   identical: number;
   modified: number;
@@ -9,31 +11,36 @@ interface DiffStatsBarProps {
 }
 
 export function DiffStatsBar({ identical, modified, added, removed, onJump }: DiffStatsBarProps) {
+  const aIdentical = useCountUp(identical);
+  const aModified = useCountUp(modified);
+  const aAdded = useCountUp(added);
+  const aRemoved = useCountUp(removed);
+
   const items = [
     {
       key: 'identical',
       label: 'Identical',
-      count: identical,
+      count: aIdentical,
       color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
     },
     {
       key: 'modified',
       label: 'Modified',
-      count: modified,
+      count: aModified,
       color:
         'border border-[var(--diff-modified-line)]/40 text-[var(--diff-modified-line)] bg-transparent',
     },
     {
       key: 'added',
       label: 'Added',
-      count: added,
+      count: aAdded,
       color:
         'border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent',
     },
     {
       key: 'removed',
       label: 'Removed',
-      count: removed,
+      count: aRemoved,
       color:
         'border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent',
     },

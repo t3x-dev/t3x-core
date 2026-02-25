@@ -2,6 +2,7 @@
 
 import { Clock3, GitCommit, Lightbulb, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useCountUp } from '@/hooks/useCountUp';
 import { GraphIllustration } from '@/components/illustrations/GraphIllustration';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ export default function InsightsPage() {
   const [timeline, setTimeline] = useState<
     { id: string; label: string; detail: string; time: string; stage: string }[]
   >([]);
+  const animatedTimelineCount = useCountUp(timeline.length);
 
   useEffect(() => {
     async function loadData() {
@@ -211,7 +213,7 @@ export default function InsightsPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Latest Commits</CardTitle>
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock3 className="h-3.5 w-3.5" /> {timeline.length} recent
+                    <Clock3 className="h-3.5 w-3.5" /> {animatedTimelineCount} recent
                   </span>
                 </div>
               </CardHeader>

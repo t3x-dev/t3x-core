@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, CheckCircle2, Circle, GitMerge, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useCountUp } from '@/hooks/useCountUp';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useMicrocopy } from '@/lib/microcopy';
@@ -65,6 +66,7 @@ export function MergeReviewDialog({
     return () => clearTimeout(timer);
   }, [state, onBackToCanvas]);
 
+  const animatedCount = useCountUp(sentenceCount, 400, state === 'success');
   const allChecksPassed = checks.every((c) => c.passed);
 
   const handleConfirm = useCallback(async () => {
@@ -169,7 +171,7 @@ export function MergeReviewDialog({
               >
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block h-2 w-2 rounded-full bg-[var(--diff-added-accent)]" />
-                  {sentenceCount} sentences unified
+                  {animatedCount} sentences unified
                 </span>
               </motion.div>
 
