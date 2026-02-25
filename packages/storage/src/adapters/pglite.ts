@@ -455,6 +455,34 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
     CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 
+    -- API Keys table (Authentication)
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      key_prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
+
+    -- Webhooks table (Event Subscription)
+    CREATE TABLE IF NOT EXISTS webhooks (
+      webhook_id TEXT PRIMARY KEY,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      events JSONB NOT NULL,
+      secret TEXT,
+      active TEXT NOT NULL DEFAULT 'true',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.
