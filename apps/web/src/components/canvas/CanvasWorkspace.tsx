@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -98,6 +99,7 @@ function CanvasWorkspaceInner({
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+  const { t } = useTerminology();
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -666,10 +668,10 @@ function CanvasWorkspaceInner({
               disabled={!hasBranchCommits}
             >
               <SelectTrigger className="h-7 w-[130px] text-xs rounded-full border-border/50 bg-muted/50 hover:bg-muted transition-colors">
-                <SelectValue placeholder="All branches" />
+                <SelectValue placeholder={t('all_branches')} />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="all">All branches</SelectItem>
+                <SelectItem value="all">{t('all_branches')}</SelectItem>
                 {branchNames.map((name) => (
                   <SelectItem key={name} value={name}>
                     {name}

@@ -1,6 +1,7 @@
 import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '../types/semantic';
 
@@ -32,8 +33,13 @@ interface SemanticCardProps {
 }
 
 export function SemanticCard({ entry }: SemanticCardProps) {
+  const { t } = useTerminology();
   const config = stageConfig[entry.stage];
   const Icon = config.Icon;
+
+  // Override static labels with terminology-aware translations
+  const label =
+    entry.stage === 'commit' ? t('commit') : entry.stage === 'draft' ? t('draft') : config.label;
 
   return (
     <Card className="elevation-1 elevation-hover">
@@ -44,7 +50,7 @@ export function SemanticCard({ entry }: SemanticCardProps) {
               <code className="text-xs text-muted-foreground">{entry.id}</code>
               <Badge variant="outline" className={cn('gap-1', config.className)}>
                 <Icon className="h-3 w-3" />
-                {config.label}
+                {label}
               </Badge>
             </div>
             <h3 className="font-semibold leading-tight">{entry.title}</h3>
