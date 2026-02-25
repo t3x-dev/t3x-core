@@ -460,6 +460,13 @@ function UnitNode(props: Props) {
   // Breathing glow for committed nodes
   const breatheClass = isCommitted ? 'node-breathe-commit' : '';
 
+  // Dark mode semantic glow
+  const nodeGlowClass = isCommitted
+    ? 'dark:node-glow-committed'
+    : isStaging
+      ? 'dark:node-glow-pending'
+      : '';
+
   // Seal animation — triggers on staging → committed transition
   const prevStatusRef = useRef(data.commitStatus);
   const [sealing, setSealing] = useState(false);
@@ -606,7 +613,8 @@ function UnitNode(props: Props) {
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
-          breatheClass
+          breatheClass,
+          nodeGlowClass
         )}
         style={{
           willChange: 'transform',

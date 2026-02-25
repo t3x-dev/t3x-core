@@ -330,7 +330,7 @@
   --surface-panel: oklch(0.14 0.008 260 / 82%);
   --surface-card: oklch(0.19 0.008 260 / 92%);
   --surface-elevated: oklch(0.21 0.008 260 / 94%);
-  --surface-radial: oklch(0.13 0.008 260);
+  --surface-radial: oklch(0.15 0.012 260);
 
   /* ===== Stroke System ===== */
   --stroke-default: oklch(1 0 0 / 12%);
@@ -596,6 +596,27 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .marching-ants { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════
+   Dark Mode Atmosphere — semantic node glow & edge brightness
+   All .dark scoped, zero impact on light mode
+   ═══════════════════════════════════════════ */
+
+/* 9.2 Node Semantic Glow — subtle halo per node type */
+.dark .node-glow-committed {
+  box-shadow: 0 0 0 1px oklch(0.55 0.15 260 / 0.15), 0 0 12px 0 oklch(0.55 0.15 260 / 0.08);
+}
+.dark .node-glow-pending {
+  box-shadow: 0 0 0 1px oklch(0.7 0.14 55 / 0.15), 0 0 12px 0 oklch(0.7 0.14 55 / 0.08);
+}
+.dark .node-glow-leaf {
+  box-shadow: 0 0 0 1px oklch(0.65 0.14 155 / 0.15), 0 0 12px 0 oklch(0.65 0.14 155 / 0.08);
+}
+
+/* 9.3 Edge Brightness — make edges more visible in dark mode */
+.dark .react-flow__edge path {
+  stroke-opacity: 0.35;
 }
 
 /* Controls - replaced with ZoomSlider component from React Flow UI */
