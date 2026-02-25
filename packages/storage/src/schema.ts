@@ -153,8 +153,8 @@ export const commits = pgTable(
 /**
  * Drafts V2 - LLM-generated drafts pending adoption
  */
-export const drafts = pgTable(
-  'drafts_v2',
+export const agentDrafts = pgTable(
+  'agent_drafts',
   {
     draftId: text('draft_id').primaryKey(),
     projectId: text('project_id')
@@ -176,8 +176,8 @@ export const drafts = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => [
-    index('idx_drafts_v2_project').on(table.projectId),
-    index('idx_drafts_v2_base_commit').on(table.baseCommitHash),
+    index('idx_agent_drafts_project').on(table.projectId),
+    index('idx_agent_drafts_base_commit').on(table.baseCommitHash),
   ]
 );
 
@@ -383,16 +383,14 @@ export const templates = pgTable(
     leafType: text('leaf_type').notNull(), // tweet|article|email|weibo|wechat|slack
     systemPrompt: text('system_prompt').notNull(),
     userPrompt: text('user_prompt').notNull(),
-    variables: jsonb('variables')
-      .notNull()
-      .$type<
-        Array<{
-          name: string;
-          description: string;
-          required: boolean;
-          defaultValue?: string;
-        }>
-      >(),
+    variables: jsonb('variables').notNull().$type<
+      Array<{
+        name: string;
+        description: string;
+        required: boolean;
+        defaultValue?: string;
+      }>
+    >(),
     tags: jsonb('tags').$type<string[]>().notNull().default([]),
     isBuiltin: boolean('is_builtin').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
@@ -423,8 +421,8 @@ export type NewBranch = typeof branches.$inferInsert;
 export type Commit = typeof commits.$inferSelect;
 export type NewCommit = typeof commits.$inferInsert;
 
-export type Draft = typeof drafts.$inferSelect;
-export type NewDraft = typeof drafts.$inferInsert;
+export type AgentDraft = typeof agentDrafts.$inferSelect;
+export type NewAgentDraft = typeof agentDrafts.$inferInsert;
 
 export type SegmentEmbedding = typeof segmentEmbeddings.$inferSelect;
 export type NewSegmentEmbedding = typeof segmentEmbeddings.$inferInsert;

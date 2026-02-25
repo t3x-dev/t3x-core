@@ -84,6 +84,11 @@ export const ErrorCodes = {
   // Webhook errors
   WEBHOOK_NOT_FOUND: 'WEBHOOK_NOT_FOUND',
 
+  // Draft errors
+  DRAFT_NOT_FOUND: 'DRAFT_NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+
   // Validation errors (VAL-2)
   NO_OUTPUT: 'NO_OUTPUT',
   SEMANTIC_NOT_SUPPORTED: 'SEMANTIC_NOT_SUPPORTED',
@@ -159,6 +164,11 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
 
   // Webhook errors
   WEBHOOK_NOT_FOUND: 404,
+
+  // Draft errors
+  DRAFT_NOT_FOUND: 404,
+  CONFLICT: 409,
+  TOO_MANY_REQUESTS: 429,
 
   // Validation errors (VAL-2)
   NO_OUTPUT: 400,
