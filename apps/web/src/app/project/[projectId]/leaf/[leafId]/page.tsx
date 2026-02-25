@@ -26,6 +26,7 @@ import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSou
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
+import { TraceTimeline, type TraceNode } from '@/components/shared/TraceTimeline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,10 +37,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Assertion, CommitV4, Constraint, Leaf } from '@/lib/api';
+import type { Assertion, CommitV4, CommitV4Sentence, Constraint, Leaf } from '@/lib/api';
 import {
   ApiError,
+  fetchTurnContextCached,
   generateLeafOutput,
   getCommitV4,
   getLeaf,
@@ -103,6 +106,66 @@ export default function LeafDetailPage() {
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
+
+  // Trace timeline state
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [traceNodes, setTraceNodes] = useState<TraceNode[]>([]);
+  const [traceLoading, setTraceLoading] = useState(false);
+
+  const handleTrace = useCallback(
+    async (sentence: CommitV4Sentence) => {
+      setTraceOpen(true);
+      setTraceLoading(true);
+
+      const nodes: TraceNode[] = [];
+
+      // Level 1: Leaf output (if exists)
+      if (leaf?.output) {
+        nodes.push({
+          type: 'leaf',
+          title: leaf.title || leaf.type,
+          content: leaf.output.length > 200 ? `${leaf.output.slice(0, 200)}...` : leaf.output,
+        });
+      }
+
+      // Level 2: Commit sentence
+      nodes.push({
+        type: 'commit',
+        title: sentence.id,
+        subtitle: commitData?.message || undefined,
+        content: sentence.text,
+        meta: sentence.confidence != null ? `${Math.round(sentence.confidence * 100)}%` : undefined,
+      });
+
+      // Level 3: Original conversation turn
+      if (sentence.source_ref?.turn_hash) {
+        try {
+          const ctx = await fetchTurnContextCached(sentence.source_ref.turn_hash);
+          const turn = ctx.target_turn;
+          nodes.push({
+            type: 'conversation',
+            title: `${turn.role} turn`,
+            subtitle: turn.conversation_id ? `conv ${turn.conversation_id.slice(0, 12)}...` : undefined,
+            content: turn.content,
+            highlight:
+              sentence.source_ref.start_char != null
+                ? { start: sentence.source_ref.start_char, end: sentence.source_ref.end_char }
+                : undefined,
+          });
+        } catch {
+          nodes.push({
+            type: 'conversation',
+            title: 'Turn unavailable',
+            content: 'Could not load original conversation turn.',
+          });
+        }
+      }
+
+      setTraceNodes(nodes);
+      setTraceLoading(false);
+    },
+    [leaf, commitData]
+  );
 
   // Assertion selection & Re-tune state
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
@@ -612,6 +675,63 @@ export default function LeafDetailPage() {
               Source commit data unavailable — constraints shown without source context.
             </div>
           )}
+
+          {/* Knowledge Sentences with Trace */}
+          {commitData && commitData.content.sentences.length > 0 && (
+            <CollapsibleSection
+              title="Knowledge Sentences"
+              badge={commitData.content.sentences.length}
+            >
+              <div className="space-y-2">
+                {commitData.content.sentences.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-start gap-3 rounded-lg bg-[var(--hover-bg)] px-3 py-2.5"
+                  >
+                    <p className="flex-1 text-sm text-[var(--text-primary)] leading-relaxed">
+                      {s.text}
+                    </p>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {s.confidence != null && (
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          {Math.round(s.confidence * 100)}%
+                        </span>
+                      )}
+                      {s.source_ref && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => handleTrace(s)}
+                        >
+                          <BookOpen className="h-3 w-3" />
+                          Trace
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Trace Timeline Sheet */}
+          <Sheet open={traceOpen} onOpenChange={setTraceOpen}>
+            <SheetContent side="right" className="w-[420px] sm:max-w-[420px] overflow-auto">
+              <SheetHeader>
+                <SheetTitle>Knowledge Trace</SheetTitle>
+              </SheetHeader>
+              <div className="mt-6">
+                {traceLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
+                  </div>
+                ) : (
+                  <TraceTimeline nodes={traceNodes} />
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
 
           {/* Source Context with constraint highlights + text selection */}
           {commitData && sentences.length > 0 && (
