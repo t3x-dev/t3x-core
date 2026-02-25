@@ -456,9 +456,9 @@ function UnitNode(props: Props) {
   // Context config state
   const [contextConfig, setContextConfig] = useState<ConversationContext | null>(null);
 
-  // Fetch context config on mount
+  // Fetch context config on mount (skip virtual orphan conversations)
   useEffect(() => {
-    if (!data.conversationId) return;
+    if (!data.conversationId || data.conversationId.startsWith('orphan-')) return;
 
     getConversationContext(data.conversationId)
       .then(setContextConfig)

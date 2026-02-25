@@ -28,10 +28,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [density]);
 
   // Sidebar collapsed state — lifted here so main content margin can follow
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('t3x-sidebar-collapsed') !== 'false';
-  });
+  // Default to `true` (collapsed) on both server & client to avoid hydration mismatch,
+  // then sync from localStorage after mount.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('t3x-sidebar-collapsed');
+    if (stored === 'false') {
+      setSidebarCollapsed(false);
+    }
+  }, []);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
