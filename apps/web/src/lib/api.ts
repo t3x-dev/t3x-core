@@ -2320,7 +2320,7 @@ export async function compareConfigurations(
 
 export interface SavedComparison {
   comparison_id: string;
-  project_id: string;
+  project_id: string | null;
   title: string;
   control_config: { model: string; prompt_version: string };
   treatment_config: { model: string; prompt_version: string };
@@ -2331,7 +2331,7 @@ export interface SavedComparison {
 }
 
 export async function createSavedComparison(input: {
-  project_id: string;
+  project_id?: string | null;
   title: string;
   control_config: { model: string; prompt_version: string };
   treatment_config: { model: string; prompt_version: string };
@@ -2347,10 +2347,9 @@ export async function createSavedComparison(input: {
   return handleResponse<SavedComparison>(res);
 }
 
-export async function listSavedComparisons(projectId: string): Promise<SavedComparison[]> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/comparisons?${buildQueryString({ project_id: projectId })}`
-  );
+export async function listSavedComparisons(projectId?: string): Promise<SavedComparison[]> {
+  const params = projectId ? `?${buildQueryString({ project_id: projectId })}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/comparisons${params}`);
   return handleResponse<SavedComparison[]>(res);
 }
 

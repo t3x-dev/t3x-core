@@ -227,8 +227,8 @@ function ComparePageContent() {
 
   // Load saved comparisons list
   useEffect(() => {
-    // We load all saved comparisons (no project filter for now)
-    listSavedComparisons('')
+    // Load all saved comparisons (no project filter for now)
+    listSavedComparisons()
       .then(setSavedComparisons)
       .catch(() => {});
   }, []);
@@ -301,7 +301,6 @@ function ComparePageContent() {
     setSaving(true);
     try {
       const saved = await createSavedComparison({
-        project_id: '', // global for now
         title: saveTitle,
         control_config: controlConfig,
         treatment_config: treatmentConfig,
