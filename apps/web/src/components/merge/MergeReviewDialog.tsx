@@ -30,6 +30,8 @@ interface MergeReviewDialogProps {
   sentenceCount: number;
   /** Merge summary stats (from computeMergeSummary) */
   summary: MergeSummary | null;
+  /** Whether server-side checks are still loading */
+  serverChecksLoading?: boolean;
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
 }
@@ -44,6 +46,7 @@ export function MergeReviewDialog({
   targetBranch,
   sentenceCount,
   summary,
+  serverChecksLoading,
   onBackToCanvas,
 }: MergeReviewDialogProps) {
   const { t } = useTerminology();
@@ -213,6 +216,14 @@ export function MergeReviewDialog({
                     </div>
                   </div>
                 ))}
+                {serverChecksLoading && (
+                  <div className="flex items-center gap-2.5">
+                    <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin text-[var(--text-tertiary)]" />
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      Loading server checks...
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Error */}

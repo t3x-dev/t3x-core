@@ -49,6 +49,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     getMergeChecks,
     getPreviewSentences,
     extendedResolutions,
+    fetchServerChecks,
+    serverChecksLoading,
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -94,7 +96,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
   const handleOpenReview = useCallback(() => {
     setShowReviewDialog(true);
-  }, []);
+    fetchServerChecks();
+  }, [fetchServerChecks]);
 
   const handleConfirmMerge = useCallback(async () => {
     await commitMerge();
@@ -140,6 +143,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         targetBranch={targetBranch || 'main'}
         sentenceCount={getPreviewSentences().length}
         summary={summary}
+        serverChecksLoading={serverChecksLoading}
         onBackToCanvas={onClose}
       />
 
