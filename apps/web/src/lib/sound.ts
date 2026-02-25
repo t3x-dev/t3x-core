@@ -53,6 +53,7 @@ class SoundManager {
 
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.1);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   /** Ascending C major chord — C4, E4, G4, staggered 60ms */
@@ -80,6 +81,7 @@ class SoundManager {
 
       osc.start(start);
       osc.stop(start + 0.2);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
     }
   }
 }

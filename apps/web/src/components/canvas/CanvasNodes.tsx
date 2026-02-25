@@ -485,11 +485,11 @@ function UnitNode(props: Props) {
   // Breathing glow for committed nodes
   const breatheClass = isCommitted ? 'node-breathe-commit' : '';
 
-  // Dark mode semantic glow
+  // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
-    ? 'dark:node-glow-committed'
+    ? 'node-glow-committed'
     : isStaging
-      ? 'dark:node-glow-pending'
+      ? 'node-glow-pending'
       : '';
 
   // Seal animation — triggers on staging → committed transition
