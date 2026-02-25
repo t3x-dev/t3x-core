@@ -15,6 +15,7 @@ import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -54,6 +55,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
+  const { t } = useTerminology();
   const [showReviewDialog, setShowReviewDialog] = useState(false);
 
   // Auto-save when dirty (debounced)
@@ -113,8 +115,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <EmptyState
           icon={GitMerge}
-          title="No merge data available"
-          description="There is no merge in progress. Start a merge from the canvas by selecting two branches to compare."
+          title={`No ${t('merge').toLowerCase()} data available`}
+          description={`There is no ${t('merge').toLowerCase()} in progress. Start a ${t('merge').toLowerCase()} from the canvas by selecting two ${t('branches').toLowerCase()} to compare.`}
           action={{ label: 'Go Back', onClick: onClose }}
         />
       </div>

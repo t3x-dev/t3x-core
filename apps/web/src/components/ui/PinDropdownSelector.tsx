@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -24,6 +25,7 @@ interface PinDropdownSelectorProps {
 
 export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorProps) {
   const [open, setOpen] = useState(false);
+  const { t } = useTerminology();
   const { data, loading } = useBranchCommits(projectId, branch);
   const pins = usePinsStore((s) => s.pins);
   const isPinned = usePinsStore((s) => s.isPinned);
@@ -116,14 +118,16 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
         {loading && (
           <div className="flex items-center justify-center py-4">
             <Loader2 size={16} className="animate-spin text-[var(--color-text-muted)]" />
-            <span className="ml-2 text-xs text-[var(--color-text-muted)]">Loading commits...</span>
+            <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+              Loading {t('commits').toLowerCase()}...
+            </span>
           </div>
         )}
 
         {/* Empty state */}
         {!loading && (!data || data.length === 0) && (
           <div className="px-2 py-4 text-center text-xs text-[var(--color-text-muted)]">
-            No commits on this branch
+            No {t('commits').toLowerCase()} on this {t('branch').toLowerCase()}
           </div>
         )}
 

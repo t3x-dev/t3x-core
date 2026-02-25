@@ -516,7 +516,7 @@ function UnitNode(props: Props) {
     }
     if (isStaging && data.conversationId) {
       return {
-        label: 'Create Commit',
+        label: t('create_commit'),
         icon: GitCommit,
         action: () => openNodeModal(id, 'commit'),
       };

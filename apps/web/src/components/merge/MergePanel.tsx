@@ -264,7 +264,7 @@ export function MergePanel() {
                 Executing...
               </span>
             ) : (
-              'Execute Merge'
+              t('mergeConfirm')
             )}
           </button>
           <button
@@ -339,7 +339,7 @@ export function MergePanel() {
             </Button>
             <Button onClick={handleConfirmExecute}>
               <GitMerge className="h-4 w-4 mr-2" />
-              Execute Merge
+              {t('mergeConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

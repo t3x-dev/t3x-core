@@ -185,7 +185,7 @@ export function CommittedCommitView({
           <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
             <div className="flex items-center gap-3">
               <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
-                Commit: {data.title || 'Untitled'}
+                {t('commit')}: {data.title || 'Untitled'}
               </h2>
               <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
               <Badge
@@ -226,7 +226,7 @@ export function CommittedCommitView({
                 <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
                   <GitBranch size={14} className="text-[var(--text-tertiary)] shrink-0" />
                   <span>
-                    Branch: <strong>{branchLabel}</strong>
+                    {t('branch')}: <strong>{branchLabel}</strong>
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
@@ -561,7 +561,9 @@ export function CommittedCommitView({
                     }}
                   >
                     <option value="">
-                      {allCommittedCommits.length <= 1 ? 'Need 2+ commits' : 'Select a commit...'}
+                      {allCommittedCommits.length <= 1
+                        ? `Need 2+ ${t('commits').toLowerCase()}`
+                        : `Select a ${t('commit').toLowerCase()}...`}
                     </option>
                     {allCommittedCommits
                       .filter((c) => c.data.commitHash !== data.commitHash)
