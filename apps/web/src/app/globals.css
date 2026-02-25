@@ -504,38 +504,19 @@ a {
   border-radius: 8px 4px 4px 8px;
 }
 
-/* Edge flow animation */
-@keyframes edge-flow {
-  from {
-    stroke-dashoffset: 24;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+/* Edge birth glow — bright pulse on new edges then fade out */
+@keyframes edge-birth-glow {
+  0% { opacity: 0; }
+  15% { opacity: 0.9; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; }
 }
-
-/* Edge birth pulse — bright glow that sweeps along a new edge then fades */
-@keyframes edge-birth-pulse {
-  0% {
-    stroke-dashoffset: 200;
-    opacity: 0.9;
-  }
-  60% {
-    stroke-dashoffset: 0;
-    opacity: 0.7;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-}
-.edge-birth-pulse {
-  stroke-dasharray: 200;
-  animation: edge-birth-pulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+.edge-birth-glow {
+  animation: edge-birth-glow 1.2s ease-out forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .edge-birth-pulse { animation: none !important; opacity: 0 !important; }
+  .edge-birth-glow { animation: none !important; opacity: 0 !important; }
 }
 
 /* Subtle pulse for active connections */

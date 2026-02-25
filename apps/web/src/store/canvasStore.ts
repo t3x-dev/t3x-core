@@ -752,6 +752,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           type: edgeType,
           animated: false,
           style: edgeStyle,
+          data: { createdAt: Date.now() },
         };
         return {
           nodes: [...state.nodes, newNode],
