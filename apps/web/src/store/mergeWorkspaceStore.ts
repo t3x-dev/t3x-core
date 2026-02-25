@@ -487,7 +487,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { draftId, message, targetBranch } = get();
     if (!draftId) throw new Error('No draft to commit');
 
-    set({ loading: true, error: null });
+    // Don't set loading: true here — the MergeReviewDialog has its own
+    // 'committing' state. Setting loading would unmount MergeWorkspace
+    // (the page shows a spinner when loading=true) and kill the dialog.
+    set({ error: null });
 
     try {
       const commitResult = await fetchApi<CommitV3>(`/merge/drafts/${draftId}/commit`, {
@@ -498,7 +501,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         }),
       });
 
-      set({ status: 'committed', loading: false, isDirty: false });
+      set({ status: 'committed', isDirty: false });
 
       // Force canvas to reload data by clearing its projectId
       // This ensures the new merge commit will be displayed
@@ -510,7 +513,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       return commitResult;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
-      set({ loading: false, error: errorMsg });
+      set({ error: errorMsg });
       throw err;
     }
   },

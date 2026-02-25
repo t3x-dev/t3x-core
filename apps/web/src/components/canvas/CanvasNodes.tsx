@@ -1,5 +1,5 @@
 import type { Node, NodeProps } from '@xyflow/react';
-import { Handle, NodeToolbar, Position } from '@xyflow/react';
+import { Handle, NodeToolbar, Position, useStore } from '@xyflow/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -42,6 +42,8 @@ import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { MarchingAnts } from '@/components/canvas/MarchingAnts';
+import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -402,6 +404,30 @@ function CommitV4Content({
   );
 }
 
+// Constellation mode — zoom hysteresis thresholds
+const CONSTELLATION_ENTER = 0.35;
+const CONSTELLATION_EXIT = 0.45;
+
+const constellationColors: Record<string, string> = {
+  committed: '#3b82f6',
+  staging: '#f97316',
+  conversation: '#818cf8',
+  leaf: '#10b981',
+};
+
+function useConstellationMode(): boolean {
+  const zoom = useStore((s) => s.transform[2]);
+  const minifiedRef = useRef(false);
+
+  if (minifiedRef.current && zoom > CONSTELLATION_EXIT) {
+    minifiedRef.current = false;
+  } else if (!minifiedRef.current && zoom < CONSTELLATION_ENTER) {
+    minifiedRef.current = true;
+  }
+
+  return minifiedRef.current;
+}
+
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
@@ -412,6 +438,7 @@ function UnitNode(props: Props) {
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
   const prefersReducedMotion = useReducedMotion();
+  const isConstellation = useConstellationMode();
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
@@ -461,18 +488,37 @@ function UnitNode(props: Props) {
   const toneKey = isStaging ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // Commit celebration animation — triggers on staging → committed transition
+  // Breathing glow for committed nodes
+  const breatheClass = isCommitted ? 'node-breathe-commit' : '';
+
+  // Dark mode semantic glow (CSS uses .dark ancestor selector)
+  const nodeGlowClass = isCommitted
+    ? 'node-glow-committed'
+    : isStaging
+      ? 'node-glow-pending'
+      : '';
+
+  // Seal animation — triggers on staging → committed transition
   const prevStatusRef = useRef(data.commitStatus);
-  const [celebrating, setCelebrating] = useState(false);
+  const [sealing, setSealing] = useState(false);
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const [nodeHeight, setNodeHeight] = useState(160);
 
   useEffect(() => {
     if (prevStatusRef.current === 'staging' && data.commitStatus === 'committed') {
-      setCelebrating(true);
-      const timer = setTimeout(() => setCelebrating(false), 500);
-      return () => clearTimeout(timer);
+      setSealing(true);
     }
     prevStatusRef.current = data.commitStatus;
   }, [data.commitStatus]);
+
+  useEffect(() => {
+    if (!nodeRef.current) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setNodeHeight(entry.contentRect.height);
+    });
+    ro.observe(nodeRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const handleAddUnit = () => {
     try {
@@ -556,17 +602,46 @@ function UnitNode(props: Props) {
     : data.commitV3
       ? data.commitV3.sentences.length
       : 0;
+
+  // Constellation mode — render minified dot at low zoom
+  if (isConstellation) {
+    const dotType = isStaging ? 'staging' : isCommitted ? 'committed' : 'conversation';
+    const color = constellationColors[dotType] || constellationColors.committed;
+    return (
+      <>
+        <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 1, height: 1 }} />
+        <div
+          className="constellation-dot"
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            backgroundColor: color,
+            boxShadow: `0 0 8px ${color}40, 0 0 2px ${color}80`,
+            transition: 'box-shadow 0.3s ease',
+          }}
+          role="treeitem"
+          tabIndex={0}
+          aria-label={`${data.title} (minified)`}
+          aria-selected={selected}
+        />
+        <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 1, height: 1 }} />
+      </>
+    );
+  }
+
   return (
     <>
       <Handle type="target" position={Position.Left} style={targetHandleStyle} />
 
       <motion.div
+        ref={nodeRef}
         variants={prefersReducedMotion ? reducedMotion.scaleIn : nodeEnter}
         initial="initial"
-        animate={celebrating && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
+        animate={sealing && !prefersReducedMotion ? { scale: [1, 1.06, 1] } : 'animate'}
         exit="exit"
         transition={
-          celebrating && !prefersReducedMotion
+          sealing && !prefersReducedMotion
             ? {
                 duration: 0.4,
                 times: [0, 0.35, 1],
@@ -581,12 +656,12 @@ function UnitNode(props: Props) {
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
-          'group w-72 rounded-xl overflow-visible elevation-1',
+          'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
           glass.highlight,
           // Left accent line
           'border-l-2',
-          isStaging && 'border-dashed',
+          isStaging && 'border-t-transparent border-r-transparent border-b-transparent',
           accentKey === 'commit' && 'border-l-[var(--accent-commit)]',
           accentKey === 'branch' && 'border-l-[var(--accent-branch)]',
           accentKey === 'pending' && 'border-l-[var(--accent-pending)]',
@@ -596,7 +671,9 @@ function UnitNode(props: Props) {
           selected && cn('ring-2', toneAccent[accentKey].ring),
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
-          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50'
+          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
+          breatheClass,
+          nodeGlowClass
         )}
         style={{
           willChange: 'transform',
@@ -608,6 +685,24 @@ function UnitNode(props: Props) {
         data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
+        {/* Marching ants for staging nodes */}
+        {isStaging && (
+          <MarchingAnts
+            width={288}
+            height={nodeHeight}
+            borderRadius={16}
+          />
+        )}
+
+        {/* Seal animation overlay */}
+        <SealAnimation
+          width={288}
+          height={nodeHeight}
+          borderRadius={16}
+          isActive={sealing}
+          onComplete={() => setSealing(false)}
+        />
+
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
