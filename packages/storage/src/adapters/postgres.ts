@@ -376,7 +376,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Saved Comparisons table (persisted A/B comparison snapshots)
     CREATE TABLE IF NOT EXISTS saved_comparisons (
       comparison_id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       control_config JSONB NOT NULL,
       treatment_config JSONB NOT NULL,

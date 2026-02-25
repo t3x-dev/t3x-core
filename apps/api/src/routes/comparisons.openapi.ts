@@ -31,7 +31,7 @@ const ConfigSchema = z.object({
 
 const SavedComparisonSchema = z.object({
   comparison_id: z.string(),
-  project_id: z.string(),
+  project_id: z.string().nullable(),
   title: z.string(),
   control_config: ConfigSchema,
   treatment_config: ConfigSchema,
@@ -42,8 +42,8 @@ const SavedComparisonSchema = z.object({
 });
 
 const CreateComparisonRequest = z.object({
-  project_id: z.string().min(1),
-  title: z.string().max(200),
+  project_id: z.string().nullable().optional(),
+  title: z.string().min(1).max(200),
   control_config: ConfigSchema,
   treatment_config: ConfigSchema,
   control_run_ids: z.array(z.string()),
@@ -56,7 +56,7 @@ const ComparisonIdParam = z.object({
 });
 
 const ListComparisonsQuery = z.object({
-  project_id: z.string().min(1),
+  project_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().int().min(0).default(0).optional(),
 });
@@ -71,7 +71,7 @@ export const comparisonsRoutes = new OpenAPIHono({
 
 function formatComparison(row: {
   comparisonId: string;
-  projectId: string;
+  projectId: string | null;
   title: string;
   controlConfig: unknown;
   treatmentConfig: unknown;
@@ -184,7 +184,7 @@ comparisonsRoutes.openapi(listComparisonsRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const rows = await listComparisons(db, project_id, { limit, offset });
+    const rows = await listComparisons(db, project_id || null, { limit, offset });
     return c.json({
       success: true as const,
       data: rows.map(formatComparison),

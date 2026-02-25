@@ -115,11 +115,23 @@ describe('Comparisons Routes', () => {
       expect(data.created_at).toBeTruthy();
     });
 
-    it('returns 400 for missing project_id', async () => {
+    it('creates a comparison without project_id (global)', async () => {
       const res = await app.request('/v1/comparisons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(makeCreateBody({ project_id: '' })),
+        body: JSON.stringify(makeCreateBody({ project_id: null })),
+      });
+      expect(res.status).toBe(201);
+      const json: ApiResponse = await res.json();
+      const data = json.data as Record<string, unknown>;
+      expect(data.project_id).toBeNull();
+    });
+
+    it('returns 400 for empty title', async () => {
+      const res = await app.request('/v1/comparisons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: '' })),
       });
       expect(res.status).toBe(400);
     });
@@ -168,9 +180,12 @@ describe('Comparisons Routes', () => {
       expect((json.data as unknown[]).length).toBe(0);
     });
 
-    it('returns 400 when project_id is missing', async () => {
+    it('returns all comparisons when no project_id filter', async () => {
       const res = await app.request('/v1/comparisons');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
+      const json: ApiResponse = await res.json();
+      expect(json.success).toBe(true);
+      expect((json.data as unknown[]).length).toBeGreaterThan(0);
     });
 
     it('supports limit and offset', async () => {

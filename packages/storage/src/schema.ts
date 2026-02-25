@@ -348,9 +348,9 @@ export const savedComparisons = pgTable(
   'saved_comparisons',
   {
     comparisonId: text('comparison_id').primaryKey(), // comp_xxxxxxxxxxxx
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    projectId: text('project_id').references(() => projects.projectId, {
+      onDelete: 'cascade',
+    }),
     title: text('title').notNull(),
     controlConfig: jsonb('control_config')
       .notNull()

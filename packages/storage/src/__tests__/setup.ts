@@ -308,7 +308,7 @@ CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
 CREATE TABLE IF NOT EXISTS saved_comparisons (
   comparison_id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   control_config JSONB NOT NULL,
   treatment_config JSONB NOT NULL,

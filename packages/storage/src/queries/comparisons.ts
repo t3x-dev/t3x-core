@@ -13,7 +13,7 @@ import { savedComparisons } from '../schema';
 
 export interface CreateComparisonInput {
   comparison_id: string;
-  project_id: string;
+  project_id?: string | null;
   title: string;
   control_config: { model: string; prompt_version: string };
   treatment_config: { model: string; prompt_version: string };
@@ -34,7 +34,7 @@ export async function createComparison(db: AnyDB, input: CreateComparisonInput) 
     .insert(savedComparisons)
     .values({
       comparisonId: input.comparison_id,
-      projectId: input.project_id,
+      projectId: input.project_id || null,
       title: input.title,
       controlConfig: input.control_config,
       treatmentConfig: input.treatment_config,
@@ -52,18 +52,21 @@ export async function createComparison(db: AnyDB, input: CreateComparisonInput) 
  */
 export async function listComparisons(
   db: AnyDB,
-  projectId: string,
+  projectId?: string | null,
   opts?: { limit?: number; offset?: number }
 ) {
   const limit = opts?.limit ?? 100;
   const offset = opts?.offset ?? 0;
-  return db
+  const query = db
     .select()
     .from(savedComparisons)
-    .where(eq(savedComparisons.projectId, projectId))
     .orderBy(desc(savedComparisons.createdAt))
     .limit(limit)
     .offset(offset);
+  if (projectId) {
+    return query.where(eq(savedComparisons.projectId, projectId));
+  }
+  return query;
 }
 
 /**
