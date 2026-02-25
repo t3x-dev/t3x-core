@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle,
   CheckCircle2,
+  ClipboardPaste,
   Copy,
   Download,
   FileJson,
@@ -538,6 +539,13 @@ export default function LeafDetailPage() {
               <DropdownMenuItem onClick={() => handleExport('clipboard')} disabled={!leaf.output}>
                 <Copy className="mr-2 h-4 w-4" />
                 Copy Output
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport('prompt')}
+                disabled={!leaf.config?.prompt_template && !leaf.output}
+              >
+                <ClipboardPaste className="mr-2 h-4 w-4" />
+                Copy as Prompt
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleExport('markdown')}>
                 <FileText className="mr-2 h-4 w-4" />

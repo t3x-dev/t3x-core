@@ -6,6 +6,7 @@ import {
   FileText,
   GitBranch,
   Home,
+  Keyboard,
   LayoutGrid,
   MessageSquarePlus,
   Search,
@@ -159,6 +160,23 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                     onSelect={() => handleSelect(() => {})}
                   >
                     Generate Summary
+                  </CommandItem>
+                  <CommandItem
+                    icon={<Keyboard size={16} />}
+                    shortcut="⌘/"
+                    onSelect={() =>
+                      handleSelect(() => {
+                        document.dispatchEvent(
+                          new KeyboardEvent('keydown', {
+                            key: '/',
+                            metaKey: true,
+                            bubbles: true,
+                          })
+                        );
+                      })
+                    }
+                  >
+                    Keyboard Shortcuts
                   </CommandItem>
                 </Command.Group>
               </Command.List>

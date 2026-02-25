@@ -1,25 +1,48 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type UserExperience = 'general' | 'developer';
+export type ViewMode = 'canvas' | 'timeline' | 'list';
+export type Density = 'compact' | 'comfortable';
+
 interface SettingsState {
   developerMode: boolean;
+  userExperience: UserExperience;
+  defaultView: ViewMode;
+  density: Density;
+
   setDeveloperMode: (enabled: boolean) => void;
   toggleDeveloperMode: () => void;
+  setUserExperience: (experience: UserExperience) => void;
+  setDefaultView: (view: ViewMode) => void;
+  setDensity: (density: Density) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       developerMode: false,
+      userExperience: 'general',
+      defaultView: 'canvas',
+      density: 'comfortable',
+
       setDeveloperMode: (enabled) => set({ developerMode: enabled }),
       toggleDeveloperMode: () =>
         set((state) => ({
           developerMode: !state.developerMode,
         })),
+      setUserExperience: (experience) => set({ userExperience: experience }),
+      setDefaultView: (view) => set({ defaultView: view }),
+      setDensity: (density) => set({ density }),
     }),
     {
       name: 't3x-settings',
-      partialize: (state) => ({ developerMode: state.developerMode }),
+      partialize: (state) => ({
+        developerMode: state.developerMode,
+        userExperience: state.userExperience,
+        defaultView: state.defaultView,
+        density: state.density,
+      }),
     }
   )
 );

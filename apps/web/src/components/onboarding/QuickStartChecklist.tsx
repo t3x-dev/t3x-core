@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { springConfig } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const STORAGE_KEY = 't3x-quickstart-progress';
 const DISMISSED_KEY = 't3x-quickstart-dismissed';
@@ -14,14 +15,23 @@ const DISMISSED_KEY = 't3x-quickstart-dismissed';
 interface ChecklistItem {
   id: string;
   label: string;
+  labelGeneral: string;
 }
 
 const ITEMS: ChecklistItem[] = [
-  { id: 'create-conv', label: 'Create a conversation' },
-  { id: 'commit-main', label: 'Commit knowledge to main' },
-  { id: 'create-branch', label: 'Create a branch' },
-  { id: 'generate-leaf', label: 'Generate a leaf output' },
-  { id: 'merge-branches', label: 'Merge branches' },
+  { id: 'create-conv', label: 'Create a conversation', labelGeneral: 'Start a conversation' },
+  {
+    id: 'commit-main',
+    label: 'Commit knowledge to main',
+    labelGeneral: 'Save a snapshot to main',
+  },
+  { id: 'create-branch', label: 'Create a branch', labelGeneral: 'Create a version' },
+  {
+    id: 'generate-leaf',
+    label: 'Generate a leaf output',
+    labelGeneral: 'Generate an output',
+  },
+  { id: 'merge-branches', label: 'Merge branches', labelGeneral: 'Merge versions' },
 ];
 
 function getProgress(): Record<string, boolean> {
@@ -55,6 +65,7 @@ export const QuickStartChecklist = memo(function QuickStartChecklist({
   const [dismissed, setDismissed] = useState(true);
   const [allComplete, setAllComplete] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+  const userExperience = useSettingsStore((s) => s.userExperience);
 
   // Initialize from localStorage
   useEffect(() => {
@@ -201,7 +212,7 @@ export const QuickStartChecklist = memo(function QuickStartChecklist({
                         : 'text-[var(--text-secondary)]'
                     )}
                   >
-                    {item.label}
+                    {userExperience === 'general' ? item.labelGeneral : item.label}
                   </span>
                 </div>
               );
