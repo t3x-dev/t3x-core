@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
+import type { MergeSummary } from '@/lib/mergeSummary';
 import { useMicrocopy } from '@/lib/microcopy';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,8 @@ interface MergeReviewDialogProps {
   sourceBranch: string;
   targetBranch: string;
   sentenceCount: number;
+  /** Merge summary stats (from computeMergeSummary) */
+  summary: MergeSummary | null;
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
 }
@@ -40,6 +43,7 @@ export function MergeReviewDialog({
   sourceBranch,
   targetBranch,
   sentenceCount,
+  summary,
   onBackToCanvas,
 }: MergeReviewDialogProps) {
   const { t } = useTerminology();
@@ -144,6 +148,40 @@ export function MergeReviewDialog({
               {message && (
                 <div className="mb-4 rounded-lg bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)]">
                   {message}
+                </div>
+              )}
+
+              {/* Merge Summary */}
+              {summary && (
+                <div className="mb-4 grid grid-cols-4 gap-3 rounded-lg bg-[var(--hover-bg)] px-3 py-3">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--text-secondary)]">
+                      {summary.kept_identical}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">
+                      {t('identical_sentences')}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--accent-commit)]">
+                      {summary.resolved_conflicts}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">{t('resolved')}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--diff-removed-accent)]">
+                      {summary.discarded}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">
+                      {t('removed_sentences')}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-[var(--text-primary)]">
+                      {summary.total_sentences}
+                    </div>
+                    <div className="text-[10px] text-[var(--text-tertiary)]">Total</div>
+                  </div>
                 </div>
               )}
 

@@ -15,6 +15,7 @@ import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { MergeActionBar } from './MergeActionBar';
@@ -47,6 +48,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     togglePreview,
     getMergeChecks,
     getPreviewSentences,
+    extendedResolutions,
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -117,6 +119,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   }
 
   const unresolvedCount = getUnresolvedCount();
+  const summary = prepared ? computeMergeSummary(prepared, extendedResolutions) : null;
   const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
 
   return (
@@ -136,6 +139,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         sourceBranch={sourceBranch || 'source'}
         targetBranch={targetBranch || 'main'}
         sentenceCount={getPreviewSentences().length}
+        summary={summary}
         onBackToCanvas={onClose}
       />
 
