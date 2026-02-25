@@ -1977,6 +1977,7 @@ export interface EngineRun {
     id: string;
     type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
     content?: string;
+    title?: string;
   } | null;
   inputs: Record<string, unknown> | null;
   workflow: {

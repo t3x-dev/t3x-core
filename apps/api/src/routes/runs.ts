@@ -168,6 +168,7 @@ runsRoutes.post('/v1/runs', async (c) => {
         type: input.leaf?.type || 'deploy',
         content: leaf.output,
         rules_ref: input.leaf?.rules_ref,
+        title: leaf.title,
       };
       console.log(
         `[runs] Resolved leaf_id ${input.leaf_id} → output (${leaf.output.length} chars)`
