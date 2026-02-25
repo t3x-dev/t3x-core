@@ -15,6 +15,7 @@
 
 import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';
 import { useEffect } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 
 type Resolution = 'source' | 'target' | 'both';
@@ -43,6 +44,7 @@ export function ConflictResolutionButtons({
   targetBranch = 'B',
   enableKeyboard = true,
 }: ConflictResolutionButtonsProps) {
+  const { t } = useTerminology();
   // Keyboard shortcuts: A/B/X
   useEffect(() => {
     if (!enableKeyboard) return;
@@ -93,7 +95,7 @@ export function ConflictResolutionButtons({
     {
       resolution: 'both',
       icon: <Layers className="h-4 w-4" />,
-      label: 'Keep Both',
+      label: t('keep_both'),
       activeClass:
         'border-[var(--accent-commit)]/40 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/40 bg-transparent',
       shortcut: 'X',

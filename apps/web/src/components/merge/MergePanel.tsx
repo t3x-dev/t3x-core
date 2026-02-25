@@ -163,26 +163,30 @@ export function MergePanel() {
       {counts && (
         <div className="mb-[var(--space-section)] p-3 bg-muted/50 rounded-lg text-sm">
           <div className="flex justify-between mb-1">
-            <span>Identical (auto-kept):</span>
+            <span>
+              {t('identical_sentences')} ({t('auto_kept').toLowerCase()}):
+            </span>
             <span className="font-medium text-[var(--diff-added-accent)]">{counts.identical}</span>
           </div>
           <div className="flex justify-between mb-1">
-            <span>Similar (need decision):</span>
+            <span>
+              {t('modified_sentences')} ({t('unresolved').toLowerCase()}):
+            </span>
             <span className="font-medium text-[var(--diff-modified-accent)]">
               {counts.resolved}/{counts.similar}
             </span>
           </div>
           <div className="flex justify-between mb-1">
-            <span>Only in source:</span>
+            <span>{t('only_in_source')}:</span>
             <span className="font-medium">{counts.onlyInSource}</span>
           </div>
           <div className="flex justify-between">
-            <span>Only in target:</span>
+            <span>{t('only_in_target')}:</span>
             <span className="font-medium">{counts.onlyInTarget}</span>
           </div>
           {unresolvedCount > 0 && (
             <div className="mt-2 pt-2 border-t border-border text-[var(--diff-modified-accent)] font-medium">
-              ⚠️ {unresolvedCount} unresolved conflict{unresolvedCount !== 1 ? 's' : ''}
+              ⚠️ {unresolvedCount} {t('unresolved').toLowerCase()} {t('conflicts').toLowerCase()}
             </div>
           )}
         </div>
@@ -197,7 +201,7 @@ export function MergePanel() {
       {prepared.similarPairs.length > 0 && (
         <div className="mb-[var(--space-group)]">
           <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-modified-accent)]">
-            Similar Sentences (Pick One)
+            {t('modified_sentences')} (Pick One)
           </h3>
           <div className="space-y-3">
             {prepared.similarPairs.map((pair, index) => (
@@ -216,7 +220,7 @@ export function MergePanel() {
         <MergeCandidateList
           candidates={prepared.onlyInSource}
           side="source"
-          title="Only in Source"
+          title={t('only_in_source')}
         />
       </div>
 
@@ -225,7 +229,7 @@ export function MergePanel() {
         <MergeCandidateList
           candidates={prepared.onlyInTarget}
           side="target"
-          title="Only in Target"
+          title={t('only_in_target')}
         />
       </div>
 
