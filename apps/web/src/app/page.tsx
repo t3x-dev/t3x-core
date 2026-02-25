@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { BookIllustration } from '@/components/illustrations/BookIllustration';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect, useState } from 'react';
@@ -269,11 +270,8 @@ export default function SemanticLedgerPage() {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="relative mb-[var(--space-group)]">
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
-                  <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-muted to-muted/50 ring-1 ring-border/50">
-                    <Folder className="h-8 w-8 text-muted-foreground" />
-                  </div>
+                <div className="mb-[var(--space-group)]">
+                  <BookIllustration />
                 </div>
                 <p className="text-lg font-semibold text-foreground">{mc('emptyProject')}</p>
                 <p className="mt-2 mb-[var(--space-section)] max-w-sm text-sm text-muted-foreground">

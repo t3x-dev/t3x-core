@@ -29,6 +29,8 @@ interface EmptyStateProps {
     label: string;
     href: string;
   };
+  /** Custom illustration to replace the default icon + backdrop */
+  customIcon?: React.ReactNode;
   /** Additional CSS classes */
   className?: string;
 }
@@ -52,6 +54,7 @@ export function EmptyState({
   action,
   secondaryAction,
   helpLink,
+  customIcon,
   className,
 }: EmptyStateProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -64,19 +67,23 @@ export function EmptyState({
       animate="animate"
       className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}
     >
-      {/* Icon with gradient glow */}
-      <div className="relative mb-[var(--space-group)]">
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
-        <div
-          className={cn(
-            'relative flex h-16 w-16 items-center justify-center rounded-2xl',
-            'bg-gradient-to-br from-muted to-muted/50',
-            'ring-1 ring-border/50'
-          )}
-        >
-          <Icon className="h-8 w-8 text-muted-foreground" />
+      {/* Custom illustration or default icon */}
+      {customIcon ? (
+        <div className="mb-[var(--space-group)]">{customIcon}</div>
+      ) : (
+        <div className="relative mb-[var(--space-group)]">
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
+          <div
+            className={cn(
+              'relative flex h-16 w-16 items-center justify-center rounded-2xl',
+              'bg-gradient-to-br from-muted to-muted/50',
+              'ring-1 ring-border/50'
+            )}
+          >
+            <Icon className="h-8 w-8 text-muted-foreground" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Title */}
       <h3 className="mb-[var(--space-item)] text-lg font-semibold text-foreground">{title}</h3>

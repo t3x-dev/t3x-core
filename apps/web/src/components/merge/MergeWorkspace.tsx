@@ -13,6 +13,7 @@
 import { motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
@@ -111,6 +112,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
           title="No merge data available"
           description="There is no merge in progress. Start a merge from the canvas by selecting two branches to compare."
           action={{ label: 'Go Back', onClick: onClose }}
+          customIcon={<MergeIllustration />}
         />
       </div>
     );

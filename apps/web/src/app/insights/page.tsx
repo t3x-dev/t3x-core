@@ -2,6 +2,7 @@
 
 import { Clock3, GitCommit, Lightbulb, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { GraphIllustration } from '@/components/illustrations/GraphIllustration';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -172,6 +173,7 @@ export default function InsightsPage() {
               icon={GitCommit}
               title="No commits yet"
               description="Create commits to see insights here. Start by adding a conversation and extracting knowledge into a commit."
+              customIcon={<GraphIllustration />}
             />
           ) : (
             <>
@@ -201,6 +203,7 @@ export default function InsightsPage() {
               icon={Clock3}
               title="No activity yet"
               description="Create commits to see a timeline of activity here."
+              customIcon={<GraphIllustration />}
             />
           ) : (
             <Card>
