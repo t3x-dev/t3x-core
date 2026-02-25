@@ -583,6 +583,16 @@ a {
   .node-breathe-leaf { animation: none !important; }
 }
 
+/* Marching ants — flowing dashed border for staging nodes */
+@keyframes march {
+  to { stroke-dashoffset: -12; }
+}
+.marching-ants { animation: march 0.8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .marching-ants { animation: none !important; }
+}
+
 /* Controls - replaced with ZoomSlider component from React Flow UI */
 
 /* MiniMap - refined styling */

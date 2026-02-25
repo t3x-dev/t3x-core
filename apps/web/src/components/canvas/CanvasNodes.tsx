@@ -36,6 +36,7 @@ import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { MarchingAnts } from '@/components/canvas/MarchingAnts';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -594,7 +595,7 @@ function UnitNode(props: Props) {
           glass.highlight,
           // Left accent line
           'border-l-2',
-          isStaging && 'border-dashed',
+          isStaging && 'border-t-transparent border-r-transparent border-b-transparent',
           accentKey === 'commit' && 'border-l-[var(--accent-commit)]',
           accentKey === 'branch' && 'border-l-[var(--accent-branch)]',
           accentKey === 'pending' && 'border-l-[var(--accent-pending)]',
@@ -617,6 +618,15 @@ function UnitNode(props: Props) {
         data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
+        {/* Marching ants for staging nodes */}
+        {isStaging && (
+          <MarchingAnts
+            width={288}
+            height={nodeHeight}
+            borderRadius={16}
+          />
+        )}
+
         {/* Seal animation overlay */}
         <SealAnimation
           width={288}
