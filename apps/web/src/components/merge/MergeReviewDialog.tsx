@@ -100,23 +100,102 @@ export function MergeReviewDialog({
               key="success"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center gap-4 py-4"
+              className="flex flex-col items-center gap-4 py-6"
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-commit)]/15">
-                <Check className="h-7 w-7 text-[var(--accent-commit)]" />
+              {/* Animated checkmark with gradient ring */}
+              <div className="relative flex h-20 w-20 items-center justify-center">
+                {/* Pulsing glow ring */}
+                {!prefersReducedMotion && (
+                  <motion.div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: 'conic-gradient(from 0deg, #f97316, #3b82f6, #f97316)',
+                      opacity: 0.15,
+                    }}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: [1, 1.3, 1.15], opacity: [0, 0.2, 0.1] }}
+                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                  />
+                )}
+                {/* Circle background */}
+                <motion.div
+                  className="absolute inset-1 rounded-full bg-[var(--surface-card)]"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                />
+                {/* SVG animated checkmark */}
+                <svg width="40" height="40" viewBox="0 0 72 72" className="relative z-10">
+                  <defs>
+                    <linearGradient id="check-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f97316" />
+                      <stop offset="100%" stopColor="#3b82f6" />
+                    </linearGradient>
+                  </defs>
+                  <motion.path
+                    d="M16 38 L30 52 L56 22"
+                    fill="none"
+                    stroke="url(#check-gradient)"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{
+                      duration: prefersReducedMotion ? 0 : 0.5,
+                      delay: prefersReducedMotion ? 0 : 0.2,
+                      ease: 'easeOut',
+                    }}
+                  />
+                </svg>
               </div>
-              <p className="text-lg font-semibold text-[var(--text-primary)]">
-                {t('merge')} complete — {sentenceCount} sentences unified
-              </p>
-              <div className="flex gap-3 mt-2">
-                <Button variant="outline" onClick={onBackToCanvas}>
+
+              {/* Title */}
+              <motion.p
+                className="text-lg font-semibold text-[var(--text-primary)]"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: prefersReducedMotion ? 0 : 0.5, duration: 0.3 }}
+              >
+                {t('merge')} complete
+              </motion.p>
+
+              {/* Stats */}
+              <motion.div
+                className="flex items-center gap-4 text-sm text-[var(--text-secondary)]"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: prefersReducedMotion ? 0 : 0.65, duration: 0.3 }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[var(--diff-added-accent)]" />
+                  {sentenceCount} sentences unified
+                </span>
+              </motion.div>
+
+              {/* Actions */}
+              <motion.div
+                className="flex gap-3 mt-2"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: prefersReducedMotion ? 0 : 0.85, duration: 0.3 }}
+              >
+                <Button onClick={onBackToCanvas}>
                   {mc('backToCanvas')}
                 </Button>
                 <Button variant="ghost" onClick={onClose}>
                   {mc('stayHere')}
                 </Button>
-              </div>
-              <p className="text-xs text-[var(--text-tertiary)]">Auto-closing in 5s...</p>
+              </motion.div>
+
+              <motion.p
+                className="text-xs text-[var(--text-tertiary)]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: prefersReducedMotion ? 0 : 1, duration: 0.3 }}
+              >
+                Auto-closing in 5s...
+              </motion.p>
             </motion.div>
           ) : (
             <motion.div key="review" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
