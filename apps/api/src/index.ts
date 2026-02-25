@@ -37,6 +37,7 @@ import {
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { shareRoutes } from './routes/share.openapi';
@@ -127,6 +128,7 @@ api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
 api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
 api.route('/', apiKeysRoutes); // /v1/api-keys
 api.route('/', shareRoutes); // /v1/share
+api.route('/', comparisonsRoutes); // /v1/comparisons
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -156,6 +158,7 @@ api.doc('/openapi.json', {
     { name: 'Runner', description: 'Grey-box agent evaluation' },
     { name: 'API Keys', description: 'API key management (create, list, revoke)' },
     { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
+    { name: 'Comparisons', description: 'Saved A/B comparison snapshots' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
     {

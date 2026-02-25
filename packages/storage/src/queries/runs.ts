@@ -41,6 +41,10 @@ export interface UpdateRunInput {
   full_trace_json?: string | null;
   // v2.1: Metadata for A/B test filtering
   metadata_json?: string | null;
+  // v2.3: Report asset fields
+  title?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
 }
 
 export interface ListRunsOptions {
@@ -176,6 +180,16 @@ export async function updateRun(
   // v2.1: Metadata for A/B test filtering
   if (input.metadata_json !== undefined) {
     updateData.metadataJson = input.metadata_json;
+  }
+  // v2.3: Report asset fields
+  if (input.title !== undefined) {
+    updateData.title = input.title;
+  }
+  if (input.description !== undefined) {
+    updateData.description = input.description;
+  }
+  if (input.tags !== undefined) {
+    updateData.tags = input.tags;
   }
 
   const [run] = await db.update(runs).set(updateData).where(eq(runs.runId, runId)).returning();

@@ -7,13 +7,35 @@
  * in a minimal read-only layout without the App Shell (no sidebar).
  */
 
-import { AlertCircle, FileText, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeftRight,
+  CheckCircle,
+  Clock,
+  Coins,
+  FileText,
+  Loader2,
+  Trophy,
+  XCircle,
+} from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+
+interface RunData {
+  runId: string;
+  status: string;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  resultJson?: string | null;
+  traceSummaryJson?: string | null;
+  createdAt: string;
+  metadataJson?: string | null;
+}
 
 interface LeafData {
   id: string;
@@ -31,6 +53,15 @@ interface LeafData {
     passed: boolean;
     details: string;
   }>;
+}
+
+interface ComparisonData {
+  comparisonId: string;
+  title: string;
+  controlConfig: { model: string; prompt_version: string };
+  treatmentConfig: { model: string; prompt_version: string };
+  resultSnapshot: Record<string, unknown>;
+  createdAt: string;
 }
 
 export default function SharePage() {
@@ -83,6 +114,14 @@ export default function SharePage() {
 
   if (entityType === 'leaf') {
     return <SharedLeafView leaf={entity as LeafData} />;
+  }
+
+  if (entityType === 'run') {
+    return <SharedRunView run={entity as RunData} />;
+  }
+
+  if (entityType === 'comparison') {
+    return <SharedComparisonView comparison={entity as ComparisonData} />;
   }
 
   // Fallback for unsupported entity types
@@ -167,6 +206,277 @@ function SharedLeafView({ leaf }: { leaf: LeafData }) {
               ))}
             </div>
           </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SharedRunView({ run }: { run: RunData }) {
+  const result = run.resultJson ? JSON.parse(run.resultJson) : null;
+  const traceSummary = run.traceSummaryJson ? JSON.parse(run.traceSummaryJson) : null;
+  const metadata = run.metadataJson ? JSON.parse(run.metadataJson) : null;
+  const evalResult = result?.run_report?.eval_result;
+  const passed = evalResult?.passed ?? run.status === 'completed';
+  const score = evalResult?.score;
+  const tags = run.tags ?? [];
+
+  return (
+    <div className="min-h-screen bg-[var(--surface-app)]">
+      {/* Header */}
+      <header className={cn('flex h-14 items-center gap-4 px-6 border-b', glass.panelBase)}>
+        <FileText className="h-5 w-5 text-[var(--text-secondary)]" />
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          {run.title || 'Run Report'}
+        </h1>
+        <span
+          className={cn(
+            'rounded-md px-2 py-0.5 text-xs font-medium',
+            passed
+              ? 'bg-green-500/10 text-[var(--status-success)]'
+              : 'bg-red-500/10 text-[var(--status-error)]'
+          )}
+        >
+          {passed ? 'Passed' : 'Failed'}
+        </span>
+        <div className="flex-1" />
+        <span className="text-xs text-[var(--text-tertiary)]">Shared via T3X</span>
+      </header>
+
+      {/* Content */}
+      <main className="mx-auto max-w-3xl p-6 space-y-6">
+        {/* Description */}
+        {run.description && <p className="text-[var(--text-secondary)]">{run.description}</p>}
+
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md bg-[var(--hover-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {score !== undefined && (
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                {Math.round(score * 100)}%
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">Score</p>
+            </div>
+          )}
+          {traceSummary?.latency_ms && (
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <Clock className="inline h-4 w-4 mr-1" />
+                {traceSummary.latency_ms < 1000
+                  ? `${Math.round(traceSummary.latency_ms)}ms`
+                  : `${(traceSummary.latency_ms / 1000).toFixed(1)}s`}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">Latency</p>
+            </div>
+          )}
+          {traceSummary?.tokens?.total_tokens && (
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <Coins className="inline h-4 w-4 mr-1" />
+                {traceSummary.tokens.total_tokens >= 1000
+                  ? `${(traceSummary.tokens.total_tokens / 1000).toFixed(1)}k`
+                  : traceSummary.tokens.total_tokens}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">Tokens</p>
+            </div>
+          )}
+          {metadata?.model && (
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                {metadata.model}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">Model</p>
+            </div>
+          )}
+        </div>
+
+        {/* Assertions */}
+        {result?.assertions && result.assertions.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Assertions (
+              {result.assertions.filter((a: { type: string }) => a.type === 'pass').length}/
+              {result.assertions.length} passed)
+            </h2>
+            <div className="space-y-2">
+              {(
+                result.assertions as Array<{
+                  id?: string;
+                  type: string;
+                  message: string;
+                  category?: string;
+                }>
+              ).map((a, i) => (
+                <div
+                  key={a.id || `a-${i}`}
+                  className={cn(
+                    'rounded-lg px-3 py-2 text-sm flex items-center gap-2',
+                    glass.cardBase
+                  )}
+                >
+                  {a.type === 'pass' ? (
+                    <CheckCircle className="h-4 w-4 shrink-0 text-[var(--diff-added-accent)]" />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                  )}
+                  <span className="text-[var(--text-primary)]">{a.message}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
+  const snap = comparison.resultSnapshot as {
+    control?: {
+      model: string;
+      prompt_version: string;
+      run_count: number;
+      pass_rate: number;
+      avg_score: number;
+      avg_latency_ms: number;
+      avg_tokens: number;
+    };
+    treatment?: {
+      model: string;
+      prompt_version: string;
+      run_count: number;
+      pass_rate: number;
+      avg_score: number;
+      avg_latency_ms: number;
+      avg_tokens: number;
+    };
+    winner?: string | null;
+  };
+
+  const control = snap.control;
+  const treatment = snap.treatment;
+  const winner = snap.winner;
+
+  return (
+    <div className="min-h-screen bg-[var(--surface-app)]">
+      {/* Header */}
+      <header className={cn('flex h-14 items-center gap-4 px-6 border-b', glass.panelBase)}>
+        <ArrowLeftRight className="h-5 w-5 text-[var(--text-secondary)]" />
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          {comparison.title || 'Shared Comparison'}
+        </h1>
+        {winner && winner !== 'tie' && (
+          <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-xs font-medium text-[var(--status-success)]">
+            <Trophy className="inline h-3 w-3 mr-1" />
+            {winner === 'control' ? 'Control wins' : 'Treatment wins'}
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="text-xs text-[var(--text-tertiary)]">Shared via T3X</span>
+      </header>
+
+      {/* Content */}
+      <main className="mx-auto max-w-3xl p-6 space-y-6">
+        {/* Config Cards */}
+        {control && treatment && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className={cn('rounded-xl p-4', glass.cardBase)}>
+              <p className="text-xs text-[var(--text-tertiary)] mb-1">Control (A)</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                {control.model} + {control.prompt_version}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">n = {control.run_count}</p>
+            </div>
+            <div className={cn('rounded-xl p-4', glass.cardBase)}>
+              <p className="text-xs text-[var(--text-tertiary)] mb-1">Treatment (B)</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                {treatment.model} + {treatment.prompt_version}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">n = {treatment.run_count}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Grid */}
+        {control && treatment && (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                {Math.round(control.pass_rate * 100)}%
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">A Pass Rate</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                {Math.round(treatment.pass_rate * 100)}%
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">B Pass Rate</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                {control.avg_score.toFixed(2)}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">A Avg Score</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                {treatment.avg_score.toFixed(2)}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">B Avg Score</p>
+            </div>
+          </div>
+        )}
+
+        {/* Latency + Tokens */}
+        {control && treatment && (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                <Clock className="inline h-4 w-4 mr-1" />
+                {control.avg_latency_ms < 1000
+                  ? `${Math.round(control.avg_latency_ms)}ms`
+                  : `${(control.avg_latency_ms / 1000).toFixed(1)}s`}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">A Latency</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                <Clock className="inline h-4 w-4 mr-1" />
+                {treatment.avg_latency_ms < 1000
+                  ? `${Math.round(treatment.avg_latency_ms)}ms`
+                  : `${(treatment.avg_latency_ms / 1000).toFixed(1)}s`}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">B Latency</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                <Coins className="inline h-4 w-4 mr-1" />
+                {Math.round(control.avg_tokens)}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">A Tokens</p>
+            </div>
+            <div className={cn('rounded-xl p-4 text-center', glass.cardBase)}>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                <Coins className="inline h-4 w-4 mr-1" />
+                {Math.round(treatment.avg_tokens)}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">B Tokens</p>
+            </div>
+          </div>
         )}
       </main>
     </div>

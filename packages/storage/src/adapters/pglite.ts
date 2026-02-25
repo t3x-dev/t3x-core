@@ -260,6 +260,11 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Migration: Add leaf_id column to existing runs tables (v2.2)
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS leaf_id TEXT;
 
+    -- Migration: Add report asset fields to existing runs tables (v2.3)
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS title TEXT;
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]';
+
     -- Commits V3 table (sentence-based semantic snapshots)
     -- NOTE: project_id is nullable by design (commits can be standalone/unattached).
     CREATE TABLE IF NOT EXISTS commits_v3 (
@@ -412,6 +417,21 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+    -- Saved Comparisons table (persisted A/B comparison snapshots)
+    CREATE TABLE IF NOT EXISTS saved_comparisons (
+      comparison_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      control_config JSONB NOT NULL,
+      treatment_config JSONB NOT NULL,
+      control_run_ids JSONB NOT NULL DEFAULT '[]',
+      treatment_run_ids JSONB NOT NULL DEFAULT '[]',
+      result_snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
+    CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

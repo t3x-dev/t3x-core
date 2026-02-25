@@ -2020,6 +2020,10 @@ export interface EngineRun {
     workflow_id?: string;
     test_case?: string;
   } | null;
+  // v2.3: Report asset fields
+  title: string | null;
+  description: string | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -2093,6 +2097,10 @@ interface EngineRunRaw {
   fullTraceJson: string | null;
   // v2.1: Metadata for A/B test filtering
   metadataJson: string | null;
+  // v2.3: Report asset fields
+  title: string | null;
+  description: string | null;
+  tags: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2123,6 +2131,9 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
     status: raw.status,
     result: mergedResult as EngineRun['result'],
     metadata: safeJsonParse(raw.metadataJson, null),
+    title: raw.title ?? null,
+    description: raw.description ?? null,
+    tags: raw.tags ?? [],
     created_at: raw.createdAt,
     updated_at: raw.updatedAt,
   };
@@ -2133,6 +2144,24 @@ function parseEngineRun(raw: EngineRunRaw): EngineRun {
  */
 export async function getEngineRun(runId: string): Promise<EngineRun> {
   const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`);
+  const data = await handleResponse<EngineRunRaw>(res);
+  return parseEngineRun(data);
+}
+
+/**
+ * Update run metadata (title, description, tags)
+ *
+ * v2.3: Report asset — partial update for run metadata.
+ */
+export async function updateEngineRun(
+  runId: string,
+  patch: { title?: string; description?: string; tags?: string[] }
+): Promise<EngineRun> {
+  const res = await fetchWithTimeout(`${API_V1}/runs/${encodeURIComponent(runId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
   const data = await handleResponse<EngineRunRaw>(res);
   return parseEngineRun(data);
 }
@@ -2283,6 +2312,58 @@ export async function compareConfigurations(
     }),
   });
   return handleResponse<ComparisonResult>(res);
+}
+
+// ============================================================================
+// Saved Comparisons (A/B comparison snapshots)
+// ============================================================================
+
+export interface SavedComparison {
+  comparison_id: string;
+  project_id: string;
+  title: string;
+  control_config: { model: string; prompt_version: string };
+  treatment_config: { model: string; prompt_version: string };
+  control_run_ids: string[];
+  treatment_run_ids: string[];
+  result_snapshot: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function createSavedComparison(input: {
+  project_id: string;
+  title: string;
+  control_config: { model: string; prompt_version: string };
+  treatment_config: { model: string; prompt_version: string };
+  control_run_ids: string[];
+  treatment_run_ids: string[];
+  result_snapshot: Record<string, unknown>;
+}): Promise<SavedComparison> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<SavedComparison>(res);
+}
+
+export async function listSavedComparisons(projectId: string): Promise<SavedComparison[]> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/comparisons?${buildQueryString({ project_id: projectId })}`
+  );
+  return handleResponse<SavedComparison[]>(res);
+}
+
+export async function getSavedComparison(comparisonId: string): Promise<SavedComparison> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`);
+  return handleResponse<SavedComparison>(res);
+}
+
+export async function deleteSavedComparison(comparisonId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
 }
 
 // ============================================================================
@@ -2924,7 +3005,7 @@ export interface ShareResolveResult {
 }
 
 export async function createShareLink(
-  entityType: 'leaf',
+  entityType: 'leaf' | 'run' | 'comparison',
   entityId: string
 ): Promise<ShareLink> {
   const res = await fetchWithTimeout(`${API_V1}/share`, {

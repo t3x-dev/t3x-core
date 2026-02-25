@@ -2,7 +2,7 @@
  * Runs Route Tests
  */
 
-import { deleteRun, insertProject, insertRun, listRuns } from '@t3x/storage';
+import { deleteRun, getRun, insertProject, insertRun, listRuns } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -146,6 +146,174 @@ describe('Runs Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
+    });
+  });
+
+  describe('PATCH /v1/runs/:id', () => {
+    it('returns 404 for non-existent run', async () => {
+      const res = await app.request('/v1/runs/run_nonexistent', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Test' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for empty body', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect((data.error as Record<string, unknown>).code).toBe('INVALID_REQUEST');
+    });
+
+    it('updates title only (partial update)', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'My Report' }),
+      });
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      const run = await getRun(mockDB, runId);
+      expect(run?.title).toBe('My Report');
+    });
+
+    it('updates description only', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'Test run for evaluation' }),
+      });
+      expect(res.status).toBe(200);
+      const run = await getRun(mockDB, runId);
+      expect(run?.description).toBe('Test run for evaluation');
+    });
+
+    it('updates tags only', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: ['v2', 'prod', 'baseline'] }),
+      });
+      expect(res.status).toBe(200);
+      const run = await getRun(mockDB, runId);
+      expect(run?.tags).toEqual(['v2', 'prod', 'baseline']);
+    });
+
+    it('updates all fields together', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Full Report',
+          description: 'A complete test report',
+          tags: ['final'],
+        }),
+      });
+      expect(res.status).toBe(200);
+      const run = await getRun(mockDB, runId);
+      expect(run?.title).toBe('Full Report');
+      expect(run?.description).toBe('A complete test report');
+      expect(run?.tags).toEqual(['final']);
+    });
+
+    it('partial update does not clear other fields', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      // First set title and tags
+      await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Keep Me', tags: ['keep'] }),
+      });
+      // Then update only description
+      await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'New description' }),
+      });
+      const run = await getRun(mockDB, runId);
+      expect(run?.title).toBe('Keep Me');
+      expect(run?.tags).toEqual(['keep']);
+      expect(run?.description).toBe('New description');
+    });
+
+    it('validates tags count limit', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const tooManyTags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
+      const res = await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: tooManyTags }),
+      });
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect((data.error as Record<string, unknown>).code).toBe('VALIDATION_FAILED');
+    });
+
+    it('updates updatedAt on each PATCH', async () => {
+      const runId = generateId('run');
+      await insertRun(mockDB, {
+        run_id: runId,
+        project_id: projectId,
+        status: 'completed',
+      });
+      const before = await getRun(mockDB, runId);
+      // Wait a small amount so timestamp differs
+      await new Promise((r) => setTimeout(r, 50));
+      await app.request(`/v1/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Updated' }),
+      });
+      const after = await getRun(mockDB, runId);
+      expect(new Date(after!.updatedAt).getTime()).toBeGreaterThan(
+        new Date(before!.updatedAt).getTime()
+      );
     });
   });
 

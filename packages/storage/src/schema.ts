@@ -257,6 +257,10 @@ export const runs = pgTable(
     fullTraceJson: text('full_trace_json'), // Complete RunRecord (conditional)
     // v2.1: Metadata for A/B test filtering
     metadataJson: text('metadata_json'), // { model, prompt_version, workflow_id, test_case }
+    // v2.3: Report asset fields
+    title: text('title'),
+    description: text('description'),
+    tags: jsonb('tags').$type<string[]>().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
@@ -334,6 +338,37 @@ export const segmentEmbeddings = pgTable(
   ]
 );
 
+/**
+ * Saved Comparisons - Persisted A/B comparison snapshots
+ *
+ * Stores a frozen copy of comparison results so users can revisit
+ * historical A/B tests without recomputing.
+ */
+export const savedComparisons = pgTable(
+  'saved_comparisons',
+  {
+    comparisonId: text('comparison_id').primaryKey(), // comp_xxxxxxxxxxxx
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    controlConfig: jsonb('control_config')
+      .notNull()
+      .$type<{ model: string; prompt_version: string }>(),
+    treatmentConfig: jsonb('treatment_config')
+      .notNull()
+      .$type<{ model: string; prompt_version: string }>(),
+    controlRunIds: jsonb('control_run_ids').notNull().$type<string[]>(),
+    treatmentRunIds: jsonb('treatment_run_ids').notNull().$type<string[]>(),
+    resultSnapshot: jsonb('result_snapshot').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_saved_comparisons_project').on(table.projectId),
+    index('idx_saved_comparisons_created_at').on(table.createdAt),
+  ]
+);
+
 // ============================================================
 // Type Exports (for use in application code)
 // ============================================================
@@ -370,3 +405,6 @@ export type NewCommitV3 = typeof commitsV3.$inferInsert;
 
 export type MergeDraft = typeof mergeDrafts.$inferSelect;
 export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
+
+export type SavedComparison = typeof savedComparisons.$inferSelect;
+export type NewSavedComparison = typeof savedComparisons.$inferInsert;
