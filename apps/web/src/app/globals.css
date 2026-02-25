@@ -619,6 +619,36 @@ a {
   stroke-opacity: 0.35;
 }
 
+/* ═══════════════════════════════════════════
+   Drag Micro-interactions — lift, shadow, bounce-back
+   ═══════════════════════════════════════════ */
+
+/* Lift: elevate and scale up when dragging */
+.react-flow__node.dragging { z-index: 1000 !important; }
+.react-flow__node.dragging > div {
+  transform: scale(1.02);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* Bounce-back: overshoot easing on drop */
+.react-flow__node:not(.dragging) > div {
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease;
+}
+
+/* Dark mode drag glow */
+.dark .react-flow__node.dragging > div {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2), 0 0 20px rgba(59,130,246,0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.dragging > div,
+  .react-flow__node:not(.dragging) > div {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
 /* Controls - replaced with ZoomSlider component from React Flow UI */
 
 /* MiniMap - refined styling */

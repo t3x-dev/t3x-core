@@ -1,4 +1,4 @@
-import { BaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
+import { BaseEdge, type EdgeProps, getSmoothStepPath, useStore } from '@xyflow/react';
 import { useEffect, useRef, useState } from 'react';
 
 // Particle system config
@@ -25,10 +25,19 @@ export function AnimatedEdge({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   markerEnd: _markerEnd,
   selected,
+  source,
+  target,
   data: rawData,
 }: EdgeProps) {
   const data = rawData as { createdAt?: number } | undefined;
   const [isHovered, setIsHovered] = useState(false);
+
+  // Detect if connected node is being dragged
+  const isDragging = useStore((s) => {
+    const sourceNode = s.nodeLookup?.get(source);
+    const targetNode = s.nodeLookup?.get(target);
+    return !!(sourceNode?.dragging || targetNode?.dragging);
+  });
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const hasAnimatedRef = useRef(false);
@@ -217,7 +226,7 @@ export function AnimatedEdge({
         />
       )}
 
-      {/* Base edge — solid subtle line */}
+      {/* Base edge — solid subtle line, dashed when connected node is dragging */}
       <BaseEdge
         id={id}
         path={edgePath}
@@ -225,6 +234,7 @@ export function AnimatedEdge({
           ...style,
           strokeWidth: getStrokeWidth(),
           stroke: getStrokeColor(),
+          ...(isDragging ? { strokeDasharray: '6 4' } : {}),
           ...transitionStyle,
         }}
       />
