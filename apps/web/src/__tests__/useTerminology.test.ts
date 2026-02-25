@@ -216,3 +216,49 @@ describe('getTermItem (non-hook)', () => {
     expect(item.show).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Batch 4 terminology entries (tooltips, empty states, status bar)
+// ---------------------------------------------------------------------------
+
+describe('batch 4 terminology entries', () => {
+  it('returns friendly terms for batch 4 entries in default mode', () => {
+    const { result, unmount } = renderHook(() => useTerminology());
+
+    expect(result.current.t('search_command')).toBe('\u641C\u7D22\u547D\u4EE4...'); // 搜索命令...
+    expect(result.current.t('no_results')).toBe('\u6CA1\u6709\u627E\u5230\u7ED3\u679C'); // 没有找到结果
+    expect(result.current.t('loading')).toBe('\u52A0\u8F7D\u4E2D...'); // 加载中...
+    expect(result.current.t('all_branches')).toBe('\u5168\u90E8\u53D8\u4F53'); // 全部变体
+    expect(result.current.t('new_branch_name')).toBe('\u8F93\u5165\u65B0\u53D8\u4F53\u540D\u79F0'); // 输入新变体名称
+    expect(result.current.t('draft_from')).toBe('\u8349\u7A3F\u6765\u81EA'); // 草稿来自
+    expect(result.current.t('configure_and_commit')).toBe('\u914D\u7F6E\u5E76\u4FDD\u5B58'); // 配置并保存
+    unmount();
+  });
+
+  it('returns Git terms for batch 4 entries in developer mode', () => {
+    useSettingsStore.setState({ developerMode: true });
+    const { result, unmount } = renderHook(() => useTerminology());
+
+    expect(result.current.t('search_command')).toBe('Search commands...');
+    expect(result.current.t('no_results')).toBe('No results found');
+    expect(result.current.t('loading')).toBe('Loading...');
+    expect(result.current.t('all_branches')).toBe('All branches');
+    expect(result.current.t('new_branch_name')).toBe('Enter new branch name');
+    expect(result.current.t('draft_from')).toBe('Draft from');
+    expect(result.current.t('configure_and_commit')).toBe('Configure and commit this unit');
+    unmount();
+  });
+
+  it('empty_project returns friendly text in default mode', () => {
+    const { result, unmount } = renderHook(() => useTerminology());
+    expect(result.current.t('empty_project')).toContain('\u5F00\u59CB'); // contains 开始
+    unmount();
+  });
+
+  it('empty_project returns dev text in developer mode', () => {
+    useSettingsStore.setState({ developerMode: true });
+    const { result, unmount } = renderHook(() => useTerminology());
+    expect(result.current.t('empty_project')).toBe('Empty project. Create a conversation to start');
+    unmount();
+  });
+});
