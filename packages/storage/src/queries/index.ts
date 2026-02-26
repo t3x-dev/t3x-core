@@ -95,6 +95,13 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
+// Global Settings (key-value config store)
+export {
+  deleteGlobalSetting,
+  getGlobalSetting,
+  listGlobalSettings,
+  setGlobalSetting,
+} from './global-settings';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,

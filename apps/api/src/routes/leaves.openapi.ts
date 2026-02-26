@@ -26,6 +26,7 @@ import {
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x/core';
+import { getLLMProvider } from '../lib/provider-registry';
 // Storage functions (provided by @t3x/storage)
 import {
   createLeaf,
@@ -666,11 +667,12 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;
-    if (needsGeneration && !isGenerationConfigured()) {
+    const llmProvider = needsGeneration ? await getLLMProvider() : null;
+    if (needsGeneration && !isGenerationConfigured(llmProvider ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
-        'ANTHROPIC_API_KEY environment variable is not set. Use skip_generation=true to create leaves without generating output.'
+        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider. Use skip_generation=true to create leaves without generating output.'
       );
     }
 
@@ -695,6 +697,7 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
             const result = await generateLeafOutput({
               commit,
               leaf,
+              provider: llmProvider ?? undefined,
               additionalInstructions:
                 typeof leaf.config?.user_instruction === 'string'
                   ? leaf.config.user_instruction
@@ -898,12 +901,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
   const _body = c.req.valid('json');
 
   try {
+    // Get LLM provider from registry (may be null if none configured)
+    const llmProvider = await getLLMProvider();
+
     // Check if generation is configured
-    if (!isGenerationConfigured()) {
+    if (!isGenerationConfigured(llmProvider ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
-        'ANTHROPIC_API_KEY environment variable is not set'
+        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.'
       );
     }
 
@@ -925,6 +931,7 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     const result = await generateLeafOutput({
       commit,
       leaf,
+      provider: llmProvider ?? undefined,
       additionalInstructions:
         typeof leaf.config?.user_instruction === 'string'
           ? leaf.config.user_instruction

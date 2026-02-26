@@ -561,6 +561,16 @@ async function initializeSchema(client: PGlite): Promise<void> {
         RAISE NOTICE 'Skipping FK constraint on runs: orphan project_id values exist. API layer will validate.';
     END $$;
 
+    -- Migration: Add provider_config column to projects (for project-level provider overrides)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
+
+    -- Global Settings table (key-value store for app-wide config)
+    CREATE TABLE IF NOT EXISTS global_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

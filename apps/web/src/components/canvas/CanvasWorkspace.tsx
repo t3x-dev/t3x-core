@@ -14,6 +14,7 @@ import {
   GitCommit,
   GitCommitHorizontal,
   HelpCircle,
+  Import,
   LayoutGrid,
   Loader2,
   MessageSquare,
@@ -53,6 +54,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
+import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
@@ -101,6 +103,7 @@ function CanvasWorkspaceInner({
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -794,6 +797,19 @@ function CanvasWorkspaceInner({
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => setShowImportDialog(true)}
+            title="Import"
+            className={cn(
+              'h-9 w-9 rounded-xl transition-all',
+              'text-[var(--text-secondary)] hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary'
+            )}
+          >
+            <Import className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleAutoLayout}
             title="Auto Layout"
             className={cn(
@@ -1053,6 +1069,23 @@ function CanvasWorkspaceInner({
           open={showMemoryModal}
           onClose={() => setShowMemoryModal(false)}
           projectId={projectId}
+        />
+      )}
+      {projectId && (
+        <ImportDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+          projectId={projectId}
+          onImported={() => {
+            setShowImportDialog(false);
+            useCanvasStore
+              .getState()
+              .loadProjectData(projectId)
+              .catch((err) => {
+                const message = err instanceof Error ? err.message : 'Failed to refresh canvas';
+                notify?.(message, 'error');
+              });
+          }}
         />
       )}
 

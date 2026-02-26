@@ -546,6 +546,13 @@ export const unitToNode = (
       ],
       // Conversation data
       conversationId: conv.conversation_id,
+      // Import source badge
+      importSource: conv.metadata?.import
+        ? {
+            source_type: conv.metadata.import.source_type,
+            platform: conv.metadata.import.platform,
+          }
+        : undefined,
       // Commit data
       commitStatus: isCommitted ? 'committed' : 'staging',
       commitHash: commit?.commit_hash,

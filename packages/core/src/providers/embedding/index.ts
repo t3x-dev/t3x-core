@@ -17,3 +17,13 @@ export {
   type GoogleAIEmbeddingConfig,
   GoogleAIEmbeddingProvider,
 } from './google-ai';
+export {
+  createOllamaEmbeddingProvider,
+  type OllamaEmbeddingConfig,
+  OllamaEmbeddingProvider,
+} from './ollama';
+export {
+  createOpenAIEmbeddingProvider,
+  type OpenAIEmbeddingConfig,
+  OpenAIEmbeddingProvider,
+} from './openai';

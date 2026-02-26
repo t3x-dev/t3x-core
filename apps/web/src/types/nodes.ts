@@ -495,6 +495,12 @@ export interface CanvasNodeData {
   // ============================================
   conversationId?: string; // Full conversation_id
 
+  /** Import source metadata (for imported conversations) */
+  importSource?: {
+    source_type: 'url' | 'document' | 'platform';
+    platform?: string;
+  };
+
   // ============================================
   // Unit node: Commit part
   // ============================================

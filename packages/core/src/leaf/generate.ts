@@ -1,12 +1,14 @@
 /**
  * Leaf Generation Service
  *
- * Calls Claude API to generate leaf output based on commit sentences and constraints.
+ * Generates leaf output using an LLM provider. Supports pluggable providers
+ * via the `provider` option, with fallback to direct Anthropic API calls.
  *
  * Owner: GEN-* track
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
+import type { LLMProvider } from '../llm/types';
 import { buildLeafPrompt } from './build-prompt';
 import {
   DEFAULT_MODEL,
@@ -21,9 +23,11 @@ import { validateConstraintsExactOnly } from './validate-constraints';
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Check if generation is configured (ANTHROPIC_API_KEY is set).
+ * Check if generation is configured.
+ * Returns true if an LLM provider is available or ANTHROPIC_API_KEY is set.
  */
-export function isGenerationConfigured(): boolean {
+export function isGenerationConfigured(provider?: LLMProvider): boolean {
+  if (provider) return true;
   return typeof process !== 'undefined' && !!process.env?.ANTHROPIC_API_KEY;
 }
 
@@ -123,19 +127,20 @@ const MAX_GENERATION_ATTEMPTS = 3;
  * @throws GenerationError if API call fails or API key is not configured
  */
 export async function generateLeafOutput(options: GenerateOptions): Promise<GenerateResult> {
-  const { model = DEFAULT_MODEL, temperature = DEFAULT_TEMPERATURE, maxTokens = 1024 } = options;
+  const {
+    model = DEFAULT_MODEL,
+    temperature = DEFAULT_TEMPERATURE,
+    maxTokens = 1024,
+    provider,
+  } = options;
 
   // Check configuration
-  if (!isGenerationConfigured()) {
+  if (!isGenerationConfigured(provider)) {
     throw new GenerationError(
-      'ANTHROPIC_API_KEY environment variable is not set',
+      'No LLM provider configured and ANTHROPIC_API_KEY is not set',
       'NOT_CONFIGURED'
     );
   }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY!;
-  const baseUrl = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com';
-  const url = `${baseUrl}/v1/messages`;
 
   // Build initial prompt
   const { systemPrompt, userPrompt } = buildLeafPrompt(options);
@@ -146,28 +151,53 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
 
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let lastOutput = '';
-  let lastModel = '';
-  // Message history for multi-turn retry
+  let lastModel = model;
+
+  // Choose generation path: pluggable provider or legacy Anthropic direct call
+  const useProvider = !!provider;
+
+  // For provider path, we accumulate prompts as a single string
+  let providerPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+  // For legacy Anthropic path, use message history for multi-turn retry
+  const apiKey = !useProvider ? process.env.ANTHROPIC_API_KEY! : '';
+  const baseUrl = !useProvider
+    ? (process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com')
+    : '';
+  const url = !useProvider ? `${baseUrl}/v1/messages` : '';
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
     { role: 'user', content: userPrompt },
   ];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // Call Anthropic API
-    const result = await callAnthropicAPI({
-      url,
-      apiKey,
-      model,
-      maxTokens,
-      temperature,
-      systemPrompt,
-      messages,
-    });
+    if (useProvider) {
+      // Provider path — use LLMProvider.generate()
+      try {
+        lastOutput = await provider.generate(providerPrompt, {
+          temperature,
+          maxTokens,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new GenerationError(`Provider generation failed: ${message}`, 'API_ERROR', undefined, error);
+      }
+    } else {
+      // Legacy Anthropic direct path
+      const result = await callAnthropicAPI({
+        url,
+        apiKey,
+        model,
+        maxTokens,
+        temperature,
+        systemPrompt,
+        messages,
+      });
 
-    lastOutput = result.text;
-    lastModel = result.model;
-    totalUsage.inputTokens += result.usage.inputTokens;
-    totalUsage.outputTokens += result.usage.outputTokens;
+      lastOutput = result.text;
+      lastModel = result.model;
+      totalUsage.inputTokens += result.usage.inputTokens;
+      totalUsage.outputTokens += result.usage.outputTokens;
+    }
 
     // If no constraints, return immediately
     if (!hasConstraints) {
@@ -222,12 +252,16 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
       .map((a) => `- ${a.details}`)
       .join('\n');
 
-    // Add assistant's previous output and user's correction to messages
-    messages.push({ role: 'assistant', content: lastOutput });
-    messages.push({
-      role: 'user',
-      content: `Your output did not satisfy all constraints. Please fix and regenerate.\n\nFailed constraints:\n${failedDetails}\n\nPlease regenerate the content, ensuring ALL constraints are satisfied.`,
-    });
+    const feedbackMessage = `Your output did not satisfy all constraints. Please fix and regenerate.\n\nFailed constraints:\n${failedDetails}\n\nPlease regenerate the content, ensuring ALL constraints are satisfied.`;
+
+    if (useProvider) {
+      // Provider path — append feedback to the prompt
+      providerPrompt += `\n\nAssistant: ${lastOutput}\n\nUser: ${feedbackMessage}`;
+    } else {
+      // Legacy path — add to message history
+      messages.push({ role: 'assistant', content: lastOutput });
+      messages.push({ role: 'user', content: feedbackMessage });
+    }
   }
 
   // Should not reach here, but TypeScript needs it
