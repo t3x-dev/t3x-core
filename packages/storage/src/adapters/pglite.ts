@@ -347,6 +347,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
     CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
 
+    -- Migration: Add merge_summary column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
       id TEXT PRIMARY KEY,

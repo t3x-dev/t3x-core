@@ -40,7 +40,7 @@ const roleLabels: Record<string, string> = {
 
 const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-[var(--status-warning-muted)]',
-  green: 'bg-[var(--status-success-muted)]',
+  green: 'bg-[var(--status-success-muted)] dark:text-emerald-200',
   deepGreen: 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100',
   deepRed: 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100',
 };
@@ -166,7 +166,7 @@ export function TurnBubble({
             {new Date(turn.created_at).toLocaleTimeString()}
           </span>
         </div>
-        <p className="text-sm whitespace-pre-wrap break-words">{renderContent()}</p>
+        <p className="text-sm whitespace-pre-wrap break-words text-[var(--text-primary)]">{renderContent()}</p>
       </div>
     </div>
   );

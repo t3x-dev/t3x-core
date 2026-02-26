@@ -122,7 +122,6 @@ function CanvasWorkspaceInner({
     getPendingCommitEffectiveConstraints,
     updatePendingCommitConstraintOverrides,
     hasDownstreamPendingCommits,
-    loadDemoData,
     openNodeId,
     modalViewMode,
     openNodeModal,
@@ -754,23 +753,6 @@ function CanvasWorkspaceInner({
               <LayoutGrid className="h-4 w-4" />
             )}
           </Button>
-          {/* DEV: Load Demo Data button */}
-          {process.env.NODE_ENV === 'development' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={loadDemoData}
-              title="Load Demo Data"
-              className={cn(
-                'h-9 px-3 rounded-xl transition-all text-xs',
-                'text-muted-foreground hover:text-foreground',
-                'hover:bg-[var(--status-warning)]/10 hover:text-[var(--status-warning)]',
-                'border border-dashed border-[var(--status-warning)]'
-              )}
-            >
-              Demo
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="icon"
