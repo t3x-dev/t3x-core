@@ -68,6 +68,7 @@ export type CanvasState = MergeSlice &
     // Deletion confirmation state
     deletionConfirmation: DeletionConfirmation;
     addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
+    addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
     updateNode: (id: string, patch: Partial<CanvasNodeData>) => void;
     commitPendingCommit: (id: string) => void;
     addPendingCommitFromConversation: (conversationId: string) => Promise<void>;

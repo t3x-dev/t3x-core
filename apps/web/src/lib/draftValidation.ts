@@ -13,6 +13,43 @@ export interface ValidationResult {
   details: string;
 }
 
+/** Per-sentence constraint match/violation result */
+export interface SentenceConstraintResult {
+  constraint_id: string;
+  type: 'match' | 'violation';
+  constraint: DraftConstraint;
+}
+
+/**
+ * Check which exact-match constraints apply to a specific sentence.
+ * Returns matches (require found) and violations (exclude found).
+ * Skips semantic constraints (require LLM).
+ */
+export function getConstraintResultsForSentence(
+  sentence: DraftSentence,
+  constraints: DraftConstraint[]
+): SentenceConstraintResult[] {
+  if (!sentence.included || constraints.length === 0) return [];
+
+  const results: SentenceConstraintResult[] = [];
+  const lowerText = sentence.text.toLowerCase();
+
+  for (const c of constraints) {
+    if (c.match_mode === 'semantic') continue;
+
+    const lowerValue = c.value.toLowerCase();
+    const found = lowerText.includes(lowerValue);
+
+    if (c.type === 'require' && found) {
+      results.push({ constraint_id: c.id, type: 'match', constraint: c });
+    } else if (c.type === 'exclude' && found) {
+      results.push({ constraint_id: c.id, type: 'violation', constraint: c });
+    }
+  }
+
+  return results;
+}
+
 /**
  * Validate constraints locally against included sentences.
  *
