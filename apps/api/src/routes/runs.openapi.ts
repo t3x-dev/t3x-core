@@ -280,12 +280,20 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
         const mappedAssertions = data.assertions.map((a: unknown, idx: number) => {
           const raw = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
           return {
-            id: typeof raw.id === 'string' ? raw.id : '',
+            id: typeof raw.id === 'string' ? raw.id : `assert_${String(idx).padStart(3, '0')}`,
             constraint_id:
-              typeof raw.constraint_id === 'string' ? raw.constraint_id : `unknown_${idx}`,
-            passed: typeof raw.passed === 'boolean' ? raw.passed : false,
-            details: typeof raw.details === 'string' ? raw.details : '',
-            lesson: typeof raw.lesson === 'string' ? raw.lesson : undefined,
+              typeof raw.constraint_id === 'string' && raw.constraint_id !== ''
+                ? raw.constraint_id
+                : `eval_${idx}`,
+            passed: typeof raw.passed === 'boolean'
+              ? raw.passed
+              : raw.type === 'pass',   // fallback: old format 'type' field
+            details: typeof raw.details === 'string' && raw.details !== ''
+              ? raw.details
+              : typeof raw.message === 'string' ? raw.message : '',  // fallback: old 'message'
+            lesson: typeof raw.lesson === 'string'
+              ? raw.lesson
+              : typeof raw.patch_suggestion === 'string' ? raw.patch_suggestion : undefined,
           };
         });
 

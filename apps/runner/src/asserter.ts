@@ -257,16 +257,14 @@ Based on the evaluation results above, generate ONE concise overall assessment:
 
 Keep it concise and actionable. Focus on the most important issue.
 
-Respond in JSON:
+Respond in JSON (use EXACTLY these field names):
 {
   "assertions": [
     {
-      "type": "pass" or "fail" or "warning",
-      "category": "correctness" or "efficiency" or "behavior" or "error",
-      "message": "One sentence overall assessment",
-      "evidence_refs": ["key evidence path"],
-      "confidence": 0.0-1.0,
-      "patch_suggestion": "One key improvement suggestion (if failed)"
+      "constraint_id": "eval_<dimension>" (e.g. "eval_overall", "eval_tool_use", "eval_efficiency"),
+      "passed": true or false,
+      "details": "One sentence overall assessment (the core evaluation finding)",
+      "lesson": "One key improvement suggestion (if failed, omit if passed)"
     }
   ],
   "suggestions": [],
@@ -288,8 +286,37 @@ Respond in JSON:
 
       const parsed = JSON.parse(jsonStr);
 
+      // Normalize assertions: support both new format (constraint_id/passed/details/lesson)
+      // and old format (type/category/message/patch_suggestion) for LLM output variance
+      const normalizedAssertions = (parsed.assertions || []).map(
+        (a: Record<string, unknown>, idx: number) => {
+          // If new format fields exist, use them directly
+          if (typeof a.details === 'string' || typeof a.constraint_id === 'string') {
+            return {
+              id: typeof a.id === 'string' ? a.id : `assert_${String(idx).padStart(3, '0')}`,
+              type: typeof a.passed === 'boolean' ? (a.passed ? 'pass' : 'fail') : (a.type || 'fail'),
+              category: a.category || 'behavior',
+              message: typeof a.details === 'string' ? a.details : (a.message || ''),
+              evidence_refs: a.evidence_refs || [],
+              confidence: typeof a.confidence === 'number' ? a.confidence : 0.8,
+              patch_suggestion: typeof a.lesson === 'string' ? a.lesson : a.patch_suggestion,
+              // Carry forward new-format fields so ingest can read them
+              constraint_id: typeof a.constraint_id === 'string' ? a.constraint_id : `eval_${idx}`,
+              passed: typeof a.passed === 'boolean' ? a.passed : a.type === 'pass',
+              details: typeof a.details === 'string' ? a.details : (a.message || ''),
+              lesson: typeof a.lesson === 'string' ? a.lesson : a.patch_suggestion,
+            };
+          }
+          // Old format: keep as-is
+          return {
+            ...a,
+            id: typeof a.id === 'string' ? a.id : `assert_${String(idx).padStart(3, '0')}`,
+          };
+        }
+      );
+
       return {
-        assertions: parsed.assertions || [],
+        assertions: normalizedAssertions,
         suggestions: parsed.suggestions || [],
         summary: parsed.summary || '',
         generated_at: new Date().toISOString(),

@@ -376,7 +376,7 @@ app.post('/callbacks/n8n', async (req, res) => {
     // ASYNC PROCESSING - After n8n workflow completes
     // ═══════════════════════════════════════════════════
     // Delay to ensure n8n workflow has finished (Respond node executed)
-    const ASYNC_DELAY_MS = 3000; // 3 seconds
+    const ASYNC_DELAY_MS = 1500; // 1.5 seconds (n8n Respond node fires before workflow ends)
 
     setTimeout(async () => {
       try {
