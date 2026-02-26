@@ -603,7 +603,7 @@ draftsRoutes.openapi(previewDraftRoute, async (c) => {
       temperature: 0,
     });
 
-    // 9. Cache + store
+    // 10. Cache + store
     const tokenCount = Math.ceil(result.output.length / 4); // rough estimate
     previewCache.set(id, {
       hash: cacheHash,
@@ -720,12 +720,17 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
     // 7. Update draft status
     await commitDraftV3(db, id, commit.hash, leaf?.id);
 
-    // 7b. Populate sentence vectors (best-effort, non-blocking)
+    // 7b. Populate sentence vectors (best-effort — errors are swallowed)
     const embedder = getEmbedder();
     if (embedder) {
       try {
         const texts = sentences.map((s) => s.text);
         const embeddings = await embedder.encode(texts);
+        if (embeddings.length !== texts.length) {
+          throw new Error(
+            `Embedding count mismatch: expected ${texts.length}, got ${embeddings.length}`
+          );
+        }
         await upsertSentenceVectorsBatch(
           db,
           sentences.map((s, i) => ({

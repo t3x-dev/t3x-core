@@ -112,6 +112,9 @@ function staleIfReady(currentStatus: PreviewStatus): PreviewStatus {
 /** Auto-preview debounce timer (module-level for cleanup) */
 let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Generation counter to discard stale preview results */
+let previewGeneration = 0;
+
 /** Schedule auto-preview regeneration if enabled and preview is stale */
 function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
   if (!get().autoPreview || newPreviewStatus !== 'stale') return;
@@ -353,11 +356,17 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     const { draftId, draft, isDirty, previewModel } = get();
     if (!draftId || !draft) return;
 
+    // Guard against concurrent calls — only the latest generation wins
+    const gen = ++previewGeneration;
+
     // Save pending changes first so preview uses latest data
     if (isDirty) {
       await get().saveDraft();
       if (get().saveStatus === 'error') return;
     }
+
+    // Stale check: a newer generation was started while saving
+    if (gen !== previewGeneration) return;
 
     set({ previewStatus: 'loading', previewError: null });
 
@@ -365,6 +374,10 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       const result = await api.previewDraftV3(draftId, {
         ...(previewModel ? { model: previewModel } : {}),
       });
+
+      // Stale check: discard if a newer generation was started during API call
+      if (gen !== previewGeneration) return;
+
       const includedCount = get().draft?.sentences.filter((s) => s.included).length ?? 0;
       set({
         previewOutput: result.output,
@@ -377,6 +390,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewIncludedCount: includedCount,
       });
     } catch (err) {
+      if (gen !== previewGeneration) return;
       const message = err instanceof Error ? err.message : 'Preview generation failed';
       set({ previewStatus: 'error', previewError: message });
     }
