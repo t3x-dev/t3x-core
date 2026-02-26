@@ -15,6 +15,8 @@ interface MergeDiffSectionProps {
   variant?: SectionVariant;
   defaultCollapsed?: boolean;
   children: React.ReactNode;
+  /** Navigation anchor ID for sidebar scroll tracking */
+  navId?: string;
 }
 
 const variantStyles: Record<SectionVariant, { header: string; icon: string }> = {
@@ -42,12 +44,13 @@ export function MergeDiffSection({
   variant = 'default',
   defaultCollapsed = false,
   children,
+  navId,
 }: MergeDiffSectionProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = variantStyles[variant];
 
   return (
-    <div className="border rounded-lg overflow-hidden elevation-1">
+    <div className="border rounded-lg overflow-hidden elevation-1" data-merge-nav={navId}>
       {/* Section Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
