@@ -363,6 +363,19 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+
+-- Sentence Vectors (pgvector-powered similarity search)
+CREATE TABLE IF NOT EXISTS sentence_vectors (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  commit_hash TEXT NOT NULL,
+  text TEXT NOT NULL,
+  embedding vector(768) NOT NULL,
+  model_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
+CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
 `;
 
 /**
@@ -374,13 +387,18 @@ export async function createTestDB(): Promise<{
   client: PGlite;
   cleanup: () => Promise<void>;
 }> {
-  // Create in-memory PGLite
-  const client = new PGlite();
+  // Load pgvector extension dynamically
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { vector } = require('@electric-sql/pglite/vector');
+
+  // Create in-memory PGLite with pgvector extension
+  const client = new PGlite({ extensions: { vector } });
 
   // Create Drizzle instance
   const db = drizzle(client, { schema }) as unknown as AnyDB;
 
-  // Create tables
+  // Enable vector extension and create tables
+  await client.exec('CREATE EXTENSION IF NOT EXISTS vector;');
   await client.exec(CREATE_TABLES_SQL);
 
   // Cleanup function

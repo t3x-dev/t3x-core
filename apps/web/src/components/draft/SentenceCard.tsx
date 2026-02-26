@@ -45,6 +45,7 @@ export function SentenceCard({
 
   return (
     <div
+      data-sentence-id={sentence.id}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}

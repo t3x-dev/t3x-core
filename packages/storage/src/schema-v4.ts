@@ -15,6 +15,7 @@
  */
 
 import {
+  customType,
   index,
   integer,
   jsonb,
@@ -670,3 +671,64 @@ export const draftsV3 = pgTable(
 
 export type DraftV3Record = typeof draftsV3.$inferSelect;
 export type DraftV3Insert = typeof draftsV3.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// sentence_vectors: pgvector-powered sentence similarity search
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Custom Drizzle type for pgvector's `vector(768)` column.
+ * Converts between number[] (TypeScript) and vector literal (SQL).
+ */
+const pgVector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return 'vector(768)';
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: string): number[] {
+    return value.replace(/[[\]]/g, '').split(',').map(Number);
+  },
+});
+
+/**
+ * Stores per-sentence embedding vectors for semantic similarity search.
+ *
+ * Populated when a draft is committed (if embedding provider is configured).
+ * Enables the AutoSuggest feature: "given a goal, find relevant committed sentences".
+ *
+ * @see docs/rfcs/engine-moat-reinforcement.md §4.2
+ */
+export const sentenceVectors = pgTable(
+  'sentence_vectors',
+  {
+    /** Sentence ID (same as CommitV4 sentence.id, e.g., "s_abc123") */
+    id: text('id').primaryKey(),
+
+    /** Project scope */
+    projectId: text('project_id').notNull(),
+
+    /** Which commit this sentence belongs to */
+    commitHash: text('commit_hash').notNull(),
+
+    /** The sentence text (denormalized for display without join) */
+    sentenceText: text('text').notNull(),
+
+    /** 768-dimensional embedding vector (Google AI text-embedding-004) */
+    embedding: pgVector('embedding').notNull(),
+
+    /** Which embedding model produced this vector */
+    modelId: text('model_id').notNull(),
+
+    /** When this vector was created */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_sv_project').on(table.projectId),
+    commitIdx: index('idx_sv_commit').on(table.commitHash),
+  })
+);
+
+export type SentenceVectorRecord = typeof sentenceVectors.$inferSelect;
+export type SentenceVectorInsert = typeof sentenceVectors.$inferInsert;

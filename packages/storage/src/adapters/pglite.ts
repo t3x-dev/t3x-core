@@ -47,8 +47,14 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
     }
   }
 
-  // Create PGLite client
-  client = new PGlite(dataDir);
+  // Load pgvector extension dynamically (moduleResolution: "Node" can't resolve subpath exports)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { vector } = require('@electric-sql/pglite/vector');
+
+  // Create PGLite client (with pgvector extension for similarity search)
+  client = new PGlite(dataDir, {
+    extensions: { vector },
+  });
 
   // Create Drizzle instance
   db = drizzle(client, { schema });
@@ -97,6 +103,9 @@ export async function closePGLiteStorage(): Promise<void> {
  * Initialize database schema
  */
 async function initializeSchema(client: PGlite): Promise<void> {
+  // Enable pgvector extension for sentence similarity search
+  await client.exec(`CREATE EXTENSION IF NOT EXISTS vector;`);
+
   // Create tables if they don't exist
   await client.exec(`
     -- Projects table
@@ -516,6 +525,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+
+    -- Sentence Vectors table (pgvector-powered similarity search)
+    CREATE TABLE IF NOT EXISTS sentence_vectors (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      text TEXT NOT NULL,
+      embedding vector(768) NOT NULL,
+      model_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
+    CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

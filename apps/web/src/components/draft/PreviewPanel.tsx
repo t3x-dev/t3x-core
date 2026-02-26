@@ -4,12 +4,21 @@
  * PreviewPanel - Bottom panel showing LLM-generated preview output
  *
  * 5 states (RFC §6.4): idle, loading, ready, stale, error
- * Follows VS Code terminal panel pattern.
+ * V2 additions: auto preview toggle, model selector, sentence-aware rendering for scroll sync
  */
 
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { forwardRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SkeletonText } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { PreviewTypeSelector } from './PreviewTypeSelector';
@@ -24,7 +33,30 @@ function formatTimeAgo(isoString: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function PreviewPanel() {
+/**
+ * Render preview text with paragraph-level sentence mapping.
+ * Each paragraph gets a data-sentence-id from the corresponding draft sentence
+ * (by paragraph index → sentence index mapping).
+ */
+function PreviewContent({ output, sentenceIds }: { output: string; sentenceIds: string[] }) {
+  const paragraphs = output.split('\n\n').filter((p) => p.trim());
+
+  return (
+    <div className="space-y-2">
+      {paragraphs.map((para, i) => (
+        <p
+          key={i}
+          data-sentence-id={sentenceIds[i] ?? undefined}
+          className="text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+        >
+          {para}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
   const previewOutput = useDraftWorkspaceStore((s) => s.previewOutput);
   const previewStatus = useDraftWorkspaceStore((s) => s.previewStatus);
   const previewError = useDraftWorkspaceStore((s) => s.previewError);
@@ -34,9 +66,19 @@ export function PreviewPanel() {
   const generatePreview = useDraftWorkspaceStore((s) => s.generatePreview);
   const previewIncludedCount = useDraftWorkspaceStore((s) => s.previewIncludedCount);
   const draft = useDraftWorkspaceStore((s) => s.draft);
+  const autoPreview = useDraftWorkspaceStore((s) => s.autoPreview);
+  const setAutoPreview = useDraftWorkspaceStore((s) => s.setAutoPreview);
+  const previewModel = useDraftWorkspaceStore((s) => s.previewModel);
+  const setPreviewModel = useDraftWorkspaceStore((s) => s.setPreviewModel);
 
   const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
   const hasSentences = includedCount > 0;
+
+  // Build sentence IDs for scroll sync
+  const sentenceIds = useMemo(() => {
+    if (!draft) return [];
+    return draft.sentences.filter((s) => s.included).map((s) => s.id);
+  }, [draft]);
 
   return (
     <div className="flex h-full flex-col">
@@ -46,7 +88,30 @@ export function PreviewPanel() {
           Preview
         </span>
         <PreviewTypeSelector />
+
+        {/* Model selector */}
+        <Select
+          value={previewModel ?? 'default'}
+          onValueChange={(v) => setPreviewModel(v === 'default' ? null : v)}
+        >
+          <SelectTrigger className="h-7 w-[100px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Haiku</SelectItem>
+            <SelectItem value="sonnet">Sonnet</SelectItem>
+            <SelectItem value="opus">Opus</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="flex-1" />
+
+        {/* Auto preview toggle */}
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+          <Switch checked={autoPreview} onCheckedChange={setAutoPreview} className="scale-75" />
+          Auto
+        </label>
+
         <Button
           variant="ghost"
           size="sm"
@@ -64,7 +129,7 @@ export function PreviewPanel() {
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div ref={ref} className="flex-1 overflow-y-auto px-4 py-3">
         {/* idle */}
         {previewStatus === 'idle' && (
           <p className="text-sm text-muted-foreground italic">
@@ -86,9 +151,7 @@ export function PreviewPanel() {
         {/* ready */}
         {previewStatus === 'ready' && previewOutput && (
           <div className="space-y-2">
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-              {previewOutput}
-            </p>
+            <PreviewContent output={previewOutput} sentenceIds={sentenceIds} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>{previewOutput.length} chars</span>
               {previewTokenCount != null && (
@@ -110,9 +173,6 @@ export function PreviewPanel() {
                 </>
               )}
             </div>
-            <p className="text-xs text-muted-foreground/70 italic">
-              Preview uses a fast model. Final output quality may be higher.
-            </p>
           </div>
         )}
 
@@ -157,4 +217,4 @@ export function PreviewPanel() {
       </div>
     </div>
   );
-}
+});
