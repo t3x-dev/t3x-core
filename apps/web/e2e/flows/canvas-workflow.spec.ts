@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures/test';
 import { cleanupProject, createTestCommitV4, createTestProject } from '../fixtures/api-helpers';
 import { CanvasPage } from '../fixtures/page-objects/canvas-page';
 import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
