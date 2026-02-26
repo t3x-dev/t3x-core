@@ -18,7 +18,8 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
 import { SettingsToggle } from '@/components/shared/SettingsToggle';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
@@ -183,6 +184,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isSettings = pathname.startsWith('/settings');
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
+  // Extract projectId from pathname for project-aware sections
+  const projectId = useMemo(() => {
+    const match = pathname.match(/^\/project\/([^/]+)/);
+    return match ? match[1] : null;
+  }, [pathname]);
+
   return (
     <TooltipProvider delayDuration={0}>
       <aside
@@ -265,6 +272,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </NavItem>
           )}
         </nav>
+
+        {/* Project Drafts Section */}
+        {projectId && (
+          <div
+            className={cn(
+              'border-t border-[var(--stroke-divider)] py-2',
+              collapsed ? 'flex justify-center' : ''
+            )}
+          >
+            <ProjectDraftsSection projectId={projectId} collapsed={collapsed} />
+          </div>
+        )}
 
         {/* Bottom Navigation */}
         <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
