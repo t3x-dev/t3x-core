@@ -63,45 +63,6 @@ function LogoIcon() {
   );
 }
 
-// Robot/Agent icon
-function AgentIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      role="img"
-      aria-label="Agent"
-    >
-      {/* Robot head */}
-      <rect
-        x="4"
-        y="6"
-        width="16"
-        height="12"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      {/* Antenna */}
-      <path d="M12 6V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="12" cy="2" r="1.5" fill="currentColor" />
-      {/* Left eye */}
-      <circle cx="9" cy="11" r="1.5" fill="currentColor" />
-      {/* Right eye */}
-      <circle cx="15" cy="11" r="1.5" fill="currentColor" />
-      {/* Mouth */}
-      <path d="M9 15h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      {/* Ears */}
-      <path d="M4 10H2M22 10h-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 interface NavItemProps {
   href: string;
   label: string;
@@ -176,7 +137,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const isAgentDemo = pathname.startsWith('/agent-demo');
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
   const isTemplates = pathname.startsWith('/templates');
@@ -248,15 +208,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           <NavItem href="/templates" label="Templates" isActive={isTemplates} collapsed={collapsed}>
             <LayoutGrid className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem
-            href="/agent-demo/chat"
-            label="Agent Demo"
-            isActive={isAgentDemo}
-            collapsed={collapsed}
-          >
-            <AgentIcon />
           </NavItem>
 
           {process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true' && (
