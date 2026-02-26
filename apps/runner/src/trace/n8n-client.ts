@@ -133,6 +133,18 @@ export class N8nClient {
     retryDelayMs: number = 1000
   ): Promise<N8nExecution> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt === 0) {
+        const baseUrl = this.apiUrl.replace(/\/api\/v1\/?$/, '');
+        logger.info(
+          {
+            execution_id: executionId,
+            api_url: `${baseUrl}/api/v1/executions/${executionId}`,
+            has_api_key: !!this.apiKey,
+            api_key_prefix: this.apiKey ? `${this.apiKey.slice(0, 4)}...` : '(none)',
+          },
+          'n8n API: first fetch attempt'
+        );
+      }
       try {
         const execution = await this.getExecution(executionId);
 

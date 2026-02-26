@@ -21,7 +21,7 @@ export const CreateRunRequest = z
     leaf: z
       .object({
         id: z.string(),
-        type: z.enum(['deploy', 'eval']),
+        type: z.enum(['deploy', 'deploy_agent', 'eval']),
         content: z.string().optional(),
         rules_ref: z.string().optional(),
       })
