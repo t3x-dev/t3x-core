@@ -16,6 +16,7 @@ import { useCanvasStore } from './canvasStore';
 // ============================================================================
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type PreviewStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
 interface DraftWorkspaceState {
   // Data
@@ -31,6 +32,15 @@ interface DraftWorkspaceState {
   lastSavedAt: Date | null;
   validationResults: ValidationResult[];
   conflictError: boolean;
+
+  // Preview state
+  previewOutput: string | null;
+  previewGeneratedAt: string | null;
+  previewStatus: PreviewStatus;
+  previewError: string | null;
+  previewTokenCount: number | null;
+  previewModelUsed: string | null;
+  previewCached: boolean;
 
   // Actions
   loadDraft: (draftId: string) => Promise<void>;
@@ -50,6 +60,11 @@ interface DraftWorkspaceState {
   ) => void;
   removeConstraint: (constraintId: string) => void;
   updateInstructions: (instructions: string) => void;
+  updatePreviewType: (previewType: string) => void;
+
+  // Preview
+  generatePreview: () => Promise<void>;
+  clearPreview: () => void;
 
   // Async
   saveDraft: () => Promise<void>;
@@ -80,6 +95,11 @@ function nextId(prefix: string): string {
   return `${prefix}${hex}`;
 }
 
+/** If preview was 'ready', mark it as 'stale' after content mutations */
+function staleIfReady(currentStatus: PreviewStatus): PreviewStatus {
+  return currentStatus === 'ready' ? 'stale' : currentStatus;
+}
+
 // ============================================================================
 // Store
 // ============================================================================
@@ -95,6 +115,14 @@ const initialState = {
   lastSavedAt: null as Date | null,
   validationResults: [] as ValidationResult[],
   conflictError: false,
+  // Preview
+  previewOutput: null as string | null,
+  previewGeneratedAt: null as string | null,
+  previewStatus: 'idle' as PreviewStatus,
+  previewError: null as string | null,
+  previewTokenCount: null as number | null,
+  previewModelUsed: null as string | null,
+  previewCached: false,
 };
 
 export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => ({
@@ -109,6 +137,20 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
 
     try {
       const draft = await api.getDraftV3(draftId);
+
+      // Determine preview status from server data
+      let previewStatus: PreviewStatus = 'idle';
+      let previewOutput: string | null = null;
+      let previewGeneratedAt: string | null = null;
+      if (draft.preview_output && draft.preview_generated_at) {
+        previewOutput = draft.preview_output;
+        previewGeneratedAt = draft.preview_generated_at;
+        // If preview was generated before last update, mark as stale
+        const genTime = new Date(draft.preview_generated_at).getTime();
+        const updTime = new Date(draft.updated_at).getTime();
+        previewStatus = genTime < updTime ? 'stale' : 'ready';
+      }
+
       set({
         draftId: draft.id,
         projectId: draft.project_id,
@@ -116,6 +158,10 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         loading: false,
         isDirty: false,
         validationResults: recomputeValidation(draft),
+        previewOutput,
+        previewGeneratedAt,
+        previewStatus,
+        previewError: null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load draft';
@@ -142,7 +188,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
   },
 
   toggleSentence: (sentenceId: string) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const sentences = draft.sentences.map((s) =>
       s.id === sentenceId ? { ...s, included: !s.included } : s
@@ -152,11 +198,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   removeSentence: (sentenceId: string) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const sentences = draft.sentences
       .filter((s) => s.id !== sentenceId)
@@ -166,11 +213,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   reorderSentences: (fromIndex: number, toIndex: number) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const sentences = [...draft.sentences];
     const [moved] = sentences.splice(fromIndex, 1);
@@ -181,11 +229,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   addManualSentence: (text: string) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing' || !text.trim()) return;
     const newSentence: DraftSentence = {
       id: nextId('ds_'),
@@ -200,11 +249,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   addConstraint: (type, matchMode, value, reason) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing' || !value.trim()) return;
     const newConstraint: DraftConstraint = {
       id: nextId('dc_'),
@@ -219,11 +269,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   removeConstraint: (constraintId: string) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const constraints = draft.constraints.filter((c) => c.id !== constraintId);
     const updated = { ...draft, constraints };
@@ -231,14 +282,67 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
+      previewStatus: staleIfReady(previewStatus),
     });
   },
 
   updateInstructions: (instructions: string) => {
-    const { draft } = get();
+    const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const updated = { ...draft, instructions: instructions || null };
-    set({ draft: updated, isDirty: true });
+    set({ draft: updated, isDirty: true, previewStatus: staleIfReady(previewStatus) });
+  },
+
+  updatePreviewType: (previewType: string) => {
+    const { draft, previewStatus } = get();
+    if (!draft || draft.status !== 'editing') return;
+    const updated = { ...draft, preview_type: previewType || null };
+    set({ draft: updated, isDirty: true, previewStatus: staleIfReady(previewStatus) });
+  },
+
+  // ============================================================================
+  // Preview
+  // ============================================================================
+
+  generatePreview: async () => {
+    const { draftId, draft, isDirty } = get();
+    if (!draftId || !draft) return;
+
+    // Save pending changes first so preview uses latest data
+    if (isDirty) {
+      await get().saveDraft();
+      if (get().saveStatus === 'error') return;
+    }
+
+    set({ previewStatus: 'loading', previewError: null });
+
+    try {
+      const result = await api.previewDraftV3(draftId);
+      set({
+        previewOutput: result.output,
+        previewGeneratedAt: new Date().toISOString(),
+        previewStatus: 'ready',
+        previewTokenCount: result.token_count,
+        previewModelUsed: result.model_used,
+        previewCached: result.cached,
+        previewError: null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Preview generation failed';
+      set({ previewStatus: 'error', previewError: message });
+    }
+  },
+
+  clearPreview: () => {
+    set({
+      previewOutput: null,
+      previewGeneratedAt: null,
+      previewStatus: 'idle',
+      previewError: null,
+      previewTokenCount: null,
+      previewModelUsed: null,
+      previewCached: false,
+    });
   },
 
   // ============================================================================

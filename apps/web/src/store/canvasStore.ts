@@ -410,6 +410,46 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       throw new Error(`Cannot create node of kind "${kind}" directly.`);
     },
 
+    addDraftNode: async (position) => {
+      const state = get();
+      if (!state.projectId) {
+        throw new Error('Cannot create draft: no project selected');
+      }
+
+      const total = state.nodes.length;
+      const basePosition = position ?? {
+        x: 140 + (total % 3) * 220,
+        y: 100 + Math.floor(total / 3) * 180,
+      };
+      const snappedPosition = snapPosition(basePosition);
+
+      const draft = await api.createDraftV3({
+        project_id: state.projectId,
+        title: 'Untitled Draft',
+      });
+
+      const newNode: Node<CanvasNodeData> = {
+        id: draft.id,
+        type: 'unit',
+        position: snappedPosition,
+        data: {
+          entryId: draft.id.replace(/^draft_/, '').slice(0, 8),
+          title: draft.title,
+          summary: 'Draft',
+          status: 'draft',
+          timestamp: draft.created_at,
+          tags: ['draft'],
+          kind: 'unit',
+          commitStatus: 'draft',
+          draftId: draft.id,
+        },
+      };
+
+      set((s) => ({
+        nodes: [...s.nodes, newNode],
+      }));
+    },
+
     updateNode: (id, patch) =>
       set((state) => ({
         nodes: state.nodes.map((node) =>

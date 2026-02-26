@@ -3,14 +3,17 @@
 /**
  * SentenceCard - Single sentence in the draft workspace
  *
- * Shows checkbox (included), text, source badge, and remove button.
+ * Shows checkbox (included), text, source badge, remove button,
+ * and inline constraint validation results (Error Lens pattern).
  */
 
-import { X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { DraftSentence } from '@/lib/api';
+import { getConstraintResultsForSentence } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 interface SentenceCardProps {
@@ -19,6 +22,12 @@ interface SentenceCardProps {
 
 export function SentenceCard({ sentence }: SentenceCardProps) {
   const { toggleSentence, removeSentence } = useDraftWorkspaceStore();
+  const constraints = useDraftWorkspaceStore((s) => s.draft?.constraints ?? []);
+
+  const constraintResults = useMemo(
+    () => getConstraintResultsForSentence(sentence, constraints),
+    [sentence, constraints]
+  );
 
   const originLabel = getOriginLabel(sentence);
 
@@ -45,6 +54,31 @@ export function SentenceCard({ sentence }: SentenceCardProps) {
           <Badge variant="secondary" className="mt-1.5 text-xs">
             {originLabel}
           </Badge>
+        )}
+        {/* Inline constraint validation (Error Lens pattern) */}
+        {constraintResults.length > 0 && (
+          <div className="mt-1.5 space-y-0.5">
+            {constraintResults.map((r) => (
+              <div
+                key={r.constraint_id}
+                className={`flex items-center gap-1.5 text-xs ${
+                  r.type === 'match'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}
+              >
+                {r.type === 'match' ? (
+                  <CheckCircle className="h-3 w-3 flex-shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                )}
+                <span>
+                  {r.type === 'match' ? 'matches' : 'violates'} {r.constraint.type} &ldquo;
+                  {r.constraint.value}&rdquo;
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

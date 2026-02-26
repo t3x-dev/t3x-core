@@ -20,7 +20,9 @@ import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
 import { DraftActionBar } from './DraftActionBar';
 import { DraftConstraintEditor } from './DraftConstraintEditor';
+import { DraftSplitPane } from './DraftSplitPane';
 import { InstructionEditor } from './InstructionEditor';
+import { PreviewPanel } from './PreviewPanel';
 import { SentenceList } from './SentenceList';
 
 interface DraftWorkspaceProps {
@@ -38,6 +40,7 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
     getIncludedCount,
     loadDraft,
     draftId,
+    generatePreview,
   } = useDraftWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -69,6 +72,14 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
         }
       }
 
+      // Cmd/Ctrl + G to generate preview
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault();
+        if (getIncludedCount() > 0) {
+          generatePreview();
+        }
+      }
+
       // Escape to close (only if dialog is not open)
       if (e.key === 'Escape' && !showCommitDialog) {
         onClose();
@@ -77,7 +88,7 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveDraft, getIncludedCount, onClose, showCommitDialog]);
+  }, [saveDraft, getIncludedCount, onClose, showCommitDialog, generatePreview]);
 
   const handleConfirmCommit = useCallback(
     async (message?: string) => {
@@ -129,19 +140,17 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
       {/* Conflict Banner */}
       {conflictError && <ConflictBanner onRefresh={handleRefreshDraft} />}
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
-          {/* Sentence List */}
-          <SentenceList />
-
-          {/* Constraint Editor */}
-          <DraftConstraintEditor />
-
-          {/* Instruction Editor */}
-          <InstructionEditor />
-        </div>
-      </div>
+      {/* Content + Preview split */}
+      <DraftSplitPane
+        top={
+          <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
+            <SentenceList />
+            <DraftConstraintEditor />
+            <InstructionEditor />
+          </div>
+        }
+        bottom={<PreviewPanel />}
+      />
     </motion.div>
   );
 }

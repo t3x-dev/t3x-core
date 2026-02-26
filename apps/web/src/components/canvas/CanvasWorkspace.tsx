@@ -111,6 +111,7 @@ function CanvasWorkspaceInner({
     edges,
     projectId,
     addNode,
+    addDraftNode,
     updateNode,
     commitPendingCommit,
     onNodesChange,
@@ -451,6 +452,8 @@ function CanvasWorkspaceInner({
       const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
       if (!kind) return;
 
+      const isDraft = event.dataTransfer.getData('application/reactflow-draft') === 'true';
+
       // Get the drop position in flow coordinates
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -459,14 +462,18 @@ function CanvasWorkspaceInner({
 
       startTransition(async () => {
         try {
-          await addNode(kind, position);
+          if (isDraft) {
+            await addDraftNode(position);
+          } else {
+            await addNode(kind, position);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to create node';
           notify?.(message, 'error');
         }
       });
     },
-    [screenToFlowPosition, addNode, notify]
+    [screenToFlowPosition, addNode, addDraftNode, notify]
   );
 
   const matchesHighlightCommit = (node: Node<CanvasNodeData>, mode: PathHighlight) => {
