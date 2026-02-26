@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures/test';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
 import { generateProjectName } from '../fixtures/test-data-factory';
 

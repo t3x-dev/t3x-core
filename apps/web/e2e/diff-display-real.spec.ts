@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test';
 
 /**
  * Real DiffDisplayView UI E2E Test

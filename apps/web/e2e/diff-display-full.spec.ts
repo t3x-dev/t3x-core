@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test';
 
 /**
  * Full DiffDisplayView E2E Test
@@ -232,10 +232,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     const hasViewFull = await viewFullBtn.isVisible({ timeout: 10000 });
 
     if (hasViewFull) {
-      // Click using dispatchEvent to bypass pointer interception
-      await viewFullBtn.evaluate((el) =>
-        el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      );
+      await viewFullBtn.click();
 
       // Wait for modal to open (check for modal header)
       const modalHeader = page.locator('text=Commit:');
@@ -298,7 +295,7 @@ test.describe('DiffDisplayView Full E2E', () => {
       const sourcesBtn = page.locator('text=SOURCES').first();
       const sourcesVisible = await sourcesBtn.isVisible({ timeout: 3000 });
       if (sourcesVisible) {
-        await sourcesBtn.click({ force: true });
+        await sourcesBtn.click();
 
         // Wait for modal content to appear
         await page.locator('aside').first().waitFor({ state: 'visible', timeout: 5000 });
@@ -315,10 +312,7 @@ test.describe('DiffDisplayView Full E2E', () => {
         return;
       }
     } else {
-      // Use dispatchEvent to bypass pointer interception
-      await viewFullBtn.evaluate((el) =>
-        el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      );
+      await viewFullBtn.click();
 
       // Wait for modal
       await page
