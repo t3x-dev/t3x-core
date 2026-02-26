@@ -14,7 +14,16 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import { index, jsonb, pgTable, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -212,9 +221,21 @@ export const leaves = pgTable(
     // Validation
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Validation results */
+    /** Validation results (local Generate & Verify / Re-validate) */
     assertions:
       jsonb('assertions').$type<
+        Array<{
+          id: string;
+          constraint_id: string;
+          passed: boolean;
+          details: string;
+          lesson?: string;
+        }>
+      >(),
+
+    /** Runner evaluation results (written back by Runner ingest) */
+    runnerAssertions:
+      jsonb('runner_assertions').$type<
         Array<{
           id: string;
           constraint_id: string;
@@ -531,3 +552,121 @@ export const webhooks = pgTable(
 
 export type WebhookRecord = typeof webhooks.$inferSelect;
 export type WebhookInsert = typeof webhooks.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// drafts_v3: Workbench / Pre-commit Working Area
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * DraftV3 is a pre-commit workspace (like Git's working directory).
+ *
+ * Users compose sentences, add constraints, preview output, then commit.
+ * Status lifecycle: editing → committed | abandoned.
+ *
+ * JSONB columns:
+ * - sentences_json: DraftSentence[]
+ * - constraints_json: DraftConstraint[]
+ */
+export const draftsV3 = pgTable(
+  'drafts_v3',
+  {
+    /** Unique ID: "draft_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Project ID */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** Human-readable title */
+    title: text('title').notNull(),
+
+    /** Optional goal/intent description */
+    goal: text('goal'),
+
+    /** Parent commit to build upon */
+    parentCommitHash: text('parent_commit_hash'),
+
+    /** Source draft ID if forked from a committed draft */
+    forkedFrom: text('forked_from'),
+
+    /** Editable sentences (DraftSentence[]) */
+    sentencesJson: jsonb('sentences_json')
+      .notNull()
+      .$type<
+        Array<{
+          id: string;
+          text: string;
+          origin:
+            | { type: 'extracted'; segment_id: string; confidence: number }
+            | { type: 'selected' }
+            | { type: 'manual' };
+          source?: {
+            conversation_id: string;
+            conversation_title?: string;
+            turn_hash: string;
+            role: string;
+            start_char: number;
+            end_char: number;
+          };
+          position: number;
+          included: boolean;
+        }>
+      >()
+      .default([]),
+
+    /** Editable constraints (DraftConstraint[]) */
+    constraintsJson: jsonb('constraints_json')
+      .notNull()
+      .$type<
+        Array<{
+          id: string;
+          type: 'require' | 'exclude';
+          match_mode: 'exact' | 'semantic';
+          value: string;
+          reason?: string;
+        }>
+      >()
+      .default([]),
+
+    /** Free-form instructions for generation */
+    instructions: text('instructions'),
+
+    /** Leaf type for preview generation */
+    previewType: text('preview_type'),
+
+    /** Cached preview output */
+    previewOutput: text('preview_output'),
+
+    /** When preview was generated */
+    previewGeneratedAt: timestamp('preview_generated_at', { withTimezone: true }),
+
+    /** Lifecycle status: 'editing' | 'committed' | 'abandoned' */
+    status: text('status').notNull().default('editing'),
+
+    /** Commit hash after committing */
+    committedAs: text('committed_as'),
+
+    /** Leaf ID created on commit */
+    committedLeafId: text('committed_leaf_id'),
+
+    /** Target branch for commit */
+    targetBranch: text('target_branch').default('main'),
+
+    /** Optimistic lock revision counter */
+    revision: integer('revision').notNull().default(1),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+
+    /** Last update time */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    projectIdx: index('idx_drafts_v3_project').on(table.projectId),
+    statusIdx: index('idx_drafts_v3_status').on(table.status),
+  })
+);
+
+export type DraftV3Record = typeof draftsV3.$inferSelect;
+export type DraftV3Insert = typeof draftsV3.$inferInsert;

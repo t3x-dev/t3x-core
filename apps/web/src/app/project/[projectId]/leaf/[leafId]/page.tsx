@@ -148,13 +148,14 @@ export default function LeafDetailPage() {
     if (projectId) fetchPins(projectId);
   }, [projectId, fetchPins]);
 
-  // Initialize selected assertions: default to failed ones
+  // Initialize selected assertions: default to failed ones from runner_assertions
   useEffect(() => {
-    if (leaf?.assertions) {
-      const failedIds = leaf.assertions.filter((a) => !a.passed).map((a) => a.id);
+    const source = leaf?.runner_assertions ?? leaf?.assertions;
+    if (source) {
+      const failedIds = source.filter((a) => !a.passed).map((a) => a.id);
       setSelectedAssertionIds(new Set(failedIds));
     }
-  }, [leaf?.assertions]);
+  }, [leaf?.runner_assertions, leaf?.assertions]);
 
   // Toggle a single assertion checkbox
   const toggleAssertion = useCallback((id: string) => {
@@ -662,10 +663,18 @@ export default function LeafDetailPage() {
           <AssertionsSection
             assertions={leaf.assertions}
             constraints={leaf.constraints}
+            title="Validation Results"
+          />
+
+          {/* Runner Evaluation (from Runner ingest) */}
+          <AssertionsSection
+            assertions={leaf.runner_assertions}
+            constraints={leaf.constraints}
+            title="Runner Evaluation"
             selectedIds={selectedAssertionIds}
             onToggle={toggleAssertion}
             footer={
-              leaf.assertions && leaf.assertions.length > 0 ? (
+              leaf.runner_assertions && leaf.runner_assertions.length > 0 ? (
                 <div className="mt-4 flex items-center gap-3 border-t pt-4">
                   <Button
                     size="sm"
@@ -1070,6 +1079,7 @@ function OutputSection({
 interface AssertionsSectionProps {
   assertions: Assertion[] | null;
   constraints: Constraint[];
+  title?: string;
   selectedIds?: Set<string>;
   onToggle?: (id: string) => void;
   footer?: React.ReactNode;
@@ -1078,6 +1088,7 @@ interface AssertionsSectionProps {
 function AssertionsSection({
   assertions,
   constraints,
+  title = 'Validation Results',
   selectedIds,
   onToggle,
   footer,
@@ -1086,11 +1097,11 @@ function AssertionsSection({
     return (
       <section className="rounded-lg border bg-card elevation-1 elevation-hover">
         <div className="border-b p-[var(--space-group)]">
-          <h2 className="font-semibold">Validation Results</h2>
+          <h2 className="font-semibold">{title}</h2>
         </div>
         <div className="p-[var(--space-group)]">
           <p className="text-sm text-muted-foreground text-center py-8">
-            No validation results yet. Click &quot;Validate&quot; to check constraints.
+            No {title.toLowerCase()} yet.
           </p>
         </div>
       </section>
@@ -1113,7 +1124,7 @@ function AssertionsSection({
       )}
     >
       <div className="flex items-center justify-between border-b p-[var(--space-group)]">
-        <h2 className="font-semibold">Validation Results</h2>
+        <h2 className="font-semibold">{title}</h2>
         <div className="flex items-center gap-2">
           <span
             className={cn(

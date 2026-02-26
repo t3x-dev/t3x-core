@@ -221,11 +221,18 @@ export {
   type ConversationContext,
   // Input types
   type CreateCommitV4Input,
+  // Draft (Workbench)
+  type CreateDraftInput as CreateDraftV3Input,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
   DEPLOY_TYPES,
   type DeployType,
+  type Draft,
+  type DraftConstraint,
+  type DraftSentence,
+  type DraftSentenceOrigin,
+  type DraftStatus as DraftV4Status,
   type ExcludeConstraint as ExcludeConstraintV4,
   // ID Prefixes
   ID_PREFIXES,

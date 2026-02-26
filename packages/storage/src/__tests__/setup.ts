@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS commits_v2 (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Drafts (drafts_v2)
-CREATE TABLE IF NOT EXISTS drafts_v2 (
+-- Agent Drafts (formerly drafts_v2)
+CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS leaves (
   output TEXT,
   generated_at TIMESTAMPTZ,
   assertions JSONB,
+  runner_assertions JSONB,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT
@@ -203,8 +204,8 @@ CREATE INDEX IF NOT EXISTS idx_commits_v2_project ON commits_v2(project_id);
 CREATE INDEX IF NOT EXISTS idx_commits_v2_branch ON commits_v2(branch);
 CREATE INDEX IF NOT EXISTS idx_commits_v2_draft ON commits_v2(draft_id);
 CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v2_project ON drafts_v2(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v2_base_commit ON drafts_v2(base_commit_hash);
+CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
+CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
 CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
@@ -337,6 +338,31 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
 CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
+
+-- Drafts V3 (Workbench / pre-commit working area)
+CREATE TABLE IF NOT EXISTS drafts_v3 (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  goal TEXT,
+  parent_commit_hash TEXT,
+  forked_from TEXT,
+  sentences_json JSONB NOT NULL DEFAULT '[]',
+  constraints_json JSONB NOT NULL DEFAULT '[]',
+  instructions TEXT,
+  preview_type TEXT,
+  preview_output TEXT,
+  preview_generated_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'editing',
+  committed_as TEXT,
+  committed_leaf_id TEXT,
+  target_branch TEXT DEFAULT 'main',
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 `;
 
 /**

@@ -205,7 +205,8 @@
       "Bash(/bin/bash -c 'cd /Users/pdx/work/T3X && pwd')",
       "Bash(/bin/ls /tmp/)",
       "Bash(OLDPWD=/ HOME=/tmp /bin/bash --noprofile --norc -c 'cd / && pwd && echo works')",
-      "Bash(git rev-list:*)"
+      "Bash(git rev-list:*)",
+      "Bash(git submodule:*)"
     ],
     "deny": [],
     "ask": []

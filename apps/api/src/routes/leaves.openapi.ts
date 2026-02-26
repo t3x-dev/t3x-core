@@ -86,6 +86,7 @@ function toApiLeaf(leaf: Leaf) {
     output: leaf.output ?? null,
     generated_at: leaf.generated_at ?? null,
     assertions: leaf.assertions ?? null,
+    runner_assertions: leaf.runner_assertions ?? null,
     project_id: leaf.project_id,
     created_at: leaf.created_at,
     created_by: leaf.created_by ?? null,

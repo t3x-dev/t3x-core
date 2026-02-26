@@ -1985,6 +1985,7 @@ export interface EngineRun {
     id: string;
     type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
     content?: string;
+    title?: string;
   } | null;
   inputs: Record<string, unknown> | null;
   workflow: {
@@ -2585,6 +2586,7 @@ export interface Leaf {
   output: string | null;
   generated_at: string | null;
   assertions: Assertion[] | null;
+  runner_assertions: Assertion[] | null;
   project_id: string;
   created_at: string;
   created_by: string | null;
@@ -3177,4 +3179,160 @@ export async function testWebhook(id: string): Promise<{ status: number; ok: boo
     method: 'POST',
   });
   return handleResponse<{ status: number; ok: boolean }>(res);
+}
+
+// ============================================================================
+// Drafts V3 (Workbench)
+// ============================================================================
+
+export type DraftSentenceOrigin =
+  | { type: 'extracted'; segment_id: string; confidence: number }
+  | { type: 'selected' }
+  | { type: 'manual' };
+
+export interface DraftSentence {
+  id: string;
+  text: string;
+  origin: DraftSentenceOrigin;
+  source?: {
+    conversation_id: string;
+    conversation_title?: string;
+    turn_hash: string;
+    role: string;
+    start_char: number;
+    end_char: number;
+  };
+  position: number;
+  included: boolean;
+}
+
+export interface DraftConstraint {
+  id: string;
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  reason?: string;
+}
+
+export interface DraftV3 {
+  id: string;
+  project_id: string;
+  title: string;
+  goal: string | null;
+  parent_commit_hash: string | null;
+  forked_from: string | null;
+  sentences: DraftSentence[];
+  constraints: DraftConstraint[];
+  instructions: string | null;
+  preview_type: string | null;
+  preview_output: string | null;
+  preview_generated_at: string | null;
+  status: 'editing' | 'committed' | 'abandoned';
+  committed_as: string | null;
+  committed_leaf_id: string | null;
+  target_branch: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDraftV3Input {
+  project_id: string;
+  title: string;
+  goal?: string;
+  parent_commit_hash?: string;
+  target_branch?: string;
+  preview_type?: string;
+}
+
+export interface UpdateDraftV3Input {
+  title?: string;
+  goal?: string;
+  sentences?: DraftSentence[];
+  constraints?: DraftConstraint[];
+  instructions?: string;
+  preview_type?: string;
+  target_branch?: string;
+  if_revision: number;
+}
+
+export async function createDraftV3(input: CreateDraftV3Input): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<DraftV3>(res);
+}
+
+export async function getDraftV3(draftId: string): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`);
+  return handleResponse<DraftV3>(res);
+}
+
+export async function listDraftsV3(projectId: string, status?: string): Promise<DraftV3[]> {
+  const params = new URLSearchParams({ project_id: projectId });
+  if (status) params.set('status', status);
+  const res = await fetchWithTimeout(`${API_V1}/drafts?${params.toString()}`);
+  return handleResponse<DraftV3[]>(res);
+}
+
+export async function updateDraftV3(
+  draftId: string,
+  updates: UpdateDraftV3Input
+): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return handleResponse<DraftV3>(res);
+}
+
+export async function deleteDraftV3(draftId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
+export async function previewDraftV3(
+  draftId: string
+): Promise<{ output: string; model_used: string; token_count: number; cached: boolean }> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/preview`, {
+    method: 'POST',
+  });
+  return handleResponse<{
+    output: string;
+    model_used: string;
+    token_count: number;
+    cached: boolean;
+  }>(res);
+}
+
+export async function commitDraftV3(
+  draftId: string,
+  message?: string
+): Promise<{
+  commit: Record<string, unknown>;
+  leaf: Record<string, unknown> | null;
+  draft_status: string;
+}> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  return handleResponse<{
+    commit: Record<string, unknown>;
+    leaf: Record<string, unknown> | null;
+    draft_status: string;
+  }>(res);
+}
+
+export async function forkDraftV3(draftId: string): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/fork`, {
+    method: 'POST',
+  });
+  return handleResponse<DraftV3>(res);
 }

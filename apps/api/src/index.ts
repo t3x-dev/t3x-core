@@ -28,6 +28,7 @@ import {
   curateRoutes,
   deployAgentRoutes,
   diffRoutes,
+  draftsRoutes,
   exportRoutes,
   healthRoutes,
   leavesRoutes,
@@ -127,6 +128,7 @@ api.route('/', exportRoutes); // /v1/export
 api.route('/', mergeRoutes); // /v1/merge
 api.route('/', runnerRoutes); // /v1/runner/*
 api.route('/', deployAgentRoutes); // /v1/deploy-agents
+api.route('/', draftsRoutes); // /v1/drafts
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins

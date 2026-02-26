@@ -1,0 +1,138 @@
+'use client';
+
+/**
+ * DraftActionBar - Top action bar for the draft workspace
+ *
+ * Displays: Back button, editable title, status badge, save indicator, commit button.
+ */
+
+import { ArrowLeft, Check, Loader2, Save } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+
+interface DraftActionBarProps {
+  onClose: () => void;
+  onCommit: () => void;
+  canCommit: boolean;
+}
+
+export function DraftActionBar({ onClose, onCommit, canCommit }: DraftActionBarProps) {
+  const { draft, saveStatus, updateTitle } = useDraftWorkspaceStore();
+  const [editing, setEditing] = useState(false);
+  const [titleValue, setTitleValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (draft) setTitleValue(draft.title);
+  }, [draft]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const handleTitleCommit = useCallback(() => {
+    setEditing(false);
+    const trimmed = titleValue.trim();
+    if (trimmed && trimmed !== draft?.title) {
+      updateTitle(trimmed);
+    } else if (draft) {
+      setTitleValue(draft.title);
+    }
+  }, [titleValue, draft, updateTitle]);
+
+  const handleTitleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        handleTitleCommit();
+      } else if (e.key === 'Escape') {
+        setEditing(false);
+        if (draft) setTitleValue(draft.title);
+      }
+    },
+    [handleTitleCommit, draft]
+  );
+
+  return (
+    <div className="flex items-center gap-3 border-b border-border px-4 py-2 bg-[var(--surface-card)]">
+      {/* Back button */}
+      <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Back</span>
+      </Button>
+
+      {/* Title */}
+      <div className="flex-1 min-w-0">
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={handleTitleCommit}
+            onKeyDown={handleTitleKeyDown}
+            className="w-full bg-transparent text-sm font-semibold border-b border-primary outline-none px-1 py-0.5"
+            maxLength={500}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-sm font-semibold truncate max-w-md hover:underline cursor-text text-left"
+            title="Click to edit title"
+          >
+            {draft?.title || 'Untitled Draft'}
+          </button>
+        )}
+      </div>
+
+      {/* Status badge */}
+      <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+        Draft
+      </Badge>
+
+      {/* Save status */}
+      <SaveStatusIndicator status={saveStatus} />
+
+      {/* Commit button */}
+      <Button size="sm" onClick={onCommit} disabled={!canCommit}>
+        Commit
+      </Button>
+    </div>
+  );
+}
+
+function SaveStatusIndicator({ status }: { status: string }) {
+  if (status === 'saving') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Saving...
+      </span>
+    );
+  }
+
+  if (status === 'saved') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-[var(--status-success)]">
+        <Check className="h-3 w-3" />
+        Saved
+      </span>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-[var(--status-error)]">
+        <Save className="h-3 w-3" />
+        Save failed
+      </span>
+    );
+  }
+
+  // idle
+  return null;
+}

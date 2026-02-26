@@ -9,7 +9,7 @@ export const EngineRunRequestSchema = z.object({
   leaf: z
     .object({
       id: z.string(),
-      type: z.enum(['deploy', 'eval']),
+      type: z.enum(['deploy', 'deploy_agent', 'eval']),
       content: z.string().optional(), // prompt for n8n AI Agent
       rules_ref: z.string().optional(), // rules file reference (from resources/rules/)
     })
@@ -74,5 +74,5 @@ export interface PendingRun {
   engine_callback_url: string;
   started_at: string;
   inputs?: Record<string, unknown>;
-  leaf?: { id: string; type: 'deploy' | 'eval'; content?: string; rules_ref?: string };
+  leaf?: { id: string; type: 'deploy' | 'deploy_agent' | 'eval'; content?: string; rules_ref?: string };
 }

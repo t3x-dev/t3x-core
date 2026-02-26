@@ -53,6 +53,18 @@ export function generateSentenceId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+export function generateDraftV3Id(): string {
+  return `draft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generateDraftSentenceId(): string {
+  return `ds_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+export function generateDraftConstraintId(): string {
+  return `dc_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
 // === Timestamps ===
 
 export function isoNow(): string {

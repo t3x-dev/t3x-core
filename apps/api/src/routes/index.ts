@@ -11,6 +11,7 @@ export { conversationRoutes } from './conversations';
 export { curateRoutes } from './curate';
 export { deployAgentRoutes } from './deploy-agents';
 export { diffRoutes } from './diff';
+export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
 export { healthRoutes } from './health';
 export { leavesRoutes } from './leaves.openapi';

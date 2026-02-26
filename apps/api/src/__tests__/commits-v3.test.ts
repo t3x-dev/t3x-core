@@ -286,14 +286,18 @@ describe('Commits V3 Routes', () => {
 
   describe('GET /v1/commits-v3', () => {
     it('returns commits for a project', async () => {
-      // Create two commits
+      // Create two commits with different content to guarantee distinct hashes
       await app.request('/v1/commits-v3', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: testProjectId,
           message: 'Commit 1',
-          content: { sentences: [] },
+          content: {
+            sentences: [
+              { id: 's1', text: 'First commit sentence.', source: { turn_hash: 'sha256:aaa', start_char: 0, end_char: 22 } },
+            ],
+          },
         }),
       });
 
@@ -303,7 +307,11 @@ describe('Commits V3 Routes', () => {
         body: JSON.stringify({
           project_id: testProjectId,
           message: 'Commit 2',
-          content: { sentences: [] },
+          content: {
+            sentences: [
+              { id: 's2', text: 'Second commit sentence.', source: { turn_hash: 'sha256:bbb', start_char: 0, end_char: 23 } },
+            ],
+          },
         }),
       });
 

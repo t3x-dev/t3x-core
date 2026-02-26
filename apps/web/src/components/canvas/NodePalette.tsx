@@ -1,6 +1,6 @@
 'use client';
 
-import { Leaf, MessageSquare } from 'lucide-react';
+import { Leaf, MessageSquare, PenSquare } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import type { NodeKind } from '@/types/nodes';
@@ -10,6 +10,7 @@ interface PaletteItem {
   label: string;
   description: string;
   icon: React.ReactNode;
+  isDraft?: boolean;
 }
 
 const paletteItems: PaletteItem[] = [
@@ -18,6 +19,13 @@ const paletteItems: PaletteItem[] = [
     label: 'Unit',
     description: 'Conversation unit',
     icon: <MessageSquare className="h-4 w-4" />,
+  },
+  {
+    kind: 'unit',
+    label: 'Draft',
+    description: 'Knowledge workbench',
+    icon: <PenSquare className="h-4 w-4" />,
+    isDraft: true,
   },
   {
     kind: 'leaf',
@@ -30,6 +38,9 @@ const paletteItems: PaletteItem[] = [
 function PaletteNode({ item }: { item: PaletteItem }) {
   const onDragStart = (event: DragEvent<HTMLDivElement>) => {
     event.dataTransfer.setData('application/reactflow', item.kind);
+    if (item.isDraft) {
+      event.dataTransfer.setData('application/reactflow-draft', 'true');
+    }
     event.dataTransfer.effectAllowed = 'move';
   };
 
@@ -76,7 +87,7 @@ export function NodePalette() {
         Nodes
       </div>
       {paletteItems.map((item) => (
-        <PaletteNode key={item.kind} item={item} />
+        <PaletteNode key={item.label} item={item} />
       ))}
     </div>
   );

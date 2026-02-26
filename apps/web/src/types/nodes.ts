@@ -11,8 +11,8 @@
  */
 export type NodeKind = 'unit' | 'leaf';
 
-// Unit commit status: staging (editable) or committed (read-only)
-export type CommitStatus = 'staging' | 'committed';
+// Unit commit status: staging (editable), committed (read-only), or draft (workbench)
+export type CommitStatus = 'staging' | 'committed' | 'draft';
 
 // Leaf node types for output destinations
 // Must match @t3x/core AnyLeafType from V4 schema
@@ -591,6 +591,12 @@ export interface CanvasNodeData {
   leafConfig?: LeafNodeConfig;
   /** Backend leaf ID (from API) */
   leafId?: string;
+
+  // ============================================
+  // Draft workbench link
+  // ============================================
+  /** Link to drafts_v3 record (when commitStatus === 'draft') */
+  draftId?: string;
 
   // ============================================
   // Deprecated fields (keep for migration)

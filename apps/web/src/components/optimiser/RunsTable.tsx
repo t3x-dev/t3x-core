@@ -13,12 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { EngineRun } from '@/lib/api';
+import type { DeployAgent, EngineRun } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useOptimiserStore } from '@/store/optimiserStore';
 
 interface RunsTableProps {
   runs: EngineRun[];
+  agents?: DeployAgent[];
   maxRows?: number;
   compareModeEnabled?: boolean;
 }
@@ -76,7 +77,7 @@ function formatScore(score: number | null): string {
  * Format token count
  */
 function formatTokens(tokens: number | null): string {
-  if (tokens === null) return '-';
+  if (tokens === null || tokens === 0) return '-';
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
   return tokens.toString();
 }
@@ -139,9 +140,22 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   );
 }
 
-export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: RunsTableProps) {
+export function RunsTable({
+  runs,
+  agents,
+  maxRows = 15,
+  compareModeEnabled = false,
+}: RunsTableProps) {
   const router = useRouter();
   const { selectedRunIds, toggleRunSelection } = useOptimiserStore();
+
+  /** Match agent name by webhook_id from the run's workflow */
+  const getAgentName = (run: EngineRun): string => {
+    const webhookId = run.workflow?.webhook_id;
+    if (!webhookId || !agents?.length) return webhookId || '-';
+    const matched = agents.find((a) => a.endpoint === webhookId);
+    return matched?.name || webhookId;
+  };
 
   if (runs.length === 0) {
     return (
@@ -168,7 +182,7 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
           <TableHead>Tags</TableHead>
           <TableHead>Agent</TableHead>
           <TableHead>Model</TableHead>
-          <TableHead>Prompt</TableHead>
+          <TableHead>Leaf</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Score</TableHead>
           <TableHead className="text-right">Tokens</TableHead>
@@ -232,10 +246,10 @@ export function RunsTable({ runs, maxRows = 15, compareModeEnabled = false }: Ru
                   </div>
                 ) : null}
               </TableCell>
-              <TableCell>{run.leaf?.id || '-'}</TableCell>
+              <TableCell>{getAgentName(run)}</TableCell>
               <TableCell className="text-muted-foreground">{run.metadata?.model || '-'}</TableCell>
               <TableCell className="text-muted-foreground">
-                {run.metadata?.prompt_version || '-'}
+                {run.leaf?.title || run.leaf?.id || '-'}
               </TableCell>
               <TableCell>{getStatusBadge(run.status, metrics.passed)}</TableCell>
               <TableCell className="text-right font-mono">
