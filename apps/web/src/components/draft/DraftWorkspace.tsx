@@ -18,6 +18,7 @@ import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
 import { DraftActionBar } from './DraftActionBar';
@@ -166,6 +167,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         top={
           <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
             <SentenceList />
+            <AutoSuggestPanel />
             <CollapsibleSection
               title="Output & Constraints"
               badge={draft.constraints.length > 0 ? draft.constraints.length : undefined}

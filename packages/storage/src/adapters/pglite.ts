@@ -47,8 +47,21 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
     }
   }
 
-  // Create PGLite client
-  client = new PGlite(dataDir);
+  // Try to load pgvector extension (optional - graceful degradation)
+  // biome-ignore lint/suspicious/noExplicitAny: PGLite extension types are dynamic
+  let extensions: any;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { vector } = require('@electric-sql/pglite/vector');
+    extensions = { vector };
+  } catch {
+    // pgvector not available — sentence similarity search will be disabled
+  }
+
+  // Create PGLite client (with pgvector if available)
+  client = new PGlite(dataDir, {
+    ...(extensions ? { extensions } : {}),
+  });
 
   // Create Drizzle instance
   db = drizzle(client, { schema });
@@ -549,4 +562,24 @@ async function initializeSchema(client: PGlite): Promise<void> {
     END $$;
 
   `);
+
+  // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
+  try {
+    await client.exec(`CREATE EXTENSION IF NOT EXISTS vector;`);
+    await client.exec(`
+      CREATE TABLE IF NOT EXISTS sentence_vectors (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        commit_hash TEXT NOT NULL,
+        text TEXT NOT NULL,
+        embedding vector(768) NOT NULL,
+        model_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
+      CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+    `);
+  } catch {
+    // pgvector not available — sentence similarity search disabled
+  }
 }

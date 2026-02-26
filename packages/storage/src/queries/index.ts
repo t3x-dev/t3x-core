@@ -223,6 +223,16 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
+// Sentence Vectors (pgvector similarity search)
+export {
+  deleteSentenceVectorsByCommit,
+  deleteSentenceVectorsByProject,
+  type SearchResult as SentenceVectorSearchResult,
+  searchSimilarSentences,
+  upsertSentenceVector,
+  upsertSentenceVectorsBatch,
+  type UpsertSentenceVectorInput,
+} from './sentenceVectors';
 // Segment Embeddings
 export {
   bufferToFloat32Array,

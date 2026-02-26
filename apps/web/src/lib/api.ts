@@ -3297,10 +3297,13 @@ export async function deleteDraftV3(draftId: string): Promise<void> {
 }
 
 export async function previewDraftV3(
-  draftId: string
+  draftId: string,
+  options?: { model?: string; preview_type?: string }
 ): Promise<{ output: string; model_used: string; token_count: number; cached: boolean }> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/preview`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options ?? {}),
   });
   return handleResponse<{
     output: string;
@@ -3308,6 +3311,24 @@ export async function previewDraftV3(
     token_count: number;
     cached: boolean;
   }>(res);
+}
+
+export interface SuggestResult {
+  sentence_id: string;
+  text: string;
+  commit_hash: string;
+  similarity: number;
+  already_in_draft: boolean;
+}
+
+export async function suggestForDraft(draftId: string, limit?: number): Promise<SuggestResult[]> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/suggest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ limit }),
+  });
+  const data = await handleResponse<{ suggestions: SuggestResult[] }>(res);
+  return data.suggestions;
 }
 
 export async function commitDraftV3(

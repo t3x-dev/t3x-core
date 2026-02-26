@@ -654,6 +654,7 @@ export const DraftResponse = z.object({
 export const PreviewDraftRequest = z
   .object({
     preview_type: z.string().optional(),
+    model: z.enum(['haiku', 'sonnet', 'opus']).optional(),
   })
   .optional();
 
@@ -676,6 +677,27 @@ export const CommitDraftResponse = SuccessResponse(
     commit: CommitV4Response,
     leaf: LeafResponse.nullable(),
     draft_status: z.literal('committed'),
+  })
+);
+
+// POST /v1/drafts/:id/suggest
+export const SuggestDraftRequest = z
+  .object({
+    limit: z.number().int().min(1).max(50).default(10),
+  })
+  .optional();
+
+export const SuggestDraftResponse = SuccessResponse(
+  z.object({
+    suggestions: z.array(
+      z.object({
+        sentence_id: z.string(),
+        text: z.string(),
+        commit_hash: z.string(),
+        similarity: z.number(),
+        already_in_draft: z.boolean(),
+      })
+    ),
   })
 );
 
