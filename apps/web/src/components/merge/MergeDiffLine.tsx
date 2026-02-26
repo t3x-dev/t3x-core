@@ -35,6 +35,8 @@ interface MergeDiffLineProps {
   contextLoading?: boolean;
   /** Callback for "Jump to conversation" link */
   onJumpToConversation?: (conversationId: string) => void;
+  /** Navigation anchor ID for sidebar scroll tracking */
+  navId?: string;
 }
 
 const lineStyles: Record<LineType, { bg: string; text: string; prefix: string; border: string }> = {
@@ -71,6 +73,7 @@ export function MergeDiffLine({
   contextData,
   contextLoading,
   onJumpToConversation,
+  navId,
 }: MergeDiffLineProps) {
   const styles = lineStyles[type];
   const isDiscarded = checkable && !isKept;
@@ -92,7 +95,7 @@ export function MergeDiffLine({
   };
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0" data-merge-nav={navId}>
       {/* Main diff line */}
       <div
         className={`
