@@ -8,7 +8,8 @@
  * - Constraint editor with local validation
  * - Instruction editor for generation guidance
  * - Auto-save with conflict detection
- * - Commit flow with dialog
+ * - Commit flow with two-phase dialog (input → success → iterate)
+ * - Diff preview section (Changes from Parent)
  */
 
 import { motion } from 'framer-motion';
@@ -20,6 +21,7 @@ import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
 import { DraftActionBar } from './DraftActionBar';
 import { DraftConstraintEditor } from './DraftConstraintEditor';
+import { DraftDiffSection } from './DraftDiffSection';
 import { DraftSplitPane } from './DraftSplitPane';
 import { InstructionEditor } from './InstructionEditor';
 import { PreviewPanel } from './PreviewPanel';
@@ -30,7 +32,7 @@ interface DraftWorkspaceProps {
   onClose: () => void;
 }
 
-export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
+export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   const {
     draft,
     isDirty,
@@ -41,6 +43,7 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
     loadDraft,
     draftId,
     generatePreview,
+    reset,
   } = useDraftWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -92,11 +95,25 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
 
   const handleConfirmCommit = useCallback(
     async (message?: string) => {
-      await commitDraft(message);
-      onClose();
+      return await commitDraft(message);
     },
-    [commitDraft, onClose]
+    [commitDraft]
   );
+
+  const handleIterate = useCallback(
+    (forkedDraftId: string) => {
+      reset();
+      loadDraft(forkedDraftId);
+      setShowCommitDialog(false);
+      // Update URL without full navigation
+      window.history.replaceState(null, '', `/project/${projectId}/draft/${forkedDraftId}`);
+    },
+    [reset, loadDraft, projectId]
+  );
+
+  const handleViewCanvas = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
   const handleRefreshDraft = useCallback(() => {
     if (draftId) {
@@ -126,6 +143,8 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
         open={showCommitDialog}
         onClose={() => setShowCommitDialog(false)}
         onConfirm={handleConfirmCommit}
+        onIterate={handleIterate}
+        onViewCanvas={handleViewCanvas}
         includedCount={getIncludedCount()}
         constraintCount={draft.constraints.length}
       />
@@ -147,6 +166,7 @@ export function DraftWorkspace({ onClose }: DraftWorkspaceProps) {
             <SentenceList />
             <DraftConstraintEditor />
             <InstructionEditor />
+            <DraftDiffSection />
           </div>
         }
         bottom={<PreviewPanel />}
