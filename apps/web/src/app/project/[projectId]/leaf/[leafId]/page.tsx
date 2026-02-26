@@ -17,7 +17,6 @@ import {
   Plus,
   RefreshCw,
   Rocket,
-  Trash2,
   X,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -27,7 +26,6 @@ import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSou
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
-import { TraceTimeline, type TraceNode } from '@/components/shared/TraceTimeline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -38,12 +36,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Assertion, CommitV4, CommitV4Sentence, Constraint, Leaf } from '@/lib/api';
+import type { Assertion, CommitV4, Constraint, Leaf } from '@/lib/api';
 import {
   ApiError,
-  fetchTurnContextCached,
   generateLeafOutput,
   getCommitV4,
   getLeaf,
@@ -107,66 +103,6 @@ export default function LeafDetailPage() {
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
-
-  // Trace timeline state
-  const [traceOpen, setTraceOpen] = useState(false);
-  const [traceNodes, setTraceNodes] = useState<TraceNode[]>([]);
-  const [traceLoading, setTraceLoading] = useState(false);
-
-  const handleTrace = useCallback(
-    async (sentence: CommitV4Sentence) => {
-      setTraceOpen(true);
-      setTraceLoading(true);
-
-      const nodes: TraceNode[] = [];
-
-      // Level 1: Leaf output (if exists)
-      if (leaf?.output) {
-        nodes.push({
-          type: 'leaf',
-          title: leaf.title || leaf.type,
-          content: leaf.output.length > 200 ? `${leaf.output.slice(0, 200)}...` : leaf.output,
-        });
-      }
-
-      // Level 2: Commit sentence
-      nodes.push({
-        type: 'commit',
-        title: sentence.id,
-        subtitle: commitData?.message || undefined,
-        content: sentence.text,
-        meta: sentence.confidence != null ? `${Math.round(sentence.confidence * 100)}%` : undefined,
-      });
-
-      // Level 3: Original conversation turn
-      if (sentence.source_ref?.turn_hash) {
-        try {
-          const ctx = await fetchTurnContextCached(sentence.source_ref.turn_hash);
-          const turn = ctx.target_turn;
-          nodes.push({
-            type: 'conversation',
-            title: `${turn.role} turn`,
-            subtitle: turn.conversation_id ? `conv ${turn.conversation_id.slice(0, 12)}...` : undefined,
-            content: turn.content,
-            highlight:
-              sentence.source_ref.start_char != null
-                ? { start: sentence.source_ref.start_char, end: sentence.source_ref.end_char }
-                : undefined,
-          });
-        } catch {
-          nodes.push({
-            type: 'conversation',
-            title: 'Turn unavailable',
-            content: 'Could not load original conversation turn.',
-          });
-        }
-      }
-
-      setTraceNodes(nodes);
-      setTraceLoading(false);
-    },
-    [leaf, commitData]
-  );
 
   // Assertion selection & Re-tune state
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
@@ -552,34 +488,31 @@ export default function LeafDetailPage() {
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
           <ShareLinkButton entityType="leaf" entityId={leafId} />
-          {/* Generate button */}
-          <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
-            <span className="mr-1 inline-flex h-3 w-3">
-              {isGenerating ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3" />
-              )}
-            </span>
-            {isGenerating ? generateProgressMessages[generatePhase] : 'Generate & Verify'}
+          {/* Generate button — primary action */}
+          <Button size="sm" onClick={handleGenerate} disabled={isGenerating}>
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                {generateProgressMessages[generatePhase]}
+              </>
+            ) : (
+              <>
+                <Play className="mr-1.5 h-3 w-3" />
+                Generate
+              </>
+            )}
           </Button>
           {/* Re-validate button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleValidate}
-            disabled={isValidating || !leaf.output}
-            title={!leaf.output ? 'Generate output first' : undefined}
-          >
-            <span className="mr-1 inline-flex h-3 w-3">
+          {leaf.output && (
+            <Button variant="outline" size="sm" onClick={handleValidate} disabled={isValidating}>
               {isValidating ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
               ) : (
-                <CheckCircle className="h-3 w-3" />
+                <CheckCircle className="mr-1.5 h-3 w-3" />
               )}
-            </span>
-            {isValidating ? 'Validating...' : 'Re-validate'}
-          </Button>
+              {isValidating ? 'Validating...' : 'Re-validate'}
+            </Button>
+          )}
           {/* Deploy button — only when runner is enabled and leaf has output */}
           {process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true' && leaf.output && (
             <Button
@@ -587,16 +520,15 @@ export default function LeafDetailPage() {
               size="sm"
               onClick={() => router.push(`/deploy?leaf_id=${encodeURIComponent(leaf.id)}`)}
             >
-              <Rocket className="mr-1 h-3 w-3" />
+              <Rocket className="mr-1.5 h-3 w-3" />
               Deploy
             </Button>
           )}
           {/* Export dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="mr-1 h-3 w-3" />
-                Export
+              <Button variant="ghost" size="sm">
+                <Download className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -685,70 +617,38 @@ export default function LeafDetailPage() {
             </div>
           )}
 
-          {/* Knowledge Sentences with Trace */}
-          {commitData && commitData.content.sentences.length > 0 && (
-            <CollapsibleSection
-              title="Knowledge Sentences"
-              badge={commitData.content.sentences.length}
-            >
-              <div className="space-y-2">
-                {commitData.content.sentences.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-start gap-3 rounded-lg bg-[var(--hover-bg)] px-3 py-2.5"
-                  >
-                    <p className="flex-1 text-sm text-[var(--text-primary)] leading-relaxed">
-                      {s.text}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {s.confidence != null && (
-                        <span className="text-xs text-[var(--text-tertiary)]">
-                          {Math.round(s.confidence * 100)}%
-                        </span>
-                      )}
-                      {s.source_ref && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 px-2 text-xs"
-                          onClick={() => handleTrace(s)}
-                        >
-                          <BookOpen className="h-3 w-3" />
-                          Trace
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CollapsibleSection>
-          )}
+          {/* ① OUTPUT — the core deliverable, always on top */}
+          <OutputSection
+            output={leaf.output}
+            generatedAt={leaf.generated_at}
+            assertions={leaf.assertions}
+            onGenerate={handleGenerate}
+            isGenerating={isGenerating}
+            generatePhase={generatePhase}
+            generateProgressMessages={generateProgressMessages}
+            generateSuccessBanner={generateSuccessBanner}
+          />
 
-          {/* Trace Timeline Sheet */}
-          <Sheet open={traceOpen} onOpenChange={setTraceOpen}>
-            <SheetContent side="right" className="w-[420px] sm:max-w-[420px] overflow-auto">
-              <SheetHeader>
-                <SheetTitle>Knowledge Trace</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6">
-                {traceLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
-                  </div>
-                ) : (
-                  <TraceTimeline nodes={traceNodes} />
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+          {/* ② CONSTRAINTS — rules the user manages */}
+          <ConstraintsSection
+            constraints={leaf.constraints}
+            onRemove={handleRemoveConstraint}
+            onAdd={handleAddConstraint}
+            saving={saving}
+          />
 
-          {/* Source Context with constraint highlights + text selection */}
+          {/* ③ USER INSTRUCTION — optional LLM guidance */}
+          <UserInstructionSection
+            instruction={
+              typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : ''
+            }
+            onSave={handleUpdateUserInstruction}
+            saving={savingInstruction}
+          />
+
+          {/* ④ SOURCE CONTEXT — reference material, collapsed by default */}
           {commitData && sentences.length > 0 && (
-            <CollapsibleSection
-              title="Source Content & Constraints"
-              badge={sentences.length}
-              defaultOpen
-            >
+            <CollapsibleSection title="Source Context" badge={sentences.length}>
               <LeafConstraintSourceContext
                 sentences={sentences}
                 constraints={leaf.constraints}
@@ -759,37 +659,7 @@ export default function LeafDetailPage() {
             </CollapsibleSection>
           )}
 
-          {/* Fallback: manual constraints when commit data unavailable */}
-          {!commitData && (
-            <ConstraintsSection
-              constraints={leaf.constraints}
-              onRemove={handleRemoveConstraint}
-              onAdd={handleAddConstraint}
-              saving={saving}
-            />
-          )}
-
-          {/* User Instruction Section */}
-          <UserInstructionSection
-            instruction={
-              typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : ''
-            }
-            onSave={handleUpdateUserInstruction}
-            saving={savingInstruction}
-          />
-
-          {/* Generate Success Banner */}
-          {generateSuccessBanner && (
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] px-4 py-2.5 text-sm font-medium text-[var(--diff-added-text)]">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              {generateSuccessBanner}
-            </div>
-          )}
-
-          {/* Output Section */}
-          <OutputSection output={leaf.output} generatedAt={leaf.generated_at} />
-
-          {/* Validation Results (local Generate & Verify) */}
+          {/* ⑤ VALIDATION DETAILS — detailed assertion results */}
           <AssertionsSection
             assertions={leaf.assertions}
             constraints={leaf.constraints}
@@ -835,7 +705,7 @@ export default function LeafDetailPage() {
 }
 
 // ============================================================================
-// Constraints Section
+// Constraints Section (chip/tag layout)
 // ============================================================================
 
 interface ConstraintsSectionProps {
@@ -861,29 +731,34 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
   };
 
   return (
-    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+    <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b p-[var(--space-group)]">
-        <h2 className="font-semibold">Constraints</h2>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{constraints.length} total</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-            disabled={saving}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add
-          </Button>
+          <h2 className="font-semibold">Constraints</h2>
+          {constraints.length > 0 && (
+            <span className="text-xs text-[var(--text-tertiary)]">
+              {requireConstraints.length} required · {excludeConstraints.length} excluded
+            </span>
+          )}
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAddForm(!showAddForm)}
+          disabled={saving}
+          className="h-7 px-2 text-xs"
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Add
+        </Button>
       </div>
-      <div className="p-[var(--space-group)] space-y-[var(--space-group)]">
+      <div className="p-[var(--space-group)]">
         {/* Add constraint form */}
         {showAddForm && (
-          <div className="rounded-md border border-dashed p-3 space-y-3">
+          <div className="mb-3 rounded-md border border-dashed p-3 space-y-2">
             <div className="flex gap-2">
               <select
-                className="rounded-md border bg-background px-3 py-1.5 text-sm"
+                className="rounded-md border bg-background px-2.5 py-1.5 text-xs"
                 value={newConstraintType}
                 onChange={(e) => setNewConstraintType(e.target.value as 'require' | 'exclude')}
               >
@@ -893,7 +768,7 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
               <input
                 type="text"
                 className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
-                placeholder="Enter constraint value..."
+                placeholder="Enter keyword or phrase..."
                 value={newConstraintValue}
                 onChange={(e) => setNewConstraintValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -905,21 +780,16 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
                 Cancel
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Add keywords or phrases that must (or must not) appear in the generated output.
-            </p>
           </div>
         )}
 
-        {/* Require constraints */}
+        {/* Must Have chips */}
         {requireConstraints.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-[var(--status-success)] mb-[var(--space-item)]">
-              Must Have ({requireConstraints.length})
-            </h3>
-            <div className="space-y-[var(--space-item)]">
+          <div className="mb-2">
+            <p className="text-xs font-medium text-[var(--status-success)] mb-1.5">Must Have</p>
+            <div className="flex flex-wrap gap-1.5">
               {requireConstraints.map((c) => (
-                <ConstraintItem
+                <ConstraintChip
                   key={c.id}
                   constraint={c}
                   onRemove={() => onRemove(c.id)}
@@ -930,15 +800,13 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
           </div>
         )}
 
-        {/* Exclude constraints */}
+        {/* Must Not Have chips */}
         {excludeConstraints.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-[var(--status-error)] mb-[var(--space-item)]">
-              Must Not Have ({excludeConstraints.length})
-            </h3>
-            <div className="space-y-[var(--space-item)]">
+            <p className="text-xs font-medium text-[var(--status-error)] mb-1.5">Must Not Have</p>
+            <div className="flex flex-wrap gap-1.5">
               {excludeConstraints.map((c) => (
-                <ConstraintItem
+                <ConstraintChip
                   key={c.id}
                   constraint={c}
                   onRemove={() => onRemove(c.id)}
@@ -950,8 +818,8 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
         )}
 
         {constraints.length === 0 && !showAddForm && (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No constraints defined. Click &quot;Add&quot; to create constraints.
+          <p className="text-xs text-[var(--text-tertiary)] text-center py-3">
+            No constraints yet — add rules to control what appears in the output.
           </p>
         )}
       </div>
@@ -959,62 +827,48 @@ function ConstraintsSection({ constraints, onRemove, onAdd, saving }: Constraint
   );
 }
 
-interface ConstraintItemProps {
+/** Compact chip for a single constraint */
+function ConstraintChip({
+  constraint,
+  onRemove,
+  disabled,
+}: {
   constraint: Constraint;
   onRemove: () => void;
   disabled: boolean;
-}
-
-function ConstraintItem({ constraint, onRemove, disabled }: ConstraintItemProps) {
+}) {
   const isRequire = constraint.type === 'require';
 
   return (
-    <div
-      className={cn(
-        'flex items-start justify-between gap-2 rounded-md border p-3',
-        isRequire
-          ? 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]'
-          : 'border-[var(--status-error)]/20 bg-[var(--status-error-muted)]'
-      )}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          {isRequire ? (
-            <Check className="h-4 w-4 text-[var(--status-success)] shrink-0" />
-          ) : (
-            <X className="h-4 w-4 text-[var(--status-error)] shrink-0" />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs max-w-[240px] transition-colors',
+            isRequire
+              ? 'bg-[var(--status-success-muted)] text-[var(--status-success)] border border-[var(--status-success)]/20'
+              : 'bg-[var(--status-error-muted)] text-[var(--status-error)] border border-[var(--status-error)]/20'
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="font-medium text-sm truncate">{constraint.value}</span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs break-words">
-              {constraint.value}
-            </TooltipContent>
-          </Tooltip>
-          <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-background rounded">
-            {constraint.match_mode}
-          </span>
-        </div>
-        {constraint.description && (
-          <p className="text-xs text-muted-foreground mt-1 ml-6">{constraint.description}</p>
+        >
+          {isRequire ? <Check className="h-3 w-3 shrink-0" /> : <X className="h-3 w-3 shrink-0" />}
+          <span className="truncate">{constraint.value}</span>
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={disabled}
+            className="ml-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:text-[var(--text-primary)]"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs break-words text-xs">
+        <p>{constraint.value}</p>
+        {constraint.match_mode === 'semantic' && (
+          <p className="mt-1 text-[var(--text-tertiary)]">Match: semantic</p>
         )}
-        {constraint.type === 'exclude' && constraint.reason && (
-          <p className="text-xs text-[var(--status-error)] mt-1 ml-6">
-            Reason: {constraint.reason}
-          </p>
-        )}
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 shrink-0"
-        onClick={onRemove}
-        disabled={disabled}
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
-    </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1114,34 +968,104 @@ function UserInstructionSection({ instruction, onSave, saving }: UserInstruction
 }
 
 // ============================================================================
-// Output Section
+// Output Section (Hero — top of page)
 // ============================================================================
 
 interface OutputSectionProps {
   output: string | null;
   generatedAt: string | null;
+  assertions: Assertion[] | null;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  generatePhase: number;
+  generateProgressMessages: string[];
+  generateSuccessBanner: string | null;
 }
 
-function OutputSection({ output, generatedAt }: OutputSectionProps) {
+function OutputSection({
+  output,
+  generatedAt,
+  assertions,
+  onGenerate,
+  isGenerating,
+  generatePhase,
+  generateProgressMessages,
+  generateSuccessBanner,
+}: OutputSectionProps) {
+  // Inline validation summary
+  const passedCount = assertions?.filter((a) => a.passed).length ?? 0;
+  const totalCount = assertions?.length ?? 0;
+  const allPassed = totalCount > 0 && passedCount === totalCount;
+
   return (
-    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+    <section
+      className={cn(
+        'rounded-lg border bg-card transition-all duration-[var(--duration-emphasis)]',
+        allPassed && 'ring-2 ring-[var(--status-success)]/30'
+      )}
+    >
       <div className="flex items-center justify-between border-b p-[var(--space-group)]">
-        <h2 className="font-semibold">Output</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="font-semibold">Output</h2>
+          {/* Inline validation badge */}
+          {totalCount > 0 && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                allPassed
+                  ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                  : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
+              )}
+            >
+              {allPassed ? <CheckCircle className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              {passedCount}/{totalCount} passed
+            </span>
+          )}
+        </div>
         {generatedAt && (
           <span className="text-xs text-[var(--text-tertiary)]">
-            Generated: {new Date(generatedAt).toLocaleString()}
+            {new Date(generatedAt).toLocaleString()}
           </span>
         )}
       </div>
+
       <div className="p-[var(--space-group)]">
+        {/* Success banner */}
+        {generateSuccessBanner && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] px-4 py-2.5 text-sm font-medium text-[var(--diff-added-text)]">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {generateSuccessBanner}
+          </div>
+        )}
+
         {output ? (
-          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-[var(--space-group)] text-sm text-[var(--text-secondary)]">
+          <div className="whitespace-pre-wrap rounded-md bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] border border-[var(--stroke-strong)] shadow-[var(--shadow-reading)] p-[var(--space-group)] text-sm text-[var(--text-secondary)] leading-relaxed">
             {output}
           </div>
         ) : (
-          <p className="text-sm text-[var(--text-tertiary)] text-center py-8">
-            No output generated yet. Click &quot;Generate&quot; to create output.
-          </p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--hover-bg)]">
+              <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
+            </div>
+            <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">No output yet</p>
+            <p className="text-xs text-[var(--text-tertiary)] mb-4 max-w-[280px]">
+              Set up your constraints below, then generate to create AI output based on your
+              knowledge base.
+            </p>
+            <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  {generateProgressMessages[generatePhase]}
+                </>
+              ) : (
+                <>
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Generate & Verify
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </div>
     </section>

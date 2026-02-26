@@ -24,7 +24,6 @@ import { AlertDialog } from '@/components/ui/alert-dialog';
 import { AnimatedButton, Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useMicrocopy } from '@/lib/microcopy';
@@ -303,15 +302,13 @@ export default function SemanticLedgerPage() {
                 className="hidden"
                 onChange={handleImportProject}
               />
-              <ShimmerButton
+              <Button
                 onClick={handleCreateProject}
-                background="linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)"
-                shimmerColor="#ffffff"
                 className="gap-2 text-sm font-semibold"
               >
                 <Plus className="h-4 w-4" />
                 New Project
-              </ShimmerButton>
+              </Button>
             </div>
           </>
         )}
@@ -335,7 +332,7 @@ export default function SemanticLedgerPage() {
                 <p className="mt-2 mb-[var(--space-section)] max-w-sm text-sm text-muted-foreground">
                   Projects organize your AI conversations and extracted knowledge.
                 </p>
-                <ShimmerButton onClick={handleCreateProject}>New Project</ShimmerButton>
+                <Button onClick={handleCreateProject}>New Project</Button>
               </CardContent>
             </Card>
           </motion.div>

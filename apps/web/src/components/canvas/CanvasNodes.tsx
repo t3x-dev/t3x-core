@@ -34,7 +34,6 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { MarchingAnts } from '@/components/canvas/MarchingAnts';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -489,8 +488,7 @@ function UnitNode(props: Props) {
   const toneKey = isStaging || isDraft ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // Breathing glow for committed nodes
-  const breatheClass = isCommitted ? 'node-breathe-commit' : '';
+  // (Breathing glow removed — keep canvas quiet)
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
@@ -699,7 +697,6 @@ function UnitNode(props: Props) {
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
-          breatheClass,
           nodeGlowClass
         )}
         style={{
@@ -712,9 +709,12 @@ function UnitNode(props: Props) {
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
-        {/* Marching ants for staging nodes (not draft — uses dashed border instead) */}
-        {isStaging && !isDraft && (
-          <MarchingAnts width={288} height={nodeHeight} borderRadius={16} />
+        {/* Staging border — static dashed outline */}
+        {isStaging && (
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[16px] border-2 border-dashed border-orange-500/60"
+            style={{ zIndex: 1 }}
+          />
         )}
 
         {/* Seal animation overlay */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeft, GitCompare } from 'lucide-react';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Button } from '@/components/ui/button';
 
 interface CommitInfo {
@@ -13,6 +14,10 @@ interface DiffHeaderProps {
   baseCommit: CommitInfo;
   targetCommit: CommitInfo;
   onClose: () => void;
+  /** 'dialog' for backward-compat modal usage, 'page' for full-screen page */
+  mode?: 'dialog' | 'page';
+  /** Project name for breadcrumb (page mode only) */
+  projectName?: string;
 }
 
 /**
@@ -46,13 +51,32 @@ function CommitBadge({ label, commit }: { label: string; commit: CommitInfo }) {
   );
 }
 
-export function DiffHeader({ baseCommit, targetCommit, onClose }: DiffHeaderProps) {
+export function DiffHeader({
+  baseCommit,
+  targetCommit,
+  onClose,
+  mode = 'dialog',
+  projectName,
+}: DiffHeaderProps) {
   return (
-    <div className="flex items-center gap-3 pl-6 pr-12 py-3 border-b bg-background">
-      <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Button>
+    <div className="flex items-center gap-3 pl-6 pr-12 py-3 border-b border-[var(--stroke-divider)] bg-background shrink-0">
+      {mode === 'page' ? (
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Breadcrumb
+            segments={[{ label: projectName || 'Project', href: '#' }, { label: 'Compare' }]}
+            className="shrink-0"
+          />
+          <div className="w-px h-5 bg-[var(--stroke-divider)] shrink-0" />
+        </>
+      ) : (
+        <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      )}
       <div className="min-w-0 flex-1">
         <CommitBadge label="Base" commit={baseCommit} />
       </div>
