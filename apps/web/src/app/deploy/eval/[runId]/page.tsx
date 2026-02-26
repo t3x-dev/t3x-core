@@ -77,13 +77,19 @@ interface EvalResult {
 }
 
 // LLM 生成的断言（来自 result.assertions）
+// Supports both old format (type/message/patch_suggestion) and new format (passed/details/lesson)
 interface LLMAssertion {
-  id: string; // 断言ID，如 "assert_001"
-  type: 'pass' | 'fail' | 'warning'; // 断言类型
-  category: string; // 分类：correctness/coverage/efficiency/behavior/error
-  message: string; // 人类可读的断言消息
-  confidence: number; // 置信度 0-1
-  patch_suggestion?: string; // 修复建议（仅失败时有）
+  id: string;
+  type: 'pass' | 'fail' | 'warning';
+  category: string;
+  message: string;
+  confidence: number;
+  patch_suggestion?: string;
+  // New format fields (aligned with Leaf Assertion)
+  constraint_id?: string;
+  passed?: boolean;
+  details?: string;
+  lesson?: string;
 }
 
 interface ParsedRunData {
@@ -151,8 +157,22 @@ function parseRunData(run: EngineRun): ParsedRunData {
   const steps = stepsRaw || [];
 
   // Parse LLM assertions (来自 result.assertions)
-  const assertionsRaw = result.assertions as LLMAssertion[] | undefined;
-  const llmAssertions = assertionsRaw || [];
+  // Normalize: support both old format (type/message) and new format (passed/details)
+  const assertionsRaw = (result.assertions as Record<string, unknown>[] | undefined) || [];
+  const llmAssertions: LLMAssertion[] = assertionsRaw.map((a, idx) => ({
+    id: (a.id as string) || `assert_${String(idx).padStart(3, '0')}`,
+    type: typeof a.passed === 'boolean'
+      ? (a.passed ? 'pass' : 'fail')
+      : ((a.type as string) || 'fail') as 'pass' | 'fail' | 'warning',
+    category: (a.category as string) || 'behavior',
+    message: (a.details as string) || (a.message as string) || '',
+    confidence: typeof a.confidence === 'number' ? a.confidence : 0.8,
+    patch_suggestion: (a.lesson as string) || (a.patch_suggestion as string) || undefined,
+    constraint_id: a.constraint_id as string | undefined,
+    passed: typeof a.passed === 'boolean' ? a.passed : a.type === 'pass',
+    details: (a.details as string) || (a.message as string) || undefined,
+    lesson: (a.lesson as string) || (a.patch_suggestion as string) || undefined,
+  }));
 
   return { evalResult, traceSummary, steps, llmAssertions };
 }
@@ -436,7 +456,7 @@ export default function RunDetailPage() {
                 passed ? 'text-[var(--diff-added-text)]' : 'text-[var(--diff-removed-text)]'
               )}
             >
-              Confidence report ready — {llmAssertions.filter((a) => a.type === 'pass').length}/
+              Confidence report ready — {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
               {llmAssertions.length} passed
             </span>
             {score !== undefined && (
@@ -676,9 +696,6 @@ export default function RunDetailPage() {
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline" className="text-xs">
-                                {assertion.constraint_id}
-                              </Badge>
                               <Badge
                                 variant="outline"
                                 className={cn(
@@ -690,8 +707,13 @@ export default function RunDetailPage() {
                               >
                                 {assertion.passed ? 'passed' : 'failed'}
                               </Badge>
+                              {assertion.constraint_id && !assertion.constraint_id.startsWith('eval_') && !assertion.constraint_id.startsWith('unknown_') && (
+                                <span className="text-xs text-muted-foreground">
+                                  {assertion.constraint_id}
+                                </span>
+                              )}
                             </div>
-                            <p className="mt-1 text-sm">{assertion.details}</p>
+                            <p className="mt-1 text-sm">{assertion.details || assertion.constraint_id || 'No details'}</p>
                             {assertion.lesson && (
                               <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
                                 <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />

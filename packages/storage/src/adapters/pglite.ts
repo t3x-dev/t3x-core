@@ -194,10 +194,18 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Note: ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL 9.6+
     ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
 
-    -- Migration: rename drafts_v2 → agent_drafts for existing databases (must run BEFORE create)
-    ALTER TABLE IF EXISTS drafts_v2 RENAME TO agent_drafts;
+    -- Migration: rename drafts_v2 → agent_drafts for existing databases
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'drafts_v2' AND schemaname = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'agent_drafts' AND schemaname = 'public') THEN
+          ALTER TABLE drafts_v2 RENAME TO agent_drafts;
+        ELSE
+          DROP TABLE drafts_v2;
+        END IF;
+      END IF;
+    END $$;
 
-    -- Drafts V2 table (agent_drafts)
+    -- Agent Drafts table (formerly drafts_v2)
     CREATE TABLE IF NOT EXISTS agent_drafts (
       draft_id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,

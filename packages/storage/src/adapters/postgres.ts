@@ -152,6 +152,17 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Note: ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL 9.6+
     ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
 
+    -- Migration: rename drafts_v2 → agent_drafts for existing databases
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'drafts_v2' AND schemaname = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'agent_drafts' AND schemaname = 'public') THEN
+          ALTER TABLE drafts_v2 RENAME TO agent_drafts;
+        ELSE
+          DROP TABLE drafts_v2;
+        END IF;
+      END IF;
+    END $$;
+
     -- Agent Drafts table (formerly drafts_v2)
     CREATE TABLE IF NOT EXISTS agent_drafts (
       draft_id TEXT PRIMARY KEY,
@@ -171,9 +182,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
     CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
-
-    -- Migration: rename drafts_v2 → agent_drafts for existing databases
-    ALTER TABLE IF EXISTS drafts_v2 RENAME TO agent_drafts;
 
     -- Segment Embeddings table
     CREATE TABLE IF NOT EXISTS segment_embeddings (
@@ -379,6 +387,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
     CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
+
+    -- Migration: Add merge_summary column to existing commits_v4 tables (v4.1)
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
 
     -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
     ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
