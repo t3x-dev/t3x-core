@@ -504,32 +504,6 @@ a {
   border-radius: 8px 4px 4px 8px;
 }
 
-/* Edge birth glow — bright pulse on new edges then fade out */
-@keyframes edge-birth-glow {
-  0% { opacity: 0; }
-  15% { opacity: 0.9; }
-  50% { opacity: 0.7; }
-  100% { opacity: 0; }
-}
-.edge-birth-glow {
-  animation: edge-birth-glow 1.2s ease-out forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .edge-birth-glow { animation: none !important; opacity: 0 !important; }
-}
-
-/* Subtle pulse for active connections */
-@keyframes handle-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
-  }
-}
-
 /* Shimmer effect for skeleton loaders */
 @keyframes shimmer {
   100% {
@@ -544,59 +518,6 @@ a {
   }
 }
 
-/* Node breathing glow — committed nodes pulse with border + shadow */
-:root {
-  --breathe-base: oklch(0.30 0 0 / 25%);
-  --breathe-commit-peak: oklch(0.50 0.20 260 / 60%);
-  --breathe-leaf-peak: oklch(0.50 0.18 155 / 60%);
-  --breathe-commit-glow: 0 0 8px 0 oklch(0.55 0.20 260 / 30%);
-  --breathe-leaf-glow: 0 0 8px 0 oklch(0.55 0.18 155 / 30%);
-}
-.dark {
-  --breathe-base: oklch(1 0 0 / 15%);
-  --breathe-commit-peak: oklch(0.60 0.20 260 / 50%);
-  --breathe-leaf-peak: oklch(0.60 0.18 155 / 50%);
-  --breathe-commit-glow: 0 0 12px 0 oklch(0.55 0.20 260 / 25%);
-  --breathe-leaf-glow: 0 0 12px 0 oklch(0.55 0.18 155 / 25%);
-}
-
-@keyframes node-breathe-commit {
-  0%, 100% {
-    border-color: var(--breathe-base);
-    box-shadow: 0 0 0 0 transparent;
-  }
-  50% {
-    border-color: var(--breathe-commit-peak);
-    box-shadow: var(--breathe-commit-glow);
-  }
-}
-@keyframes node-breathe-leaf {
-  0%, 100% {
-    border-color: var(--breathe-base);
-    box-shadow: 0 0 0 0 transparent;
-  }
-  50% {
-    border-color: var(--breathe-leaf-peak);
-    box-shadow: var(--breathe-leaf-glow);
-  }
-}
-.node-breathe-commit { animation: node-breathe-commit 4s ease-in-out infinite; }
-.node-breathe-leaf { animation: node-breathe-leaf 4s ease-in-out infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .node-breathe-commit,
-  .node-breathe-leaf { animation: none !important; }
-}
-
-/* Marching ants — flowing dashed border for staging nodes */
-@keyframes march {
-  to { stroke-dashoffset: -12; }
-}
-.marching-ants { animation: march 0.8s linear infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .marching-ants { animation: none !important; }
-}
 
 /* ═══════════════════════════════════════════
    Dark Mode Atmosphere — semantic node glow & edge brightness
@@ -621,8 +542,8 @@ a {
 /* Lift: elevate and scale up when dragging */
 .react-flow__node.dragging { z-index: 1000 !important; }
 .react-flow__node.dragging > div {
-  transform: scale(1.02);
-  box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
@@ -633,7 +554,7 @@ a {
 
 /* Dark mode drag glow */
 .dark .react-flow__node.dragging > div {
-  box-shadow: 0 8px 16px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2), 0 0 20px rgba(59,130,246,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -795,41 +716,6 @@ a {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
-  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
-  @keyframes shimmer-slide {
-    to {
-      transform: translate(calc(100cqw - 100%), 0);
-    }
-  }
-  @keyframes spin-around {
-    0% {
-      transform: translateZ(0) rotate(0);
-    }
-    15%,
-    35% {
-      transform: translateZ(0) rotate(90deg);
-    }
-    65%,
-    85% {
-      transform: translateZ(0) rotate(270deg);
-    }
-    100% {
-      transform: translateZ(0) rotate(360deg);
-    }
-  }
-  --animate-shiny-text: shiny-text 8s infinite;
-  @keyframes shiny-text {
-    0%,
-    90%,
-    100% {
-      background-position: calc(-100% - var(--shiny-width)) 0;
-    }
-    30%,
-    60% {
-      background-position: calc(100% + var(--shiny-width)) 0;
-    }
-  }
 }
 
 /* Duplicate .dark block removed — all tokens consolidated above */

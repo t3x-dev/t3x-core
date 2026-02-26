@@ -42,7 +42,6 @@ import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { MarchingAnts } from '@/components/canvas/MarchingAnts';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -488,8 +487,7 @@ function UnitNode(props: Props) {
   const toneKey = isStaging ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // Breathing glow for committed nodes
-  const breatheClass = isCommitted ? 'node-breathe-commit' : '';
+  // (Breathing glow removed — keep canvas quiet)
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
@@ -672,7 +670,6 @@ function UnitNode(props: Props) {
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
-          breatheClass,
           nodeGlowClass
         )}
         style={{
@@ -685,12 +682,11 @@ function UnitNode(props: Props) {
         data-node-type={isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
-        {/* Marching ants for staging nodes */}
+        {/* Staging border — static dashed outline */}
         {isStaging && (
-          <MarchingAnts
-            width={288}
-            height={nodeHeight}
-            borderRadius={16}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[16px] border-2 border-dashed border-orange-500/60"
+            style={{ zIndex: 1 }}
           />
         )}
 
