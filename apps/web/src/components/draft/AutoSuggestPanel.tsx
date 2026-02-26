@@ -69,11 +69,11 @@ export function AutoSuggestPanel() {
   }, [goal, fetchSuggestions]);
 
   const handleAdd = useCallback(
-    (text: string) => {
+    (sentenceId: string, text: string) => {
       addManualSentence(text);
-      // Remove from suggestions list
+      // Mark as added in suggestions list (match by ID, not text, to avoid false positives)
       setSuggestions((prev) =>
-        prev.map((s) => (s.text === text ? { ...s, already_in_draft: true } : s))
+        prev.map((s) => (s.sentence_id === sentenceId ? { ...s, already_in_draft: true } : s))
       );
     },
     [addManualSentence]
@@ -99,6 +99,7 @@ export function AutoSuggestPanel() {
         type="button"
         className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
         onClick={() => setCollapsed(!collapsed)}
+        aria-expanded={!collapsed}
       >
         <Lightbulb className="h-4 w-4 text-amber-500" />
         <span className="text-sm font-medium">Suggestions</span>
@@ -177,7 +178,7 @@ export function AutoSuggestPanel() {
                     variant="ghost"
                     size="sm"
                     className="h-6 shrink-0 gap-1 text-xs"
-                    onClick={() => handleAdd(s.text)}
+                    onClick={() => handleAdd(s.sentence_id, s.text)}
                   >
                     <Plus className="h-3 w-3" />
                     Add

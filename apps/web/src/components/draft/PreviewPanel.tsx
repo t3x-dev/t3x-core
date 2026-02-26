@@ -74,11 +74,12 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
   const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
   const hasSentences = includedCount > 0;
 
-  // Build sentence IDs for scroll sync
+  // Build sentence IDs for scroll sync (depend only on sentences, not full draft)
+  const sentences = draft?.sentences;
   const sentenceIds = useMemo(() => {
-    if (!draft) return [];
-    return draft.sentences.filter((s) => s.included).map((s) => s.id);
-  }, [draft]);
+    if (!sentences) return [];
+    return sentences.filter((s) => s.included).map((s) => s.id);
+  }, [sentences]);
 
   return (
     <div className="flex h-full flex-col">
@@ -107,6 +108,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         <div className="flex-1" />
 
         {/* Auto preview toggle */}
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is a Radix primitive, label wraps it */}
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
           <Switch checked={autoPreview} onCheckedChange={setAutoPreview} className="scale-75" />
           Auto

@@ -2,26 +2,20 @@
  * useScrollSync - Bidirectional scroll sync between SentenceList and PreviewPanel
  *
  * Links sentence IDs (via data-sentence-id attributes) in the source container
- * to corresponding spans in the preview container.
+ * to corresponding spans in the preview container. Uses DOM-based paragraph-level
+ * mapping: both panes render elements with data-sentence-id, and the hook
+ * finds the topmost visible sentence in the source and scrolls the target to match.
  *
  * Part of Workbench V2 (RFC §13 Issue F).
  */
 
 import { type RefObject, useCallback, useEffect, useRef } from 'react';
 
-interface SentenceMapping {
-  sentence_id: string;
-  start: number;
-  end: number;
-}
-
 interface UseScrollSyncOptions {
   /** Container holding SentenceCards (each with data-sentence-id) */
   sourceRef: RefObject<HTMLElement | null>;
   /** Container holding the preview with data-sentence-id spans */
   targetRef: RefObject<HTMLElement | null>;
-  /** Sentence position mappings from preview (null = disabled) */
-  sentenceMap: SentenceMapping[] | null;
   /** Enable/disable sync */
   enabled: boolean;
 }
@@ -29,14 +23,11 @@ interface UseScrollSyncOptions {
 interface UseScrollSyncReturn {
   /** Scroll target to show a specific sentence */
   scrollToSentence: (sentenceId: string) => void;
-  /** Currently active sentence ID in the viewport */
-  activeSentenceId: string | null;
 }
 
 export function useScrollSync({
   sourceRef,
   targetRef,
-  sentenceMap,
   enabled,
 }: UseScrollSyncOptions): UseScrollSyncReturn {
   const activeSentenceRef = useRef<string | null>(null);
@@ -67,7 +58,7 @@ export function useScrollSync({
       const target = targetRef.current;
       if (!target) return;
 
-      const el = target.querySelector(`[data-sentence-id="${sentenceId}"]`);
+      const el = target.querySelector(`[data-sentence-id="${CSS.escape(sentenceId)}"]`);
       if (el) {
         isScrollingRef.current = true;
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -81,7 +72,7 @@ export function useScrollSync({
 
   // Listen to source scroll events
   useEffect(() => {
-    if (!enabled || !sentenceMap) return;
+    if (!enabled) return;
 
     const source = sourceRef.current;
     if (!source) return;
@@ -104,7 +95,7 @@ export function useScrollSync({
       source.removeEventListener('scroll', handleScroll);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [enabled, sentenceMap, sourceRef, getTopmostSentenceId, scrollTargetToSentence]);
+  }, [enabled, sourceRef, getTopmostSentenceId, scrollTargetToSentence]);
 
   const scrollToSentence = useCallback(
     (sentenceId: string) => {
@@ -116,6 +107,5 @@ export function useScrollSync({
 
   return {
     scrollToSentence,
-    activeSentenceId: activeSentenceRef.current,
   };
 }

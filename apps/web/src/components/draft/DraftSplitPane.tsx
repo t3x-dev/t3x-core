@@ -47,11 +47,10 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
 
   const previewStatus = useDraftWorkspaceStore((s) => s.previewStatus);
 
-  // Scroll sync: active only when preview is ready
+  // Scroll sync: active only when preview is ready and panel is expanded
   useScrollSync({
     sourceRef: topRef,
     targetRef: bottomRef,
-    sentenceMap: previewStatus === 'ready' ? [] : null, // paragraph-level mapping
     enabled: previewStatus === 'ready' && !collapsed,
   });
 
