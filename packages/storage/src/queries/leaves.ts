@@ -249,7 +249,7 @@ export async function updateLeafAtomic(
 }
 
 /**
- * Update leaf assertions
+ * Update leaf assertions (local validation results)
  *
  * Convenience method for setting validation results.
  * Generates IDs for assertions if not provided.
@@ -268,6 +268,33 @@ export async function updateLeafAssertions(
   const [updated] = await db
     .update(leaves)
     .set({ assertions: assertionsWithIds })
+    .where(eq(leaves.id, id))
+    .returning();
+
+  return updated ? rowToLeaf(updated) : null;
+}
+
+/**
+ * Update leaf runner assertions (Runner evaluation results)
+ *
+ * Writes runner evaluation assertions to the separate runner_assertions column,
+ * so they don't overwrite local validation results in the assertions column.
+ * Generates IDs for assertions if not provided.
+ */
+export async function updateLeafRunnerAssertions(
+  db: AnyDB,
+  id: string,
+  assertions: Assertion[]
+): Promise<Leaf | null> {
+  // Generate IDs for assertions if not provided
+  const assertionsWithIds = assertions.map((a) => ({
+    ...a,
+    id: a.id || generateAssertionId(),
+  }));
+
+  const [updated] = await db
+    .update(leaves)
+    .set({ runnerAssertions: assertionsWithIds })
     .where(eq(leaves.id, id))
     .returning();
 
@@ -331,6 +358,7 @@ function rowToLeaf(row: LeafRecord): Leaf {
     output: row.output ?? undefined,
     generated_at: row.generatedAt?.toISOString(),
     assertions: row.assertions as Assertion[] | undefined,
+    runner_assertions: row.runnerAssertions as Assertion[] | undefined,
     project_id: row.projectId,
     created_at: row.createdAt.toISOString(),
     created_by: row.createdBy ?? undefined,

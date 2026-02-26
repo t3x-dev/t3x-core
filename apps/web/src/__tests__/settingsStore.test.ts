@@ -1,8 +1,32 @@
 // @vitest-environment jsdom
 /**
  * Tests for settingsStore (developer mode toggle + persistence)
+ *
+ * Node.js 25+ ships a native `localStorage` global that is a broken stub
+ * (setItem is undefined) unless `--localstorage-file` is given a valid path.
+ * vitest's jsdom environment fails to override it, so we polyfill it here
+ * before the Zustand persist middleware captures a reference to it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  if (typeof globalThis.localStorage !== 'object' || typeof globalThis.localStorage.setItem === 'function') {
+    return; // localStorage already works, no polyfill needed
+  }
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => store.clear(),
+      get length() { return store.size; },
+      key: (index: number) => [...store.keys()][index] ?? null,
+    },
+  });
+});
+
 import { useSettingsStore } from '@/store/settingsStore';
 
 // ---------------------------------------------------------------------------

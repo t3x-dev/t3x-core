@@ -26,7 +26,7 @@ import {
   getRunFilterOptions,
   insertRun,
   listRuns,
-  updateLeafAssertions,
+  updateLeafRunnerAssertions,
   updateRun,
 } from '@t3x/storage';
 import { randomUUID } from 'crypto';
@@ -289,7 +289,7 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
           };
         });
 
-        await updateLeafAssertions(db, leafId, mappedAssertions);
+        await updateLeafRunnerAssertions(db, leafId, mappedAssertions);
 
         const leaf = await findLeafById(db, leafId);
         if (leaf?.output) {

@@ -380,6 +380,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
     CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
 
+    -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
+    ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
+
     -- Saved Comparisons table (persisted A/B comparison snapshots)
     CREATE TABLE IF NOT EXISTS saved_comparisons (
       comparison_id TEXT PRIMARY KEY,

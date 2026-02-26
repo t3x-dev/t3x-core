@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS leaves (
   output TEXT,
   generated_at TIMESTAMPTZ,
   assertions JSONB,
+  runner_assertions JSONB,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT

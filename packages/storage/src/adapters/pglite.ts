@@ -428,6 +428,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
+    -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
+    ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
+
     -- Saved Comparisons table (persisted A/B comparison snapshots)
     CREATE TABLE IF NOT EXISTS saved_comparisons (
       comparison_id TEXT PRIMARY KEY,

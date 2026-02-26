@@ -73,6 +73,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
+      - AUTH_DISABLED=true
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
       - GOOGLE_CLOUD_NLP_KEY

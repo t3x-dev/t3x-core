@@ -1985,6 +1985,7 @@ export interface EngineRun {
     id: string;
     type: 'deploy_agent' | 'eval'; // Runner execution type (not LeafType)
     content?: string;
+    title?: string;
   } | null;
   inputs: Record<string, unknown> | null;
   workflow: {
@@ -2585,6 +2586,7 @@ export interface Leaf {
   output: string | null;
   generated_at: string | null;
   assertions: Assertion[] | null;
+  runner_assertions: Assertion[] | null;
   project_id: string;
   created_at: string;
   created_by: string | null;

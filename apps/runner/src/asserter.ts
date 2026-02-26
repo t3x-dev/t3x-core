@@ -318,7 +318,7 @@ export const llmAsserter = new LLMAsserter();
 /** @deprecated Use AssertionInput instead */
 export interface GenerateAssertionsInput {
   run_id: string;
-  leaf?: { id: string; type: 'deploy' | 'eval'; content?: string };
+  leaf?: { id: string; type: 'deploy' | 'deploy_agent' | 'eval'; content?: string };
   inputs?: Record<string, unknown>;
   run_report: { output?: Record<string, unknown>; meta?: { latency_ms?: number; tokens?: number } };
   evidence_pack: {
