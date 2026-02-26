@@ -300,7 +300,10 @@ export default function SemanticLedgerPage() {
                 className="hidden"
                 onChange={handleImportProject}
               />
-              <Button onClick={handleCreateProject} className="gap-2 text-sm font-semibold">
+              <Button
+                onClick={handleCreateProject}
+                className="gap-2 text-sm font-semibold"
+              >
                 <Plus className="h-4 w-4" />
                 New Project
               </Button>

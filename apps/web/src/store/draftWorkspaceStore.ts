@@ -41,6 +41,11 @@ interface DraftWorkspaceState {
   previewTokenCount: number | null;
   previewModelUsed: string | null;
   previewCached: boolean;
+  previewIncludedCount: number | null;
+
+  // V2: Auto preview + model selector
+  autoPreview: boolean;
+  previewModel: string | null; // null = server default (haiku)
 
   // Actions
   loadDraft: (draftId: string) => Promise<void>;
@@ -65,6 +70,10 @@ interface DraftWorkspaceState {
   // Preview
   generatePreview: () => Promise<void>;
   clearPreview: () => void;
+
+  // V2: Settings
+  setAutoPreview: (enabled: boolean) => void;
+  setPreviewModel: (model: string | null) => void;
 
   // Async
   saveDraft: () => Promise<void>;
@@ -100,6 +109,19 @@ function staleIfReady(currentStatus: PreviewStatus): PreviewStatus {
   return currentStatus === 'ready' ? 'stale' : currentStatus;
 }
 
+/** Auto-preview debounce timer (module-level for cleanup) */
+let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Schedule auto-preview regeneration if enabled and preview is stale */
+function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
+  if (!get().autoPreview || newPreviewStatus !== 'stale') return;
+  if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
+  autoPreviewTimer = setTimeout(() => {
+    autoPreviewTimer = null;
+    get().generatePreview();
+  }, 2000);
+}
+
 // ============================================================================
 // Store
 // ============================================================================
@@ -123,6 +145,10 @@ const initialState = {
   previewTokenCount: null as number | null,
   previewModelUsed: null as string | null,
   previewCached: false,
+  previewIncludedCount: null as number | null,
+  // V2: Auto preview + model
+  autoPreview: false,
+  previewModel: null as string | null,
 };
 
 export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => ({
@@ -162,6 +188,9 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewGeneratedAt,
         previewStatus,
         previewError: null,
+        previewIncludedCount: previewOutput
+          ? draft.sentences.filter((s) => s.included).length
+          : null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load draft';
@@ -194,12 +223,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       s.id === sentenceId ? { ...s, included: !s.included } : s
     );
     const updated = { ...draft, sentences };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   removeSentence: (sentenceId: string) => {
@@ -209,12 +240,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       .filter((s) => s.id !== sentenceId)
       .map((s, i) => ({ ...s, position: i }));
     const updated = { ...draft, sentences };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   reorderSentences: (fromIndex: number, toIndex: number) => {
@@ -225,12 +258,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     sentences.splice(toIndex, 0, moved);
     const reindexed = sentences.map((s, i) => ({ ...s, position: i }));
     const updated = { ...draft, sentences: reindexed };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   addManualSentence: (text: string) => {
@@ -245,12 +280,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     };
     const sentences = [...draft.sentences, newSentence];
     const updated = { ...draft, sentences };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   addConstraint: (type, matchMode, value, reason) => {
@@ -265,12 +302,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     };
     const constraints = [...draft.constraints, newConstraint];
     const updated = { ...draft, constraints };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   removeConstraint: (constraintId: string) => {
@@ -278,26 +317,32 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     if (!draft || draft.status !== 'editing') return;
     const constraints = draft.constraints.filter((c) => c.id !== constraintId);
     const updated = { ...draft, constraints };
+    const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
       isDirty: true,
       validationResults: recomputeValidation(updated),
-      previewStatus: staleIfReady(previewStatus),
+      previewStatus: newPreviewStatus,
     });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   updateInstructions: (instructions: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const updated = { ...draft, instructions: instructions || null };
-    set({ draft: updated, isDirty: true, previewStatus: staleIfReady(previewStatus) });
+    const newPreviewStatus = staleIfReady(previewStatus);
+    set({ draft: updated, isDirty: true, previewStatus: newPreviewStatus });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   updatePreviewType: (previewType: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const updated = { ...draft, preview_type: previewType || null };
-    set({ draft: updated, isDirty: true, previewStatus: staleIfReady(previewStatus) });
+    const newPreviewStatus = staleIfReady(previewStatus);
+    set({ draft: updated, isDirty: true, previewStatus: newPreviewStatus });
+    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   // ============================================================================
@@ -305,7 +350,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
   // ============================================================================
 
   generatePreview: async () => {
-    const { draftId, draft, isDirty } = get();
+    const { draftId, draft, isDirty, previewModel } = get();
     if (!draftId || !draft) return;
 
     // Save pending changes first so preview uses latest data
@@ -317,7 +362,10 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ previewStatus: 'loading', previewError: null });
 
     try {
-      const result = await api.previewDraftV3(draftId);
+      const result = await api.previewDraftV3(draftId, {
+        ...(previewModel ? { model: previewModel } : {}),
+      });
+      const includedCount = get().draft?.sentences.filter((s) => s.included).length ?? 0;
       set({
         previewOutput: result.output,
         previewGeneratedAt: new Date().toISOString(),
@@ -326,6 +374,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewModelUsed: result.model_used,
         previewCached: result.cached,
         previewError: null,
+        previewIncludedCount: includedCount,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Preview generation failed';
@@ -342,7 +391,24 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       previewTokenCount: null,
       previewModelUsed: null,
       previewCached: false,
+      previewIncludedCount: null,
     });
+  },
+
+  // ============================================================================
+  // V2: Settings
+  // ============================================================================
+
+  setAutoPreview: (enabled: boolean) => {
+    set({ autoPreview: enabled });
+    if (!enabled && autoPreviewTimer) {
+      clearTimeout(autoPreviewTimer);
+      autoPreviewTimer = null;
+    }
+  },
+
+  setPreviewModel: (model: string | null) => {
+    set({ previewModel: model });
   },
 
   // ============================================================================
@@ -448,6 +514,10 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
   // ============================================================================
 
   reset: () => {
+    if (autoPreviewTimer) {
+      clearTimeout(autoPreviewTimer);
+      autoPreviewTimer = null;
+    }
     set(initialState);
   },
 }));

@@ -5,11 +5,14 @@
  *
  * CSS flex-based with drag handle. Follows VS Code terminal / Overleaf pattern.
  * Persists bottom panel height to localStorage.
+ * V2: Integrates scroll sync between sentence list and preview.
  */
 
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useScrollSync } from '@/hooks/useScrollSync';
 import { cn } from '@/lib/utils';
+import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 const STORAGE_KEY = 'draft-preview-panel-height';
 const MAX_BOTTOM_RATIO = 0.6; // 60vh max
@@ -36,9 +39,21 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
   const [bottomHeight, setBottomHeight] = useState(initialHeight);
   const [collapsed, setCollapsed] = useState(initialHeight <= HEADER_HEIGHT);
   const containerRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(0);
+
+  const previewStatus = useDraftWorkspaceStore((s) => s.previewStatus);
+
+  // Scroll sync: active only when preview is ready
+  useScrollSync({
+    sourceRef: topRef,
+    targetRef: bottomRef,
+    sentenceMap: previewStatus === 'ready' ? [] : null, // paragraph-level mapping
+    enabled: previewStatus === 'ready' && !collapsed,
+  });
 
   // Persist height
   useEffect(() => {
@@ -101,7 +116,9 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">
       {/* Top content */}
-      <div className="flex-1 overflow-y-auto min-h-0">{top}</div>
+      <div ref={topRef} className="flex-1 overflow-y-auto min-h-0">
+        {top}
+      </div>
 
       {/* Drag handle */}
       {/* biome-ignore lint/a11y/useSemanticElements: custom resize handle */}
@@ -136,6 +153,7 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
 
       {/* Bottom preview panel */}
       <div
+        ref={bottomRef}
         style={{ height: effectiveHeight, minHeight: HEADER_HEIGHT }}
         className="overflow-hidden flex-shrink-0"
       >
