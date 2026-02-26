@@ -13,11 +13,11 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { BookIllustration } from '@/components/illustrations/BookIllustration';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { ErrorMessage } from '@/components/ApiStatus';
+import { BookIllustration } from '@/components/illustrations/BookIllustration';
 import { IconText } from '@/components/shared/IconText';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -26,7 +26,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useMicrocopy } from '@/lib/microcopy';
 import {
   noHover,
   noTap,
@@ -45,7 +44,6 @@ export default function SemanticLedgerPage() {
   const { projects, loading, error, initialized, fetchProjects, addProject, deleteProject } =
     useProjectStore();
   const prefersReducedMotion = useReducedMotion();
-  const mc = useMicrocopy();
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -324,15 +322,58 @@ export default function SemanticLedgerPage() {
         {projects.length === 0 && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="mb-[var(--space-group)]">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-6">
                   <BookIllustration />
                 </div>
-                <p className="text-lg font-semibold text-foreground">{mc('emptyProject')}</p>
-                <p className="mt-2 mb-[var(--space-section)] max-w-sm text-sm text-muted-foreground">
-                  Projects organize your AI conversations and extracted knowledge.
+                <h2 className="text-xl font-semibold text-foreground">
+                  Capture meaning from AI conversations
+                </h2>
+                <p className="mt-2 mb-8 max-w-md text-sm text-muted-foreground">
+                  T3X extracts and versions the knowledge hidden in your AI chats. Get started in
+                  three steps:
                 </p>
-                <Button onClick={handleCreateProject}>New Project</Button>
+                <div className="mb-8 flex w-full max-w-sm flex-col gap-4 text-left">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      1
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Create a project</p>
+                      <p className="text-xs text-muted-foreground">
+                        Organize conversations around a topic or goal
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      2
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Add a conversation</p>
+                      <p className="text-xs text-muted-foreground">
+                        Import or start a new AI dialogue
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      3
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        Save a knowledge snapshot
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Extract and commit key insights with full traceability
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <Button onClick={handleCreateProject} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create First Project
+                </Button>
               </CardContent>
             </Card>
           </motion.div>

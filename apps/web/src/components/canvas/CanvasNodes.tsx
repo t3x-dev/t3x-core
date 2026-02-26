@@ -697,11 +697,15 @@ function UnitNode(props: Props) {
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
+          data.highlightMode === 'node' && 'ring-2 ring-[var(--accent-commit)]/50',
           nodeGlowClass
         )}
         style={{
           willChange: 'transform',
           ...(selected ? { boxShadow: toneGlow[accentKey as keyof typeof toneGlow] } : {}),
+          ...(data.dimmed
+            ? { opacity: 0.3, transition: 'opacity 200ms ease' }
+            : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
         aria-label={`${data.title} — ${isDraft ? 'Draft' : isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}

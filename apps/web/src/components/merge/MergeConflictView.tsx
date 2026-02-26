@@ -26,6 +26,7 @@ interface MergeConflictViewProps {
   index: number;
   sourceBranch: string;
   targetBranch: string;
+  navId?: string;
 }
 
 export function MergeConflictView({
@@ -33,6 +34,7 @@ export function MergeConflictView({
   index,
   sourceBranch,
   targetBranch,
+  navId,
 }: MergeConflictViewProps) {
   const router = useRouter();
   const { extendedResolutions, resolveConflict, getEffectiveResolution, projectId } =
@@ -55,6 +57,7 @@ export function MergeConflictView({
 
   return (
     <div
+      data-merge-nav={navId}
       className={cn(
         'rounded-lg border p-[var(--space-group)] transition-colors elevation-1',
         resolved

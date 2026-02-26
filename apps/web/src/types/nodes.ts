@@ -471,7 +471,13 @@ export interface CanvasNodeData {
    * Highlight mode - visual emphasis during operations
    * @display Box shadow color (blue=main, amber=branch)
    */
-  highlightMode?: 'main' | 'branch';
+  highlightMode?: 'main' | 'branch' | 'node';
+
+  /**
+   * Whether the node should appear faded (not part of current highlight)
+   * @display Reduced opacity when true
+   */
+  dimmed?: boolean;
 
   // ============================================
   // Unit node: Sources section (top of card)
