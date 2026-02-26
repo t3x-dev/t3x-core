@@ -32,9 +32,11 @@ export function PreviewPanel() {
   const previewTokenCount = useDraftWorkspaceStore((s) => s.previewTokenCount);
   const previewModelUsed = useDraftWorkspaceStore((s) => s.previewModelUsed);
   const generatePreview = useDraftWorkspaceStore((s) => s.generatePreview);
+  const previewIncludedCount = useDraftWorkspaceStore((s) => s.previewIncludedCount);
   const draft = useDraftWorkspaceStore((s) => s.draft);
 
-  const hasSentences = (draft?.sentences.filter((s) => s.included).length ?? 0) > 0;
+  const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
+  const hasSentences = includedCount > 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -126,7 +128,9 @@ export function PreviewPanel() {
               {previewOutput}
             </div>
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Sentences changed since last preview.{' '}
+              {previewIncludedCount != null && includedCount !== previewIncludedCount
+                ? `${Math.abs(includedCount - previewIncludedCount)} sentence${Math.abs(includedCount - previewIncludedCount) !== 1 ? 's' : ''} ${includedCount > previewIncludedCount ? 'added' : 'removed'} since last preview. `
+                : 'Sentences changed since last preview. '}
               <button
                 type="button"
                 onClick={generatePreview}

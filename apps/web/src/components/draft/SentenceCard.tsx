@@ -7,7 +7,7 @@
  * and inline constraint validation results (Error Lens pattern).
  */
 
-import { AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, GripVertical, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,21 @@ import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 interface SentenceCardProps {
   sentence: DraftSentence;
+  isDragOver?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
-export function SentenceCard({ sentence }: SentenceCardProps) {
+export function SentenceCard({
+  sentence,
+  isDragOver,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: SentenceCardProps) {
   const { toggleSentence, removeSentence } = useDraftWorkspaceStore();
   const constraints = useDraftWorkspaceStore((s) => s.draft?.constraints ?? []);
 
@@ -33,12 +45,20 @@ export function SentenceCard({ sentence }: SentenceCardProps) {
 
   return (
     <div
-      className={`group flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`group flex items-start gap-2 rounded-lg border p-3 transition-colors ${
         sentence.included
           ? 'border-border bg-[var(--surface-card)]'
           : 'border-border/50 bg-muted/30 opacity-60'
-      }`}
+      } ${isDragOver ? 'border-primary border-t-2' : ''}`}
     >
+      {/* Drag handle */}
+      <GripVertical className="h-4 w-4 mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing" />
+
       {/* Include checkbox */}
       <Checkbox
         checked={sentence.included}

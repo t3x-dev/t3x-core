@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
@@ -919,7 +920,18 @@ function CanvasWorkspaceInner({
         )}
       </div>
       <CanvasStatusBar />
-      {modalNode && (
+      {modalNode &&
+        modalNode.data.commitStatus === 'draft' &&
+        modalNode.data.draftId &&
+        projectId && (
+          <DraftQuickSheet
+            open
+            onClose={closeNodeModal}
+            draftId={modalNode.data.draftId}
+            projectId={projectId}
+          />
+        )}
+      {modalNode && modalNode.data.commitStatus !== 'draft' && (
         <NodeModal
           node={modalNode}
           onClose={closeNodeModal}

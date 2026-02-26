@@ -41,6 +41,7 @@ interface DraftWorkspaceState {
   previewTokenCount: number | null;
   previewModelUsed: string | null;
   previewCached: boolean;
+  previewIncludedCount: number | null;
 
   // Actions
   loadDraft: (draftId: string) => Promise<void>;
@@ -123,6 +124,7 @@ const initialState = {
   previewTokenCount: null as number | null,
   previewModelUsed: null as string | null,
   previewCached: false,
+  previewIncludedCount: null as number | null,
 };
 
 export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => ({
@@ -162,6 +164,9 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewGeneratedAt,
         previewStatus,
         previewError: null,
+        previewIncludedCount: previewOutput
+          ? draft.sentences.filter((s) => s.included).length
+          : null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load draft';
@@ -318,6 +323,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
 
     try {
       const result = await api.previewDraftV3(draftId);
+      const includedCount = get().draft?.sentences.filter((s) => s.included).length ?? 0;
       set({
         previewOutput: result.output,
         previewGeneratedAt: new Date().toISOString(),
@@ -326,6 +332,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewModelUsed: result.model_used,
         previewCached: result.cached,
         previewError: null,
+        previewIncludedCount: includedCount,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Preview generation failed';
@@ -342,6 +349,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       previewTokenCount: null,
       previewModelUsed: null,
       previewCached: false,
+      previewIncludedCount: null,
     });
   },
 

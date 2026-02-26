@@ -5,15 +5,56 @@
  */
 
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AddManualSentenceDialog } from './AddManualSentenceDialog';
 import { SentenceCard } from './SentenceCard';
 
 export function SentenceList() {
-  const { draft } = useDraftWorkspaceStore();
+  const { draft, reorderSentences } = useDraftWorkspaceStore();
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+
+  const handleDragStart = useCallback(
+    (index: number) => (e: React.DragEvent) => {
+      dragIndexRef.current = index;
+      e.dataTransfer.effectAllowed = 'move';
+      // Make drag image semi-transparent
+      if (e.currentTarget instanceof HTMLElement) {
+        e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+      }
+    },
+    []
+  );
+
+  const handleDragOver = useCallback(
+    (index: number) => (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverIndex(index);
+    },
+    []
+  );
+
+  const handleDrop = useCallback(
+    (index: number) => (e: React.DragEvent) => {
+      e.preventDefault();
+      const from = dragIndexRef.current;
+      if (from != null && from !== index) {
+        reorderSentences(from, index);
+      }
+      dragIndexRef.current = null;
+      setDragOverIndex(null);
+    },
+    [reorderSentences]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  }, []);
 
   if (!draft) return null;
 
@@ -56,8 +97,16 @@ export function SentenceList() {
         </div>
       ) : (
         <div className="space-y-2">
-          {sentences.map((sentence) => (
-            <SentenceCard key={sentence.id} sentence={sentence} />
+          {sentences.map((sentence, i) => (
+            <SentenceCard
+              key={sentence.id}
+              sentence={sentence}
+              isDragOver={dragOverIndex === i}
+              onDragStart={handleDragStart(i)}
+              onDragOver={handleDragOver(i)}
+              onDrop={handleDrop(i)}
+              onDragEnd={handleDragEnd}
+            />
           ))}
         </div>
       )}

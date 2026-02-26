@@ -317,6 +317,88 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           });
         });
 
+        // Load editing drafts and create draft nodes + conversation→draft edges
+        try {
+          const editingDrafts = await api.listDraftsV3(projectId, 'editing');
+          // Build conversationId → nodeId map for edge creation
+          const convToNodeId = new Map<string, string>();
+          for (const node of nodes) {
+            if (node.data.conversationId) {
+              convToNodeId.set(node.data.conversationId, node.id);
+            }
+          }
+
+          const existingNodeIds = new Set(nodes.map((n) => n.id));
+
+          for (const draft of editingDrafts) {
+            // Skip if node already exists (user-created via addDraftNode)
+            if (existingNodeIds.has(draft.id)) continue;
+
+            // Compute position: centroid of source conversation nodes, offset right
+            const sourceConvIds = new Set(
+              draft.sentences
+                .filter((s) => s.source?.conversation_id)
+                .map((s) => s.source!.conversation_id)
+            );
+            let posX = 140 + (nodes.length % 3) * 220;
+            let posY = 100 + Math.floor(nodes.length / 3) * 180;
+            if (sourceConvIds.size > 0) {
+              let sumX = 0;
+              let sumY = 0;
+              let count = 0;
+              for (const convId of sourceConvIds) {
+                const nodeId = convToNodeId.get(convId);
+                const sourceNode = nodeId ? nodes.find((n) => n.id === nodeId) : undefined;
+                if (sourceNode) {
+                  sumX += sourceNode.position.x;
+                  sumY += sourceNode.position.y;
+                  count++;
+                }
+              }
+              if (count > 0) {
+                posX = sumX / count + 300;
+                posY = sumY / count;
+              }
+            }
+
+            const existingPos = existingNodePositions.get(draft.id);
+            const draftNode: Node<CanvasNodeData> = {
+              id: draft.id,
+              type: 'unit',
+              position: existingPos ?? snapPosition({ x: posX, y: posY }),
+              data: {
+                entryId: draft.id.replace(/^draft_/, '').slice(0, 8),
+                title: draft.title,
+                summary: `${draft.sentences.length} sentences`,
+                status: 'draft',
+                timestamp: draft.updated_at,
+                tags: ['draft'],
+                kind: 'unit',
+                commitStatus: 'draft',
+                draftId: draft.id,
+              },
+            };
+            nodes.push(draftNode);
+
+            // Create edges from source conversations to draft
+            for (const convId of sourceConvIds) {
+              const sourceNodeId = convToNodeId.get(convId);
+              if (sourceNodeId) {
+                edges.push({
+                  id: `draft-${sourceNodeId}-${draft.id}`,
+                  source: sourceNodeId,
+                  target: draft.id,
+                  type: edgeType,
+                  animated: true,
+                  style: { ...edgeStyle, strokeDasharray: '5 5' },
+                });
+              }
+            }
+          }
+        } catch {
+          // Drafts loading is non-critical — don't fail canvas load
+        }
+
         // Check for main commits
         const hasMainCommit = commits.some((c) => c.branch === 'main');
         const latestMainCommitId = resolveLatestMainUnitId(nodes);
