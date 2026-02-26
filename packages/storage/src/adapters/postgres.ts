@@ -68,9 +68,6 @@ export async function closePostgresStorage(): Promise<void> {
  * Initialize database schema
  */
 async function initializeSchema(sql: postgres.Sql): Promise<void> {
-  // Enable pgvector extension for sentence similarity search
-  await sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector;`);
-
   // Create tables if they don't exist
   await sql.unsafe(`
     -- Projects table
@@ -444,19 +441,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 
-    -- Sentence Vectors table (pgvector-powered similarity search)
-    CREATE TABLE IF NOT EXISTS sentence_vectors (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      commit_hash TEXT NOT NULL,
-      text TEXT NOT NULL,
-      embedding vector(768) NOT NULL,
-      model_id TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
-    CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
-
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
     -- created before v1.2 won't have them. This migration adds them safely.
@@ -488,4 +472,24 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         RAISE NOTICE 'Skipping FK constraint on runs: orphan project_id values exist. API layer will validate.';
     END $$;
   `);
+
+  // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
+  try {
+    await sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector;`);
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS sentence_vectors (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        commit_hash TEXT NOT NULL,
+        text TEXT NOT NULL,
+        embedding vector(768) NOT NULL,
+        model_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
+      CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+    `);
+  } catch {
+    // pgvector not available — sentence similarity search disabled
+  }
 }

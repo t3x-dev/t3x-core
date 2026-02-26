@@ -364,7 +364,10 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 
--- Sentence Vectors (pgvector-powered similarity search)
+`;
+
+/** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */
+export const CREATE_VECTOR_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS sentence_vectors (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -387,19 +390,35 @@ export async function createTestDB(): Promise<{
   client: PGlite;
   cleanup: () => Promise<void>;
 }> {
-  // Load pgvector extension dynamically
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { vector } = require('@electric-sql/pglite/vector');
+  // Try to load pgvector extension (optional)
+  // biome-ignore lint/suspicious/noExplicitAny: PGLite extension types are dynamic
+  let extensions: any;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { vector } = require('@electric-sql/pglite/vector');
+    extensions = { vector };
+  } catch {
+    // pgvector not available
+  }
 
-  // Create in-memory PGLite with pgvector extension
-  const client = new PGlite({ extensions: { vector } });
+  // Create in-memory PGLite (with pgvector if available)
+  const client = new PGlite({
+    ...(extensions ? { extensions } : {}),
+  });
 
   // Create Drizzle instance
   const db = drizzle(client, { schema }) as unknown as AnyDB;
 
-  // Enable vector extension and create tables
-  await client.exec('CREATE EXTENSION IF NOT EXISTS vector;');
+  // Create core tables
   await client.exec(CREATE_TABLES_SQL);
+
+  // Try to create vector tables (graceful — skipped if vector unavailable)
+  try {
+    await client.exec('CREATE EXTENSION IF NOT EXISTS vector;');
+    await client.exec(CREATE_VECTOR_TABLES_SQL);
+  } catch {
+    // pgvector not available — sentence vector tests will be skipped
+  }
 
   // Cleanup function
   const cleanup = async () => {

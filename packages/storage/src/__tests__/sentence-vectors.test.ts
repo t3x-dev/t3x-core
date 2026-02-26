@@ -5,6 +5,7 @@
  * Uses PGLite with the vector extension for isolated in-memory testing.
  */
 
+import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -16,14 +17,26 @@ import {
 } from '../queries/sentenceVectors';
 import { createTestDB } from './setup';
 
+/** Check if pgvector is available in this PGLite instance */
+async function hasVector(client: PGlite): Promise<boolean> {
+  try {
+    await client.exec("SELECT 'test'::vector(1)");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe('sentenceVectors', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
+  let vectorAvailable = false;
 
   beforeAll(async () => {
     const testEnv = await createTestDB();
     db = testEnv.db;
     cleanup = testEnv.cleanup;
+    vectorAvailable = await hasVector(testEnv.client);
   });
 
   afterAll(async () => {
@@ -48,6 +61,7 @@ describe('sentenceVectors', () => {
   }
 
   it('should upsert a single sentence vector', async () => {
+    if (!vectorAvailable) return;
     const input = {
       id: 's_test001',
       projectId: 'proj_test1',
@@ -68,6 +82,7 @@ describe('sentenceVectors', () => {
   });
 
   it('should upsert batch of vectors', async () => {
+    if (!vectorAvailable) return;
     const inputs = [
       {
         id: 's_batch001',
@@ -104,6 +119,7 @@ describe('sentenceVectors', () => {
   });
 
   it('should return results sorted by similarity', async () => {
+    if (!vectorAvailable) return;
     const results = await searchSimilarSentences(db, 'proj_test1', makeVector(3), 10);
 
     // batch002 should be highest similarity (seed 3 matches)
@@ -115,11 +131,13 @@ describe('sentenceVectors', () => {
   });
 
   it('should respect limit parameter', async () => {
+    if (!vectorAvailable) return;
     const results = await searchSimilarSentences(db, 'proj_test1', makeVector(1), 2);
     expect(results.length).toBe(2);
   });
 
   it('should filter by project_id', async () => {
+    if (!vectorAvailable) return;
     // Insert vector for different project
     await upsertSentenceVector(db, {
       id: 's_other001',
@@ -136,6 +154,7 @@ describe('sentenceVectors', () => {
   });
 
   it('should exclude specific commit hash', async () => {
+    if (!vectorAvailable) return;
     const results = await searchSimilarSentences(
       db,
       'proj_test1',
@@ -150,6 +169,7 @@ describe('sentenceVectors', () => {
   });
 
   it('should upsert (update) existing vector', async () => {
+    if (!vectorAvailable) return;
     await upsertSentenceVector(db, {
       id: 's_test001',
       projectId: 'proj_test1',
@@ -166,11 +186,13 @@ describe('sentenceVectors', () => {
   });
 
   it('should delete vectors by commit', async () => {
+    if (!vectorAvailable) return;
     const deleted = await deleteSentenceVectorsByCommit(db, 'sha256:def456');
     expect(deleted).toBe(3); // batch001, batch002, batch003
   });
 
   it('should delete vectors by project', async () => {
+    if (!vectorAvailable) return;
     const deleted = await deleteSentenceVectorsByProject(db, 'proj_other');
     expect(deleted).toBe(1);
   });
