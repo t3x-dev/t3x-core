@@ -73,9 +73,8 @@ function DeployPageContent() {
     endpoint: '',
   });
 
-  // v2.1: Filter states for A/B test comparison
+  // Filter states
   const [filterModel, setFilterModel] = useState<string | null>(null);
-  const [filterPromptVersion, setFilterPromptVersion] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<{
     models: string[];
     prompt_versions: string[];
@@ -113,12 +112,11 @@ function DeployPageContent() {
     return [];
   }, []);
 
-  // Load runs with optional filters
-  const loadRuns = useCallback(async (model?: string | null, promptVersion?: string | null) => {
+  // Load runs with optional model filter
+  const loadRuns = useCallback(async (model?: string | null) => {
     try {
       const runsData = await listEngineRuns({
         model: model || undefined,
-        prompt_version: promptVersion || undefined,
       });
       setRuns(runsData.runs);
     } catch (_err) {
@@ -161,10 +159,9 @@ function DeployPageContent() {
 
   // Handle filter changes
   const handleFilterChange = useCallback(
-    (model: string | null, promptVersion: string | null) => {
+    (model: string | null) => {
       setFilterModel(model);
-      setFilterPromptVersion(promptVersion);
-      loadRuns(model, promptVersion);
+      loadRuns(model);
     },
     [loadRuns]
   );
@@ -449,7 +446,7 @@ function DeployPageContent() {
         runnerHealthy={runnerHealthy === true}
         initialLeafId={initialLeafId}
         onRunComplete={async (runId) => {
-          await loadRuns(filterModel, filterPromptVersion);
+          await loadRuns(filterModel);
           try {
             const options = await getRunFilterOptions();
             setFilterOptions(options);
@@ -471,7 +468,7 @@ function DeployPageContent() {
             agents={deployAgents}
             runnerHealthy={runnerHealthy === true}
             onRunComplete={async (runId) => {
-              await loadRuns(filterModel, filterPromptVersion);
+              await loadRuns(filterModel);
               try {
                 const options = await getRunFilterOptions();
                 setFilterOptions(options);
@@ -490,9 +487,9 @@ function DeployPageContent() {
       {/* Recent Runs Section */}
       <RecentRunsSection
         runs={runs}
+        agents={deployAgents}
         router={router}
         filterModel={filterModel}
-        filterPromptVersion={filterPromptVersion}
         filterOptions={filterOptions}
         onFilterChange={handleFilterChange}
       />
@@ -505,27 +502,22 @@ function DeployPageContent() {
  */
 function RecentRunsSection({
   runs,
+  agents,
   router,
   filterModel,
-  filterPromptVersion,
   filterOptions,
   onFilterChange,
 }: {
   runs: EngineRun[];
+  agents: DeployAgent[];
   router: ReturnType<typeof useRouter>;
   filterModel: string | null;
-  filterPromptVersion: string | null;
   filterOptions: { models: string[]; prompt_versions: string[] };
-  onFilterChange: (model: string | null, promptVersion: string | null) => void;
+  onFilterChange: (model: string | null) => void;
 }) {
   const handleModelChange = (value: string) => {
     const newModel = value === 'all' ? null : value;
-    onFilterChange(newModel, filterPromptVersion);
-  };
-
-  const handlePromptVersionChange = (value: string) => {
-    const newPromptVersion = value === 'all' ? null : value;
-    onFilterChange(filterModel, newPromptVersion);
+    onFilterChange(newModel);
   };
 
   return (
@@ -533,35 +525,20 @@ function RecentRunsSection({
       <CardHeader className="flex-row items-center justify-between border-b pb-4">
         <div className="flex items-center gap-4">
           <CardTitle>Recent Runs</CardTitle>
-          {/* Filter dropdowns */}
-          <div className="flex items-center gap-2">
-            <Select value={filterModel || 'all'} onValueChange={handleModelChange}>
-              <SelectTrigger className="h-8 w-[140px]">
-                <SelectValue placeholder="All Models" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Models</SelectItem>
-                {filterOptions.models.map((model) => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterPromptVersion || 'all'} onValueChange={handlePromptVersionChange}>
-              <SelectTrigger className="h-8 w-[140px]">
-                <SelectValue placeholder="All Prompts" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Prompts</SelectItem>
-                {filterOptions.prompt_versions.map((version) => (
-                  <SelectItem key={version} value={version}>
-                    {version}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Filter dropdown */}
+          <Select value={filterModel || 'all'} onValueChange={handleModelChange}>
+            <SelectTrigger className="h-8 w-[140px]">
+              <SelectValue placeholder="All Models" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Models</SelectItem>
+              {filterOptions.models.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => router.push('/deploy/compare')}>
@@ -575,7 +552,7 @@ function RecentRunsSection({
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        <RunsTable runs={runs} maxRows={15} />
+        <RunsTable runs={runs} agents={agents} maxRows={15} />
       </CardContent>
     </Card>
   );

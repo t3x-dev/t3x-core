@@ -322,8 +322,11 @@ export interface Leaf {
   // Validation
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Validation results */
+  /** Validation results (local Generate & Verify / Re-validate) */
   assertions?: Assertion[];
+
+  /** Runner evaluation results (written back by Runner ingest) */
+  runner_assertions?: Assertion[];
 
   // ─────────────────────────────────────────────────────────────────────────
   // Metadata
