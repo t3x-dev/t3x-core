@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
@@ -60,7 +61,11 @@ import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
 
-type PathHighlight = { mode: 'main' } | { mode: 'branch'; branch?: string } | null;
+type PathHighlight =
+  | { mode: 'main' }
+  | { mode: 'branch'; branch?: string }
+  | { mode: 'node'; nodeId: string }
+  | null;
 
 interface CanvasWorkspaceProps {
   projectName: string;
@@ -111,6 +116,7 @@ function CanvasWorkspaceInner({
     edges,
     projectId,
     addNode,
+    addDraftNode,
     updateNode,
     commitPendingCommit,
     onNodesChange,
@@ -451,6 +457,8 @@ function CanvasWorkspaceInner({
       const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
       if (!kind) return;
 
+      const isDraft = event.dataTransfer.getData('application/reactflow-draft') === 'true';
+
       // Get the drop position in flow coordinates
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -459,14 +467,18 @@ function CanvasWorkspaceInner({
 
       startTransition(async () => {
         try {
-          await addNode(kind, position);
+          if (isDraft) {
+            await addDraftNode(position);
+          } else {
+            await addNode(kind, position);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to create node';
           notify?.(message, 'error');
         }
       });
     },
-    [screenToFlowPosition, addNode, notify]
+    [screenToFlowPosition, addNode, addDraftNode, notify]
   );
 
   const matchesHighlightCommit = (node: Node<CanvasNodeData>, mode: PathHighlight) => {
@@ -496,7 +508,6 @@ function CanvasWorkspaceInner({
       };
     }
 
-    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
     const adjacency = new Map<string, Set<string>>();
     edges.forEach((edge) => {
       const out = adjacency.get(edge.source) ?? new Set<string>();
@@ -507,6 +518,28 @@ function CanvasWorkspaceInner({
       inbound.add(edge.source);
       adjacency.set(edge.target, inbound);
     });
+
+    // Node-click highlighting: 1-hop neighbors only
+    if (highlight.mode === 'node') {
+      const { nodeId } = highlight;
+      const connected = new Set<string>([nodeId]);
+      const neighbors = adjacency.get(nodeId);
+      if (neighbors) {
+        neighbors.forEach((id) => connected.add(id));
+      }
+
+      const connectedEdges = new Set<string>();
+      edges.forEach((edge) => {
+        if (edge.source === nodeId || edge.target === nodeId) {
+          connectedEdges.add(edge.id);
+        }
+      });
+
+      return { nodes: connected, edges: connectedEdges };
+    }
+
+    // Branch/main highlighting: BFS traversal
+    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
 
     const startNodes = nodes
       .filter((node) => matchesHighlightCommit(node, highlight))
@@ -565,45 +598,76 @@ function CanvasWorkspaceInner({
     };
   }, [nodes, edges, highlight]);
 
-  // Semantic highlight colors - Blue for main (committed), Orange for branch (pending)
-  const highlightColor =
-    highlight?.mode === 'main' ? '#2563eb' : highlight?.mode === 'branch' ? '#f97316' : undefined;
+  // Semantic highlight colors - Blue for main/node (committed), Orange for branch (pending)
+  const highlightColor = !highlight
+    ? undefined
+    : highlight.mode === 'main' || highlight.mode === 'node'
+      ? '#2563eb'
+      : highlight.mode === 'branch'
+        ? '#f97316'
+        : undefined;
 
   const nodesForRender = useMemo(() => {
     if (!highlight) {
       return nodes;
     }
 
+    const hasHighlightedNodes = highlightSets.nodes.size > 0;
+
     return nodes.map((node) => {
-      if (!highlightSets.nodes.has(node.id)) {
-        return node;
+      const isHighlighted = highlightSets.nodes.has(node.id);
+      if (isHighlighted) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            highlightMode: highlight.mode,
+            dimmed: false,
+          },
+        };
       }
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          highlightMode: highlight.mode,
-        },
-      };
+      // Dim non-highlighted nodes when a highlight is active
+      if (hasHighlightedNodes) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            highlightMode: undefined,
+            dimmed: true,
+          },
+        };
+      }
+      return node;
     });
   }, [nodes, highlight, highlightSets.nodes]);
 
   const edgesForRender = useMemo(() => {
-    if (!highlight || !highlightColor || highlightSets.edges.size === 0) {
+    if (!highlight || !highlightColor) {
       return edges;
     }
+    const hasHighlightedEdges = highlightSets.edges.size > 0;
     return edges.map((edge) => {
-      if (!highlightSets.edges.has(edge.id)) {
-        return edge;
+      if (highlightSets.edges.has(edge.id)) {
+        return {
+          ...edge,
+          style: {
+            ...edge.style,
+            stroke: highlightColor,
+            strokeWidth: 4.5,
+          },
+        };
       }
-      return {
-        ...edge,
-        style: {
-          ...edge.style,
-          stroke: highlightColor,
-          strokeWidth: 4.5,
-        },
-      };
+      // Dim non-highlighted edges when a highlight is active
+      if (hasHighlightedEdges) {
+        return {
+          ...edge,
+          style: {
+            ...edge.style,
+            opacity: 0.2,
+          },
+        };
+      }
+      return edge;
     });
   }, [edges, highlight, highlightSets.edges, highlightColor]);
 
@@ -805,8 +869,23 @@ function CanvasWorkspaceInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeClick={(_, node) => {
+            setHighlight((current) => {
+              // If clicking the same node, clear highlight
+              if (current?.mode === 'node' && current.nodeId === node.id) {
+                return null;
+              }
+              return { mode: 'node', nodeId: node.id };
+            });
+          }}
           onNodeDoubleClick={(_, node) => {
             openNodeModal(node.id, 'commit');
+          }}
+          onPaneClick={() => {
+            // Clear node highlight when clicking empty canvas
+            if (highlight?.mode === 'node') {
+              setHighlight(null);
+            }
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
@@ -912,7 +991,18 @@ function CanvasWorkspaceInner({
         )}
       </div>
       <CanvasStatusBar />
-      {modalNode && (
+      {modalNode &&
+        modalNode.data.commitStatus === 'draft' &&
+        modalNode.data.draftId &&
+        projectId && (
+          <DraftQuickSheet
+            open
+            onClose={closeNodeModal}
+            draftId={modalNode.data.draftId}
+            projectId={projectId}
+          />
+        )}
+      {modalNode && modalNode.data.commitStatus !== 'draft' && (
         <NodeModal
           node={modalNode}
           onClose={closeNodeModal}

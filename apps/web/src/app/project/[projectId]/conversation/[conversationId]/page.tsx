@@ -2,13 +2,15 @@
 
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { AddToDraftButton } from '@/components/conversation/AddToDraftButton';
 import { ContextPanelWrapper } from '@/components/conversation/ContextPanelWrapper';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { parseHighlightParam } from '@/components/shared/ViewSourceLink';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
+import { useTextSelection } from '@/hooks/useTextSelection';
 import type { Conversation, Turn } from '@/lib/api';
 import { getConversation, listTurns } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -30,6 +32,10 @@ export default function ConversationPage() {
   // Refs for scroll-to-turn functionality
   const turnRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const hasScrolled = useRef(false);
+
+  // Ref for text selection tracking
+  const mainRef = useRef<HTMLElement>(null);
+  const { selection, clearSelection } = useTextSelection(mainRef);
 
   const [conversation, setConversation] = useState<
     (Conversation & { turns_count?: number }) | null
@@ -80,6 +86,11 @@ export default function ConversationPage() {
 
     return () => clearTimeout(timer);
   }, [loading, targetTurnHash, turns]);
+
+  const handleDraftDone = useCallback(() => {
+    clearSelection();
+    window.getSelection()?.removeAllRanges();
+  }, [clearSelection]);
 
   if (loading) {
     return (
@@ -145,7 +156,7 @@ export default function ConversationPage() {
       {/* Main content area with sidebar */}
       <div className="flex flex-1 overflow-hidden">
         {/* Conversation content */}
-        <main className="flex-1 overflow-auto p-[var(--space-page)]">
+        <main ref={mainRef} className="flex-1 overflow-auto p-[var(--space-page)]">
           <div className="mx-auto max-w-3xl space-y-[var(--space-group)]">
             {turns.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -174,6 +185,17 @@ export default function ConversationPage() {
           <ContextPanelWrapper projectId={projectId} conversationId={conversationId} />
         </aside>
       </div>
+
+      {/* Floating Add to Draft button */}
+      {selection && (
+        <AddToDraftButton
+          selection={selection}
+          projectId={projectId}
+          conversationId={conversationId}
+          conversationTitle={conversation.title || undefined}
+          onDone={handleDraftDone}
+        />
+      )}
     </div>
   );
 }
@@ -223,6 +245,8 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
   return (
     <div
       ref={ref}
+      data-turn-hash={turn.turn_hash}
+      data-turn-role={turn.role}
       className={cn(
         'rounded-lg p-[var(--space-group)] transition-all duration-[var(--duration-slow)]',
         isUser && 'bg-primary/10 ml-8',
@@ -254,7 +278,9 @@ const TurnMessage = forwardRef<HTMLDivElement, TurnMessageProps>(function TurnMe
           </span>
         )}
       </div>
-      <div className="whitespace-pre-wrap text-sm">{renderContent()}</div>
+      <div data-turn-content className="whitespace-pre-wrap text-sm">
+        {renderContent()}
+      </div>
     </div>
   );
 });

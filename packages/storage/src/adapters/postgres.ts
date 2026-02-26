@@ -483,4 +483,24 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         RAISE NOTICE 'Skipping FK constraint on runs: orphan project_id values exist. API layer will validate.';
     END $$;
   `);
+
+  // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
+  try {
+    await sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector;`);
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS sentence_vectors (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        commit_hash TEXT NOT NULL,
+        text TEXT NOT NULL,
+        embedding vector(768) NOT NULL,
+        model_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
+      CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+    `);
+  } catch {
+    // pgvector not available — sentence similarity search disabled
+  }
 }

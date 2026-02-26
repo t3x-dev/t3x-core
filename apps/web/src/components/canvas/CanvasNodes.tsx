@@ -34,6 +34,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -42,8 +43,6 @@ import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { MarchingAnts } from '@/components/canvas/MarchingAnts';
-import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -481,20 +480,20 @@ function UnitNode(props: Props) {
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
+  const isDraft = data.commitStatus === 'draft';
 
   const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN';
 
   // Map tone to accent system
-  const toneKey = isStaging ? 'staging' : tone || 'default';
+  const toneKey = isStaging || isDraft ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // Breathing glow for committed nodes
-  const breatheClass = isCommitted ? 'node-breathe-commit' : '';
+  // (Breathing glow removed — keep canvas quiet)
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
     ? 'node-glow-committed'
-    : isStaging
+    : isStaging || isDraft
       ? 'node-glow-pending'
       : '';
 
@@ -559,6 +558,14 @@ function UnitNode(props: Props) {
 
   // B-4: Next Step button logic
   const getNextStep = (): { label: string; icon: typeof ArrowRight; action: () => void } | null => {
+    // Draft nodes: navigate to draft workspace
+    if (isDraft && data.draftId && projectId) {
+      return {
+        label: 'Open Draft',
+        icon: PenSquare,
+        action: () => router.push(`/project/${projectId}/draft/${data.draftId}`),
+      };
+    }
     if (isStaging && !data.conversationId) {
       return {
         label: 'Start Conversation',
@@ -597,19 +604,31 @@ function UnitNode(props: Props) {
   const nextStep = getNextStep();
 
   // B-8: Compute stats for collapsed view
-  const sentenceCount = data.commitV4
-    ? data.commitV4.content.sentences.length
-    : data.commitV3
-      ? data.commitV3.sentences.length
-      : 0;
+  const sentenceCount = isDraft
+    ? 0 // Draft shows its own summary in title area
+    : data.commitV4
+      ? data.commitV4.content.sentences.length
+      : data.commitV3
+        ? data.commitV3.sentences.length
+        : 0;
 
   // Constellation mode — render minified dot at low zoom
   if (isConstellation) {
-    const dotType = isStaging ? 'staging' : isCommitted ? 'committed' : 'conversation';
+    const dotType = isDraft
+      ? 'staging'
+      : isStaging
+        ? 'staging'
+        : isCommitted
+          ? 'committed'
+          : 'conversation';
     const color = constellationColors[dotType] || constellationColors.committed;
     return (
       <>
-        <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 1, height: 1 }} />
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{ opacity: 0, width: 1, height: 1 }}
+        />
         <div
           className="constellation-dot"
           style={{
@@ -625,7 +644,11 @@ function UnitNode(props: Props) {
           aria-label={`${data.title} (minified)`}
           aria-selected={selected}
         />
-        <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 1, height: 1 }} />
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{ opacity: 0, width: 1, height: 1 }}
+        />
       </>
     );
   }
@@ -659,9 +682,11 @@ function UnitNode(props: Props) {
           'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
           glass.highlight,
-          // Left accent line
-          'border-l-2',
-          isStaging && 'border-t-transparent border-r-transparent border-b-transparent',
+          // Draft: dashed amber border
+          isDraft && 'border-dashed border-2 border-amber-500/70',
+          // Left accent line (non-draft)
+          !isDraft && 'border-l-2',
+          isStaging && !isDraft && 'border-t-transparent border-r-transparent border-b-transparent',
           accentKey === 'commit' && 'border-l-[var(--accent-commit)]',
           accentKey === 'branch' && 'border-l-[var(--accent-branch)]',
           accentKey === 'pending' && 'border-l-[var(--accent-pending)]',
@@ -672,25 +697,27 @@ function UnitNode(props: Props) {
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
-          breatheClass,
+          data.highlightMode === 'node' && 'ring-2 ring-[var(--accent-commit)]/50',
           nodeGlowClass
         )}
         style={{
           willChange: 'transform',
           ...(selected ? { boxShadow: toneGlow[accentKey as keyof typeof toneGlow] } : {}),
+          ...(data.dimmed
+            ? { opacity: 0.3, transition: 'opacity 200ms ease' }
+            : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
+        aria-label={`${data.title} — ${isDraft ? 'Draft' : isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
         aria-selected={selected}
-        data-node-type={isStaging ? 'conversation' : 'commit'}
+        data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
       >
-        {/* Marching ants for staging nodes */}
+        {/* Staging border — static dashed outline */}
         {isStaging && (
-          <MarchingAnts
-            width={288}
-            height={nodeHeight}
-            borderRadius={16}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[16px] border-2 border-dashed border-orange-500/60"
+            style={{ zIndex: 1 }}
           />
         )}
 
@@ -771,26 +798,37 @@ function UnitNode(props: Props) {
             <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
               {data.title}
             </h4>
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
-                      data.branchType === 'main'
-                        ? cn(toneAccent.commit.border, toneAccent.commit.text)
-                        : cn(toneAccent.branch.border, toneAccent.branch.text)
-                    )}
-                  >
-                    {data.branchType === 'main' ? <GitCommit size={10} /> : <GitBranch size={10} />}
+            {isDraft ? (
+              <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
+                <PenSquare size={10} />
+                DRAFT
+              </span>
+            ) : (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={cn(
+                        'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
+                        data.branchType === 'main'
+                          ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                          : cn(toneAccent.branch.border, toneAccent.branch.text)
+                      )}
+                    >
+                      {data.branchType === 'main' ? (
+                        <GitCommit size={10} />
+                      ) : (
+                        <GitBranch size={10} />
+                      )}
+                      {branchLabel}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
                     {branchLabel}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {branchLabel}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           {/* Row 2: Self hash (committed only) */}

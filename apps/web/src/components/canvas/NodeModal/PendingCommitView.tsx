@@ -8,6 +8,7 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   GitCompare,
   Loader2,
   Lock,
@@ -19,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1069,6 +1071,74 @@ export function PendingCommitView({
     }
   }, [projectId, onConvertDraft, node?.id, commitSuccess?.commitHash]);
 
+  // ========== B-8: Open as Draft ==========
+  const [openingAsDraft, setOpeningAsDraft] = useState(false);
+
+  const handleOpenAsDraft = useCallback(async () => {
+    setOpeningAsDraft(true);
+    try {
+      // Collect sentences from the current staging
+      const draftSentences: api.DraftSentence[] = [];
+
+      if (hasNewSourceData) {
+        // New system: extract from textBlocks selections
+        const sourceConvId = data.sourceConversationId || data.conversationId || '';
+        for (const block of textBlocks) {
+          const text = getSelectedText(block.tokens, block.selections);
+          if (text.trim()) {
+            draftSentences.push({
+              id: `ds_${Math.random().toString(36).slice(2, 14)}`,
+              text: text.trim(),
+              origin: { type: 'selected' },
+              source: {
+                conversation_id: sourceConvId,
+                turn_hash: '',
+                role: 'user',
+                start_char: 0,
+                end_char: text.trim().length,
+              },
+              position: draftSentences.length,
+              included: true,
+            });
+          }
+        }
+      } else {
+        // Legacy system: extract from allPhrases
+        for (const phrase of allPhrases.filter((p) => p.included)) {
+          draftSentences.push({
+            id: `ds_${Math.random().toString(36).slice(2, 14)}`,
+            text: phrase.text,
+            origin: { type: 'selected' },
+            position: draftSentences.length,
+            included: true,
+          });
+        }
+      }
+
+      const newDraft = await api.createDraftV3({
+        project_id: projectId,
+        title: data.title || 'Draft from Canvas',
+        parent_commit_hash: data.sourceCommitHash || undefined,
+        target_branch: data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
+      });
+
+      if (draftSentences.length > 0) {
+        await api.updateDraftV3(newDraft.id, {
+          sentences: draftSentences,
+          if_revision: 1,
+        });
+      }
+
+      // Navigate to draft page
+      const routeProject = data.projectId || projectId;
+      window.location.href = `/project/${routeProject}/draft/${newDraft.id}`;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create draft');
+    } finally {
+      setOpeningAsDraft(false);
+    }
+  }, [projectId, data, hasNewSourceData, textBlocks, allPhrases]);
+
   // ========== JSX ==========
 
   // B-7: Commit success page
@@ -1191,6 +1261,20 @@ export function PendingCommitView({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenAsDraft}
+              disabled={openingAsDraft}
+              className="gap-1.5"
+            >
+              {openingAsDraft ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5" />
+              )}
+              Open as Draft
+            </Button>
             <Button
               variant="ghost"
               size="icon"

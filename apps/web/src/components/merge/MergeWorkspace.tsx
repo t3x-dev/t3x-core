@@ -12,17 +12,21 @@
 
 import { motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useMergeNavigation } from '@/hooks/useMergeNavigation';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { buildMergeNavItems } from './buildMergeNavItems';
 import { MergeActionBar } from './MergeActionBar';
+import { MergeNavSidebar } from './MergeNavSidebar';
 import { MergePreview } from './MergePreview';
 import { MergeReviewDialog } from './MergeReviewDialog';
+import type { ViewMode } from './UnifiedDiffView';
 import { UnifiedDiffView } from './UnifiedDiffView';
 
 interface MergeWorkspaceProps {
@@ -58,6 +62,26 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   const prefersReducedMotion = useReducedMotion();
   const { t } = useTerminology();
   const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Build nav items from merge data
+  const navItems = useMemo(
+    () => (prepared ? buildMergeNavItems(prepared, extendedResolutions) : []),
+    [prepared, extendedResolutions]
+  );
+
+  // Scroll sync between sidebar and content
+  const { activeItemId, scrollToItem } = useMergeNavigation({
+    scrollContainerRef,
+    items: navItems,
+    prefersReducedMotion,
+  });
+
+  // Compute resolved/total for sidebar progress
+  const totalConflicts = prepared?.similarPairs.length ?? 0;
+  const resolvedCount = totalConflicts - (prepared ? getUnresolvedCount() : 0);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -85,6 +109,12 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         if (canCommit()) {
           setShowReviewDialog(true);
         }
+      }
+
+      // Cmd/Ctrl + B to toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
       }
 
       // Escape to close (only if dialog is not open)
@@ -125,7 +155,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     );
   }
 
-  const unresolvedCount = getUnresolvedCount();
+  const unresolvedCount = totalConflicts - resolvedCount;
   const summary = prepared ? computeMergeSummary(prepared, extendedResolutions) : null;
   const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
 
@@ -167,21 +197,39 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         onClose={onClose}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Diff View */}
-        <div className="flex-1 overflow-auto p-[var(--space-page)]">
-          <UnifiedDiffView
-            prepared={prepared}
-            onResolvePair={resolvePair}
-            onToggleKeep={toggleKeep}
-            sourceBranch={sourceBranch || 'A'}
-            targetBranch={targetBranch || 'B'}
+      {/* Main Content — horizontal layout with sidebar */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Navigation Sidebar (hidden on small screens) */}
+        <div className="hidden md:flex">
+          <MergeNavSidebar
+            items={navItems}
+            activeItemId={activeItemId}
+            onItemClick={scrollToItem}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+            resolvedCount={resolvedCount}
+            totalConflicts={totalConflicts}
           />
         </div>
 
-        {/* Preview Panel */}
-        <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
+        {/* Diff + Preview */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Diff View */}
+          <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
+            <UnifiedDiffView
+              prepared={prepared}
+              onResolvePair={resolvePair}
+              onToggleKeep={toggleKeep}
+              sourceBranch={sourceBranch || 'A'}
+              targetBranch={targetBranch || 'B'}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
+          </div>
+
+          {/* Preview Panel */}
+          <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
+        </div>
       </div>
     </motion.div>
   );

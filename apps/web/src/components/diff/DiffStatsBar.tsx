@@ -1,8 +1,9 @@
 'use client';
 
+import { AlignJustify, Check, Columns2, Minus, Paperclip, Pencil, Plus } from 'lucide-react';
 import { useCountUp } from '@/hooks/useCountUp';
-import { Check, Minus, Pencil, Plus } from 'lucide-react';
 import { useTerminology } from '@/hooks/useTerminology';
+import { cn } from '@/lib/utils';
 
 interface DiffStatsBarProps {
   identical: number;
@@ -10,9 +11,25 @@ interface DiffStatsBarProps {
   added: number;
   removed: number;
   onJump?: (section: string) => void;
+  /** View mode toggle (page mode only) */
+  viewMode?: 'split' | 'unified';
+  onViewModeChange?: (mode: 'split' | 'unified') => void;
+  /** Context snippets toggle (page mode only) */
+  showSnippets?: boolean;
+  onToggleSnippets?: () => void;
 }
 
-export function DiffStatsBar({ identical, modified, added, removed, onJump }: DiffStatsBarProps) {
+export function DiffStatsBar({
+  identical,
+  modified,
+  added,
+  removed,
+  onJump,
+  viewMode,
+  onViewModeChange,
+  showSnippets,
+  onToggleSnippets,
+}: DiffStatsBarProps) {
   const { t } = useTerminology();
   const aIdentical = useCountUp(identical);
   const aModified = useCountUp(modified);
@@ -54,7 +71,7 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
   ];
 
   return (
-    <div className="flex items-center gap-3 px-6 py-3 bg-[var(--surface-panel)] border-b border-[var(--stroke-divider)]">
+    <div className="flex items-center gap-3 px-6 py-3 bg-[var(--surface-panel)] border-b border-[var(--stroke-divider)] shrink-0">
       {items.map((item) => (
         <button
           key={item.key}
@@ -68,6 +85,58 @@ export function DiffStatsBar({ identical, modified, added, removed, onJump }: Di
           <span>{item.count}</span>
         </button>
       ))}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Context snippets toggle */}
+      {onToggleSnippets != null && (
+        <button
+          type="button"
+          onClick={onToggleSnippets}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border',
+            showSnippets
+              ? 'border-[var(--accent-commit)]/40 text-[var(--accent-commit)] bg-[var(--hover-bg)]'
+              : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent hover:text-[var(--text-secondary)]'
+          )}
+        >
+          <Paperclip className="h-3 w-3" />
+          <span>Context</span>
+        </button>
+      )}
+
+      {/* View mode toggle */}
+      {onViewModeChange && viewMode && (
+        <div className="inline-flex rounded-md border border-[var(--stroke-divider)] overflow-hidden">
+          <button
+            type="button"
+            onClick={() => onViewModeChange('split')}
+            className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors',
+              viewMode === 'split'
+                ? 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+            title="Split view"
+          >
+            <Columns2 className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewModeChange('unified')}
+            className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors border-l border-[var(--stroke-divider)]',
+              viewMode === 'unified'
+                ? 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+            title="Unified view"
+          >
+            <AlignJustify className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,7 +29,7 @@ import { MergeDiffSection } from './MergeDiffSection';
 // ============================================================================
 
 /** View mode for the diff display */
-type ViewMode = 'grouped' | 'positional';
+export type ViewMode = 'grouped' | 'positional';
 
 /** Number of context lines to show before/after changes (positional mode) */
 const CONTEXT_LINES = 2;
@@ -230,6 +230,8 @@ interface UnifiedDiffViewProps {
   onToggleKeep: (side: 'source' | 'target', index: number) => void;
   sourceBranch?: string;
   targetBranch?: string;
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 export function UnifiedDiffView({
@@ -238,6 +240,8 @@ export function UnifiedDiffView({
   onToggleKeep,
   sourceBranch = 'A',
   targetBranch = 'B',
+  viewMode: controlledViewMode,
+  onViewModeChange,
 }: UnifiedDiffViewProps) {
   const { identical, similarPairs, onlyInSource, onlyInTarget } = prepared;
   const { getUnresolvedCount, contextCache, contextLoadingStates, projectId, sourceHash } =
@@ -245,8 +249,10 @@ export function UnifiedDiffView({
   const router = useRouter();
   const { t } = useTerminology();
 
-  // View mode state (default: grouped)
-  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  // View mode state — controlled if props provided, otherwise internal
+  const [internalViewMode, setInternalViewMode] = useState<ViewMode>('grouped');
+  const viewMode = controlledViewMode ?? internalViewMode;
+  const setViewMode = onViewModeChange ?? setInternalViewMode;
 
   // Fetch source commit for positional mode
   const [sourceCommit, setSourceCommit] = useState<CommitV4 | null>(null);
@@ -380,6 +386,7 @@ export function UnifiedDiffView({
           index={line.pairIndex}
           sourceBranch={sourceBranch}
           targetBranch={targetBranch}
+          navId={`conflict-${line.pairIndex}`}
         />
       );
     }
@@ -397,6 +404,7 @@ export function UnifiedDiffView({
           contextData={ctx.data}
           contextLoading={ctx.loading}
           onJumpToConversation={handleJumpToConversation}
+          navId={`source-${line.sourceIndex}`}
         />
       );
     }
@@ -414,6 +422,7 @@ export function UnifiedDiffView({
           contextData={ctx.data}
           contextLoading={ctx.loading}
           onJumpToConversation={handleJumpToConversation}
+          navId={`target-${line.targetIndex}`}
         />
       );
     }
@@ -490,6 +499,7 @@ export function UnifiedDiffView({
               subtitle={`${identical.length} sentences (${t('auto_kept').toLowerCase()})`}
               variant="success"
               defaultCollapsed
+              navId="identical"
             >
               <div className="space-y-1">
                 {identical.map((sentence) => {
@@ -515,6 +525,7 @@ export function UnifiedDiffView({
               title={t('conflicts')}
               subtitle={`${unresolvedCount} of ${similarPairs.length} need resolution`}
               variant={unresolvedCount > 0 ? 'warning' : 'success'}
+              navId="conflicts"
             >
               <div className="space-y-[var(--space-group)]">
                 {similarPairs.map((pair, idx) => (
@@ -524,6 +535,7 @@ export function UnifiedDiffView({
                     index={idx}
                     sourceBranch={sourceBranch}
                     targetBranch={targetBranch}
+                    navId={`conflict-${idx}`}
                   />
                 ))}
               </div>
@@ -536,6 +548,7 @@ export function UnifiedDiffView({
               title={t('only_in_source')}
               subtitle={`${onlyInSource.length} sentences from ${t('source').toLowerCase()}`}
               variant="info"
+              navId="source-only"
             >
               <div className="space-y-1">
                 {onlyInSource.map((candidate, idx) => {
@@ -551,6 +564,7 @@ export function UnifiedDiffView({
                       contextData={ctx.data}
                       contextLoading={ctx.loading}
                       onJumpToConversation={handleJumpToConversation}
+                      navId={`source-${idx}`}
                     />
                   );
                 })}
@@ -564,6 +578,7 @@ export function UnifiedDiffView({
               title={t('only_in_target')}
               subtitle={`${onlyInTarget.length} sentences from ${t('target').toLowerCase()}`}
               variant="info"
+              navId="target-only"
             >
               <div className="space-y-1">
                 {onlyInTarget.map((candidate, idx) => {
@@ -579,6 +594,7 @@ export function UnifiedDiffView({
                       contextData={ctx.data}
                       contextLoading={ctx.loading}
                       onJumpToConversation={handleJumpToConversation}
+                      navId={`target-${idx}`}
                     />
                   );
                 })}

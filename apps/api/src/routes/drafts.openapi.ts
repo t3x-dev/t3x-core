@@ -30,10 +30,13 @@ import {
   forkDraftV3,
   insertDraftV3,
   listDraftV3ByProject,
+  searchSimilarSentences,
   updateDraftV3,
   updateDraftV3Preview,
+  upsertSentenceVectorsBatch,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
+import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -43,6 +46,8 @@ import {
   DraftResponse,
   PreviewDraftRequest,
   PreviewDraftResponse,
+  SuggestDraftRequest,
+  SuggestDraftResponse,
   UpdateDraftRequest,
 } from '../schemas/v4-contracts';
 
@@ -314,6 +319,39 @@ const forkDraftRoute = createRoute({
   },
 });
 
+// POST /v1/drafts/:id/suggest
+const suggestDraftRoute = createRoute({
+  method: 'post',
+  path: '/v1/drafts/{id}/suggest',
+  tags: ['Drafts'],
+  summary: 'Get sentence suggestions based on draft goal',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: SuggestDraftRequest } },
+      required: false,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Suggestions returned',
+      content: { 'application/json': { schema: SuggestDraftResponse } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    501: {
+      description: 'Embedding service not configured',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 // ============================================================
 // Route Handlers
 // ============================================================
@@ -545,16 +583,27 @@ draftsRoutes.openapi(previewDraftRoute, async (c) => {
       created_at: new Date().toISOString(),
     };
 
-    // 8. Generate
+    // 8. Resolve model
+    const MODEL_MAP: Record<string, string> = {
+      haiku: 'claude-haiku-4-5-20251001',
+      sonnet: 'claude-sonnet-4-6',
+      opus: 'claude-opus-4-6',
+    };
+    const requestedModel = body?.model;
+    const modelId = requestedModel
+      ? (MODEL_MAP[requestedModel] ?? MODEL_MAP.haiku)
+      : MODEL_MAP.haiku;
+
+    // 9. Generate
     const result = await generateLeafOutput({
       commit: virtualCommit,
       leaf: virtualLeaf,
       additionalInstructions: draft.instructions,
-      model: 'claude-haiku-4-5-20251001',
+      model: modelId,
       temperature: 0,
     });
 
-    // 9. Cache + store
+    // 10. Cache + store
     const tokenCount = Math.ceil(result.output.length / 4); // rough estimate
     previewCache.set(id, {
       hash: cacheHash,
@@ -671,6 +720,34 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
     // 7. Update draft status
     await commitDraftV3(db, id, commit.hash, leaf?.id);
 
+    // 7b. Populate sentence vectors (best-effort — errors are swallowed)
+    const embedder = getEmbedder();
+    if (embedder) {
+      try {
+        const texts = sentences.map((s) => s.text);
+        const embeddings = await embedder.encode(texts);
+        if (embeddings.length !== texts.length) {
+          throw new Error(
+            `Embedding count mismatch: expected ${texts.length}, got ${embeddings.length}`
+          );
+        }
+        await upsertSentenceVectorsBatch(
+          db,
+          sentences.map((s, i) => ({
+            id: s.id,
+            projectId: draft.project_id,
+            commitHash: commit.hash,
+            text: s.text,
+            embedding: embeddings[i],
+            modelId: embedder.id,
+          }))
+        );
+      } catch (embErr) {
+        // Non-fatal: log and continue
+        console.warn('[drafts] Failed to populate sentence vectors:', embErr);
+      }
+    }
+
     // 8. Build response
     const commitResponse = {
       hash: commit.hash,
@@ -742,6 +819,83 @@ draftsRoutes.openapi(forkDraftRoute, async (c) => {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
+  }
+});
+
+// POST /v1/drafts/:id/suggest
+draftsRoutes.openapi(suggestDraftRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    // 1. Get draft
+    const draft = await findDraftV3ById(db, id);
+    if (!draft) {
+      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
+    }
+
+    // 2. Check embedding service
+    const embedder = getEmbedder();
+    if (!embedder) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'EMBEDDING_NOT_CONFIGURED',
+            message: 'Embedding service not configured (GOOGLE_AI_STUDIO_KEY not set)',
+          },
+        },
+        501
+      );
+    }
+
+    // 3. Need a goal to suggest
+    if (!draft.goal) {
+      return c.json(
+        {
+          success: true as const,
+          data: { suggestions: [] },
+        },
+        200
+      );
+    }
+
+    // 4. Embed goal text
+    const [goalEmbedding] = await embedder.encode([draft.goal]);
+
+    // 5. Search for similar sentences
+    const limit = body?.limit ?? 10;
+    const draftTexts = new Set(draft.sentences.map((s) => s.text));
+    const rawResults = await searchSimilarSentences(
+      db,
+      draft.project_id,
+      goalEmbedding,
+      limit + draftTexts.size // fetch extra to account for filtering
+    );
+
+    // 6. Mark already_in_draft and filter
+    const suggestions = rawResults
+      .map((r) => ({
+        sentence_id: r.id,
+        text: r.text,
+        commit_hash: r.commit_hash,
+        similarity: Math.round(r.similarity * 1000) / 1000,
+        already_in_draft: draftTexts.has(r.text),
+      }))
+      .slice(0, limit);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { suggestions },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'SUGGEST_FAILED', message);
   }
 });
 

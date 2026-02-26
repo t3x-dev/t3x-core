@@ -5,9 +5,8 @@ import { GitCommit, Leaf, Loader2, MessageSquare, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ShimmerButton } from '@/components/ui/shimmer-button';
 import * as api from '@/lib/api';
-import { scaleIn, staggerContainer, staggerItem } from '@/lib/motion';
+import { fadeIn } from '@/lib/motion';
 import { demoSeedData } from '@/lib/seedData';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -76,13 +75,7 @@ export function WelcomeModal() {
 
   const motionProps = prefersReducedMotion
     ? { initial: { opacity: 1 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
-    : scaleIn;
-
-  const containerVariants = prefersReducedMotion ? { initial: {}, animate: {} } : staggerContainer;
-
-  const itemVariants = prefersReducedMotion
-    ? { initial: { opacity: 1 }, animate: { opacity: 1 } }
-    : staggerItem;
+    : fadeIn;
 
   return (
     <AnimatePresence>
@@ -158,34 +151,26 @@ export function WelcomeModal() {
             </div>
 
             {/* Highlights */}
-            <motion.div
-              variants={containerVariants}
-              initial="initial"
-              animate="animate"
-              className="flex flex-col gap-3 w-full"
-            >
+            <div className="flex flex-col gap-3 w-full">
               {highlights.map((item) => (
-                <motion.div
+                <div
                   key={item.text}
-                  variants={itemVariants}
                   className="flex items-center gap-3 rounded-lg px-4 py-2.5 bg-[var(--hover-bg)]"
                 >
                   <item.icon className="h-5 w-5 shrink-0 text-[var(--accent-commit)]" />
                   <span className="text-sm text-[var(--text-primary)]">{item.text}</span>
-                </motion.div>
+                </div>
               ))}
-            </motion.div>
+            </div>
 
             {/* CTAs */}
             <div className="flex flex-col items-center gap-3 w-full">
-              <ShimmerButton
+              <Button
                 onClick={handleCreateProject}
                 className="w-full text-sm font-medium"
-                shimmerColor="var(--accent-commit)"
-                background="oklch(0.17 0.008 260 / 95%)"
               >
                 Create Your First Project
-              </ShimmerButton>
+              </Button>
 
               <div className="flex flex-col items-center gap-1">
                 <Button

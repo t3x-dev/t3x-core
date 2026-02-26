@@ -11,8 +11,8 @@
  */
 export type NodeKind = 'unit' | 'leaf';
 
-// Unit commit status: staging (editable) or committed (read-only)
-export type CommitStatus = 'staging' | 'committed';
+// Unit commit status: staging (editable), committed (read-only), or draft (workbench)
+export type CommitStatus = 'staging' | 'committed' | 'draft';
 
 // Leaf node types for output destinations
 // Must match @t3x/core AnyLeafType from V4 schema
@@ -471,7 +471,13 @@ export interface CanvasNodeData {
    * Highlight mode - visual emphasis during operations
    * @display Box shadow color (blue=main, amber=branch)
    */
-  highlightMode?: 'main' | 'branch';
+  highlightMode?: 'main' | 'branch' | 'node';
+
+  /**
+   * Whether the node should appear faded (not part of current highlight)
+   * @display Reduced opacity when true
+   */
+  dimmed?: boolean;
 
   // ============================================
   // Unit node: Sources section (top of card)
@@ -591,6 +597,12 @@ export interface CanvasNodeData {
   leafConfig?: LeafNodeConfig;
   /** Backend leaf ID (from API) */
   leafId?: string;
+
+  // ============================================
+  // Draft workbench link
+  // ============================================
+  /** Link to drafts_v3 record (when commitStatus === 'draft') */
+  draftId?: string;
 
   // ============================================
   // Deprecated fields (keep for migration)

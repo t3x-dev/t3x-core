@@ -9,7 +9,11 @@ export class MergePage {
 
   constructor(page: Page) {
     this.page = page;
-    this.commitButton = page.locator('button:has-text("Commit Merge")').first();
+    // Matches both "Commit Merge" (default) and "Execute Merge" (developer mode)
+    this.commitButton = page
+      .locator('button:has-text("Commit Merge")')
+      .or(page.locator('button:has-text("Execute Merge")'))
+      .first();
     this.cancelButton = page.locator('button:has-text("Cancel")').first();
     this.messageInput = page
       .locator('input[placeholder*="message" i]')
@@ -23,8 +27,10 @@ export class MergePage {
 
   async waitForLoad(timeout = 15000): Promise<void> {
     // #1: Removed networkidle — wait for concrete merge UI elements
+    // Match both "Commit Merge" (default) and "Execute Merge" (developer mode)
     const workspace = this.page
       .locator('button:has-text("Commit Merge")')
+      .or(this.page.locator('button:has-text("Execute Merge")'))
       .or(this.page.locator('text=Conflicts'))
       .or(this.page.locator('text=Identical'));
     await expect(workspace.first()).toBeVisible({ timeout });
@@ -43,7 +49,7 @@ export class MergePage {
     return this.page
       .locator('button:has-text("Conflicts")')
       .first()
-      .isVisible()
+      .isVisible({ timeout: 5000 })
       .catch(() => false);
   }
 
@@ -51,7 +57,7 @@ export class MergePage {
     return this.page
       .locator('button:has-text("Identical")')
       .first()
-      .isVisible()
+      .isVisible({ timeout: 5000 })
       .catch(() => false);
   }
 

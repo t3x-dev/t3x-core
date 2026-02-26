@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures/test';
 import { isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**
@@ -145,10 +145,10 @@ test.describe('Agent Demo', () => {
     await commitEntry.click();
 
     // Modal or detail view should open after clicking commit
+    // Note: avoid [class*="backdrop"] — it matches sidebar's backdrop-blur-* classes
     const modal = page
       .locator('[role="dialog"]')
       .or(page.locator('.fixed.inset-0.z-50'))
-      .or(page.locator('[class*="backdrop"]'))
       .or(page.locator('[class*="modal"]'));
     const hasModal = await modal
       .first()
@@ -160,10 +160,11 @@ test.describe('Agent Demo', () => {
     const promptSection = page.locator('text=Prompt').or(page.locator('pre'));
     await expect(promptSection.first()).toBeVisible({ timeout: 5000 });
 
-    // Close modal — button must exist if modal opened
-    const closeBtn = page
-      .locator('button:has-text("×")')
-      .or(page.locator('button[aria-label*="close" i]'))
+    // Close modal — the close button renders a Lucide <X> SVG icon (not "×" text)
+    const closeBtn = modal
+      .first()
+      .locator('button')
+      .filter({ has: page.locator('svg') })
       .first();
     await expect(closeBtn).toBeVisible({ timeout: 5000 });
     await closeBtn.click();

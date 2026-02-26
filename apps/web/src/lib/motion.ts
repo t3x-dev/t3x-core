@@ -147,26 +147,18 @@ export const slideRight: Variants = {
   },
 };
 
-/** Full-screen enter — scale 0.97→1 with gentle spring (merge workspace) */
+/** Full-screen enter — fade only (merge workspace) */
 export const fullScreenEnter: Variants = {
-  initial: { opacity: 0, scale: 0.97 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    scale: 1,
-    transition: { ...springConfig.gentle, duration: 0.3 },
+    transition: { duration: duration.normal, ease: easing.out },
   },
   exit: {
     opacity: 0,
-    scale: 0.97,
-    transition: { duration: duration.normal, ease: easing.in },
+    transition: { duration: duration.fast, ease: easing.in },
   },
 };
-
-/** Glow flash — one-shot glow for commit milestone */
-export const glowFlash = (color = 'rgba(59, 130, 246, 0.5)') => ({
-  boxShadow: [`0 0 0 0px ${color}`, `0 0 20px 4px ${color}`, `0 0 0 0px transparent`],
-  transition: { duration: 0.4, ease: 'easeOut' },
-});
 
 /** Count-up helper — returns keyframes array for animating a number */
 export const countUpTransition: Transition = {
@@ -193,18 +185,6 @@ export const nodeEnter: Variants = {
   },
 };
 
-/** Node hover state */
-export const nodeHover = {
-  scale: 1.02,
-  transition: springConfig.smooth,
-};
-
-/** Node selected state */
-export const nodeSelected = {
-  scale: 1.01,
-  transition: springConfig.snappy,
-};
-
 /** Error shake animation */
 export const shake: Variants = {
   initial: { x: 0 },
@@ -223,32 +203,6 @@ export const buttonTap = {
   scale: 0.97,
   transition: { duration: 0.1 },
 };
-
-/** Button hover animation */
-export const buttonHover = {
-  scale: 1.02,
-  transition: springConfig.smooth,
-};
-
-// ============================================
-// Celebration & Transition Presets
-// ============================================
-
-/** Commit success celebration — scale pulse with overshoot */
-export const commitCelebration = {
-  scale: [1, 1.06, 1],
-  transition: {
-    duration: 0.4,
-    times: [0, 0.35, 1],
-    ease: [0.34, 1.56, 0.64, 1],
-  },
-};
-
-/** Glow ring pulse — one-shot expanding ring */
-export const glowPulseKeyframes = (color: string) => ({
-  boxShadow: [`0 0 0 0px ${color}00`, `0 0 0 8px ${color}33`, `0 0 0 0px ${color}00`],
-  transition: { duration: 0.6, ease: 'easeOut' },
-});
 
 /** Page transition — simple opacity fade */
 export const pageTransition = {
@@ -412,9 +366,9 @@ export const reducedMotion = {
   } as Variants,
 
   fullScreenEnter: {
-    initial: { opacity: 1, scale: 1 },
-    animate: { opacity: 1, scale: 1 },
-    exit: { opacity: 0, scale: 1 },
+    initial: { opacity: 1 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
   } as Variants,
 };
 
