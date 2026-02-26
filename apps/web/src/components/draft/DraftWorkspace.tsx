@@ -155,6 +155,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         onClose={onClose}
         onCommit={() => setShowCommitDialog(true)}
         canCommit={getIncludedCount() > 0 && draft.status === 'editing'}
+        projectId={projectId}
       />
 
       {/* Conflict Banner */}

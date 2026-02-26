@@ -16,10 +16,11 @@ interface DraftActionBarProps {
   onClose: () => void;
   onCommit: () => void;
   canCommit: boolean;
+  projectId?: string;
 }
 
-export function DraftActionBar({ onClose, onCommit, canCommit }: DraftActionBarProps) {
-  const { draft, saveStatus, updateTitle } = useDraftWorkspaceStore();
+export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: DraftActionBarProps) {
+  const { draft, saveStatus, lastSavedAt, updateTitle } = useDraftWorkspaceStore();
   const [editing, setEditing] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,11 +60,19 @@ export function DraftActionBar({ onClose, onCommit, canCommit }: DraftActionBarP
 
   return (
     <div className="flex items-center gap-3 border-b border-border px-4 py-2 bg-[var(--surface-card)]">
-      {/* Back button */}
-      <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
-        <ArrowLeft className="h-4 w-4" />
-        <span className="hidden sm:inline">Back</span>
-      </Button>
+      {/* Back + Breadcrumb */}
+      <div className="flex items-center gap-1.5">
+        <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+        </Button>
+        {projectId && (
+          <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+            <span>/</span>
+            <span>Draft</span>
+          </span>
+        )}
+      </div>
 
       {/* Title */}
       <div className="flex-1 min-w-0">
@@ -95,7 +104,7 @@ export function DraftActionBar({ onClose, onCommit, canCommit }: DraftActionBarP
       </Badge>
 
       {/* Save status */}
-      <SaveStatusIndicator status={saveStatus} />
+      <SaveStatusIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
 
       {/* Commit button */}
       <Button size="sm" onClick={onCommit} disabled={!canCommit}>
@@ -105,7 +114,32 @@ export function DraftActionBar({ onClose, onCommit, canCommit }: DraftActionBarP
   );
 }
 
-function SaveStatusIndicator({ status }: { status: string }) {
+function formatRelativeTime(date: Date): string {
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
+
+function SaveStatusIndicator({
+  status,
+  lastSavedAt,
+}: {
+  status: string;
+  lastSavedAt: Date | null;
+}) {
+  const [, setTick] = useState(0);
+
+  // Re-render every 10s to update relative time
+  useEffect(() => {
+    if (!lastSavedAt || status !== 'saved') return;
+    const interval = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(interval);
+  }, [lastSavedAt, status]);
+
   if (status === 'saving') {
     return (
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -119,7 +153,7 @@ function SaveStatusIndicator({ status }: { status: string }) {
     return (
       <span className="flex items-center gap-1 text-xs text-[var(--status-success)]">
         <Check className="h-3 w-3" />
-        Saved
+        Saved{lastSavedAt ? ` · ${formatRelativeTime(lastSavedAt)}` : ''}
       </span>
     );
   }

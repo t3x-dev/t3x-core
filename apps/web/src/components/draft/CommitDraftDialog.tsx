@@ -7,6 +7,7 @@
  * Phase 'success': Celebration with commit hash + [View on Canvas] + [Iterate] buttons
  */
 
+import { motion } from 'framer-motion';
 import { CheckCircle, GitFork, Loader2, Map as MapIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -145,9 +146,14 @@ export function CommitDraftDialog({
           /* Success phase */
           <div className="flex flex-col items-center gap-4 py-4">
             {/* Animated checkmark */}
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
+              className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25"
+            >
               <CheckCircle className="h-7 w-7 text-white" />
-            </div>
+            </motion.div>
 
             <div className="text-center">
               <h3 className="text-lg font-semibold text-[var(--text-primary)]">
