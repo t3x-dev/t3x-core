@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 37 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(37);
+  it('has 40 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(40);
   });
 
   it('key equals value for every code', () => {
@@ -27,10 +27,12 @@ describe('ErrorCodes', () => {
         "AUTH_ERROR": "AUTH_ERROR",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
+        "CONFLICT": "CONFLICT",
         "CONVERSATION_NOT_FOUND": "CONVERSATION_NOT_FOUND",
         "CREATE_FAILED": "CREATE_FAILED",
         "DATABASE_ERROR": "DATABASE_ERROR",
         "DELETE_FAILED": "DELETE_FAILED",
+        "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
@@ -55,6 +57,7 @@ describe('ErrorCodes', () => {
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
