@@ -20,6 +20,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Leaf, LeafHistory } from '@t3x/core';
 // Generation functions (provided by @t3x/core)
 import {
+  AllProvidersFailedError,
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
@@ -1012,6 +1013,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
         default:
           return errorResponse(c, 'GENERATION_FAILED', err.message);
       }
+    }
+
+    // All providers failed — extract the last provider's error for status mapping
+    if (err instanceof AllProvidersFailedError) {
+      const lastErr = err.errors[err.errors.length - 1]?.error;
+      if (lastErr instanceof GenerationError && lastErr.code === 'RATE_LIMIT') {
+        return errorResponse(c, 'RATE_LIMITED', err.message);
+      }
+      return errorResponse(c, 'GENERATION_FAILED', err.message);
     }
 
     const message = err instanceof Error ? err.message : 'Unknown error';
