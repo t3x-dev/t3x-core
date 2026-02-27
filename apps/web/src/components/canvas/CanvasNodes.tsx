@@ -16,6 +16,7 @@ import {
   GitBranch,
   GitCommit,
   GitMerge,
+  Globe,
   Loader2,
   Mail,
   MessageCircle,
@@ -844,6 +845,26 @@ function UnitNode(props: Props) {
           {sentenceCount > 0 && (
             <div className="text-xs text-[var(--text-secondary)] mb-[var(--space-item)]">
               {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+            </div>
+          )}
+
+          {/* Import source badge */}
+          {data.importSource && (
+            <div className="flex items-center gap-1 mb-[var(--space-item)]">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30">
+                {data.importSource.source_type === 'url' ? (
+                  <Globe size={10} />
+                ) : data.importSource.source_type === 'platform' ? (
+                  <MessageSquare size={10} />
+                ) : (
+                  <FileText size={10} />
+                )}
+                {data.importSource.source_type === 'platform' && data.importSource.platform
+                  ? data.importSource.platform
+                  : data.importSource.source_type === 'url'
+                    ? 'URL Import'
+                    : 'Doc Import'}
+              </span>
             </div>
           )}
 

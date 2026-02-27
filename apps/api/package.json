@@ -20,6 +20,7 @@
     "@t3x/core": "workspace:*",
     "@t3x/runner": "workspace:*",
     "@t3x/storage": "workspace:*",
+    "fflate": "^0.8.2",
     "hono": "^4.7.10",
     "nanoid": "^5.1.6",
     "pino": "^9.14.0",

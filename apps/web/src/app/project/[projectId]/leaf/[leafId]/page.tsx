@@ -22,6 +22,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
@@ -36,13 +37,24 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Assertion, CommitV4, Constraint, Leaf } from '@/lib/api';
+import type { Assertion, CommitV4, Constraint, Leaf, ProviderInfo } from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
   getCommitV4,
   getLeaf,
+  listProviders,
   updateLeaf,
   validateLeafOutput,
 } from '@/lib/api';
@@ -102,6 +114,7 @@ export default function LeafDetailPage() {
   const [commitData, setCommitData] = useState<CommitV4 | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
 
   // Assertion selection & Re-tune state
@@ -353,6 +366,31 @@ export default function LeafDetailPage() {
         setError(err instanceof Error ? err : new Error('Failed to update instruction'));
       } finally {
         setSavingInstruction(false);
+      }
+    },
+    [leafId]
+  );
+
+  // Handle model update
+  const [modelError, setModelError] = useState<string | null>(null);
+  const handleUpdateModel = useCallback(
+    async (model: string | undefined) => {
+      const current = leafRef.current;
+      if (!current) return;
+
+      setSavingModel(true);
+      setModelError(null);
+      try {
+        const updatedConfig = {
+          ...current.config,
+          model: model ?? undefined,
+        };
+        const updated = await updateLeaf(leafId, { config: updatedConfig });
+        setLeaf(updated);
+      } catch (err) {
+        setModelError(err instanceof Error ? err.message : 'Failed to update model');
+      } finally {
+        setSavingModel(false);
       }
     },
     [leafId]
@@ -649,6 +687,15 @@ export default function LeafDetailPage() {
             }
             onSave={handleUpdateUserInstruction}
             saving={savingInstruction}
+          />
+
+          {/* ③b MODEL SELECTOR — choose LLM for generation */}
+          <ModelSelectorSection
+            currentModel={typeof leaf.config?.model === 'string' ? leaf.config.model : undefined}
+            onSave={handleUpdateModel}
+            saving={savingModel}
+            error={modelError}
+            leafId={leafId}
           />
 
           {/* ④ SOURCE CONTEXT — reference material, collapsed by default */}
@@ -965,6 +1012,153 @@ function UserInstructionSection({ instruction, onSave, saving }: UserInstruction
             onClick={() => setIsEditing(true)}
           >
             {instruction}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// Model Selector Section
+// ============================================================================
+
+interface ModelSelectorSectionProps {
+  currentModel: string | undefined;
+  onSave: (model: string | undefined) => Promise<void>;
+  saving: boolean;
+  error?: string | null;
+  leafId: string;
+}
+
+interface ModelOption {
+  providerId: string;
+  providerName: string;
+  model: string;
+}
+
+function ModelSelectorSection({
+  currentModel,
+  onSave,
+  saving,
+  error: saveError,
+  leafId,
+}: ModelSelectorSectionProps) {
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listProviders()
+      .then((data) => {
+        if (!cancelled) setProviders(data);
+      })
+      .catch(() => {
+        // Silently ignore — model selector is optional
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProviders(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const modelOptions = useMemo(() => {
+    const options: ModelOption[] = [];
+    const seen = new Set<string>();
+    for (const p of providers) {
+      if (!p.configured || !p.roles?.includes('generation')) continue;
+      if (p.available_models) {
+        for (const m of p.available_models) {
+          if (!seen.has(m)) {
+            seen.add(m);
+            options.push({ providerId: p.id, providerName: p.name, model: m });
+          }
+        }
+      }
+    }
+    return options;
+  }, [providers]);
+
+  // Group by provider
+  const grouped = useMemo(() => {
+    const map = new Map<string, ModelOption[]>();
+    for (const opt of modelOptions) {
+      const existing = map.get(opt.providerName) ?? [];
+      existing.push(opt);
+      map.set(opt.providerName, existing);
+    }
+    return map;
+  }, [modelOptions]);
+
+  const handleChange = (value: string) => {
+    const model = value === '__default__' ? undefined : value;
+    onSave(model).catch(() => {
+      /* error handled by caller */
+    });
+  };
+
+  return (
+    <section className="rounded-lg border bg-card elevation-1 elevation-hover">
+      <div className="flex items-center justify-between border-b p-[var(--space-group)]">
+        <div className="flex items-center gap-2">
+          <Rocket className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold">Model</h2>
+        </div>
+        {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
+      <div className="p-[var(--space-group)]">
+        {loadingProviders ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Loading models...
+          </div>
+        ) : modelOptions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No LLM providers configured. Configure providers in Settings to select a model.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Select
+                value={currentModel ?? '__default__'}
+                onValueChange={handleChange}
+                disabled={saving}
+              >
+                <SelectTrigger className="flex-1" aria-label="Select LLM model">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Default (provider default)</SelectItem>
+                  <SelectSeparator />
+                  {Array.from(grouped.entries()).map(([providerName, models]) => (
+                    <SelectGroup key={providerName}>
+                      <SelectLabel>{providerName}</SelectLabel>
+                      {models.map((opt) => (
+                        <SelectItem key={`${opt.providerId}:${opt.model}`} value={opt.model}>
+                          {opt.model}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCompareOpen(true)}
+                className="shrink-0"
+              >
+                Compare
+              </Button>
+            </div>
+            {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+            <p className="text-xs text-muted-foreground">
+              Choose which LLM model to use when generating output for this leaf.
+            </p>
+            <CompareModelsDialog open={compareOpen} onOpenChange={setCompareOpen} leafId={leafId} />
           </div>
         )}
       </div>

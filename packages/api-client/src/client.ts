@@ -28,6 +28,9 @@ import type {
   ExportLedgerInput,
   GenerateLeafInput,
   HealthResponse,
+  ImportUrlInput,
+  ImportUrlPreviewResult,
+  ImportUrlResult,
   Leaf,
   ListBranchesResponse,
   ListCommitsResponse,
@@ -37,6 +40,7 @@ import type {
   ListProjectsResponse,
   ListTurnsResponse,
   PaginationParams,
+  PlatformImportResult,
   Project,
   ProjectWithStats,
   ShareToken,
@@ -437,6 +441,50 @@ export class T3xClient {
 
   async importCfpack(data: unknown): Promise<{ project_id: string }> {
     return this.request<{ project_id: string }>('POST', '/v1/import/cfpack', data);
+  }
+
+  async previewUrl(input: ImportUrlInput): Promise<ImportUrlPreviewResult> {
+    return this.request<ImportUrlPreviewResult>('POST', '/v1/import/url/preview', input);
+  }
+
+  async importUrl(input: ImportUrlInput): Promise<ImportUrlResult> {
+    return this.request<ImportUrlResult>('POST', '/v1/import/url', input);
+  }
+
+  async importDocument(projectId: string, file: Blob, filename: string): Promise<ImportUrlResult> {
+    const formData = new FormData();
+    formData.append('file', file, filename);
+    formData.append('project_id', projectId);
+
+    const url = new URL(`${this.baseUrl}/v1/import/document`);
+    const headers = { ...this.headers };
+    // Remove Content-Type to let fetch set multipart boundary
+    delete headers['Content-Type'];
+
+    const response = await this.fetchFn(url.toString(), {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = (await response.json()) as ApiResponse<ImportUrlResult>;
+    if (!response.ok || !data.success) {
+      const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
+      throw new T3xApiError(error.code, error.message, response.status);
+    }
+    return (data as ApiSuccessResponse<ImportUrlResult>).data;
+  }
+
+  async importPlatform(
+    projectId: string,
+    platformData: string,
+    conversationIds?: string[]
+  ): Promise<PlatformImportResult> {
+    return this.request<PlatformImportResult>('POST', '/v1/import/platform', {
+      project_id: projectId,
+      platform_data: platformData,
+      conversation_ids: conversationIds,
+    });
   }
 
   // ============================================

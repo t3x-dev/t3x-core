@@ -18,6 +18,7 @@ export { leavesRoutes } from './leaves.openapi';
 export { mergeRoutes } from './merge';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects';
+export { providersRoutes } from './providers.openapi';
 export { runnerRoutes } from './runner';
 export { runsRoutes } from './runs.openapi';
 export { statusRoutes } from './status';

@@ -7,6 +7,7 @@
  */
 
 import { createClaudeProvider, LLMProviderError } from '@t3x/core';
+import { getLLMProvider } from '../lib/provider-registry';
 import {
   findConversationById,
   findDraftById,
@@ -420,9 +421,11 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     );
   }
 
+  // Get LLM provider from registry (preferred) or fall back to direct Anthropic
+  let llmProviderInstance = await getLLMProvider();
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', 'Anthropic API key not configured', 400);
+  if (!llmProviderInstance && !anthropicApiKey) {
+    return jsonError(c, 'PROVIDER_ERROR', 'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.', 400);
   }
 
   try {
@@ -480,14 +483,16 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       mustntHave
     );
 
-    // Generate draft
-    const provider = createClaudeProvider({
-      apiKey: anthropicApiKey,
-      model: llmConfig.model,
-    });
+    // Generate draft — use registry provider if available, else direct Claude
+    if (!llmProviderInstance && anthropicApiKey) {
+      llmProviderInstance = createClaudeProvider({
+        apiKey: anthropicApiKey,
+        model: llmConfig.model,
+      });
+    }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const generatedText = await provider.generate(fullPrompt, {
+    const generatedText = await llmProviderInstance!.generate(fullPrompt, {
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });
@@ -599,11 +604,6 @@ agentDraftRoutes.get('/v1/agent/drafts/:id', async (c) => {
 agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
   const draftId = c.req.param('id');
 
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', 'Anthropic API key not configured', 500);
-  }
-
   let body: { feedback?: string; append_must_have?: string[] } | null = null;
 
   try {
@@ -658,14 +658,21 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
       mustntHave
     );
 
-    // Regenerate
-    const provider = createClaudeProvider({
-      apiKey: anthropicApiKey,
-      model: llmConfig.model,
-    });
+    // Regenerate — use registry provider if available, else direct Claude
+    let patchProvider = await getLLMProvider();
+    if (!patchProvider) {
+      const patchApiKey = process.env.ANTHROPIC_API_KEY;
+      if (!patchApiKey) {
+        return jsonError(c, 'PROVIDER_ERROR', 'No LLM provider configured', 500);
+      }
+      patchProvider = createClaudeProvider({
+        apiKey: patchApiKey,
+        model: llmConfig.model,
+      });
+    }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const generatedText = await provider.generate(fullPrompt, {
+    const generatedText = await patchProvider.generate(fullPrompt, {
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });

@@ -39,6 +39,17 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   metadataJson: text('metadata_json'),
+  providerConfig: text('provider_config'), // JSON: project-level provider overrides
+});
+
+/**
+ * Global Settings - Key-value store for app-wide configuration
+ * Used for provider registry config, feature flags, etc.
+ */
+export const globalSettings = pgTable('global_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(), // JSON as text (PGLite compatible)
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -444,3 +455,6 @@ export type NewSavedComparison = typeof savedComparisons.$inferInsert;
 
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
+
+export type GlobalSetting = typeof globalSettings.$inferSelect;
+export type NewGlobalSetting = typeof globalSettings.$inferInsert;

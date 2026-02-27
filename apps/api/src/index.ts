@@ -43,6 +43,7 @@ import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
+import { providersRoutes } from './routes/providers.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
@@ -139,6 +140,7 @@ api.route('/', comparisonsRoutes); // /v1/comparisons
 api.route('/', templatesRoutes); // /v1/templates
 api.route('/', webhooksRoutes); // /v1/webhooks
 api.route('/', importRoutes); // /v1/import
+api.route('/', providersRoutes); // /v1/providers
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
