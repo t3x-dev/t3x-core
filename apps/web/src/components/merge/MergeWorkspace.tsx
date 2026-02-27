@@ -179,6 +179,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         summary={summary}
         serverChecksLoading={serverChecksLoading}
         onBackToCanvas={onClose}
+        prepared={prepared}
+        extendedResolutions={extendedResolutions}
       />
 
       {/* Action Bar */}

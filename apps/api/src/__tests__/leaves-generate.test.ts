@@ -55,6 +55,18 @@ vi.mock('@t3x/core', async (importOriginal) => {
   };
 });
 
+// Mock provider-registry so generateWithFallback delegates to the mocked generateLeafOutput
+vi.mock('../lib/provider-registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/provider-registry')>();
+  return {
+    ...actual,
+    getLLMProvider: vi.fn(() => Promise.resolve({ id: 'mock', generate: vi.fn() })),
+    generateWithFallback: vi.fn((options: Record<string, unknown>) =>
+      mockGenerateLeafOutput(options)
+    ),
+  };
+});
+
 // Import routes after mocking
 import { leavesRoutes } from '../routes/leaves.openapi';
 

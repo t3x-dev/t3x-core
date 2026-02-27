@@ -142,6 +142,7 @@ export default function ConversationPage() {
           </Button>
           <Breadcrumb
             segments={[
+              { label: 'Home', href: '/' },
               { label: projectName || 'Project', href: `/project/${projectId}` },
               { label: conversation.title || 'Untitled Conversation' },
             ]}

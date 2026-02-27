@@ -148,6 +148,7 @@ export {
 } from './merge';
 // Provider interfaces and implementations
 export {
+  type AnyProvider,
   type CachedEmbeddingConfig,
   CachedEmbeddingProvider,
   // LLM Provider (implementations)
@@ -156,13 +157,26 @@ export {
   cosineSimilarity,
   createCachedEmbeddingProvider,
   createClaudeProvider,
+  createDeepSeekProvider,
+  createGeminiProvider,
   createGoogleAIEmbeddingProvider,
   // NLP Provider (Google Cloud)
   createGoogleCloudNLPProvider,
+  createOllamaEmbeddingProvider,
+  createOllamaProvider,
+  createOpenAIEmbeddingProvider,
+  createOpenAIProvider,
+  AllProvidersFailedError,
+  // Provider Registry
+  createProviderRegistry,
+  DeepSeekProvider,
+  type DeepSeekProviderConfig,
   type DependencyLabel,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
+  GeminiProvider,
+  type GeminiProviderConfig,
   type GoogleAIEmbeddingConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
@@ -177,7 +191,22 @@ export {
   type NLPToken,
   normalizeDependencyLabel,
   normalizePosTag,
+  type OllamaEmbeddingConfig,
+  OllamaEmbeddingProvider,
+  OllamaProvider,
+  type OllamaProviderConfig,
+  type OpenAIEmbeddingConfig,
+  OpenAIEmbeddingProvider,
+  OpenAIProvider,
+  type OpenAIProviderConfig,
   POS_TAG_MAPPING,
+  type ProviderEntry,
+  ProviderRegistry,
+  type ProviderRole,
+  type RegistryConfig,
+  type ResolvedConfig,
+  type RoleAssignment,
+  type TestConnectionResult,
 } from './providers';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package

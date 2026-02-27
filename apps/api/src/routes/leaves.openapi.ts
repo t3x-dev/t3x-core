@@ -20,6 +20,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Leaf, LeafHistory } from '@t3x/core';
 // Generation functions (provided by @t3x/core)
 import {
+  AllProvidersFailedError,
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
@@ -46,6 +47,11 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  generateWithFallback,
+  getLLMProvider,
+  getProviderRegistry,
+} from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -587,12 +593,16 @@ leavesRoutes.openapi(createLeafRoute, async (c) => {
     });
 
     // Fire webhook event (fire-and-forget)
-    webhookDispatcher.dispatch('leaf.created', {
-      leaf_id: leaf.id,
-      project_id: body.project_id,
-      type: body.type,
-      commit_hash: body.commit_hash,
-    }, body.project_id);
+    webhookDispatcher.dispatch(
+      'leaf.created',
+      {
+        leaf_id: leaf.id,
+        project_id: body.project_id,
+        type: body.type,
+        commit_hash: body.commit_hash,
+      },
+      body.project_id
+    );
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 201);
   } catch (err) {
@@ -666,11 +676,11 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;
-    if (needsGeneration && !isGenerationConfigured()) {
+    if (needsGeneration && !isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
-        'ANTHROPIC_API_KEY environment variable is not set. Use skip_generation=true to create leaves without generating output.'
+        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider. Use skip_generation=true to create leaves without generating output.'
       );
     }
 
@@ -689,10 +699,10 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
           project_id: body.project_id,
         });
 
-        // 3b. Generate output if not skipped
+        // 3b. Generate output if not skipped (uses fallback across providers)
         if (needsGeneration) {
           try {
-            const result = await generateLeafOutput({
+            const result = await generateWithFallback({
               commit,
               leaf,
               additionalInstructions:
@@ -898,12 +908,12 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
   const _body = c.req.valid('json');
 
   try {
-    // Check if generation is configured
-    if (!isGenerationConfigured()) {
+    // Check if any generation provider is configured
+    if (!isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
-        'ANTHROPIC_API_KEY environment variable is not set'
+        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.'
       );
     }
 
@@ -921,8 +931,8 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
 
-    // Call generateLeafOutput (uses defaults per contract)
-    const result = await generateLeafOutput({
+    // Generate with automatic provider fallback
+    const result = await generateWithFallback({
       commit,
       leaf,
       additionalInstructions:
@@ -959,10 +969,14 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     }
 
     // Fire webhook event (fire-and-forget)
-    webhookDispatcher.dispatch('leaf.generated', {
-      leaf_id: id,
-      project_id: leaf.project_id,
-    }, leaf.project_id);
+    webhookDispatcher.dispatch(
+      'leaf.generated',
+      {
+        leaf_id: id,
+        project_id: leaf.project_id,
+      },
+      leaf.project_id
+    );
 
     // Return response according to contract (v4-contracts.ts)
     // Use the generated_at from the updated leaf for consistency
@@ -999,6 +1013,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
         default:
           return errorResponse(c, 'GENERATION_FAILED', err.message);
       }
+    }
+
+    // All providers failed — extract the last provider's error for status mapping
+    if (err instanceof AllProvidersFailedError) {
+      const lastErr = err.errors[err.errors.length - 1]?.error;
+      if (lastErr instanceof GenerationError && lastErr.code === 'RATE_LIMIT') {
+        return errorResponse(c, 'RATE_LIMITED', err.message);
+      }
+      return errorResponse(c, 'GENERATION_FAILED', err.message);
     }
 
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -1268,6 +1291,161 @@ leavesRoutes.openapi(deleteLeafHistoryRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'DELETE_FAILED', message);
+  }
+});
+
+// ============================================================
+// POST /v1/leaves/:id/compare - Compare models
+// ============================================================
+
+const CompareModelsRequest = z.object({
+  models: z.array(z.string()).min(1).max(3),
+});
+
+const CompareModelsResponse = SuccessResponseSchema(
+  z.object({
+    results: z.array(
+      z.object({
+        model: z.string(),
+        provider_id: z.string(),
+        output: z.string().nullable(),
+        latency_ms: z.number(),
+        error: z.string().optional(),
+      })
+    ),
+  })
+);
+
+const compareModelsRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/compare',
+  tags: ['Leaves'],
+  summary: 'Compare models for leaf generation',
+  description:
+    'Generates output from multiple models in parallel for side-by-side comparison. Max 3 models.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: CompareModelsRequest,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Comparison results',
+      content: {
+        'application/json': {
+          schema: CompareModelsResponse,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Leaf or commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+leavesRoutes.openapi(compareModelsRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const { models } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    const commit = await findCommitV4ByHash(db, leaf.commit_hash);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
+    }
+
+    const registry = await getProviderRegistry();
+    const additionalInstructions =
+      typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : undefined;
+
+    // Run all models in parallel
+    const results = await Promise.allSettled(
+      models.map(async (modelSpec) => {
+        const start = Date.now();
+
+        // Resolve model to provider
+        const resolved = registry.resolveModel(modelSpec);
+        if (!resolved) {
+          return {
+            model: modelSpec,
+            provider_id: 'unknown',
+            output: null as string | null,
+            latency_ms: Date.now() - start,
+            error: `No provider found for model: ${modelSpec}`,
+          };
+        }
+
+        try {
+          const result = await generateLeafOutput({
+            commit,
+            leaf,
+            provider: resolved.provider,
+            additionalInstructions,
+          });
+
+          const latencyMs = Date.now() - start;
+
+          // Save each result to history
+          try {
+            await createLeafHistory(db, {
+              leaf_id: id,
+              output: result.output,
+              config: { ...leaf.config, model: modelSpec },
+              model: result.model,
+            });
+          } catch {
+            // Non-critical
+          }
+
+          return {
+            model: result.model,
+            provider_id: resolved.provider.id,
+            output: result.output as string | null,
+            latency_ms: latencyMs,
+          };
+        } catch (err) {
+          return {
+            model: modelSpec,
+            provider_id: resolved.provider.id,
+            output: null as string | null,
+            latency_ms: Date.now() - start,
+            error: err instanceof Error ? err.message : 'Generation failed',
+          };
+        }
+      })
+    );
+
+    const data = results.map((r) => {
+      if (r.status === 'fulfilled') return r.value;
+      return {
+        model: 'unknown',
+        provider_id: 'unknown',
+        output: null,
+        latency_ms: 0,
+        error: r.reason instanceof Error ? r.reason.message : 'Unknown error',
+      };
+    });
+
+    return c.json({ success: true as const, data: { results: data } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'COMPARE_FAILED', message);
   }
 });
 

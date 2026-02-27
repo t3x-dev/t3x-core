@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Clock, Eye, Loader2, Play, X } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,12 +17,15 @@ import {
 import type { DeployAgent, EngineRun } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useOptimiserStore } from '@/store/optimiserStore';
+import { useProjectStore } from '@/store/projectStore';
 
 interface RunsTableProps {
   runs: EngineRun[];
   agents?: DeployAgent[];
   maxRows?: number;
   compareModeEnabled?: boolean;
+  /** Project ID for source links */
+  projectId?: string;
 }
 
 /**
@@ -93,16 +97,18 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
         variant="outline"
         className="gap-1 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
       >
-        <Check className="h-3 w-3" />
-        passed
+        <Check className="h-3 w-3" aria-hidden="true" />
+        <span>passed</span>
+        <span className="sr-only">Evaluation passed</span>
       </Badge>
     ) : (
       <Badge
         variant="outline"
         className="gap-1 border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
       >
-        <X className="h-3 w-3" />
-        failed
+        <X className="h-3 w-3" aria-hidden="true" />
+        <span>failed</span>
+        <span className="sr-only">Evaluation failed</span>
       </Badge>
     );
   }
@@ -145,9 +151,11 @@ export function RunsTable({
   agents,
   maxRows = 15,
   compareModeEnabled = false,
+  projectId,
 }: RunsTableProps) {
   const router = useRouter();
   const { selectedRunIds, toggleRunSelection } = useOptimiserStore();
+  const getProject = useProjectStore((s) => s.getProject);
 
   /** Match agent name by webhook_id from the run's workflow */
   const getAgentName = (run: EngineRun): string => {
@@ -155,6 +163,59 @@ export function RunsTable({
     if (!webhookId || !agents?.length) return webhookId || '-';
     const matched = agents.find((a) => a.endpoint === webhookId);
     return matched?.name || webhookId;
+  };
+
+  /** Render Source cell content: "Project → Leaf" with clickable links */
+  const renderSource = (run: EngineRun) => {
+    const projectId = run.project_id;
+    const project = projectId ? getProject(projectId) : undefined;
+    const projectName = project?.name;
+    const leafId = run.leaf?.id;
+    const leafTitle = run.leaf?.title || leafId;
+    const isActualLeaf = leafId?.startsWith('leaf_');
+    const hasProject = !!projectId;
+    const hasLeaf = !!leafId;
+
+    if (!hasProject && !hasLeaf) {
+      return <span className="text-muted-foreground">—</span>;
+    }
+
+    return (
+      <div className="flex items-center gap-1 text-sm">
+        {hasProject ? (
+          <Link
+            href={`/project/${projectId}`}
+            className="max-w-[120px] truncate text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+            title={projectName || projectId || undefined}
+          >
+            {projectName || projectId}
+          </Link>
+        ) : null}
+        {hasProject && hasLeaf && (
+          <span className="text-muted-foreground/60">→</span>
+        )}
+        {hasLeaf ? (
+          isActualLeaf && hasProject ? (
+            <Link
+              href={`/project/${projectId}/leaf/${leafId}`}
+              className="max-w-[120px] truncate text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+              title={leafTitle || undefined}
+            >
+              {leafTitle}
+            </Link>
+          ) : (
+            <span
+              className="max-w-[120px] truncate text-muted-foreground"
+              title={leafTitle || undefined}
+            >
+              {leafTitle}
+            </span>
+          )
+        ) : null}
+      </div>
+    );
   };
 
   if (runs.length === 0) {
@@ -182,7 +243,7 @@ export function RunsTable({
           <TableHead>Tags</TableHead>
           <TableHead>Agent</TableHead>
           <TableHead>Model</TableHead>
-          <TableHead>Leaf</TableHead>
+          <TableHead>Source</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Score</TableHead>
           <TableHead className="text-right">Tokens</TableHead>
@@ -248,9 +309,7 @@ export function RunsTable({
               </TableCell>
               <TableCell>{getAgentName(run)}</TableCell>
               <TableCell className="text-muted-foreground">{run.metadata?.model || '-'}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {run.leaf?.title || run.leaf?.id || '-'}
-              </TableCell>
+              <TableCell>{renderSource(run)}</TableCell>
               <TableCell>{getStatusBadge(run.status, metrics.passed)}</TableCell>
               <TableCell className="text-right font-mono">
                 {metrics.score !== null ? (
@@ -279,12 +338,13 @@ export function RunsTable({
                   variant="outline"
                   size="sm"
                   className="h-auto"
+                  aria-label={`View details for run ${run.title || run.run_id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     router.push(`/deploy/eval/${run.run_id}`);
                   }}
                 >
-                  <Eye className="mr-1 h-3 w-3" />
+                  <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
                   Detail
                 </Button>
               </TableCell>

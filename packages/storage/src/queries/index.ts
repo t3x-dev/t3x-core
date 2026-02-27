@@ -95,6 +95,13 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
+// Global Settings (key-value config store)
+export {
+  deleteGlobalSetting,
+  getGlobalSetting,
+  listGlobalSettings,
+  setGlobalSetting,
+} from './global-settings';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
@@ -107,6 +114,21 @@ export {
   updateDeployAgent,
   updateDeployAgentRunStatus,
 } from './deployAgents';
+// Drafts V3 (Workbench)
+export {
+  abandonDraftV3,
+  ConflictError,
+  commitDraftV3,
+  deleteDraftV3,
+  findDraftV3ById,
+  forkDraftV3,
+  insertDraftV3,
+  type ListDraftV3Options,
+  listDraftV3ByProject,
+  type UpdateDraftV3Input,
+  updateDraftV3,
+  updateDraftV3Preview,
+} from './drafts-v3';
 // Agent Drafts (formerly drafts_v2)
 export {
   adoptDraft,
@@ -123,21 +145,6 @@ export {
   updateDraft,
   updateDraftStatus,
 } from './drafts';
-// Drafts V3 (Workbench)
-export {
-  abandonDraftV3,
-  ConflictError,
-  commitDraftV3,
-  deleteDraftV3,
-  findDraftV3ById,
-  forkDraftV3,
-  insertDraftV3,
-  type ListDraftV3Options,
-  listDraftV3ByProject,
-  type UpdateDraftV3Input,
-  updateDraftV3,
-  updateDraftV3Preview,
-} from './drafts-v3';
 // Leaf History (generation history for leaves)
 export {
   countHistoryByLeafId,
@@ -205,6 +212,18 @@ export {
   type ProjectWithStats,
   updateProject,
 } from './projects';
+// Recipes (workflow automation)
+export {
+  type CreateRecipeInput,
+  createRecipe,
+  deleteRecipe,
+  findRecipeById,
+  findRecipesByEvent,
+  listRecipesByProject,
+  type RecipeOutput,
+  type UpdateRecipeInput,
+  updateRecipe,
+} from './recipes';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
@@ -223,16 +242,6 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
-// Sentence Vectors (pgvector similarity search)
-export {
-  deleteSentenceVectorsByCommit,
-  deleteSentenceVectorsByProject,
-  type SearchResult as SentenceVectorSearchResult,
-  searchSimilarSentences,
-  upsertSentenceVector,
-  upsertSentenceVectorsBatch,
-  type UpsertSentenceVectorInput,
-} from './sentenceVectors';
 // Segment Embeddings
 export {
   bufferToFloat32Array,
@@ -250,6 +259,16 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Sentence Vectors (pgvector similarity search)
+export {
+  deleteSentenceVectorsByCommit,
+  deleteSentenceVectorsByProject,
+  type SearchResult as SentenceVectorSearchResult,
+  searchSimilarSentences,
+  type UpsertSentenceVectorInput,
+  upsertSentenceVector,
+  upsertSentenceVectorsBatch,
+} from './sentenceVectors';
 // Share Tokens
 export {
   type CreateShareTokenInput,

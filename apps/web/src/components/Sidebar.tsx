@@ -5,22 +5,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Command,
-  FileText,
-  Github,
   Home,
   LayoutGrid,
-  ListChecks,
-  Moon,
   Rocket,
   Settings,
-  Sun,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
-import { SettingsToggle } from '@/components/shared/SettingsToggle';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -69,12 +62,10 @@ interface NavItemProps {
   label: string;
   isActive: boolean;
   children: React.ReactNode;
-  external?: boolean;
-  disabled?: boolean;
   collapsed: boolean;
 }
 
-function NavItem({ href, label, isActive, children, external, disabled, collapsed }: NavItemProps) {
+function NavItem({ href, label, isActive, children, collapsed }: NavItemProps) {
   const baseClass = cn(
     'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
     collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
@@ -101,15 +92,7 @@ function NavItem({ href, label, isActive, children, external, disabled, collapse
     </>
   );
 
-  const linkElement = external ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-      {inner}
-    </a>
-  ) : disabled ? (
-    <Button variant="ghost" className={cn(className, 'cursor-not-allowed opacity-50')} disabled>
-      {inner}
-    </Button>
-  ) : (
+  const linkElement = (
     <Link href={href} className={className}>
       {inner}
     </Link>
@@ -135,9 +118,6 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
   const isTemplates = pathname.startsWith('/templates');
@@ -153,6 +133,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <TooltipProvider delayDuration={0}>
       <aside
+        aria-label="Main navigation"
         className={cn(
           'fixed left-0 top-0 z-40 flex h-screen flex-col border-r py-4',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
@@ -208,7 +189,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* Main Navigation */}
-        <nav className={cn('flex flex-1 flex-col gap-1', collapsed ? 'items-center' : '')}>
+        <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
           <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
             <Home className="h-5 w-5" />
           </NavItem>
@@ -222,6 +203,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <Rocket className="h-5 w-5" />
             </NavItem>
           )}
+
+          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
+            <BarChart3 className="h-5 w-5" />
+          </NavItem>
+
+          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
+            <Settings className="h-5 w-5" />
+          </NavItem>
         </nav>
 
         {/* Project Drafts Section */}
@@ -236,148 +225,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
-        {/* Bottom Navigation */}
-        <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
-          {/* QuickStart Checklist Reopen */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem('t3x-quickstart-dismissed');
-                    window.dispatchEvent(new Event('t3x-quickstart-reopen'));
-                  }}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                    'h-10 w-10 justify-center',
-                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                  )}
-                >
-                  <ListChecks className="h-5 w-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                Quick Start Checklist
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem('t3x-quickstart-dismissed');
-                window.dispatchEvent(new Event('t3x-quickstart-reopen'));
-              }}
-              className={cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                'h-10 w-full px-3',
-                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-              )}
-            >
-              <span className="shrink-0">
-                <ListChecks className="h-5 w-5" />
-              </span>
-              <span className="text-sm font-medium truncate">Quick Start</span>
-            </button>
-          )}
-
-          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
-            <BarChart3 className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
-            <Settings className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem
-            href="#"
-            label="Docs (Coming Soon)"
-            isActive={false}
-            collapsed={collapsed}
-            disabled
-          >
-            <FileText className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem
-            href="https://github.com/anthropics/t3x"
-            label="GitHub"
-            isActive={false}
-            collapsed={collapsed}
-            external
-          >
-            <Github className="h-5 w-5" />
-          </NavItem>
-
-          {/* Developer Mode Toggle */}
-          <SettingsToggle collapsed={collapsed} />
-
-          {/* Theme Toggle — use mounted guard to avoid SSR hydration mismatch */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                    'h-10 w-10 justify-center',
-                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                  )}
-                  aria-label={
-                    mounted
-                      ? resolvedTheme === 'dark'
-                        ? 'Switch to light mode'
-                        : 'Switch to dark mode'
-                      : 'Toggle theme'
-                  }
-                >
-                  {mounted && resolvedTheme === 'dark' ? (
-                    <Sun className="h-5 w-5" />
-                  ) : (
-                    <Moon className="h-5 w-5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className={cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                'h-10 w-full px-3',
-                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-              )}
-              aria-label={
-                mounted
-                  ? resolvedTheme === 'dark'
-                    ? 'Switch to light mode'
-                    : 'Switch to dark mode'
-                  : 'Toggle theme'
-              }
-            >
-              <span className="shrink-0">
-                {mounted && resolvedTheme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </span>
-              <span className="text-sm font-medium truncate">
-                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </span>
-            </button>
-          )}
-        </nav>
-
         {/* Collapse Toggle */}
         <div
           className={cn(
-            'mt-3 pt-3 border-t border-[var(--stroke-divider)]',
+            'mt-auto pt-3 border-t border-[var(--stroke-divider)]',
             collapsed ? 'flex justify-center' : ''
           )}
         >
