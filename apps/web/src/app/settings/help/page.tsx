@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, FileText, Github } from 'lucide-react';
+import { ExternalLink, FileText, Github, ListChecks } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ResourceRowProps {
@@ -8,10 +8,11 @@ interface ResourceRowProps {
   title: string;
   description: string;
   href?: string;
+  onClick?: () => void;
   badge?: string;
 }
 
-function ResourceRow({ icon, title, description, href, badge }: ResourceRowProps) {
+function ResourceRow({ icon, title, description, href, onClick, badge }: ResourceRowProps) {
   const content = (
     <div className="flex items-center gap-4 rounded-lg border border-[var(--stroke-divider)] p-4 transition-colors hover:border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]">
       <div className="shrink-0 text-[var(--text-tertiary)]">{icon}</div>
@@ -38,6 +39,14 @@ function ResourceRow({ icon, title, description, href, badge }: ResourceRowProps
     );
   }
 
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="w-full cursor-pointer text-left">
+        {content}
+      </button>
+    );
+  }
+
   return content;
 }
 
@@ -50,6 +59,15 @@ export default function HelpPage() {
       </p>
 
       <section className="flex flex-col gap-3">
+        <ResourceRow
+          icon={<ListChecks className="h-5 w-5" />}
+          title="Quick Start Checklist"
+          description="Reopen the onboarding checklist to review setup steps."
+          onClick={() => {
+            localStorage.removeItem('t3x-quickstart-dismissed');
+            window.dispatchEvent(new Event('t3x-quickstart-reopen'));
+          }}
+        />
         <ResourceRow
           icon={<Github className="h-5 w-5" />}
           title="GitHub Repository"

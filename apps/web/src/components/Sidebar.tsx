@@ -7,7 +7,6 @@ import {
   Command,
   Home,
   LayoutGrid,
-  ListChecks,
   Rocket,
   Settings,
 } from 'lucide-react';
@@ -189,7 +188,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* Main Navigation */}
-        <nav className={cn('flex flex-1 flex-col gap-1', collapsed ? 'items-center' : '')}>
+        <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
           <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
             <Home className="h-5 w-5" />
           </NavItem>
@@ -207,6 +206,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
             <BarChart3 className="h-5 w-5" />
           </NavItem>
+
+          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
+            <Settings className="h-5 w-5" />
+          </NavItem>
         </nav>
 
         {/* Project Drafts Section */}
@@ -221,60 +224,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
-        {/* Bottom Navigation */}
-        <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
-          {/* QuickStart Checklist Reopen */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem('t3x-quickstart-dismissed');
-                    window.dispatchEvent(new Event('t3x-quickstart-reopen'));
-                  }}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                    'h-10 w-10 justify-center',
-                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                  )}
-                >
-                  <ListChecks className="h-5 w-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                Quick Start Checklist
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem('t3x-quickstart-dismissed');
-                window.dispatchEvent(new Event('t3x-quickstart-reopen'));
-              }}
-              className={cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                'h-10 w-full px-3',
-                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-              )}
-            >
-              <span className="shrink-0">
-                <ListChecks className="h-5 w-5" />
-              </span>
-              <span className="text-sm font-medium truncate">Quick Start</span>
-            </button>
-          )}
-
-          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
-            <Settings className="h-5 w-5" />
-          </NavItem>
-        </nav>
-
         {/* Collapse Toggle */}
         <div
           className={cn(
-            'mt-3 pt-3 border-t border-[var(--stroke-divider)]',
+            'mt-auto pt-3 border-t border-[var(--stroke-divider)]',
             collapsed ? 'flex justify-center' : ''
           )}
         >
