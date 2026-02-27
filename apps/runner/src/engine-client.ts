@@ -54,7 +54,12 @@ export interface ParsedRun {
   project_id: string | null;
   runner_run_id: string | null;
   commit_ref: string | null;
-  leaf: { id: string; type: 'deploy' | 'deploy_agent' | 'eval'; content?: string; rules_ref?: string } | null;
+  leaf: {
+    id: string;
+    type: 'deploy' | 'deploy_agent' | 'eval';
+    content?: string;
+    rules_ref?: string;
+  } | null;
   inputs: Record<string, unknown>;
   workflow: { type: string; webhook_id?: string } | null;
   status: string;

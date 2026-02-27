@@ -1117,9 +1117,10 @@ export function PendingCommitView({
 
       const newDraft = await api.createDraftV3({
         project_id: projectId,
-        title: data.title || 'Draft from Canvas',
+        title: data.title || t('draft_from_canvas'),
         parent_commit_hash: data.sourceCommitHash || undefined,
-        target_branch: data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
+        target_branch:
+          data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
       });
 
       if (draftSentences.length > 0) {

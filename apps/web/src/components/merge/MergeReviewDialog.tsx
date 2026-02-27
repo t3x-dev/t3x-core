@@ -25,6 +25,7 @@ import type { MergeSummary } from '@/lib/mergeSummary';
 import { useMicrocopy } from '@/lib/microcopy';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
 
 interface MergeReviewDialogProps {
@@ -103,6 +104,32 @@ export function MergeReviewDialog({
     );
   }, [state, prepared, summary, sourceBranch, targetBranch, extendedResolutions]);
 
+  // Save release note to the merge commit node in canvas store
+  useEffect(() => {
+    if (!releaseNote) return;
+    // Find the latest merge commit node and update its merge_summary with release_note
+    const { nodes, updateNode } = useCanvasStore.getState();
+    const mergeNode = nodes.find((n) => n.data.isMergeCommit && n.data.commitV4?.merge_summary);
+    if (mergeNode?.data.commitV4?.merge_summary) {
+      updateNode(mergeNode.id, {
+        commitV4: {
+          ...mergeNode.data.commitV4,
+          merge_summary: {
+            ...mergeNode.data.commitV4.merge_summary,
+            release_note: {
+              title: releaseNote.title,
+              timestamp: releaseNote.timestamp,
+              source_branch: releaseNote.sourceBranch,
+              target_branch: releaseNote.targetBranch,
+              summary: releaseNote.summary,
+              sections: releaseNote.sections,
+            },
+          },
+        },
+      });
+    }
+  }, [releaseNote]);
+
   const handleCopyReleaseNote = useCallback(async () => {
     if (!releaseNote) return;
     const md = formatReleaseNoteAsMarkdown(releaseNote);
@@ -119,7 +146,7 @@ export function MergeReviewDialog({
       setState('success');
     } catch (err) {
       setState('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Merge failed');
+      setErrorMsg(err instanceof Error ? err.message : t('merge_failed'));
     }
   }, [onConfirm]);
 

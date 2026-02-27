@@ -9,12 +9,14 @@ import {
   Download,
   GitCompare,
   Loader2,
+  MapPin,
   Pin,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   AssertionsSection,
@@ -38,7 +40,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { type EngineRun, getEngineRun, getLeaf, type Leaf, updateEngineRun } from '@/lib/api';
+import {
+  type CommitV4,
+  type CommitV4SentenceSourceRef,
+  type EngineRun,
+  getCommitV4,
+  getEngineRun,
+  getLeaf,
+  type Leaf,
+  updateEngineRun,
+} from '@/lib/api';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
@@ -163,9 +174,12 @@ function parseRunData(run: EngineRun): ParsedRunData {
   const assertionsRaw = (result.assertions as Record<string, unknown>[] | undefined) || [];
   const llmAssertions: LLMAssertion[] = assertionsRaw.map((a, idx) => ({
     id: (a.id as string) || `assert_${String(idx).padStart(3, '0')}`,
-    type: typeof a.passed === 'boolean'
-      ? (a.passed ? 'pass' : 'fail')
-      : ((a.type as string) || 'fail') as 'pass' | 'fail' | 'warning',
+    type:
+      typeof a.passed === 'boolean'
+        ? a.passed
+          ? 'pass'
+          : 'fail'
+        : (((a.type as string) || 'fail') as 'pass' | 'fail' | 'warning'),
     category: (a.category as string) || 'behavior',
     message: (a.details as string) || (a.message as string) || '',
     confidence: typeof a.confidence === 'number' ? a.confidence : 0.8,
@@ -203,6 +217,7 @@ export default function RunDetailPage() {
 
   const [run, setRun] = useState<EngineRun | null>(null);
   const [leaf, setLeaf] = useState<Leaf | null>(null);
+  const [commit, setCommit] = useState<CommitV4 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -248,6 +263,39 @@ export default function RunDetailPage() {
 
     loadRun();
   }, [runId]);
+
+  // Fetch commit data for lineage chain (assertion → constraint → sentence → source_ref)
+  useEffect(() => {
+    if (!leaf?.commit_hash) return;
+    getCommitV4(leaf.commit_hash)
+      .then(setCommit)
+      .catch(() => {
+        // Commit fetch failure is non-fatal
+      });
+  }, [leaf?.commit_hash]);
+
+  // Build map: constraint_id → source_ref (for lineage links)
+  const constraintSourceRefMap = useMemo(() => {
+    const map = new Map<string, CommitV4SentenceSourceRef>();
+    if (!leaf?.constraints || !commit?.content?.sentences) return map;
+
+    // Index sentences by ID for fast lookup
+    const sentenceMap = new Map(
+      commit.content.sentences.filter((s) => s.source_ref).map((s) => [s.id, s.source_ref!])
+    );
+
+    // Map constraint → sentence → source_ref
+    for (const constraint of leaf.constraints) {
+      if (constraint.type === 'require' && constraint.source_sentence_id) {
+        const ref = sentenceMap.get(constraint.source_sentence_id);
+        if (ref) {
+          map.set(constraint.id, ref);
+        }
+      }
+    }
+
+    return map;
+  }, [leaf?.constraints, commit?.content?.sentences]);
 
   // Initialize selected assertions: default to failed ones from runner_assertions (more actionable)
   useEffect(() => {
@@ -322,7 +370,8 @@ export default function RunDetailPage() {
           ? {
               ...prev,
               title: patch.title !== undefined ? patch.title || null : prev.title,
-              description: patch.description !== undefined ? patch.description || null : prev.description,
+              description:
+                patch.description !== undefined ? patch.description || null : prev.description,
               tags: patch.tags !== undefined ? patch.tags : prev.tags,
             }
           : prev
@@ -404,10 +453,20 @@ export default function RunDetailPage() {
                 segments={[
                   { label: 'Home', href: '/' },
                   ...(run.project_id
-                    ? [{ label: getProject(run.project_id)?.name || 'Project', href: `/project/${run.project_id}` }]
+                    ? [
+                        {
+                          label: getProject(run.project_id)?.name || 'Project',
+                          href: `/project/${run.project_id}`,
+                        },
+                      ]
                     : []),
                   ...(run.leaf?.id?.startsWith('leaf_') && run.project_id
-                    ? [{ label: run.leaf.title || run.leaf.id, href: `/project/${run.project_id}/leaf/${run.leaf.id}` }]
+                    ? [
+                        {
+                          label: run.leaf.title || run.leaf.id,
+                          href: `/project/${run.project_id}/leaf/${run.leaf.id}`,
+                        },
+                      ]
                     : []),
                   { label: run.title || `Run ${runId.slice(0, 8)}` },
                 ]}
@@ -479,7 +538,8 @@ export default function RunDetailPage() {
                 passed ? 'text-[var(--diff-added-text)]' : 'text-[var(--diff-removed-text)]'
               )}
             >
-              Confidence report ready — {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
+              Confidence report ready —{' '}
+              {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
               {llmAssertions.length} passed
             </span>
             {score !== undefined && (
@@ -685,8 +745,8 @@ export default function RunDetailPage() {
                   <CardTitle className="flex items-center gap-2 text-base">
                     Runner Evaluation
                     <Badge variant="outline" className="text-xs font-normal">
-                      {leaf.runner_assertions.filter((a) => a.passed).length}/{leaf.runner_assertions.length}{' '}
-                      passed
+                      {leaf.runner_assertions.filter((a) => a.passed).length}/
+                      {leaf.runner_assertions.length} passed
                     </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
@@ -713,9 +773,15 @@ export default function RunDetailPage() {
                             className="mt-0.5"
                           />
                           {assertion.passed ? (
-                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                            <>
+                              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                              <span className="sr-only">Passed</span>
+                            </>
                           ) : (
-                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                            <>
+                              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                              <span className="sr-only">Failed</span>
+                            </>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -730,13 +796,17 @@ export default function RunDetailPage() {
                               >
                                 {assertion.passed ? 'passed' : 'failed'}
                               </Badge>
-                              {assertion.constraint_id && !assertion.constraint_id.startsWith('eval_') && !assertion.constraint_id.startsWith('unknown_') && (
-                                <span className="text-xs text-muted-foreground">
-                                  {assertion.constraint_id}
-                                </span>
-                              )}
+                              {assertion.constraint_id &&
+                                !assertion.constraint_id.startsWith('eval_') &&
+                                !assertion.constraint_id.startsWith('unknown_') && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {assertion.constraint_id}
+                                  </span>
+                                )}
                             </div>
-                            <p className="mt-1 text-sm">{assertion.details || assertion.constraint_id || 'No details'}</p>
+                            <p className="mt-1 text-sm">
+                              {assertion.details || assertion.constraint_id || 'No details'}
+                            </p>
                             {assertion.lesson && (
                               <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
                                 <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
@@ -746,6 +816,18 @@ export default function RunDetailPage() {
                                 </div>
                               </div>
                             )}
+                            {/* Lineage link: assertion → constraint → sentence → source conversation turn */}
+                            {assertion.constraint_id &&
+                              constraintSourceRefMap.get(assertion.constraint_id) &&
+                              projectId && (
+                                <Link
+                                  href={`/project/${projectId}/conversation/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
+                                  className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
+                                >
+                                  <MapPin size={10} />
+                                  View source
+                                </Link>
+                              )}
                           </div>
                         </div>
                       </div>
@@ -814,11 +896,20 @@ export default function RunDetailPage() {
                       >
                         <div className="flex items-start gap-3">
                           {assertion.type === 'fail' ? (
-                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                            <>
+                              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                              <span className="sr-only">Failed</span>
+                            </>
                           ) : assertion.type === 'warning' ? (
-                            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                            <>
+                              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                              <span className="sr-only">Warning</span>
+                            </>
                           ) : (
-                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                            <>
+                              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                              <span className="sr-only">Passed</span>
+                            </>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -849,6 +940,18 @@ export default function RunDetailPage() {
                                 {assertion.patch_suggestion}
                               </div>
                             )}
+                            {/* Lineage link: LLM assertion → constraint → sentence → source conversation turn */}
+                            {assertion.constraint_id &&
+                              constraintSourceRefMap.get(assertion.constraint_id) &&
+                              projectId && (
+                                <Link
+                                  href={`/project/${projectId}/conversation/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
+                                  className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
+                                >
+                                  <MapPin size={10} />
+                                  View source
+                                </Link>
+                              )}
                           </div>
                         </div>
                       </div>

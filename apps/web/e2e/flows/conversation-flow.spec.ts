@@ -1,4 +1,3 @@
-import { expect, test } from '../fixtures/test';
 import {
   cleanupProject,
   createTestConversation,
@@ -7,6 +6,7 @@ import {
   createTestTurn,
 } from '../fixtures/api-helpers';
 import { ConversationPage } from '../fixtures/page-objects/conversation-page';
+import { expect, test } from '../fixtures/test';
 
 /**
  * Conversation Flow E2E Tests

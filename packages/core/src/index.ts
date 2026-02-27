@@ -148,6 +148,7 @@ export {
 } from './merge';
 // Provider interfaces and implementations
 export {
+  AllProvidersFailedError,
   type AnyProvider,
   type CachedEmbeddingConfig,
   CachedEmbeddingProvider,
@@ -166,7 +167,6 @@ export {
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
   createOpenAIProvider,
-  AllProvidersFailedError,
   // Provider Registry
   createProviderRegistry,
   DeepSeekProvider,

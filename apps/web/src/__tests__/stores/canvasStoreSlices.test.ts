@@ -323,10 +323,7 @@ describe('addLeafNode edge cases', () => {
 
     const result = await useCanvasStore.getState().addLeafNode('tweet');
     expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith(
-      'Commit not saved yet. Please commit first before adding output.',
-      'error'
-    );
+    expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('not saved yet'), 'error');
   });
 
   it('returns null when projectId is null', async () => {

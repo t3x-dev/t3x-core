@@ -513,13 +513,17 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
     }
 
     // Fire webhook event (fire-and-forget)
-    webhookDispatcher.dispatch('commit.created', {
-      commit_hash: commit.hash,
-      project_id: body.project_id,
-      branch: body.branch,
-      message: body.message,
-      sentence_count: finalSentences.length,
-    }, body.project_id);
+    webhookDispatcher.dispatch(
+      'commit.created',
+      {
+        commit_hash: commit.hash,
+        project_id: body.project_id,
+        branch: body.branch,
+        message: body.message,
+        sentence_count: finalSentences.length,
+      },
+      body.project_id
+    );
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
   } catch (err) {

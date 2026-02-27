@@ -1,6 +1,8 @@
 import type { MergeSummaryData } from '@t3x/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
+import { getTerminology } from '@/hooks/useTerminology';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { CommitV3 } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
 import type { CanvasState, MergeSlice } from './canvasStoreTypes';
@@ -193,7 +195,9 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         position: mergeNodePosition,
         data: {
           entryId: mergeCommit.hash.slice(0, 12),
-          title: mergeCommit.message || 'Merge commit',
+          title:
+            mergeCommit.message ||
+            `${getTerminology('merge', useSettingsStore.getState().developerMode)} ${getTerminology('commit', useSettingsStore.getState().developerMode).toLowerCase()}`,
           summary: `${mergeCommit.content.sentences.length} sentences`,
           status: 'committed',
           timestamp: mergeCommit.committed_at,

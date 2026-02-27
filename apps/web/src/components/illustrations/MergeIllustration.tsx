@@ -41,19 +41,53 @@ export function MergeIllustration({ className }: { className?: string }) {
       />
 
       {/* Source node top */}
-      <circle cx="30" cy="30" r="8" fill="var(--surface-card)" fillOpacity="0.6" stroke="#3b82f6" strokeWidth="1.2" />
-      <text x="30" y="33" textAnchor="middle" fontSize="9" fill="#3b82f6" fontWeight="600">A</text>
+      <circle
+        cx="30"
+        cy="30"
+        r="8"
+        fill="var(--surface-card)"
+        fillOpacity="0.6"
+        stroke="#3b82f6"
+        strokeWidth="1.2"
+      />
+      <text x="30" y="33" textAnchor="middle" fontSize="9" fill="#3b82f6" fontWeight="600">
+        A
+      </text>
 
       {/* Source node bottom */}
-      <circle cx="30" cy="70" r="8" fill="var(--surface-card)" fillOpacity="0.6" stroke="#f97316" strokeWidth="1.2" />
-      <text x="30" y="73" textAnchor="middle" fontSize="9" fill="#f97316" fontWeight="600">B</text>
+      <circle
+        cx="30"
+        cy="70"
+        r="8"
+        fill="var(--surface-card)"
+        fillOpacity="0.6"
+        stroke="#f97316"
+        strokeWidth="1.2"
+      />
+      <text x="30" y="73" textAnchor="middle" fontSize="9" fill="#f97316" fontWeight="600">
+        B
+      </text>
 
       {/* Merge diamond */}
-      <circle cx="80" cy="50" r="18" fill="none" stroke="#8b5cf6" strokeWidth="3" strokeOpacity="0.1" />
+      <circle
+        cx="80"
+        cy="50"
+        r="18"
+        fill="none"
+        stroke="#8b5cf6"
+        strokeWidth="3"
+        strokeOpacity="0.1"
+      />
       <rect
-        x="68" y="38" width="24" height="24" rx="4"
-        fill="var(--surface-card)" fillOpacity="0.7"
-        stroke="#8b5cf6" strokeWidth="1.5"
+        x="68"
+        y="38"
+        width="24"
+        height="24"
+        rx="4"
+        fill="var(--surface-card)"
+        fillOpacity="0.7"
+        stroke="#8b5cf6"
+        strokeWidth="1.5"
         transform="rotate(45 80 50)"
       />
       {/* Merge icon inside diamond */}
@@ -67,8 +101,23 @@ export function MergeIllustration({ className }: { className?: string }) {
       />
 
       {/* Result node */}
-      <circle cx="135" cy="50" r="8" fill="var(--surface-card)" fillOpacity="0.6" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-      <path d="M131 50 L134 53 L139 47" stroke="var(--text-secondary)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle
+        cx="135"
+        cy="50"
+        r="8"
+        fill="var(--surface-card)"
+        fillOpacity="0.6"
+        stroke="var(--text-tertiary)"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M131 50 L134 53 L139 47"
+        stroke="var(--text-secondary)"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }

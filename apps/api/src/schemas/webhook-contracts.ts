@@ -31,10 +31,7 @@ export const CreateWebhookRequest = z
       .array(WebhookEventEnum)
       .min(1)
       .openapi({ description: 'Event types to subscribe to' }),
-    secret: z
-      .string()
-      .optional()
-      .openapi({ description: 'Secret for HMAC-SHA256 signature' }),
+    secret: z.string().optional().openapi({ description: 'Secret for HMAC-SHA256 signature' }),
     project_id: z
       .string()
       .optional()

@@ -288,13 +288,17 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     }
 
     // Fire webhook event (fire-and-forget)
-    webhookDispatcher.dispatch('merge.completed', {
-      commit_hash: mergeCommit.hash,
-      project_id: projectId,
-      source_hash,
-      target_hash,
-      branch: branch || null,
-    }, projectId);
+    webhookDispatcher.dispatch(
+      'merge.completed',
+      {
+        commit_hash: mergeCommit.hash,
+        project_id: projectId,
+        source_hash,
+        target_hash,
+        branch: branch || null,
+      },
+      projectId
+    );
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },

@@ -14,7 +14,17 @@
  * @see https://github.com/t3x-dev/T3X/issues/220
  */
 
-import { CheckCircle, Columns2, Expand, FileText, Loader2, MapPin } from 'lucide-react';
+import {
+  CheckCircle,
+  Columns2,
+  Expand,
+  FileText,
+  Loader2,
+  MapPin,
+  Minus,
+  Pencil,
+  Plus,
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
@@ -266,13 +276,22 @@ function SideBySideRow({
   const isTargetExpanded = targetSentence && expandedSentenceId === targetSentence.id;
   const isExpanded = isSourceExpanded || isTargetExpanded;
 
+  const DiffIcon =
+    type === 'added' ? Plus : type === 'removed' ? Minus : type === 'modified' ? Pencil : null;
+
   return (
     <div>
-      <div className="grid grid-cols-2 gap-1">
+      <div className="grid grid-cols-2 gap-1" aria-label={`${type} sentence`}>
         {/* Left (Source) Side */}
         <div className={cn('p-2 rounded-l text-sm', leftBg, leftBorder)}>
           {sourceSentence ? (
             <div className="flex flex-col gap-1">
+              {DiffIcon && (type === 'removed' || type === 'modified') && (
+                <DiffIcon
+                  className="h-3.5 w-3.5 shrink-0 text-[var(--diff-removed-accent)] mb-0.5"
+                  aria-hidden="true"
+                />
+              )}
               {type === 'modified' && wordDiffSegments ? (
                 <div>
                   <WordDiffDisplay segments={wordDiffSegments.filter((s) => s.type !== 'added')} />
@@ -298,6 +317,17 @@ function SideBySideRow({
         <div className={cn('p-2 rounded-r text-sm', rightBg, rightBorder)}>
           {targetSentence ? (
             <div className="flex flex-col gap-1">
+              {DiffIcon && (type === 'added' || type === 'modified') && (
+                <DiffIcon
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0 mb-0.5',
+                    type === 'added'
+                      ? 'text-[var(--diff-added-accent)]'
+                      : 'text-[var(--diff-modified-accent)]'
+                  )}
+                  aria-hidden="true"
+                />
+              )}
               {type === 'modified' && wordDiffSegments ? (
                 <div>
                   <WordDiffDisplay
@@ -371,11 +401,23 @@ function UnifiedRow({
   const getPrefix = () => {
     switch (line.type) {
       case 'added':
-        return <span className="text-[var(--diff-added-accent)] font-mono mr-2">+</span>;
+        return (
+          <span className="text-[var(--diff-added-accent)] font-mono mr-2 inline-flex items-center gap-0.5">
+            <Plus className="h-3 w-3" aria-hidden="true" />+
+          </span>
+        );
       case 'removed':
-        return <span className="text-[var(--diff-removed-accent)] font-mono mr-2">−</span>;
+        return (
+          <span className="text-[var(--diff-removed-accent)] font-mono mr-2 inline-flex items-center gap-0.5">
+            <Minus className="h-3 w-3" aria-hidden="true" />−
+          </span>
+        );
       case 'modified':
-        return <span className="text-[var(--diff-modified-accent)] font-mono mr-2">~</span>;
+        return (
+          <span className="text-[var(--diff-modified-accent)] font-mono mr-2 inline-flex items-center gap-0.5">
+            <Pencil className="h-3 w-3" aria-hidden="true" />~
+          </span>
+        );
       default:
         return <span className="text-[var(--diff-identical-text)] font-mono mr-2"> </span>;
     }
@@ -386,7 +428,10 @@ function UnifiedRow({
 
   return (
     <div>
-      <div className={cn('p-2 rounded text-sm flex items-start', getBgClass())}>
+      <div
+        className={cn('p-2 rounded text-sm flex items-start', getBgClass())}
+        aria-label={`${line.type} sentence`}
+      >
         {getPrefix()}
         <div className="flex-1">
           {line.type === 'modified' && line.wordDiff ? (

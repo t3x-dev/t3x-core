@@ -20,13 +20,13 @@ import {
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreateWebhookRequest,
   ListWebhooksQuery,
   UpdateWebhookRequest,
   WebhookResponse,
 } from '../schemas/webhook-contracts';
-import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const webhooksRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -272,9 +272,7 @@ const testWebhookRoute = createRoute({
       description: 'Test event sent',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({ status: z.number(), ok: z.boolean() })
-          ),
+          schema: SuccessResponseSchema(z.object({ status: z.number(), ok: z.boolean() })),
         },
       },
     },

@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   Eye,
+  FileOutput,
   FilePlus,
   FileText,
   GitBranch,
@@ -463,6 +464,7 @@ function UnitNode(props: Props) {
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const leafContextMenuHandler = useCanvasStore((state) => state.leafContextMenuHandler);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -972,8 +974,44 @@ function UnitNode(props: Props) {
                   ];
                   if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);
                   return (
-                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 truncate">
-                      {parts.join(' · ')}
+                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 flex items-center gap-1.5">
+                      <span className="truncate">{parts.join(' · ')}</span>
+                      {ms.release_note && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="shrink-0 p-0.5 rounded hover:bg-[var(--hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const note = ms.release_note!;
+                                  const md = [
+                                    `# ${note.title}`,
+                                    '',
+                                    `**Summary:** ${note.summary}`,
+                                    '',
+                                  ];
+                                  for (const sec of note.sections) {
+                                    md.push(`## ${sec.heading}`, '');
+                                    for (const item of sec.items) md.push(`- ${item}`);
+                                    md.push('');
+                                  }
+                                  navigator.clipboard.writeText(md.join('\n')).then(
+                                    () => notify?.('Release note copied', 'success'),
+                                    () => notify?.('Failed to copy', 'error')
+                                  );
+                                }}
+                              >
+                                <FileOutput size={10} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Copy release note
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   );
                 })()}
@@ -1124,6 +1162,7 @@ function UnitNode(props: Props) {
                           key={leaf.id}
                           data-node-type="leaf"
                           className="group/leaf flex items-center gap-1"
+                          onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, id)}
                         >
                           {leafHref ? (
                             <Link

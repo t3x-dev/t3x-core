@@ -105,13 +105,21 @@ app.get('/debug/n8n-check', async (_req, res) => {
     if (!response.ok) {
       const body = await response.text();
       info.error_body = body.slice(0, 500);
-      res.json({ success: false, error: { code: 'API_ERROR', message: `n8n returned ${response.status}` }, data: info });
+      res.json({
+        success: false,
+        error: { code: 'API_ERROR', message: `n8n returned ${response.status}` },
+        data: info,
+      });
     } else {
       res.json({ success: true, data: info });
     }
   } catch (error) {
     info.error = String(error);
-    res.json({ success: false, error: { code: 'CONNECTION_FAILED', message: String(error) }, data: info });
+    res.json({
+      success: false,
+      error: { code: 'CONNECTION_FAILED', message: String(error) },
+      data: info,
+    });
   }
 });
 

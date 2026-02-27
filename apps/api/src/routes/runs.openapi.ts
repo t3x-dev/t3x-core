@@ -16,6 +16,7 @@
  * - POST   /v1/runs/compare       - A/B test comparison
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createLeafHistory,
   findLeafById,
@@ -30,11 +31,11 @@ import {
   updateRun,
 } from '@t3x/storage';
 import { randomUUID } from 'crypto';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CompareRunsRequest,
   CompareRunsResponse,
@@ -49,7 +50,6 @@ import {
   RunResponse,
   UpdateRunRequest,
 } from '../schemas/run-contracts';
-import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 // Runner URL (t3x-runner service)
 const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
@@ -75,7 +75,8 @@ const createRunRoute = createRoute({
   path: '/v1/runs',
   tags: ['Runner'],
   summary: 'Create and trigger a run',
-  description: 'Creates a new evaluation run and forwards it to the Runner service (Engine → Runner → n8n).',
+  description:
+    'Creates a new evaluation run and forwards it to the Runner service (Engine → Runner → n8n).',
   request: {
     body: {
       content: { 'application/json': { schema: CreateRunRequest } },
@@ -103,7 +104,10 @@ runsRoutes.openapi(createRunRoute, async (c) => {
       const project = await findProjectById(db, input.project_id);
       if (!project) {
         return c.json(
-          { success: false as const, error: { code: 'PROJECT_NOT_FOUND', message: `Project ${input.project_id} not found` } },
+          {
+            success: false as const,
+            error: { code: 'PROJECT_NOT_FOUND', message: `Project ${input.project_id} not found` },
+          },
           400
         );
       }
@@ -116,13 +120,22 @@ runsRoutes.openapi(createRunRoute, async (c) => {
       const leaf = await findLeafById(db, input.leaf_id);
       if (!leaf) {
         return c.json(
-          { success: false as const, error: { code: 'LEAF_NOT_FOUND', message: `Leaf ${input.leaf_id} not found` } },
+          {
+            success: false as const,
+            error: { code: 'LEAF_NOT_FOUND', message: `Leaf ${input.leaf_id} not found` },
+          },
           400
         );
       }
       if (!leaf.output) {
         return c.json(
-          { success: false as const, error: { code: 'NO_OUTPUT', message: `Leaf ${input.leaf_id} has no generated output yet` } },
+          {
+            success: false as const,
+            error: {
+              code: 'NO_OUTPUT',
+              message: `Leaf ${input.leaf_id} has no generated output yet`,
+            },
+          },
           400
         );
       }
@@ -198,7 +211,13 @@ runsRoutes.openapi(createRunRoute, async (c) => {
     });
   } catch (error) {
     return c.json(
-      { success: false as const, error: { code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : String(error) } },
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
       400
     );
   }
@@ -285,15 +304,19 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
               typeof raw.constraint_id === 'string' && raw.constraint_id !== ''
                 ? raw.constraint_id
                 : `eval_${idx}`,
-            passed: typeof raw.passed === 'boolean'
-              ? raw.passed
-              : raw.type === 'pass',   // fallback: old format 'type' field
-            details: typeof raw.details === 'string' && raw.details !== ''
-              ? raw.details
-              : typeof raw.message === 'string' ? raw.message : '',  // fallback: old 'message'
-            lesson: typeof raw.lesson === 'string'
-              ? raw.lesson
-              : typeof raw.patch_suggestion === 'string' ? raw.patch_suggestion : undefined,
+            passed: typeof raw.passed === 'boolean' ? raw.passed : raw.type === 'pass', // fallback: old format 'type' field
+            details:
+              typeof raw.details === 'string' && raw.details !== ''
+                ? raw.details
+                : typeof raw.message === 'string'
+                  ? raw.message
+                  : '', // fallback: old 'message'
+            lesson:
+              typeof raw.lesson === 'string'
+                ? raw.lesson
+                : typeof raw.patch_suggestion === 'string'
+                  ? raw.patch_suggestion
+                  : undefined,
           };
         });
 
@@ -317,7 +340,13 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
     return c.json({ success: true as const, data: { ok: true } });
   } catch (error) {
     return c.json(
-      { success: false as const, error: { code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : String(error) } },
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
       400
     );
   }
@@ -366,7 +395,11 @@ runsRoutes.openapi(listRunsRoute, async (c) => {
       data: { runs: result, limit, offset },
     });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -409,7 +442,11 @@ runsRoutes.openapi(getRunByRunnerIdRoute, async (c) => {
 
     return c.json({ success: true as const, data: run });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -441,7 +478,11 @@ runsRoutes.openapi(getRunFiltersRoute, async (c) => {
     const options = await getRunFilterOptions(db);
     return c.json({ success: true as const, data: options });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -454,14 +495,17 @@ const getConfigurationsRoute = createRoute({
   path: '/v1/runs/configurations',
   tags: ['Runner'],
   summary: 'Get configuration stats',
-  description: 'Returns aggregated statistics grouped by model + prompt_version for A/B test configuration selection.',
+  description:
+    'Returns aggregated statistics grouped by model + prompt_version for A/B test configuration selection.',
   request: {
     query: ConfigurationsQuery,
   },
   responses: {
     200: {
       description: 'Configuration stats',
-      content: { 'application/json': { schema: SuccessResponseSchema(ConfigurationStatsResponse) } },
+      content: {
+        'application/json': { schema: SuccessResponseSchema(ConfigurationStatsResponse) },
+      },
     },
     500: {
       description: 'Internal error',
@@ -477,7 +521,11 @@ runsRoutes.openapi(getConfigurationsRoute, async (c) => {
     const configurations = await getConfigurationStats(db, project_id || undefined);
     return c.json({ success: true as const, data: { configurations } });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -518,7 +566,11 @@ runsRoutes.openapi(getRunRoute, async (c) => {
 
     return c.json({ success: true as const, data: run });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -564,7 +616,11 @@ runsRoutes.openapi(deleteRunRoute, async (c) => {
 
     return c.json({ success: true as const, data: { deleted: true } });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -607,7 +663,13 @@ runsRoutes.openapi(updateRunRoute, async (c) => {
 
     if (input.title === undefined && input.description === undefined && input.tags === undefined) {
       return c.json(
-        { success: false as const, error: { code: 'INVALID_REQUEST', message: 'At least one field (title, description, tags) must be provided' } },
+        {
+          success: false as const,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: 'At least one field (title, description, tags) must be provided',
+          },
+        },
         400
       );
     }
@@ -626,7 +688,11 @@ runsRoutes.openapi(updateRunRoute, async (c) => {
 
     return c.json({ success: true as const, data: updated });
   } catch (error) {
-    return errorResponse(c, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 
@@ -639,7 +705,8 @@ const compareRunsRoute = createRoute({
   path: '/v1/runs/compare',
   tags: ['Runner'],
   summary: 'Compare two configurations (A/B test)',
-  description: 'Performs statistical comparison between control and treatment configurations using Z-test and T-test.',
+  description:
+    'Performs statistical comparison between control and treatment configurations using Z-test and T-test.',
   request: {
     body: {
       content: { 'application/json': { schema: CompareRunsRequest } },
@@ -671,7 +738,8 @@ runsRoutes.openapi(compareRunsRoute, async (c) => {
       (s) => s.model === input.control.model && s.prompt_version === input.control.prompt_version
     );
     const treatment = allStats.find(
-      (s) => s.model === input.treatment.model && s.prompt_version === input.treatment.prompt_version
+      (s) =>
+        s.model === input.treatment.model && s.prompt_version === input.treatment.prompt_version
     );
 
     if (!control) {
@@ -750,7 +818,13 @@ runsRoutes.openapi(compareRunsRoute, async (c) => {
     });
   } catch (error) {
     return c.json(
-      { success: false as const, error: { code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : String(error) } },
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
       400
     );
   }
