@@ -1,6 +1,7 @@
 'use client';
 
-import { CheckCircle, Loader2, Tag, X, XCircle } from 'lucide-react';
+import { CheckCircle, ChevronRight, Loader2, Tag, X, XCircle } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,12 @@ interface ReportHeaderProps {
   status: string;
   createdAt: string;
   onUpdate: (patch: { title?: string; description?: string; tags?: string[] }) => Promise<void>;
+  /** Project ID for lineage breadcrumb */
+  projectId?: string;
+  /** Leaf title for lineage breadcrumb */
+  leafTitle?: string;
+  /** Leaf ID for lineage breadcrumb link */
+  leafId?: string;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -34,6 +41,9 @@ export function ReportHeader({
   status,
   createdAt,
   onUpdate,
+  projectId,
+  leafTitle,
+  leafId,
 }: ReportHeaderProps) {
   // Title editing
   const [editingTitle, setEditingTitle] = useState(false);
@@ -137,6 +147,28 @@ export function ReportHeader({
 
   return (
     <div className="space-y-2">
+      {/* Lineage breadcrumb */}
+      {projectId && (
+        <nav aria-label="Lineage" className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Link href={`/project/${projectId}`} className="hover:text-foreground transition-colors">
+            Project
+          </Link>
+          {leafId && (
+            <>
+              <ChevronRight className="h-3 w-3" aria-hidden="true" />
+              <Link
+                href={`/project/${projectId}/leaf/${leafId}`}
+                className="hover:text-foreground transition-colors"
+              >
+                {leafTitle || 'Leaf'}
+              </Link>
+            </>
+          )}
+          <ChevronRight className="h-3 w-3" aria-hidden="true" />
+          <span className="text-foreground font-medium">Run</span>
+        </nav>
+      )}
+
       {/* Title row */}
       <div className="flex items-center gap-3">
         {editingTitle ? (

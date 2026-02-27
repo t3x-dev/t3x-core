@@ -28,6 +28,12 @@ import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
 import { canvasNodeTypes } from './CanvasNodes';
 import { CanvasStatusBar } from './CanvasStatusBar';
+import {
+  buildBackgroundMenu,
+  buildUnitNodeMenu,
+  type ContextMenuGroup,
+  NodeContextMenu,
+} from './NodeContextMenu';
 import { NodePalette } from './NodePalette';
 
 // Custom edge types for xyflow
@@ -104,13 +110,18 @@ function CanvasWorkspaceInner({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    groups: ContextMenuGroup[];
+  } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
-  const { t } = useTerminology();
+  const { t, isDeveloperMode } = useTerminology();
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -162,6 +173,70 @@ function CanvasWorkspaceInner({
       setIsLayouting(false);
     }
   }, [getNodes, getEdges, setNodes, fitView, notify]);
+
+  // Context menu handlers
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
+      event.preventDefault();
+      const isDraft = node.data.commitStatus === 'draft';
+      const groups = buildUnitNodeMenu({
+        onOpenDetail: () => openNodeModal(node.id, 'commit'),
+        onCreateBranch: () => {
+          const position = { x: node.position.x + 320, y: node.position.y };
+          startTransition(async () => {
+            try {
+              await addNode('unit', position);
+            } catch (err) {
+              notify?.(err instanceof Error ? err.message : 'Failed', 'error');
+            }
+          });
+        },
+        onConnectLeaf: () => useCanvasStore.getState().openLeafPanel(node.id),
+        onCopyHash: isDeveloperMode
+          ? () => {
+              const hash =
+                node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
+              navigator.clipboard.writeText(hash);
+            }
+          : undefined,
+        onDelete: isDraft
+          ? () => {
+              // Trigger removal via onNodesChange (same as pressing Delete key)
+              const change = { id: node.id, type: 'remove' as const };
+              useCanvasStore.getState().onNodesChange([change]);
+            }
+          : undefined,
+        isDraft,
+        isDeveloperMode,
+      });
+      setContextMenu({ x: event.clientX, y: event.clientY, groups });
+    },
+    [openNodeModal, addNode, isDeveloperMode, notify]
+  );
+
+  // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode
+  const handlePaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault();
+      const addNodeInline = (kind: NodeKind) => {
+        startTransition(async () => {
+          try {
+            await addNode(kind);
+          } catch (err) {
+            notify?.(err instanceof Error ? err.message : 'Failed to create node', 'error');
+          }
+        });
+      };
+      const groups = buildBackgroundMenu({
+        onAddConversation: () => addNodeInline('unit'),
+        onAddLeaf: () => addNodeInline('leaf'),
+        onFitView: () => fitView({ padding: 0.2, duration: 300 }),
+        onAutoLayout: handleAutoLayout,
+      });
+      setContextMenu({ x: event.clientX, y: event.clientY, groups });
+    },
+    [addNode, notify, fitView, handleAutoLayout]
+  );
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
@@ -435,17 +510,20 @@ function CanvasWorkspaceInner({
     });
   }, [screenToFlowPosition]);
 
-  const handleAddNode = async (kind: NodeKind) => {
-    const position = getViewportCenter();
-    startTransition(async () => {
-      try {
-        await addNode(kind, position);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
-        notify?.(message, 'error');
-      }
-    });
-  };
+  const handleAddNode = useCallback(
+    async (kind: NodeKind) => {
+      const position = getViewportCenter();
+      startTransition(async () => {
+        try {
+          await addNode(kind, position);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to create node';
+          notify?.(message, 'error');
+        }
+      });
+    },
+    [getViewportCenter, addNode, notify]
+  );
 
   // Drag-and-drop handlers for node palette
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -897,11 +975,14 @@ function CanvasWorkspaceInner({
           onNodeDoubleClick={(_, node) => {
             openNodeModal(node.id, 'commit');
           }}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneContextMenu={handlePaneContextMenu}
           onPaneClick={() => {
-            // Clear node highlight when clicking empty canvas
+            // Clear node highlight and close context menu when clicking empty canvas
             if (highlight?.mode === 'node') {
               setHighlight(null);
             }
+            setContextMenu(null);
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
@@ -1006,6 +1087,15 @@ function CanvasWorkspaceInner({
           </div>
         )}
       </div>
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <NodeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          groups={contextMenu.groups}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
       <CanvasStatusBar />
       {modalNode &&
         modalNode.data.commitStatus === 'draft' &&
