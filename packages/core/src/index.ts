@@ -166,6 +166,7 @@ export {
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
   createOpenAIProvider,
+  AllProvidersFailedError,
   // Provider Registry
   createProviderRegistry,
   DeepSeekProvider,

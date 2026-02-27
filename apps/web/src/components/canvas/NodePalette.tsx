@@ -2,6 +2,7 @@
 
 import { Leaf, MessageSquare, PenSquare } from 'lucide-react';
 import type { DragEvent } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import type { NodeKind } from '@/types/nodes';
 
@@ -12,28 +13,6 @@ interface PaletteItem {
   icon: React.ReactNode;
   isDraft?: boolean;
 }
-
-const paletteItems: PaletteItem[] = [
-  {
-    kind: 'unit',
-    label: 'Unit',
-    description: 'Conversation unit',
-    icon: <MessageSquare className="h-4 w-4" />,
-  },
-  {
-    kind: 'unit',
-    label: 'Draft',
-    description: 'Knowledge workbench',
-    icon: <PenSquare className="h-4 w-4" />,
-    isDraft: true,
-  },
-  {
-    kind: 'leaf',
-    label: 'Leaf',
-    description: 'Output generator',
-    icon: <Leaf className="h-4 w-4" />,
-  },
-];
 
 function PaletteNode({ item }: { item: PaletteItem }) {
   const onDragStart = (event: DragEvent<HTMLDivElement>) => {
@@ -74,6 +53,30 @@ function PaletteNode({ item }: { item: PaletteItem }) {
 }
 
 export function NodePalette() {
+  const { t } = useTerminology();
+
+  const paletteItems: PaletteItem[] = [
+    {
+      kind: 'unit',
+      label: t('unit'),
+      description: 'Conversation unit',
+      icon: <MessageSquare className="h-4 w-4" />,
+    },
+    {
+      kind: 'unit',
+      label: t('draft'),
+      description: 'Knowledge workbench',
+      icon: <PenSquare className="h-4 w-4" />,
+      isDraft: true,
+    },
+    {
+      kind: 'leaf',
+      label: t('leaf'),
+      description: 'Output generator',
+      icon: <Leaf className="h-4 w-4" />,
+    },
+  ];
+
   return (
     <div
       className={cn(
@@ -87,7 +90,7 @@ export function NodePalette() {
         Nodes
       </div>
       {paletteItems.map((item) => (
-        <PaletteNode key={item.label} item={item} />
+        <PaletteNode key={`${item.kind}-${item.isDraft}`} item={item} />
       ))}
     </div>
   );

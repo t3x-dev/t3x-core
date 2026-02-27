@@ -8,12 +8,15 @@
 import {
   createProviderRegistry,
   type EmbeddingProvider,
+  type GenerateOptions,
+  type GenerateResult,
+  generateLeafOutput,
   type LLMProvider,
   type NLPProvider,
   type ProviderRegistry,
   type RegistryConfig,
 } from '@t3x/core';
-import { getGlobalSetting, setGlobalSetting } from '@t3x/storage/pglite';
+import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x/storage/pglite';
 import { getDB } from './db';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -21,36 +24,74 @@ import { getDB } from './db';
 // ═══════════════════════════════════════════════════════════════════════════
 
 let registry: ProviderRegistry | null = null;
+let registryInit: Promise<ProviderRegistry> | null = null;
 
 const PROVIDER_CONFIG_KEY = 'provider_registry';
 
 /**
  * Get or create the global provider registry.
  * On first call, registers all built-in providers and loads saved config.
+ * Uses a Promise guard to prevent concurrent initializations.
  */
 export async function getProviderRegistry(): Promise<ProviderRegistry> {
   if (registry) return registry;
+  if (registryInit) return registryInit;
 
-  registry = createProviderRegistry();
+  registryInit = initRegistry();
+  registry = await registryInit;
+  registryInit = null;
+  return registry;
+}
+
+async function initRegistry(): Promise<ProviderRegistry> {
+  const reg = createProviderRegistry();
 
   // Register all built-in providers
-  registerBuiltinProviders(registry);
+  registerBuiltinProviders(reg);
 
   // Auto-configure defaults from env
-  registry.autoConfigureFromEnv();
+  reg.autoConfigureFromEnv();
 
   // Load saved config from DB (overrides auto-config)
   try {
     const db = await getDB();
     const savedConfig = await getGlobalSetting<RegistryConfig>(db, PROVIDER_CONFIG_KEY);
     if (savedConfig) {
-      registry.importConfig(savedConfig);
+      reg.importConfig(savedConfig);
     }
   } catch {
     // DB not available yet or config not saved — use auto-config
   }
 
-  return registry;
+  return reg;
+}
+
+/**
+ * Get the generation provider IDs for a project, falling back to global config.
+ * If the project has `provider_config` with a 'generation' role override,
+ * those provider IDs are returned; otherwise the global assignment is used.
+ */
+export async function getGenerationProviderIds(projectId?: string): Promise<string[]> {
+  const reg = await getProviderRegistry();
+  const globalIds = reg.getProviderIdsForRole('generation');
+
+  if (!projectId) return globalIds;
+
+  try {
+    const db = await getDB();
+    const project = await findProjectById(db, projectId);
+    if (project?.providerConfig) {
+      const config = JSON.parse(project.providerConfig) as RegistryConfig;
+      const genRole = config?.roles?.find((r) => r.role === 'generation');
+      if (genRole && genRole.providerIds.length > 0) {
+        return genRole.providerIds;
+      }
+    }
+  } catch {
+    // Fall through to global
+  }
+
+  return globalIds;
 }
 
 /**
@@ -67,6 +108,7 @@ export async function saveRegistryConfig(): Promise<void> {
  */
 export function resetProviderRegistry(): void {
   registry = null;
+  registryInit = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -262,4 +304,18 @@ export async function getEmbeddingProvider(): Promise<EmbeddingProvider | null> 
 export async function getNLPFromRegistry(): Promise<NLPProvider | null> {
   const reg = await getProviderRegistry();
   return reg.getForRole<NLPProvider>('extraction');
+}
+
+/**
+ * Generate leaf output with automatic provider fallback.
+ * Tries each provider assigned to the 'generation' role in priority order.
+ * On retryable errors (RATE_LIMIT, OVERLOADED, NETWORK_ERROR), moves to the next provider.
+ */
+export async function generateWithFallback(
+  options: Omit<GenerateOptions, 'provider'>
+): Promise<GenerateResult> {
+  const reg = await getProviderRegistry();
+  return reg.tryWithFallback<LLMProvider, GenerateResult>('generation', (provider) =>
+    generateLeafOutput({ ...options, provider })
+  );
 }

@@ -3471,6 +3471,43 @@ export async function updateProviderConfig(
 }
 
 // ============================================================================
+// Project Provider Config
+// ============================================================================
+
+export interface ProjectProviderConfig {
+  roles: RoleAssignment[];
+}
+
+export async function getProjectProviderConfig(
+  projectId: string
+): Promise<ProjectProviderConfig | null> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
+  const project = await handleResponse<{
+    project_id: string;
+    provider_config: ProjectProviderConfig | null;
+    [key: string]: unknown;
+  }>(res);
+  return project.provider_config ?? null;
+}
+
+export async function updateProjectProviderConfig(
+  projectId: string,
+  config: ProjectProviderConfig | null
+): Promise<ProjectProviderConfig | null> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider_config: config }),
+  });
+  const project = await handleResponse<{
+    project_id: string;
+    provider_config: ProjectProviderConfig | null;
+    [key: string]: unknown;
+  }>(res);
+  return project.provider_config ?? null;
+}
+
+// ============================================================================
 // Import API
 // ============================================================================
 

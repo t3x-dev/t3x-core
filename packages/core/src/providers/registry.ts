@@ -53,6 +53,30 @@ export interface TestConnectionResult {
   latencyMs?: number;
 }
 
+/** Error codes that indicate a transient failure worth retrying with a different provider. */
+const RETRYABLE_ERROR_CODES = new Set([
+  'RATE_LIMIT',
+  'OVERLOADED',
+  'NETWORK_ERROR',
+  'SERVER_ERROR',
+]);
+
+/** Error thrown when all providers in a fallback chain fail. */
+export class AllProvidersFailedError extends Error {
+  constructor(
+    public readonly role: ProviderRole,
+    public readonly errors: Array<{ providerId: string; error: unknown }>
+  ) {
+    const summary = errors
+      .map(
+        (e) => `${e.providerId}: ${e.error instanceof Error ? e.error.message : String(e.error)}`
+      )
+      .join('; ');
+    super(`All providers failed for role "${role}": ${summary}`);
+    this.name = 'AllProvidersFailedError';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Registry
 // ═══════════════════════════════════════════════════════════════════════════
@@ -101,6 +125,49 @@ export class ProviderRegistry {
    */
   getWithFallback<T extends AnyProvider>(role: ProviderRole): T | null {
     return this.getForRole<T>(role);
+  }
+
+  /**
+   * Try an operation with fallback across all providers assigned to a role.
+   * On retryable errors (RATE_LIMIT, OVERLOADED, NETWORK_ERROR, SERVER_ERROR),
+   * automatically tries the next provider. Non-retryable errors throw immediately.
+   */
+  async tryWithFallback<T extends AnyProvider, R>(
+    role: ProviderRole,
+    fn: (provider: T) => Promise<R>
+  ): Promise<R> {
+    const ids = this.roleAssignments.get(role);
+    if (!ids || ids.length === 0) {
+      throw new AllProvidersFailedError(role, [
+        { providerId: '(none)', error: new Error('No providers assigned to role') },
+      ]);
+    }
+
+    const errors: Array<{ providerId: string; error: unknown }> = [];
+
+    for (const id of ids) {
+      const instance = this.getInstance<T>(id);
+      if (!instance) {
+        errors.push({
+          providerId: id,
+          error: new Error(`Provider not configured (missing environment variables)`),
+        });
+        continue;
+      }
+
+      try {
+        return await fn(instance);
+      } catch (error) {
+        const code = isErrorWithCode(error) ? error.code : '';
+        // Non-retryable errors: throw immediately
+        if (code && !RETRYABLE_ERROR_CODES.has(code)) {
+          throw error;
+        }
+        errors.push({ providerId: id, error });
+      }
+    }
+
+    throw new AllProvidersFailedError(role, errors);
   }
 
   /**
@@ -287,6 +354,11 @@ export class ProviderRegistry {
 
   // ─── Private ───────────────────────────────────────────────────────────
 
+  /** Get the list of provider IDs assigned to a role (returns a copy). */
+  getProviderIdsForRole(role: ProviderRole): string[] {
+    return [...(this.roleAssignments.get(role) ?? [])];
+  }
+
   private getInstance<T extends AnyProvider>(id: string): T | null {
     // Return cached instance
     if (this.instances.has(id)) {
@@ -324,4 +396,9 @@ export class ProviderRegistry {
  */
 export function createProviderRegistry(): ProviderRegistry {
   return new ProviderRegistry();
+}
+
+/** Type guard for errors that carry a `code` property (e.g. GenerationError). */
+function isErrorWithCode(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && typeof (error as { code?: unknown }).code === 'string';
 }

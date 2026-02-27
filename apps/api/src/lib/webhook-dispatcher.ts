@@ -7,9 +7,10 @@
  */
 
 import { createHmac } from 'node:crypto';
-import { findWebhooksByEvent } from '@t3x/storage/pglite';
-import { getDB } from './db';
+import { findRecipesByEvent, findWebhooksByEvent } from '@t3x/storage/pglite';
 import { pinoLogger } from '../middleware/logger';
+import { getDB } from './db';
+import { executeRecipe } from './recipe-executor';
 
 export interface WebhookEvent {
   event: string;
@@ -35,7 +36,13 @@ class WebhookDispatcher {
       const db = await getDB();
       const matchingWebhooks = await findWebhooksByEvent(db, evt.event, evt.project_id);
 
-      if (matchingWebhooks.length === 0) return;
+      if (matchingWebhooks.length === 0) {
+        // No webhooks, but still check for matching recipes
+        if (evt.project_id) {
+          await this.triggerRecipes(evt);
+        }
+        return;
+      }
 
       const body = JSON.stringify({
         event: evt.event,
@@ -86,8 +93,60 @@ class WebhookDispatcher {
       });
 
       await Promise.allSettled(promises);
+
+      // Also trigger matching recipes for this event
+      if (evt.project_id) {
+        await this.triggerRecipes(evt);
+      }
     } catch (err) {
       pinoLogger.error({ err, event: evt.event }, 'Webhook dispatch error');
+    }
+  }
+
+  /**
+   * Find and execute matching recipes for the given event.
+   * Fire-and-forget — errors are logged but don't propagate.
+   */
+  private async triggerRecipes(evt: WebhookEvent): Promise<void> {
+    if (!evt.project_id) return;
+
+    try {
+      const db = await getDB();
+      const matchingRecipes = await findRecipesByEvent(db, evt.project_id, evt.event);
+
+      if (matchingRecipes.length === 0) return;
+
+      const webhookDispatch = async (url: string, payload: unknown): Promise<void> => {
+        const body = JSON.stringify(payload);
+        await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-T3X-Event': evt.event },
+          body,
+          signal: AbortSignal.timeout(10000),
+        });
+      };
+
+      for (const recipe of matchingRecipes) {
+        try {
+          const results = await executeRecipe(
+            { id: recipe.id, name: recipe.name, steps: recipe.steps },
+            { projectId: evt.project_id, event: evt.event, payload: evt.payload },
+            { webhookDispatch }
+          );
+
+          pinoLogger.info(
+            { recipe_id: recipe.id, recipe_name: recipe.name, event: evt.event, results },
+            'Recipe executed'
+          );
+        } catch (err) {
+          pinoLogger.warn(
+            { recipe_id: recipe.id, recipe_name: recipe.name, event: evt.event, err },
+            'Recipe execution failed'
+          );
+        }
+      }
+    } catch (err) {
+      pinoLogger.error({ err, event: evt.event }, 'Recipe trigger error');
     }
   }
 }

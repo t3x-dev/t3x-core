@@ -20,6 +20,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Leaf, LeafHistory } from '@t3x/core';
 // Generation functions (provided by @t3x/core)
 import {
+  AllProvidersFailedError,
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
@@ -46,7 +47,11 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
+import {
+  generateWithFallback,
+  getLLMProvider,
+  getProviderRegistry,
+} from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -671,8 +676,7 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;
-    const llmProvider = needsGeneration ? await getLLMProvider() : null;
-    if (needsGeneration && !isGenerationConfigured(llmProvider ?? undefined)) {
+    if (needsGeneration && !isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
@@ -695,13 +699,12 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
           project_id: body.project_id,
         });
 
-        // 3b. Generate output if not skipped
+        // 3b. Generate output if not skipped (uses fallback across providers)
         if (needsGeneration) {
           try {
-            const result = await generateLeafOutput({
+            const result = await generateWithFallback({
               commit,
               leaf,
-              provider: llmProvider ?? undefined,
               additionalInstructions:
                 typeof leaf.config?.user_instruction === 'string'
                   ? leaf.config.user_instruction
@@ -905,11 +908,8 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
   const _body = c.req.valid('json');
 
   try {
-    // Get LLM provider from registry (may be null if none configured)
-    const llmProvider = await getLLMProvider();
-
-    // Check if generation is configured
-    if (!isGenerationConfigured(llmProvider ?? undefined)) {
+    // Check if any generation provider is configured
+    if (!isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
       return errorResponse(
         c,
         'GENERATION_NOT_CONFIGURED',
@@ -931,11 +931,10 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
 
-    // Call generateLeafOutput (uses defaults per contract)
-    const result = await generateLeafOutput({
+    // Generate with automatic provider fallback
+    const result = await generateWithFallback({
       commit,
       leaf,
-      provider: llmProvider ?? undefined,
       additionalInstructions:
         typeof leaf.config?.user_instruction === 'string'
           ? leaf.config.user_instruction
@@ -1014,6 +1013,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
         default:
           return errorResponse(c, 'GENERATION_FAILED', err.message);
       }
+    }
+
+    // All providers failed — extract the last provider's error for status mapping
+    if (err instanceof AllProvidersFailedError) {
+      const lastErr = err.errors[err.errors.length - 1]?.error;
+      if (lastErr instanceof GenerationError && lastErr.code === 'RATE_LIMIT') {
+        return errorResponse(c, 'RATE_LIMITED', err.message);
+      }
+      return errorResponse(c, 'GENERATION_FAILED', err.message);
     }
 
     const message = err instanceof Error ? err.message : 'Unknown error';

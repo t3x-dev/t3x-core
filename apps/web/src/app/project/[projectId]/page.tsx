@@ -1,6 +1,7 @@
 'use client';
 
-import { Activity, Cpu, Search, Zap } from 'lucide-react';
+import { Activity, Cpu, Search, Settings, Zap } from 'lucide-react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
@@ -209,7 +210,16 @@ export default function ProjectDetailPage() {
         <div className="flex h-full flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{project.name}</h2>
-            <ViewSwitcher value={viewMode} onChange={setViewMode} />
+            <div className="flex items-center gap-2">
+              <ViewSwitcher value={viewMode} onChange={setViewMode} />
+              <Link
+                href={`/project/${projectId}/settings`}
+                title="Project Settings"
+                className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+              </Link>
+            </div>
           </header>
           {viewMode === 'timeline' ? (
             <TimelineView projectId={projectId} />

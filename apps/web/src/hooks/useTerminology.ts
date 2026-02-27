@@ -39,6 +39,8 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   parent_commit: { default: 'Previous', developer: 'Parent Commit' },
   branch_name: { default: 'Version', developer: 'Branch' },
   pending_changes: { default: 'In Progress', developer: 'Pending Changes' },
+  unit: { default: '单元', developer: 'Unit' },
+  leaf: { default: '输出', developer: 'Leaf' },
   conversation: { default: 'Conversation', developer: 'Conversation' },
   empty_canvas: { default: 'Start your first conversation', developer: 'Empty canvas' },
 

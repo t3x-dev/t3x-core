@@ -44,6 +44,7 @@ import { importRoutes } from './routes/import.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
+import { recipesRoutes } from './routes/recipes.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
@@ -139,6 +140,7 @@ api.route('/', shareRoutes); // /v1/share
 api.route('/', comparisonsRoutes); // /v1/comparisons
 api.route('/', templatesRoutes); // /v1/templates
 api.route('/', webhooksRoutes); // /v1/webhooks
+api.route('/', recipesRoutes); // /v1/projects/:projectId/recipes
 api.route('/', importRoutes); // /v1/import
 api.route('/', providersRoutes); // /v1/providers
 
@@ -179,6 +181,10 @@ api.doc('/openapi.json', {
       description: 'Commits v4 (pure knowledge, sentences only, no constraints)',
     },
     { name: 'Webhooks', description: 'Webhook event subscriptions' },
+    {
+      name: 'Recipes',
+      description: 'Workflow recipe automation (event-triggered action pipelines)',
+    },
     { name: 'Import', description: 'Import project data from archives' },
   ],
 });

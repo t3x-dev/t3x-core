@@ -24,6 +24,8 @@ interface RunsTableProps {
   agents?: DeployAgent[];
   maxRows?: number;
   compareModeEnabled?: boolean;
+  /** Project ID for source links */
+  projectId?: string;
 }
 
 /**
@@ -95,16 +97,18 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
         variant="outline"
         className="gap-1 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
       >
-        <Check className="h-3 w-3" />
-        passed
+        <Check className="h-3 w-3" aria-hidden="true" />
+        <span>passed</span>
+        <span className="sr-only">Evaluation passed</span>
       </Badge>
     ) : (
       <Badge
         variant="outline"
         className="gap-1 border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
       >
-        <X className="h-3 w-3" />
-        failed
+        <X className="h-3 w-3" aria-hidden="true" />
+        <span>failed</span>
+        <span className="sr-only">Evaluation failed</span>
       </Badge>
     );
   }
@@ -147,6 +151,7 @@ export function RunsTable({
   agents,
   maxRows = 15,
   compareModeEnabled = false,
+  projectId,
 }: RunsTableProps) {
   const router = useRouter();
   const { selectedRunIds, toggleRunSelection } = useOptimiserStore();
@@ -333,12 +338,13 @@ export function RunsTable({
                   variant="outline"
                   size="sm"
                   className="h-auto"
+                  aria-label={`View details for run ${run.title || run.run_id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     router.push(`/deploy/eval/${run.run_id}`);
                   }}
                 >
-                  <Eye className="mr-1 h-3 w-3" />
+                  <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
                   Detail
                 </Button>
               </TableCell>
