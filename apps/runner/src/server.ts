@@ -41,6 +41,7 @@ const allowedOrigins = process.env.CORS_ORIGINS
 app.use(cors({ origin: allowedOrigins }));
 
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Root route - service info
 app.get('/', (_req, res) => {
@@ -51,6 +52,7 @@ app.get('/', (_req, res) => {
       version: '0.2.0',
       endpoints: {
         health: 'GET /health',
+        debug_n8n: 'GET /debug/n8n-check',
         agents: 'POST /agents',
         run: 'POST /run',
         runs: 'POST /runs (Engine → n8n flow)',
@@ -64,6 +66,53 @@ app.get('/', (_req, res) => {
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', service: 't3x-runner' } });
+});
+
+// Debug: n8n API connectivity check
+app.get('/debug/n8n-check', async (_req, res) => {
+  const apiUrl = process.env.N8N_API_URL || process.env.N8N_BASE_URL || 'http://n8n:5678';
+  const hasKey = !!process.env.N8N_API_KEY;
+
+  const info: Record<string, unknown> = {
+    n8n_api_url: apiUrl,
+    has_api_key: hasKey,
+  };
+
+  if (!hasKey) {
+    res.json({
+      success: false,
+      error: { code: 'NO_API_KEY', message: 'N8N_API_KEY env var is not set' },
+      data: info,
+    });
+    return;
+  }
+
+  try {
+    const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+    const url = `${baseUrl}/api/v1/executions?limit=1`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'X-N8N-API-KEY': process.env.N8N_API_KEY!,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    info.status = response.status;
+    info.ok = response.ok;
+
+    if (!response.ok) {
+      const body = await response.text();
+      info.error_body = body.slice(0, 500);
+      res.json({ success: false, error: { code: 'API_ERROR', message: `n8n returned ${response.status}` }, data: info });
+    } else {
+      res.json({ success: true, data: info });
+    }
+  } catch (error) {
+    info.error = String(error);
+    res.json({ success: false, error: { code: 'CONNECTION_FAILED', message: String(error) }, data: info });
+  }
 });
 
 // ============================================
@@ -310,7 +359,11 @@ app.post('/callbacks/n8n', async (req, res) => {
     const data = N8nCallbackSchema.parse(req.body);
 
     logger.info(
-      { run_id: data.run_id, runner_run_id: data.runner_run_id },
+      {
+        run_id: data.run_id,
+        runner_run_id: data.runner_run_id,
+        execution_id: data.execution_id ?? '(missing)',
+      },
       'n8n callback received'
     );
 
@@ -323,7 +376,7 @@ app.post('/callbacks/n8n', async (req, res) => {
     // ASYNC PROCESSING - After n8n workflow completes
     // ═══════════════════════════════════════════════════
     // Delay to ensure n8n workflow has finished (Respond node executed)
-    const ASYNC_DELAY_MS = 3000; // 3 seconds
+    const ASYNC_DELAY_MS = 1500; // 1.5 seconds (n8n Respond node fires before workflow ends)
 
     setTimeout(async () => {
       try {
@@ -379,11 +432,14 @@ async function processN8nCallback(data: {
   // ═══════════════════════════════════════════════════
   let runRecord: RunRecord;
 
-  if (data.execution_id) {
+  // Normalize execution_id: treat empty/whitespace-only as missing
+  const executionId = data.execution_id?.trim() || undefined;
+
+  if (executionId) {
     // Full trace from n8n Execution API (with retry to ensure finished)
     try {
-      logger.info({ execution_id: data.execution_id }, 'Fetching n8n execution trace...');
-      const execution = await n8nClient.getExecutionWithRetry(data.execution_id, 5, 1000);
+      logger.info({ execution_id: executionId }, 'Fetching n8n execution trace...');
+      const execution = await n8nClient.getExecutionWithRetry(executionId, 5, 1000);
 
       // DEBUG: Log full n8n execution data to investigate tool call structure
       const runData = execution.data?.resultData?.runData;
@@ -432,12 +488,20 @@ async function processN8nCallback(data: {
         'n8n trace collected'
       );
     } catch (traceError) {
-      logger.warn({ error: String(traceError) }, 'Failed to collect n8n trace, using fallback');
+      logger.warn(
+        { execution_id: executionId, error: String(traceError) },
+        'Failed to collect n8n trace, using fallback'
+      );
       // Fallback: build minimal RunRecord from callback data
       runRecord = buildRunRecordFromCallback(data, runInfo);
     }
   } else {
     // No execution_id: build minimal RunRecord from callback data
+    logger.warn(
+      { run_id: data.run_id, runner_run_id: data.runner_run_id },
+      'No execution_id in n8n callback — falling back to minimal trace. ' +
+        'Ensure n8n HTTP Request node sends execution_id={{ $execution.id }}'
+    );
     runRecord = buildRunRecordFromCallback(data, runInfo);
   }
 
