@@ -32,6 +32,9 @@ export interface BuildPromptOptions {
 
   /** Additional instructions to include in the prompt */
   additionalInstructions?: string;
+
+  /** Lessons learned from previous generation attempts (Upgrade #4: feedback loop) */
+  lessons?: string[];
 }
 
 /**
@@ -108,6 +111,17 @@ export interface GenerateResult {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Per-leaf semantic threshold overrides.
+ * When set on Leaf.config.semantic_threshold, these override the global defaults.
+ */
+export interface SemanticThreshold {
+  /** Override for require constraint threshold (default: 0.85) */
+  require?: number;
+  /** Override for exclude constraint threshold (default: 0.70) */
+  exclude?: number;
+}
+
+/**
  * Options for validating leaf output against constraints.
  */
 export interface ValidateOptions {
@@ -119,6 +133,9 @@ export interface ValidateOptions {
 
   /** Embedder for semantic matching (optional, required for semantic constraints) */
   embedder?: EmbeddingProvider;
+
+  /** Per-leaf semantic threshold overrides (optional, falls back to global constants) */
+  semanticThreshold?: SemanticThreshold;
 }
 
 /**

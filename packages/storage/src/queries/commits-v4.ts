@@ -43,6 +43,14 @@ export interface CreateCommitV4Options {
    * Set to false for import/sync scenarios where parents may arrive later.
    */
   strictParents?: boolean;
+
+  /**
+   * If true, verify parent commits' hash integrity before insert (L1 verification).
+   * Recomputes each parent's hash and compares with stored value.
+   * Throws ParentHashIntegrityError if any parent hash is tampered.
+   * Default: false (opt-in for security-critical scenarios)
+   */
+  verifyParentHashes?: boolean;
 }
 
 /**
@@ -58,6 +66,19 @@ export class ParentNotFoundErrorV4 extends Error {
         `Use { strictParents: false } for import mode.`
     );
     this.name = 'ParentNotFoundErrorV4';
+  }
+}
+
+/**
+ * Error thrown when parent commit hash integrity check fails (L1 verification)
+ */
+export class ParentHashIntegrityError extends Error {
+  constructor(
+    public invalidParents: string[],
+    public details: string[]
+  ) {
+    super(`Parent commit hash integrity check failed: ${details.join('; ')}`);
+    this.name = 'ParentHashIntegrityError';
   }
 }
 
@@ -123,7 +144,7 @@ export async function createCommitV4(
   input: CreateCommitV4Input,
   options: CreateCommitV4Options = {}
 ): Promise<CommitV4> {
-  const { strictParents = true } = options;
+  const { strictParents = true, verifyParentHashes = false } = options;
   const parents = input.parents ?? [];
 
   // Validate parents exist if strict mode
@@ -138,6 +159,36 @@ export async function createCommitV4(
 
     if (missingParents.length > 0) {
       throw new ParentNotFoundErrorV4(missingParents, parents);
+    }
+  }
+
+  // L1 incremental verification: verify parent hash integrity (Upgrade #6)
+  if (verifyParentHashes && parents.length > 0) {
+    const parentRows = await db.select().from(commitsV4).where(inArray(commitsV4.hash, parents));
+
+    const invalidParents: string[] = [];
+    const details: string[] = [];
+
+    for (const row of parentRows) {
+      const parentCommit = rowToCommitV4(row);
+      const recomputed = computeCommitV4Hash({
+        schema: parentCommit.schema as 't3x/commit/v4',
+        parents: parentCommit.parents,
+        author: parentCommit.author,
+        committed_at: parentCommit.committed_at,
+        content: parentCommit.content,
+      });
+
+      if (recomputed !== parentCommit.hash) {
+        invalidParents.push(parentCommit.hash);
+        details.push(
+          `Parent ${parentCommit.hash.slice(0, 16)}: hash mismatch (expected ${recomputed.slice(0, 16)})`
+        );
+      }
+    }
+
+    if (invalidParents.length > 0) {
+      throw new ParentHashIntegrityError(invalidParents, details);
     }
   }
 

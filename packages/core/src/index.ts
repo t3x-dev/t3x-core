@@ -39,10 +39,14 @@ export {
 // Diff Engine
 export {
   buildSimilarityMatrix,
+  type ClassifiedCommitDiff,
+  type ClassifiedSentencePair,
+  classifyDiff,
   type CommitDiff,
   calculateDiffStats,
   createDiffEngine,
   type DiffableSentence,
+  type DiffClassification,
   DiffEngine,
   type DiffEngineConfig,
   type DiffResult,
@@ -50,6 +54,7 @@ export {
   type DiffStats,
   DiffType,
   diffCommits,
+  EQUIVALENT_THRESHOLD,
   hungarian,
   JACCARD_THRESHOLD,
   jaccard,
@@ -114,11 +119,15 @@ export {
 export {
   // Types
   type BuildPromptOptions,
+  buildCorrectivePrompt,
   type BuiltPrompt,
   // Generation (GEN-1)
   buildLeafPrompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
+  // Constraint Suggestion
+  type ConstraintSuggestionResult,
+  type CorrectivePromptOptions,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   // Default templates
@@ -138,6 +147,11 @@ export {
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
+  type SemanticThreshold,
+  type SuggestedConstraint,
+  suggestConstraints,
+  type SuggestConstraintsOptions,
+  suggestionsToConstraints,
   type ValidateOptions,
   type ValidationResult,
   // Validation (VAL-1, VAL-2)

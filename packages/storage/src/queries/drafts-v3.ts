@@ -8,6 +8,7 @@
  * Key design:
  * - Optimistic locking via `revision` column
  * - Status lifecycle: editing → committed | abandoned
+ * - Auto-draft lifecycle: auto → editing → committed | abandoned
  * - Fork creates a new draft from a committed draft
  */
 
@@ -304,4 +305,109 @@ export async function forkDraftV3(db: AnyDB, sourceDraftId: string): Promise<Dra
  */
 export async function deleteDraftV3(db: AnyDB, draftId: string): Promise<void> {
   await db.delete(draftsV3).where(eq(draftsV3.id, draftId));
+}
+
+// ============================================================
+// Auto-Draft Functions (Upgrade #7)
+// ============================================================
+
+/**
+ * Create an auto-draft for a conversation.
+ *
+ * Auto-drafts are created with status='auto' and store the conversation_id
+ * in the `goal` field for reverse lookup.
+ */
+export async function insertAutoDraftV3(
+  db: AnyDB,
+  input: {
+    project_id: string;
+    conversation_id: string;
+    title: string;
+    sentences: DraftSentence[];
+    parent_commit_hash?: string;
+    target_branch?: string;
+  }
+): Promise<Draft> {
+  const id = generateDraftV3Id();
+  const now = new Date();
+
+  const [row] = await db
+    .insert(draftsV3)
+    .values({
+      id,
+      projectId: input.project_id,
+      title: input.title,
+      goal: `auto:${input.conversation_id}`,
+      parentCommitHash: input.parent_commit_hash ?? null,
+      forkedFrom: null,
+      sentencesJson: input.sentences as DraftV3Record['sentencesJson'],
+      constraintsJson: [],
+      instructions: null,
+      previewType: null,
+      previewOutput: null,
+      previewGeneratedAt: null,
+      status: 'auto',
+      committedAs: null,
+      committedLeafId: null,
+      targetBranch: input.target_branch ?? 'main',
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return rowToDraft(row);
+}
+
+/**
+ * Find auto-drafts for a conversation.
+ *
+ * Uses the `goal` field pattern `auto:<conversation_id>` for lookup.
+ */
+export async function findAutoDraftsByConversation(
+  db: AnyDB,
+  projectId: string,
+  conversationId: string
+): Promise<Draft[]> {
+  const rows = await db
+    .select()
+    .from(draftsV3)
+    .where(
+      and(
+        eq(draftsV3.projectId, projectId),
+        eq(draftsV3.status, 'auto'),
+        eq(draftsV3.goal, `auto:${conversationId}`)
+      )
+    )
+    .orderBy(desc(draftsV3.updatedAt));
+
+  return rows.map(rowToDraft);
+}
+
+/**
+ * Promote an auto-draft to editing status (for user review before commit).
+ *
+ * @throws Error if draft is not in 'auto' status
+ */
+export async function promoteDraftV3(db: AnyDB, draftId: string): Promise<Draft> {
+  // Atomic check-and-update: WHERE id AND status='auto' prevents TOCTOU race
+  const rows = await db
+    .update(draftsV3)
+    .set({
+      status: 'editing',
+      updatedAt: new Date(),
+    })
+    .where(and(eq(draftsV3.id, draftId), eq(draftsV3.status, 'auto')))
+    .returning();
+
+  if (rows.length === 0) {
+    // Distinguish "not found" from "wrong status"
+    const existing = await findDraftV3ById(db, draftId);
+    if (!existing) {
+      throw new Error(`Draft not found: ${draftId}`);
+    }
+    throw new Error(`Cannot promote draft with status '${existing.status}' (must be 'auto')`);
+  }
+
+  return rowToDraft(rows[0]);
 }

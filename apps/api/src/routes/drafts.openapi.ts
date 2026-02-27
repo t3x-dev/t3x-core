@@ -28,8 +28,10 @@ import {
   deleteDraftV3,
   findDraftV3ById,
   forkDraftV3,
+  insertAutoDraftV3,
   insertDraftV3,
   listDraftV3ByProject,
+  promoteDraftV3,
   searchSimilarSentences,
   updateDraftV3,
   updateDraftV3Preview,
@@ -1039,6 +1041,147 @@ draftsRoutes.openapi(suggestDraftRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'SUGGEST_FAILED', message);
+  }
+});
+
+// ============================================================
+// Auto-Draft Endpoints (Upgrade #7)
+// ============================================================
+
+// POST /v1/drafts/auto
+const createAutoDraftRoute = createRoute({
+  method: 'post',
+  path: '/v1/drafts/auto',
+  tags: ['Drafts'],
+  summary: 'Create auto-draft from conversation (Upgrade #7)',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            project_id: z.string().min(1),
+            conversation_id: z.string().min(1),
+            parent_commit_hash: z.string().optional(),
+            target_branch: z.string().optional(),
+            options: z
+              .object({
+                max_sentences: z.number().int().min(1).max(100).optional(),
+              })
+              .optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Auto-draft created',
+      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponse) } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    503: {
+      description: 'LLM provider not configured',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+draftsRoutes.openapi(createAutoDraftRoute, async (c) => {
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    // 1. Extract sentences from conversation
+    const result = await extractSentencesFromConversation(body.conversation_id, body.options);
+
+    if (result.sentences.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'No sentences extracted from conversation');
+    }
+
+    // 2. Create auto-draft
+    const draft = await insertAutoDraftV3(db, {
+      project_id: body.project_id,
+      conversation_id: body.conversation_id,
+      title: `Auto-draft from ${body.conversation_id.slice(0, 16)}`,
+      sentences: result.sentences,
+      parent_commit_hash: body.parent_commit_hash,
+      target_branch: body.target_branch,
+    });
+
+    return c.json({ success: true as const, data: toApiDraft(draft) }, 201);
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'LLM_NOT_CONFIGURED',
+            message:
+              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
+          },
+        },
+        503
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'CREATE_FAILED', message);
+  }
+});
+
+// POST /v1/drafts/:id/promote
+const promoteDraftRoute = createRoute({
+  method: 'post',
+  path: '/v1/drafts/{id}/promote',
+  tags: ['Drafts'],
+  summary: 'Promote auto-draft to editing status (Upgrade #7)',
+  request: { params: IdParamSchema },
+  responses: {
+    200: {
+      description: 'Draft promoted to editing',
+      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponse) } },
+    },
+    400: {
+      description: 'Draft not in auto status',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+draftsRoutes.openapi(promoteDraftRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const promoted = await promoteDraftV3(db, id);
+
+    return c.json({ success: true as const, data: toApiDraft(promoted) }, 200);
+  } catch (err) {
+    if (err instanceof Error) {
+      if (err.message.includes('not found')) {
+        return errorResponse(c, 'NOT_FOUND', err.message);
+      }
+      if (err.message.includes('Cannot promote')) {
+        return errorResponse(c, 'INVALID_REQUEST', err.message);
+      }
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'PROMOTE_FAILED', message);
   }
 });
 

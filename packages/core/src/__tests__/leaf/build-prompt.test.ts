@@ -305,4 +305,28 @@ describe('buildLeafPrompt', () => {
     expect(typeof result.systemPrompt).toBe('string');
     expect(typeof result.userPrompt).toBe('string');
   });
+
+  it('includes lessons learned when provided', () => {
+    const commit = createTestCommit(['Test sentence']);
+    const leaf = createTestLeaf('tweet');
+    const lessons = [
+      'Previous output was too formal for Twitter',
+      'Include more hashtags for engagement',
+    ];
+
+    const result = buildLeafPrompt({ commit, leaf, lessons });
+
+    expect(result.userPrompt).toContain('Lessons Learned');
+    expect(result.userPrompt).toContain('Previous output was too formal for Twitter');
+    expect(result.userPrompt).toContain('Include more hashtags for engagement');
+  });
+
+  it('does not include lessons section when empty', () => {
+    const commit = createTestCommit(['Test sentence']);
+    const leaf = createTestLeaf('tweet');
+
+    const result = buildLeafPrompt({ commit, leaf, lessons: [] });
+
+    expect(result.userPrompt).not.toContain('Lessons Learned');
+  });
 });

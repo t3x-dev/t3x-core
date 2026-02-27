@@ -248,4 +248,70 @@ extractRoutes.openapi(extractSentencesRoute, async (c) => {
   }
 });
 
+// ============================================================
+// Extract from Leaf Output (Upgrade #4: lesson feedback loop)
+// ============================================================
+
+/**
+ * Extract sentences from a leaf's output text.
+ * Reuses the LLM extraction pipeline but treats the output as a single "turn".
+ */
+export async function extractSentencesFromLeafOutput(
+  leafId: string,
+  output: string,
+  options?: { max_sentences?: number }
+): Promise<ExtractionOutput> {
+  // Treat the leaf output as a single turn input
+  const turnInputs: TurnInput[] = [
+    {
+      conversation_id: `leaf:${leafId}`,
+      turn_hash: `leaf_output:${leafId}`,
+      role: 'assistant' as const,
+      content: output,
+    },
+  ];
+
+  const reg = await getProviderRegistry();
+  const result = await reg.tryWithFallback('generation', (provider) => {
+    const extractor = createLLMExtractor(provider);
+    return extractor.extract(turnInputs, {
+      maxSentences: options?.max_sentences ?? 20,
+    });
+  });
+
+  const { valid, removed } = validateExtractedSentences(result.sentences, turnInputs);
+
+  const draftSentences = valid.map((s, i) => ({
+    id: generateDraftSentenceId(),
+    text: s.text,
+    origin: {
+      type: 'extracted' as const,
+      segment_id: `leaf_${i}`,
+      confidence: s.confidence,
+    },
+    source: s.source_ref
+      ? {
+          conversation_id: s.source_ref.conversation_id,
+          turn_hash: s.source_ref.turn_hash,
+          role: 'assistant',
+          start_char: s.source_ref.start_char,
+          end_char: s.source_ref.end_char,
+        }
+      : undefined,
+    position: i,
+    included: true,
+  }));
+
+  return {
+    sentences: draftSentences,
+    model: result.model,
+    stats: {
+      total_turns: 1,
+      extracted: valid.length,
+      with_source_ref: valid.filter((s) => s.source_ref).length,
+      removed: removed.length,
+    },
+  };
+}
+
 export default extractRoutes;

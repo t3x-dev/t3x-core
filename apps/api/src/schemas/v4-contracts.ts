@@ -641,7 +641,7 @@ export const DraftResponse = z.object({
   preview_type: z.string().nullable(),
   preview_output: z.string().nullable(),
   preview_generated_at: z.string().nullable(),
-  status: z.enum(['editing', 'committed', 'abandoned']),
+  status: z.enum(['editing', 'committed', 'abandoned', 'auto']),
   committed_as: z.string().nullable(),
   committed_leaf_id: z.string().nullable(),
   target_branch: z.string().nullable(),

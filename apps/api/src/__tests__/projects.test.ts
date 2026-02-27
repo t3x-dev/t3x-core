@@ -2,7 +2,7 @@
  * Projects Route Tests
  */
 
-import { deleteProject, findProjects, insertProject } from '@t3x/storage';
+import { createCommitV4, deleteProject, findProjects, insertProject } from '@t3x/storage';
 import type { PGLiteDB } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -156,6 +156,55 @@ describe('Projects Routes', () => {
 
     it('returns 404 for non-existent project', async () => {
       const res = await app.request('/v1/projects/proj_nonexistent');
+      expect(res.status).toBe(404);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('GET /v1/projects/:id/verify', () => {
+    it('returns valid result for project with no commits', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Empty Verify' }));
+
+      const res = await app.request(`/v1/projects/${project.projectId}/verify`);
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.valid).toBe(true);
+      expect(data.data.total).toBe(0);
+      expect(data.data.verified_depth).toBe(0);
+      expect(data.data.entry_points).toBe(0);
+      expect(data.data.errors).toBeDefined();
+      expect(data.data.verified_at).toBeTruthy();
+    });
+
+    it('returns valid result for project with commits', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Verify With Commits' })
+      );
+
+      await createCommitV4(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', name: 'Tester' },
+        sentences: [{ id: 's_1', text: 'Test sentence' }],
+        branch: 'main',
+      });
+
+      const res = await app.request(`/v1/projects/${project.projectId}/verify`);
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.valid).toBe(true);
+      expect(data.data.total).toBe(1);
+    });
+
+    it('returns 404 for non-existent project', async () => {
+      const res = await app.request('/v1/projects/proj_nonexistent/verify');
       expect(res.status).toBe(404);
 
       const data: ApiResponse = await res.json();

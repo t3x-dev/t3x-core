@@ -22,6 +22,13 @@ export {
   type PGLiteConfig,
   type PGLiteDB,
 } from './adapters/pglite';
+// Backup & verification
+export {
+  verifyCommitHash,
+  type VerifyChainResult,
+  verifyHashChain,
+  type VerifyResult,
+} from './backup';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)

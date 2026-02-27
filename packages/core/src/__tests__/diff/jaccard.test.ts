@@ -48,7 +48,7 @@ describe('jaccard', () => {
 });
 
 describe('JACCARD_THRESHOLD', () => {
-  it('is 0.3', () => {
-    expect(JACCARD_THRESHOLD).toBe(0.3);
+  it('is 0.4', () => {
+    expect(JACCARD_THRESHOLD).toBe(0.4);
   });
 });
