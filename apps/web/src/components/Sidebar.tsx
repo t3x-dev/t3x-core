@@ -10,17 +10,13 @@ import {
   Home,
   LayoutGrid,
   ListChecks,
-  Moon,
   Rocket,
   Settings,
-  Sun,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
-import { SettingsToggle } from '@/components/shared/SettingsToggle';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -135,9 +131,6 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
   const isTemplates = pathname.startsWith('/templates');
@@ -222,6 +215,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <Rocket className="h-5 w-5" />
             </NavItem>
           )}
+
+          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
+            <BarChart3 className="h-5 w-5" />
+          </NavItem>
         </nav>
 
         {/* Project Drafts Section */}
@@ -281,10 +278,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </button>
           )}
 
-          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
-            <BarChart3 className="h-5 w-5" />
-          </NavItem>
-
           <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
             <Settings className="h-5 w-5" />
           </NavItem>
@@ -308,70 +301,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           >
             <Github className="h-5 w-5" />
           </NavItem>
-
-          {/* Developer Mode Toggle */}
-          <SettingsToggle collapsed={collapsed} />
-
-          {/* Theme Toggle — use mounted guard to avoid SSR hydration mismatch */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                    'h-10 w-10 justify-center',
-                    'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                  )}
-                  aria-label={
-                    mounted
-                      ? resolvedTheme === 'dark'
-                        ? 'Switch to light mode'
-                        : 'Switch to dark mode'
-                      : 'Toggle theme'
-                  }
-                >
-                  {mounted && resolvedTheme === 'dark' ? (
-                    <Sun className="h-5 w-5" />
-                  ) : (
-                    <Moon className="h-5 w-5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className={cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                'h-10 w-full px-3',
-                'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-              )}
-              aria-label={
-                mounted
-                  ? resolvedTheme === 'dark'
-                    ? 'Switch to light mode'
-                    : 'Switch to dark mode'
-                  : 'Toggle theme'
-              }
-            >
-              <span className="shrink-0">
-                {mounted && resolvedTheme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </span>
-              <span className="text-sm font-medium truncate">
-                {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </span>
-            </button>
-          )}
         </nav>
 
         {/* Collapse Toggle */}
