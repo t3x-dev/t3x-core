@@ -17,6 +17,13 @@ export interface ParseResult {
   raw_text: string;
 }
 
+export interface TurnProvenance {
+  turn_hash: string;
+  paragraph_index: number;
+  element_type: ParsedParagraph['type'] | 'message';
+  page?: number;
+}
+
 export interface ImportMetadata {
   source_type: 'url' | 'document' | 'platform';
   source_url?: string;
@@ -31,6 +38,7 @@ export interface ImportMetadata {
   extraction_quality?: 'good' | 'partial' | 'poor';
   page_count?: number;
   imported_at: string;
+  turn_map?: TurnProvenance[];
 }
 
 export interface ImportPreviewResult {

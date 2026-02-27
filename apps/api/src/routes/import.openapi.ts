@@ -23,9 +23,25 @@ import {
   createTurnsFromParagraphs,
   parseDocument,
   parsePlatformExport,
+  parsePlatformExportFromBuffer,
   parseUrl,
 } from '../lib/import';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+
+// Platform display labels for title prefix (RFC §6.C)
+const PLATFORM_LABELS: Record<string, string> = {
+  chatgpt: 'ChatGPT',
+  claude: 'Claude',
+  gemini: 'Gemini',
+  slack: 'Slack',
+  discord: 'Discord',
+  feishu: '飞书',
+};
+
+function prefixPlatformTitle(platform: string, title: string): string {
+  const label = PLATFORM_LABELS[platform] ?? platform;
+  return `[${label}] ${title}`;
+}
 
 // SSE helper
 function encodeSseEvent(payload: string): Uint8Array {
@@ -57,6 +73,13 @@ const ParagraphSchema = z.object({
   index: z.number(),
 });
 
+const TurnProvenanceSchema = z.object({
+  turn_hash: z.string(),
+  paragraph_index: z.number(),
+  element_type: z.enum(['heading', 'paragraph', 'list_item', 'code', 'table', 'blockquote', 'message']),
+  page: z.number().optional(),
+});
+
 const ImportMetadataSchema = z.object({
   source_type: z.enum(['url', 'document', 'platform']),
   source_url: z.string().optional(),
@@ -71,6 +94,7 @@ const ImportMetadataSchema = z.object({
   extraction_quality: z.enum(['good', 'partial', 'poor']).optional(),
   page_count: z.number().optional(),
   imported_at: z.string(),
+  turn_map: z.array(TurnProvenanceSchema).optional(),
 });
 
 const PreviewResponseSchema = z.object({
@@ -573,7 +597,8 @@ const platformPreviewRoute = createRoute({
   path: '/v1/import/platform/preview',
   tags: ['Import'],
   summary: 'Preview platform conversation export',
-  description: 'Parse ChatGPT, Claude.ai, or Gemini export files.',
+  description:
+    'Parse ChatGPT, Claude.ai, Gemini, Discord, or Feishu export files (JSON). Also supports Slack workspace export (ZIP).',
   request: {
     body: {
       content: {
@@ -630,8 +655,20 @@ importRoutes.openapi(platformPreviewRoute, async (c) => {
       );
     }
 
-    const jsonString = await file.text();
-    const result = parsePlatformExport(jsonString);
+    // Detect ZIP vs JSON by file extension or content
+    const isZip =
+      file.name?.endsWith('.zip') ||
+      file.type === 'application/zip' ||
+      file.type === 'application/x-zip-compressed';
+
+    let result;
+    if (isZip) {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      result = parsePlatformExportFromBuffer(buffer);
+    } else {
+      const jsonString = await file.text();
+      result = parsePlatformExport(jsonString);
+    }
 
     return c.json({
       success: true as const,
@@ -736,11 +773,12 @@ importRoutes.openapi(platformImportRoute, async (c) => {
 
     for (const conv of toImport) {
       const contentHash = computeContentHash(conv.messages.map((m) => m.content).join('\n'));
+      const prefixedTitle = prefixPlatformTitle(parsed.platform, conv.title);
 
       const metadata = {
         source_type: 'platform' as const,
         platform: parsed.platform,
-        title: conv.title,
+        title: prefixedTitle,
         content_hash: contentHash,
         content_length: conv.messages.reduce((acc, m) => acc + m.content.length, 0),
         imported_at: new Date().toISOString(),
@@ -750,7 +788,7 @@ importRoutes.openapi(platformImportRoute, async (c) => {
         db,
         project_id,
         conv.messages,
-        conv.title,
+        prefixedTitle,
         metadata
       );
 
@@ -758,7 +796,7 @@ importRoutes.openapi(platformImportRoute, async (c) => {
         source_id: conv.id,
         conversation_id: conversationId,
         turns_imported: turnsCreated,
-        title: conv.title,
+        title: prefixedTitle,
       });
 
       totalTurns += turnsCreated;
@@ -1034,13 +1072,15 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
         for (let i = 0; i < toImport.length; i++) {
           const conv = toImport[i];
 
+          const prefixedTitle = prefixPlatformTitle(parsed.platform, conv.title);
+
           controller.enqueue(
             encodeSseEvent(
               JSON.stringify({
                 type: 'progress',
                 current: i + 1,
                 total: totalConversations,
-                message: `Importing "${conv.title}"...`,
+                message: `Importing "${prefixedTitle}"...`,
               })
             )
           );
@@ -1050,7 +1090,7 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
           const metadata = {
             source_type: 'platform' as const,
             platform: parsed.platform,
-            title: conv.title,
+            title: prefixedTitle,
             content_hash: contentHash,
             content_length: conv.messages.reduce((acc, m) => acc + m.content.length, 0),
             imported_at: new Date().toISOString(),
@@ -1060,7 +1100,7 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
             db,
             project_id,
             conv.messages,
-            conv.title,
+            prefixedTitle,
             metadata
           );
 
@@ -1068,7 +1108,7 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
             source_id: conv.id,
             conversation_id: conversationId,
             turns_imported: turnsCreated,
-            title: conv.title,
+            title: prefixedTitle,
           });
 
           totalTurns += turnsCreated;

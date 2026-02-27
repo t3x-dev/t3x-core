@@ -6,11 +6,11 @@
  */
 
 import {
-  type LLMProvider,
-  type EmbeddingProvider,
-  type NLPProvider,
-  ProviderRegistry,
   createProviderRegistry,
+  type EmbeddingProvider,
+  type LLMProvider,
+  type NLPProvider,
+  type ProviderRegistry,
   type RegistryConfig,
 } from '@t3x/core';
 import { getGlobalSetting, setGlobalSetting } from '@t3x/storage/pglite';
@@ -124,6 +124,21 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
       return createDeepSeekProvider({
         apiKey: config.DEEPSEEK_API_KEY!,
         baseUrl: process.env.DEEPSEEK_BASE_URL,
+      });
+    },
+  });
+
+  reg.register({
+    id: 'google-ai',
+    name: 'Google AI (Gemini)',
+    role: 'generation',
+    requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
+    defaultModel: 'gemini-2.0-flash',
+    availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    factory: (config) => {
+      const { createGeminiProvider } = require('@t3x/core');
+      return createGeminiProvider({
+        apiKey: config.GOOGLE_AI_STUDIO_KEY!,
       });
     },
   });

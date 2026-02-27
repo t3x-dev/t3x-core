@@ -364,3 +364,40 @@ export interface VerifyResult {
   total: number;
   errors: string[];
 }
+
+// Import types (URL, document, platform)
+export interface ImportUrlInput {
+  url: string;
+  project_id: string;
+}
+
+export interface ImportUrlPreviewResult {
+  paragraphs: Array<{
+    text: string;
+    type: string;
+    index: number;
+  }>;
+  metadata: Record<string, unknown>;
+  estimated_turns: number;
+  duplicate_warning?: string;
+}
+
+export interface ImportUrlResult {
+  project_id: string;
+  conversation_id: string;
+  turns_imported: number;
+  metadata: Record<string, unknown>;
+  duplicate_warning?: string;
+}
+
+export interface PlatformImportResult {
+  project_id: string;
+  imported: Array<{
+    source_id: string;
+    conversation_id: string;
+    turns_imported: number;
+    title: string;
+  }>;
+  total_conversations: number;
+  total_turns: number;
+}

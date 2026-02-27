@@ -27,14 +27,17 @@ export {
   type ClaudeProviderConfig,
   createClaudeProvider,
   createDeepSeekProvider,
+  createGeminiProvider,
   createOllamaProvider,
   createOpenAIProvider,
-  type DeepSeekProviderConfig,
   DeepSeekProvider,
-  type OllamaProviderConfig,
+  type DeepSeekProviderConfig,
+  GeminiProvider,
+  type GeminiProviderConfig,
   OllamaProvider,
-  type OpenAIProviderConfig,
+  type OllamaProviderConfig,
   OpenAIProvider,
+  type OpenAIProviderConfig,
 } from './llm';
 // NLP Provider
 export {

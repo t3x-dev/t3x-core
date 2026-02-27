@@ -158,6 +158,7 @@ export {
   createCachedEmbeddingProvider,
   createClaudeProvider,
   createDeepSeekProvider,
+  createGeminiProvider,
   createGoogleAIEmbeddingProvider,
   // NLP Provider (Google Cloud)
   createGoogleCloudNLPProvider,
@@ -167,12 +168,14 @@ export {
   createOpenAIProvider,
   // Provider Registry
   createProviderRegistry,
-  type DeepSeekProviderConfig,
   DeepSeekProvider,
+  type DeepSeekProviderConfig,
   type DependencyLabel,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
+  GeminiProvider,
+  type GeminiProviderConfig,
   type GoogleAIEmbeddingConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
@@ -189,12 +192,12 @@ export {
   normalizePosTag,
   type OllamaEmbeddingConfig,
   OllamaEmbeddingProvider,
-  type OllamaProviderConfig,
   OllamaProvider,
+  type OllamaProviderConfig,
   type OpenAIEmbeddingConfig,
   OpenAIEmbeddingProvider,
-  type OpenAIProviderConfig,
   OpenAIProvider,
+  type OpenAIProviderConfig,
   POS_TAG_MAPPING,
   type ProviderEntry,
   ProviderRegistry,

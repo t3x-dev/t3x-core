@@ -22,6 +22,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
@@ -689,6 +690,7 @@ export default function LeafDetailPage() {
             onSave={handleUpdateModel}
             saving={savingModel}
             error={modelError}
+            leafId={leafId}
           />
 
           {/* ④ SOURCE CONTEXT — reference material, collapsed by default */}
@@ -1021,6 +1023,7 @@ interface ModelSelectorSectionProps {
   onSave: (model: string | undefined) => Promise<void>;
   saving: boolean;
   error?: string | null;
+  leafId: string;
 }
 
 interface ModelOption {
@@ -1034,9 +1037,11 @@ function ModelSelectorSection({
   onSave,
   saving,
   error: saveError,
+  leafId,
 }: ModelSelectorSectionProps) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1111,33 +1116,44 @@ function ModelSelectorSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <Select
-              value={currentModel ?? '__default__'}
-              onValueChange={handleChange}
-              disabled={saving}
-            >
-              <SelectTrigger className="w-full" aria-label="Select LLM model">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__default__">Default (provider default)</SelectItem>
-                <SelectSeparator />
-                {Array.from(grouped.entries()).map(([providerName, models]) => (
-                  <SelectGroup key={providerName}>
-                    <SelectLabel>{providerName}</SelectLabel>
-                    {models.map((opt) => (
-                      <SelectItem key={`${opt.providerId}:${opt.model}`} value={opt.model}>
-                        {opt.model}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={currentModel ?? '__default__'}
+                onValueChange={handleChange}
+                disabled={saving}
+              >
+                <SelectTrigger className="flex-1" aria-label="Select LLM model">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Default (provider default)</SelectItem>
+                  <SelectSeparator />
+                  {Array.from(grouped.entries()).map(([providerName, models]) => (
+                    <SelectGroup key={providerName}>
+                      <SelectLabel>{providerName}</SelectLabel>
+                      {models.map((opt) => (
+                        <SelectItem key={`${opt.providerId}:${opt.model}`} value={opt.model}>
+                          {opt.model}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCompareOpen(true)}
+                className="shrink-0"
+              >
+                Compare
+              </Button>
+            </div>
             {saveError && <p className="text-xs text-destructive">{saveError}</p>}
             <p className="text-xs text-muted-foreground">
               Choose which LLM model to use when generating output for this leaf.
             </p>
+            <CompareModelsDialog open={compareOpen} onOpenChange={setCompareOpen} leafId={leafId} />
           </div>
         )}
       </div>

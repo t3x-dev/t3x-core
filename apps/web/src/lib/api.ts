@@ -2713,6 +2713,38 @@ export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOu
 }
 
 /**
+ * Compare models result
+ */
+export interface CompareModelsResult {
+  results: Array<{
+    model: string;
+    provider_id: string;
+    output: string | null;
+    latency_ms: number;
+    error?: string;
+  }>;
+}
+
+/**
+ * Compare multiple models for a leaf
+ */
+export async function compareLeafModels(
+  leafId: string,
+  models: string[]
+): Promise<CompareModelsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/compare`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ models }),
+    },
+    300000 // 5 minutes for parallel generation
+  );
+  return handleResponse<CompareModelsResult>(res);
+}
+
+/**
  * Validate output result
  * 验证输出的结果
  */

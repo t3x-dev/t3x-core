@@ -8,9 +8,14 @@ export {
 } from './claude';
 export {
   createDeepSeekProvider,
-  type DeepSeekProviderConfig,
   DeepSeekProvider,
+  type DeepSeekProviderConfig,
 } from './deepseek';
+export {
+  createGeminiProvider,
+  GeminiProvider,
+  type GeminiProviderConfig,
+} from './gemini';
 export {
   createOllamaProvider,
   OllamaProvider,

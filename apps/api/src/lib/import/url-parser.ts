@@ -8,6 +8,7 @@
 import { sha256 } from '@t3x/core';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';
+import { trySpecialUrlParse } from './url-handlers';
 
 // Security guardrails
 const FETCH_TIMEOUT_MS = 30000;
@@ -97,6 +98,13 @@ export async function parseUrl(url: string): Promise<ParseResult> {
 
   // Validate URL (SSRF prevention)
   validateUrl(url);
+
+  // Try specialized URL handlers first (GitHub, Reddit, etc.)
+  const specialResult = await trySpecialUrlParse(url);
+  if (specialResult) {
+    setCache(url, specialResult);
+    return specialResult;
+  }
 
   // Fetch with timeout, size limit, and manual redirect following
   const controller = new AbortController();

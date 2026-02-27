@@ -1,13 +1,17 @@
 /**
  * Platform Parser
  *
- * Parses exported conversation data from ChatGPT, Claude.ai, and Gemini.
+ * Parses exported conversation data from ChatGPT, Claude.ai, Gemini, Discord, and Feishu.
+ * Also supports Slack ZIP exports via parsePlatformExportFromBuffer().
  */
 
+import { isDiscordExport, parseDiscordExport } from './discord-parser';
+import { isFeishuExport, parseFeishuExport } from './feishu-parser';
+import { isSlackExportZip, parseSlackExport } from './slack-parser';
 import type { PlatformConversation, PlatformMessage, PlatformParseResult } from './types';
 
 /**
- * Detect platform and parse exported conversation data.
+ * Detect platform and parse exported conversation data (JSON string).
  */
 export function parsePlatformExport(jsonString: string): PlatformParseResult {
   let data: unknown;
@@ -27,9 +31,28 @@ export function parsePlatformExport(jsonString: string): PlatformParseResult {
   if (isGeminiExport(data)) {
     return parseGeminiExport(data);
   }
+  if (isDiscordExport(data)) {
+    return parseDiscordExport(data);
+  }
+  if (isFeishuExport(data)) {
+    return parseFeishuExport(data);
+  }
 
   throw new Error(
-    'Unrecognized export format. Supported: ChatGPT (conversations.json), Claude.ai, Gemini.'
+    'Unrecognized export format. Supported: ChatGPT, Claude.ai, Gemini, Discord, Feishu. For Slack ZIP exports, use the file upload endpoint.'
+  );
+}
+
+/**
+ * Parse a binary platform export (ZIP files like Slack).
+ */
+export function parsePlatformExportFromBuffer(buffer: Uint8Array): PlatformParseResult {
+  if (isSlackExportZip(buffer)) {
+    return parseSlackExport(buffer);
+  }
+
+  throw new Error(
+    'Unrecognized ZIP format. Currently only Slack workspace exports are supported as ZIP files.'
   );
 }
 
