@@ -4,6 +4,6 @@
  * Export, import, and verify project data.
  */
 
-export { backupAsCfpack, backupAllProjects, type CfpackData } from './backup';
-export { restoreFromCfpack, type RestoreResult } from './restore';
-export { verifyHashChain, type VerifyResult } from './verify';
+export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup';
+export { type RestoreResult, restoreFromCfpack } from './restore';
+export { type VerifyResult, verifyHashChain } from './verify';

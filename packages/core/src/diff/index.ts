@@ -14,7 +14,7 @@ export { buildSimilarityMatrix, hungarian, type MatchPair } from './hungarian';
 export { JACCARD_THRESHOLD, jaccard } from './jaccard';
 export { lcs, wordDiff } from './lcs';
 // Word-level diff (Issue #70)
-export { tokenize } from './tokenize';
+export { lightStem, tokenize, tokenizeForMatching } from './tokenize';
 // Types
 export {
   type CommitDiff,

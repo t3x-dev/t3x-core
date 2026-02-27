@@ -6,12 +6,8 @@
  */
 
 import type { AnyDB } from '../adapters';
+import { insertConversation, insertProject, insertTurn } from '../queries';
 import type { CfpackData } from './backup';
-import {
-  insertProject,
-  insertConversation,
-  insertTurn,
-} from '../queries';
 
 export interface RestoreResult {
   project_id: string;
@@ -25,10 +21,7 @@ export interface RestoreResult {
  * Creates a new project and imports conversations and turns.
  * Name conflicts are handled by appending "_imported".
  */
-export async function restoreFromCfpack(
-  db: AnyDB,
-  cfpack: CfpackData
-): Promise<RestoreResult> {
+export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<RestoreResult> {
   // Create new project (generates new project ID)
   const project = await insertProject(db, {
     name: cfpack.project.name,

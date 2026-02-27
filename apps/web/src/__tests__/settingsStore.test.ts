@@ -10,7 +10,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
-  if (typeof globalThis.localStorage !== 'object' || typeof globalThis.localStorage.setItem === 'function') {
+  if (
+    typeof globalThis.localStorage !== 'object' ||
+    typeof globalThis.localStorage.setItem === 'function'
+  ) {
     return; // localStorage already works, no polyfill needed
   }
   const store = new Map<string, string>();
@@ -19,9 +22,13 @@ vi.hoisted(() => {
     value: {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => store.set(key, String(value)),
-      removeItem: (key: string) => { store.delete(key); },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
       clear: () => store.clear(),
-      get length() { return store.size; },
+      get length() {
+        return store.size;
+      },
       key: (index: number) => [...store.keys()][index] ?? null,
     },
   });

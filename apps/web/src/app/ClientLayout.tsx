@@ -77,6 +77,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className="flex min-h-screen bg-background">
           <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main
+            aria-label="Main content"
             className={cn(
               'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
               sidebarCollapsed ? 'ml-16' : 'ml-52'

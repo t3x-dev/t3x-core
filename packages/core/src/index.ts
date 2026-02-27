@@ -148,6 +148,7 @@ export {
 } from './merge';
 // Provider interfaces and implementations
 export {
+  AllProvidersFailedError,
   type AnyProvider,
   type CachedEmbeddingConfig,
   CachedEmbeddingProvider,

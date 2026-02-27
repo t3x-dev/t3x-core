@@ -39,6 +39,8 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   parent_commit: { default: 'Previous', developer: 'Parent Commit' },
   branch_name: { default: 'Version', developer: 'Branch' },
   pending_changes: { default: 'In Progress', developer: 'Pending Changes' },
+  unit: { default: '单元', developer: 'Unit' },
+  leaf: { default: '输出', developer: 'Leaf' },
   conversation: { default: 'Conversation', developer: 'Conversation' },
   empty_canvas: { default: 'Start your first conversation', developer: 'Empty canvas' },
 
@@ -75,6 +77,18 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   mergeReviewCancel: { default: 'Go Back', developer: 'Cancel' },
   unresolved: { default: 'Needs Decision', developer: 'Unresolved' },
   resolved: { default: 'Decided', developer: 'Resolved' },
+
+  // Batch 5: Commit/Draft/Merge workflow labels
+  commit_draft: { default: '保存草稿', developer: 'Commit Draft' },
+  commit_message: { default: '保存说明', developer: 'Commit message' },
+  committing: { default: '保存中...', developer: 'Committing...' },
+  knowledge_committed: { default: '知识已保存', developer: 'Knowledge committed' },
+  draft_committed: { default: '草稿已保存', developer: 'Draft committed' },
+  commit_failed: { default: '保存失败', developer: 'Commit failed' },
+  merge_failed: { default: '合并失败', developer: 'Merge failed' },
+  commit_created: { default: '快照已创建', developer: 'Commit Created' },
+  merge_completed: { default: '合并完成', developer: 'Merge Completed' },
+  draft_from_canvas: { default: '来自画布的草稿', developer: 'Draft from Canvas' },
 
   // Batch 4: Command palette, tooltips, empty states
   search_command: { default: '搜索命令...', developer: 'Search commands...' },

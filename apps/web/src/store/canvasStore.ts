@@ -256,7 +256,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           const virtualConv: api.Conversation = {
             conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
             project_id: projectId,
-            title: commit.message || `Commit ${commit.commit_hash.slice(0, 8)}`,
+            title:
+              commit.message ||
+              `${getTerminology('commit', useSettingsStore.getState().developerMode)} ${commit.commit_hash.slice(0, 8)}`,
             parent_commit_hash: commit.parent_hashes[0] ?? undefined,
             turns_count: 0,
             position_x: undefined,

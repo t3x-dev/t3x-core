@@ -13,6 +13,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { useBranchCommits } from '@/hooks/useBranchCommits';
+import { clearQueryCache } from '@/hooks/useQuery';
 import * as api from '@/lib/api';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ const makeLeaf = (id: string, commitHash: string) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearQueryCache();
 });
 
 afterEach(() => {

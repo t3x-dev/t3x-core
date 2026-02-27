@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { Assertion, CommitV4, Constraint, Leaf, ProviderInfo } from '@/lib/api';
 import {
   ApiError,
@@ -90,6 +91,7 @@ function getGenerateErrorMessage(error: string): {
 export default function LeafDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { t } = useTerminology();
   const projectId = params.projectId as string;
   const leafId = params.leafId as string;
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
@@ -513,7 +515,7 @@ export default function LeafDetailPage() {
               { label: 'Home', href: '/' },
               { label: projectName || 'Project', href: `/project/${projectId}` },
               {
-                label: `Commit ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
+                label: `${t('commit')} ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
                 href: `/project/${projectId}?focus=${leaf.commit_hash}`,
               },
               { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },

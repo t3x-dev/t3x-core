@@ -23,6 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { DraftSentence, DraftV3 } from '@/lib/api';
 import * as api from '@/lib/api';
 
@@ -35,6 +36,7 @@ interface DraftQuickSheetProps {
 
 export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuickSheetProps) {
   const router = useRouter();
+  const { t } = useTerminology();
   const [draft, setDraft] = useState<DraftV3 | null>(null);
   const [loading, setLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -79,14 +81,14 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     setCommitting(true);
     try {
       await api.commitDraftV3(draftId);
-      toast.success('Draft committed');
+      toast.success(t('draft_committed'));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Commit failed');
+      toast.error(err instanceof Error ? err.message : t('commit_failed'));
     } finally {
       setCommitting(false);
     }
-  }, [draft, draftId, onClose]);
+  }, [draft, draftId, onClose, t]);
 
   const handleOpenFull = useCallback(() => {
     onClose();
@@ -102,12 +104,12 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
         <SheetHeader>
           <div className="flex items-center gap-2">
             <FileEdit className="h-4 w-4 text-amber-500" />
-            <SheetTitle className="text-base">{draft?.title || 'Draft'}</SheetTitle>
+            <SheetTitle className="text-base">{draft?.title || t('draft')}</SheetTitle>
           </div>
           <SheetDescription>
             {includedCount}/{totalCount} sentences included
             {(draft?.constraints.length ?? 0) > 0 && (
-              <span> · {draft!.constraints.length} constraints</span>
+              <span> · {draft?.constraints.length ?? 0} constraints</span>
             )}
           </SheetDescription>
         </SheetHeader>
@@ -155,7 +157,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
             ) : (
               <Send className="h-3.5 w-3.5" />
             )}
-            Commit
+            {t('commitAction')}
           </Button>
         </SheetFooter>
       </SheetContent>

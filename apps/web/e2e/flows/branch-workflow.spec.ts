@@ -1,4 +1,3 @@
-import { expect, test } from '../fixtures/test';
 import {
   cleanupProject,
   createTestBranch,
@@ -8,6 +7,7 @@ import {
   listTestBranches,
   switchTestBranch,
 } from '../fixtures/api-helpers';
+import { expect, test } from '../fixtures/test';
 import { generateSentences } from '../fixtures/test-data-factory';
 
 /**

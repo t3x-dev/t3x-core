@@ -8,16 +8,24 @@
  */
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, CheckCircle2, Circle, GitMerge, Loader2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, Circle, ClipboardCopy, GitMerge, Loader2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
+import { copyToClipboard } from '@/lib/export';
+import {
+  formatReleaseNoteAsMarkdown,
+  generateMergeReleaseNote,
+  type MergeReleaseNote,
+} from '@/lib/mergeReleaseNote';
 import type { MergeSummary } from '@/lib/mergeSummary';
 import { useMicrocopy } from '@/lib/microcopy';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
 
 interface MergeReviewDialogProps {
@@ -35,6 +43,13 @@ interface MergeReviewDialogProps {
   serverChecksLoading?: boolean;
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
+  /** Merge2WayResult for release note generation */
+  prepared?: import('@t3x/core').Merge2WayResult | null;
+  /** Extended resolutions for release note generation */
+  extendedResolutions?: Record<
+    string,
+    import('@/store/mergeWorkspaceStore').ExtendedResolutionData
+  >;
 }
 
 export function MergeReviewDialog({
@@ -49,6 +64,8 @@ export function MergeReviewDialog({
   summary,
   serverChecksLoading,
   onBackToCanvas,
+  prepared,
+  extendedResolutions,
 }: MergeReviewDialogProps) {
   const { t } = useTerminology();
   const mc = useMicrocopy();
@@ -74,10 +91,53 @@ export function MergeReviewDialog({
   }, [state, onBackToCanvas]);
 
   const animatedCount = useCountUp(sentenceCount, 400, state === 'success');
+
+  // Generate release note on success
+  const releaseNote = useMemo<MergeReleaseNote | null>(() => {
+    if (state !== 'success' || !prepared || !summary) return null;
+    return generateMergeReleaseNote(
+      prepared,
+      summary,
+      sourceBranch,
+      targetBranch,
+      extendedResolutions
+    );
+  }, [state, prepared, summary, sourceBranch, targetBranch, extendedResolutions]);
+
+  // Save release note to the merge commit node in canvas store
+  useEffect(() => {
+    if (!releaseNote) return;
+    // Find the latest merge commit node and update its merge_summary with release_note
+    const { nodes, updateNode } = useCanvasStore.getState();
+    const mergeNode = nodes.find((n) => n.data.isMergeCommit && n.data.commitV4?.merge_summary);
+    if (mergeNode?.data.commitV4?.merge_summary) {
+      updateNode(mergeNode.id, {
+        commitV4: {
+          ...mergeNode.data.commitV4,
+          merge_summary: {
+            ...mergeNode.data.commitV4.merge_summary,
+            release_note: {
+              title: releaseNote.title,
+              timestamp: releaseNote.timestamp,
+              source_branch: releaseNote.sourceBranch,
+              target_branch: releaseNote.targetBranch,
+              summary: releaseNote.summary,
+              sections: releaseNote.sections,
+            },
+          },
+        },
+      });
+    }
+  }, [releaseNote]);
+
+  const handleCopyReleaseNote = useCallback(async () => {
+    if (!releaseNote) return;
+    const md = formatReleaseNoteAsMarkdown(releaseNote);
+    const ok = await copyToClipboard(md);
+    if (ok) toast.success('Release note copied');
+  }, [releaseNote]);
   // Only frontend checks gate merge; server checks are advisory warnings
-  const allChecksPassed = checks
-    .filter((c) => c.source !== 'server')
-    .every((c) => c.passed);
+  const allChecksPassed = checks.filter((c) => c.source !== 'server').every((c) => c.passed);
 
   const handleConfirm = useCallback(async () => {
     setState('committing');
@@ -86,7 +146,7 @@ export function MergeReviewDialog({
       setState('success');
     } catch (err) {
       setState('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Merge failed');
+      setErrorMsg(err instanceof Error ? err.message : t('merge_failed'));
     }
   }, [onConfirm]);
 
@@ -192,9 +252,13 @@ export function MergeReviewDialog({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: prefersReducedMotion ? 0 : 0.85, duration: 0.3 }}
               >
-                <Button onClick={onBackToCanvas}>
-                  {mc('backToCanvas')}
-                </Button>
+                <Button onClick={onBackToCanvas}>{mc('backToCanvas')}</Button>
+                {releaseNote && (
+                  <Button variant="outline" onClick={handleCopyReleaseNote} className="gap-1.5">
+                    <ClipboardCopy className="h-3.5 w-3.5" />
+                    Release Note
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={onClose}>
                   {mc('stayHere')}
                 </Button>

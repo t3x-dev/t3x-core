@@ -1,4 +1,3 @@
-import { expect, test } from '../fixtures/test';
 import {
   API_BASE,
   cleanupProject,
@@ -9,6 +8,7 @@ import {
   createTestProject,
   createTestTurn,
 } from '../fixtures/api-helpers';
+import { expect, test } from '../fixtures/test';
 import { generateSentences } from '../fixtures/test-data-factory';
 
 /**

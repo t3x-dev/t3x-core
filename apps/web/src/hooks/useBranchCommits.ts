@@ -3,9 +3,9 @@
  * Used by PinDropdownSelector to display branch-scoped commit browsing.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CommitV4, Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
+import { useQuery } from './useQuery';
 
 export interface CommitWithLeaves {
   commit: CommitV4;
@@ -23,23 +23,12 @@ export function useBranchCommits(
   projectId: string | undefined,
   branch: string | undefined
 ): UseBranchCommitsState {
-  const [data, setData] = useState<CommitWithLeaves[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const mountedRef = useRef(true);
+  const enabled = !!projectId && !!branch;
 
-  const doFetch = useCallback(async () => {
-    if (!projectId || !branch) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const commits = await api.listCommitsV4(projectId, branch, 200, 0);
+  const { data, isLoading, error, refetch } = useQuery<CommitWithLeaves[]>({
+    queryKey: ['branchCommits', projectId, branch],
+    queryFn: async () => {
+      const commits = await api.listCommitsV4(projectId!, branch!, 200, 0);
 
       const results: CommitWithLeaves[] = await Promise.all(
         commits.map(async (commit) => {
@@ -52,30 +41,15 @@ export function useBranchCommits(
         })
       );
 
-      if (mountedRef.current) {
-        setData(results);
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [projectId, branch]);
+      return results;
+    },
+    enabled,
+  });
 
-  useEffect(() => {
-    doFetch();
-  }, [doFetch]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  return { data, loading, error, refetch: doFetch };
+  return {
+    data: enabled ? data : null,
+    loading: isLoading,
+    error,
+    refetch,
+  };
 }

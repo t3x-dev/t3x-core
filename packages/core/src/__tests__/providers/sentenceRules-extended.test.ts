@@ -247,6 +247,63 @@ describe('splitSentencesRuleBased (extended)', () => {
   });
 
   // =========================================================================
+  // Tech names and file extensions (isDotSentenceBoundary)
+  // =========================================================================
+  describe('tech names and file extensions', () => {
+    it('does not split on Node.js', () => {
+      const sentences = splitSentencesRuleBased('We use Node.js for the backend. It is fast.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('Node.js');
+    });
+
+    it('does not split on file extensions like index.ts', () => {
+      const sentences = splitSentencesRuleBased('Edit the file index.ts to fix it. Then rebuild.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('index.ts');
+    });
+
+    it('does not split on config.yaml', () => {
+      const sentences = splitSentencesRuleBased(
+        'Check config.yaml for settings. Update if needed.'
+      );
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('config.yaml');
+    });
+
+    it('does not split on App.tsx', () => {
+      const sentences = splitSentencesRuleBased('Open App.tsx and add the component. Save it.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('App.tsx');
+    });
+
+    it('does not split on docs.example.com', () => {
+      const sentences = splitSentencesRuleBased(
+        'Visit docs.example.com for details. It has guides.'
+      );
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('docs.example.com');
+    });
+
+    it('does not split on U.S. economy', () => {
+      const sentences = splitSentencesRuleBased('The U.S. economy grew. Exports rose.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('U.S. economy');
+    });
+
+    it('correctly splits after tech name at sentence end', () => {
+      const sentences = splitSentencesRuleBased('We use Node.js. React is popular.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts).toEqual(['We use Node.js.', 'React is popular.']);
+    });
+
+    it('does not split on version numbers like v2.0', () => {
+      const sentences = splitSentencesRuleBased('Upgrade to v2.0 now. It has fixes.');
+      const texts = sentences.map((s) => s.text);
+      expect(texts[0]).toContain('v2.0');
+    });
+  });
+
+  // =========================================================================
   // Mixed content
   // =========================================================================
   describe('mixed content', () => {

@@ -133,6 +133,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <TooltipProvider delayDuration={0}>
       <aside
+        aria-label="Main navigation"
         className={cn(
           'fixed left-0 top-0 z-40 flex h-screen flex-col border-r py-4',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',

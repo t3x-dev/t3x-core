@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   Eye,
+  FileOutput,
   FilePlus,
   FileText,
   GitBranch,
@@ -230,18 +231,20 @@ function CommitV3Content({
   commit,
   onViewFull,
   projectId,
+  maxSentences = PREVIEW_MAX_SENTENCES,
 }: {
   commit: CommitV3Display;
   onViewFull?: () => void;
   projectId?: string;
+  maxSentences?: number;
 }) {
   // Check if we have source context for truncated view
   const sentencesWithSource = commit.sentences.filter((s) => s.source?.turn_hash);
   const hasSourceContext = sentencesWithSource.length > 0;
 
   // Preview mode: limit sentences and constraints
-  const displaySentences = commit.sentences.slice(0, PREVIEW_MAX_SENTENCES);
-  const remainingSentences = commit.sentences.length - PREVIEW_MAX_SENTENCES;
+  const displaySentences = commit.sentences.slice(0, maxSentences);
+  const remainingSentences = commit.sentences.length - maxSentences;
   const displayConstraints = commit.constraints.slice(0, PREVIEW_MAX_CONSTRAINTS);
   const remainingConstraints = commit.constraints.length - PREVIEW_MAX_CONSTRAINTS;
 
@@ -323,14 +326,16 @@ function CommitV4Content({
   commit,
   onViewFull,
   projectId: _projectId, // Reserved for future TruncatedCommitView integration
+  maxSentences = PREVIEW_MAX_SENTENCES,
 }: {
   commit: CommitV4Display;
   onViewFull?: () => void;
   projectId?: string;
+  maxSentences?: number;
 }) {
   const sentences = commit.content.sentences;
-  const displaySentences = sentences.slice(0, PREVIEW_MAX_SENTENCES);
-  const remainingSentences = sentences.length - PREVIEW_MAX_SENTENCES;
+  const displaySentences = sentences.slice(0, maxSentences);
+  const remainingSentences = sentences.length - maxSentences;
 
   return (
     <div className="commit-v4-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
@@ -417,9 +422,14 @@ function CommitV4Content({
   );
 }
 
-// Constellation mode — zoom hysteresis thresholds
-const CONSTELLATION_ENTER = 0.35;
-const CONSTELLATION_EXIT = 0.45;
+// Semantic zoom — 3-tier with hysteresis
+// overview (dots) at very low zoom, default (cards), detail (expanded) at high zoom
+type ZoomTier = 'overview' | 'default' | 'detail';
+
+const OVERVIEW_ENTER = 0.35;
+const OVERVIEW_EXIT = 0.45;
+const DETAIL_ENTER = 1.2;
+const DETAIL_EXIT = 1.0;
 
 const constellationColors: Record<string, string> = {
   committed: '#3b82f6',
@@ -428,24 +438,27 @@ const constellationColors: Record<string, string> = {
   leaf: '#10b981',
 };
 
-function useConstellationMode(): boolean {
+function useSemanticZoom(): ZoomTier {
   const zoom = useStore((s) => s.transform[2]);
-  const minifiedRef = useRef(false);
+  const tierRef = useRef<ZoomTier>('default');
 
-  if (minifiedRef.current && zoom > CONSTELLATION_EXIT) {
-    minifiedRef.current = false;
-  } else if (!minifiedRef.current && zoom < CONSTELLATION_ENTER) {
-    minifiedRef.current = true;
+  if (tierRef.current === 'overview' && zoom > OVERVIEW_EXIT) {
+    tierRef.current = zoom > DETAIL_ENTER ? 'detail' : 'default';
+  } else if (tierRef.current === 'default') {
+    if (zoom < OVERVIEW_ENTER) tierRef.current = 'overview';
+    else if (zoom > DETAIL_ENTER) tierRef.current = 'detail';
+  } else if (tierRef.current === 'detail' && zoom < DETAIL_EXIT) {
+    tierRef.current = zoom < OVERVIEW_ENTER ? 'overview' : 'default';
   }
 
-  return minifiedRef.current;
+  return tierRef.current;
 }
 
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
 function UnitNode(props: Props) {
   const { data, selected, id } = props;
   const [leavesExpanded, setLeavesExpanded] = useState(false);
-  const [contentExpanded, setContentExpanded] = useState(false);
+  const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
   const [showLineage, setShowLineage] = useState(false);
   const lineageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -453,7 +466,11 @@ function UnitNode(props: Props) {
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
   const prefersReducedMotion = useReducedMotion();
-  const isConstellation = useConstellationMode();
+  const zoomTier = useSemanticZoom();
+  const isConstellation = zoomTier === 'overview';
+  const isDetail = zoomTier === 'detail';
+  // Detail zoom tier auto-expands content and leaves
+  const contentExpanded = contentExpandedManual || isDetail;
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
@@ -462,6 +479,7 @@ function UnitNode(props: Props) {
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const leafContextMenuHandler = useCanvasStore((state) => state.leafContextMenuHandler);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -743,7 +761,7 @@ function UnitNode(props: Props) {
             : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isDraft ? 'Draft' : isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
+        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
         aria-selected={selected}
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
@@ -904,8 +922,9 @@ function UnitNode(props: Props) {
             </h4>
             {isDraft ? (
               <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
-                <PenSquare size={10} />
+                <PenSquare size={10} aria-hidden="true" />
                 DRAFT
+                <span className="sr-only">Status: draft</span>
               </span>
             ) : (
               <TooltipProvider delayDuration={200}>
@@ -995,7 +1014,7 @@ function UnitNode(props: Props) {
               className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-1 rounded hover:bg-[var(--hover-bg)] transition-colors nodrag"
               onClick={(e) => {
                 e.stopPropagation();
-                setContentExpanded((prev) => !prev);
+                setContentExpandedManual((prev) => !prev);
               }}
             >
               <span>Details</span>
@@ -1058,8 +1077,44 @@ function UnitNode(props: Props) {
                   ];
                   if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);
                   return (
-                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 truncate">
-                      {parts.join(' · ')}
+                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 flex items-center gap-1.5">
+                      <span className="truncate">{parts.join(' · ')}</span>
+                      {ms.release_note && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="shrink-0 p-0.5 rounded hover:bg-[var(--hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const note = ms.release_note!;
+                                  const md = [
+                                    `# ${note.title}`,
+                                    '',
+                                    `**Summary:** ${note.summary}`,
+                                    '',
+                                  ];
+                                  for (const sec of note.sections) {
+                                    md.push(`## ${sec.heading}`, '');
+                                    for (const item of sec.items) md.push(`- ${item}`);
+                                    md.push('');
+                                  }
+                                  navigator.clipboard.writeText(md.join('\n')).then(
+                                    () => notify?.('Release note copied', 'success'),
+                                    () => notify?.('Failed to copy', 'error')
+                                  );
+                                }}
+                              >
+                                <FileOutput size={10} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Copy release note
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   );
                 })()}
@@ -1111,6 +1166,7 @@ function UnitNode(props: Props) {
                   commit={data.commitV4}
                   onViewFull={() => openNodeModal(id, 'commit')}
                   projectId={projectId}
+                  maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}
                 />
               )}
               {data.commitV3 && !data.commitV4 && (
@@ -1118,6 +1174,7 @@ function UnitNode(props: Props) {
                   commit={data.commitV3}
                   onViewFull={() => openNodeModal(id, 'commit')}
                   projectId={projectId}
+                  maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}
                 />
               )}
             </>
@@ -1148,12 +1205,12 @@ function UnitNode(props: Props) {
                 size={12}
                 className={cn(
                   'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
-                  leavesExpanded && 'rotate-90'
+                  (leavesExpanded || isDetail) && 'rotate-90'
                 )}
               />
             </button>
             <AnimatePresence>
-              {leavesExpanded && (
+              {(leavesExpanded || isDetail) && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -1208,6 +1265,7 @@ function UnitNode(props: Props) {
                           key={leaf.id}
                           data-node-type="leaf"
                           className="group/leaf flex items-center gap-1"
+                          onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, id)}
                         >
                           {leafHref ? (
                             <Link

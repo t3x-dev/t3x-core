@@ -76,7 +76,15 @@ const ParagraphSchema = z.object({
 const TurnProvenanceSchema = z.object({
   turn_hash: z.string(),
   paragraph_index: z.number(),
-  element_type: z.enum(['heading', 'paragraph', 'list_item', 'code', 'table', 'blockquote', 'message']),
+  element_type: z.enum([
+    'heading',
+    'paragraph',
+    'list_item',
+    'code',
+    'table',
+    'blockquote',
+    'message',
+  ]),
   page: z.number().optional(),
 });
 

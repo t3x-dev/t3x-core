@@ -294,16 +294,16 @@ Respond in JSON (use EXACTLY these field names):
           if (typeof a.details === 'string' || typeof a.constraint_id === 'string') {
             return {
               id: typeof a.id === 'string' ? a.id : `assert_${String(idx).padStart(3, '0')}`,
-              type: typeof a.passed === 'boolean' ? (a.passed ? 'pass' : 'fail') : (a.type || 'fail'),
+              type: typeof a.passed === 'boolean' ? (a.passed ? 'pass' : 'fail') : a.type || 'fail',
               category: a.category || 'behavior',
-              message: typeof a.details === 'string' ? a.details : (a.message || ''),
+              message: typeof a.details === 'string' ? a.details : a.message || '',
               evidence_refs: a.evidence_refs || [],
               confidence: typeof a.confidence === 'number' ? a.confidence : 0.8,
               patch_suggestion: typeof a.lesson === 'string' ? a.lesson : a.patch_suggestion,
               // Carry forward new-format fields so ingest can read them
               constraint_id: typeof a.constraint_id === 'string' ? a.constraint_id : `eval_${idx}`,
               passed: typeof a.passed === 'boolean' ? a.passed : a.type === 'pass',
-              details: typeof a.details === 'string' ? a.details : (a.message || ''),
+              details: typeof a.details === 'string' ? a.details : a.message || '',
               lesson: typeof a.lesson === 'string' ? a.lesson : a.patch_suggestion,
             };
           }

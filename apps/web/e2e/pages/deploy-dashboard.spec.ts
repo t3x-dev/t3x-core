@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures/test';
 import { cleanupDeployAgent, createTestDeployAgent } from '../fixtures/api-helpers';
 import { DeployPage } from '../fixtures/page-objects/deploy-page';
+import { expect, test } from '../fixtures/test';
 import { isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**

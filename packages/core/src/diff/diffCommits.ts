@@ -18,7 +18,7 @@
 import { buildSimilarityMatrix, hungarian } from './hungarian';
 import { JACCARD_THRESHOLD, jaccard } from './jaccard';
 import { wordDiff } from './lcs';
-import { tokenize } from './tokenize';
+import { tokenizeForMatching } from './tokenize';
 import type { CommitDiff, DiffableSentence, SentencePair } from './types';
 
 /**
@@ -80,8 +80,8 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
 
   // Pre-tokenize all unmatched sentences for efficiency
   // 预先分词以提高效率
-  const tokenizedA = unmatchedA.map((s) => ({ sentence: s, tokens: tokenize(s.text) }));
-  const tokenizedB = unmatchedB.map((s) => ({ sentence: s, tokens: tokenize(s.text) }));
+  const tokenizedA = unmatchedA.map((s) => ({ sentence: s, tokens: tokenizeForMatching(s.text) }));
+  const tokenizedB = unmatchedB.map((s) => ({ sentence: s, tokens: tokenizeForMatching(s.text) }));
 
   // Build similarity matrix
   // 构建相似度矩阵

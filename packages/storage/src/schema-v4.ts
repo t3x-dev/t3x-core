@@ -15,6 +15,7 @@
  */
 
 import {
+  boolean,
   customType,
   index,
   integer,
@@ -125,6 +126,14 @@ export const commitsV4 = pgTable(
       kept_from_target: number;
       discarded: number;
       total_sentences: number;
+      release_note?: {
+        title: string;
+        timestamp: string;
+        source_branch: string;
+        target_branch: string;
+        summary: string;
+        sections: Array<{ heading: string; items: string[] }>;
+      };
     }>(),
 
     /** Canvas position */
@@ -732,3 +741,38 @@ export const sentenceVectors = pgTable(
 
 export type SentenceVectorRecord = typeof sentenceVectors.$inferSelect;
 export type SentenceVectorInsert = typeof sentenceVectors.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// recipes: Workflow Recipes
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Recipes define automated workflows triggered by T3X events.
+ *
+ * Each recipe has a trigger (event + optional filter) and a sequence of steps
+ * (send_webhook, run_eval, export_report) that execute when the event fires.
+ */
+export const recipes = pgTable('recipes', {
+  id: text('id').primaryKey(), // recipe_{nanoid}
+  project_id: text('project_id')
+    .notNull()
+    .references(() => projects.projectId),
+  name: text('name').notNull(),
+  description: text('description'),
+  trigger: jsonb('trigger').notNull().$type<{
+    event: string; // e.g. 'merge.completed', 'leaf.generated', 'commit.created'
+    filter?: Record<string, string>; // optional event field filters
+  }>(),
+  steps: jsonb('steps').notNull().$type<
+    Array<{
+      action: 'send_webhook' | 'run_eval' | 'export_report';
+      config: Record<string, unknown>;
+    }>
+  >(),
+  enabled: boolean('enabled').notNull().default(true),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type RecipeRecord = typeof recipes.$inferSelect;
+export type RecipeInsert = typeof recipes.$inferInsert;

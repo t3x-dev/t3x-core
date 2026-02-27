@@ -165,10 +165,7 @@ export function WelcomeModal() {
 
             {/* CTAs */}
             <div className="flex flex-col items-center gap-3 w-full">
-              <Button
-                onClick={handleCreateProject}
-                className="w-full text-sm font-medium"
-              >
+              <Button onClick={handleCreateProject} className="w-full text-sm font-medium">
                 Create Your First Project
               </Button>
 
