@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { FileText, GitCommit, MessageCircle } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTerminology } from '@/hooks/useTerminology';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
 
 export interface TraceNode {
@@ -25,7 +26,13 @@ const nodeConfig = {
   conversation: { icon: MessageCircle, color: '#6366f1', label: 'Turn' },
 } as const;
 
-function HighlightedText({ text, highlight }: { text: string; highlight?: { start: number; end: number } }) {
+function HighlightedText({
+  text,
+  highlight,
+}: {
+  text: string;
+  highlight?: { start: number; end: number };
+}) {
   if (!highlight || highlight.start >= text.length) {
     return <span>{text}</span>;
   }
@@ -43,17 +50,13 @@ function HighlightedText({ text, highlight }: { text: string; highlight?: { star
 }
 
 export function TraceTimeline({ nodes, className }: TraceTimelineProps) {
+  const { t } = useTerminology();
   const prefersReducedMotion = useReducedMotion();
   const container = prefersReducedMotion ? reducedMotion.fadeIn : staggerContainer;
   const item = prefersReducedMotion ? reducedMotion.fadeIn : staggerItem;
 
   return (
-    <motion.div
-      variants={container}
-      initial="initial"
-      animate="animate"
-      className={className}
-    >
+    <motion.div variants={container} initial="initial" animate="animate" className={className}>
       {nodes.map((node, i) => {
         const config = nodeConfig[node.type];
         const Icon = config.icon;
@@ -84,15 +87,13 @@ export function TraceTimeline({ nodes, className }: TraceTimelineProps) {
             <div className="flex-1 pb-5">
               <div className="flex items-baseline gap-2">
                 <span className="text-xs font-medium" style={{ color: config.color }}>
-                  {config.label}
+                  {node.type === 'commit' ? t('commit') : config.label}
                 </span>
                 {node.meta && (
                   <span className="text-xs text-[var(--text-tertiary)]">{node.meta}</span>
                 )}
               </div>
-              <p className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">
-                {node.title}
-              </p>
+              <p className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">{node.title}</p>
               {node.subtitle && (
                 <p className="text-xs text-[var(--text-tertiary)]">{node.subtitle}</p>
               )}

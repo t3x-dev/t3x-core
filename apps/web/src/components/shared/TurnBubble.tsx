@@ -166,7 +166,9 @@ export function TurnBubble({
             {new Date(turn.created_at).toLocaleTimeString()}
           </span>
         </div>
-        <p className="text-sm whitespace-pre-wrap break-words text-[var(--text-primary)]">{renderContent()}</p>
+        <p className="text-sm whitespace-pre-wrap break-words text-[var(--text-primary)]">
+          {renderContent()}
+        </p>
       </div>
     </div>
   );

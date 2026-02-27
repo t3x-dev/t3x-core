@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/lib/api';
 
 const WEBHOOK_EVENTS = [
@@ -38,6 +39,7 @@ interface WebhookFormProps {
 }
 
 export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: WebhookFormProps) {
+  const { t } = useTerminology();
   const isEdit = webhook !== null;
 
   const [url, setUrl] = useState(webhook?.url ?? '');
@@ -131,7 +133,11 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
               />
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium text-[var(--text-primary)]">
-                  {event.label}
+                  {event.value === 'commit.created'
+                    ? t('commit_created')
+                    : event.value === 'merge.completed'
+                      ? t('merge_completed')
+                      : event.label}
                 </span>
                 <span className="text-xs text-[var(--text-tertiary)]">{event.description}</span>
               </div>

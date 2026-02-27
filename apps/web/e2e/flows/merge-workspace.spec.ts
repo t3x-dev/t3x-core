@@ -1,4 +1,3 @@
-import { expect, test } from '../fixtures/test';
 import {
   API_BASE,
   cleanupProject,
@@ -7,6 +6,7 @@ import {
   createTestProject,
 } from '../fixtures/api-helpers';
 import { MergePage } from '../fixtures/page-objects/merge-page';
+import { expect, test } from '../fixtures/test';
 
 /**
  * Merge Workspace E2E Tests

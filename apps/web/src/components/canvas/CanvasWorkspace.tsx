@@ -32,6 +32,7 @@ import { canvasNodeTypes } from './CanvasNodes';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import {
   buildBackgroundMenu,
+  buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
   NodeContextMenu,
@@ -118,7 +119,7 @@ function CanvasWorkspaceInner({
     groups: ContextMenuGroup[];
   } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView } = useReactFlow();
+  const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
@@ -240,6 +241,56 @@ function CanvasWorkspaceInner({
     [addNode, notify, fitView, handleAutoLayout]
   );
 
+  // Leaf context menu handler — called from CanvasNodes when right-clicking a leaf inside a unit node
+  const handleLeafContextMenu = useCallback(
+    (event: React.MouseEvent, leafId: string, nodeId: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const groups = buildLeafNodeMenu({
+        onOpenDetail: () => {
+          const node = getNodes().find((n) => n.id === nodeId);
+          const leaves = node?.data.leaves as Array<{ id: string }> | undefined;
+          const leaf = leaves?.find((l) => l.id === leafId);
+          if (leaf && projectId) {
+            window.location.href = `/project/${projectId}/leaf/${leafId}`;
+          }
+        },
+        onGenerate: () => {
+          useCanvasStore.getState().openLeafPanel(nodeId);
+        },
+        onShare: () => {
+          if (projectId) {
+            const url = `${window.location.origin}/project/${projectId}/leaf/${leafId}`;
+            navigator.clipboard.writeText(url);
+            notify?.('Link copied to clipboard', 'success');
+          }
+        },
+        onExport: () => {
+          if (projectId) {
+            window.open(`/project/${projectId}/leaf/${leafId}`, '_blank');
+          }
+        },
+        onDelete: () => {
+          useCanvasStore.getState().removeLeafFromNode(nodeId, leafId);
+        },
+      });
+      setContextMenu({ x: event.clientX, y: event.clientY, groups });
+    },
+    [getNodes, projectId, notify]
+  );
+
+  // Store leaf context menu handler ref for CanvasNodes to access
+  const leafContextMenuRef = useRef(handleLeafContextMenu);
+  leafContextMenuRef.current = handleLeafContextMenu;
+
+  // Expose leaf context menu handler via store for CanvasNodes
+  useEffect(() => {
+    useCanvasStore.setState({ leafContextMenuHandler: handleLeafContextMenu });
+    return () => {
+      useCanvasStore.setState({ leafContextMenuHandler: undefined });
+    };
+  }, [handleLeafContextMenu]);
+
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
     if (!openNodeId) {
@@ -357,28 +408,53 @@ function CanvasWorkspaceInner({
       });
 
       if (bestNodeId) {
+        const targetNode = currentNodes.find((n) => n.id === bestNodeId);
         setNodes(
           currentNodes.map((node) => ({
             ...node,
             selected: node.id === bestNodeId,
           }))
         );
+        // Auto-pan viewport to follow selected node
+        if (targetNode) {
+          setCenter(targetNode.position.x + 100, targetNode.position.y + 50, { duration: 200 });
+        }
       }
     },
-    [getNodes, setNodes]
+    [getNodes, setNodes, setCenter]
   );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't handle shortcuts when modal is open or typing in input
+      // Don't handle shortcuts when typing in input
       const target = event.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
-      // Pan mode toggle (Meta/Ctrl held)
+      // Pan mode toggle (Meta/Ctrl held) — always allowed
       if (event.key === 'Meta' || event.key === 'Control') {
         setIsPanMode(true);
+      }
+
+      // Don't handle navigation shortcuts when modal/dialog is open
+      if (openNodeId || showShortcuts) {
+        return;
+      }
+
+      // Space: toggle pan mode (skip when focus is on interactive elements)
+      if (event.key === ' ') {
+        if (
+          target.tagName === 'BUTTON' ||
+          target.tagName === 'SELECT' ||
+          target.getAttribute('role') === 'button' ||
+          target.getAttribute('role') === 'combobox'
+        ) {
+          return;
+        }
+        event.preventDefault();
+        setIsPanMode((prev) => !prev);
+        return;
       }
 
       // Select all (Ctrl/Cmd+A)
@@ -458,7 +534,16 @@ function CanvasWorkspaceInner({
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [selectAllNodes, deselectAllNodes, navigateToNode, getNodes, setNodes, openNodeModal]);
+  }, [
+    selectAllNodes,
+    deselectAllNodes,
+    navigateToNode,
+    getNodes,
+    setNodes,
+    openNodeModal,
+    openNodeId,
+    showShortcuts,
+  ]);
 
   // Keyboard shortcut help dialog toggle (? key)
   useEffect(() => {
@@ -1058,7 +1143,7 @@ function CanvasWorkspaceInner({
                   {
                     icon: GitCommitHorizontal,
                     title: 'Extract Knowledge',
-                    desc: 'Commit semantic content from your conversations',
+                    desc: `${t('commitAction')} semantic content from your conversations`,
                   },
                   {
                     icon: FileOutput,
@@ -1252,6 +1337,36 @@ function CanvasWorkspaceInner({
                   <span className="text-xs text-[var(--text-secondary)]">Deselect all</span>
                   <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
                     Escape
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Cycle nodes</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      Tab
+                    </kbd>
+                    <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
+                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                      ⇧Tab
+                    </kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Navigate nodes</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    Arrow keys
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Open node</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    Enter
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">Toggle pan mode</span>
+                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
+                    Space
                   </kbd>
                 </div>
               </div>

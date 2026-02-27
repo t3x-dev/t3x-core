@@ -113,4 +113,6 @@ export type CanvasState = MergeSlice &
     updateNodeId: (oldId: string, newId: string) => void;
     // Get direct upstream source nodes for a pending commit
     getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
+    // Leaf context menu handler (set by CanvasWorkspace, consumed by CanvasNodes)
+    leafContextMenuHandler?: (event: React.MouseEvent, leafId: string, nodeId: string) => void;
   };

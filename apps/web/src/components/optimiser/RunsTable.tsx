@@ -192,9 +192,7 @@ export function RunsTable({
             {projectName || projectId}
           </Link>
         ) : null}
-        {hasProject && hasLeaf && (
-          <span className="text-muted-foreground/60">→</span>
-        )}
+        {hasProject && hasLeaf && <span className="text-muted-foreground/60">→</span>}
         {hasLeaf ? (
           isActualLeaf && hasProject ? (
             <Link

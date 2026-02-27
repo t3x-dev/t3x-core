@@ -74,5 +74,10 @@ export interface PendingRun {
   engine_callback_url: string;
   started_at: string;
   inputs?: Record<string, unknown>;
-  leaf?: { id: string; type: 'deploy' | 'deploy_agent' | 'eval'; content?: string; rules_ref?: string };
+  leaf?: {
+    id: string;
+    type: 'deploy' | 'deploy_agent' | 'eval';
+    content?: string;
+    rules_ref?: string;
+  };
 }

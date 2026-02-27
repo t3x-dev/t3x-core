@@ -179,7 +179,12 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new GenerationError(`Provider generation failed: ${message}`, 'API_ERROR', undefined, error);
+        throw new GenerationError(
+          `Provider generation failed: ${message}`,
+          'API_ERROR',
+          undefined,
+          error
+        );
       }
     } else {
       // Legacy Anthropic direct path

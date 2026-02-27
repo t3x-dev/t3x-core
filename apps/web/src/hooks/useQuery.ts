@@ -1,106 +1,99 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  dedup,
-  getCacheEntry,
-  invalidateCache,
-  isStale,
-  setCacheEntry,
-  setCacheError,
-} from '@/lib/queryClient';
 
-export interface UseQueryOptions {
-  /** Time in ms before cached data is considered stale (default: 30000) */
-  staleTime?: number;
-  /** Whether to fetch on mount (default: true) */
+interface UseQueryOptions<T> {
+  queryKey: unknown[];
+  queryFn: () => Promise<T>;
   enabled?: boolean;
-  /** Refetch interval in ms (0 = disabled, default: 0) */
-  refetchInterval?: number;
+  staleTime?: number;
 }
 
-export interface UseQueryResult<T> {
-  data: T | undefined;
-  error: Error | undefined;
+interface UseQueryResult<T> {
+  data: T | null;
   isLoading: boolean;
-  isRefetching: boolean;
-  refetch: () => Promise<void>;
-  invalidate: () => void;
+  error: Error | null;
+  refetch: () => void;
 }
 
-export function useQuery<T>(
-  key: string | null,
-  fetcher: () => Promise<T>,
-  options: UseQueryOptions = {}
-): UseQueryResult<T> {
-  const { staleTime = 30_000, enabled = true, refetchInterval = 0 } = options;
-  const [, forceUpdate] = useState(0);
-  const rerender = useCallback(() => forceUpdate((n) => n + 1), []);
+// Simple cache for deduplication
+const queryCache = new Map<string, { data: unknown; timestamp: number }>();
+
+function getCacheKey(queryKey: unknown[]): string {
+  return JSON.stringify(queryKey);
+}
+
+export function useQuery<T>({
+  queryKey,
+  queryFn,
+  enabled = true,
+  staleTime = 30000,
+}: UseQueryOptions<T>): UseQueryResult<T> {
+  const [data, setData] = useState<T | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const mountedRef = useRef(true);
-  const fetchingRef = useRef(false);
+  const queryFnRef = useRef(queryFn);
+  queryFnRef.current = queryFn;
 
-  // Use ref for fetcher to avoid triggering effects on every render
-  // when callers pass inline arrow functions
-  const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  const cacheKey = getCacheKey(queryKey);
+  // Track active key to discard stale responses when key changes mid-flight
+  const activeKeyRef = useRef(cacheKey);
+  activeKeyRef.current = cacheKey;
 
-  const doFetch = useCallback(
-    async (isRefetch = false) => {
-      if (!key || !enabled) return;
-      fetchingRef.current = true;
-      if (!isRefetch) rerender();
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
 
-      try {
-        const data = await dedup(key, fetcherRef.current);
-        setCacheEntry(key, data);
-      } catch (err) {
-        setCacheError(key, err instanceof Error ? err : new Error(String(err)));
-      } finally {
-        fetchingRef.current = false;
-        if (mountedRef.current) rerender();
-      }
-    },
-    [key, enabled, rerender]
-  );
-
-  // Initial fetch + SWR
-  useEffect(() => {
-    if (!key || !enabled) return;
-    if (isStale(key, staleTime)) {
-      doFetch();
+    // Check cache
+    const cached = queryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < staleTime) {
+      setData(cached.data as T);
+      return;
     }
-  }, [key, enabled, staleTime, doFetch]);
 
-  // Refetch interval
-  useEffect(() => {
-    if (!refetchInterval || !key || !enabled) return;
-    const id = setInterval(() => doFetch(true), refetchInterval);
-    return () => clearInterval(id);
-  }, [refetchInterval, key, enabled, doFetch]);
+    setIsLoading(true);
+    setError(null);
+    const requestKey = cacheKey; // capture at call time
+    try {
+      const result = await queryFnRef.current();
+      if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
+      setData(result);
+      queryCache.set(requestKey, { data: result, timestamp: Date.now() });
+    } catch (err) {
+      if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      if (mountedRef.current && activeKeyRef.current === requestKey) setIsLoading(false);
+    }
+  }, [cacheKey, enabled, staleTime]);
 
-  // Cleanup
   useEffect(() => {
     mountedRef.current = true;
+    fetchData();
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [fetchData]);
 
-  const entry = key ? getCacheEntry<T>(key) : undefined;
-  const hasData = entry && !entry.error;
-  const isLoading = !hasData && fetchingRef.current;
+  const refetch = useCallback(() => {
+    // Invalidate cache on refetch
+    queryCache.delete(cacheKey);
+    fetchData();
+  }, [cacheKey, fetchData]);
 
-  return {
-    data: entry?.data as T | undefined,
-    error: entry?.error,
-    isLoading,
-    isRefetching: hasData ? fetchingRef.current : false,
-    refetch: () => doFetch(!!hasData),
-    invalidate: () => {
-      if (key) {
-        invalidateCache(key);
-        doFetch();
-      }
-    },
-  };
+  return { data, isLoading, error, refetch };
+}
+
+// Utility to invalidate cache entries
+export function invalidateQueries(keyPrefix: string): void {
+  for (const key of queryCache.keys()) {
+    if (key.startsWith(`["${keyPrefix}"`)) {
+      queryCache.delete(key);
+    }
+  }
+}
+
+// Clear all cache
+export function clearQueryCache(): void {
+  queryCache.clear();
 }
