@@ -304,7 +304,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         // Build unit→unit edges based on commit parent relationships
         // In the unit model, edges connect committed units to their children
         // Edge: parentUnit (commit_hash) → childUnit (commit_hash)
+        // Semantic type: evolve (single parent) or merge (multiple parents)
         commits.forEach((commit) => {
+          const isMergeCommit = commit.parent_hashes.length > 1;
           commit.parent_hashes.forEach((parentHash) => {
             if (!commitHashes.has(parentHash)) return;
 
@@ -315,6 +317,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
               type: edgeType,
               animated: false,
               style: edgeStyle,
+              data: { edgeType: isMergeCommit ? 'merge' : 'evolve' },
             });
           });
         });
@@ -393,6 +396,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                   type: edgeType,
                   animated: true,
                   style: { ...edgeStyle, strokeDasharray: '5 5' },
+                  data: { edgeType: 'draft' },
                 });
               }
             }
@@ -728,7 +732,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
       set({
@@ -781,7 +785,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
       set({
@@ -876,7 +880,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           type: edgeType,
           animated: false,
           style: edgeStyle,
-          data: { createdAt: Date.now() },
+          data: { createdAt: Date.now(), edgeType: 'evolve' },
         };
         return {
           nodes: [...state.nodes, newNode],
@@ -1323,7 +1327,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
       set({ edges: [...edges, newEdge] });

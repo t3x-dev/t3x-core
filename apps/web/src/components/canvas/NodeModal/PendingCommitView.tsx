@@ -9,9 +9,11 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FileText,
   GitCompare,
   Loader2,
   Lock,
+  MessageCircle,
   MessageSquarePlus,
   Minus,
   Pencil,
@@ -1625,6 +1627,36 @@ export function PendingCommitView({
                       ? 'Drag to select text \u00b7 Click to mark keywords'
                       : 'Click phrases in SOURCE to toggle inclusion'}
                   </p>
+
+                  {/* Source lineage summary */}
+                  {hasNewSourceData && (
+                    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-2.5 text-xs">
+                      <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1.5">
+                        Sources
+                      </div>
+                      <div className="space-y-1">
+                        {textBlocks.map((block) => (
+                          <div key={block.id} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                            <MessageCircle size={11} className="text-[var(--text-tertiary)] shrink-0" />
+                            <span className="truncate flex-1">
+                              {block.sourceNodeTitle || 'Unknown source'}
+                            </span>
+                            <span className="text-[var(--text-tertiary)] shrink-0">
+                              {block.selections.length} sel
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {data.pendingSource?.sentences && data.pendingSource.sentences.length > 0 && (
+                        <div className="mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)] flex items-center gap-1.5 text-[var(--text-tertiary)]">
+                          <FileText size={11} className="shrink-0" />
+                          <span>
+                            {data.pendingSource.sentences.length} sentence{data.pendingSource.sentences.length !== 1 ? 's' : ''} ready
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Commit error */}
                   {commitError && (

@@ -40,6 +40,10 @@ interface DiffSideBySideProps {
   groupBySource?: boolean;
   /** Map of conversation ID → title from commit-level source_refs */
   sourceRefTitles?: Map<string, string>;
+  /** Column label for base side (e.g., "main @ abc123") */
+  baseLabel?: string;
+  /** Column label for target side (e.g., "feature/pricing @ def456") */
+  targetLabel?: string;
 }
 
 export interface DiffSideBySideHandle {
@@ -334,6 +338,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       showSnippets = false,
       groupBySource = false,
       sourceRefTitles,
+      baseLabel,
+      targetLabel,
     },
     ref
   ) {
@@ -775,17 +781,27 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           </div>
         ) : (
           <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
-            <div className="px-4 py-2 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+            <div className="px-4 py-2 flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium shrink-0">
                 <Minus className="h-2.5 w-2.5" />
-                Base (Source)
+                Base
               </span>
+              {baseLabel && (
+                <span className="text-xs text-[var(--text-secondary)] font-medium truncate">
+                  {baseLabel}
+                </span>
+              )}
             </div>
-            <div className="px-4 py-2 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
+            <div className="px-4 py-2 flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium shrink-0">
                 <Plus className="h-2.5 w-2.5" />
                 Target
               </span>
+              {targetLabel && (
+                <span className="text-xs text-[var(--text-secondary)] font-medium truncate">
+                  {targetLabel}
+                </span>
+              )}
             </div>
           </div>
         )}

@@ -24,6 +24,19 @@ import { DiffSideBySide } from './DiffSideBySide';
 import { DiffStatsBar } from './DiffStatsBar';
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/** Format column label: "branch @ shortHash" or just shortHash */
+function formatCommitLabel(
+  branch: string | null | undefined,
+  hash: string
+): string {
+  const shortHash = hash.replace('sha256:', '').slice(0, 7);
+  return branch ? `${branch} @ ${shortHash}` : shortHash;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -140,6 +153,8 @@ export function DiffFullScreen({
             baseSentences={baseCommit?.content.sentences ?? []}
             targetSentences={targetCommit?.content.sentences ?? []}
             projectId={projectId}
+            baseLabel={formatCommitLabel(baseCommit?.branch, baseCommitHash)}
+            targetLabel={formatCommitLabel(targetCommit?.branch, targetCommitHash)}
           />
         )}
       </DialogContent>
