@@ -11,12 +11,14 @@
  * - Inline edit panel when Edit is selected
  */
 
-import { useRouter } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { useTerminology } from '@/hooks/useTerminology';
+import { fetchTurnContextCached } from '@/lib/api';
+import type { TurnContextData } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { MergeSimilarPair } from '@/types/merge';
+import type { MergeSimilarPair, Sentence } from '@/types/merge';
 import { ConflictHeader } from './ConflictHeader';
 import { ConflictResolutionButtons } from './ConflictResolutionButtons';
 import { ConflictSide } from './ConflictSide';
@@ -37,7 +39,6 @@ export function MergeConflictView({
   targetBranch,
   navId,
 }: MergeConflictViewProps) {
-  const router = useRouter();
   const { t } = useTerminology();
   const { extendedResolutions, resolveConflict, getEffectiveResolution, projectId } =
     useMergeWorkspaceStore();
@@ -47,14 +48,55 @@ export function MergeConflictView({
   const extRes = extendedResolutions[String(index)];
   const resolved = isConflictResolved(pair, extRes);
 
-  // Handle jump to conversation
-  const handleJumpToConversation = useCallback(
-    (conversationId: string) => {
-      if (projectId) {
-        router.push(`/project/${projectId}/conversation/${conversationId}`);
-      }
+  // Context modal state
+  const [contextModal, setContextModal] = useState<{
+    open: boolean;
+    conversationId: string;
+    turnHash: string;
+    highlightStart?: number;
+    highlightEnd?: number;
+  } | null>(null);
+  const [modalContextData, setModalContextData] = useState<TurnContextData | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  const openContextModal = useCallback(
+    (conversationId: string, turnHash: string, hStart?: number, hEnd?: number) => {
+      setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd });
+      setModalLoading(true);
+      setModalContextData(null);
+
+      fetchTurnContextCached(turnHash, {
+        before: 5,
+        after: 5,
+        highlightStart: hStart,
+        highlightEnd: hEnd,
+      })
+        .then((data) => setModalContextData(data))
+        .catch(() => setModalContextData(null))
+        .finally(() => setModalLoading(false));
     },
-    [projectId, router]
+    []
+  );
+
+  const closeContextModal = useCallback(() => {
+    setContextModal(null);
+    setModalContextData(null);
+  }, []);
+
+  /** Create a jump handler that opens the context modal with source info */
+  const makeJumpHandler = useCallback(
+    (sentence: Sentence) => {
+      if (!projectId || !sentence.source?.conversation_id) return undefined;
+      return (conversationId: string) => {
+        openContextModal(
+          conversationId,
+          sentence.source?.turn_hash || '',
+          sentence.source?.start_char,
+          sentence.source?.end_char
+        );
+      };
+    },
+    [projectId, openContextModal]
   );
 
   return (
@@ -91,14 +133,14 @@ export function MergeConflictView({
           sentence={pair.source}
           label={`${t('branch')} ${sourceBranch}`}
           isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
-          onJumpToConversation={handleJumpToConversation}
+          onJumpToConversation={makeJumpHandler(pair.source)}
         />
         <ConflictSide
           side="target"
           sentence={pair.target}
           label={`${t('branch')} ${targetBranch}`}
           isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
-          onJumpToConversation={handleJumpToConversation}
+          onJumpToConversation={makeJumpHandler(pair.target)}
         />
       </div>
 
@@ -108,6 +150,20 @@ export function MergeConflictView({
         onResolve={(resolution) => resolveConflict(index, resolution)}
         sourceBranch={sourceBranch}
         targetBranch={targetBranch}
+      />
+
+      {/* Source context modal */}
+      <DiffSourceContextModal
+        open={!!contextModal?.open}
+        sentence={null}
+        data={modalContextData}
+        loading={modalLoading}
+        onClose={closeContextModal}
+        projectId={projectId ?? undefined}
+        conversationId={contextModal?.conversationId}
+        turnHash={contextModal?.turnHash}
+        highlightStart={contextModal?.highlightStart}
+        highlightEnd={contextModal?.highlightEnd}
       />
     </li>
   );

@@ -11,13 +11,14 @@
  */
 
 import { CheckCircle, ChevronDown, ChevronRight, ListTree, MapPin } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4 } from '@/lib/api';
-import { getCommitV4 } from '@/lib/api';
+import { fetchTurnContextCached, getCommitV4 } from '@/lib/api';
+import type { TurnContextData } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -246,7 +247,6 @@ export function UnifiedDiffView({
   const { identical, similarPairs, onlyInSource, onlyInTarget } = prepared;
   const { getUnresolvedCount, contextCache, contextLoadingStates, projectId, sourceHash } =
     useMergeWorkspaceStore();
-  const router = useRouter();
   const { t } = useTerminology();
 
   // View mode state — controlled if props provided, otherwise internal
@@ -333,14 +333,55 @@ export function UnifiedDiffView({
     [contextCache, contextLoadingStates]
   );
 
-  // Handle jump to conversation
-  const handleJumpToConversation = useCallback(
-    (conversationId: string) => {
-      if (projectId) {
-        router.push(`/project/${projectId}/conversation/${conversationId}`);
-      }
+  // Context modal state
+  const [contextModal, setContextModal] = useState<{
+    open: boolean;
+    conversationId: string;
+    turnHash: string;
+    highlightStart?: number;
+    highlightEnd?: number;
+  } | null>(null);
+  const [modalContextData, setModalContextData] = useState<TurnContextData | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  const openContextModal = useCallback(
+    (conversationId: string, turnHash: string, hStart?: number, hEnd?: number) => {
+      setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd });
+      setModalLoading(true);
+      setModalContextData(null);
+
+      fetchTurnContextCached(turnHash, {
+        before: 5,
+        after: 5,
+        highlightStart: hStart,
+        highlightEnd: hEnd,
+      })
+        .then((data) => setModalContextData(data))
+        .catch(() => setModalContextData(null))
+        .finally(() => setModalLoading(false));
     },
-    [projectId, router]
+    []
+  );
+
+  const closeContextModal = useCallback(() => {
+    setContextModal(null);
+    setModalContextData(null);
+  }, []);
+
+  /** Create a jump handler that opens the context modal with source info */
+  const makeJumpHandler = useCallback(
+    (sentence: Sentence) => {
+      if (!projectId || !sentence.source?.conversation_id) return undefined;
+      return (conversationId: string) => {
+        openContextModal(
+          conversationId,
+          sentence.source?.turn_hash || '',
+          sentence.source?.start_char,
+          sentence.source?.end_char
+        );
+      };
+    },
+    [projectId, openContextModal]
   );
 
   // Render a positional line
@@ -373,7 +414,7 @@ export function UnifiedDiffView({
           sentence={line.sentence}
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={handleJumpToConversation}
+          onJumpToConversation={makeJumpHandler(line.sentence)}
         />
       );
     }
@@ -403,7 +444,7 @@ export function UnifiedDiffView({
           checkable
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={handleJumpToConversation}
+          onJumpToConversation={makeJumpHandler(line.sourceCandidate.sentence)}
           navId={`source-${line.sourceIndex}`}
         />
       );
@@ -421,7 +462,7 @@ export function UnifiedDiffView({
           checkable
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={handleJumpToConversation}
+          onJumpToConversation={makeJumpHandler(line.targetCandidate.sentence)}
           navId={`target-${line.targetIndex}`}
         />
       );
@@ -511,7 +552,7 @@ export function UnifiedDiffView({
                       sentence={sentence}
                       contextData={ctx.data}
                       contextLoading={ctx.loading}
-                      onJumpToConversation={handleJumpToConversation}
+                      onJumpToConversation={makeJumpHandler(sentence)}
                     />
                   );
                 })}
@@ -563,7 +604,7 @@ export function UnifiedDiffView({
                       checkable
                       contextData={ctx.data}
                       contextLoading={ctx.loading}
-                      onJumpToConversation={handleJumpToConversation}
+                      onJumpToConversation={makeJumpHandler(candidate.sentence)}
                       navId={`source-${idx}`}
                     />
                   );
@@ -593,7 +634,7 @@ export function UnifiedDiffView({
                       checkable
                       contextData={ctx.data}
                       contextLoading={ctx.loading}
-                      onJumpToConversation={handleJumpToConversation}
+                      onJumpToConversation={makeJumpHandler(candidate.sentence)}
                       navId={`target-${idx}`}
                     />
                   );
@@ -629,6 +670,20 @@ export function UnifiedDiffView({
           className="py-12"
         />
       )}
+
+      {/* Source context modal */}
+      <DiffSourceContextModal
+        open={!!contextModal?.open}
+        sentence={null}
+        data={modalContextData}
+        loading={modalLoading}
+        onClose={closeContextModal}
+        projectId={projectId ?? undefined}
+        conversationId={contextModal?.conversationId}
+        turnHash={contextModal?.turnHash}
+        highlightStart={contextModal?.highlightStart}
+        highlightEnd={contextModal?.highlightEnd}
+      />
     </div>
   );
 }
