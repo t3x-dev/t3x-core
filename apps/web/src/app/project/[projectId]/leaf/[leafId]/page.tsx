@@ -472,7 +472,12 @@ export default function LeafDetailPage() {
           </Button>
           <Breadcrumb
             segments={[
+              { label: 'Home', href: '/' },
               { label: projectName || 'Project', href: `/project/${projectId}` },
+              {
+                label: `Commit ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
+                href: `/project/${projectId}?focus=${leaf.commit_hash}`,
+              },
               { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },
             ]}
           />

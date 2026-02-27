@@ -65,6 +65,7 @@ export function MergeActionBar({
       {/* Breadcrumb + Branch Info */}
       <Breadcrumb
         segments={[
+          { label: 'Home', href: '/' },
           { label: projectName || 'Project', href: `/project/${projectId}` },
           { label: t('merge') },
         ]}
