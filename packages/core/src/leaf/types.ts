@@ -12,6 +12,7 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
+import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 import type { AnyLeafType, Assertion, CommitV4, Constraint, Leaf, LeafType } from '../types/v4';
 
@@ -63,6 +64,9 @@ export interface GenerateOptions extends BuildPromptOptions {
 
   /** Max tokens for generation */
   maxTokens?: number;
+
+  /** Optional LLM provider. If not provided, falls back to Anthropic direct API call. */
+  provider?: LLMProvider;
 }
 
 /**
