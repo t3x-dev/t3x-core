@@ -86,12 +86,7 @@ export function splitSentencesRuleBased(
     }
 
     if (SENTENCE_END_CHARS.has(ch)) {
-      const shouldSkip =
-        ch === '.' &&
-        (isDecimalPoint(text, index) ||
-          isAbbreviationDot(text, index) ||
-          isListMarkerDot(text, index));
-      if (shouldSkip) {
+      if (ch === '.' && (isListMarkerDot(text, index) || !isDotSentenceBoundary(text, index))) {
         index += 1;
         continue;
       }
@@ -246,10 +241,6 @@ function isCjkNumeral(ch: string | undefined): boolean {
   }
 }
 
-function isDecimalPoint(text: string, index: number): boolean {
-  return isDigit(text[index - 1]) && isDigit(text[index + 1]);
-}
-
 function isAbbreviationDot(text: string, index: number): boolean {
   const prev = text[index - 1];
   const next = text[index + 1];
@@ -259,6 +250,37 @@ function isAbbreviationDot(text: string, index: number): boolean {
 
   const word = getWordBefore(text, index);
   return word.length > 0 && ABBREVIATIONS.has(word.toLowerCase());
+}
+
+/**
+ * Innocence-presumption dot boundary check.
+ * A dot is a sentence boundary only if ALL three evidence tests pass:
+ * 1. Dot followed by whitespace or EOF
+ * 2. Next content starts uppercase, list marker, or is EOF
+ * 3. Word before dot is not a known abbreviation
+ */
+function isDotSentenceBoundary(text: string, index: number): boolean {
+  // Evidence 1: dot must be followed by whitespace, closing chars, or EOF
+  let afterDot = index + 1;
+  while (afterDot < text.length && CLOSING_CHARS.has(text[afterDot])) {
+    afterDot++;
+  }
+  const next = text[afterDot];
+  if (next !== undefined && !isWhitespace(next)) return false;
+
+  // Evidence 2: next content must start with uppercase, list marker, or be EOF
+  const nextContentIdx = findNextNonSpace(text, afterDot);
+  if (nextContentIdx !== null) {
+    const ch = text[nextContentIdx];
+    const startsUppercase = ch >= 'A' && ch <= 'Z';
+    const startsList = getListMarkerLength(text, nextContentIdx) > 0;
+    if (!startsUppercase && !startsList) return false;
+  }
+
+  // Evidence 3: word before dot must not be a known abbreviation
+  if (isAbbreviationDot(text, index)) return false;
+
+  return true;
 }
 
 function isListMarkerDot(text: string, index: number): boolean {
