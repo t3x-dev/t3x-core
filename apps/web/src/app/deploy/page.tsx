@@ -42,6 +42,7 @@ import {
   listEngineRuns,
   updateDeployAgent,
 } from '@/lib/api';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {
   return (
@@ -72,6 +73,10 @@ function DeployPageContent() {
     name: '',
     endpoint: '',
   });
+
+  // Project store — ensure projects are loaded for RunsTable source column
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const projectsInitialized = useProjectStore((s) => s.initialized);
 
   // Filter states
   const [filterModel, setFilterModel] = useState<string | null>(null);
@@ -123,6 +128,13 @@ function DeployPageContent() {
       showToast('Failed to load runs', 'error');
     }
   }, []);
+
+  // Ensure project store is initialized (for RunsTable Source column)
+  useEffect(() => {
+    if (!projectsInitialized) {
+      fetchProjects();
+    }
+  }, [projectsInitialized, fetchProjects]);
 
   // Check runner health and load data
   useEffect(() => {
