@@ -5,8 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Command,
-  FileText,
-  Github,
   Home,
   LayoutGrid,
   ListChecks,
@@ -65,12 +63,10 @@ interface NavItemProps {
   label: string;
   isActive: boolean;
   children: React.ReactNode;
-  external?: boolean;
-  disabled?: boolean;
   collapsed: boolean;
 }
 
-function NavItem({ href, label, isActive, children, external, disabled, collapsed }: NavItemProps) {
+function NavItem({ href, label, isActive, children, collapsed }: NavItemProps) {
   const baseClass = cn(
     'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
     collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
@@ -97,15 +93,7 @@ function NavItem({ href, label, isActive, children, external, disabled, collapse
     </>
   );
 
-  const linkElement = external ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-      {inner}
-    </a>
-  ) : disabled ? (
-    <Button variant="ghost" className={cn(className, 'cursor-not-allowed opacity-50')} disabled>
-      {inner}
-    </Button>
-  ) : (
+  const linkElement = (
     <Link href={href} className={className}>
       {inner}
     </Link>
@@ -280,26 +268,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
             <Settings className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem
-            href="#"
-            label="Docs (Coming Soon)"
-            isActive={false}
-            collapsed={collapsed}
-            disabled
-          >
-            <FileText className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem
-            href="https://github.com/anthropics/t3x"
-            label="GitHub"
-            isActive={false}
-            collapsed={collapsed}
-            external
-          >
-            <Github className="h-5 w-5" />
           </NavItem>
         </nav>
 
