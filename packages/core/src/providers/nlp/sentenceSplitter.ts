@@ -3,9 +3,10 @@
  *
  * Replaces the 477-line rule-based splitter with ICU's UAX#29 sentence
  * segmentation + a thin patch layer for 3 known ICU weaknesses:
- *   1. Title abbreviations (Dr., Mrs.) — ICU splits incorrectly
- *   2. Other abbreviations (etc., vs.) — ICU splits when next starts lowercase
+ *   1. Title abbreviations (Dr., Mrs., vs.) — ICU splits incorrectly
+ *   2. Other abbreviations (etc., al.) — ICU splits when next starts lowercase
  *   3. List markers (1., 2.) — ICU treats as standalone sentences
+ *   4. Unicode ellipsis (…) — ICU doesn't treat as sentence boundary
  *
  * Eval results: 100% (23/23) vs rule-based 73.9% (17/23)
  * Code: ~60 LOC vs 477 LOC
@@ -17,7 +18,7 @@ export interface SentenceSplitterOptions {
   minLength?: number;
 }
 
-// Title abbreviations — always merge (next segment is a person name)
+// Title / unconditional abbreviations — always merge regardless of next case
 const TITLE_ABBREVS = new Set([
   'Dr',
   'Mr',
@@ -43,6 +44,7 @@ const TITLE_ABBREVS = new Set([
   'Supt',
   'Det',
   'Insp',
+  'vs', // "vs." is always mid-sentence
 ]);
 
 // Other abbreviations — merge when next segment starts lowercase
@@ -75,7 +77,6 @@ const OTHER_ABBREVS = new Set([
   'Eq',
   'Vol',
   'No',
-  'vs',
   'al',
   'etc',
   'e',
@@ -84,6 +85,8 @@ const OTHER_ABBREVS = new Set([
 
 const ALL_ABBREVS = new Set([...TITLE_ABBREVS, ...OTHER_ABBREVS]);
 const NUMBERED_LIST_RE = /^\d+\.$/;
+// Unicode ellipsis (…) or ASCII ellipsis (...) followed by space + uppercase = sentence break
+const ELLIPSIS_SPLIT_RE = /(\u2026|\.{3,})\s+(?=[A-Z])/;
 
 interface RawSegment {
   text: string;
@@ -108,8 +111,29 @@ export function splitSentences(text: string, options: SentenceSplitterOptions = 
       endOffset: beginOffset + trimmed.length,
     });
   }
-  if (raw.length <= 1) {
-    return raw
+  // Step 0.5: Split segments that contain ellipsis + uppercase (ICU misses these)
+  const expanded: RawSegment[] = [];
+  for (const seg of raw) {
+    const match = ELLIPSIS_SPLIT_RE.exec(seg.text);
+    if (match && match.index !== undefined) {
+      const splitAt = match.index + match[1].length;
+      const left = seg.text.slice(0, splitAt).trim();
+      const right = seg.text.slice(splitAt).trim();
+      if (left.length > 0) {
+        const lBegin = text.indexOf(left, seg.beginOffset);
+        expanded.push({ text: left, beginOffset: lBegin, endOffset: lBegin + left.length });
+      }
+      if (right.length > 0) {
+        const rBegin = text.indexOf(right, seg.beginOffset + splitAt);
+        expanded.push({ text: right, beginOffset: rBegin, endOffset: rBegin + right.length });
+      }
+    } else {
+      expanded.push(seg);
+    }
+  }
+
+  if (expanded.length <= 1) {
+    return expanded
       .filter((s) => s.text.length >= minLength)
       .map((s) => ({
         text: s.text,
@@ -121,7 +145,7 @@ export function splitSentences(text: string, options: SentenceSplitterOptions = 
 
   // Step 1: Backward merge (current absorbs into previous)
   const pass1: RawSegment[] = [];
-  for (const seg of raw) {
+  for (const seg of expanded) {
     if (pass1.length > 0 && shouldMergeBack(pass1[pass1.length - 1].text, seg.text)) {
       const prev = pass1[pass1.length - 1];
       prev.text = text.slice(prev.beginOffset, seg.endOffset).trim();
