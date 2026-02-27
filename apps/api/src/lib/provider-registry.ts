@@ -6,6 +6,15 @@
  */
 
 import {
+  createClaudeProvider,
+  createDeepSeekProvider,
+  createGeminiProvider,
+  createGoogleAIEmbeddingProvider,
+  createGoogleCloudNLPProvider,
+  createOllamaEmbeddingProvider,
+  createOllamaProvider,
+  createOpenAIEmbeddingProvider,
+  createOpenAIProvider,
   createProviderRegistry,
   type EmbeddingProvider,
   type GenerateOptions,
@@ -129,13 +138,11 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
       'claude-opus-4-20250514',
       'claude-haiku-4-5-20251001',
     ],
-    factory: (config) => {
-      const { createClaudeProvider } = require('@t3x/core');
-      return createClaudeProvider({
+    factory: (config) =>
+      createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
         baseUrl: process.env.ANTHROPIC_BASE_URL,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -145,13 +152,11 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: ['OPENAI_API_KEY'],
     defaultModel: 'gpt-4o',
     availableModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
-    factory: (config) => {
-      const { createOpenAIProvider } = require('@t3x/core');
-      return createOpenAIProvider({
+    factory: (config) =>
+      createOpenAIProvider({
         apiKey: config.OPENAI_API_KEY!,
         baseUrl: process.env.OPENAI_BASE_URL,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -161,13 +166,11 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: ['DEEPSEEK_API_KEY'],
     defaultModel: 'deepseek-chat',
     availableModels: ['deepseek-chat', 'deepseek-reasoner'],
-    factory: (config) => {
-      const { createDeepSeekProvider } = require('@t3x/core');
-      return createDeepSeekProvider({
+    factory: (config) =>
+      createDeepSeekProvider({
         apiKey: config.DEEPSEEK_API_KEY!,
         baseUrl: process.env.DEEPSEEK_BASE_URL,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -177,12 +180,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
     defaultModel: 'gemini-2.0-flash',
     availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-    factory: (config) => {
-      const { createGeminiProvider } = require('@t3x/core');
-      return createGeminiProvider({
+    factory: (config) =>
+      createGeminiProvider({
         apiKey: config.GOOGLE_AI_STUDIO_KEY!,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -192,12 +193,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: [], // No key needed — local server
     defaultModel: 'llama3.1',
     availableModels: ['llama3.1', 'llama3.2', 'mistral', 'mixtral', 'qwen2.5', 'deepseek-r1'],
-    factory: () => {
-      const { createOllamaProvider } = require('@t3x/core');
-      return createOllamaProvider({
+    factory: () =>
+      createOllamaProvider({
         baseUrl: process.env.OLLAMA_BASE_URL,
-      });
-    },
+      }),
   });
 
   // ─── LLM Providers (merge role) ────────────────────────────────────
@@ -208,13 +207,11 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     role: 'merge',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
     defaultModel: 'claude-sonnet-4-5-20250929',
-    factory: (config) => {
-      const { createClaudeProvider } = require('@t3x/core');
-      return createClaudeProvider({
+    factory: (config) =>
+      createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
         baseUrl: process.env.ANTHROPIC_BASE_URL,
-      });
-    },
+      }),
   });
 
   // ─── Embedding Providers ───────────────────────────────────────────
@@ -226,12 +223,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
     defaultModel: 'gemini-embedding-001',
     availableModels: ['gemini-embedding-001', 'text-embedding-004'],
-    factory: (config) => {
-      const { createGoogleAIEmbeddingProvider } = require('@t3x/core');
-      return createGoogleAIEmbeddingProvider({
+    factory: (config) =>
+      createGoogleAIEmbeddingProvider({
         apiKey: config.GOOGLE_AI_STUDIO_KEY!,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -241,12 +236,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: ['OPENAI_API_KEY'],
     defaultModel: 'text-embedding-3-small',
     availableModels: ['text-embedding-3-small', 'text-embedding-3-large'],
-    factory: (config) => {
-      const { createOpenAIEmbeddingProvider } = require('@t3x/core');
-      return createOpenAIEmbeddingProvider({
+    factory: (config) =>
+      createOpenAIEmbeddingProvider({
         apiKey: config.OPENAI_API_KEY!,
-      });
-    },
+      }),
   });
 
   reg.register({
@@ -256,12 +249,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     requiredEnvKeys: [],
     defaultModel: 'nomic-embed-text',
     availableModels: ['nomic-embed-text', 'mxbai-embed-large', 'all-minilm'],
-    factory: () => {
-      const { createOllamaEmbeddingProvider } = require('@t3x/core');
-      return createOllamaEmbeddingProvider({
+    factory: () =>
+      createOllamaEmbeddingProvider({
         baseUrl: process.env.OLLAMA_BASE_URL,
-      });
-    },
+      }),
   });
 
   // ─── NLP Providers (extraction role) ───────────────────────────────
@@ -271,10 +262,7 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Google Cloud NLP',
     role: 'extraction',
     requiredEnvKeys: ['GOOGLE_CLOUD_NLP_KEY'],
-    factory: (config) => {
-      const { createGoogleCloudNLPProvider } = require('@t3x/core');
-      return createGoogleCloudNLPProvider(config.GOOGLE_CLOUD_NLP_KEY!);
-    },
+    factory: (config) => createGoogleCloudNLPProvider(config.GOOGLE_CLOUD_NLP_KEY!),
   });
 }
 
