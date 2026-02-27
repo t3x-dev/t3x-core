@@ -13,6 +13,7 @@ export { deployAgentRoutes } from './deploy-agents';
 export { diffRoutes } from './diff';
 export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
+export { extractRoutes } from './extract.openapi';
 export { healthRoutes } from './health';
 export { leavesRoutes } from './leaves.openapi';
 export { mergeRoutes } from './merge';

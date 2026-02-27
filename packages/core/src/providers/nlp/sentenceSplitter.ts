@@ -94,6 +94,7 @@ interface RawSegment {
   endOffset: number;
 }
 
+// @ts-expect-error Intl.Segmenter requires ES2022+ lib but works at runtime in Node 16+
 const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
 
 export function splitSentences(text: string, options: SentenceSplitterOptions = {}): NLPSentence[] {

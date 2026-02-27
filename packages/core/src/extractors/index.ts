@@ -2,6 +2,27 @@
  * Extractors exports
  */
 
+export {
+  type ExtractionItem,
+  ExtractionParseError,
+  parseExtractionResponse,
+} from './extractionParser';
+// LLM Extraction
+export {
+  buildExtractionPrompt,
+  type LLMExtractionOptions,
+  type TurnInput,
+} from './extractionPrompt';
+export {
+  type ValidationResult,
+  validateExtractedSentences,
+} from './extractionValidator';
+export {
+  createLLMExtractor,
+  type ExtractedSentence,
+  type LLMExtractionResult,
+  LLMExtractor,
+} from './llmExtractor';
 // Polarity Rules
 export {
   createPolarityRuleEngine,
@@ -15,6 +36,7 @@ export {
   type ExtractorConfig,
   RingExtractor,
 } from './ringExtractor';
+export { resolveSourceRef } from './sourceRefResolver';
 // Types
 export {
   // v1.1: Anchor types
