@@ -1330,7 +1330,31 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
-      set({ edges: [...edges, newEdge] });
+      // Propagate sourceCommitHash when connecting committed → staging unit
+      let updatedNodes = nodes;
+      if (
+        source &&
+        target &&
+        source.data.kind === 'unit' &&
+        source.data.commitStatus === 'committed' &&
+        target.data.kind === 'unit' &&
+        target.data.commitStatus === 'staging'
+      ) {
+        updatedNodes = nodes.map((n) =>
+          n.id === target.id
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  sourceCommitHash: source.data.commitHash ?? source.data.sourceCommitHash,
+                  sourceTurnWindow: source.data.sourceTurnWindow,
+                },
+              }
+            : n
+        );
+      }
+
+      set({ nodes: updatedNodes, edges: [...edges, newEdge] });
     },
     getCommitTone: (commitId) => {
       const state = get();
