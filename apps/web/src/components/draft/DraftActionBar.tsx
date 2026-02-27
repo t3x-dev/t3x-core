@@ -8,9 +8,11 @@
 
 import { ArrowLeft, Check, Loader2, Save } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { useProjectStore } from '@/store/projectStore';
 
 interface DraftActionBarProps {
   onClose: () => void;
@@ -21,6 +23,7 @@ interface DraftActionBarProps {
 
 export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: DraftActionBarProps) {
   const { draft, saveStatus, lastSavedAt, updateTitle } = useDraftWorkspaceStore();
+  const projectName = useProjectStore((s) => projectId ? s.getProject(projectId)?.name : undefined);
   const [editing, setEditing] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,12 +69,15 @@ export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: Draf
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
-        {projectId && (
-          <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-            <span>/</span>
-            <span>Draft</span>
-          </span>
-        )}
+        <Breadcrumb
+          segments={[
+            { label: 'Home', href: '/' },
+            ...(projectId
+              ? [{ label: projectName || 'Project', href: `/project/${projectId}` }]
+              : []),
+            { label: 'Draft' },
+          ]}
+        />
       </div>
 
       {/* Title */}

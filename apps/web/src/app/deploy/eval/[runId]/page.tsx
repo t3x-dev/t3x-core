@@ -24,6 +24,7 @@ import {
 import { ChartToggle } from '@/components/optimiser/charts/ChartToggle';
 import { ReportHeader } from '@/components/optimiser/ReportHeader';
 import { type StepRecord, TraceTimeline } from '@/components/optimiser/trace';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectStore } from '@/store/projectStore';
 
 // Types for parsed result data
 interface DimensionScores {
@@ -209,6 +211,14 @@ export default function RunDetailPage() {
   const [pinSuccess, setPinSuccess] = useState(false);
   const [retuning, setRetuning] = useState(false);
   const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
+  const getProject = useProjectStore((s) => s.getProject);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const projectsInitialized = useProjectStore((s) => s.initialized);
+
+  // Ensure project store is initialized (for breadcrumb project name)
+  useEffect(() => {
+    if (!projectsInitialized) fetchProjects();
+  }, [projectsInitialized, fetchProjects]);
 
   // Load run data + associated leaf
   useEffect(() => {
@@ -386,10 +396,23 @@ export default function RunDetailPage() {
         {/* Header */}
         <header className="space-y-3">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/deploy')}>
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={() => router.push('/deploy')}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Breadcrumb
+                segments={[
+                  { label: 'Home', href: '/' },
+                  ...(run.project_id
+                    ? [{ label: getProject(run.project_id)?.name || 'Project', href: `/project/${run.project_id}` }]
+                    : []),
+                  ...(run.leaf?.id?.startsWith('leaf_') && run.project_id
+                    ? [{ label: run.leaf.title || run.leaf.id, href: `/project/${run.project_id}/leaf/${run.leaf.id}` }]
+                    : []),
+                  { label: run.title || `Run ${runId.slice(0, 8)}` },
+                ]}
+              />
+            </div>
             <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
