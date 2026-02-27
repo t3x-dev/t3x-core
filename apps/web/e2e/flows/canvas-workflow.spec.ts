@@ -1,6 +1,6 @@
-import { expect, test } from '../fixtures/test';
 import { cleanupProject, createTestCommitV4, createTestProject } from '../fixtures/api-helpers';
 import { CanvasPage } from '../fixtures/page-objects/canvas-page';
+import { expect, test } from '../fixtures/test';
 import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Node } from '@xyflow/react';
+import type { Edge, Node } from '@xyflow/react';
 import {
   AlertCircle,
   ArrowRight,
@@ -9,9 +9,11 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FileText,
   GitCompare,
   Loader2,
   Lock,
+  MessageCircle,
   MessageSquarePlus,
   Minus,
   Pencil,
@@ -56,6 +58,39 @@ import {
   type SourceBox,
 } from './helpers';
 import type { NodeQuickAction } from './NodeModal';
+
+/**
+ * Walk the canvas graph upstream from a staging node to find the nearest
+ * committed unit's commitHash. Handles the case where sourceCommitHash
+ * wasn't set on the node data (e.g., manual edge drag).
+ */
+function findUpstreamCommitHash(
+  nodeId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[]
+): string | undefined {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const visited = new Set<string>();
+  const stack = edges.filter((e) => e.target === nodeId).map((e) => e.source);
+
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const n = nodeMap.get(id);
+    if (!n) continue;
+    if (n.data.kind === 'unit' && n.data.commitStatus === 'committed' && n.data.commitHash) {
+      return n.data.commitHash;
+    }
+    // Keep walking upstream
+    for (const e of edges) {
+      if (e.target === id && !visited.has(e.source)) {
+        stack.push(e.source);
+      }
+    }
+  }
+  return undefined;
+}
 
 interface PendingCommitViewProps {
   node: Node<CanvasNodeData>;
@@ -134,10 +169,20 @@ export function PendingCommitView({
   const isMainBranchInvalid = useMemo(() => {
     if (data.pendingBranch === 'branch') return false; // Not selecting main
     if (!hasMainCommit) return false; // No main commit yet, can create root
-    if (!data.sourceCommitHash) return true; // Has main commit but trying to create another root
+
+    // Try sourceCommitHash first, then fall back to graph walk
+    let effectiveSourceHash = data.sourceCommitHash;
+    if (!effectiveSourceHash && node?.id) {
+      // Read nodes/edges on-demand via getState() to avoid subscribing to
+      // the full arrays (which would cause re-renders on every canvas change)
+      const { nodes: currentNodes, edges: currentEdges } = useCanvasStore.getState();
+      effectiveSourceHash = findUpstreamCommitHash(node.id, currentNodes, currentEdges);
+    }
+
+    if (!effectiveSourceHash) return true; // Truly no parent
     // Has parent commit: only valid if parent is HEAD of main
-    return data.sourceCommitHash !== latestMainCommitId;
-  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId]);
+    return effectiveSourceHash !== latestMainCommitId;
+  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId, node?.id]);
 
   // ========== Layout state ==========
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240);
@@ -1117,9 +1162,10 @@ export function PendingCommitView({
 
       const newDraft = await api.createDraftV3({
         project_id: projectId,
-        title: data.title || 'Draft from Canvas',
+        title: data.title || t('draft_from_canvas'),
         parent_commit_hash: data.sourceCommitHash || undefined,
-        target_branch: data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
+        target_branch:
+          data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
       });
 
       if (draftSentences.length > 0) {
@@ -1624,6 +1670,36 @@ export function PendingCommitView({
                       ? 'Drag to select text \u00b7 Click to mark keywords'
                       : 'Click phrases in SOURCE to toggle inclusion'}
                   </p>
+
+                  {/* Source lineage summary */}
+                  {hasNewSourceData && (
+                    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-2.5 text-xs">
+                      <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1.5">
+                        Sources
+                      </div>
+                      <div className="space-y-1">
+                        {textBlocks.map((block) => (
+                          <div key={block.id} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                            <MessageCircle size={11} className="text-[var(--text-tertiary)] shrink-0" />
+                            <span className="truncate flex-1">
+                              {block.sourceNodeTitle || 'Unknown source'}
+                            </span>
+                            <span className="text-[var(--text-tertiary)] shrink-0">
+                              {block.selections.length} sel
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {data.pendingSource?.sentences && data.pendingSource.sentences.length > 0 && (
+                        <div className="mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)] flex items-center gap-1.5 text-[var(--text-tertiary)]">
+                          <FileText size={11} className="shrink-0" />
+                          <span>
+                            {data.pendingSource.sentences.length} sentence{data.pendingSource.sentences.length !== 1 ? 's' : ''} ready
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Commit error */}
                   {commitError && (

@@ -4,8 +4,9 @@
  * GET /health - Liveness probe (no DB check)
  * GET /ready  - Readiness probe (verifies DB connectivity)
  */
-import { Hono } from 'hono';
+
 import { findProjects } from '@t3x/storage/pglite';
+import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 
 const startTime = Date.now();

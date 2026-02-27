@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4, LeafType, Project, Template } from '@/lib/api';
 import { createLeaf, listCommitsV4, listProjects } from '@/lib/api';
 
@@ -26,6 +27,7 @@ interface UseTemplateDialogProps {
 }
 
 export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateDialogProps) {
+  const { t } = useTerminology();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [commits, setCommits] = useState<CommitV4[]>([]);
@@ -154,7 +156,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
 
           {/* Commit selection */}
           <div className="space-y-1.5">
-            <Label>Commit</Label>
+            <Label>{t('commit')}</Label>
             {loadingCommits ? (
               <div className="flex items-center gap-2 h-9 text-sm text-[var(--text-tertiary)]">
                 <Loader2 className="h-3 w-3 animate-spin" />

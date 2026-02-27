@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   Eye,
+  FileOutput,
   FilePlus,
   FileText,
   GitBranch,
@@ -34,7 +35,7 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -365,11 +366,24 @@ function CommitV4Content({
           <>
             <ul className="mt-1 space-y-0.5">
               {displaySentences.map((s) => (
-                <li key={s.id} className="text-xs text-[var(--text-secondary)] line-clamp-2">
-                  <span className="text-[var(--text-tertiary)] font-mono text-[11px] mr-1">
+                <li key={s.id} className="flex items-start gap-1 text-xs text-[var(--text-secondary)]">
+                  {s.confidence !== undefined && (
+                    <span
+                      className={cn(
+                        'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
+                        s.confidence >= 0.8
+                          ? 'bg-[var(--status-success)]'
+                          : s.confidence >= 0.5
+                            ? 'bg-amber-500'
+                            : 'bg-[var(--status-error)]'
+                      )}
+                      title={`${Math.round(s.confidence * 100)}%`}
+                    />
+                  )}
+                  <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
                     {s.id}
                   </span>
-                  {s.text}
+                  <span className="line-clamp-2">{s.text}</span>
                 </li>
               ))}
             </ul>
@@ -446,6 +460,8 @@ function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
+  const [showLineage, setShowLineage] = useState(false);
+  const lineageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
@@ -463,6 +479,7 @@ function UnitNode(props: Props) {
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const leafContextMenuHandler = useCanvasStore((state) => state.leafContextMenuHandler);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -505,8 +522,6 @@ function UnitNode(props: Props) {
   const toneKey = isStaging || isDraft ? 'staging' : tone || 'default';
   const accentKey = getToneAccentKey(toneKey);
 
-  // (Breathing glow removed — keep canvas quiet)
-
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
     ? 'node-glow-committed'
@@ -534,6 +549,13 @@ function UnitNode(props: Props) {
     });
     ro.observe(nodeRef.current);
     return () => ro.disconnect();
+  }, []);
+
+  // Cleanup lineage hover timer on unmount
+  useEffect(() => {
+    return () => {
+      if (lineageTimerRef.current) clearTimeout(lineageTimerRef.current);
+    };
   }, []);
 
   const handleAddUnit = () => {
@@ -566,6 +588,18 @@ function UnitNode(props: Props) {
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
   };
+
+  // Lineage card hover handlers (400ms open delay, immediate close)
+  const handleNodeMouseEnter = useCallback(() => {
+    lineageTimerRef.current = setTimeout(() => setShowLineage(true), 400);
+  }, []);
+  const handleNodeMouseLeave = useCallback(() => {
+    if (lineageTimerRef.current) {
+      clearTimeout(lineageTimerRef.current);
+      lineageTimerRef.current = null;
+    }
+    setShowLineage(false);
+  }, []);
 
   // Navigate to leaf detail page
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
@@ -695,6 +729,8 @@ function UnitNode(props: Props) {
             : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
+        onMouseEnter={handleNodeMouseEnter}
+        onMouseLeave={handleNodeMouseLeave}
         className={cn(
           'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
@@ -746,6 +782,75 @@ function UnitNode(props: Props) {
           isActive={sealing}
           onComplete={() => setSealing(false)}
         />
+
+        {/* Lineage summary card — appears on hover after 400ms */}
+        {showLineage && isCommitted && (
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 pointer-events-none">
+            <div
+              className={cn(
+                'rounded-lg px-3 py-2 text-xs min-w-[200px] max-w-[260px] shadow-lg border border-[var(--stroke-divider)]',
+                glass.cardNode
+              )}
+            >
+              {/* Branch + hash */}
+              <div className="flex items-center gap-1.5 mb-1.5">
+                {data.branchType === 'main' ? (
+                  <GitCommit size={11} className={toneAccent.commit.text} />
+                ) : (
+                  <GitBranch size={11} className={toneAccent.branch.text} />
+                )}
+                <span className="font-medium text-[var(--text-primary)]">{branchLabel}</span>
+                {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash) && (
+                  <span className="font-mono text-[var(--text-tertiary)] text-[10px]">
+                    {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '')
+                      .replace('sha256:', '')
+                      .slice(0, 7)}
+                  </span>
+                )}
+              </div>
+              {/* Stats rows */}
+              <div className="space-y-0.5 text-[var(--text-secondary)]">
+                {data.isMergeCommit && (
+                  <div className="flex items-center gap-1.5">
+                    <GitMerge size={10} className="text-[var(--text-tertiary)]" />
+                    <span>Merge commit</span>
+                  </div>
+                )}
+                {data.sources && data.sources.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <MessageCircle size={10} className="text-[var(--text-tertiary)]" />
+                    <span>
+                      {data.sources.length} source{data.sources.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+                {sentenceCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <FileText size={10} className="text-[var(--text-tertiary)]" />
+                    <span>
+                      {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+                {data.leaves && data.leaves.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Rocket size={10} className="text-[var(--text-tertiary)]" />
+                    <span>
+                      {data.leaves.length} {data.leaves.length === 1 ? 'leaf' : 'leaves'}
+                      {totalAssertions > 0 && (
+                        <span className="ml-1">
+                          (<span className="text-[var(--status-success)]">{totalPassed}</span>
+                          <span className="text-[var(--text-tertiary)]">/</span>
+                          <span>{totalAssertions}</span>)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
@@ -972,8 +1077,44 @@ function UnitNode(props: Props) {
                   ];
                   if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);
                   return (
-                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 truncate">
-                      {parts.join(' · ')}
+                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 flex items-center gap-1.5">
+                      <span className="truncate">{parts.join(' · ')}</span>
+                      {ms.release_note && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="shrink-0 p-0.5 rounded hover:bg-[var(--hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const note = ms.release_note!;
+                                  const md = [
+                                    `# ${note.title}`,
+                                    '',
+                                    `**Summary:** ${note.summary}`,
+                                    '',
+                                  ];
+                                  for (const sec of note.sections) {
+                                    md.push(`## ${sec.heading}`, '');
+                                    for (const item of sec.items) md.push(`- ${item}`);
+                                    md.push('');
+                                  }
+                                  navigator.clipboard.writeText(md.join('\n')).then(
+                                    () => notify?.('Release note copied', 'success'),
+                                    () => notify?.('Failed to copy', 'error')
+                                  );
+                                }}
+                              >
+                                <FileOutput size={10} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Copy release note
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   );
                 })()}
@@ -1124,6 +1265,7 @@ function UnitNode(props: Props) {
                           key={leaf.id}
                           data-node-type="leaf"
                           className="group/leaf flex items-center gap-1"
+                          onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, id)}
                         >
                           {leafHref ? (
                             <Link

@@ -2,13 +2,14 @@
 
 import { Clock3, GitCommit, Lightbulb, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useCountUp } from '@/hooks/useCountUp';
 import { GraphIllustration } from '@/components/illustrations/GraphIllustration';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCountUp } from '@/hooks/useCountUp';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitV4, Project } from '@/lib/api';
 import { listCommitsV4, listProjects } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -33,10 +34,14 @@ function formatTimeAgo(dateStr: string): string {
   return `${diffDay}d ago`;
 }
 
-function commitToSemanticEntry(commit: CommitV4, projectName: string): SemanticEntry {
+function commitToSemanticEntry(
+  commit: CommitV4,
+  projectName: string,
+  commitLabel: string
+): SemanticEntry {
   return {
     id: commit.hash.slice(7, 19),
-    title: commit.message || `Commit ${commit.hash.slice(7, 15)}`,
+    title: commit.message || `${commitLabel} ${commit.hash.slice(7, 15)}`,
     summary: commit.content.sentences.map((s) => s.text).join('. '),
     author: commit.author?.name || commit.author?.type || 'unknown',
     stage: 'commit',
@@ -56,6 +61,7 @@ const INSIGHTS_COMMITS_PER_PROJECT = 5;
 const LEDGER_PAGE_SIZE = 50;
 
 export default function InsightsPage() {
+  const { t } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [entries, setEntries] = useState<SemanticEntry[]>([]);
@@ -103,15 +109,16 @@ export default function InsightsPage() {
         );
 
         // Map to SemanticEntry for the Ledger tab
+        const commitLabel = t('commit');
         const semanticEntries = allCommits.map(({ commit, projectName }) =>
-          commitToSemanticEntry(commit, projectName)
+          commitToSemanticEntry(commit, projectName, commitLabel)
         );
         setEntries(semanticEntries);
 
         // Build timeline from recent commits
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
           id: commit.hash.slice(7, 19),
-          label: commit.message || `Commit on ${commit.branch || 'main'}`,
+          label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
           detail: `${commit.content.sentences.length} sentences in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),
           stage: 'commit' as const,

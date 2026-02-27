@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { useTerminology } from '@/hooks/useTerminology';
 
 interface CommitResult {
   commit: Record<string, unknown>;
@@ -45,6 +46,7 @@ export function CommitDraftDialog({
   includedCount,
   constraintCount,
 }: CommitDraftDialogProps) {
+  const { t } = useTerminology();
   const [message, setMessage] = useState('');
   const [committing, setCommitting] = useState(false);
   const [phase, setPhase] = useState<'input' | 'success'>('input');
@@ -106,7 +108,7 @@ export function CommitDraftDialog({
         {phase === 'input' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Commit Draft</DialogTitle>
+              <DialogTitle>{t('commit_draft')}</DialogTitle>
               <DialogDescription>
                 This will create a new commit with {includedCount} sentence
                 {includedCount !== 1 ? 's' : ''}
@@ -120,7 +122,7 @@ export function CommitDraftDialog({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Commit message (optional)"
+              placeholder={`${t('commit_message')} (optional)`}
               rows={2}
               className="resize-none"
               autoFocus
@@ -134,10 +136,10 @@ export function CommitDraftDialog({
                 {committing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    Committing...
+                    {t('committing')}
                   </>
                 ) : (
-                  'Commit'
+                  t('commitAction')
                 )}
               </Button>
             </DialogFooter>
@@ -157,7 +159,7 @@ export function CommitDraftDialog({
 
             <div className="text-center">
               <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-                Knowledge committed
+                {t('knowledge_committed')}
               </h3>
               <p className="text-sm text-muted-foreground font-mono mt-1">
                 {commitHash ? `${commitHash.slice(0, 16)}...` : ''}

@@ -295,7 +295,11 @@ describe('Commits V3 Routes', () => {
           message: 'Commit 1',
           content: {
             sentences: [
-              { id: 's1', text: 'First commit sentence.', source: { turn_hash: 'sha256:aaa', start_char: 0, end_char: 22 } },
+              {
+                id: 's1',
+                text: 'First commit sentence.',
+                source: { turn_hash: 'sha256:aaa', start_char: 0, end_char: 22 },
+              },
             ],
           },
         }),
@@ -309,7 +313,11 @@ describe('Commits V3 Routes', () => {
           message: 'Commit 2',
           content: {
             sentences: [
-              { id: 's2', text: 'Second commit sentence.', source: { turn_hash: 'sha256:bbb', start_char: 0, end_char: 23 } },
+              {
+                id: 's2',
+                text: 'Second commit sentence.',
+                source: { turn_hash: 'sha256:bbb', start_char: 0, end_char: 23 },
+              },
             ],
           },
         }),

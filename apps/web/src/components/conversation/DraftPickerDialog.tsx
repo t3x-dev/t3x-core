@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { DraftSentence, DraftV3 } from '@/lib/api';
 import { createDraftV3, listDraftsV3, updateDraftV3 } from '@/lib/api';
 import { nextDraftId } from '@/lib/draftUtils';
@@ -71,6 +72,7 @@ export function DraftPickerDialog({
   startChar,
   endChar,
 }: DraftPickerDialogProps) {
+  const { t } = useTerminology();
   const [drafts, setDrafts] = useState<DraftV3[]>([]);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
@@ -90,7 +92,7 @@ export function DraftPickerDialog({
     try {
       const titlePrefix = conversationTitle ? conversationTitle.slice(0, 20) : 'Selection';
       const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const autoTitle = `Draft · ${titlePrefix} · ${dateStr}`;
+      const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
       const newDraft = await createDraftV3({ project_id: projectId, title: autoTitle });
       const sentence = buildSentence(

@@ -1,5 +1,5 @@
-import { expect, test } from '../fixtures/test';
 import { API_BASE } from '../fixtures/api-helpers';
+import { expect, test } from '../fixtures/test';
 import { isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**

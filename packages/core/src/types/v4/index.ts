@@ -527,6 +527,16 @@ export interface MergeSummaryData {
 
   /** Total sentences in the merged commit */
   total_sentences: number;
+
+  /** Optional release note generated after merge */
+  release_note?: {
+    title: string;
+    timestamp: string;
+    source_branch: string;
+    target_branch: string;
+    summary: string;
+    sections: Array<{ heading: string; items: string[] }>;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

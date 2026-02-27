@@ -11,7 +11,16 @@
  * - Expanded view shows source context with "Jump to conversation" link
  */
 
-import { Check, CheckSquare, ChevronDown, ChevronUp, MapPin, Square } from 'lucide-react';
+import {
+  Check,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Minus,
+  Plus,
+  Square,
+} from 'lucide-react';
 import { useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import type { Sentence, TurnContextData } from '@/types/merge';
@@ -95,7 +104,7 @@ export function MergeDiffLine({
   };
 
   return (
-    <div className="space-y-0" data-merge-nav={navId}>
+    <div className="space-y-0" data-merge-nav={navId} aria-label={`${type} sentence`}>
       {/* Main diff line */}
       <div
         className={`
@@ -111,12 +120,19 @@ export function MergeDiffLine({
         {/* Prefix */}
         <span
           className={`
-            shrink-0 w-4 text-center font-bold
+            shrink-0 w-4 text-center font-bold inline-flex items-center justify-center
             ${type === 'added' ? 'text-[var(--diff-added-accent)]' : ''}
             ${type === 'removed' ? 'text-[var(--diff-removed-accent)]' : ''}
           `}
+          aria-hidden="true"
         >
-          {styles.prefix}
+          {type === 'added' ? (
+            <Plus className="h-3.5 w-3.5" />
+          ) : type === 'removed' ? (
+            <Minus className="h-3.5 w-3.5" />
+          ) : (
+            styles.prefix
+          )}
         </span>
 
         {/* Checkbox for keep/discard */}
@@ -127,12 +143,13 @@ export function MergeDiffLine({
               e.stopPropagation();
               onToggleKeep?.();
             }}
+            aria-label={isKept ? 'Exclude sentence' : 'Include sentence'}
             className="shrink-0 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
           >
             {isKept ? (
-              <CheckSquare className="h-4 w-4 text-[var(--diff-added-accent)]" />
+              <CheckSquare className="h-4 w-4 text-[var(--diff-added-accent)]" aria-hidden="true" />
             ) : (
-              <Square className="h-4 w-4" />
+              <Square className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
         )}
@@ -177,10 +194,14 @@ export function MergeDiffLine({
               : 'Source context not available'
           }
         >
-          <MapPin className="h-4 w-4" />
+          <MapPin className="h-4 w-4" aria-hidden="true" />
           {hasSource &&
             useInlineExpand &&
-            (expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+            (expanded ? (
+              <ChevronUp className="h-3 w-3" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+            ))}
         </button>
       </div>
 

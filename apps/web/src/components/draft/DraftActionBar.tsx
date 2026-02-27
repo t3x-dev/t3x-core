@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useTerminology } from '@/hooks/useTerminology';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -22,8 +23,11 @@ interface DraftActionBarProps {
 }
 
 export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: DraftActionBarProps) {
+  const { t } = useTerminology();
   const { draft, saveStatus, lastSavedAt, updateTitle } = useDraftWorkspaceStore();
-  const projectName = useProjectStore((s) => projectId ? s.getProject(projectId)?.name : undefined);
+  const projectName = useProjectStore((s) =>
+    projectId ? s.getProject(projectId)?.name : undefined
+  );
   const [editing, setEditing] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,7 +79,7 @@ export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: Draf
             ...(projectId
               ? [{ label: projectName || 'Project', href: `/project/${projectId}` }]
               : []),
-            { label: 'Draft' },
+            { label: t('draft') },
           ]}
         />
       </div>
@@ -106,7 +110,7 @@ export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: Draf
 
       {/* Status badge */}
       <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-        Draft
+        {t('draft')}
       </Badge>
 
       {/* Save status */}
@@ -114,7 +118,7 @@ export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: Draf
 
       {/* Commit button */}
       <Button size="sm" onClick={onCommit} disabled={!canCommit}>
-        Commit
+        {t('commitAction')}
       </Button>
     </div>
   );

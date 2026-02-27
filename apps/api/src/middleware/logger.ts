@@ -8,8 +8,9 @@
  * Log format: { level, time, req_id, method, path, status, latency_ms }
  * Env: LOG_LEVEL (default: 'info')
  */
-import pino from 'pino';
+
 import { createMiddleware } from 'hono/factory';
+import pino from 'pino';
 
 const isDev = process.env.NODE_ENV !== 'production';
 

@@ -13,6 +13,7 @@ import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { useTerminology } from '@/hooks/useTerminology';
 import type { TextSelectionResult } from '@/hooks/useTextSelection';
 import type { DraftV3 } from '@/lib/api';
 import { createDraftV3, listDraftsV3, updateDraftV3 } from '@/lib/api';
@@ -58,6 +59,7 @@ export function AddToDraftButton({
   conversationTitle,
   onDone,
 }: AddToDraftButtonProps) {
+  const { t } = useTerminology();
   const [showPicker, setShowPicker] = useState(false);
   const [acting, setActing] = useState(false);
 
@@ -75,7 +77,7 @@ export function AddToDraftButton({
   const quickCollect = async () => {
     const titlePrefix = conversationTitle ? conversationTitle.slice(0, 20) : 'Selection';
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const autoTitle = `Draft · ${titlePrefix} · ${dateStr}`;
+    const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
     const newDraft = await createDraftV3({ project_id: projectId, title: autoTitle });
     const sentence = buildSentence(selection.text, selection, conversationId, conversationTitle, 0);

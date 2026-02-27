@@ -7,7 +7,6 @@
  */
 
 import { createClaudeProvider, LLMProviderError } from '@t3x/core';
-import { getLLMProvider } from '../lib/provider-registry';
 import {
   findConversationById,
   findDraftById,
@@ -18,6 +17,7 @@ import {
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
+import { getLLMProvider } from '../lib/provider-registry';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
@@ -425,7 +425,12 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
   let llmProviderInstance = await getLLMProvider();
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (!llmProviderInstance && !anthropicApiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', 'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.', 400);
+    return jsonError(
+      c,
+      'PROVIDER_ERROR',
+      'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.',
+      400
+    );
   }
 
   try {

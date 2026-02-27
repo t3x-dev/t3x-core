@@ -13,6 +13,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
+import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeSimilarPair } from '@/types/merge';
@@ -37,6 +38,7 @@ export function MergeConflictView({
   navId,
 }: MergeConflictViewProps) {
   const router = useRouter();
+  const { t } = useTerminology();
   const { extendedResolutions, resolveConflict, getEffectiveResolution, projectId } =
     useMergeWorkspaceStore();
 
@@ -56,8 +58,9 @@ export function MergeConflictView({
   );
 
   return (
-    <div
+    <li
       data-merge-nav={navId}
+      aria-label={`Conflict ${index + 1}: ${resolved ? 'resolved' : 'unresolved'}`}
       className={cn(
         'rounded-lg border p-[var(--space-group)] transition-colors elevation-1',
         resolved
@@ -86,14 +89,14 @@ export function MergeConflictView({
         <ConflictSide
           side="source"
           sentence={pair.source}
-          label={`Branch ${sourceBranch}`}
+          label={`${t('branch')} ${sourceBranch}`}
           isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
           onJumpToConversation={handleJumpToConversation}
         />
         <ConflictSide
           side="target"
           sentence={pair.target}
-          label={`Branch ${targetBranch}`}
+          label={`${t('branch')} ${targetBranch}`}
           isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
           onJumpToConversation={handleJumpToConversation}
         />
@@ -106,6 +109,6 @@ export function MergeConflictView({
         sourceBranch={sourceBranch}
         targetBranch={targetBranch}
       />
-    </div>
+    </li>
   );
 }

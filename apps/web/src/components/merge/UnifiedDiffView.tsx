@@ -527,7 +527,7 @@ export function UnifiedDiffView({
               variant={unresolvedCount > 0 ? 'warning' : 'success'}
               navId="conflicts"
             >
-              <div className="space-y-[var(--space-group)]">
+              <ul className="space-y-[var(--space-group)] list-none p-0 m-0">
                 {similarPairs.map((pair, idx) => (
                   <MergeConflictView
                     key={`conflict-${pair.source.id}-${pair.target.id}`}
@@ -538,7 +538,7 @@ export function UnifiedDiffView({
                     navId={`conflict-${idx}`}
                   />
                 ))}
-              </div>
+              </ul>
             </MergeDiffSection>
           )}
 

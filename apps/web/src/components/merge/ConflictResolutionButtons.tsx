@@ -78,7 +78,7 @@ export function ConflictResolutionButtons({
   const buttons: ButtonConfig[] = [
     {
       resolution: 'source',
-      icon: <ArrowLeft className="h-4 w-4" />,
+      icon: <ArrowLeft className="h-4 w-4" aria-hidden="true" />,
       label: `Keep ${sourceBranch}`,
       activeClass:
         'border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] ring-1 ring-[var(--diff-removed-line)]/40 bg-transparent',
@@ -86,7 +86,7 @@ export function ConflictResolutionButtons({
     },
     {
       resolution: 'target',
-      icon: <ArrowRight className="h-4 w-4" />,
+      icon: <ArrowRight className="h-4 w-4" aria-hidden="true" />,
       label: `Keep ${targetBranch}`,
       activeClass:
         'border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] ring-1 ring-[var(--diff-added-line)]/40 bg-transparent',
@@ -94,7 +94,7 @@ export function ConflictResolutionButtons({
     },
     {
       resolution: 'both',
-      icon: <Layers className="h-4 w-4" />,
+      icon: <Layers className="h-4 w-4" aria-hidden="true" />,
       label: t('keep_both'),
       activeClass:
         'border-[var(--accent-commit)]/40 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/40 bg-transparent',
@@ -112,6 +112,8 @@ export function ConflictResolutionButtons({
             type="button"
             onClick={() => onResolve(btn.resolution)}
             title={enableKeyboard ? `${btn.label} (${btn.shortcut})` : btn.label}
+            aria-label={btn.label}
+            aria-pressed={isActive}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors',
               isActive

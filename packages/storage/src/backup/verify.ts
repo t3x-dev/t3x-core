@@ -6,7 +6,7 @@
  */
 
 import type { AnyDB } from '../adapters';
-import { findCommitsV4ByProject, computeCommitV4Hash } from '../queries';
+import { computeCommitV4Hash, findCommitsV4ByProject } from '../queries';
 
 export interface VerifyResult {
   valid: boolean;
@@ -20,10 +20,7 @@ export interface VerifyResult {
  * Recomputes each commit hash from its content and compares
  * with the stored hash value.
  */
-export async function verifyHashChain(
-  db: AnyDB,
-  projectId: string
-): Promise<VerifyResult> {
+export async function verifyHashChain(db: AnyDB, projectId: string): Promise<VerifyResult> {
   const commits = await findCommitsV4ByProject(db, projectId, { limit: 100000 });
   const errors: string[] = [];
 

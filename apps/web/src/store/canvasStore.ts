@@ -256,7 +256,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           const virtualConv: api.Conversation = {
             conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
             project_id: projectId,
-            title: commit.message || `Commit ${commit.commit_hash.slice(0, 8)}`,
+            title:
+              commit.message ||
+              `${getTerminology('commit', useSettingsStore.getState().developerMode)} ${commit.commit_hash.slice(0, 8)}`,
             parent_commit_hash: commit.parent_hashes[0] ?? undefined,
             turns_count: 0,
             position_x: undefined,
@@ -302,7 +304,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         // Build unit→unit edges based on commit parent relationships
         // In the unit model, edges connect committed units to their children
         // Edge: parentUnit (commit_hash) → childUnit (commit_hash)
+        // Semantic type: evolve (single parent) or merge (multiple parents)
         commits.forEach((commit) => {
+          const isMergeCommit = commit.parent_hashes.length > 1;
           commit.parent_hashes.forEach((parentHash) => {
             if (!commitHashes.has(parentHash)) return;
 
@@ -313,6 +317,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
               type: edgeType,
               animated: false,
               style: edgeStyle,
+              data: { edgeType: isMergeCommit ? 'merge' : 'evolve' },
             });
           });
         });
@@ -391,6 +396,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                   type: edgeType,
                   animated: true,
                   style: { ...edgeStyle, strokeDasharray: '5 5' },
+                  data: { edgeType: 'draft' },
                 });
               }
             }
@@ -726,7 +732,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
       set({
@@ -779,7 +785,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
       set({
@@ -874,7 +880,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           type: edgeType,
           animated: false,
           style: edgeStyle,
-          data: { createdAt: Date.now() },
+          data: { createdAt: Date.now(), edgeType: 'evolve' },
         };
         return {
           nodes: [...state.nodes, newNode],
@@ -1321,10 +1327,34 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         type: edgeType,
         animated: false,
         style: edgeStyle,
-        data: { createdAt: Date.now() },
+        data: { createdAt: Date.now(), edgeType: 'evolve' },
       };
 
-      set({ edges: [...edges, newEdge] });
+      // Propagate sourceCommitHash when connecting committed → staging unit
+      let updatedNodes = nodes;
+      if (
+        source &&
+        target &&
+        source.data.kind === 'unit' &&
+        source.data.commitStatus === 'committed' &&
+        target.data.kind === 'unit' &&
+        target.data.commitStatus === 'staging'
+      ) {
+        updatedNodes = nodes.map((n) =>
+          n.id === target.id
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  sourceCommitHash: source.data.commitHash ?? source.data.sourceCommitHash,
+                  sourceTurnWindow: source.data.sourceTurnWindow,
+                },
+              }
+            : n
+        );
+      }
+
+      set({ nodes: updatedNodes, edges: [...edges, newEdge] });
     },
     getCommitTone: (commitId) => {
       const state = get();

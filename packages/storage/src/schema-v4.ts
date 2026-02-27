@@ -126,6 +126,14 @@ export const commitsV4 = pgTable(
       kept_from_target: number;
       discarded: number;
       total_sentences: number;
+      release_note?: {
+        title: string;
+        timestamp: string;
+        source_branch: string;
+        target_branch: string;
+        summary: string;
+        sections: Array<{ heading: string; items: string[] }>;
+      };
     }>(),
 
     /** Canvas position */
