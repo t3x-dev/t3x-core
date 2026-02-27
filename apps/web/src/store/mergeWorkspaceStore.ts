@@ -219,6 +219,7 @@ function transformSentence(apiSentence: ApiSentence): Sentence {
   const turnHash = ref.turn_hash || ref.turnHash;
   const startChar = ref.start_char ?? ref.startChar;
   const endChar = ref.end_char ?? ref.endChar;
+  const conversationId = ref.conversation_id || ref.conversationId;
 
   if (!turnHash) {
     return {
@@ -233,6 +234,7 @@ function transformSentence(apiSentence: ApiSentence): Sentence {
     text: apiSentence.text,
     confidence: apiSentence.confidence,
     source: {
+      conversation_id: conversationId,
       turn_hash: turnHash,
       start_char: startChar ?? 0,
       end_char: endChar ?? 0,

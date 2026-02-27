@@ -28,6 +28,10 @@ export const SentenceSchema = z.object({
   }),
   source: z
     .object({
+      conversation_id: z.string().optional().openapi({
+        description: 'Source conversation ID for lineage tracing',
+        example: 'conv_abc123',
+      }),
       turn_hash: z.string().openapi({
         description: 'Source turn hash',
         example: 'sha256:abc123...',

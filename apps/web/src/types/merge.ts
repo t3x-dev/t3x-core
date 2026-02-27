@@ -25,6 +25,8 @@ export interface SentenceSource {
   type?: string;
   /** Legacy: Source identifier */
   id?: string;
+  /** V4: Conversation ID for lineage tracing */
+  conversation_id?: string;
   /** V3: Turn hash for tracing */
   turn_hash?: string;
   /** V3: Start character position */
