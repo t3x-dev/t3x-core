@@ -7,7 +7,6 @@ import {
   ExternalLink,
   GitCompare,
   Loader2,
-  Play,
   Plus,
   RefreshCw,
   Trash2,
@@ -33,7 +32,6 @@ import {
 import {
   checkRunnerHealth,
   createDeployAgent,
-  createEngineRun,
   type DeployAgent,
   deleteDeployAgent,
   type EngineRun,
@@ -199,79 +197,6 @@ function DeployPageContent() {
     }
   };
 
-  const handleRunAgent = async (agent: DeployAgent) => {
-    try {
-      // Update local state to show running
-      setDeployAgents(
-        deployAgents.map((a) =>
-          a.deploy_agent_id === agent.deploy_agent_id ? { ...a, status: 'running' as const } : a
-        )
-      );
-
-      // Update database status
-      await updateDeployAgent(agent.deploy_agent_id, { status: 'running' });
-
-      // Use Engine API to trigger n8n workflow
-      // agent.endpoint is used as the n8n webhook ID
-      const result = await createEngineRun({
-        leaf: {
-          id: agent.deploy_agent_id,
-          type: 'deploy_agent',
-        },
-        inputs: { test: true },
-        workflow: {
-          type: 'n8n',
-          webhook_id: agent.endpoint,
-        },
-      });
-
-      const nowIso = new Date().toISOString();
-
-      // Update database with run ID (status will be updated by callback)
-      await updateDeployAgent(agent.deploy_agent_id, {
-        status: 'running',
-        last_run_id: result.run_id,
-        last_run_at: nowIso,
-      });
-
-      // Update local state
-      setDeployAgents(
-        deployAgents.map((a) =>
-          a.deploy_agent_id === agent.deploy_agent_id
-            ? { ...a, status: 'running' as const, last_run_id: result.run_id, last_run_at: nowIso }
-            : a
-        )
-      );
-
-      // Refresh runs list from Engine
-      try {
-        const runsData = await listEngineRuns();
-        setRuns(runsData.runs);
-      } catch (_err) {
-        // Runs refresh is best-effort after triggering agent
-      }
-
-      // Show warning if any
-      if (result.warning) {
-        showToast(`Run warning: ${result.warning}`, 'warning');
-      }
-
-      // Navigate to run detail page
-      router.push(`/deploy/eval/${result.run_id}`);
-    } catch (_err) {
-      showToast('Failed to run deploy agent', 'error');
-
-      // Update database status to error
-      await updateDeployAgent(agent.deploy_agent_id, { status: 'error' });
-
-      setDeployAgents(
-        deployAgents.map((a) =>
-          a.deploy_agent_id === agent.deploy_agent_id ? { ...a, status: 'error' as const } : a
-        )
-      );
-    }
-  };
-
   const handleDeleteAgent = async (agent: DeployAgent) => {
     if (!confirm(`Are you sure you want to delete deploy agent "${agent.name}"?`)) {
       return;
@@ -373,79 +298,41 @@ function DeployPageContent() {
               }}
             />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="divide-y">
               {deployAgents.map((agent) => (
-                <Card key={agent.deploy_agent_id} className="py-3">
-                  <CardContent className="space-y-[var(--space-item)]">
-                    <div className="min-w-0">
-                      <h3 className="truncate font-semibold">{agent.name}</h3>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {agent.deploy_agent_id}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1">
-                      <code className="flex-1 truncate text-xs">{agent.endpoint}</code>
-                      <a
-                        href={agent.endpoint}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRunAgent(agent);
-                        }}
-                        disabled={agent.status === 'running' || !runnerHealthy}
-                      >
-                        {agent.status === 'running' ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Running
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4" />
-                            Run
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:bg-destructive/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAgent(agent);
-                        }}
-                        disabled={agent.status === 'running'}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {agent.last_run_id && (
-                      <p className="text-xs text-muted-foreground">
-                        Last run:{' '}
-                        <a
-                          href={`/deploy/eval/${agent.last_run_id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {agent.last_run_id}
-                        </a>
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+                <div
+                  key={agent.deploy_agent_id}
+                  className="flex items-center gap-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 shrink-0 font-medium">{agent.name}</span>
+                  <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {agent.endpoint}
+                  </code>
+                  {agent.last_run_id && (
+                    <a
+                      href={`/deploy/eval/${agent.last_run_id}`}
+                      className="shrink-0 text-xs text-primary hover:underline"
+                    >
+                      last run
+                    </a>
+                  )}
+                  <a
+                    href={agent.endpoint}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDeleteAgent(agent)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               ))}
             </div>
           )}

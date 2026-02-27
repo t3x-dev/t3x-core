@@ -1,6 +1,6 @@
 'use client';
 
-import { Brain, Check, FileText, Loader2, MessageSquare, Pin, XCircle } from 'lucide-react';
+import { BookOpen, Brain, Check, CheckCircle, FileText, Loader2, MessageSquare, Pin, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { TurnBubble } from '@/components/shared/TurnBubble';
 import { Button } from '@/components/ui/button';
@@ -262,8 +262,69 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                 </div>
               )}
 
+              {/* Assertion Lessons (from runner evaluation) */}
+              {(() => {
+                const assertions = leaf.runner_assertions ?? leaf.assertions;
+                if (!assertions || assertions.length === 0) return null;
+                const pin = getPinByRef('leaf', leaf.id);
+                const selectedIds = pin?.selected_assertion_ids;
+                return (
+                  <div>
+                    <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] mb-[var(--space-item)] uppercase tracking-wide">
+                      Evaluation Lessons
+                      {selectedIds && (
+                        <span className="ml-1 text-[var(--status-warning)]">
+                          ({selectedIds.length} pinned)
+                        </span>
+                      )}
+                    </h4>
+                    <div className="space-y-[var(--space-item)]">
+                      {assertions.map((a) => {
+                        const isSelected = selectedIds?.includes(a.id);
+                        return (
+                          <div
+                            key={a.id}
+                            className={cn(
+                              'p-2 rounded border text-sm',
+                              a.passed
+                                ? 'bg-[var(--status-success-muted)] border-[var(--status-success)]/20'
+                                : 'bg-[var(--status-error-muted)] border-[var(--status-error)]/20',
+                              isSelected && 'ring-1 ring-[var(--status-warning)]/50'
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              {a.passed ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-[var(--status-success)]" />
+                              ) : (
+                                <XCircle className="h-3.5 w-3.5 text-[var(--status-error)]" />
+                              )}
+                              <span className={cn(
+                                'text-xs font-medium',
+                                a.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
+                              )}>
+                                {a.passed ? 'Passed' : 'Failed'}
+                              </span>
+                              {isSelected && (
+                                <Pin className="h-3 w-3 text-[var(--status-warning)] fill-[var(--status-warning)]" />
+                              )}
+                            </div>
+                            <p className="text-sm text-[var(--text-secondary)]">{a.details}</p>
+                            {a.lesson && (
+                              <div className="mt-1.5 flex items-start gap-1.5 rounded bg-amber-500/10 p-1.5 text-xs">
+                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                                <span className="text-amber-900 dark:text-amber-300">{a.lesson}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* No content */}
-              {(!leaf.constraints || leaf.constraints.length === 0) && !leaf.output && (
+              {(!leaf.constraints || leaf.constraints.length === 0) && !leaf.output && !(leaf.runner_assertions ?? leaf.assertions)?.length && (
                 <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
                   No constraints or output yet
                 </p>
