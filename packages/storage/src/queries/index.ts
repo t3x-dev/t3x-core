@@ -95,6 +95,13 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
+// Global Settings (key-value config store)
+export {
+  deleteGlobalSetting,
+  getGlobalSetting,
+  listGlobalSettings,
+  setGlobalSetting,
+} from './global-settings';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
@@ -107,6 +114,21 @@ export {
   updateDeployAgent,
   updateDeployAgentRunStatus,
 } from './deployAgents';
+// Drafts V3 (Workbench)
+export {
+  abandonDraftV3,
+  ConflictError,
+  commitDraftV3,
+  deleteDraftV3,
+  findDraftV3ById,
+  forkDraftV3,
+  insertDraftV3,
+  type ListDraftV3Options,
+  listDraftV3ByProject,
+  type UpdateDraftV3Input,
+  updateDraftV3,
+  updateDraftV3Preview,
+} from './drafts-v3';
 // Agent Drafts (formerly drafts_v2)
 export {
   adoptDraft,
@@ -123,28 +145,6 @@ export {
   updateDraft,
   updateDraftStatus,
 } from './drafts';
-// Drafts V3 (Workbench)
-export {
-  abandonDraftV3,
-  ConflictError,
-  commitDraftV3,
-  deleteDraftV3,
-  findDraftV3ById,
-  forkDraftV3,
-  insertDraftV3,
-  type ListDraftV3Options,
-  listDraftV3ByProject,
-  type UpdateDraftV3Input,
-  updateDraftV3,
-  updateDraftV3Preview,
-} from './drafts-v3';
-// Global Settings (key-value config store)
-export {
-  deleteGlobalSetting,
-  getGlobalSetting,
-  listGlobalSettings,
-  setGlobalSetting,
-} from './global-settings';
 // Leaf History (generation history for leaves)
 export {
   countHistoryByLeafId,

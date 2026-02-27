@@ -1,6 +1,8 @@
 'use client';
 
-import { Code, Layout, Monitor, Rows3, Users } from 'lucide-react';
+import { Code, Layout, Monitor, Moon, Rows3, Sun, Users } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { type UserExperience, useSettingsStore, type ViewMode } from '@/store/settingsStore';
@@ -59,6 +61,9 @@ export default function PreferencesPage() {
   const setDensity = useSettingsStore((s) => s.setDensity);
   const developerMode = useSettingsStore((s) => s.developerMode);
   const setDeveloperMode = useSettingsStore((s) => s.setDeveloperMode);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">
@@ -66,6 +71,42 @@ export default function PreferencesPage() {
       <p className="text-sm text-[var(--text-secondary)] mt-1 mb-8">
         Customize your T3X experience. Changes are saved automatically.
       </p>
+
+      {/* Appearance */}
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Appearance</h2>
+        <p className="text-xs text-[var(--text-tertiary)] mb-3">
+          Choose your preferred color theme.
+        </p>
+        {mounted && (
+          <div className="flex flex-col gap-3">
+            <OptionCard<string>
+              value="light"
+              current={theme ?? 'system'}
+              onChange={setTheme}
+              icon={<Sun className="h-5 w-5" />}
+              title="Light"
+              description="Clean light background for daytime use."
+            />
+            <OptionCard<string>
+              value="dark"
+              current={theme ?? 'system'}
+              onChange={setTheme}
+              icon={<Moon className="h-5 w-5" />}
+              title="Dark"
+              description="Reduced glare for low-light environments."
+            />
+            <OptionCard<string>
+              value="system"
+              current={theme ?? 'system'}
+              onChange={setTheme}
+              icon={<Monitor className="h-5 w-5" />}
+              title="System"
+              description="Automatically match your operating system preference."
+            />
+          </div>
+        )}
+      </section>
 
       {/* Experience Level */}
       <section className="mb-8">
