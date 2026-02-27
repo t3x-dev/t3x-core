@@ -19,7 +19,9 @@ import {
   Loader2,
   MessageSquare,
   MessageSquarePlus,
+  Settings,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
@@ -904,6 +906,17 @@ function CanvasWorkspaceInner({
               <LayoutGrid className="h-4 w-4" />
             )}
           </Button>
+          <Link
+            href={`/project/${projectId}/settings`}
+            title="Project Settings"
+            className={cn(
+              'inline-flex items-center justify-center h-9 w-9 rounded-xl transition-all',
+              'text-[var(--text-secondary)] hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary'
+            )}
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
           <Button
             variant="ghost"
             size="icon"

@@ -57,6 +57,7 @@ export {
 } from './nlp';
 // Provider Registry
 export {
+  AllProvidersFailedError,
   type AnyProvider,
   createProviderRegistry,
   type ProviderEntry,

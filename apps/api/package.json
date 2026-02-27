@@ -22,7 +22,9 @@
     "@t3x/storage": "workspace:*",
     "fflate": "^0.8.2",
     "hono": "^4.7.10",
+    "mammoth": "^1.8.0",
     "nanoid": "^5.1.6",
+    "pdf-parse": "^1.1.1",
     "pino": "^9.14.0",
     "pino-pretty": "^11.3.0",
     "undici": "^7.16.0",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/pdf-parse": "^1.1.4",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",

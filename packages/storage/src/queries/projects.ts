@@ -93,7 +93,7 @@ export async function findProjects(
 export async function updateProject(
   db: AnyDB,
   projectId: string,
-  updates: { name?: string; metadata?: Record<string, unknown> }
+  updates: { name?: string; metadata?: Record<string, unknown>; providerConfig?: string | null }
 ): Promise<Project | null> {
   const existing = await findProjectById(db, projectId);
   if (!existing) return null;
@@ -104,6 +104,9 @@ export async function updateProject(
   }
   if (updates.metadata !== undefined) {
     updateData.metadataJson = JSON.stringify(updates.metadata);
+  }
+  if (updates.providerConfig !== undefined) {
+    updateData.providerConfig = updates.providerConfig;
   }
 
   const [updated] = await db

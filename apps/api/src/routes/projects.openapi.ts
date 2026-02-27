@@ -221,6 +221,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       name: project.name,
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+      provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
       commits_count: v4Commits.length || project.stats.commitsCount,
@@ -288,6 +289,12 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     const project = await updateProject(db, id, {
       name: body.name,
       metadata: body.metadata,
+      providerConfig:
+        body.provider_config === undefined
+          ? undefined
+          : body.provider_config === null
+            ? null
+            : JSON.stringify(body.provider_config),
     });
 
     if (!project) {
@@ -305,6 +312,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
       name: project.name,
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+      provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);
