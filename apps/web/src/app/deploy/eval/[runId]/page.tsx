@@ -239,14 +239,16 @@ export default function RunDetailPage() {
     loadRun();
   }, [runId]);
 
-  // Initialize selected assertions: default to failed ones from runner_assertions (more actionable)
+  // Initialize selected assertions: default to failed ones from llmAssertions (parsed from result_json)
+  const { llmAssertions: parsedAssertions } = run ? parseRunData(run) : { llmAssertions: [] };
   useEffect(() => {
-    const source = leaf?.runner_assertions ?? leaf?.assertions;
-    if (source) {
-      const failedIds = source.filter((a) => !a.passed).map((a) => a.id);
+    if (parsedAssertions.length > 0) {
+      const failedIds = parsedAssertions
+        .filter((a) => a.type === 'fail' || a.passed === false)
+        .map((a) => a.id);
       setSelectedAssertionIds(new Set(failedIds));
     }
-  }, [leaf]);
+  }, [run?.run_id]); // re-init when run changes, not on every render
 
   // Toggle a single assertion checkbox
   const toggleAssertion = useCallback((id: string) => {
@@ -653,80 +655,91 @@ export default function RunDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* Assertions Tab - LLM 生成的断言 + Leaf 结构化断言 */}
+          {/* Assertions Tab — unified: data from result_json, with Pin + Re-tune actions */}
           <TabsContent value="assertions" className="mt-4 space-y-6">
-            {/* Runner Assertions — 写回到 Leaf 的结构化断言（用于 Pin 反馈回路） */}
-            {leaf?.runner_assertions && leaf.runner_assertions.length > 0 && (
+            {llmAssertions.length > 0 ? (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    Runner Evaluation
+                    Assertions
                     <Badge variant="outline" className="text-xs font-normal">
-                      {leaf.runner_assertions.filter((a) => a.passed).length}/{leaf.runner_assertions.length}{' '}
+                      {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/{llmAssertions.length}{' '}
                       passed
                     </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Structured assertions written back to Leaf from Runner evaluation. Pin these to
-                    feed lessons into future conversations.
+                    Runner evaluation results. Select assertions to pin lessons into future
+                    conversations, or Re-tune to start a new iteration.
                   </p>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {leaf.runner_assertions.map((assertion) => (
-                      <div
-                        key={assertion.id}
-                        className={cn(
-                          'rounded-lg border p-3',
-                          assertion.passed
-                            ? 'border-green-500/30 bg-green-500/5'
-                            : 'border-red-500/30 bg-red-500/5'
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={selectedAssertionIds.has(assertion.id)}
-                            onCheckedChange={() => toggleAssertion(assertion.id)}
-                            className="mt-0.5"
-                          />
-                          {assertion.passed ? (
-                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-                          ) : (
-                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                    {llmAssertions.map((assertion) => {
+                      const isFailed = assertion.type === 'fail' || assertion.passed === false;
+                      const isWarning = assertion.type === 'warning';
+                      const isPassed = !isFailed && !isWarning;
+                      return (
+                        <div
+                          key={assertion.id}
+                          className={cn(
+                            'rounded-lg border p-3',
+                            isFailed
+                              ? 'border-red-500/30 bg-red-500/5'
+                              : isWarning
+                                ? 'border-yellow-500/30 bg-yellow-500/5'
+                                : 'border-green-500/30 bg-green-500/5'
                           )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'text-xs',
-                                  assertion.passed
-                                    ? 'border-green-500/30 text-green-600'
-                                    : 'border-red-500/30 text-red-600'
-                                )}
-                              >
-                                {assertion.passed ? 'passed' : 'failed'}
-                              </Badge>
-                              {assertion.constraint_id && !assertion.constraint_id.startsWith('eval_') && !assertion.constraint_id.startsWith('unknown_') && (
+                        >
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={selectedAssertionIds.has(assertion.id)}
+                              onCheckedChange={() => toggleAssertion(assertion.id)}
+                              className="mt-0.5"
+                            />
+                            {isFailed ? (
+                              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                            ) : isWarning ? (
+                              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                            ) : (
+                              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">
+                                  {assertion.category}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-xs',
+                                    isFailed
+                                      ? 'border-red-500/30 text-[var(--status-error)]'
+                                      : isWarning
+                                        ? 'border-yellow-500/30 text-[var(--status-warning)]'
+                                        : 'border-green-500/30 text-[var(--status-success)]'
+                                  )}
+                                >
+                                  {isPassed ? 'passed' : isFailed ? 'failed' : 'warning'}
+                                </Badge>
                                 <span className="text-xs text-muted-foreground">
-                                  {assertion.constraint_id}
+                                  {Math.round(assertion.confidence * 100)}% confidence
                                 </span>
+                              </div>
+                              <p className="mt-1 text-sm">{assertion.message}</p>
+                              {assertion.patch_suggestion && (
+                                <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
+                                  <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                                  <div>
+                                    <span className="font-medium text-amber-700">Lesson: </span>
+                                    <span className="text-amber-900">{assertion.patch_suggestion}</span>
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            <p className="mt-1 text-sm">{assertion.details || assertion.constraint_id || 'No details'}</p>
-                            {assertion.lesson && (
-                              <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
-                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
-                                <div>
-                                  <span className="font-medium text-amber-700">Lesson: </span>
-                                  <span className="text-amber-900">{assertion.lesson}</span>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Pin Selected & Re-tune buttons */}
@@ -767,79 +780,13 @@ export default function RunDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            )}
-
-            {/* LLM Assertions — Runner 原始断言 */}
-            {llmAssertions.length > 0 ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">LLM Assertions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {llmAssertions.map((assertion, i) => (
-                      <div
-                        key={assertion.id || `assertion-${i}`}
-                        className={cn(
-                          'rounded-lg border p-3',
-                          assertion.type === 'fail'
-                            ? 'border-red-500/30 bg-red-500/5'
-                            : assertion.type === 'warning'
-                              ? 'border-yellow-500/30 bg-yellow-500/5'
-                              : 'border-green-500/30 bg-green-500/5'
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          {assertion.type === 'fail' ? (
-                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                          ) : assertion.type === 'warning' ? (
-                            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
-                          ) : (
-                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline" className="text-xs">
-                                {assertion.category}
-                              </Badge>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'text-xs',
-                                  assertion.type === 'fail'
-                                    ? 'border-red-500/30 text-[var(--status-error)]'
-                                    : assertion.type === 'warning'
-                                      ? 'border-yellow-500/30 text-[var(--status-warning)]'
-                                      : 'border-green-500/30 text-[var(--status-success)]'
-                                )}
-                              >
-                                {assertion.type}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {Math.round(assertion.confidence * 100)}% confidence
-                              </span>
-                            </div>
-                            <p className="mt-1 text-sm">{assertion.message}</p>
-                            {assertion.patch_suggestion && (
-                              <div className="mt-2 rounded bg-muted/50 p-2 text-xs">
-                                <span className="font-medium">Suggestion: </span>
-                                {assertion.patch_suggestion}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : !leaf?.runner_assertions?.length ? (
+            ) : (
               <Card>
                 <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
                   No assertions available
                 </CardContent>
               </Card>
-            ) : null}
+            )}
           </TabsContent>
         </Tabs>
       </div>
