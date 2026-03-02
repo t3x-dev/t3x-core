@@ -359,7 +359,7 @@ const incrementalExtractRoute = createRoute({
 });
 
 extractRoutes.openapi(incrementalExtractRoute, async (c) => {
-  const { conversation_id, draft_id } = c.req.valid('json');
+  const { project_id, conversation_id, draft_id } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -367,6 +367,11 @@ extractRoutes.openapi(incrementalExtractRoute, async (c) => {
     // 1. Load draft
     const draft = await findDraftV3ById(db, draft_id);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
+
+    // Validate project_id matches draft
+    if (draft.project_id !== project_id) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft does not belong to the specified project');
+    }
 
     // 2. Load conversation turns
     const turns = await findTurnsByConversation(db, {

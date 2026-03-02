@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { SemanticPointAPI } from '@/lib/api';
+import { reviewAction } from '@/lib/api';
 import { ExtractButton } from './ExtractButton';
 import { ReadyZone } from './ReadyZone';
 import { ReviewZone } from './ReviewZone';
@@ -29,27 +31,16 @@ export function DraftWorkbenchLLM({
   const readyPoints = semanticPoints.filter((p) => p.zone === 'ready');
   const reviewPoints = semanticPoints.filter((p) => p.zone === 'review');
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
   const callReviewAction = useCallback(
     async (spId: string, action: 'accept' | 'dismiss' | 'undo' | 'edit', editedText?: string) => {
       try {
-        const res = await fetch(`${apiUrl}/v1/drafts/${draftId}/review-action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
-        });
-        if (res.ok) {
-          const json = await res.json();
-          onUpdate(json.data.semantic_points);
-        } else {
-          console.error('Review action failed:', res.status);
-        }
+        const result = await reviewAction(draftId, spId, action, editedText);
+        onUpdate(result.semantic_points);
       } catch (err) {
-        console.error('Review action error:', err);
+        toast.error(err instanceof Error ? err.message : 'Review action failed');
       }
     },
-    [apiUrl, draftId, onUpdate]
+    [draftId, onUpdate]
   );
 
   const handleUndo = useCallback((id: string) => callReviewAction(id, 'undo'), [callReviewAction]);

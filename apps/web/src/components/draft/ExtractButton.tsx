@@ -2,7 +2,9 @@
 
 import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { extractIncremental } from '@/lib/api';
 
 interface ExtractButtonProps {
   draftId: string;
@@ -24,20 +26,12 @@ export function ExtractButton({
   const handleExtract = async () => {
     setLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/v1/extract/incremental`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: projectId,
-          conversation_id: conversationId,
-          draft_id: draftId,
-        }),
-      });
-      if (!res.ok) throw new Error('Extraction failed');
+      const result = await extractIncremental(projectId, conversationId, draftId);
+      const total = result.stats.auto_landed + result.stats.needs_review;
+      toast.success(`Extracted ${total} point${total !== 1 ? 's' : ''}`);
       onExtracted();
     } catch (err) {
-      console.error('Extraction failed:', err);
+      toast.error(err instanceof Error ? err.message : 'Extraction failed');
     } finally {
       setLoading(false);
     }
