@@ -5,13 +5,23 @@
  * 1. Check turn existence (turn_hash lookup)
  * 2. Check quote location (fuzzyLocate)
  * 3. For modify proposals, check target SP exists
+ * 4. (Optional) L2 semantic overlap detection via embeddings
  *
  * Returns verified proposal with LocatedEvidence[] or null if rejected.
  */
 
+import type { EmbeddingProvider } from '../providers/embedding/base';
 import type { ExtractionProposal, LocatedEvidence, SemanticPoint } from '../types/v4';
 import type { TurnInput } from './extractionPrompt';
 import { fuzzyLocate } from './fuzzyLocate';
+
+export type OverlapStatus = 'duplicate' | 'potential_conflict' | 'unique';
+
+export interface OverlapResult {
+  status: OverlapStatus;
+  matched_sp_id: string;
+  cosine: number;
+}
 
 export interface VerifiedProposal {
   type: ExtractionProposal['type'];
@@ -21,17 +31,30 @@ export interface VerifiedProposal {
   inference_type: ExtractionProposal['inference_type'];
   reasoning: string;
   evidence: LocatedEvidence[];
+  overlap?: OverlapResult;
+}
+
+export interface VerifyOptions {
+  embedder?: EmbeddingProvider;
+  existingEmbeddings?: Map<string, number[]>;
 }
 
 export function verifyProposal(
   proposal: ExtractionProposal,
   existingSPs: SemanticPoint[],
-  turns: TurnInput[]
-): VerifiedProposal | null {
+  turns: TurnInput[],
+  options?: VerifyOptions,
+): VerifiedProposal | null;
+export function verifyProposal(
+  proposal: ExtractionProposal,
+  existingSPs: SemanticPoint[],
+  turns: TurnInput[],
+  options?: VerifyOptions,
+): Promise<VerifiedProposal | null> | VerifiedProposal | null {
   // Check 1: For modify/reinforce proposals, target must exist
   if ((proposal.type === 'modify' || proposal.type === 'reinforce') && proposal.target_sp_id) {
     const targetExists = existingSPs.some(
-      (sp) => sp.id === proposal.target_sp_id && sp.status !== 'undone'
+      (sp) => sp.id === proposal.target_sp_id && sp.status !== 'undone',
     );
     if (!targetExists) return null;
   }
@@ -80,7 +103,7 @@ export function verifyProposal(
   // Must have at least one primary evidence
   if (!hasPrimary) return null;
 
-  return {
+  const base: VerifiedProposal = {
     type: proposal.type,
     target_sp_id: proposal.target_sp_id,
     text: proposal.text,
@@ -88,5 +111,47 @@ export function verifyProposal(
     inference_type: proposal.inference_type,
     reasoning: proposal.reasoning,
     evidence: verifiedEvidence,
+  };
+
+  // Check 3 (Optional): L2 semantic overlap detection
+  if (options?.embedder && options.existingEmbeddings && options.existingEmbeddings.size > 0) {
+    return detectOverlap(base, options.embedder, options.existingEmbeddings);
+  }
+
+  return base;
+}
+
+async function detectOverlap(
+  proposal: VerifiedProposal,
+  embedder: EmbeddingProvider,
+  existingEmbeddings: Map<string, number[]>,
+): Promise<VerifiedProposal> {
+  const [proposalVec] = await embedder.encode([proposal.text]);
+
+  let bestCosine = -1;
+  let bestSpId = '';
+
+  for (const [spId, vec] of existingEmbeddings) {
+    const cosine = embedder.similarity(proposalVec, vec);
+    if (cosine > bestCosine) {
+      bestCosine = cosine;
+      bestSpId = spId;
+    }
+  }
+
+  if (bestCosine < 0 || bestSpId === '') return proposal;
+
+  let status: OverlapStatus;
+  if (bestCosine >= 0.95) {
+    status = 'duplicate';
+  } else if (bestCosine >= 0.85) {
+    status = 'potential_conflict';
+  } else {
+    status = 'unique';
+  }
+
+  return {
+    ...proposal,
+    overlap: { status, matched_sp_id: bestSpId, cosine: bestCosine },
   };
 }

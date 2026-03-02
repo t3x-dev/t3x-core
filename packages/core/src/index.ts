@@ -119,7 +119,10 @@ export {
   spToSentence,
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
+  type OverlapResult,
+  type OverlapStatus,
   type VerifiedProposal,
+  type VerifyOptions,
   validateExtractedSentences,
   verifyProposal,
 } from './extractors';

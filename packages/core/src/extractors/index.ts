@@ -64,4 +64,4 @@ export {
   type RingOutput,
   type Segment,
 } from './types';
-export { type VerifiedProposal, verifyProposal } from './verifyProposal';
+export { type OverlapResult, type OverlapStatus, type VerifiedProposal, type VerifyOptions, verifyProposal } from './verifyProposal';
