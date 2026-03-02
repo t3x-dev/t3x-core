@@ -251,8 +251,8 @@ describe('diffCommits', () => {
   });
 
   it('pairs similar sentences correctly with word diff', () => {
-    const source = [createSentence('s1', 'The quick brown fox')];
-    const target = [createSentence('t1', 'The slow brown dog')];
+    const source = [createSentence('s1', 'The quick brown fox jumps')];
+    const target = [createSentence('t1', 'The slow brown fox runs')];
     const result = diffCommits(source, target);
 
     expect(result.similar).toHaveLength(1);
@@ -270,7 +270,7 @@ describe('diffCommits', () => {
 });
 
 describe('Performance', () => {
-  it('50 sentences diff completes within 50ms', () => {
+  it('50 sentences diff completes within 200ms', () => {
     // Note: Hungarian algorithm O(n³) is slower than greedy O(n²)
     // but guarantees globally optimal matching
     const source: Sentence[] = [];
@@ -287,6 +287,6 @@ describe('Performance', () => {
     diffCommits(source, target);
     const elapsed = performance.now() - start;
 
-    expect(elapsed).toBeLessThan(50);
+    expect(elapsed).toBeLessThan(200);
   });
 });

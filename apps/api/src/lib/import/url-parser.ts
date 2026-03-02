@@ -6,6 +6,7 @@
  */
 
 import { sha256 } from '@t3x/core';
+import { extractArticle } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';
 import { trySpecialUrlParse } from './url-handlers';
@@ -168,15 +169,23 @@ export async function parseUrl(url: string): Promise<ParseResult> {
 
   let markdown: string;
   let title: string | undefined;
+  let author: string | undefined;
+  let publishedAt: string | undefined;
+  let excerpt: string | undefined;
+  let siteName: string | undefined;
 
   if (contentType.includes('text/plain') || contentType.includes('text/markdown')) {
     // Plain text or markdown — use directly
     markdown = text;
   } else {
     // HTML — extract with Readability + convert to markdown
-    const extracted = extractFromHtml(text, url);
+    const extracted = extractArticle(text, url);
     markdown = extracted.markdown;
     title = extracted.title;
+    author = extracted.metadata.author;
+    publishedAt = extracted.metadata.published_at;
+    excerpt = extracted.metadata.excerpt;
+    siteName = extracted.metadata.site_name;
   }
 
   const paragraphs = splitIntoParagraphs(markdown);
@@ -186,6 +195,10 @@ export async function parseUrl(url: string): Promise<ParseResult> {
     source_type: 'url',
     source_url: url,
     title,
+    author,
+    published_at: publishedAt,
+    excerpt,
+    site_name: siteName,
     content_hash: contentHash,
     content_length: text.length,
     content_truncated: truncated,
@@ -200,72 +213,4 @@ export async function parseUrl(url: string): Promise<ParseResult> {
 
   setCache(url, result);
   return result;
-}
-
-/**
- * Extract main content from HTML using simple heuristics.
- * Falls back to basic tag stripping if Readability is not available.
- */
-function extractFromHtml(html: string, _url: string): { markdown: string; title?: string } {
-  // Extract title from <title> tag
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const title = titleMatch?.[1]?.trim();
-
-  // Simple HTML-to-markdown conversion (no external dependency needed for v1)
-  let text = html;
-
-  // Remove script and style tags
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '');
-
-  // Convert headings
-  text = text.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n');
-  text = text.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n');
-  text = text.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n');
-  text = text.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n#### $1\n');
-  text = text.replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, '\n##### $1\n');
-  text = text.replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, '\n###### $1\n');
-
-  // Convert list items
-  text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n');
-
-  // Convert paragraphs
-  text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n$1\n');
-
-  // Convert line breaks
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-
-  // Convert bold/italic
-  text = text.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
-  text = text.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
-
-  // Convert code
-  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
-  text = text.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '\n```\n$1\n```\n');
-
-  // Convert blockquotes
-  text = text.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_, content) =>
-    content
-      .split('\n')
-      .map((line: string) => `> ${line}`)
-      .join('\n')
-  );
-
-  // Remove remaining HTML tags
-  text = text.replace(/<[^>]+>/g, '');
-
-  // Decode HTML entities
-  text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
-
-  // Clean up whitespace
-  text = text.replace(/\n{3,}/g, '\n\n').trim();
-
-  return { markdown: text, title };
 }

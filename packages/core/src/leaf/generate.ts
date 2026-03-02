@@ -10,6 +10,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import { buildLeafPrompt } from './build-prompt';
+import { buildCorrectivePrompt } from './corrective-prompt';
 import {
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
@@ -251,13 +252,14 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
       };
     }
 
-    // Build retry feedback for multi-turn conversation
-    const failedDetails = validation.assertions
-      .filter((a) => !a.passed)
-      .map((a) => `- ${a.details}`)
-      .join('\n');
-
-    const feedbackMessage = `Your output did not satisfy all constraints. Please fix and regenerate.\n\nFailed constraints:\n${failedDetails}\n\nPlease regenerate the content, ensuring ALL constraints are satisfied.`;
+    // Build corrective feedback with detailed failure analysis
+    const failedAssertions = validation.assertions.filter((a) => !a.passed);
+    const feedbackMessage = buildCorrectivePrompt({
+      output: lastOutput,
+      failedAssertions,
+      constraints,
+      attempt,
+    });
 
     if (useProvider) {
       // Provider path — append feedback to the prompt

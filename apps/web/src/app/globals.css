@@ -183,6 +183,9 @@
   --diff-identical-bg: rgba(248, 250, 252, 0.5);
   --diff-identical-border: #e2e8f0;
   --diff-identical-text: #64748b;
+  /* Word-level highlights — strong contrast against line bg */
+  --diff-added-word-bg: #86efac;
+  --diff-removed-word-bg: #fca5a5;
   /* Backward compat: --diff-*-line → --diff-*-accent (migrate to proper tokens in #360) */
   --diff-added-line: var(--diff-added-accent);
   --diff-removed-line: var(--diff-removed-accent);
@@ -402,6 +405,8 @@
   --diff-identical-bg: rgba(2, 6, 23, 0.3);
   --diff-identical-border: #334155;
   --diff-identical-text: #94a3b8;
+  --diff-added-word-bg: rgba(34, 197, 94, 0.45);
+  --diff-removed-word-bg: rgba(239, 68, 68, 0.45);
 
   /* ===== Highlight Token System (§1.1) — dark overrides ===== */
   --highlight-yellow-bg: rgba(133, 77, 14, 0.5);

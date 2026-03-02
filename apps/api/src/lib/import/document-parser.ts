@@ -6,6 +6,7 @@
  */
 
 import { sha256 } from '@t3x/core';
+import { convertHtmlToMarkdown } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';
 
@@ -42,18 +43,8 @@ export async function parseDocument(
       break;
     }
     case 'text/html': {
-      text = buffer.toString('utf-8');
-      // Simple HTML to text
-      text = text
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, '\n')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+      const rawHtml = buffer.toString('utf-8');
+      text = convertHtmlToMarkdown(rawHtml);
       break;
     }
     default: {
@@ -129,19 +120,7 @@ async function parseDocx(buffer: Buffer): Promise<{ text: string }> {
     const mammoth = await import('mammoth');
     const result = await mammoth.convertToHtml({ buffer });
 
-    // Convert HTML to markdown-like text
-    let text = result.value;
-    text = text.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n');
-    text = text.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n');
-    text = text.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n');
-    text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n$1\n');
-    text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n');
-    text = text.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
-    text = text.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
-    text = text.replace(/<br\s*\/?>/gi, '\n');
-    text = text.replace(/<[^>]+>/g, '');
-    text = text.replace(/\n{3,}/g, '\n\n').trim();
-
+    const text = convertHtmlToMarkdown(result.value);
     return { text };
   } catch (err) {
     throw new Error(

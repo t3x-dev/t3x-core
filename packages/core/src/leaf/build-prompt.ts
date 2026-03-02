@@ -181,6 +181,16 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
     userPromptParts.push('');
   }
 
+  // Add lessons learned from previous generations
+  if (options.lessons && options.lessons.length > 0) {
+    userPromptParts.push('## Lessons Learned\n');
+    userPromptParts.push('From previous generation attempts, keep these lessons in mind:\n');
+    for (const lesson of options.lessons) {
+      userPromptParts.push(`- ${lesson}`);
+    }
+    userPromptParts.push('');
+  }
+
   // Add additional instructions if provided
   if (additionalInstructions) {
     userPromptParts.push('## Additional Instructions\n');

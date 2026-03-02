@@ -17,6 +17,7 @@ import {
   Plus,
   RefreshCw,
   Rocket,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -24,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
+import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
@@ -49,7 +51,14 @@ import {
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { Assertion, CommitV4, Constraint, Leaf, ProviderInfo } from '@/lib/api';
+import type {
+  Assertion,
+  CommitV4,
+  Constraint,
+  Leaf,
+  ProviderInfo,
+  SuggestedConstraint,
+} from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
@@ -118,6 +127,7 @@ export default function LeafDetailPage() {
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   // Assertion selection & Re-tune state
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
@@ -350,6 +360,25 @@ export default function LeafDetailPage() {
     [saving, handleUpdateConstraints]
   );
 
+  // Accept AI-suggested constraints (batch add)
+  const handleAcceptSuggestions = useCallback(
+    (suggestions: SuggestedConstraint[]) => {
+      const current = leafRef.current;
+      if (!current || saving || suggestions.length === 0) return;
+      const newConstraints: Constraint[] = suggestions.map((s) => ({
+        id: `cst_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`,
+        type: s.type,
+        value: s.value,
+        match_mode: s.match_mode,
+        ...(s.type === 'exclude' ? { reason: s.reason } : {}),
+      }));
+      const updatedConstraints = [...current.constraints, ...newConstraints];
+      const optimisticLeaf = { ...current, constraints: updatedConstraints };
+      handleUpdateConstraints(updatedConstraints, optimisticLeaf);
+    },
+    [saving, handleUpdateConstraints]
+  );
+
   // Handle user instruction update
   const handleUpdateUserInstruction = useCallback(
     async (instruction: string) => {
@@ -533,6 +562,11 @@ export default function LeafDetailPage() {
         <div className="flex items-center gap-2">
           <PinButton projectId={projectId} type="leaf" refId={leafId} />
           <ShareLinkButton entityType="leaf" entityId={leafId} />
+          {/* AI Suggest constraints */}
+          <Button variant="outline" size="sm" onClick={() => setSuggestOpen(true)}>
+            <Sparkles className="mr-1.5 h-3 w-3" />
+            Suggest
+          </Button>
           {/* Generate button — primary action */}
           <Button size="sm" onClick={handleGenerate} disabled={isGenerating}>
             {isGenerating ? (
@@ -755,6 +789,14 @@ export default function LeafDetailPage() {
           />
         </div>
       </div>
+
+      {/* AI Constraint Suggestions Dialog */}
+      <SuggestConstraintsDialog
+        open={suggestOpen}
+        onOpenChange={setSuggestOpen}
+        leafId={leafId}
+        onAccept={handleAcceptSuggestions}
+      />
     </div>
   );
 }

@@ -29,6 +29,7 @@ export const ID_PREFIXES = {
   draft: 'draft_',
   draft_sentence: 'ds_',
   draft_constraint: 'dc_',
+  semantic_point: 'sp_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
@@ -739,8 +740,9 @@ export interface ShareToken {
 
 /**
  * Draft status lifecycle: editing → committed | abandoned
+ * 'auto' status: auto-generated from conversation turns (Upgrade #7)
  */
-export type DraftStatus = 'editing' | 'committed' | 'abandoned';
+export type DraftStatus = 'editing' | 'committed' | 'abandoned' | 'auto';
 
 /**
  * Distinguishes how a sentence entered the Draft (RFC §13 Issue A).
@@ -861,6 +863,15 @@ export interface Draft {
 
   /** Last update timestamp, ISO8601 */
   updated_at: string;
+
+  /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftSentence flow. */
+  extraction_mode?: 'deterministic' | 'llm';
+
+  /** SemanticPoints (only when extraction_mode === 'llm') */
+  semantic_points?: SemanticPoint[];
+
+  /** Per-conversation extraction cursor (only when extraction_mode === 'llm') */
+  extraction_cursor?: ExtractionCursor;
 }
 
 /**
@@ -873,4 +884,122 @@ export interface CreateDraftInput {
   parent_commit_hash?: string;
   target_branch?: string;
   preview_type?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LLM Incremental Extraction Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Evidence anchor linking a SemanticPoint to a specific location in a conversation turn.
+ * Multiple evidence anchors per SemanticPoint (many-to-many).
+ */
+export interface LocatedEvidence {
+  conversation_id: string;
+  turn_hash: string;
+  quoted_text: string;
+  start_char: number;
+  end_char: number;
+  match_score: number;
+  role: 'primary' | 'supporting';
+  relevance: string;
+  enabled: boolean;
+}
+
+/**
+ * A SemanticPoint is the fundamental unit in LLM-extracted drafts.
+ * Replaces DraftSentence when extraction_mode === 'llm'.
+ */
+export interface SemanticPoint {
+  /** Unique ID, format: "sp_" + nanoid(12) */
+  id: string;
+  text: string;
+  extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
+  inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
+  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
+  zone: 'ready' | 'review';
+  routing_reason?: string;
+  inherited_from?: string;
+  evidence: LocatedEvidence[];
+  confidence?: number;
+  position: number;
+  staged: boolean;
+}
+
+/**
+ * Tracks per-conversation extraction progress.
+ * Enables delta-in: only process turns after the cursor.
+ */
+export interface ExtractionCursor {
+  cursors: Record<string, {
+    last_processed_turn: string;
+    processed_at: string;
+  }>;
+}
+
+/**
+ * LLM output proposal before verification and routing.
+ */
+export interface ExtractionProposal {
+  type: 'new' | 'modify' | 'reinforce';
+  target_sp_id?: string;
+  text: string;
+  confidence: number;
+  inference_type: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
+  reasoning: string;
+  evidence: EvidenceAnchor[];
+}
+
+/**
+ * Raw evidence anchor from LLM output (before location verification).
+ */
+export interface EvidenceAnchor {
+  conversation_id: string;
+  turn_hash: string;
+  quoted_text: string;
+  role: 'primary' | 'supporting';
+  relevance: string;
+}
+
+/**
+ * Extended Sentence with multi-evidence support for LLM-extracted commits.
+ */
+export interface SentenceV5 extends Sentence {
+  supporting_refs?: SentenceSourceRef[];
+  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
+}
+
+/**
+ * Result of incremental extraction pipeline.
+ */
+export interface IncrementalExtractionResult {
+  readyPoints: SemanticPoint[];
+  reviewPoints: SemanticPoint[];
+  newCursor: ExtractionCursor;
+  stats: ExtractionStats;
+}
+
+/**
+ * Statistics from an extraction run.
+ */
+export interface ExtractionStats {
+  total_turns: number;
+  new_turns: number;
+  proposals: number;
+  auto_landed: number;
+  needs_review: number;
+  rejected: number;
+}
+
+/**
+ * Project-level extraction configuration.
+ * Stored in projects table settings JSON.
+ */
+export interface ProjectExtractionConfig {
+  auto_landing_enabled: boolean;
+  confidence_thresholds?: {
+    direct?: number;
+    paraphrase?: number;
+    cross_turn?: number;
+  };
 }

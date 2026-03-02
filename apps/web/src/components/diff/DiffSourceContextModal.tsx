@@ -3,21 +3,29 @@
 /**
  * DiffSourceContextModal - Standalone source context modal for Diff page
  *
- * Same UI as merge/SourceContextModal but driven by useSourceContext hook
- * instead of mergeWorkspaceStore.
- *
  * Features:
  * - Shows conversation context around the source sentence
- * - "Jump to conversation" button for quick navigation
+ * - Fullscreen toggle (Maximize2/Minimize2)
+ * - Auto-scroll to target turn on open
+ * - "Open in new tab" for full conversation page
  */
 
-import { Bot, ExternalLink, Loader2, Settings, Terminal, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import {
+  Bot,
+  ExternalLink,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Settings,
+  Terminal,
+  User,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import type { Sentence, TurnContextData, TurnWithContext } from '@/types/merge';
+import type { Sentence, TurnContextData, TurnWithContext, WordDiffSegment } from '@/types/merge';
 
 const roleIcons: Record<string, React.ReactNode> = {
   user: <User className="h-4 w-4" />,
@@ -33,7 +41,11 @@ const roleLabels: Record<string, string> = {
   tool: 'Tool',
 };
 
-export function TurnBubble({ turn }: { turn: TurnWithContext }) {
+export function TurnBubble({
+  turn,
+  targetRef,
+  wordDiff,
+}: { turn: TurnWithContext; targetRef?: React.RefObject<HTMLDivElement | null>; wordDiff?: WordDiffSegment[] }) {
   const isUser = turn.role === 'user';
 
   const renderContent = () => {
@@ -42,12 +54,36 @@ export function TurnBubble({ turn }: { turn: TurnWithContext }) {
     }
     const { start, end } = turn.highlight;
     const before = turn.content.slice(0, start);
-    const highlighted = turn.content.slice(start, end);
     const after = turn.content.slice(end);
+
+    // When wordDiff is provided, highlight only changed words
+    if (wordDiff && wordDiff.length > 0) {
+      return (
+        <>
+          {before && <span className="text-[var(--text-tertiary)]">{before}</span>}
+          {wordDiff.map((seg, i) => {
+            if (seg.type === 'unchanged') {
+              return <span key={i}>{seg.text}</span>;
+            }
+            if (seg.type === 'added') {
+              return <mark key={i} className="bg-green-500 text-white font-medium px-0.5 rounded-sm">{seg.text}</mark>;
+            }
+            if (seg.type === 'removed') {
+              return <mark key={i} className="bg-red-500 text-white font-medium px-0.5 rounded-sm line-through">{seg.text}</mark>;
+            }
+            return <span key={i}>{seg.text}</span>;
+          })}
+          {after && <span className="text-[var(--text-tertiary)]">{after}</span>}
+        </>
+      );
+    }
+
+    // Fallback: highlight entire range
+    const highlighted = turn.content.slice(start, end);
     return (
       <>
         {before}
-        <mark className="bg-[var(--accent-branch)]/20 text-[var(--text-primary)] px-0.5 rounded">
+        <mark className="bg-amber-200 dark:bg-amber-500/40 text-[var(--text-primary)] font-medium px-1 py-0.5 rounded border-b-2 border-amber-400 dark:border-amber-500">
           {highlighted}
         </mark>
         {after}
@@ -57,7 +93,14 @@ export function TurnBubble({ turn }: { turn: TurnWithContext }) {
 
   return (
     <div
-      className={`flex gap-3 p-3 rounded-lg ${turn.is_target ? 'ring-2 ring-[var(--accent-branch)]/50 ring-offset-1 ring-offset-[var(--surface-card)]' : ''} ${isUser ? 'bg-[var(--accent-commit)]/8' : 'bg-[var(--surface-panel)]'}`}
+      ref={turn.is_target ? targetRef : undefined}
+      className={cn(
+        'flex gap-3 p-3 rounded-lg',
+        turn.is_target &&
+          'ring-2 ring-[var(--accent-branch)]/50 ring-offset-1 ring-offset-[var(--surface-card)] border-l-4 border-[var(--accent-branch)]',
+        isUser ? 'bg-[var(--accent-commit)]/8' : 'bg-[var(--surface-panel)]',
+        !turn.is_target && 'opacity-70'
+      )}
     >
       <div
         className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isUser ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]' : 'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'}`}
@@ -95,6 +138,16 @@ interface DiffSourceContextModalProps {
   loading: boolean;
   onClose: () => void;
   projectId?: string;
+  /** Conversation ID for "Open in new tab" link */
+  conversationId?: string;
+  /** Turn hash for highlight params in URL */
+  turnHash?: string;
+  /** Highlight start char for URL params */
+  highlightStart?: number;
+  /** Highlight end char for URL params */
+  highlightEnd?: number;
+  /** Word-level diff segments for highlighting only changed words */
+  wordDiff?: WordDiffSegment[];
 }
 
 export function DiffSourceContextModal({
@@ -104,13 +157,44 @@ export function DiffSourceContextModal({
   loading,
   onClose,
   projectId,
+  conversationId: propConversationId,
+  turnHash: propTurnHash,
+  highlightStart,
+  highlightEnd,
+  wordDiff,
 }: DiffSourceContextModalProps) {
-  const router = useRouter();
+  const [fullscreen, setFullscreen] = useState(false);
+  const targetTurnRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleJumpToConversation = () => {
-    if (data?.conversation_id && projectId) {
-      onClose();
-      router.push(`/project/${projectId}/conversation/${data.conversation_id}`);
+  const effectiveConversationId = propConversationId || data?.conversation_id;
+
+  // Auto-scroll to target turn when modal opens or data loads
+  useEffect(() => {
+    if (open && data && targetTurnRef.current) {
+      // Small delay to let the modal render
+      const timer = setTimeout(() => {
+        targetTurnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [open, data]);
+
+  // Reset fullscreen when modal closes
+  useEffect(() => {
+    if (!open) setFullscreen(false);
+  }, [open]);
+
+  const handleOpenInNewTab = () => {
+    if (effectiveConversationId && projectId) {
+      const params = new URLSearchParams();
+      if (propTurnHash) params.set('turn', propTurnHash);
+      if (highlightStart != null && highlightEnd != null) {
+        params.set('highlight', `${highlightStart}-${highlightEnd}`);
+      }
+      const qs = params.toString();
+      const url = `/project/${projectId}/conversation/${effectiveConversationId}${qs ? `?${qs}` : ''}`;
+      window.open(url, '_blank');
     }
   };
 
@@ -118,7 +202,8 @@ export function DiffSourceContextModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className={cn(
-          'max-w-2xl max-h-[80vh] overflow-hidden flex flex-col rounded-2xl',
+          'overflow-hidden flex flex-col rounded-2xl transition-all duration-200',
+          fullscreen ? 'w-[95vw] h-[95vh] max-w-none max-h-none' : 'max-w-2xl max-h-[80vh]',
           glass.elevatedBase,
           glass.highlight
         )}
@@ -133,21 +218,31 @@ export function DiffSourceContextModal({
                 </p>
               )}
             </div>
-            {data?.conversation_id && projectId && (
+            <div className="flex items-center gap-2 shrink-0">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={handleJumpToConversation}
-                className="shrink-0"
+                onClick={() => setFullscreen((f) => !f)}
+                className="h-8 w-8 p-0"
+                title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               >
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Jump to conversation
+                {fullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </Button>
-            )}
+              {effectiveConversationId && projectId && (
+                <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open in new tab
+                </Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto py-4">
+        <div className="flex-1 overflow-auto py-4" ref={scrollContainerRef}>
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
@@ -158,7 +253,12 @@ export function DiffSourceContextModal({
           {!loading && data && (
             <div className="space-y-3">
               {data.context.map((turn, idx) => (
-                <TurnBubble key={turn.turn_hash || idx} turn={turn} />
+                <TurnBubble
+                  key={turn.turn_hash || idx}
+                  turn={turn}
+                  targetRef={targetTurnRef}
+                  wordDiff={turn.is_target ? wordDiff : undefined}
+                />
               ))}
             </div>
           )}

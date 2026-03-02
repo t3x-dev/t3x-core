@@ -2,6 +2,14 @@
  * Diff exports
  */
 
+// Four-level classification (Upgrade #5)
+export {
+  classifyDiff,
+  type ClassifiedCommitDiff,
+  type ClassifiedSentencePair,
+  type DiffClassification,
+  EQUIVALENT_THRESHOLD,
+} from './classify';
 export { diffCommits } from './diffCommits';
 // Embedding-based diff engine
 export {

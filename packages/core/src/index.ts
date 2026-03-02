@@ -39,10 +39,14 @@ export {
 // Diff Engine
 export {
   buildSimilarityMatrix,
+  type ClassifiedCommitDiff,
+  type ClassifiedSentencePair,
   type CommitDiff,
   calculateDiffStats,
+  classifyDiff,
   createDiffEngine,
   type DiffableSentence,
+  type DiffClassification,
   DiffEngine,
   type DiffEngineConfig,
   type DiffResult,
@@ -50,6 +54,7 @@ export {
   type DiffStats,
   DiffType,
   diffCommits,
+  EQUIVALENT_THRESHOLD,
   hungarian,
   JACCARD_THRESHOLD,
   jaccard,
@@ -68,17 +73,31 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
+  // LLM Extraction
+  buildExtractionPrompt,
+  // Incremental Extraction (LLM pipeline)
+  buildIncrementalPrompt,
+  buildStyleSeed,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
   createEmptyRingOutput,
+  createLLMExtractor,
   createPolarityRuleEngine,
   createRingExtractor,
+  type ExtractedSentence,
+  type ExtractionItem,
+  ExtractionParseError,
   // Ring Extractor
   type ExtractorConfig,
   type Facet,
   type FacetType,
+  type FuzzyLocateResult,
+  fuzzyLocate,
   type Keyword,
+  type LLMExtractionOptions,
+  type LLMExtractionResult,
+  LLMExtractor,
   type Polarity,
   // Polarity Rules
   type PolarityRule,
@@ -86,12 +105,23 @@ export {
   // Types
   type PosTag,
   type PreferenceRelation,
+  parseExtractionResponse,
+  parseIncrementalResponse,
   type Ring1Output,
   type Ring2Output,
   type Ring3Output,
   RingExtractor,
   type RingOutput,
+  type RouteResult,
+  resolveSourceRef,
+  routeProposal,
   type Segment,
+  spToSentence,
+  type TurnInput,
+  type ValidationResult as ExtractionValidationResult,
+  type VerifiedProposal,
+  validateExtractedSentences,
+  verifyProposal,
 } from './extractors';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
@@ -101,10 +131,14 @@ export {
   // Types
   type BuildPromptOptions,
   type BuiltPrompt,
+  buildCorrectivePrompt,
   // Generation (GEN-1)
   buildLeafPrompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
+  // Constraint Suggestion
+  type ConstraintSuggestionResult,
+  type CorrectivePromptOptions,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   // Default templates
@@ -124,6 +158,11 @@ export {
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
+  type SemanticThreshold,
+  type SuggestConstraintsOptions,
+  type SuggestedConstraint,
+  suggestConstraints,
+  suggestionsToConstraints,
   type ValidateOptions,
   type ValidationResult,
   // Validation (VAL-1, VAL-2)
@@ -262,9 +301,15 @@ export {
   type DraftSentence,
   type DraftSentenceOrigin,
   type DraftStatus as DraftV4Status,
+  // Evidence / Extraction (LLM Incremental)
+  type EvidenceAnchor,
   type ExcludeConstraint as ExcludeConstraintV4,
+  type ExtractionCursor,
+  type ExtractionProposal,
+  type ExtractionStats,
   // ID Prefixes
   ID_PREFIXES,
+  type IncrementalExtractionResult,
   isDeployLeaf,
   isGenerationLeaf,
   LEAF_TYPES,
@@ -273,6 +318,7 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
+  type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
   type MergeV4Candidate,
@@ -282,10 +328,13 @@ export {
   // Pin (source selection)
   type Pin,
   type PinType,
+  type ProjectExtractionConfig,
   type RequireConstraint as RequireConstraintV4,
+  type SemanticPoint,
   // Sentence
   type Sentence as SentenceV4,
   type SentenceSourceRef,
+  type SentenceV5,
   // Share Token
   type ShareToken,
   type WordDiffSegment as WordDiffSegmentV4,

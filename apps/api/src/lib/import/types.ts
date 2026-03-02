@@ -35,6 +35,8 @@ export interface ImportMetadata {
   content_hash: string;
   content_length: number;
   content_truncated?: boolean;
+  excerpt?: string;
+  site_name?: string;
   extraction_quality?: 'good' | 'partial' | 'poor';
   page_count?: number;
   imported_at: string;

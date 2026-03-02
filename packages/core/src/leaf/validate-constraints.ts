@@ -119,31 +119,36 @@ export function validateExcludeExact(
 /**
  * Validate REQUIRE constraint with semantic (embedding-based) matching.
  *
- * Passes when cosine similarity between output and value >= SEMANTIC_REQUIRE_THRESHOLD (0.85).
+ * Passes when cosine similarity between output and value >= threshold.
+ * Uses configurable threshold if provided, otherwise falls back to SEMANTIC_REQUIRE_THRESHOLD (0.85).
  *
  * @param output - The generated output text to validate
  * @param value - The required semantic meaning that must be present
  * @param embedder - Embedding provider for vector encoding
+ * @param threshold - Optional custom threshold (overrides global default)
  * @returns Promise resolving to ConstraintCheckResult
  */
 export async function validateRequireSemantic(
   output: string,
   value: string,
-  embedder: EmbeddingProvider
+  embedder: EmbeddingProvider,
+  threshold?: number
 ): Promise<Omit<ConstraintCheckResult, 'constraint'>> {
+  const effectiveThreshold = threshold ?? SEMANTIC_REQUIRE_THRESHOLD;
+
   // Encode both texts to vectors
   const [outputVec, valueVec] = await embedder.encode([output, value]);
 
   // Calculate cosine similarity
   const similarity = cosineSimilarity(outputVec, valueVec);
 
-  if (similarity >= SEMANTIC_REQUIRE_THRESHOLD) {
+  if (similarity >= effectiveThreshold) {
     return {
       passed: true,
       evidence: {
         similarity,
       },
-      message: `Semantic similarity ${similarity.toFixed(3)} >= ${SEMANTIC_REQUIRE_THRESHOLD} threshold`,
+      message: `Semantic similarity ${similarity.toFixed(3)} >= ${effectiveThreshold} threshold`,
     };
   }
 
@@ -152,40 +157,44 @@ export async function validateRequireSemantic(
     evidence: {
       similarity,
     },
-    message: `Semantic similarity ${similarity.toFixed(3)} < ${SEMANTIC_REQUIRE_THRESHOLD} threshold for required value "${value}"`,
+    message: `Semantic similarity ${similarity.toFixed(3)} < ${effectiveThreshold} threshold for required value "${value}"`,
   };
 }
 
 /**
  * Validate EXCLUDE constraint with semantic (embedding-based) matching.
  *
- * Passes when cosine similarity between output and value < SEMANTIC_EXCLUDE_THRESHOLD (0.70).
- * This means the output is semantically different enough from the excluded value.
+ * Passes when cosine similarity between output and value < threshold.
+ * Uses configurable threshold if provided, otherwise falls back to SEMANTIC_EXCLUDE_THRESHOLD (0.70).
  *
  * @param output - The generated output text to validate
  * @param value - The excluded semantic meaning that must NOT be present
  * @param embedder - Embedding provider for vector encoding
+ * @param threshold - Optional custom threshold (overrides global default)
  * @returns Promise resolving to ConstraintCheckResult
  */
 export async function validateExcludeSemantic(
   output: string,
   value: string,
-  embedder: EmbeddingProvider
+  embedder: EmbeddingProvider,
+  threshold?: number
 ): Promise<Omit<ConstraintCheckResult, 'constraint'>> {
+  const effectiveThreshold = threshold ?? SEMANTIC_EXCLUDE_THRESHOLD;
+
   // Encode both texts to vectors
   const [outputVec, valueVec] = await embedder.encode([output, value]);
 
   // Calculate cosine similarity
   const similarity = cosineSimilarity(outputVec, valueVec);
 
-  if (similarity < SEMANTIC_EXCLUDE_THRESHOLD) {
+  if (similarity < effectiveThreshold) {
     // Low similarity means the excluded content is NOT present - good!
     return {
       passed: true,
       evidence: {
         similarity,
       },
-      message: `Semantic similarity ${similarity.toFixed(3)} < ${SEMANTIC_EXCLUDE_THRESHOLD} threshold (excluded content not present)`,
+      message: `Semantic similarity ${similarity.toFixed(3)} < ${effectiveThreshold} threshold (excluded content not present)`,
     };
   }
 
@@ -195,7 +204,7 @@ export async function validateExcludeSemantic(
     evidence: {
       similarity,
     },
-    message: `Semantic similarity ${similarity.toFixed(3)} >= ${SEMANTIC_EXCLUDE_THRESHOLD} threshold, excluded value "${value}" is semantically present`,
+    message: `Semantic similarity ${similarity.toFixed(3)} >= ${effectiveThreshold} threshold, excluded value "${value}" is semantically present`,
   };
 }
 
@@ -274,7 +283,7 @@ export function validateConstraintsExactOnly(
  * @returns Promise resolving to ValidationResult with assertions for each constraint
  */
 export async function validateConstraints(options: ValidateOptions): Promise<ValidationResult> {
-  const { output, constraints, embedder } = options;
+  const { output, constraints, embedder, semanticThreshold } = options;
   const assertions: Assertion[] = [];
   let passedCount = 0;
   let failedCount = 0;
@@ -290,11 +299,21 @@ export async function validateConstraints(options: ValidateOptions): Promise<Val
           message: `Semantic matching requires embedder but none was provided.`,
         };
       } else {
-        // Use semantic validation
+        // Use semantic validation with optional per-leaf threshold overrides
         if (constraint.type === 'require') {
-          checkResult = await validateRequireSemantic(output, constraint.value, embedder);
+          checkResult = await validateRequireSemantic(
+            output,
+            constraint.value,
+            embedder,
+            semanticThreshold?.require
+          );
         } else {
-          checkResult = await validateExcludeSemantic(output, constraint.value, embedder);
+          checkResult = await validateExcludeSemantic(
+            output,
+            constraint.value,
+            embedder,
+            semanticThreshold?.exclude
+          );
         }
       }
     } else {

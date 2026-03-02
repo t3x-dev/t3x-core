@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -10,20 +10,40 @@ import { cn } from '@/lib/utils';
  */
 
 interface DiffHunkHeaderProps {
-  label: string;
+  /** Base range string, e.g. "3,5" (start line, count) */
+  baseRange?: string;
+  /** Target range string, e.g. "3,6" (start line, count) */
+  targetRange?: string;
+  /** Fallback label if no range info */
+  label?: string;
   onToggle?: () => void;
   isExpanded?: boolean;
 }
 
-export function DiffHunkHeader({ label, onToggle, isExpanded }: DiffHunkHeaderProps) {
+export function DiffHunkHeader({
+  baseRange,
+  targetRange,
+  label,
+  onToggle,
+  isExpanded,
+}: DiffHunkHeaderProps) {
+  const hunkLabel =
+    baseRange || targetRange
+      ? `@@ ${baseRange ? `-${baseRange}` : ''} ${targetRange ? `+${targetRange}` : ''} @@`
+      : label || '';
+
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center gap-2 bg-muted/50 px-4 py-1.5 font-mono text-xs text-muted-foreground hover:bg-muted"
+      className="flex w-full items-center gap-2 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] px-4 py-1.5 font-mono text-xs text-[var(--text-tertiary)] transition-colors cursor-pointer border-y border-[var(--stroke-divider)]"
     >
-      <ChevronDown className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')} />
-      <span>{label}</span>
+      {isExpanded ? (
+        <ChevronDown className="h-3 w-3 shrink-0" />
+      ) : (
+        <ChevronRight className="h-3 w-3 shrink-0" />
+      )}
+      <span className="text-[var(--accent-branch)]">{hunkLabel}</span>
     </button>
   );
 }

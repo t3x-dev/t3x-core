@@ -3269,13 +3269,58 @@ export interface DraftV3 {
   preview_type: string | null;
   preview_output: string | null;
   preview_generated_at: string | null;
-  status: 'editing' | 'committed' | 'abandoned';
+  status: 'editing' | 'committed' | 'abandoned' | 'auto';
   committed_as: string | null;
   committed_leaf_id: string | null;
   target_branch: string | null;
   revision: number;
   created_at: string;
   updated_at: string;
+  // LLM extraction fields
+  extraction_mode?: 'deterministic' | 'llm' | null;
+  semantic_points?: SemanticPointAPI[] | null;
+  extraction_cursor?: ExtractionCursorAPI | null;
+}
+
+// ============================================================
+// LLM Incremental Extraction Types (API layer)
+// ============================================================
+
+export interface LocatedEvidenceAPI {
+  conversation_id: string;
+  turn_hash: string;
+  quoted_text: string;
+  start_char: number;
+  end_char: number;
+  match_score: number;
+  role: 'primary' | 'supporting';
+  relevance: string;
+  enabled: boolean;
+}
+
+export interface SemanticPointAPI {
+  id: string;
+  text: string;
+  extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
+  inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
+  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
+  zone: 'ready' | 'review';
+  routing_reason?: string;
+  inherited_from?: string;
+  evidence: LocatedEvidenceAPI[];
+  confidence?: number;
+  position: number;
+  staged: boolean;
+}
+
+export interface ExtractionCursorAPI {
+  cursors: Record<
+    string,
+    {
+      last_processed_turn: string;
+      processed_at: string;
+    }
+  >;
 }
 
 export interface CreateDraftV3Input {
@@ -3792,4 +3837,190 @@ export async function* streamPlatformImport(
   if (!res.ok) await throwStreamError(res);
 
   yield* parseSseStream(res);
+}
+
+// ============================================================================
+// Core Engine Upgrade API (#2-#7)
+// ============================================================================
+
+/** Hash chain verification result */
+export interface VerifyResult {
+  valid: boolean;
+  total: number;
+  verified_depth: number;
+  entry_points: number;
+  errors: {
+    hash_mismatch: string[];
+    parent_not_found: string[];
+    other: string[];
+  };
+  verified_at: string;
+}
+
+/** AI-suggested constraint */
+export interface SuggestedConstraint {
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  reason: string;
+  confidence: number;
+}
+
+/** Constraint suggestion response */
+export interface SuggestConstraintsResult {
+  suggestions: SuggestedConstraint[];
+  constraints: Array<{
+    id: string;
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+    description?: string;
+    reason?: string;
+  }>;
+  model: string;
+}
+
+/** Extract-to-draft response */
+export interface ExtractToDraftResult {
+  added_count: number;
+  draft: DraftV3;
+}
+
+/**
+ * Verify the hash chain integrity of a project.
+ */
+export async function verifyProjectHashChain(projectId: string): Promise<VerifyResult> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/verify`);
+  return handleResponse<VerifyResult>(res);
+}
+
+/**
+ * Get AI-suggested constraints for a leaf.
+ */
+export async function suggestLeafConstraints(
+  leafId: string,
+  options?: { max_suggestions?: number; instructions?: string }
+): Promise<SuggestConstraintsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${leafId}/suggest-constraints`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options ?? {}),
+    },
+    60_000
+  );
+  return handleResponse<SuggestConstraintsResult>(res);
+}
+
+/**
+ * Create an auto-draft by extracting sentences from a conversation via LLM.
+ */
+export async function createAutoDraft(input: {
+  project_id: string;
+  conversation_id: string;
+  parent_commit_hash?: string;
+  target_branch?: string;
+  options?: { max_sentences?: number };
+}): Promise<DraftV3> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/drafts/auto`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    60_000
+  );
+  return handleResponse<DraftV3>(res);
+}
+
+/**
+ * Promote an auto-draft to editing status.
+ */
+export async function promoteDraft(draftId: string): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${draftId}/promote`, {
+    method: 'POST',
+  });
+  return handleResponse<DraftV3>(res);
+}
+
+/**
+ * Extract sentences from a conversation and append to an existing draft.
+ */
+export async function extractToDraft(
+  draftId: string,
+  conversationId: string,
+  options?: { max_sentences?: number }
+): Promise<ExtractToDraftResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/drafts/${draftId}/extract`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        options,
+      }),
+    },
+    60_000
+  );
+  return handleResponse<ExtractToDraftResult>(res);
+}
+
+// ============================================================
+// LLM Incremental Extraction
+// ============================================================
+
+export interface IncrementalExtractResult {
+  ready_points: SemanticPointAPI[];
+  review_points: SemanticPointAPI[];
+  cursor: ExtractionCursorAPI;
+  stats: {
+    total_turns: number;
+    new_turns: number;
+    proposals: number;
+    auto_landed: number;
+    needs_review: number;
+    rejected: number;
+  };
+}
+
+export async function extractIncremental(
+  projectId: string,
+  conversationId: string,
+  draftId: string
+): Promise<IncrementalExtractResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/extract/incremental`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: projectId,
+        conversation_id: conversationId,
+        draft_id: draftId,
+      }),
+    },
+    60_000
+  );
+  return handleResponse<IncrementalExtractResult>(res);
+}
+
+export interface ReviewActionResult {
+  semantic_points: SemanticPointAPI[];
+}
+
+export async function reviewAction(
+  draftId: string,
+  spId: string,
+  action: 'accept' | 'dismiss' | 'undo' | 'edit',
+  editedText?: string
+): Promise<ReviewActionResult> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${draftId}/review-action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
+  });
+  return handleResponse<ReviewActionResult>(res);
 }

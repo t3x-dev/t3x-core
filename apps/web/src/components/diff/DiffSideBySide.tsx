@@ -1,7 +1,6 @@
 'use client';
 
-import { CheckCircle, ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { CheckCircle, Minus, Plus } from 'lucide-react';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
@@ -10,7 +9,9 @@ import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { WordDiffSegment } from '@/types/merge';
 import { DiffContextSnippet } from './DiffContextSnippet';
+import { DiffHunkHeader } from './DiffHunkHeader';
 import { DiffSentenceLine } from './DiffSentenceLine';
+import { DiffSourceContextModal } from './DiffSourceContextModal';
 import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
 
 // ============================================================================
@@ -55,10 +56,16 @@ export interface DiffSideBySideHandle {
 interface UnifiedLine {
   type: 'context' | 'modified' | 'removed' | 'added' | 'collapsed' | 'group-header';
   baseIndex?: number;
+  targetIndex?: number;
   baseSentence?: CommitV4Sentence;
   targetSentence?: CommitV4Sentence;
   wordDiff?: WordDiffSegment[];
   collapsedCount?: number;
+  /** Collapse range for hunk header display */
+  collapseBaseStart?: number;
+  collapseBaseEnd?: number;
+  collapseTargetStart?: number;
+  collapseTargetEnd?: number;
   /** Source group header data */
   groupHeader?: {
     conversationId: string;
@@ -74,7 +81,7 @@ interface UnifiedLine {
 // Helpers
 // ============================================================================
 
-const CONTEXT_LINES = 2;
+const CONTEXT_LINES = 3;
 
 /**
  * Build unified lines in position order with context folding
@@ -97,6 +104,12 @@ function buildUnifiedLines(
 
   const targetMap = new Map(targetSentences.map((s) => [s.id, s]));
 
+  // Build target position map: sentenceId → index in targetSentences
+  const targetPositionMap = new Map<string, number>();
+  for (let i = 0; i < targetSentences.length; i++) {
+    targetPositionMap.set(targetSentences[i].id, i);
+  }
+
   const rawLines: UnifiedLine[] = [];
 
   for (let i = 0; i < baseSentences.length; i++) {
@@ -107,6 +120,7 @@ function buildUnifiedLines(
       rawLines.push({
         type: 'context',
         baseIndex: i,
+        targetIndex: targetPositionMap.get(baseSentence.id),
         baseSentence,
         targetSentence: baseSentence,
       });
@@ -114,6 +128,9 @@ function buildUnifiedLines(
       rawLines.push({
         type: 'modified',
         baseIndex: i,
+        targetIndex: diff.matchedSegmentId
+          ? targetPositionMap.get(diff.matchedSegmentId)
+          : undefined,
         baseSentence,
         targetSentence: diff.matchedSegmentId ? targetMap.get(diff.matchedSegmentId) : undefined,
         wordDiff: diff.wordDiff,
@@ -132,6 +149,7 @@ function buildUnifiedLines(
     if (targetSentence) {
       rawLines.push({
         type: 'added',
+        targetIndex: targetPositionMap.get(added.segmentId),
         targetSentence,
       });
     }
@@ -153,22 +171,40 @@ function buildUnifiedLines(
   }
 
   const finalLines: UnifiedLine[] = [];
-  let collapsedCount = 0;
+  let collapseStart = -1;
 
   for (let i = 0; i < rawLines.length; i++) {
     if (showLine[i]) {
-      if (collapsedCount > 0) {
-        finalLines.push({ type: 'collapsed', collapsedCount });
-        collapsedCount = 0;
+      if (collapseStart >= 0) {
+        const collapseEnd = i - 1;
+        const count = collapseEnd - collapseStart + 1;
+        finalLines.push({
+          type: 'collapsed',
+          collapsedCount: count,
+          collapseBaseStart: rawLines[collapseStart].baseIndex,
+          collapseBaseEnd: rawLines[collapseEnd].baseIndex,
+          collapseTargetStart: rawLines[collapseStart].targetIndex,
+          collapseTargetEnd: rawLines[collapseEnd].targetIndex,
+        });
+        collapseStart = -1;
       }
       finalLines.push(rawLines[i]);
     } else {
-      collapsedCount++;
+      if (collapseStart < 0) collapseStart = i;
     }
   }
 
-  if (collapsedCount > 0) {
-    finalLines.push({ type: 'collapsed', collapsedCount });
+  if (collapseStart >= 0) {
+    const collapseEnd = rawLines.length - 1;
+    const count = collapseEnd - collapseStart + 1;
+    finalLines.push({
+      type: 'collapsed',
+      collapsedCount: count,
+      collapseBaseStart: rawLines[collapseStart].baseIndex,
+      collapseBaseEnd: rawLines[collapseEnd].baseIndex,
+      collapseTargetStart: rawLines[collapseStart].targetIndex,
+      collapseTargetEnd: rawLines[collapseEnd].targetIndex,
+    });
   }
 
   return finalLines;
@@ -282,45 +318,18 @@ function insertGroupHeaders(
 }
 
 // ============================================================================
-// Sub-components
+// Helpers – hunk range formatting
 // ============================================================================
 
-interface CollapsedRowProps {
-  count: number;
-  onExpand: () => void;
-  unified?: boolean;
-}
-
-function CollapsedRow({ count, onExpand, unified }: CollapsedRowProps) {
-  if (unified) {
-    return (
-      <button
-        type="button"
-        onClick={onExpand}
-        className="w-full px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-      >
-        <ChevronRight className="h-3 w-3" />
-        <span>··· {count} unchanged ···</span>
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onExpand}
-      className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-    >
-      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
-        <ChevronRight className="h-3 w-3" />
-        <span>··· {count} unchanged ···</span>
-      </div>
-      <div className="px-3 py-1.5 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
-        <ChevronRight className="h-3 w-3" />
-        <span>··· {count} unchanged ···</span>
-      </div>
-    </button>
-  );
+/** Format a hunk range string like "3,5" (1-based start, count) */
+function formatHunkRange(
+  startIdx: number | undefined,
+  endIdx: number | undefined
+): string | undefined {
+  if (startIdx == null || endIdx == null) return undefined;
+  const start = startIdx + 1; // 1-based
+  const count = endIdx - startIdx + 1;
+  return `${start},${count}`;
 }
 
 // ============================================================================
@@ -344,7 +353,6 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const router = useRouter();
 
     // Build unified lines
     const rawUnifiedLines = useMemo(
@@ -405,15 +413,17 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const [expandedTurnHash, setExpandedTurnHash] = useState<string | undefined>();
     const [expandedHighlightStart, setExpandedHighlightStart] = useState<number | undefined>();
     const [expandedHighlightEnd, setExpandedHighlightEnd] = useState<number | undefined>();
+    const [expandedWordDiff, setExpandedWordDiff] = useState<WordDiffSegment[] | undefined>();
 
     const handleSourceToggle = useCallback(
-      async (segmentId: string, sentence: CommitV4Sentence) => {
+      async (segmentId: string, sentence: CommitV4Sentence, lineWordDiff?: WordDiffSegment[]) => {
         if (expandedSegmentId === segmentId) {
           setExpandedSegmentId(null);
           setInlineContextData(null);
           setExpandedTurnHash(undefined);
           setExpandedHighlightStart(undefined);
           setExpandedHighlightEnd(undefined);
+          setExpandedWordDiff(undefined);
           return;
         }
 
@@ -427,6 +437,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         setExpandedTurnHash(turnHash);
         setExpandedHighlightStart(startChar);
         setExpandedHighlightEnd(endChar);
+        setExpandedWordDiff(lineWordDiff);
         setInlineContextLoading(true);
         setInlineContextData(null);
 
@@ -447,13 +458,58 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [expandedSegmentId]
     );
 
-    const handleJumpToConversation = useCallback(
-      (conversationId: string) => {
-        if (projectId) {
-          router.push(`/project/${projectId}/conversation/${conversationId}`);
-        }
+    // Context modal state
+    const [contextModal, setContextModal] = useState<{
+      open: boolean;
+      conversationId: string;
+      turnHash: string;
+      highlightStart?: number;
+      highlightEnd?: number;
+      wordDiff?: WordDiffSegment[];
+    } | null>(null);
+    const [modalContextData, setModalContextData] = useState<TurnContextData | null>(null);
+    const [modalLoading, setModalLoading] = useState(false);
+
+    const openContextModal = useCallback(
+      (conversationId: string, turnHash: string, hStart?: number, hEnd?: number, wDiff?: WordDiffSegment[]) => {
+        setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd, wordDiff: wDiff });
+        setModalLoading(true);
+        setModalContextData(null);
+
+        api.fetchTurnContextCached(turnHash, {
+          before: 5,
+          after: 5,
+          highlightStart: hStart,
+          highlightEnd: hEnd,
+        })
+          .then((data) => setModalContextData(data))
+          .catch(() => setModalContextData(null))
+          .finally(() => setModalLoading(false));
       },
-      [projectId, router]
+      []
+    );
+
+    const closeContextModal = useCallback(() => {
+      setContextModal(null);
+      setModalContextData(null);
+    }, []);
+
+    /** Create a jump handler that opens the context modal with source_ref info */
+    const makeJumpHandler = useCallback(
+      (sentence: CommitV4Sentence | undefined, lineWordDiff?: WordDiffSegment[]) => {
+        if (!projectId || !sentence?.source_ref?.conversation_id) return undefined;
+        return (conversationId: string) => {
+          const ref = sentence.source_ref;
+          openContextModal(
+            conversationId,
+            ref?.turn_hash || '',
+            ref?.start_char,
+            ref?.end_char,
+            lineWordDiff
+          );
+        };
+      },
+      [projectId, openContextModal]
     );
 
     // Whether a line is a change (not context/collapsed/group-header)
@@ -479,32 +535,16 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       if (line.type === 'collapsed') {
-        if (expandedSections.has(index)) {
-          return (
-            <button
-              key={`collapsed-${index}`}
-              type="button"
-              onClick={() => toggleSection(index)}
-              className="w-full grid grid-cols-2 divide-x divide-[var(--stroke-divider)] bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-              data-line-index={index}
-            >
-              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
-                <ChevronDown className="h-3 w-3" />
-                <span>··· {line.collapsedCount} unchanged (click to collapse) ···</span>
-              </div>
-              <div className="px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1">
-                <ChevronDown className="h-3 w-3" />
-                <span>··· {line.collapsedCount} unchanged ···</span>
-              </div>
-            </button>
-          );
-        }
         return (
-          <CollapsedRow
-            key={`collapsed-${index}`}
-            count={line.collapsedCount || 0}
-            onExpand={() => toggleSection(index)}
-          />
+          <div key={`collapsed-${index}`} data-line-index={index}>
+            <DiffHunkHeader
+              baseRange={formatHunkRange(line.collapseBaseStart, line.collapseBaseEnd)}
+              targetRange={formatHunkRange(line.collapseTargetStart, line.collapseTargetEnd)}
+              label={`··· ${line.collapsedCount} unchanged ···`}
+              onToggle={() => toggleSection(index)}
+              isExpanded={expandedSections.has(index)}
+            />
+          </div>
         );
       }
 
@@ -522,6 +562,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               <DiffSentenceLine
                 text={line.baseSentence?.text || ''}
                 type={line.type === 'context' ? 'context' : 'removed'}
+                lineNumber={line.baseIndex != null ? line.baseIndex + 1 : undefined}
                 wordDiff={
                   line.type === 'modified'
                     ? line.wordDiff?.filter((seg) => seg.type !== 'added')
@@ -530,7 +571,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 hasSource={!!line.baseSentence?.source_ref?.turn_hash}
                 onSourceClick={() => {
                   if (line.baseSentence) {
-                    handleSourceToggle(line.baseSentence.id, line.baseSentence);
+                    const wd = line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'added') : undefined;
+                    handleSourceToggle(line.baseSentence.id, line.baseSentence, wd);
                   }
                 }}
                 expanded={expandedSegmentId === baseId}
@@ -539,7 +581,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 turnHash={expandedSegmentId === baseId ? expandedTurnHash : undefined}
                 highlightStart={expandedSegmentId === baseId ? expandedHighlightStart : undefined}
                 highlightEnd={expandedSegmentId === baseId ? expandedHighlightEnd : undefined}
-                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+                onJumpToConversation={makeJumpHandler(line.baseSentence, line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'added') : undefined)}
               />
             )}
 
@@ -550,6 +592,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               <DiffSentenceLine
                 text={line.targetSentence?.text || ''}
                 type={line.type === 'context' ? 'context' : 'added'}
+                lineNumber={line.targetIndex != null ? line.targetIndex + 1 : undefined}
                 wordDiff={
                   line.type === 'modified'
                     ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
@@ -558,7 +601,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 hasSource={!!line.targetSentence?.source_ref?.turn_hash}
                 onSourceClick={() => {
                   if (line.targetSentence) {
-                    handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence);
+                    const wd = line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'removed') : undefined;
+                    handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence, wd);
                   }
                 }}
                 expanded={expandedSegmentId === `target-${targetId}`}
@@ -571,7 +615,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 highlightEnd={
                   expandedSegmentId === `target-${targetId}` ? expandedHighlightEnd : undefined
                 }
-                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+                onJumpToConversation={makeJumpHandler(line.targetSentence, line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'removed') : undefined)}
               />
             )}
           </div>
@@ -583,7 +627,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 {line.type !== 'added' && line.baseSentence?.source_ref && (
                   <DiffContextSnippet
                     sentence={line.baseSentence}
-                    onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+                    onJumpToConversation={makeJumpHandler(line.baseSentence)}
                   />
                 )}
               </div>
@@ -591,7 +635,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 {line.type !== 'removed' && line.targetSentence?.source_ref && (
                   <DiffContextSnippet
                     sentence={line.targetSentence}
-                    onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+                    onJumpToConversation={makeJumpHandler(line.targetSentence)}
                   />
                 )}
               </div>
@@ -620,27 +664,16 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       if (line.type === 'collapsed') {
-        if (expandedSections.has(index)) {
-          return (
-            <button
-              key={`collapsed-${index}`}
-              type="button"
-              onClick={() => toggleSection(index)}
-              className="w-full px-3 py-1 text-xs text-[var(--text-tertiary)] flex items-center gap-1 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-              data-line-index={index}
-            >
-              <ChevronDown className="h-3 w-3" />
-              <span>··· {line.collapsedCount} unchanged (click to collapse) ···</span>
-            </button>
-          );
-        }
         return (
-          <CollapsedRow
-            key={`collapsed-${index}`}
-            count={line.collapsedCount || 0}
-            onExpand={() => toggleSection(index)}
-            unified
-          />
+          <div key={`collapsed-${index}`} data-line-index={index}>
+            <DiffHunkHeader
+              baseRange={formatHunkRange(line.collapseBaseStart, line.collapseBaseEnd)}
+              targetRange={formatHunkRange(line.collapseTargetStart, line.collapseTargetEnd)}
+              label={`··· ${line.collapsedCount} unchanged ···`}
+              onToggle={() => toggleSection(index)}
+              isExpanded={expandedSections.has(index)}
+            />
+          </div>
         );
       }
 
@@ -654,11 +687,12 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             <DiffSentenceLine
               text={line.baseSentence?.text || ''}
               type="removed"
+              baseLineNumber={line.baseIndex != null ? line.baseIndex + 1 : undefined}
               wordDiff={line.wordDiff?.filter((seg) => seg.type !== 'added')}
               hasSource={!!line.baseSentence?.source_ref?.turn_hash}
               onSourceClick={() => {
                 if (line.baseSentence) {
-                  handleSourceToggle(line.baseSentence.id, line.baseSentence);
+                  handleSourceToggle(line.baseSentence.id, line.baseSentence, line.wordDiff?.filter((seg) => seg.type !== 'added'));
                 }
               }}
               expanded={expandedSegmentId === line.baseSentence?.id}
@@ -671,16 +705,17 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               highlightEnd={
                 expandedSegmentId === line.baseSentence?.id ? expandedHighlightEnd : undefined
               }
-              onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+              onJumpToConversation={makeJumpHandler(line.baseSentence, line.wordDiff?.filter((seg) => seg.type !== 'added'))}
             />
             <DiffSentenceLine
               text={line.targetSentence?.text || ''}
               type="added"
+              targetLineNumber={line.targetIndex != null ? line.targetIndex + 1 : undefined}
               wordDiff={line.wordDiff?.filter((seg) => seg.type !== 'removed')}
               hasSource={!!line.targetSentence?.source_ref?.turn_hash}
               onSourceClick={() => {
                 if (line.targetSentence) {
-                  handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence);
+                  handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence, line.wordDiff?.filter((seg) => seg.type !== 'removed'));
                 }
               }}
               expanded={expandedSegmentId === `target-${line.targetSentence?.id}`}
@@ -701,12 +736,12 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                   ? expandedHighlightEnd
                   : undefined
               }
-              onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+              onJumpToConversation={makeJumpHandler(line.targetSentence, line.wordDiff?.filter((seg) => seg.type !== 'removed'))}
             />
             {showSnippets && line.targetSentence?.source_ref && (
               <DiffContextSnippet
                 sentence={line.targetSentence}
-                onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+                onJumpToConversation={makeJumpHandler(line.targetSentence)}
               />
             )}
           </div>
@@ -714,11 +749,19 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       // Single line (context, added, removed)
+      // Dual gutters: base # on left, target # on right
+      const baseNum =
+        line.type !== 'added' && line.baseIndex != null ? line.baseIndex + 1 : undefined;
+      const targetNum =
+        line.type !== 'removed' && line.targetIndex != null ? line.targetIndex + 1 : undefined;
+
       return (
         <div key={`line-${index}`} data-line-index={index}>
           <DiffSentenceLine
             text={relevantSentence?.text || ''}
             type={line.type === 'context' ? 'context' : line.type === 'added' ? 'added' : 'removed'}
+            baseLineNumber={baseNum}
+            targetLineNumber={targetNum}
             hasSource={!!relevantSentence?.source_ref?.turn_hash}
             onSourceClick={() => {
               if (relevantSentence) {
@@ -751,12 +794,12 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 ? expandedHighlightEnd
                 : undefined
             }
-            onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+            onJumpToConversation={makeJumpHandler(relevantSentence)}
           />
           {showSnippets && showChange && relevantSentence?.source_ref && (
             <DiffContextSnippet
               sentence={relevantSentence}
-              onJumpToConversation={projectId ? handleJumpToConversation : undefined}
+              onJumpToConversation={makeJumpHandler(relevantSentence)}
             />
           )}
         </div>
@@ -770,6 +813,13 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         {/* Column Headers */}
         {isUnified ? (
           <div className="px-4 py-2 flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0" title="Base line">
+              {baseLabel || 'Base'}
+            </span>
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0" title="Target line">
+              {targetLabel || 'Target'}
+            </span>
+            <span className="w-4 shrink-0" />
             <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium">
               <Minus className="h-2.5 w-2.5" />
               Removed
@@ -782,6 +832,9 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         ) : (
           <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)] border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
             <div className="px-4 py-2 flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0">
+                #
+              </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium shrink-0">
                 <Minus className="h-2.5 w-2.5" />
                 Base
@@ -793,6 +846,9 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               )}
             </div>
             <div className="px-4 py-2 flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0">
+                #
+              </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent px-2 py-0.5 text-[10px] font-medium shrink-0">
                 <Plus className="h-2.5 w-2.5" />
                 Target
@@ -821,6 +877,21 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             className="py-20"
           />
         )}
+
+        {/* Source context modal */}
+        <DiffSourceContextModal
+          open={!!contextModal?.open}
+          sentence={null}
+          data={modalContextData}
+          loading={modalLoading}
+          onClose={closeContextModal}
+          projectId={projectId}
+          conversationId={contextModal?.conversationId}
+          turnHash={contextModal?.turnHash}
+          highlightStart={contextModal?.highlightStart}
+          highlightEnd={contextModal?.highlightEnd}
+          wordDiff={contextModal?.wordDiff}
+        />
       </div>
     );
   }
