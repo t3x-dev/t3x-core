@@ -77,12 +77,14 @@ export {
 } from './diff';
 // Extractors (Ring 1/2/3)
 export {
+  type AdaptiveThresholds,
   // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
   // LLM Extraction
   buildExtractionPrompt,
+  computeAdaptiveThresholds,
   // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   buildStyleSeed,

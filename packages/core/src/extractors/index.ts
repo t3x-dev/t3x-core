@@ -2,6 +2,7 @@
  * Extractors exports
  */
 
+export { type AdaptiveThresholds, computeAdaptiveThresholds, type FeedbackStats } from './adaptiveThresholds';
 export {
   type ExtractionItem,
   ExtractionParseError,
