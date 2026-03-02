@@ -12,6 +12,8 @@
 // Two-way merge functions
 export { executeMerge } from './executeMerge';
 export { prepareMerge } from './prepareMerge';
+// Smart merge suggestion (#10)
+export { type MergeSuggestion, suggestMerge } from './suggestMerge';
 
 // Two-way merge types
 export type {

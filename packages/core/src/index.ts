@@ -195,7 +195,9 @@ export {
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
+  type MergeSuggestion,
   prepareMerge,
+  suggestMerge,
 } from './merge';
 // Provider interfaces and implementations
 export {
