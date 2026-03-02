@@ -30,6 +30,7 @@ import {
   diffRoutes,
   draftsRoutes,
   exportRoutes,
+  extractRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
@@ -131,6 +132,7 @@ api.route('/', mergeRoutes); // /v1/merge
 api.route('/', runnerRoutes); // /v1/runner/*
 api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', draftsRoutes); // /v1/drafts
+api.route('/', extractRoutes); // /v1/extract
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
@@ -166,6 +168,7 @@ api.doc('/openapi.json', {
     { name: 'Branches', description: 'Branch management' },
     { name: 'Drafts', description: 'Draft management' },
     { name: 'Diff', description: 'Semantic diff operations' },
+    { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
     { name: 'Merge', description: 'Merge operations' },
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },

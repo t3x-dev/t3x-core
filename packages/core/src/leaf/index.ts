@@ -21,6 +21,20 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Corrective Prompt Exports (Upgrade #3: Intelligent Feedback Retry)
+// ═══════════════════════════════════════════════════════════════════════════
+export type { CorrectivePromptOptions } from './corrective-prompt';
+export { buildCorrectivePrompt } from './corrective-prompt';
+// ═══════════════════════════════════════════════════════════════════════════
+// Constraint Suggestion Exports
+// ═══════════════════════════════════════════════════════════════════════════
+export type {
+  ConstraintSuggestionResult,
+  SuggestedConstraint,
+  SuggestConstraintsOptions,
+} from './constraintSuggester';
+export { suggestConstraints, suggestionsToConstraints } from './constraintSuggester';
+// ═══════════════════════════════════════════════════════════════════════════
 // Generation Exports (GEN-* adds here)
 // ═══════════════════════════════════════════════════════════════════════════
 export type { BuildPromptWithTemplateOptions } from './build-prompt';
@@ -76,6 +90,8 @@ export type {
   GenerateResult,
   LeafTemplate,
   RenderedTemplate,
+  // Semantic threshold override type
+  SemanticThreshold,
   TemplateContext,
   TemplateVariable,
   // Template types

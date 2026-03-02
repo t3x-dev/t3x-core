@@ -3269,7 +3269,7 @@ export interface DraftV3 {
   preview_type: string | null;
   preview_output: string | null;
   preview_generated_at: string | null;
-  status: 'editing' | 'committed' | 'abandoned';
+  status: 'editing' | 'committed' | 'abandoned' | 'auto';
   committed_as: string | null;
   committed_leaf_id: string | null;
   target_branch: string | null;
@@ -3792,4 +3792,133 @@ export async function* streamPlatformImport(
   if (!res.ok) await throwStreamError(res);
 
   yield* parseSseStream(res);
+}
+
+// ============================================================================
+// Core Engine Upgrade API (#2-#7)
+// ============================================================================
+
+/** Hash chain verification result */
+export interface VerifyResult {
+  valid: boolean;
+  total: number;
+  verified_depth: number;
+  entry_points: number;
+  errors: {
+    hash_mismatch: string[];
+    parent_not_found: string[];
+    other: string[];
+  };
+  verified_at: string;
+}
+
+/** AI-suggested constraint */
+export interface SuggestedConstraint {
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  reason: string;
+  confidence: number;
+}
+
+/** Constraint suggestion response */
+export interface SuggestConstraintsResult {
+  suggestions: SuggestedConstraint[];
+  constraints: Array<{
+    id: string;
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+    description?: string;
+    reason?: string;
+  }>;
+  model: string;
+}
+
+/** Extract-to-draft response */
+export interface ExtractToDraftResult {
+  added_count: number;
+  draft: DraftV3;
+}
+
+/**
+ * Verify the hash chain integrity of a project.
+ */
+export async function verifyProjectHashChain(projectId: string): Promise<VerifyResult> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/verify`);
+  return handleResponse<VerifyResult>(res);
+}
+
+/**
+ * Get AI-suggested constraints for a leaf.
+ */
+export async function suggestLeafConstraints(
+  leafId: string,
+  options?: { max_suggestions?: number; instructions?: string }
+): Promise<SuggestConstraintsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${leafId}/suggest-constraints`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options ?? {}),
+    },
+    60_000
+  );
+  return handleResponse<SuggestConstraintsResult>(res);
+}
+
+/**
+ * Create an auto-draft by extracting sentences from a conversation via LLM.
+ */
+export async function createAutoDraft(input: {
+  project_id: string;
+  conversation_id: string;
+  parent_commit_hash?: string;
+  target_branch?: string;
+  options?: { max_sentences?: number };
+}): Promise<DraftV3> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/drafts/auto`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    60_000
+  );
+  return handleResponse<DraftV3>(res);
+}
+
+/**
+ * Promote an auto-draft to editing status.
+ */
+export async function promoteDraft(draftId: string): Promise<DraftV3> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${draftId}/promote`, {
+    method: 'POST',
+  });
+  return handleResponse<DraftV3>(res);
+}
+
+/**
+ * Extract sentences from a conversation and append to an existing draft.
+ */
+export async function extractToDraft(
+  draftId: string,
+  conversationId: string,
+  options?: { max_sentences?: number }
+): Promise<ExtractToDraftResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/drafts/${draftId}/extract`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        options,
+      }),
+    },
+    60_000
+  );
+  return handleResponse<ExtractToDraftResult>(res);
 }

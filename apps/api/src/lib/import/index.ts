@@ -6,6 +6,7 @@
 
 export { checkDuplicate, computeContentHash } from './dedup';
 export { parseDocument } from './document-parser';
+export { convertHtmlToMarkdown, extractArticle } from './html-converter';
 export { splitIntoParagraphs } from './paragraph-splitter';
 export { parsePlatformExport, parsePlatformExportFromBuffer } from './platform-parser';
 export { createTurnsFromMessages, createTurnsFromParagraphs } from './turn-creator';

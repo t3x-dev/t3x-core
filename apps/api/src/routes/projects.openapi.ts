@@ -11,6 +11,7 @@ import {
   findProjectWithStats,
   insertProject,
   updateProject,
+  verifyHashChain,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import {
@@ -385,5 +386,85 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Hash Chain Verification (Upgrade #6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const VerifyChainResultSchema = z.object({
+  valid: z.boolean(),
+  total: z.number(),
+  verified_depth: z.number(),
+  entry_points: z.number(),
+  errors: z.object({
+    hash_mismatch: z.array(z.string()),
+    parent_not_found: z.array(z.string()),
+    other: z.array(z.string()),
+  }),
+  verified_at: z.string(),
+});
+
+const verifyProjectRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{id}/verify',
+  tags: ['Projects'],
+  summary: 'Verify hash chain integrity for a project',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Verification result',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(VerifyChainResultSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(verifyProjectRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    // Check project exists
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+
+    const result = await verifyHashChain(db, id);
+
+    return c.json({ success: true as const, data: result }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'VERIFY_FAILED', message } }, 500);
   }
 });

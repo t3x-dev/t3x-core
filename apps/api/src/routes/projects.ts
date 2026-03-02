@@ -5,6 +5,7 @@
  * POST   /v1/projects - Create project
  * GET    /v1/projects/:id - Get project by ID
  * DELETE /v1/projects/:id - Delete project
+ * GET    /v1/projects/:id/verify - Verify hash chain integrity
  */
 
 import {
@@ -15,6 +16,7 @@ import {
   findProjectById,
   findProjects,
   insertProject,
+  verifyHashChain,
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
@@ -143,5 +145,29 @@ projectRoutes.delete('/v1/projects/:id', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'DELETE_FAILED', message, 500);
+  }
+});
+
+/**
+ * GET /v1/projects/:id/verify - Verify hash chain integrity (Upgrade #6)
+ */
+projectRoutes.get('/v1/projects/:id/verify', async (c) => {
+  const id = c.req.param('id');
+
+  try {
+    const db = await getDB();
+
+    // Check project exists
+    const project = await findProjectById(db, id);
+    if (!project) {
+      return jsonError(c, 'NOT_FOUND', `Project ${id} not found`, 404);
+    }
+
+    const result = await verifyHashChain(db, id);
+
+    return jsonSuccess(c, result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return jsonError(c, 'VERIFY_FAILED', message, 500);
   }
 });

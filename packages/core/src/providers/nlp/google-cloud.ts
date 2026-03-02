@@ -18,7 +18,7 @@
 
 import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from './base';
 import { NLPProviderError, normalizeDependencyLabel, normalizePosTag } from './base';
-import { splitSentencesRuleBased } from './sentenceRules';
+import { splitSentences } from './sentenceSplitter';
 
 /**
  * Google Cloud NLP API response types
@@ -229,7 +229,7 @@ export class GoogleCloudNLPProvider implements NLPProvider {
     });
 
     // Use rule-based segmentation (ignore Google sentence boundaries).
-    const sentences: NLPSentence[] = splitSentencesRuleBased(originalText);
+    const sentences: NLPSentence[] = splitSentences(originalText);
 
     // Document sentiment
     const sentiment = {

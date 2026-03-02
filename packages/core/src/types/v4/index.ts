@@ -739,8 +739,9 @@ export interface ShareToken {
 
 /**
  * Draft status lifecycle: editing → committed | abandoned
+ * 'auto' status: auto-generated from conversation turns (Upgrade #7)
  */
-export type DraftStatus = 'editing' | 'committed' | 'abandoned';
+export type DraftStatus = 'editing' | 'committed' | 'abandoned' | 'auto';
 
 /**
  * Distinguishes how a sentence entered the Draft (RFC §13 Issue A).

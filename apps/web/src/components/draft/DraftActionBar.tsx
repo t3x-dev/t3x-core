@@ -6,7 +6,7 @@
  * Displays: Back button, editable title, status badge, save indicator, commit button.
  */
 
-import { ArrowLeft, Check, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Save, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
@@ -18,11 +18,18 @@ import { useProjectStore } from '@/store/projectStore';
 interface DraftActionBarProps {
   onClose: () => void;
   onCommit: () => void;
+  onExtract?: () => void;
   canCommit: boolean;
   projectId?: string;
 }
 
-export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: DraftActionBarProps) {
+export function DraftActionBar({
+  onClose,
+  onCommit,
+  onExtract,
+  canCommit,
+  projectId,
+}: DraftActionBarProps) {
   const { t } = useTerminology();
   const { draft, saveStatus, lastSavedAt, updateTitle } = useDraftWorkspaceStore();
   const projectName = useProjectStore((s) =>
@@ -109,12 +116,26 @@ export function DraftActionBar({ onClose, onCommit, canCommit, projectId }: Draf
       </div>
 
       {/* Status badge */}
-      <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-        {t('draft')}
-      </Badge>
+      {draft?.status === 'auto' ? (
+        <Badge variant="outline" className="border-blue-500/50 text-blue-600 dark:text-blue-400">
+          Auto
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+          {t('draft')}
+        </Badge>
+      )}
 
       {/* Save status */}
       <SaveStatusIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
+
+      {/* Extract button */}
+      {onExtract && draft?.status === 'editing' && (
+        <Button variant="outline" size="sm" onClick={onExtract}>
+          <Sparkles className="mr-1.5 h-3 w-3" />
+          Extract
+        </Button>
+      )}
 
       {/* Commit button */}
       <Button size="sm" onClick={onCommit} disabled={!canCommit}>

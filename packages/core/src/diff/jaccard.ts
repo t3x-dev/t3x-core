@@ -23,9 +23,12 @@ export function jaccard(tokensA: string[], tokensB: string[]): number {
 /**
  * Minimum Jaccard score to consider sentences "similar"
  *
- * Why 0.3?
- * - Below 0.3 → sentences share so few words that diff is noise
- * - At 0.3 → at least 30% word overlap, indicating related content
+ * Why 0.4?
+ * - Below 0.4 → sentences share too few words, diff produces noise/false pairs
+ * - At 0.4 → at least 40% word overlap, indicating genuinely related content
  * - Above 0.5 → clearly related, diff will be informative
+ *
+ * Upgraded from 0.3 → 0.4 to reduce false positive pairings
+ * (e.g., "fox jumps" vs "dog runs" would no longer be erroneously paired)
  */
-export const JACCARD_THRESHOLD = 0.3;
+export const JACCARD_THRESHOLD = 0.4;

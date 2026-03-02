@@ -13,9 +13,13 @@
  */
 
 import { motion } from 'framer-motion';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
+import { Button } from '@/components/ui/button';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { promoteDraft as apiPromoteDraft } from '@/lib/api';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
@@ -25,6 +29,7 @@ import { DraftActionBar } from './DraftActionBar';
 import { DraftConstraintEditor } from './DraftConstraintEditor';
 import { DraftDiffSection } from './DraftDiffSection';
 import { DraftSplitPane } from './DraftSplitPane';
+import { ExtractConversationDialog } from './ExtractConversationDialog';
 import { InstructionEditor } from './InstructionEditor';
 import { PreviewPanel } from './PreviewPanel';
 import { SentenceList } from './SentenceList';
@@ -50,6 +55,8 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
 
   const prefersReducedMotion = useReducedMotion();
   const [showCommitDialog, setShowCommitDialog] = useState(false);
+  const [showExtractDialog, setShowExtractDialog] = useState(false);
+  const [promoting, setPromoting] = useState(false);
 
   // Auto-save when dirty (debounced 2s)
   useEffect(() => {
@@ -117,6 +124,20 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     onClose();
   }, [onClose]);
 
+  const handlePromote = useCallback(async () => {
+    if (!draftId) return;
+    setPromoting(true);
+    try {
+      await apiPromoteDraft(draftId);
+      toast.success('Draft promoted to editing');
+      loadDraft(draftId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Promote failed');
+    } finally {
+      setPromoting(false);
+    }
+  }, [draftId, loadDraft]);
+
   const handleRefreshDraft = useCallback(() => {
     if (draftId) {
       loadDraft(draftId);
@@ -151,16 +172,42 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         constraintCount={draft.constraints.length}
       />
 
+      {/* Extract Conversation Dialog */}
+      {draftId && (
+        <ExtractConversationDialog
+          open={showExtractDialog}
+          onOpenChange={setShowExtractDialog}
+          draftId={draftId}
+          projectId={projectId}
+          onExtracted={handleRefreshDraft}
+        />
+      )}
+
       {/* Action Bar */}
       <DraftActionBar
         onClose={onClose}
         onCommit={() => setShowCommitDialog(true)}
+        onExtract={() => setShowExtractDialog(true)}
         canCommit={getIncludedCount() > 0 && draft.status === 'editing'}
         projectId={projectId}
       />
 
       {/* Conflict Banner */}
       {conflictError && <ConflictBanner onRefresh={handleRefreshDraft} />}
+
+      {/* Auto-draft promotion banner */}
+      {draft.status === 'auto' && (
+        <div className="flex items-center gap-2 border-b border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-6 py-2.5 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="flex-1 text-amber-800 dark:text-amber-200">
+            Auto-extracted draft — read-only until promoted.
+          </span>
+          <Button size="sm" variant="outline" onClick={handlePromote} disabled={promoting}>
+            {promoting ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
+            Start Editing
+          </Button>
+        </div>
+      )}
 
       {/* Content + Preview split */}
       <DraftSplitPane

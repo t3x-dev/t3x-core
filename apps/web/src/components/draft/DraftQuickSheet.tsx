@@ -8,7 +8,7 @@
  * commit button, and "Open Full Draft" link.
  */
 
-import { ExternalLink, FileEdit, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, ExternalLink, FileEdit, Loader2, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -40,6 +40,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   const [draft, setDraft] = useState<DraftV3 | null>(null);
   const [loading, setLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const savingRef = useRef(false);
 
   // Load draft when sheet opens
@@ -55,7 +56,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
 
   const toggleSentence = useCallback(
     async (sentenceId: string) => {
-      if (!draft || savingRef.current) return;
+      if (!draft || savingRef.current || draft.status === 'auto') return;
       const sentences = draft.sentences.map((s) =>
         s.id === sentenceId ? { ...s, included: !s.included } : s
       );
@@ -90,6 +91,19 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     }
   }, [draft, draftId, onClose, t]);
 
+  const handlePromote = useCallback(async () => {
+    setPromoting(true);
+    try {
+      const updated = await api.promoteDraft(draftId);
+      setDraft(updated);
+      toast.success('Draft promoted to editing');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Promote failed');
+    } finally {
+      setPromoting(false);
+    }
+  }, [draftId]);
+
   const handleOpenFull = useCallback(() => {
     onClose();
     router.push(`/project/${projectId}/draft/${draftId}`);
@@ -113,6 +127,26 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
             )}
           </SheetDescription>
         </SheetHeader>
+
+        {/* Auto-draft banner */}
+        {draft?.status === 'auto' && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="flex-1 text-amber-800 dark:text-amber-200">
+              Auto-extracted draft — read-only until promoted.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handlePromote}
+              disabled={promoting}
+              className="shrink-0"
+            >
+              {promoting ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
+              Start Editing
+            </Button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto -mx-4 px-4">

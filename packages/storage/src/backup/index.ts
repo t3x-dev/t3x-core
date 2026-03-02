@@ -6,4 +6,9 @@
 
 export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup';
 export { type RestoreResult, restoreFromCfpack } from './restore';
-export { type VerifyResult, verifyHashChain } from './verify';
+export {
+  verifyCommitHash,
+  type VerifyChainResult,
+  verifyHashChain,
+  type VerifyResult,
+} from './verify';
