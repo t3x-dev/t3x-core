@@ -135,6 +135,7 @@ function CanvasWorkspaceInner({
     nodes,
     edges,
     projectId,
+    loading: canvasLoading,
     addNode,
     addDraftNode,
     updateNode,
@@ -152,6 +153,10 @@ function CanvasWorkspaceInner({
     openNodeModal,
     closeNodeModal,
   } = useCanvasStore();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('t3x_onboarded') === 'true';
+  });
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Auto-layout handler
@@ -1189,12 +1194,12 @@ function CanvasWorkspaceInner({
           />
         </ReactFlow>
 
-        {/* Empty state overlay - guided 3-step card */}
-        {nodes.length === 0 && (
+        {/* Empty state overlay - guided 3-step onboarding card */}
+        {nodes.length === 0 && !canvasLoading && !onboardingDismissed && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
             <Card
               className={cn(
-                'border-dashed border-2 border-[var(--stroke-default)]/60 px-10 py-8 max-w-lg',
+                'pointer-events-auto border-dashed border-2 border-[var(--stroke-default)]/60 px-10 py-8 max-w-lg',
                 glass.cardBase,
                 glass.highlight
               )}
@@ -1250,6 +1255,32 @@ function CanvasWorkspaceInner({
                   </div>
                 ))}
               </div>
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleAddNode('unit')}
+                  disabled={isPending}
+                  className="gap-1.5"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageSquarePlus className="h-4 w-4" />
+                  )}
+                  Create Your First Conversation
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOnboardingDismissed(true);
+                  localStorage.setItem('t3x_onboarded', 'true');
+                }}
+                className="mt-3 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                Don&apos;t show again
+              </button>
             </Card>
           </div>
         )}

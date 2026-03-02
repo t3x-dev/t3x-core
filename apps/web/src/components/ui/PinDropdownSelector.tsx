@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, GitCommit, Leaf as LeafIcon, Loader2, Pin } from 'lucide-react';
+import { Check, ChevronDown, GitCommit, Leaf as LeafIcon, Loader2, Pin, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +15,7 @@ import {
 import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
 import { useTerminology } from '@/hooks/useTerminology';
+import type { Assertion, Leaf } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -32,6 +33,7 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
   const getPinByRef = usePinsStore((s) => s.getPinByRef);
   const addPin = usePinsStore((s) => s.addPin);
   const removePin = usePinsStore((s) => s.removePin);
+  const updatePinAssertions = usePinsStore((s) => s.updatePinAssertions);
 
   const convCount = pins.filter((p) => p.type === 'conversation').length;
   const leafCount = pins.filter((p) => p.type === 'leaf').length;
@@ -146,6 +148,8 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
                 onToggle={handleToggle}
                 showSeparator={idx < data.length - 1}
                 showConversation={showConv}
+                getPinByRef={getPinByRef}
+                onToggleAssertion={updatePinAssertions}
               />
             );
           });
@@ -165,12 +169,19 @@ function CommitGroup({
   onToggle,
   showSeparator,
   showConversation,
+  getPinByRef,
+  onToggleAssertion,
 }: {
   item: CommitWithLeaves;
   isPinned: (type: 'conversation' | 'leaf', refId: string) => boolean;
   onToggle: (type: 'conversation' | 'leaf', refId: string) => void;
   showSeparator: boolean;
   showConversation: boolean;
+  getPinByRef: (
+    type: 'conversation' | 'leaf',
+    refId: string
+  ) => { id: string; selected_assertion_ids?: string[] } | undefined;
+  onToggleAssertion: (pinId: string, assertionIds: string[]) => Promise<unknown>;
 }) {
   const { commit, leaves } = item;
   const convId = extractConversationId(item);
@@ -204,24 +215,40 @@ function CommitGroup({
         </DropdownMenuCheckboxItem>
       )}
 
-      {/* Leaf pins */}
-      {leaves.map((leaf) => (
-        <DropdownMenuCheckboxItem
-          key={leaf.id}
-          checked={isPinned('leaf', leaf.id)}
-          onCheckedChange={() => onToggle('leaf', leaf.id)}
-          onSelect={(e) => e.preventDefault()}
-          className="text-xs pl-6"
-        >
-          <span className="inline-flex items-center gap-1">
-            <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-[var(--accent-conversation)]/15 text-[var(--accent-conversation)]">
-              leaf
-            </span>
-            <LeafIcon size={10} className="text-[var(--accent-conversation)]" />
-            <span className="truncate">{leaf.title || leaf.id.slice(0, 10)}</span>
-          </span>
-        </DropdownMenuCheckboxItem>
-      ))}
+      {/* Leaf pins + assertion sub-items */}
+      {leaves.map((leaf) => {
+        const leafPinned = isPinned('leaf', leaf.id);
+        const pin = leafPinned ? getPinByRef('leaf', leaf.id) : undefined;
+        const assertions = getLeafAssertions(leaf);
+
+        return (
+          <div key={leaf.id}>
+            <DropdownMenuCheckboxItem
+              checked={leafPinned}
+              onCheckedChange={() => onToggle('leaf', leaf.id)}
+              onSelect={(e) => e.preventDefault()}
+              className="text-xs pl-6"
+            >
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[0.6rem] font-medium px-1 py-0.5 rounded bg-[var(--accent-conversation)]/15 text-[var(--accent-conversation)]">
+                  leaf
+                </span>
+                <LeafIcon size={10} className="text-[var(--accent-conversation)]" />
+                <span className="truncate">{leaf.title || leaf.id.slice(0, 10)}</span>
+              </span>
+            </DropdownMenuCheckboxItem>
+
+            {/* Assertion sub-checkboxes (only when leaf is pinned and has assertions) */}
+            {leafPinned && pin && assertions.length > 0 && (
+              <AssertionSubItems
+                assertions={assertions}
+                pin={pin}
+                onToggleAssertion={onToggleAssertion}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {/* No pinnable items under this commit */}
       {(!convId || !showConversation) && leaves.length === 0 && (
@@ -236,8 +263,64 @@ function CommitGroup({
 }
 
 // ---------------------------------------------------------------------------
+// Internal: assertion sub-items under a pinned leaf
+// ---------------------------------------------------------------------------
+
+function AssertionSubItems({
+  assertions,
+  pin,
+  onToggleAssertion,
+}: {
+  assertions: Assertion[];
+  pin: { id: string; selected_assertion_ids?: string[] };
+  onToggleAssertion: (pinId: string, assertionIds: string[]) => Promise<unknown>;
+}) {
+  const selectedIds = pin.selected_assertion_ids ?? [];
+
+  const handleToggle = (assertionId: string) => {
+    const next = selectedIds.includes(assertionId)
+      ? selectedIds.filter((id) => id !== assertionId)
+      : [...selectedIds, assertionId];
+    onToggleAssertion(pin.id, next);
+  };
+
+  return (
+    <div className="ml-2">
+      {assertions.map((a) => {
+        const checked = selectedIds.includes(a.id);
+        return (
+          <DropdownMenuCheckboxItem
+            key={a.id}
+            checked={checked}
+            onCheckedChange={() => handleToggle(a.id)}
+            onSelect={(e) => e.preventDefault()}
+            className="text-[0.65rem] pl-10 py-0.5"
+          >
+            <span className="inline-flex items-center gap-1 min-w-0">
+              {a.passed ? (
+                <Check size={10} className="shrink-0 text-[var(--status-success)]" />
+              ) : (
+                <X size={10} className="shrink-0 text-[var(--status-error)]" />
+              )}
+              <span className="truncate">{a.details || a.id}</span>
+            </span>
+          </DropdownMenuCheckboxItem>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Get assertions from a leaf, preferring runner_assertions over assertions.
+ */
+function getLeafAssertions(leaf: Leaf): Assertion[] {
+  return leaf.runner_assertions ?? leaf.assertions ?? [];
+}
 
 /**
  * Extract conversation_id from commit's source_refs.

@@ -353,19 +353,53 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
         <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
       </div>
       <ul className="space-y-[var(--space-item)]">
-        {sentences.map((s) => (
-          <li
-            key={s.id}
-            className="flex items-start gap-2 p-2 bg-background rounded border border-border"
-          >
-            <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
-              {s.id}
-            </span>
-            <span className="text-[0.875rem] leading-relaxed text-foreground break-words">
-              {s.text}
-            </span>
-          </li>
-        ))}
+        {sentences.map((s) => {
+          const confidence = 'confidence' in s ? (s.confidence as number | undefined) : undefined;
+          const barColor =
+            confidence === undefined
+              ? 'bg-muted'
+              : confidence >= 0.8
+                ? 'bg-[var(--status-success)]'
+                : confidence >= 0.5
+                  ? 'bg-amber-500'
+                  : 'bg-[var(--status-error)]';
+          return (
+            <li
+              key={s.id}
+              className={cn(
+                'flex items-start gap-2 p-2 rounded border',
+                confidence !== undefined && confidence < 0.7
+                  ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300/30'
+                  : 'bg-background border-border'
+              )}
+            >
+              <div
+                className={cn('w-1 self-stretch rounded-full shrink-0', barColor)}
+                title={confidence !== undefined ? `Confidence: ${confidence.toFixed(2)}` : undefined}
+              />
+              <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
+                {s.id}
+              </span>
+              <span className="text-[0.875rem] leading-relaxed text-foreground break-words flex-1">
+                {s.text}
+              </span>
+              {confidence !== undefined && (
+                <span
+                  className={cn(
+                    'text-[10px] font-mono shrink-0 px-1 py-0.5 rounded',
+                    confidence >= 0.8
+                      ? 'text-[var(--status-success)]'
+                      : confidence >= 0.5
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-[var(--status-error)]'
+                  )}
+                >
+                  {Math.round(confidence * 100)}%
+                </span>
+              )}
+            </li>
+          );
+        })}
         {sentences.length === 0 && (
           <li className="text-center py-4 text-muted-foreground/70 text-sm">No sentences</li>
         )}

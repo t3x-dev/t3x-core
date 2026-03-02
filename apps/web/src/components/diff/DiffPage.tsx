@@ -45,6 +45,15 @@ export interface SourceInfo {
 // Helpers
 // ============================================================================
 
+/** Format column label: "branch @ shortHash" or just shortHash */
+function formatCommitLabel(
+  branch: string | null | undefined,
+  hash: string
+): string {
+  const shortHash = hash.replace('sha256:', '').slice(0, 7);
+  return branch ? `${branch} @ ${shortHash}` : shortHash;
+}
+
 /** Build source map from both commits' sentences and source_refs */
 function buildSourceMap(
   baseCommit: CommitV4 | null,
@@ -281,6 +290,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         showSnippets={showSnippets}
         groupBySource
         sourceRefTitles={sourceRefTitles}
+        baseLabel={formatCommitLabel(baseCommit?.branch, baseHash)}
+        targetLabel={formatCommitLabel(targetCommit?.branch, targetHash)}
       />
     </div>
   );

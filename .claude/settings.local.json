@@ -206,7 +206,17 @@
       "Bash(/bin/ls /tmp/)",
       "Bash(OLDPWD=/ HOME=/tmp /bin/bash --noprofile --norc -c 'cd / && pwd && echo works')",
       "Bash(git rev-list:*)",
-      "Bash(git submodule:*)"
+      "Bash(git submodule:*)",
+      "Bash(kill -TERM 11245 && sleep 2 && lsof -i :3000 -t 2>/dev/null | head -1)",
+      "Bash(docker ps --filter \"publish=5432\" --format \"{{.Names}}\" 2>/dev/null)",
+      "Bash(PROJ_ID=\"proj_aee035e0\"\nCONV_ID=\"conv_7fd4a64b\"\n\ncurl -s --noproxy '*' \"http://localhost:8000/api/v1/commits-v4\" -X POST \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{\n    \"project_id\":\"'\"$PROJ_ID\"'\",\n    \"branch\":\"main\",\n    \"message\":\"Initial commit with preferences\",\n    \"author\":{\"type\":\"human\",\"id\":\"test\",\"name\":\"Test User\"},\n    \"content\":{\n      \"sentences\":[\n        {\"id\":\"s_001\",\"text\":\"User prefers dark chocolate over milk chocolate.\",\"confidence\":0.95},\n        {\"id\":\"s_002\",\"text\":\"User always uses TypeScript for new projects.\",\"confidence\":0.9},\n        {\"id\":\"s_003\",\"text\":\"User favorite framework is React with Next.js.\",\"confidence\":0.85}\n      ]\n    },\n    \"source_refs\":[{\"type\":\"conversation\",\"id\":\"'\"$CONV_ID\"'\",\"title\":\"Test conversation\"}]\n  }' | python3 -m json.tool)",
+      "Bash(LEAF_ID=\"leaf_72d7de623d36\"\ncurl -s --noproxy '*' \"http://localhost:8000/api/v1/leaves/$LEAF_ID\" -X PUT \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{\n    \"output\":\"I love dark chocolate so much! TypeScript + Next.js is my go-to stack for every project.\",\n    \"runner_assertions\":[\n      {\"id\":\"ast_001\",\"constraint_id\":\"cst_001\",\"passed\":true,\"details\":\"Contains dark chocolate reference\",\"lesson\":\"Direct mention found\"},\n      {\"id\":\"ast_002\",\"constraint_id\":\"cst_002\",\"passed\":true,\"details\":\"Does not mention white chocolate\",\"lesson\":\"Exclusion constraint satisfied\"}\n    ]\n  }')",
+      "Bash(LEAF_ID=\"leaf_72d7de623d36\"\n\ncurl -s --noproxy '*' \"http://localhost:8000/api/v1/leaves/$LEAF_ID\" -X PATCH \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{\n    \"output\":\"I love dark chocolate so much! TypeScript + Next.js is my go-to stack for every project.\",\n    \"runner_assertions\":[\n      {\"id\":\"ast_001\",\"constraint_id\":\"cst_001\",\"passed\":true,\"details\":\"Contains dark chocolate reference\",\"lesson\":\"Direct mention found\"},\n      {\"id\":\"ast_002\",\"constraint_id\":\"cst_002\",\"passed\":true,\"details\":\"Does not mention white chocolate\",\"lesson\":\"Exclusion constraint satisfied\"}\n    ]\n  }' | python3 -m json.tool | head -20)",
+      "Bash(pnpm test:api 2>&1 | tail -20)",
+      "Bash(cd /Users/pdx/work/T3X && pnpm test:api 2>&1 | tail -30)",
+      "Bash(pnpm test:api 2>&1 | tail -10)",
+      "Bash(pnpm test:api 2>&1 | tail -5)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": [],
     "ask": []

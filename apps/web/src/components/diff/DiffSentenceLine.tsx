@@ -12,6 +12,12 @@ interface DiffSentenceLineProps {
   wordDiff?: WordDiffSegment[];
   onSourceClick?: () => void;
   hasSource?: boolean;
+  /** 1-based line number displayed in the gutter (split mode) */
+  lineNumber?: number;
+  /** 1-based base line number for unified dual-gutter */
+  baseLineNumber?: number;
+  /** 1-based target line number for unified dual-gutter */
+  targetLineNumber?: number;
   /** Inline source context props */
   expanded?: boolean;
   inlineContextData?: TurnContextData | null;
@@ -32,21 +38,21 @@ const lineStyles = {
     text: 'text-[var(--text-primary)]',
     border: 'border-transparent',
     prefix: ' ',
-    decoration: '',
+    prefixColor: 'text-[var(--text-tertiary)]',
   },
   added: {
     bg: 'bg-[var(--diff-added-bg)]',
     text: 'text-[var(--text-primary)]',
     border: 'border-[var(--diff-added-line)]',
     prefix: '+',
-    decoration: '',
+    prefixColor: 'text-[var(--diff-added-accent)] font-bold',
   },
   removed: {
     bg: 'bg-[var(--diff-removed-bg)]',
     text: 'text-[var(--text-primary)]',
     border: 'border-[var(--diff-removed-line)]',
     prefix: '-',
-    decoration: 'line-through',
+    prefixColor: 'text-[var(--diff-removed-accent)] font-bold',
   },
 };
 
@@ -56,6 +62,9 @@ export function DiffSentenceLine({
   wordDiff,
   onSourceClick,
   hasSource = false,
+  lineNumber,
+  baseLineNumber,
+  targetLineNumber,
   expanded = false,
   inlineContextData,
   inlineContextLoading = false,
@@ -65,15 +74,30 @@ export function DiffSentenceLine({
   onJumpToConversation,
 }: DiffSentenceLineProps) {
   const styles = lineStyles[type];
+  const hasDualGutter = baseLineNumber !== undefined || targetLineNumber !== undefined;
 
   return (
     <div>
       <div
         className={`flex items-start gap-2 px-3 py-2 font-mono text-sm border-l-2 ${styles.border} ${styles.bg}`}
       >
-        <span className="shrink-0 select-none text-[var(--text-tertiary)]">{styles.prefix}</span>
+        {hasDualGutter ? (
+          <>
+            <span className="w-8 shrink-0 select-none text-right text-[var(--text-tertiary)]/50 text-xs leading-5">
+              {baseLineNumber ?? ''}
+            </span>
+            <span className="w-8 shrink-0 select-none text-right text-[var(--text-tertiary)]/50 text-xs leading-5">
+              {targetLineNumber ?? ''}
+            </span>
+          </>
+        ) : (
+          <span className="w-8 shrink-0 select-none text-right text-[var(--text-tertiary)]/50 text-xs leading-5">
+            {lineNumber ?? ''}
+          </span>
+        )}
+        <span className={`shrink-0 select-none w-4 text-center ${styles.prefixColor}`}>{styles.prefix}</span>
         <div
-          className={`flex-1 min-w-0 break-words whitespace-pre-wrap ${styles.text} ${wordDiff && wordDiff.length > 0 ? '' : styles.decoration}`}
+          className={`flex-1 min-w-0 break-words whitespace-pre-wrap ${styles.text}`}
         >
           {wordDiff && wordDiff.length > 0 ? <WordDiffDisplay segments={wordDiff} /> : text}
         </div>
@@ -108,6 +132,7 @@ export function DiffSentenceLine({
             turnHash={turnHash}
             highlightStart={highlightStart}
             highlightEnd={highlightEnd}
+            wordDiff={wordDiff}
             contextData={inlineContextData}
             autoFetch={false}
             loading={inlineContextLoading}

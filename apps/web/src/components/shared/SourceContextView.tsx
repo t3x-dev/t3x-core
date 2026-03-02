@@ -38,7 +38,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { fetchTurnContextCached } from '@/lib/api';
 import { truncateWithHighlights } from '@/lib/truncationUtils';
-import type { TurnContextData } from '@/types/merge';
+import type { TurnContextData, WordDiffSegment } from '@/types/merge';
 import type { HighlightColor, HighlightRange } from '@/types/sourceContext';
 
 // ============================================================================
@@ -71,6 +71,9 @@ export interface SourceContextViewProps {
   /** Highlight color: 'yellow' for merge UI, 'green' for commit display */
   highlightColor?: HighlightColor;
 
+  /** Word-level diff segments — when provided, only changed words are highlighted */
+  wordDiff?: WordDiffSegment[];
+
   /** Pre-loaded context data (skips fetch if provided) */
   contextData?: TurnContextData | null;
   /** Whether to auto-fetch context data (default: true) */
@@ -94,10 +97,10 @@ export interface SourceContextViewProps {
 // ============================================================================
 
 const highlightColorClasses: Record<HighlightColor, string> = {
-  yellow: 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100',
-  green: 'bg-green-200 dark:bg-green-800/50 text-[var(--color-text)]',
-  deepGreen: 'bg-green-500 text-white',
-  deepRed: 'bg-red-500 text-white',
+  yellow: 'bg-amber-200 dark:bg-amber-500/40 text-amber-950 dark:text-amber-50 font-medium border-b-2 border-amber-400 dark:border-amber-500',
+  green: 'bg-emerald-200 dark:bg-emerald-500/40 text-emerald-950 dark:text-emerald-50 font-medium border-b-2 border-emerald-400 dark:border-emerald-500',
+  deepGreen: 'bg-green-500 text-white font-medium',
+  deepRed: 'bg-red-500 text-white font-medium',
 };
 
 // ============================================================================
@@ -111,6 +114,7 @@ export function SourceContextView({
   mode = 'compact',
   compactChars = DEFAULT_COMPACT_CHARS,
   highlightColor = 'yellow',
+  wordDiff,
   contextData: externalData,
   autoFetch = true,
   showHeader = true,
@@ -213,7 +217,7 @@ export function SourceContextView({
   const roleLabel = roleLabels[targetTurn.role] || targetTurn.role;
 
   // Highlight class for marks
-  const highlightClass = `${highlightColorClasses[highlightColor]} px-0.5 rounded-sm`;
+  const highlightClass = `${highlightColorClasses[highlightColor]} px-1 py-0.5 rounded`;
 
   // Get truncated segments for compact mode
   const segments = truncateWithHighlights(targetTurn.content, highlights, {
@@ -227,12 +231,45 @@ export function SourceContextView({
   // Render content
   // ─────────────────────────────────────────────────────────────────────────
 
+  /** Render word-diff segments within the highlighted sentence range */
+  const renderWordDiffContent = (contentBefore: string, contentAfter: string) => {
+    const addedClass = `${highlightColorClasses.deepGreen} px-0.5 rounded-sm`;
+    const removedClass = `${highlightColorClasses.deepRed} px-0.5 rounded-sm line-through`;
+    return (
+      <>
+        {contentBefore && <span className="text-[var(--text-tertiary)]">{contentBefore}</span>}
+        {wordDiff!.map((seg, i) => {
+          if (seg.type === 'unchanged') {
+            return <span key={i}>{seg.text}</span>;
+          }
+          if (seg.type === 'added') {
+            return <mark key={i} className={addedClass}>{seg.text}</mark>;
+          }
+          if (seg.type === 'removed') {
+            return <mark key={i} className={removedClass}>{seg.text}</mark>;
+          }
+          return <span key={i}>{seg.text}</span>;
+        })}
+        {contentAfter && <span className="text-[var(--text-tertiary)]">{contentAfter}</span>}
+      </>
+    );
+  };
+
   const renderExpandedContent = () => {
+    // When wordDiff is provided, highlight only changed words
+    if (wordDiff && wordDiff.length > 0 && highlights.length > 0) {
+      const { start, end } = highlights[0];
+      return renderWordDiffContent(
+        targetTurn.content.slice(0, start),
+        targetTurn.content.slice(end)
+      );
+    }
+
     if (highlights.length === 0) {
       return targetTurn.content;
     }
 
-    // Single highlight (most common case)
+    // Fallback: Single highlight (most common case)
     const { start, end } = highlights[0];
     return (
       <>
@@ -244,6 +281,21 @@ export function SourceContextView({
   };
 
   const renderTruncatedContent = () => {
+    // When wordDiff is provided, show word-level diffs in compact mode too
+    if (wordDiff && wordDiff.length > 0 && highlights.length > 0) {
+      const { start, end } = highlights[0];
+      // Show truncated before/after context around the word diff
+      const beforeFull = targetTurn.content.slice(0, start);
+      const afterFull = targetTurn.content.slice(end);
+      const beforeTrunc = beforeFull.length > compactChars
+        ? `...${beforeFull.slice(-compactChars)}`
+        : beforeFull;
+      const afterTrunc = afterFull.length > compactChars
+        ? `${afterFull.slice(0, compactChars)}...`
+        : afterFull;
+      return renderWordDiffContent(beforeTrunc, afterTrunc);
+    }
+
     return segments.map((seg, idx) => {
       // Segments are static once rendered (content doesn't reorder)
       const key = `${seg.type}-${idx}`;
@@ -282,7 +334,7 @@ export function SourceContextView({
                 onClick={() => onJumpClick(contextData.conversation_id)}
                 className="text-[var(--status-info)] hover:underline"
               >
-                Jump to conversation
+                View full context
               </button>
             </>
           )}
@@ -290,7 +342,7 @@ export function SourceContextView({
       )}
 
       {/* Content with highlight */}
-      <div className="text-xs leading-relaxed text-muted-foreground bg-muted/30 rounded px-2 py-1.5">
+      <div className="text-xs leading-relaxed text-[var(--text-secondary)] bg-muted/50 border border-[var(--stroke-divider)] rounded px-2.5 py-2">
         {expanded ? renderExpandedContent() : renderTruncatedContent()}
       </div>
 
