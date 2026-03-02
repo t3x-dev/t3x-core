@@ -1,10 +1,10 @@
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-import express, { type Express } from 'express';
-import pino from 'pino';
+import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
-import { getEngineCallbackUrl, getRunByRunnerRunId, type ParsedRun } from './engine-client.js';
+import { getEngineCallbackUrl, getEngineUrl, getRunByRunnerRunId, type ParsedRun } from './engine-client.js';
 import { evalEngine } from './evaluator/index.js';
+import { logger } from './lib/logger.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
 import type { EvalResult } from './schemas/eval-result.js';
@@ -24,13 +24,6 @@ import {
 } from './trace/index.js';
 import { fetchWithRetry } from './utils/retry.js';
 
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
-
 const app: Express = express();
 
 // CORS - whitelist origins (extend via CORS_ORIGINS env var if needed)
@@ -42,6 +35,14 @@ app.use(cors({ origin: allowedOrigins }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request-ID middleware — correlate logs across a single request
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const reqId = randomUUID().replace(/-/g, '').slice(0, 12);
+  (req as Request & { id: string }).id = reqId;
+  res.setHeader('X-Request-Id', reqId);
+  next();
+});
 
 // Root route - service info
 app.get('/', (_req, res) => {
@@ -66,6 +67,29 @@ app.get('/', (_req, res) => {
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', service: 't3x-runner' } });
+});
+
+// Readiness check — verifies T3X API connectivity
+app.get('/ready', async (_req, res) => {
+  const apiUrl = getEngineUrl();
+  try {
+    const response = await fetch(`${apiUrl}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (response.ok) {
+      res.json({ success: true, data: { status: 'ready', api: 'reachable' } });
+    } else {
+      res.status(503).json({
+        success: false,
+        error: { code: 'NOT_READY', message: `T3X API returned ${response.status}` },
+      });
+    }
+  } catch (err) {
+    res.status(503).json({
+      success: false,
+      error: { code: 'NOT_READY', message: `T3X API unreachable: ${err instanceof Error ? err.message : String(err)}` },
+    });
+  }
 });
 
 // Debug: n8n API connectivity check
@@ -452,12 +476,12 @@ async function processN8nCallback(data: {
       // DEBUG: Log full n8n execution data to investigate tool call structure
       const runData = execution.data?.resultData?.runData;
       if (runData) {
-        logger.info({ run_id: runInfo.run_id }, '=== DEBUG: n8n execution runData keys ===');
+        logger.debug({ run_id: runInfo.run_id }, 'n8n execution runData keys');
         for (const [nodeName, nodeRuns] of Object.entries(runData)) {
           for (const [runIndex, nodeRun] of nodeRuns.entries()) {
             const nodeRunAny = nodeRun as unknown as Record<string, unknown>;
             const dataKeys = nodeRunAny.data ? Object.keys(nodeRunAny.data as object) : [];
-            logger.info(
+            logger.debug(
               {
                 node: nodeName,
                 run_index: runIndex,
@@ -807,6 +831,19 @@ app.post('/eval', async (req, res) => {
 });
 
 // ============================================
+// Global Error Handler
+// ============================================
+
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const reqId = (req as Request & { id?: string }).id;
+  logger.error({ err, req_id: reqId, method: req.method, path: req.path }, 'unhandled error');
+  res.status(500).json({
+    success: false,
+    error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+  });
+});
+
+// ============================================
 // Start Server
 // ============================================
 
@@ -815,6 +852,8 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   logger.info({ port: PORT }, 'T3X Runner started');
   logger.info('Endpoints:');
+  logger.info('  GET  /health        - Health check');
+  logger.info('  GET  /ready         - Readiness check');
   logger.info('  POST /agents        - Register agent');
   logger.info('  POST /run           - Execute agent run (SDK proxy)');
   logger.info('  POST /run/:id/step  - Add step to running run');

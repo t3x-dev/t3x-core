@@ -5,7 +5,7 @@
  * This is the core of the evaluation system - no LLM involved.
  */
 
-import pino from 'pino';
+import { logger } from '../lib/logger.js';
 import type {
   CheckResult,
   DimensionScores,
@@ -27,13 +27,6 @@ const RULE_TYPE_TO_DIMENSION: Record<RuleType, keyof DimensionScores> = {
   cost: 'cost_efficiency',
   performance: 'latency',
 };
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 /**
  * Get value from object by dot-notation path

@@ -5,15 +5,8 @@
  * Reference: https://docs.n8n.io/api/api-reference/
  */
 
-import pino from 'pino';
+import { logger } from '../lib/logger.js';
 import type { N8nApiError, N8nClientConfig, N8nExecution } from './types.js';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 /**
  * Custom error class for n8n API errors

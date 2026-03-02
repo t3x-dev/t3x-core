@@ -8,7 +8,7 @@
  * - Added LLM/Tool/Retrieval data extraction
  */
 
-import pino from 'pino';
+import { logger } from '../lib/logger.js';
 import type {
   LLMData,
   RetrievalData,
@@ -18,13 +18,6 @@ import type {
   ToolData,
 } from '../schemas/run-record.js';
 import type { N8nExecution, N8nNodeRun, N8nRunData } from './types.js';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 /**
  * Mapping options
