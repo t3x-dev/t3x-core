@@ -11,16 +11,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import pino from 'pino';
+import { logger } from './lib/logger.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import type { RunRecord } from './schemas/run-record.js';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 // ============================================
 // Types

@@ -50,6 +50,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { pinoLogger } from '../middleware/logger';
 import {
   generateWithFallback,
   getLLMProvider,
@@ -969,7 +970,7 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       });
     } catch (historyErr) {
       // Log but don't fail - history is supplementary
-      console.warn('Failed to save generation history:', historyErr);
+      pinoLogger.warn({ err: historyErr }, "failed to save generation history");
     }
 
     // Fire webhook event (fire-and-forget)

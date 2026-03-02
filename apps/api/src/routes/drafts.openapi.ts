@@ -45,6 +45,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CommitDraftRequest,
@@ -846,7 +847,7 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
         );
       } catch (embErr) {
         // Non-fatal: log and continue
-        console.warn('[drafts] Failed to populate sentence vectors:', embErr);
+        pinoLogger.warn({ err: embErr }, "failed to populate sentence vectors");
       }
     }
 

@@ -244,6 +244,39 @@ jobs:
         run: pnpm lint
 
   # ===========================================
+  # RUNNER UNIT TESTS - Runner's own test suite
+  # Only runs when runner-related files change
+  # ===========================================
+  test-runner-unit:
+    name: Runner Unit Tests
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      needs.changes.outputs.runner == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: pnpm build:core
+
+      - name: Run @t3x/runner tests
+        run: pnpm --filter @t3x/runner test
+
+  # ===========================================
   # RUNNER CONTRACT TESTS - Protect Runner/n8n integration
   # Only runs when runner-related files change
   # ===========================================

@@ -4,14 +4,7 @@
  * Exponential backoff retry for async operations.
  */
 
-import pino from 'pino';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
+import { logger } from '../lib/logger.js';
 
 export interface RetryOptions {
   /** Maximum number of retry attempts (default: 3) */

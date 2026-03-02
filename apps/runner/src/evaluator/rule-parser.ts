@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'fs';
 import yaml from 'js-yaml';
 import { join } from 'path';
-import pino from 'pino';
+import { logger } from '../lib/logger.js';
 import { type EvalRules, EvalRulesSchema } from '../schemas/eval-rules.js';
 
 /**
@@ -25,13 +25,6 @@ export interface LeafForRules {
   content?: string;
   rules_ref?: string;
 }
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 /**
  * Default evaluation rules
