@@ -13,6 +13,7 @@ import { API_KEY_VALUE_PREFIX } from '@t3x/core';
 import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { pinoLogger } from '../middleware/logger';
 import {
   ApiKeyCreatedResponse,
   ApiKeyResponse,
@@ -90,7 +91,7 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
       201
     );
   } catch (err) {
-    console.error('[API Keys] Create error:', err);
+    pinoLogger.error({ err }, "error creating API key");
     return errorResponse(c, 'CREATE_FAILED', 'Failed to create API key');
   }
 });
@@ -134,7 +135,7 @@ apiKeysRoutes.openapi(listApiKeysRoute, async (c) => {
       data: keys,
     });
   } catch (err) {
-    console.error('[API Keys] List error:', err);
+    pinoLogger.error({ err }, "error listing API keys");
     return errorResponse(c, 'LIST_FAILED', 'Failed to list API keys');
   }
 });
@@ -191,7 +192,7 @@ apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
       data: revoked,
     });
   } catch (err) {
-    console.error('[API Keys] Revoke error:', err);
+    pinoLogger.error({ err }, "error revoking API key");
     return errorResponse(c, 'DELETE_FAILED', 'Failed to revoke API key');
   }
 });
