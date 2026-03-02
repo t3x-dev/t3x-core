@@ -12,7 +12,14 @@
  * - Fork creates a new draft from a committed draft
  */
 
-import type { CreateDraftV3Input, Draft, DraftConstraint, DraftSentence } from '@t3x/core';
+import type {
+  CreateDraftV3Input,
+  Draft,
+  DraftConstraint,
+  DraftSentence,
+  ExtractionCursor,
+  SemanticPoint,
+} from '@t3x/core';
 import { generateDraftV3Id } from '@t3x/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
@@ -54,6 +61,9 @@ export interface UpdateDraftV3Input {
   instructions?: string;
   preview_type?: string;
   target_branch?: string;
+  extraction_mode?: 'deterministic' | 'llm';
+  semantic_points?: SemanticPoint[];
+  extraction_cursor?: ExtractionCursor;
 }
 
 // ============================================================
@@ -84,6 +94,9 @@ function rowToDraft(row: DraftV3Record): Draft {
     revision: row.revision,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+    extraction_mode: (row.extractionMode as Draft['extraction_mode']) ?? undefined,
+    semantic_points: (row.semanticPointsJson ?? undefined) as SemanticPoint[] | undefined,
+    extraction_cursor: (row.extractionCursorJson ?? undefined) as ExtractionCursor | undefined,
   };
 }
 
@@ -186,6 +199,9 @@ export async function updateDraftV3(
   if (input.instructions !== undefined) updateData.instructions = input.instructions;
   if (input.preview_type !== undefined) updateData.previewType = input.preview_type;
   if (input.target_branch !== undefined) updateData.targetBranch = input.target_branch;
+  if (input.extraction_mode !== undefined) updateData.extractionMode = input.extraction_mode;
+  if (input.semantic_points !== undefined) updateData.semanticPointsJson = input.semantic_points;
+  if (input.extraction_cursor !== undefined) updateData.extractionCursorJson = input.extraction_cursor;
 
   // Increment revision
   // Note: Drizzle doesn't support SQL expressions in set(), so we use ifRevision + 1

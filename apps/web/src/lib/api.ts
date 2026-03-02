@@ -3276,6 +3276,51 @@ export interface DraftV3 {
   revision: number;
   created_at: string;
   updated_at: string;
+  // LLM extraction fields
+  extraction_mode?: 'deterministic' | 'llm' | null;
+  semantic_points?: SemanticPointAPI[] | null;
+  extraction_cursor?: ExtractionCursorAPI | null;
+}
+
+// ============================================================
+// LLM Incremental Extraction Types (API layer)
+// ============================================================
+
+export interface LocatedEvidenceAPI {
+  conversation_id: string;
+  turn_hash: string;
+  quoted_text: string;
+  start_char: number;
+  end_char: number;
+  match_score: number;
+  role: 'primary' | 'supporting';
+  relevance: string;
+  enabled: boolean;
+}
+
+export interface SemanticPointAPI {
+  id: string;
+  text: string;
+  extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
+  inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
+  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
+  zone: 'ready' | 'review';
+  routing_reason?: string;
+  inherited_from?: string;
+  evidence: LocatedEvidenceAPI[];
+  confidence?: number;
+  position: number;
+  staged: boolean;
+}
+
+export interface ExtractionCursorAPI {
+  cursors: Record<
+    string,
+    {
+      last_processed_turn: string;
+      processed_at: string;
+    }
+  >;
 }
 
 export interface CreateDraftV3Input {
@@ -3921,4 +3966,61 @@ export async function extractToDraft(
     60_000
   );
   return handleResponse<ExtractToDraftResult>(res);
+}
+
+// ============================================================
+// LLM Incremental Extraction
+// ============================================================
+
+export interface IncrementalExtractResult {
+  ready_points: SemanticPointAPI[];
+  review_points: SemanticPointAPI[];
+  cursor: ExtractionCursorAPI;
+  stats: {
+    total_turns: number;
+    new_turns: number;
+    proposals: number;
+    auto_landed: number;
+    needs_review: number;
+    rejected: number;
+  };
+}
+
+export async function extractIncremental(
+  projectId: string,
+  conversationId: string,
+  draftId: string
+): Promise<IncrementalExtractResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/extract/incremental`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: projectId,
+        conversation_id: conversationId,
+        draft_id: draftId,
+      }),
+    },
+    60_000
+  );
+  return handleResponse<IncrementalExtractResult>(res);
+}
+
+export interface ReviewActionResult {
+  semantic_points: SemanticPointAPI[];
+}
+
+export async function reviewAction(
+  draftId: string,
+  spId: string,
+  action: 'accept' | 'dismiss' | 'undo' | 'edit',
+  editedText?: string
+): Promise<ReviewActionResult> {
+  const res = await fetchWithTimeout(`${API_V1}/drafts/${draftId}/review-action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
+  });
+  return handleResponse<ReviewActionResult>(res);
 }

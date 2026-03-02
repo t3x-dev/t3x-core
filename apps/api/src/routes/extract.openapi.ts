@@ -10,16 +10,22 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createLLMExtractor,
+  type ExtractionCursor,
   generateDraftSentenceId,
+  type SemanticPoint,
   type TurnInput,
   validateExtractedSentences,
 } from '@t3x/core';
-import { findTurnsByConversation } from '@t3x/storage/pglite';
+import { findDraftV3ById, findTurnsByConversation, updateDraftV3 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
-import { DraftSentenceSchema } from '../schemas/v4-contracts';
+import {
+  DraftSentenceSchema,
+  IncrementalExtractRequest,
+  IncrementalExtractResponse,
+} from '../schemas/v4-contracts';
 
 export const extractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -313,5 +319,130 @@ export async function extractSentencesFromLeafOutput(
     },
   };
 }
+
+// ============================================================
+// POST /v1/extract/incremental - Incremental LLM extraction
+// ============================================================
+
+const incrementalExtractRoute = createRoute({
+  method: 'post',
+  path: '/v1/extract/incremental',
+  tags: ['Extract'],
+  summary: 'Run incremental LLM extraction on a conversation for a draft',
+  request: {
+    body: {
+      content: { 'application/json': { schema: IncrementalExtractRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Extraction completed',
+      content: { 'application/json': { schema: IncrementalExtractResponse } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    503: {
+      description: 'LLM provider not configured',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+extractRoutes.openapi(incrementalExtractRoute, async (c) => {
+  const { project_id, conversation_id, draft_id } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    // 1. Load draft
+    const draft = await findDraftV3ById(db, draft_id);
+    if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
+
+    // Validate project_id matches draft
+    if (draft.project_id !== project_id) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft does not belong to the specified project');
+    }
+
+    // 2. Load conversation turns
+    const turns = await findTurnsByConversation(db, {
+      conversationId: conversation_id,
+      limit: 500,
+    });
+
+    if (turns.length === 0) {
+      return errorResponse(c, 'CONVERSATION_NOT_FOUND', 'No turns found');
+    }
+
+    const turnInputs: TurnInput[] = turns.map((t) => ({
+      conversation_id: t.conversationId,
+      turn_hash: t.turnHash,
+      role: t.role as TurnInput['role'],
+      content: t.content,
+    }));
+
+    // 3. Get LLM provider
+    const reg = await getProviderRegistry();
+    const result = await reg.tryWithFallback('generation', (provider) => {
+      const extractor = createLLMExtractor(provider);
+      const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
+      const cursor = (draft.extraction_cursor ?? { cursors: {} }) as ExtractionCursor;
+      return extractor.extractIncremental(turnInputs, existingSPs, cursor);
+    });
+
+    // 4. Merge results into draft
+    const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
+    const allSPs = [...existingSPs, ...result.readyPoints, ...result.reviewPoints];
+
+    await updateDraftV3(
+      db,
+      draft_id,
+      {
+        semantic_points: allSPs,
+        extraction_cursor: result.newCursor,
+        extraction_mode: 'llm',
+      },
+      draft.revision
+    );
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          ready_points: result.readyPoints,
+          review_points: result.reviewPoints,
+          cursor: result.newCursor,
+          stats: result.stats,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'LLM_NOT_CONFIGURED',
+            message:
+              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
+          },
+        },
+        503
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'EXTRACTION_FAILED', message);
+  }
+});
 
 export default extractRoutes;

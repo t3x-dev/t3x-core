@@ -666,6 +666,15 @@ export const draftsV3 = pgTable(
     /** Optimistic lock revision counter */
     revision: integer('revision').notNull().default(1),
 
+    /** LLM extraction mode: 'deterministic' | 'llm' */
+    extractionMode: text('extraction_mode'),
+
+    /** SemanticPoint[] (only when extraction_mode === 'llm') */
+    semanticPointsJson: jsonb('semantic_points_json'),
+
+    /** ExtractionCursor (only when extraction_mode === 'llm') */
+    extractionCursorJson: jsonb('extraction_cursor_json'),
+
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 
