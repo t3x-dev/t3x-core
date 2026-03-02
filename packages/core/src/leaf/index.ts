@@ -30,6 +30,16 @@ export { buildCorrectivePrompt } from './corrective-prompt';
 // ═══════════════════════════════════════════════════════════════════════════
 export { collectLessons } from './lesson-collector';
 // ═══════════════════════════════════════════════════════════════════════════
+// Multi-Round Generation (#12)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  multiRoundGenerate,
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  type RoundConfig,
+  type RoundResult,
+} from './multi-round-generate';
+// ═══════════════════════════════════════════════════════════════════════════
 // Constraint Suggestion Exports
 // ═══════════════════════════════════════════════════════════════════════════
 export type {

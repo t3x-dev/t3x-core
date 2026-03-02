@@ -151,6 +151,10 @@ export {
   type ConstraintCheckResult,
   collectLessons,
   // Constraint Suggestion
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  multiRoundGenerate,
+  type RoundConfig,
   type ConstraintSuggestionResult,
   type CorrectivePromptOptions,
   DEFAULT_MODEL,
