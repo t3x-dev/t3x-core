@@ -36,3 +36,6 @@ export * from './schema';
 // V4 Schema (commits_v4, leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';
+
+// Extraction Feedback Schema (Anchoring L4)
+export * from './schema-extraction-feedback';

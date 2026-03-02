@@ -317,3 +317,11 @@ export {
   updateWebhook,
   type WebhookOutput,
 } from './webhooks';
+// Extraction Feedback (Anchoring L4)
+export {
+  type ExtractionFeedbackStats,
+  getExtractionFeedbackStats,
+  type InsertExtractionFeedbackInput,
+  insertExtractionFeedback,
+  listExtractionFeedback,
+} from './extraction-feedback';

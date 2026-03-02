@@ -368,6 +368,22 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
 
+-- Extraction Feedback (Anchoring L4)
+CREATE TABLE IF NOT EXISTS extraction_feedback (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  draft_id TEXT NOT NULL,
+  sp_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  inference_type TEXT,
+  confidence REAL,
+  zone TEXT,
+  edited_text TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_extraction_feedback_project ON extraction_feedback(project_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_feedback_draft ON extraction_feedback(draft_id);
+
 `;
 
 /** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */
