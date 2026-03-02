@@ -17,9 +17,7 @@ COPY packages/storage/package.json ./packages/storage/
 COPY apps/web/package.json ./apps/web/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
-# Use China npm mirror for faster downloads
-RUN pnpm config set registry https://registry.npmmirror.com && \
-    pnpm install --frozen-lockfile --shamefully-hoist
+RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source files
 COPY packages/core/ ./packages/core/

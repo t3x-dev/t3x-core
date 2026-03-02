@@ -18,9 +18,7 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/runner/package.json ./apps/runner/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
-# Use China npm mirror for faster downloads
-RUN pnpm config set registry https://registry.npmmirror.com && \
-    pnpm install --frozen-lockfile --shamefully-hoist
+RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source files
 COPY packages/core/ ./packages/core/
@@ -42,6 +40,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8000
 
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 hono
+
 # Copy everything from builder (simpler approach for monorepo)
 # Note: We don't prune devDependencies because pnpm workspace links can break
 COPY --from=builder /app ./
@@ -50,6 +52,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD node -e "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"
 
 EXPOSE 8000
+
+USER hono
 
 WORKDIR /app/apps/api
 CMD ["node", "dist/index.js"]
