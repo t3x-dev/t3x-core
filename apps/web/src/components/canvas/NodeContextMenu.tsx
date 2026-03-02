@@ -17,6 +17,7 @@ import {
   MessageSquarePlus,
   Plus,
   Share2,
+  Sparkles,
   Trash2,
   ZoomIn,
 } from 'lucide-react';
@@ -143,10 +144,12 @@ export function buildUnitNodeMenu(opts: {
   onOpenDetail: () => void;
   onCreateBranch: () => void;
   onConnectLeaf: () => void;
+  onAutoExtract?: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
   isDraft: boolean;
   isDeveloperMode: boolean;
+  hasConversation?: boolean;
 }): ContextMenuGroup[] {
   const groups: ContextMenuGroup[] = [
     {
@@ -157,6 +160,18 @@ export function buildUnitNodeMenu(opts: {
       ],
     },
   ];
+
+  if (opts.hasConversation && opts.onAutoExtract) {
+    groups.push({
+      items: [
+        {
+          label: 'Auto-Extract to Draft',
+          icon: <Sparkles size={14} />,
+          action: opts.onAutoExtract,
+        },
+      ],
+    });
+  }
 
   if (opts.isDeveloperMode && opts.onCopyHash) {
     groups.push({

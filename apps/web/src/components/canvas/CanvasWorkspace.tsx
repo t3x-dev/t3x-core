@@ -20,6 +20,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Settings,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -56,6 +57,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
+import { createAutoDraft, verifyProjectHashChain } from '@/lib/api';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -123,6 +125,7 @@ function CanvasWorkspaceInner({
   const { resolvedTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const { t, isDeveloperMode } = useTerminology();
 
@@ -177,11 +180,37 @@ function CanvasWorkspaceInner({
     }
   }, [getNodes, getEdges, setNodes, fitView, notify]);
 
+  // Hash chain verification handler
+  const handleVerify = useCallback(async () => {
+    if (!projectId || isVerifying) return;
+    setIsVerifying(true);
+    try {
+      const result = await verifyProjectHashChain(projectId);
+      if (result.valid) {
+        notify?.(
+          `Hash chain verified: ${result.total} commits, depth ${result.verified_depth}`,
+          'success'
+        );
+      } else {
+        const errorCount =
+          result.errors.hash_mismatch.length +
+          result.errors.parent_not_found.length +
+          result.errors.other.length;
+        notify?.(`Hash chain invalid: ${errorCount} error(s) in ${result.total} commits`, 'error');
+      }
+    } catch (err) {
+      notify?.(err instanceof Error ? err.message : 'Verification failed', 'error');
+    } finally {
+      setIsVerifying(false);
+    }
+  }, [projectId, isVerifying, notify]);
+
   // Context menu handlers
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
       event.preventDefault();
       const isDraft = node.data.commitStatus === 'draft';
+      const hasConversation = !!node.data.conversationId;
       const groups = buildUnitNodeMenu({
         onOpenDetail: () => openNodeModal(node.id, 'commit'),
         onCreateBranch: () => {
@@ -195,6 +224,26 @@ function CanvasWorkspaceInner({
           });
         },
         onConnectLeaf: () => useCanvasStore.getState().openLeafPanel(node.id),
+        onAutoExtract:
+          hasConversation && projectId
+            ? () => {
+                createAutoDraft({
+                  project_id: projectId,
+                  conversation_id: node.data.conversationId as string,
+                  parent_commit_hash: node.data.commitHash || undefined,
+                })
+                  .then((draft) => {
+                    notify?.(
+                      `Auto-extracted ${draft.sentences.length} sentences to draft`,
+                      'success'
+                    );
+                    useCanvasStore.getState().loadProjectData(projectId);
+                  })
+                  .catch((err) => {
+                    notify?.(err instanceof Error ? err.message : 'Auto-extract failed', 'error');
+                  });
+              }
+            : undefined,
         onCopyHash: isDeveloperMode
           ? () => {
               const hash =
@@ -211,6 +260,7 @@ function CanvasWorkspaceInner({
           : undefined,
         isDraft,
         isDeveloperMode,
+        hasConversation,
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
@@ -989,6 +1039,25 @@ function CanvasWorkspaceInner({
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <LayoutGrid className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleVerify}
+            title="Verify Hash Chain"
+            className={cn(
+              'h-9 w-9 rounded-xl transition-all',
+              'text-[var(--text-secondary)] hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary',
+              isVerifying && 'pointer-events-none'
+            )}
+            disabled={isVerifying}
+          >
+            {isVerifying ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-4 w-4" />
             )}
           </Button>
           <Link
