@@ -3276,6 +3276,48 @@ export interface DraftV3 {
   revision: number;
   created_at: string;
   updated_at: string;
+  // LLM extraction fields
+  extraction_mode?: 'deterministic' | 'llm' | null;
+  semantic_points?: SemanticPointAPI[] | null;
+  extraction_cursor?: ExtractionCursorAPI | null;
+}
+
+// ============================================================
+// LLM Incremental Extraction Types (API layer)
+// ============================================================
+
+export interface LocatedEvidenceAPI {
+  conversation_id: string;
+  turn_hash: string;
+  quoted_text: string;
+  start_char: number;
+  end_char: number;
+  match_score: number;
+  role: 'primary' | 'supporting';
+  relevance: string;
+  enabled: boolean;
+}
+
+export interface SemanticPointAPI {
+  id: string;
+  text: string;
+  extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
+  inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
+  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
+  zone: 'ready' | 'review';
+  routing_reason?: string;
+  inherited_from?: string;
+  evidence: LocatedEvidenceAPI[];
+  confidence?: number;
+  position: number;
+  staged: boolean;
+}
+
+export interface ExtractionCursorAPI {
+  cursors: Record<string, {
+    last_processed_turn: string;
+    processed_at: string;
+  }>;
 }
 
 export interface CreateDraftV3Input {

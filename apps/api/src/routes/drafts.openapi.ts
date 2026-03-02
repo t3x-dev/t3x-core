@@ -18,8 +18,13 @@
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Draft } from '@t3x/core';
-import { generateLeafOutput, generateSentenceId, isGenerationConfigured } from '@t3x/core';
+import type { Draft, SemanticPoint } from '@t3x/core';
+import {
+  generateLeafOutput,
+  generateSentenceId,
+  isGenerationConfigured,
+  spToSentence,
+} from '@t3x/core';
 import {
   ConflictError,
   commitDraftV3,
@@ -48,6 +53,8 @@ import {
   DraftResponse,
   PreviewDraftRequest,
   PreviewDraftResponse,
+  ReviewActionRequest,
+  ReviewActionResponse,
   SuggestDraftRequest,
   SuggestDraftResponse,
   UpdateDraftRequest,
@@ -83,6 +90,9 @@ function toApiDraft(draft: Draft) {
     revision: draft.revision,
     created_at: draft.created_at,
     updated_at: draft.updated_at,
+    extraction_mode: draft.extraction_mode ?? null,
+    semantic_points: draft.semantic_points ?? null,
+    extraction_cursor: draft.extraction_cursor ?? null,
   };
 }
 
@@ -715,32 +725,65 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
-    const includedSentences = draft.sentences.filter((s) => s.included);
-    if (includedSentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
-    }
-
-    // 3. Convert DraftSentence → CommitV4 Sentence
-    const sentences = includedSentences.map((ds) => {
-      const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
-
-      const sourceRef =
-        ds.source && (ds.origin.type === 'extracted' || ds.origin.type === 'selected')
-          ? {
-              conversation_id: ds.source.conversation_id,
-              turn_hash: ds.source.turn_hash,
-              start_char: ds.source.start_char,
-              end_char: ds.source.end_char,
-            }
-          : undefined;
-
-      return {
-        id: generateSentenceId(),
-        text: ds.text,
-        confidence,
-        source_ref: sourceRef,
+    // 3. Convert to CommitV4 Sentences (branch by extraction_mode)
+    let sentences: Array<{
+      id: string;
+      text: string;
+      confidence?: number;
+      source_ref?: {
+        conversation_id: string;
+        turn_hash: string;
+        start_char: number;
+        end_char: number;
       };
-    });
+      supporting_refs?: Array<{
+        conversation_id: string;
+        turn_hash: string;
+        start_char: number;
+        end_char: number;
+      }>;
+      anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
+    }>;
+
+    if (draft.extraction_mode === 'llm') {
+      // LLM mode: convert staged SemanticPoints to SentenceV5
+      const activeSPs = ((draft.semantic_points ?? []) as SemanticPoint[]).filter(
+        (sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
+      );
+
+      if (activeSPs.length === 0) {
+        return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
+      }
+
+      sentences = activeSPs.map((sp) => spToSentence(sp));
+    } else {
+      // Deterministic mode: existing DraftSentence flow
+      const includedSentences = draft.sentences.filter((s) => s.included);
+      if (includedSentences.length === 0) {
+        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+      }
+
+      sentences = includedSentences.map((ds) => {
+        const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
+
+        const sourceRef =
+          ds.source && (ds.origin.type === 'extracted' || ds.origin.type === 'selected')
+            ? {
+                conversation_id: ds.source.conversation_id,
+                turn_hash: ds.source.turn_hash,
+                start_char: ds.source.start_char,
+                end_char: ds.source.end_char,
+              }
+            : undefined;
+
+        return {
+          id: generateSentenceId(),
+          text: ds.text,
+          confidence,
+          source_ref: sourceRef,
+        };
+      });
+    }
 
     // 4. Set parents
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
@@ -1182,6 +1225,108 @@ draftsRoutes.openapi(promoteDraftRoute, async (c) => {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'PROMOTE_FAILED', message);
+  }
+});
+
+// ============================================================
+// POST /v1/drafts/:id/review-action — Review zone actions
+// ============================================================
+
+const reviewActionRoute = createRoute({
+  method: 'post',
+  path: '/v1/drafts/{id}/review-action',
+  tags: ['Drafts'],
+  summary: 'Perform a review action on a semantic point',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: ReviewActionRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Action applied',
+      content: { 'application/json': { schema: ReviewActionResponse } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Draft or semantic point not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+draftsRoutes.openapi(reviewActionRoute, async (c) => {
+  const { id: draftId } = c.req.valid('param');
+  const { sp_id, action, edited_text } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const draft = await findDraftV3ById(db, draftId);
+    if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
+
+    const sps = [...((draft.semantic_points ?? []) as SemanticPoint[])];
+    const idx = sps.findIndex((sp) => sp.id === sp_id);
+    if (idx === -1) return errorResponse(c, 'NOT_FOUND', 'Semantic point not found');
+
+    const sp = sps[idx];
+
+    switch (action) {
+      case 'accept':
+        // Move from review to ready, mark as reviewed
+        sps[idx] = { ...sp, zone: 'ready', status: 'reviewed', staged: true };
+        break;
+
+      case 'accept_change':
+        sps[idx] = { ...sp, zone: 'ready', status: 'modified', staged: true };
+        break;
+
+      case 'dismiss':
+        // Remove from list
+        sps.splice(idx, 1);
+        break;
+
+      case 'undo':
+        // Mark as undone (in ready zone)
+        sps[idx] = { ...sp, status: 'undone', staged: false };
+        break;
+
+      case 'edit':
+        if (!edited_text) {
+          return errorResponse(c, 'INVALID_REQUEST', 'edited_text required for edit action');
+        }
+        sps[idx] = { ...sp, text: edited_text, zone: 'ready', status: 'reviewed', staged: true };
+        break;
+    }
+
+    await updateDraftV3(db, draftId, { semantic_points: sps }, draft.revision);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { semantic_points: sps },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof ConflictError) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'CONFLICT', message: err.message },
+        },
+        409
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'REVIEW_ACTION_FAILED', message);
   }
 });
 

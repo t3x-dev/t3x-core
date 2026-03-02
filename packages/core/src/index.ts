@@ -75,6 +75,9 @@ export {
   type AnchorType,
   // LLM Extraction
   buildExtractionPrompt,
+  // Incremental Extraction (LLM pipeline)
+  buildIncrementalPrompt,
+  buildStyleSeed,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
@@ -85,6 +88,8 @@ export {
   type ExtractedSentence,
   type ExtractionItem,
   ExtractionParseError,
+  fuzzyLocate,
+  type FuzzyLocateResult,
   // Ring Extractor
   type ExtractorConfig,
   type Facet,
@@ -101,16 +106,22 @@ export {
   type PosTag,
   type PreferenceRelation,
   parseExtractionResponse,
+  parseIncrementalResponse,
   type Ring1Output,
   type Ring2Output,
   type Ring3Output,
   RingExtractor,
   type RingOutput,
   resolveSourceRef,
+  routeProposal,
+  type RouteResult,
   type Segment,
+  spToSentence,
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
   validateExtractedSentences,
+  type VerifiedProposal,
+  verifyProposal,
 } from './extractors';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
@@ -290,9 +301,16 @@ export {
   type DraftSentence,
   type DraftSentenceOrigin,
   type DraftStatus as DraftV4Status,
+  // Evidence / Extraction (LLM Incremental)
+  type EvidenceAnchor,
   type ExcludeConstraint as ExcludeConstraintV4,
+  type ExtractionCursor,
+  type ExtractionProposal,
+  type ExtractionStats,
   // ID Prefixes
   ID_PREFIXES,
+  type IncrementalExtractionResult,
+  type LocatedEvidence,
   isDeployLeaf,
   isGenerationLeaf,
   LEAF_TYPES,
@@ -310,10 +328,13 @@ export {
   // Pin (source selection)
   type Pin,
   type PinType,
+  type ProjectExtractionConfig,
   type RequireConstraint as RequireConstraintV4,
+  type SemanticPoint,
   // Sentence
   type Sentence as SentenceV4,
   type SentenceSourceRef,
+  type SentenceV5,
   // Share Token
   type ShareToken,
   type WordDiffSegment as WordDiffSegmentV4,

@@ -625,6 +625,10 @@ export const UpdateDraftRequest = z.object({
   preview_type: z.string().optional(),
   target_branch: z.string().optional(),
   if_revision: z.number().int().min(1),
+  // LLM extraction fields
+  semantic_points: z.array(z.lazy(() => SemanticPointSchema)).optional(),
+  extraction_mode: z.enum(['deterministic', 'llm']).optional(),
+  extraction_cursor: z.lazy(() => ExtractionCursorSchema).optional(),
 });
 
 // Response
@@ -648,6 +652,10 @@ export const DraftResponse = z.object({
   revision: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
+  // LLM extraction fields
+  extraction_mode: z.enum(['deterministic', 'llm']).nullable().optional(),
+  semantic_points: z.array(z.lazy(() => SemanticPointSchema)).nullable().optional(),
+  extraction_cursor: z.lazy(() => ExtractionCursorSchema).nullable().optional(),
 });
 
 // POST /v1/drafts/:id/preview
@@ -703,6 +711,82 @@ export const SuggestDraftResponse = SuccessResponse(
 
 // POST /v1/drafts/:id/fork
 export const ForkDraftResponse = SuccessResponse(DraftResponse);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Incremental Extraction Contracts
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const LocatedEvidenceSchema = z.object({
+  conversation_id: z.string(),
+  turn_hash: z.string(),
+  quoted_text: z.string(),
+  start_char: z.number().int(),
+  end_char: z.number().int(),
+  match_score: z.number(),
+  role: z.enum(['primary', 'supporting']),
+  relevance: z.string(),
+  enabled: z.boolean(),
+});
+
+export const SemanticPointSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  extraction_mode: z.enum(['deterministic', 'llm_extracted', 'manual']),
+  inference_type: z.enum(['direct', 'paraphrase', 'cross_turn', 'implicit']).optional(),
+  status: z.enum(['inherited', 'auto_landed', 'reviewed', 'modified', 'reinforced', 'undone']),
+  zone: z.enum(['ready', 'review']),
+  routing_reason: z.string().optional(),
+  inherited_from: z.string().optional(),
+  evidence: z.array(LocatedEvidenceSchema),
+  confidence: z.number().optional(),
+  position: z.number().int(),
+  staged: z.boolean(),
+});
+
+export const ExtractionCursorSchema = z.object({
+  cursors: z.record(z.object({
+    last_processed_turn: z.string(),
+    processed_at: z.string(),
+  })),
+});
+
+export const ExtractionStatsSchema = z.object({
+  total_turns: z.number(),
+  new_turns: z.number(),
+  proposals: z.number(),
+  auto_landed: z.number(),
+  needs_review: z.number(),
+  rejected: z.number(),
+});
+
+// POST /v1/extract/incremental
+export const IncrementalExtractRequest = z.object({
+  project_id: z.string().min(1),
+  conversation_id: z.string().min(1),
+  draft_id: z.string().min(1),
+});
+
+export const IncrementalExtractResponse = SuccessResponse(
+  z.object({
+    ready_points: z.array(SemanticPointSchema),
+    review_points: z.array(SemanticPointSchema),
+    cursor: ExtractionCursorSchema,
+    stats: ExtractionStatsSchema,
+  })
+);
+
+// POST /v1/drafts/:id/review-action
+export const ReviewActionRequest = z.object({
+  sp_id: z.string().min(1),
+  action: z.enum(['accept', 'accept_change', 'dismiss', 'undo', 'edit']),
+  edited_text: z.string().optional(),
+});
+
+export const ReviewActionResponse = SuccessResponse(
+  z.object({
+    semantic_points: z.array(SemanticPointSchema),
+  })
+);
 
 // Type exports
 export type CreateDraftRequestType = z.infer<typeof CreateDraftRequest>;

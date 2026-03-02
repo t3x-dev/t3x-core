@@ -36,7 +36,14 @@ export {
   type ExtractorConfig,
   RingExtractor,
 } from './ringExtractor';
+// Incremental Extraction (LLM pipeline)
+export { fuzzyLocate, type FuzzyLocateResult } from './fuzzyLocate';
+export { buildIncrementalPrompt, buildStyleSeed } from './incrementalPrompt';
+export { parseIncrementalResponse } from './incrementalParser';
+export { routeProposal, type RouteResult } from './routeProposal';
 export { resolveSourceRef } from './sourceRefResolver';
+export { spToSentence } from './spToSentence';
+export { verifyProposal, type VerifiedProposal } from './verifyProposal';
 // Types
 export {
   // v1.1: Anchor types
