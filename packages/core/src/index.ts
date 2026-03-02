@@ -44,6 +44,13 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
+// Hash / Merkle Tree (#14)
+export {
+  buildMerkleTree,
+  type MembershipProof,
+  type MerkleTree,
+  verifyMembership,
+} from './hash';
 // Diff Engine
 export {
   buildSimilarityMatrix,
