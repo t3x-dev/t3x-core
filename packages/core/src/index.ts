@@ -136,6 +136,7 @@ export {
   buildLeafPrompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
+  collectLessons,
   // Constraint Suggestion
   type ConstraintSuggestionResult,
   type CorrectivePromptOptions,

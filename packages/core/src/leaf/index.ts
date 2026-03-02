@@ -26,6 +26,10 @@
 export type { CorrectivePromptOptions } from './corrective-prompt';
 export { buildCorrectivePrompt } from './corrective-prompt';
 // ═══════════════════════════════════════════════════════════════════════════
+// Lesson Collector (Upgrade #4: Feedback Loop)
+// ═══════════════════════════════════════════════════════════════════════════
+export { collectLessons } from './lesson-collector';
+// ═══════════════════════════════════════════════════════════════════════════
 // Constraint Suggestion Exports
 // ═══════════════════════════════════════════════════════════════════════════
 export type {
