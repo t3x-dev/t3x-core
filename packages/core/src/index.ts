@@ -23,6 +23,14 @@ export {
 } from './commit';
 // Common utilities
 export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// Conflict Detection (#9)
+export {
+  type ConflictCandidate,
+  type ConflictReport,
+  type DetectConflictsOptions,
+  detectConflicts,
+  type ExistingSentenceWithEmbedding,
+} from './conflict';
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Builder (V4)
 // @see docs/specification/memory-pin-system-design.md
