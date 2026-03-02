@@ -41,9 +41,9 @@ export {
   buildSimilarityMatrix,
   type ClassifiedCommitDiff,
   type ClassifiedSentencePair,
-  classifyDiff,
   type CommitDiff,
   calculateDiffStats,
+  classifyDiff,
   createDiffEngine,
   type DiffableSentence,
   type DiffClassification,
@@ -88,12 +88,12 @@ export {
   type ExtractedSentence,
   type ExtractionItem,
   ExtractionParseError,
-  fuzzyLocate,
-  type FuzzyLocateResult,
   // Ring Extractor
   type ExtractorConfig,
   type Facet,
   type FacetType,
+  type FuzzyLocateResult,
+  fuzzyLocate,
   type Keyword,
   type LLMExtractionOptions,
   type LLMExtractionResult,
@@ -112,15 +112,15 @@ export {
   type Ring3Output,
   RingExtractor,
   type RingOutput,
+  type RouteResult,
   resolveSourceRef,
   routeProposal,
-  type RouteResult,
   type Segment,
   spToSentence,
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
-  validateExtractedSentences,
   type VerifiedProposal,
+  validateExtractedSentences,
   verifyProposal,
 } from './extractors';
 // ═══════════════════════════════════════════════════════════════════════════
@@ -130,8 +130,8 @@ export {
 export {
   // Types
   type BuildPromptOptions,
-  buildCorrectivePrompt,
   type BuiltPrompt,
+  buildCorrectivePrompt,
   // Generation (GEN-1)
   buildLeafPrompt,
   buildSystemPrompt,
@@ -159,9 +159,9 @@ export {
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
   type SemanticThreshold,
+  type SuggestConstraintsOptions,
   type SuggestedConstraint,
   suggestConstraints,
-  type SuggestConstraintsOptions,
   suggestionsToConstraints,
   type ValidateOptions,
   type ValidationResult,
@@ -310,7 +310,6 @@ export {
   // ID Prefixes
   ID_PREFIXES,
   type IncrementalExtractionResult,
-  type LocatedEvidence,
   isDeployLeaf,
   isGenerationLeaf,
   LEAF_TYPES,
@@ -319,6 +318,7 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
+  type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
   type MergeV4Candidate,
