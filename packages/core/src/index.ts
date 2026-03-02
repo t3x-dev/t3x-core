@@ -337,5 +337,7 @@ export {
   type SentenceV5,
   // Share Token
   type ShareToken,
+  // User (authentication)
+  type User,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

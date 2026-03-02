@@ -29,6 +29,48 @@ import {
 import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// users: Authentication (OAuth providers)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Registered users via OAuth providers (e.g., GitHub).
+ *
+ * In AUTH_DISABLED mode, no users exist. Projects with owner_id=null
+ * are public/legacy data accessible to everyone.
+ */
+export const users = pgTable(
+  'users',
+  {
+    /** Unique ID: "user_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** OAuth provider name (e.g., 'github') */
+    provider: text('provider').notNull(),
+
+    /** User ID from the OAuth provider */
+    providerId: text('provider_id').notNull(),
+
+    /** Email address (may be null) */
+    email: text('email'),
+
+    /** Display name */
+    name: text('name'),
+
+    /** Avatar URL */
+    avatarUrl: text('avatar_url'),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+  })
+);
+
+export type UserRecord = typeof users.$inferSelect;
+export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -443,10 +485,13 @@ export const apiKeys = pgTable(
     /** Human-readable label */
     name: text('name').notNull(),
 
-    /** Project scope (null = global) */
+    /** Project scope (null = user-level key, can access all user's projects) */
     projectId: text('project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
     }),
+
+    /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
+    userId: text('user_id'),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
