@@ -359,6 +359,9 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
   committed_leaf_id TEXT,
   target_branch TEXT DEFAULT 'main',
   revision INTEGER NOT NULL DEFAULT 1,
+  extraction_mode TEXT,
+  semantic_points_json JSONB,
+  extraction_cursor_json JSONB,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
