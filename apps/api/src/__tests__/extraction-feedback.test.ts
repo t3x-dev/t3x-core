@@ -169,8 +169,8 @@ describe('Extraction feedback recording in review-action', () => {
     expect(mockInsertExtractionFeedback).toHaveBeenCalledTimes(1);
     const feedbackInput = mockInsertExtractionFeedback.mock.calls[0][1];
     expect(feedbackInput.sp_id).toBe('sp_fb_dismiss');
-    // dismiss maps to the action passed through (cast as-is in production code)
-    expect(feedbackInput.action).toBe('dismiss');
+    // dismiss is mapped to 'reject' by the review-action route handler
+    expect(feedbackInput.action).toBe('reject');
     expect(feedbackInput.inference_type).toBe('paraphrase');
     expect(feedbackInput.confidence).toBe(0.75);
     expect(feedbackInput.zone).toBe('review');

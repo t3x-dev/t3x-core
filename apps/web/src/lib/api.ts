@@ -545,9 +545,7 @@ async function getAuthToken(): Promise<string | null> {
   try {
     const { getSession } = await import('next-auth/react');
     const session = await getSession();
-    const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as
-      | string
-      | undefined;
+    const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as string | undefined;
     if (sessionApiKey) {
       _cachedApiKey = sessionApiKey;
       _cacheExpiry = Date.now() + CACHE_TTL_MS;
@@ -2889,10 +2887,10 @@ export async function validateLeafOutput(
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  // Call API server directly (streaming — can't use fetchWithTimeout)
+  // Call API server directly
   const res = await fetch(`${API_V1}/chat/stream`, {
     method: 'POST',
-    headers: getAuthHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   });
 
@@ -3207,12 +3205,6 @@ export interface Template {
   variables: TemplateVariable[];
   tags: string[];
   is_builtin: boolean;
-  default_constraints: Array<{
-    type: 'require' | 'exclude';
-    match_mode: 'exact' | 'semantic';
-    value: string;
-  }>;
-  semantic_threshold: { require: number; exclude: number } | null;
   created_at: string;
   updated_at: string;
 }
@@ -3226,12 +3218,6 @@ export interface CreateTemplateInput {
   user_prompt: string;
   variables: TemplateVariable[];
   tags: string[];
-  default_constraints?: Array<{
-    type: 'require' | 'exclude';
-    match_mode: 'exact' | 'semantic';
-    value: string;
-  }>;
-  semantic_threshold?: { require: number; exclude: number };
 }
 
 export async function listTemplates(opts?: {
@@ -3904,7 +3890,7 @@ export async function* streamUrlImport(
 ): AsyncGenerator<ImportStreamEvent> {
   const res = await fetch(`${API_V1}/import/url/stream`, {
     method: 'POST',
-    headers: getAuthHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, project_id: projectId }),
   });
 
@@ -3924,12 +3910,8 @@ export async function* streamDocumentImport(
   formData.append('file', file);
   formData.append('project_id', projectId);
 
-  // FormData: don't set Content-Type (browser sets multipart boundary), only inject auth
-  const docHeaders: HeadersInit = {};
-  if (API_KEY) (docHeaders as Record<string, string>).Authorization = `Bearer ${API_KEY}`;
   const res = await fetch(`${API_V1}/import/document/stream`, {
     method: 'POST',
-    headers: docHeaders,
     body: formData,
   });
 
@@ -3948,7 +3930,7 @@ export async function* streamPlatformImport(
 ): AsyncGenerator<ImportStreamEvent> {
   const res = await fetch(`${API_V1}/import/platform/stream`, {
     method: 'POST',
-    headers: getAuthHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       project_id: projectId,
       platform_data: platformData,
@@ -4145,75 +4127,4 @@ export async function reviewAction(
     body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
   });
   return handleResponse<ReviewActionResult>(res);
-}
-
-// ============================================================================
-// Notifications
-// ============================================================================
-
-export interface NotificationItem {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  project_id: string | null;
-  ref_id: string | null;
-  read: boolean;
-  created_at: string;
-}
-
-export async function listNotifications(projectId?: string): Promise<NotificationItem[]> {
-  const query = new URLSearchParams();
-  if (projectId) query.set('project_id', projectId);
-  const res = await fetchWithTimeout(`${API_V1}/notifications?${query}`);
-  return handleResponse<NotificationItem[]>(res);
-}
-
-export async function markNotificationRead(id: string): Promise<void> {
-  const res = await fetchWithTimeout(`${API_V1}/notifications/${encodeURIComponent(id)}/read`, {
-    method: 'POST',
-  });
-  await handleResponse<{ read: boolean }>(res);
-}
-
-export async function markAllNotificationsRead(projectId?: string): Promise<{ count: number }> {
-  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
-  const res = await fetchWithTimeout(`${API_V1}/notifications/read-all${query}`, {
-    method: 'POST',
-  });
-  return handleResponse<{ count: number }>(res);
-}
-
-// ============================================================================
-// Reverse Learning (Constraint Suggestions from Failed Assertions)
-// ============================================================================
-
-export interface SuggestedConstraint {
-  type: 'require' | 'exclude';
-  match_mode: 'exact' | 'semantic';
-  value: string;
-  reason: string;
-  confidence: number;
-}
-
-export interface ReverseLearnResult {
-  suggestions: SuggestedConstraint[];
-  lessons_used: string[];
-  model: string;
-}
-
-export async function reverseLearnConstraints(
-  leafId: string,
-  maxSuggestions = 5
-): Promise<ReverseLearnResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_suggestions: maxSuggestions }),
-    },
-    30_000
-  );
-  return handleResponse<ReverseLearnResult>(res);
 }

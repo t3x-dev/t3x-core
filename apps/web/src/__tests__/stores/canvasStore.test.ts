@@ -26,7 +26,6 @@ vi.mock('@/lib/api', () => ({
   listBranches: vi.fn(),
   getProject: vi.fn(),
   getTurn: vi.fn(),
-  getAuthHeaders: vi.fn(() => ({ 'Content-Type': 'application/json' })),
   createLeaf: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
@@ -736,20 +735,6 @@ describe('Canvas Store - Unit Node Model', () => {
       } as unknown as Parameters<typeof selectCanExecuteMerge>[0];
 
       expect(selectCanExecuteMerge(state)).toBe(false);
-    });
-  });
-
-  describe('backflow edge', () => {
-    it('backflowEdgeStyle has correct properties', async () => {
-      const { backflowEdgeStyle } = await import('@/store/canvasStoreUtils');
-      expect(backflowEdgeStyle.stroke).toBe('#a78bfa');
-      expect(backflowEdgeStyle.strokeWidth).toBe(2);
-      expect(backflowEdgeStyle.strokeDasharray).toBe('6 3');
-    });
-
-    it('backflow edge data has correct type', () => {
-      const edgeData = { edgeType: 'backflow' as const };
-      expect(edgeData.edgeType).toBe('backflow');
     });
   });
 });

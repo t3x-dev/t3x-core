@@ -26,7 +26,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SkeletonProject } from '@/components/ui/skeleton';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { getAuthHeaders } from '@/lib/api';
 import {
   noHover,
   noTap,
@@ -102,7 +101,7 @@ export default function SemanticLedgerPage() {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiBase}/api/v1/import/cfpack`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfpack),
       });
 

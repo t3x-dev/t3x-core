@@ -18,7 +18,6 @@ import { createMergeSlice } from './canvasMergeSlice';
 import type { CanvasState } from './canvasStoreTypes';
 import {
   API_V1,
-  backflowEdgeStyle,
   buildIncomingMap,
   buildOutgoingMap,
   canConnect,
@@ -70,6 +69,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     openNodeId: null,
     modalViewMode: null,
     deletionConfirmation: null,
+
     setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
     openNodeModal: (nodeId, viewMode = 'commit') =>
@@ -322,42 +322,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           });
         });
 
-        // Build backflow edges: Leaf source → Commit (feedback loop visualization)
-        // When commit B uses a leaf from commit A as source, show dashed violet edge A → B
-        if (projectLeaves.length > 0) {
-          const leafToCommitHash = new Map<string, string>();
-          for (const leaf of projectLeaves) {
-            leafToCommitHash.set(leaf.id, leaf.commit_hash);
-          }
-
-          const backflowSeen = new Set<string>();
-          for (const v4 of commitsV4) {
-            if (!v4.source_refs) continue;
-            for (const ref of v4.source_refs) {
-              if (ref.type !== 'leaf') continue;
-              const leafParentHash = leafToCommitHash.get(ref.id);
-              if (
-                leafParentHash &&
-                commitHashes.has(leafParentHash) &&
-                leafParentHash !== v4.hash
-              ) {
-                const edgeKey = `${leafParentHash}-${v4.hash}`;
-                if (backflowSeen.has(edgeKey)) continue;
-                backflowSeen.add(edgeKey);
-                edges.push({
-                  id: `backflow-${edgeKey}`,
-                  source: leafParentHash,
-                  target: v4.hash,
-                  type: 'default',
-                  animated: false,
-                  style: backflowEdgeStyle,
-                  data: { edgeType: 'backflow' },
-                });
-              }
-            }
-          }
-        }
-
         // Load editing drafts and create draft nodes + conversation→draft edges
         try {
           const editingDrafts = await api.listDraftsV3(projectId, 'editing');
@@ -439,32 +403,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           }
         } catch {
           // Drafts loading is non-critical — don't fail canvas load
-        }
-
-        // Load auto-drafts and attach IDs to conversation nodes
-        try {
-          const autoDrafts = await api.listDraftsV3(projectId, 'auto');
-          // Build conversationId → draft.id map
-          const convToAutoDraft = new Map<string, string>();
-          for (const draft of autoDrafts) {
-            for (const s of draft.sentences) {
-              if (s.source?.conversation_id) {
-                convToAutoDraft.set(s.source.conversation_id, draft.id);
-                break; // one auto-draft per conversation is enough
-              }
-            }
-          }
-          // Attach autoDraftId to conversation nodes
-          for (const node of nodes) {
-            if (node.data.conversationId) {
-              const autoDraftId = convToAutoDraft.get(node.data.conversationId);
-              if (autoDraftId) {
-                node.data.autoDraftId = autoDraftId;
-              }
-            }
-          }
-        } catch {
-          // Auto-drafts loading is non-critical
         }
 
         // Check for main commits
@@ -1012,7 +950,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       try {
         const response = await fetch(`${API_V1}/merge/drafts`, {
           method: 'POST',
-          headers: api.getAuthHeaders(),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             project_id: state.projectId,
             source_hash: sourceHash,
