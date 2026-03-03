@@ -89,7 +89,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
           >
             <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
-              {projectId && <VerificationBadge projectId={projectId} />}
+              {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
               <NotificationBell />
             </div>
             <div className="flex flex-1 flex-col">{children}</div>

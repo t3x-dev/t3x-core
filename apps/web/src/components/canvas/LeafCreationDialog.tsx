@@ -43,9 +43,18 @@ export function LeafCreationDialog({
   const [title, setTitle] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<LeafTemplate | null>(null);
 
+  const resetForm = () => {
+    setTitle('');
+    setSelectedType('tweet');
+    setSelectedTemplate(null);
+  };
+
   const handleTemplateSelect = (template: LeafTemplate) => {
+    if (template.type === 'custom') {
+      setSelectedTemplate(null);
+      return;
+    }
     setSelectedTemplate(template);
-    // Map template type to leaf type if possible
     const leafType = LEAF_TYPES.find((lt) => lt.type === template.type);
     if (leafType) {
       setSelectedType(leafType.type);
@@ -70,11 +79,6 @@ export function LeafCreationDialog({
       toast.success('Leaf created successfully');
       onOpenChange(false);
 
-      // Reset form
-      setTitle('');
-      setSelectedType('tweet');
-      setSelectedTemplate(null);
-
       // Navigate to leaf detail page
       router.push(`/project/${projectId}/leaf/${leaf.id}`);
     } catch (err) {
@@ -96,7 +100,13 @@ export function LeafCreationDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) resetForm();
+        onOpenChange(v);
+      }}
+    >
       <DialogContent
         className="w-[90vw] max-w-[540px] bg-[var(--color-bg-white)] overflow-hidden z-[60]"
         overlayClassName="z-[60]"
@@ -149,7 +159,10 @@ export function LeafCreationDialog({
                     <button
                       key={leafType.type}
                       type="button"
-                      onClick={() => setSelectedType(leafType.type)}
+                      onClick={() => {
+                        setSelectedType(leafType.type);
+                        setSelectedTemplate(null);
+                      }}
                       disabled={isCreating}
                       className={cn(
                         'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',

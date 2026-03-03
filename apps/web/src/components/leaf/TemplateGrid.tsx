@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, Mail, MessageCircle, MessageSquare, PenTool, Settings } from 'lucide-react';
+import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface LeafTemplate {
@@ -45,16 +45,9 @@ const TEMPLATES: LeafTemplate[] = [
     constraints: [],
   },
   {
-    type: 'eval',
-    label: 'Eval',
-    description: 'Test assertions',
-    icon: <Settings className="h-5 w-5" />,
-    constraints: [],
-  },
-  {
     type: 'custom',
     label: 'Custom',
-    description: 'Blank slate',
+    description: 'No preset constraints',
     icon: <PenTool className="h-5 w-5" />,
     constraints: [],
   },

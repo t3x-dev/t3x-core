@@ -14,7 +14,7 @@
 
 import { motion } from 'framer-motion';
 import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   } = useDraftWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
+  const readyCountRef = useRef(0);
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [showExtractDialog, setShowExtractDialog] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -81,7 +82,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
       // Cmd/Ctrl + Enter to open commit dialog
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        if (getIncludedCount() > 0) {
+        if (getIncludedCount() > 0 || readyCountRef.current > 0) {
           setShowCommitDialog(true);
         }
       }
@@ -89,7 +90,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
       // Cmd/Ctrl + G to generate preview
       if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
         e.preventDefault();
-        if (getIncludedCount() > 0) {
+        if (getIncludedCount() > 0 || readyCountRef.current > 0) {
           generatePreview();
         }
       }
@@ -154,6 +155,8 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   const reviewCount = isLLMMode
     ? (draft.semantic_points ?? []).filter((p) => p.zone === 'review').length
     : 0;
+  const effectiveIncludedCount = isLLMMode ? readyCount : getIncludedCount();
+  readyCountRef.current = readyCount;
 
   if (!draft) {
     return (
@@ -179,7 +182,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         onConfirm={handleConfirmCommit}
         onIterate={handleIterate}
         onViewCanvas={handleViewCanvas}
-        includedCount={getIncludedCount()}
+        includedCount={effectiveIncludedCount}
         constraintCount={draft.constraints.length}
       />
 
@@ -199,7 +202,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         onClose={onClose}
         onCommit={() => setShowCommitDialog(true)}
         onExtract={() => setShowExtractDialog(true)}
-        canCommit={getIncludedCount() > 0 && draft.status === 'editing'}
+        canCommit={effectiveIncludedCount > 0 && draft.status === 'editing'}
         projectId={projectId}
       />
 
