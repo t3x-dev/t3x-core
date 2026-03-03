@@ -32,8 +32,10 @@ const ID_RANDOM_LENGTH = 12;
 export interface CreateApiKeyInput {
   /** Human-readable label */
   name: string;
-  /** Project scope (undefined = global) */
+  /** Project scope (undefined = user-level key) */
   projectId?: string;
+  /** Owner user ID (undefined = legacy key in AUTH_DISABLED mode) */
+  userId?: string;
   /** The raw key value (e.g. "t3xk_...") — caller generates this */
   keyValue: string;
 }
@@ -78,6 +80,7 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
       keyHash,
       name: input.name,
       projectId: input.projectId ?? null,
+      userId: input.userId ?? null,
       createdAt: now,
       lastUsedAt: null,
       revokedAt: null,
@@ -184,6 +187,7 @@ function rowToApiKey(row: ApiKeyRecord): ApiKey {
     key_hash: row.keyHash,
     name: row.name,
     project_id: row.projectId ?? null,
+    user_id: row.userId ?? null,
     created_at: row.createdAt.toISOString(),
     last_used_at: row.lastUsedAt?.toISOString() ?? null,
     revoked_at: row.revokedAt?.toISOString() ?? null,

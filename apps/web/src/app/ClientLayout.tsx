@@ -1,5 +1,6 @@
 'use client';
 
+import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -72,26 +73,28 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <ErrorBoundary>
-        <div className="flex min-h-screen bg-background">
-          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-          <main
-            aria-label="Main content"
-            className={cn(
-              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-              sidebarCollapsed ? 'ml-16' : 'ml-52'
-            )}
-          >
-            <div className="flex flex-1 flex-col">{children}</div>
-          </main>
-          <Toaster position="bottom-right" richColors closeButton />
-          <CommandPalette />
-          <KeyboardShortcutsDialog />
-          <WelcomeModal />
-          <OnboardingDialog />
-        </div>
-      </ErrorBoundary>
-    </ThemeProvider>
+    <SessionProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ErrorBoundary>
+          <div className="flex min-h-screen bg-background">
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+            <main
+              aria-label="Main content"
+              className={cn(
+                'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
+                sidebarCollapsed ? 'ml-16' : 'ml-52'
+              )}
+            >
+              <div className="flex flex-1 flex-col">{children}</div>
+            </main>
+            <Toaster position="bottom-right" richColors closeButton />
+            <CommandPalette />
+            <KeyboardShortcutsDialog />
+            <WelcomeModal />
+            <OnboardingDialog />
+          </div>
+        </ErrorBoundary>
+      </ThemeProvider>
+    </SessionProvider>
   );
 }
