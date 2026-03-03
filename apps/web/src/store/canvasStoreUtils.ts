@@ -41,6 +41,8 @@ export const nextNodeId = () => `node-${nodeCounter++}`;
 export const nextEdgeId = () => `edge-${edgeCounter++}`;
 export const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 };
 export const edgeType: Edge['type'] = 'animated';
+/** Backflow edge: Leaf → Commit feedback (dashed violet) */
+export const backflowEdgeStyle = { stroke: '#a78bfa', strokeWidth: 2, strokeDasharray: '6 3' };
 export const conversationCommitOffset = 300;
 export const commitQuickOffset = conversationCommitOffset + 40;
 const reactFlowGridSize = 16;

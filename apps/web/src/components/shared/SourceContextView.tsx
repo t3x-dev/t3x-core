@@ -97,10 +97,15 @@ export interface SourceContextViewProps {
 // ============================================================================
 
 const highlightColorClasses: Record<HighlightColor, string> = {
-  yellow: 'bg-amber-200 dark:bg-amber-500/40 text-amber-950 dark:text-amber-50 font-medium border-b-2 border-amber-400 dark:border-amber-500',
-  green: 'bg-emerald-200 dark:bg-emerald-500/40 text-emerald-950 dark:text-emerald-50 font-medium border-b-2 border-emerald-400 dark:border-emerald-500',
+  yellow:
+    'bg-amber-200 dark:bg-amber-500/40 text-amber-950 dark:text-amber-50 font-medium border-b-2 border-amber-400 dark:border-amber-500',
+  green:
+    'bg-emerald-200 dark:bg-emerald-500/40 text-emerald-950 dark:text-emerald-50 font-medium border-b-2 border-emerald-400 dark:border-emerald-500',
   deepGreen: 'bg-green-500 text-white font-medium',
   deepRed: 'bg-red-500 text-white font-medium',
+  amber:
+    'bg-amber-100 border border-dashed border-amber-400 dark:bg-amber-900/30 dark:text-amber-200 font-medium',
+  blue: 'bg-blue-100 border border-dotted border-blue-400 dark:bg-blue-900/30 dark:text-blue-200 font-medium',
 };
 
 // ============================================================================
@@ -243,10 +248,18 @@ export function SourceContextView({
             return <span key={i}>{seg.text}</span>;
           }
           if (seg.type === 'added') {
-            return <mark key={i} className={addedClass}>{seg.text}</mark>;
+            return (
+              <mark key={i} className={addedClass}>
+                {seg.text}
+              </mark>
+            );
           }
           if (seg.type === 'removed') {
-            return <mark key={i} className={removedClass}>{seg.text}</mark>;
+            return (
+              <mark key={i} className={removedClass}>
+                {seg.text}
+              </mark>
+            );
           }
           return <span key={i}>{seg.text}</span>;
         })}
@@ -287,12 +300,10 @@ export function SourceContextView({
       // Show truncated before/after context around the word diff
       const beforeFull = targetTurn.content.slice(0, start);
       const afterFull = targetTurn.content.slice(end);
-      const beforeTrunc = beforeFull.length > compactChars
-        ? `...${beforeFull.slice(-compactChars)}`
-        : beforeFull;
-      const afterTrunc = afterFull.length > compactChars
-        ? `${afterFull.slice(0, compactChars)}...`
-        : afterFull;
+      const beforeTrunc =
+        beforeFull.length > compactChars ? `...${beforeFull.slice(-compactChars)}` : beforeFull;
+      const afterTrunc =
+        afterFull.length > compactChars ? `${afterFull.slice(0, compactChars)}...` : afterFull;
       return renderWordDiffContent(beforeTrunc, afterTrunc);
     }
 

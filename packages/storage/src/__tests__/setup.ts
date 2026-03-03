@@ -337,6 +337,8 @@ CREATE TABLE IF NOT EXISTS templates (
   variables JSONB NOT NULL,
   tags JSONB NOT NULL DEFAULT '[]',
   is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  default_constraints JSONB DEFAULT '[]'::jsonb,
+  semantic_threshold JSONB,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -416,6 +418,20 @@ CREATE TABLE IF NOT EXISTS metrics_events (
 CREATE INDEX IF NOT EXISTS idx_metrics_events_project ON metrics_events(project_id);
 CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
+
+-- Sentence Modifications (audit trail)
+CREATE TABLE IF NOT EXISTS sentence_modifications (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL,
+  sp_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  previous_text TEXT,
+  new_text TEXT,
+  actor TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
+CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
 
 `;
 

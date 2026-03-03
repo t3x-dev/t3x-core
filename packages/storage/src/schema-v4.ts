@@ -86,6 +86,7 @@ export const commitsV4 = pgTable(
           start_char: number;
           end_char: number;
         };
+        anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
       }>;
     }>(),
 

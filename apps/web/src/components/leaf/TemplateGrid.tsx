@@ -9,6 +9,7 @@ export interface LeafTemplate {
   description: string;
   icon: React.ReactNode;
   constraints: { type: 'require' | 'exclude'; match_mode: 'exact' | 'semantic'; value: string }[];
+  semantic_threshold?: { require: number; exclude: number };
 }
 
 const TEMPLATES: LeafTemplate[] = [
@@ -20,6 +21,7 @@ const TEMPLATES: LeafTemplate[] = [
     constraints: [
       { type: 'require', match_mode: 'exact', value: 'Must be 280 characters or fewer' },
     ],
+    semantic_threshold: { require: 0.85, exclude: 0.8 },
   },
   {
     type: 'email',
@@ -29,6 +31,7 @@ const TEMPLATES: LeafTemplate[] = [
     constraints: [
       { type: 'require', match_mode: 'semantic', value: 'Must include greeting and sign-off' },
     ],
+    semantic_threshold: { require: 0.8, exclude: 0.75 },
   },
   {
     type: 'article',
@@ -36,6 +39,7 @@ const TEMPLATES: LeafTemplate[] = [
     description: 'Long-form, detailed',
     icon: <FileText className="h-5 w-5" />,
     constraints: [],
+    semantic_threshold: { require: 0.75, exclude: 0.7 },
   },
   {
     type: 'slack',
@@ -43,6 +47,7 @@ const TEMPLATES: LeafTemplate[] = [
     description: 'Casual, brief',
     icon: <MessageSquare className="h-5 w-5" />,
     constraints: [],
+    semantic_threshold: { require: 0.8, exclude: 0.75 },
   },
   {
     type: 'custom',

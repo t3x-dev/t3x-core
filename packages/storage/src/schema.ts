@@ -404,6 +404,17 @@ export const templates = pgTable(
     >(),
     tags: jsonb('tags').$type<string[]>().notNull().default([]),
     isBuiltin: boolean('is_builtin').notNull().default(false),
+    /** Default constraints applied when using this template */
+    defaultConstraints: jsonb('default_constraints')
+      .$type<
+        Array<{ type: 'require' | 'exclude'; match_mode: 'exact' | 'semantic'; value: string }>
+      >()
+      .default([]),
+    /** Default semantic thresholds for validation */
+    semanticThreshold: jsonb('semantic_threshold').$type<{
+      require: number;
+      exclude: number;
+    } | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },

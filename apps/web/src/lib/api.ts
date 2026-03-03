@@ -3163,6 +3163,12 @@ export interface Template {
   variables: TemplateVariable[];
   tags: string[];
   is_builtin: boolean;
+  default_constraints: Array<{
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+  }>;
+  semantic_threshold: { require: number; exclude: number } | null;
   created_at: string;
   updated_at: string;
 }
@@ -3176,6 +3182,12 @@ export interface CreateTemplateInput {
   user_prompt: string;
   variables: TemplateVariable[];
   tags: string[];
+  default_constraints?: Array<{
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+  }>;
+  semantic_threshold?: { require: number; exclude: number };
 }
 
 export async function listTemplates(opts?: {

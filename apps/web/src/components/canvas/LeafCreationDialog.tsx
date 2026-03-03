@@ -74,6 +74,9 @@ export function LeafCreationDialog({
           id: `cst_tpl_${i}`,
           ...c,
         })),
+        ...(selectedTemplate?.semantic_threshold
+          ? { config: { semantic_threshold: selectedTemplate.semantic_threshold } }
+          : {}),
       });
 
       toast.success('Leaf created successfully');

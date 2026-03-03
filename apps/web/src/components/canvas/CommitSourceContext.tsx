@@ -44,7 +44,9 @@ import {
   truncateLongContent,
 } from '@/lib/truncationUtils';
 import type {
+  ColoredHighlightRange,
   ContentIntegrityStatus,
+  HighlightColor,
   HighlightRange,
   SentenceWithSource,
   TurnBubbleData,
@@ -92,6 +94,42 @@ interface SentenceWithHighlight {
 interface LeafSentence {
   sentence: CommitSentence;
   leafId: string;
+}
+
+/**
+ * Map anchor_type to highlight color for visual differentiation.
+ * - verbatim (default): green solid highlight
+ * - paraphrase: amber dashed border
+ * - inference: blue dotted border
+ */
+function anchorTypeToColor(anchorType?: string): HighlightColor {
+  switch (anchorType) {
+    case 'paraphrase':
+      return 'amber';
+    case 'inference':
+      return 'blue';
+    default:
+      return 'green';
+  }
+}
+
+/**
+ * Build colored highlights from sentences with anchor_type info.
+ * Returns coloredHighlights when mixed anchor_types exist, undefined otherwise.
+ */
+function buildColoredHighlights(
+  sentences: SentenceWithHighlight[]
+): ColoredHighlightRange[] | undefined {
+  const hasNonVerbatim = sentences.some(
+    (s) => s.sentence.anchor_type && s.sentence.anchor_type !== 'verbatim'
+  );
+  if (!hasNonVerbatim) return undefined;
+
+  return sentences.map((s) => ({
+    start: s.highlight.start,
+    end: s.highlight.end,
+    color: anchorTypeToColor(s.sentence.anchor_type),
+  }));
 }
 
 /**
@@ -898,6 +936,13 @@ export function CommitSourceContext({
             maxLength: MAX_TURN_LENGTH,
             contextChars: TRUNCATION_CONTEXT,
           };
+
+          // Build per-anchor-type colored highlights when mixed types exist
+          const coloredHighlights = buildColoredHighlights(data.sentences);
+          const effectiveHighlights = shouldTruncate
+            ? adjustHighlightsForTruncation(data.highlights, targetTurn.content, truncationOptions)
+            : data.highlights;
+
           const turnBubbleData: TurnBubbleData = {
             turn_hash: targetTurn.turn_hash,
             role: targetTurn.role,
@@ -906,13 +951,24 @@ export function CommitSourceContext({
               : targetTurn.content,
             created_at: targetTurn.created_at,
             is_target: true,
-            highlights: shouldTruncate
-              ? adjustHighlightsForTruncation(
-                  data.highlights,
-                  targetTurn.content,
-                  truncationOptions
-                )
-              : data.highlights,
+            // Use coloredHighlights for per-anchor-type styling, fallback to uniform highlights
+            ...(coloredHighlights
+              ? {
+                  coloredHighlights: shouldTruncate
+                    ? coloredHighlights
+                        .map((ch) => {
+                          // Find corresponding adjusted highlight position
+                          const adjusted = effectiveHighlights.find(
+                            (h) => Math.abs(h.start - ch.start) < 5 || Math.abs(h.end - ch.end) < 5
+                          );
+                          return adjusted
+                            ? { start: adjusted.start, end: adjusted.end, color: ch.color }
+                            : null;
+                        })
+                        .filter((ch): ch is ColoredHighlightRange => ch !== null)
+                    : coloredHighlights,
+                }
+              : { highlights: effectiveHighlights }),
           };
 
           return (

@@ -55,6 +55,11 @@ export const SentenceSchema = z.object({
    * Second-class field: does NOT participate in hash calculation.
    */
   inherited_from: z.string().optional(),
+  /**
+   * How the evidence anchor relates to the source text.
+   * Second-class field: does NOT participate in hash calculation.
+   */
+  anchor_type: z.enum(['verbatim', 'paraphrase', 'inference']).optional(),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -654,8 +659,14 @@ export const DraftResponse = z.object({
   updated_at: z.string(),
   // LLM extraction fields
   extraction_mode: z.enum(['deterministic', 'llm']).nullable().optional(),
-  semantic_points: z.array(z.lazy(() => SemanticPointSchema)).nullable().optional(),
-  extraction_cursor: z.lazy(() => ExtractionCursorSchema).nullable().optional(),
+  semantic_points: z
+    .array(z.lazy(() => SemanticPointSchema))
+    .nullable()
+    .optional(),
+  extraction_cursor: z
+    .lazy(() => ExtractionCursorSchema)
+    .nullable()
+    .optional(),
 });
 
 // POST /v1/drafts/:id/preview
@@ -744,10 +755,12 @@ export const SemanticPointSchema = z.object({
 });
 
 export const ExtractionCursorSchema = z.object({
-  cursors: z.record(z.object({
-    last_processed_turn: z.string(),
-    processed_at: z.string(),
-  })),
+  cursors: z.record(
+    z.object({
+      last_processed_turn: z.string(),
+      processed_at: z.string(),
+    })
+  ),
 });
 
 export const ExtractionStatsSchema = z.object({

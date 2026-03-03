@@ -140,7 +140,7 @@ export interface TurnBubbleData {
 /**
  * Highlight color options.
  */
-export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed';
+export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed' | 'amber' | 'blue';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Data Types

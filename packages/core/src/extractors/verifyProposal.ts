@@ -2,10 +2,10 @@
  * Proposal Verifier
  *
  * Verifies an ExtractionProposal against source data:
- * 1. Check turn existence (turn_hash lookup)
- * 2. Check quote location (fuzzyLocate)
- * 3. For modify proposals, check target SP exists
- * 4. (Optional) L2 semantic overlap detection via embeddings
+ * 1. For modify proposals, check target SP exists
+ * 2. Check evidence anchors (turn existence + quote location via fuzzyLocate)
+ * 3. (Optional) L2 semantic overlap detection via embeddings
+ * 4. Coverage warning: flag if evidence covers <60% of primary turn content
  *
  * Returns verified proposal with LocatedEvidence[] or null if rejected.
  */
@@ -32,6 +32,8 @@ export interface VerifiedProposal {
   reasoning: string;
   evidence: LocatedEvidence[];
   overlap?: OverlapResult;
+  /** Check 4: true when evidence covers <60% of primary turn content */
+  low_coverage?: boolean;
 }
 
 export interface VerifyOptions {
@@ -108,6 +110,32 @@ export function verifyProposal(
   // Must have at least one primary evidence
   if (!hasPrimary) return null;
 
+  // Check 4: Coverage warning (non-blocking)
+  // If evidence quotes cover <60% of the primary turn content, flag it
+  const COVERAGE_THRESHOLD = 0.6;
+  let lowCoverage: boolean | undefined;
+
+  const primaryTurnHashes = new Set(
+    verifiedEvidence.filter((e) => e.role === 'primary').map((e) => e.turn_hash)
+  );
+  if (primaryTurnHashes.size > 0) {
+    let totalTurnChars = 0;
+    let coveredChars = 0;
+    for (const hash of primaryTurnHashes) {
+      const turn = turnMap.get(hash);
+      if (turn) {
+        totalTurnChars += turn.content.length;
+        const ranges = verifiedEvidence
+          .filter((e) => e.turn_hash === hash)
+          .map((e) => ({ start: e.start_char, end: e.end_char }));
+        coveredChars += mergeAndCountRanges(ranges);
+      }
+    }
+    if (totalTurnChars > 0 && coveredChars / totalTurnChars < COVERAGE_THRESHOLD) {
+      lowCoverage = true;
+    }
+  }
+
   const base: VerifiedProposal = {
     type: proposal.type,
     target_sp_id: proposal.target_sp_id,
@@ -116,6 +144,7 @@ export function verifyProposal(
     inference_type: proposal.inference_type,
     reasoning: proposal.reasoning,
     evidence: verifiedEvidence,
+    ...(lowCoverage ? { low_coverage: true } : {}),
   };
 
   // Check 3 (Optional): L2 semantic overlap detection
@@ -124,6 +153,28 @@ export function verifyProposal(
   }
 
   return base;
+}
+
+/**
+ * Merge overlapping character ranges and return total covered length.
+ */
+function mergeAndCountRanges(ranges: Array<{ start: number; end: number }>): number {
+  if (ranges.length === 0) return 0;
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  let total = 0;
+  let curStart = sorted[0].start;
+  let curEnd = sorted[0].end;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].start <= curEnd) {
+      curEnd = Math.max(curEnd, sorted[i].end);
+    } else {
+      total += curEnd - curStart;
+      curStart = sorted[i].start;
+      curEnd = sorted[i].end;
+    }
+  }
+  total += curEnd - curStart;
+  return total;
 }
 
 async function detectOverlap(

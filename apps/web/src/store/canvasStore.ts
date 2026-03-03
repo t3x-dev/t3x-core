@@ -18,6 +18,7 @@ import { createMergeSlice } from './canvasMergeSlice';
 import type { CanvasState } from './canvasStoreTypes';
 import {
   API_V1,
+  backflowEdgeStyle,
   buildIncomingMap,
   buildOutgoingMap,
   canConnect,
@@ -320,6 +321,42 @@ export const useCanvasStore = create<CanvasState>((...a) => {
             });
           });
         });
+
+        // Build backflow edges: Leaf source → Commit (feedback loop visualization)
+        // When commit B uses a leaf from commit A as source, show dashed violet edge A → B
+        if (projectLeaves.length > 0) {
+          const leafToCommitHash = new Map<string, string>();
+          for (const leaf of projectLeaves) {
+            leafToCommitHash.set(leaf.id, leaf.commit_hash);
+          }
+
+          const backflowSeen = new Set<string>();
+          for (const v4 of commitsV4) {
+            if (!v4.source_refs) continue;
+            for (const ref of v4.source_refs) {
+              if (ref.type !== 'leaf') continue;
+              const leafParentHash = leafToCommitHash.get(ref.id);
+              if (
+                leafParentHash &&
+                commitHashes.has(leafParentHash) &&
+                leafParentHash !== v4.hash
+              ) {
+                const edgeKey = `${leafParentHash}-${v4.hash}`;
+                if (backflowSeen.has(edgeKey)) continue;
+                backflowSeen.add(edgeKey);
+                edges.push({
+                  id: `backflow-${edgeKey}`,
+                  source: leafParentHash,
+                  target: v4.hash,
+                  type: 'default',
+                  animated: false,
+                  style: backflowEdgeStyle,
+                  data: { edgeType: 'backflow' },
+                });
+              }
+            }
+          }
+        }
 
         // Load editing drafts and create draft nodes + conversation→draft edges
         try {

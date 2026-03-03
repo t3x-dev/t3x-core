@@ -848,7 +848,7 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
         );
       } catch (embErr) {
         // Non-fatal: log and continue
-        pinoLogger.warn({ err: embErr }, "failed to populate sentence vectors");
+        pinoLogger.warn({ err: embErr }, 'failed to populate sentence vectors');
       }
     }
 
@@ -1309,6 +1309,21 @@ draftsRoutes.openapi(reviewActionRoute, async (c) => {
     }
 
     await updateDraftV3(db, draftId, { semantic_points: sps }, draft.revision);
+
+    // Record sentence modification audit trail — fire-and-forget
+    try {
+      const { insertSentenceModification } = await import('@t3x/storage');
+      await insertSentenceModification(db, {
+        draft_id: draftId,
+        sp_id: sp_id,
+        action: action === 'accept_change' ? 'accept' : action === 'dismiss' ? 'delete' : action,
+        previous_text: sp.text,
+        new_text: action === 'edit' ? edited_text : undefined,
+        actor: 'user',
+      });
+    } catch {
+      // Audit is non-blocking — don't fail the main action
+    }
 
     // Record extraction feedback (L4 anchoring) — fire-and-forget
     // Map UI actions to feedback action types

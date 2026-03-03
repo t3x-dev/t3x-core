@@ -68,6 +68,16 @@ export interface Sentence {
    * This preserves determinism while enabling inheritance tracking.
    */
   inherited_from?: string;
+
+  /**
+   * How the evidence anchor relates to the source text.
+   * - verbatim: exact quote from the source
+   * - paraphrase: meaning preserved but rewording applied
+   * - inference: derived from source through reasoning
+   *
+   * Second-class field: Does NOT participate in hash calculation.
+   */
+  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 export interface SentenceSourceRef {
@@ -931,10 +941,13 @@ export interface SemanticPoint {
  * Enables delta-in: only process turns after the cursor.
  */
 export interface ExtractionCursor {
-  cursors: Record<string, {
-    last_processed_turn: string;
-    processed_at: string;
-  }>;
+  cursors: Record<
+    string,
+    {
+      last_processed_turn: string;
+      processed_at: string;
+    }
+  >;
 }
 
 /**
@@ -966,7 +979,6 @@ export interface EvidenceAnchor {
  */
 export interface SentenceV5 extends Sentence {
   supporting_refs?: SentenceSourceRef[];
-  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 /**

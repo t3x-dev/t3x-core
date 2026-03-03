@@ -294,6 +294,12 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Sentence Modifications (audit trail)
+export {
+  findModificationsByDraft,
+  type InsertSentenceModificationInput,
+  insertSentenceModification,
+} from './sentence-modifications';
 // Sentence Vectors (pgvector similarity search)
 export {
   deleteSentenceVectorsByCommit,

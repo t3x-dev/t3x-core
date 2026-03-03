@@ -38,6 +38,8 @@ export * from './schema-extraction-feedback';
 export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)
 export * from './schema-metrics';
+// Sentence Modifications Schema (audit trail)
+export * from './schema-sentence-modifications';
 // V4 Schema (commits_v4, leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';

@@ -738,4 +738,18 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(selectCanExecuteMerge(state)).toBe(false);
     });
   });
+
+  describe('backflow edge', () => {
+    it('backflowEdgeStyle has correct properties', async () => {
+      const { backflowEdgeStyle } = await import('@/store/canvasStoreUtils');
+      expect(backflowEdgeStyle.stroke).toBe('#a78bfa');
+      expect(backflowEdgeStyle.strokeWidth).toBe(2);
+      expect(backflowEdgeStyle.strokeDasharray).toBe('6 3');
+    });
+
+    it('backflow edge data has correct type', () => {
+      const edgeData = { edgeType: 'backflow' as const };
+      expect(edgeData.edgeType).toBe('backflow');
+    });
+  });
 });
