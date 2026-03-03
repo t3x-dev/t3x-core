@@ -8,15 +8,8 @@
  * is stored in Engine's PostgreSQL database.
  */
 
-import pino from 'pino';
+import { logger } from './lib/logger.js';
 import { fetchWithRetry } from './utils/retry.js';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 // Engine API URL (support both T3X_ENGINE_URL and T3X_API_URL for compatibility)
 const T3X_ENGINE_URL =

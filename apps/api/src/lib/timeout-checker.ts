@@ -8,6 +8,7 @@
 
 import { getTimedOutRuns, markRunAsTimeout } from '@t3x/storage';
 import { getDB } from './db';
+import { pinoLogger } from '../middleware/logger';
 
 // Default timeout: 5 minutes
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -28,19 +29,19 @@ async function checkTimeouts(): Promise<void> {
     const timedOutRuns = await getTimedOutRuns(db, timeoutMs);
 
     if (timedOutRuns.length > 0) {
-      console.log(`[timeout-checker] Found ${timedOutRuns.length} timed-out runs`);
+      pinoLogger.info({ count: timedOutRuns.length }, "found timed-out runs");
 
       for (const run of timedOutRuns) {
         try {
           await markRunAsTimeout(db, run.runId);
-          console.log(`[timeout-checker] Marked run ${run.runId} as timeout`);
+          pinoLogger.info({ run_id: run.runId }, "marked run as timeout");
         } catch (err) {
-          console.error(`[timeout-checker] Failed to mark run ${run.runId} as timeout:`, err);
+          pinoLogger.error({ err, run_id: run.runId }, "failed to mark run as timeout");
         }
       }
     }
   } catch (err) {
-    console.error('[timeout-checker] Error checking timeouts:', err);
+    pinoLogger.error({ err }, "error checking timeouts");
   }
 }
 
@@ -51,13 +52,13 @@ async function checkTimeouts(): Promise<void> {
  */
 export function startTimeoutChecker(): void {
   if (intervalId) {
-    console.warn('[timeout-checker] Already running');
+    pinoLogger.warn("timeout-checker already running");
     return;
   }
 
   const intervalMs = parseInt(process.env.TIMEOUT_CHECK_INTERVAL_MS || '', 10) || CHECK_INTERVAL_MS;
 
-  console.log(`[timeout-checker] Starting with interval ${intervalMs}ms`);
+  pinoLogger.info({ interval_ms: intervalMs }, "timeout-checker starting");
 
   // Run immediately on start
   checkTimeouts();
@@ -75,6 +76,6 @@ export function stopTimeoutChecker(): void {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
-    console.log('[timeout-checker] Stopped');
+    pinoLogger.info("timeout-checker stopped");
   }
 }

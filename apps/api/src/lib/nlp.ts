@@ -7,6 +7,7 @@
 
 import { createGoogleCloudNLPProvider, type NLPProvider } from '@t3x/core';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { pinoLogger } from '../middleware/logger';
 
 /**
  * Create a proxy-aware fetch function
@@ -47,9 +48,7 @@ export function getNLPProvider(): NLPProvider {
     }
 
     const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-    console.log(
-      `[nlp] Using Google Cloud NLP provider${proxyUrl ? ` (via proxy: ${proxyUrl})` : ''}`
-    );
+    pinoLogger.info({ proxy: proxyUrl || undefined }, "using Google Cloud NLP provider");
     nlpProvider = createGoogleCloudNLPProvider(googleApiKey, {
       fetch: getProxyFetch(),
     });

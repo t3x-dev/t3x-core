@@ -6,6 +6,7 @@
  * - PGLite: Local development fallback
  */
 import type { AnyDB } from '@t3x/storage';
+import { pinoLogger } from '../middleware/logger';
 
 let db: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
@@ -32,7 +33,7 @@ async function initializeDB(): Promise<AnyDB> {
 
   if (databaseUrl) {
     // Use PostgreSQL for Docker/production
-    console.log('[DB] Using PostgreSQL:', databaseUrl.replace(/:[^:@]+@/, ':****@'));
+    pinoLogger.info({ url: databaseUrl.replace(/:[^:@]+@/, ':****@') }, "using PostgreSQL");
     const { createPostgresStorage, closePostgresStorage } = await import('@t3x/storage');
     db = await createPostgresStorage({ connectionString: databaseUrl });
     closeFunction = closePostgresStorage;
@@ -42,7 +43,7 @@ async function initializeDB(): Promise<AnyDB> {
     const inMemory = process.env.T3X_IN_MEMORY === 'true';
     // Use same default path as WebUI for data sharing
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
-    console.log('[DB] Using PGLite:', dataDir, inMemory ? '(in-memory)' : '');
+    pinoLogger.info({ data_dir: dataDir, in_memory: inMemory }, "using PGLite");
     const { createPGLiteStorage, closePGLiteStorage } = await import('@t3x/storage');
     db = await createPGLiteStorage({ dataDir, inMemory });
     closeFunction = closePGLiteStorage;

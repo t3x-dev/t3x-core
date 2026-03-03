@@ -38,6 +38,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { pinoLogger } from '../middleware/logger';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import {
   ErrorResponseSchema,
@@ -508,10 +509,7 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
 
       // Warn if non-main branch doesn't exist
       if (!updated && body.branch !== 'main') {
-        console.warn(
-          `[commits-v4] Branch "${body.branch}" not found for project ${body.project_id}. ` +
-            'HEAD not updated. Create the branch first or use "main".'
-        );
+        pinoLogger.warn({ branch: body.branch, project_id: body.project_id }, "branch not found, HEAD not updated");
       }
     }
 

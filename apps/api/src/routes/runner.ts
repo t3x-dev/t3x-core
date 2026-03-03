@@ -24,6 +24,7 @@ import {
 } from '@t3x/runner';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { pinoLogger } from '../middleware/logger';
 
 export const runnerRoutes = new Hono();
 
@@ -39,7 +40,7 @@ runnerRoutes.post('/runner/agents', async (c) => {
     const body = await c.req.json();
     const config = AgentConfigSchema.parse(body);
     observer.registerAgent(config);
-    console.log(`[runner] Agent registered: ${config.id}`);
+    pinoLogger.info({ agent_id: config.id }, "agent registered");
     return c.json({ success: true, agent_id: config.id });
   } catch (error) {
     return c.json({ success: false, error: String(error) }, 400);
@@ -78,7 +79,7 @@ runnerRoutes.post('/runner/run', async (c) => {
 
     // Start observing
     const runId = observer.startRun(input.agent_id, input);
-    console.log(`[runner] Run started: ${runId} for agent ${input.agent_id}`);
+    pinoLogger.info({ run_id: runId, agent_id: input.agent_id }, "run started");
 
     try {
       // Forward to agent
@@ -103,7 +104,7 @@ runnerRoutes.post('/runner/run', async (c) => {
 
       // Complete the run
       const record = observer.completeRun(runId, output, 'completed');
-      console.log(`[runner] Run completed: ${runId} in ${latencyMs}ms`);
+      pinoLogger.info({ run_id: runId, latency_ms: latencyMs }, "run completed");
 
       return c.json({
         success: true,
@@ -118,7 +119,7 @@ runnerRoutes.post('/runner/run', async (c) => {
       observer.recordError(runId, errorMsg);
       const record = observer.completeRun(runId, null, 'failed');
 
-      console.error(`[runner] Run failed: ${runId}`, errorMsg);
+      pinoLogger.error({ run_id: runId, err: errorMsg }, "run failed");
       return c.json(
         {
           success: false,
@@ -227,9 +228,7 @@ runnerRoutes.post('/runner/eval', async (c) => {
 
     // Run evaluation
     const result = evalEngine.evaluate(runRecord, rules);
-    console.log(
-      `[runner] Eval completed: ${result.run_id}, passed=${result.passed}, score=${result.score.toFixed(2)}`
-    );
+    pinoLogger.info({ run_id: result.run_id, passed: result.passed, score: result.score }, "eval completed");
 
     return c.json({ success: true, data: result });
   } catch (error) {

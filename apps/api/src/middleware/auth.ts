@@ -15,6 +15,7 @@
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { pinoLogger } from './logger';
 
 /** Paths that never require authentication */
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
@@ -90,7 +91,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return next();
   } catch (err) {
-    console.error('[Auth] Error validating API key:', err);
+    pinoLogger.error({ err }, "error validating API key");
     return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
   }
 }

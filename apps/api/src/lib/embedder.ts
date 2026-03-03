@@ -10,6 +10,7 @@
 
 import { createGoogleAIEmbeddingProvider, type EmbeddingProvider } from '@t3x/core';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { pinoLogger } from '../middleware/logger';
 
 function getProxyFetch() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
@@ -63,10 +64,10 @@ export function getEmbedder(): EmbeddingProvider | null {
       ...(proxyFetch && { fetch: proxyFetch }),
     });
     initialized = true;
-    console.log(`[embedder] Initialized Google AI embedder (${embedderInstance.id})`);
+    pinoLogger.info({ embedder_id: embedderInstance.id }, "initialized Google AI embedder");
     return embedderInstance;
   } catch (err) {
-    console.error('[embedder] Failed to initialize:', err);
+    pinoLogger.error({ err }, "failed to initialize embedder");
     initialized = true;
     return null;
   }

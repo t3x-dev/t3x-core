@@ -4,16 +4,9 @@
  * Triggers n8n workflows via webhook.
  */
 
-import pino from 'pino';
+import { logger } from './lib/logger.js';
 import type { EngineRunRequest } from './types.js';
 import { fetchWithRetry } from './utils/retry.js';
-
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: true },
-  },
-});
 
 // n8n webhook base URL (used when webhook_id is not a full URL)
 const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_URL || 'http://n8n:5678/webhook';
