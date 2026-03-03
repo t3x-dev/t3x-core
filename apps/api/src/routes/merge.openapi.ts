@@ -13,7 +13,7 @@
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { CreateCommitV4Input, MergeSummaryData } from '@t3x/core';
-import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
+import { executeMerge, type Merge2WayResult, prepareMerge, suggestMerge } from '@t3x/core';
 import {
   commitMergeDraft,
   createCommitV4,
@@ -28,6 +28,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
+import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -848,4 +849,87 @@ mergeRoutes.openapi(getDraftChecksRoute, async (c) => {
 
   const checks = await computeMergeChecks(db, draft);
   return c.json({ success: true as const, data: checks }, 200);
+});
+
+// ============================================================================
+// POST /v1/merge/drafts/:id/suggest/:pairIndex — AI merge suggestion
+// ============================================================================
+
+const MergeSuggestionSchema = z.object({
+  suggestion: z.string(),
+  reasoning: z.string(),
+});
+
+const suggestRoute = createRoute({
+  method: 'post',
+  path: '/v1/merge/drafts/{id}/suggest/{pairIndex}',
+  tags: ['Merge'],
+  summary: 'Get AI suggestion for a conflicting pair',
+  description: 'Uses LLM to suggest merged text for a specific similar pair in a merge draft.',
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: 'Merge draft ID' }),
+      pairIndex: z.string().regex(/^\d+$/).openapi({ description: 'Index of the similar pair' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Merge suggestion',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ suggestion: MergeSuggestionSchema.nullable() })),
+        },
+      },
+    },
+    404: {
+      description: 'Draft or pair not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    503: {
+      description: 'LLM not configured',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+mergeRoutes.openapi(suggestRoute, async (c) => {
+  const { id, pairIndex } = c.req.valid('param');
+  const idx = Number.parseInt(pairIndex, 10);
+
+  const db = await getDB();
+  const draft = await getMergeDraft(db, id);
+  if (!draft) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
+  }
+
+  const prepared: Merge2WayResult = JSON.parse(draft.preparedJson);
+  if (idx < 0 || idx >= prepared.similarPairs.length) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Pair index out of range: ${idx}` },
+      },
+      404
+    );
+  }
+
+  const llm = await getLLMProvider();
+  if (!llm) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider configured' },
+      },
+      503
+    );
+  }
+
+  const result = await suggestMerge(prepared.similarPairs[idx], llm);
+  return c.json({ success: true as const, data: { suggestion: result } }, 200);
 });

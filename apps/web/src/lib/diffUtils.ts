@@ -33,6 +33,7 @@ export interface SentencePair {
 /** Result of comparing two commits */
 export interface CommitDiff {
   identical: DiffableSentence[];
+  equivalent: SentencePair[];
   similar: SentencePair[];
   onlyInSource: DiffableSentence[];
   onlyInTarget: DiffableSentence[];
@@ -43,6 +44,7 @@ export interface CommitDiff {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const JACCARD_THRESHOLD = 0.3;
+export const EQUIVALENT_THRESHOLD = 0.85;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tokenization
@@ -244,9 +246,13 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
     }
   }
 
-  // Stage 4: Classify remainder
+  // Stage 4: Split similar by threshold → equivalent (≥ 0.85) vs similar (< 0.85)
+  const equivalent = similar.filter((p) => p.similarity >= EQUIVALENT_THRESHOLD);
+  const modified = similar.filter((p) => p.similarity < EQUIVALENT_THRESHOLD);
+
+  // Stage 5: Classify remainder
   const onlyInSource = unmatchedA.filter((s) => !matchedSourceIds.has(s.id));
   const onlyInTarget = unmatchedB.filter((s) => !matchedTargetIds.has(s.id));
 
-  return { identical, similar, onlyInSource, onlyInTarget };
+  return { identical, equivalent, similar: modified, onlyInSource, onlyInTarget };
 }

@@ -26,6 +26,8 @@ interface RunsTableProps {
   compareModeEnabled?: boolean;
   /** Project ID for source links */
   projectId?: string;
+  /** Active run ID for keyboard navigation highlight */
+  activeRunId?: string | null;
 }
 
 /**
@@ -152,6 +154,7 @@ export function RunsTable({
   maxRows = 15,
   compareModeEnabled = false,
   projectId,
+  activeRunId,
 }: RunsTableProps) {
   const router = useRouter();
   const { selectedRunIds, toggleRunSelection } = useOptimiserStore();
@@ -258,9 +261,11 @@ export function RunsTable({
           return (
             <TableRow
               key={run.run_id}
+              data-run-id={run.run_id}
               className={cn(
                 'cursor-pointer hover:bg-muted/50',
-                isSelected && 'bg-primary/5 hover:bg-primary/10'
+                isSelected && 'bg-primary/5 hover:bg-primary/10',
+                activeRunId === run.run_id && 'ring-2 ring-[var(--accent-primary)] ring-inset'
               )}
               onClick={() => handleRowClick(run)}
             >

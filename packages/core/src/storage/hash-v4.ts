@@ -19,6 +19,7 @@ export type { CommitV4FirstClass } from '../types/v4';
  *
  * NOT included (second-class):
  * - project_id, message, branch, source_refs, position_x, position_y
+ * - Sentence-level: inherited_from, anchor_type
  *
  * Key difference from V3: NO constraints in content!
  *
@@ -26,15 +27,20 @@ export type { CommitV4FirstClass } from '../types/v4';
  * @returns The computed hash with "sha256:" prefix
  */
 export function computeCommitV4Hash(commit: CommitV4FirstClass): string {
-  // Normalize sentences to ensure determinism
-  // (empty array is valid, unlike V3 where constraints needed normalization)
+  // Strip second-class sentence fields (inherited_from, anchor_type)
+  // to ensure they don't affect the hash
   const hashable = {
     schema: commit.schema,
     parents: commit.parents,
     author: commit.author,
     committed_at: commit.committed_at,
     content: {
-      sentences: commit.content.sentences,
+      sentences: commit.content.sentences.map((s) => ({
+        id: s.id,
+        text: s.text,
+        ...(s.confidence !== undefined ? { confidence: s.confidence } : {}),
+        ...(s.source_ref ? { source_ref: s.source_ref } : {}),
+      })),
     },
   };
 

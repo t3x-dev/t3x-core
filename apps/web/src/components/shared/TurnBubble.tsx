@@ -43,6 +43,9 @@ const highlightColors: Record<HighlightColor, string> = {
   green: 'bg-[var(--status-success-muted)] dark:text-emerald-200',
   deepGreen: 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100',
   deepRed: 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100',
+  amber:
+    'bg-amber-100 border border-dashed border-amber-400 dark:bg-amber-900/30 dark:text-amber-200',
+  blue: 'bg-blue-100 border border-dotted border-blue-400 dark:bg-blue-900/30 dark:text-blue-200',
 };
 
 export function TurnBubble({
@@ -136,6 +139,8 @@ export function TurnBubble({
     green: 'ring-2 ring-[var(--status-success)] ring-offset-2',
     deepGreen: 'ring-2 ring-[var(--status-success)] ring-offset-2',
     deepRed: 'ring-2 ring-[var(--status-error)] ring-offset-2',
+    amber: 'ring-2 ring-amber-400 ring-offset-2',
+    blue: 'ring-2 ring-blue-400 ring-offset-2',
   };
 
   const ringClass = showTargetRing && turn.is_target ? ringColorMap[highlightColor] : '';

@@ -370,20 +370,26 @@ export function calculateTextSimilarity(a: string, b: string): number {
 
 /**
  * Check if sentence text matches the content at the source position.
+ * Threshold varies by anchor_type:
+ * - 'verbatim' (default): 0.9 — strict match
+ * - 'paraphrase': 0.4 — loose match for rephrased content
+ * - 'inference': always valid (derived knowledge, not direct quote)
  *
  * @param sentenceText - Expected sentence text
  * @param turnContent - Full turn content
  * @param startChar - Start position
  * @param endChar - End position
+ * @param anchorType - Optional anchor type for threshold selection
  * @returns 'valid' if match, 'mismatch' if different, 'unknown' if can't determine
  */
 export function checkContentIntegrity(
   sentenceText: string,
   turnContent: string,
   startChar: number,
-  endChar: number
+  endChar: number,
+  anchorType?: 'verbatim' | 'paraphrase' | 'inference'
 ): 'valid' | 'mismatch' | 'unknown' {
-  // Boundary validation
+  // Boundary validation (always applies, even for inference)
   if (
     startChar < 0 ||
     endChar < 0 ||
@@ -392,6 +398,11 @@ export function checkContentIntegrity(
     endChar > turnContent.length
   ) {
     return 'mismatch';
+  }
+
+  // Inference: derived knowledge, not a direct quote — always valid after boundary check
+  if (anchorType === 'inference') {
+    return 'valid';
   }
 
   const actualText = turnContent.slice(startChar, endChar);
@@ -404,9 +415,11 @@ export function checkContentIntegrity(
     return 'valid';
   }
 
-  // Check if it's a close match (>90% similar) - could be minor edits
+  // Select threshold based on anchor_type
+  const threshold = anchorType === 'paraphrase' ? 0.4 : 0.9;
+
   const similarity = calculateTextSimilarity(normalizedSentence, normalizedActual);
-  if (similarity > 0.9) {
+  if (similarity >= threshold) {
     return 'valid';
   }
 

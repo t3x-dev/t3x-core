@@ -7,9 +7,10 @@
  * Fetches parent commit once, then recomputes diff locally on sentence changes.
  */
 
-import { Minus, Pencil, Plus } from 'lucide-react';
+import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
+import { Badge } from '@/components/ui/badge';
 import { getCommitV4 } from '@/lib/api';
 import type { DiffableSentence } from '@/lib/diffUtils';
 import { type CommitDiff, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
@@ -80,7 +81,7 @@ export function DraftDiffSection() {
 
   // Build badge text
   const badge = diff
-    ? `+${diff.onlyInTarget.length} / -${diff.onlyInSource.length} / ~${diff.similar.length}`
+    ? `+${diff.onlyInTarget.length} / -${diff.onlyInSource.length} / ≈${diff.equivalent.length} / ~${diff.similar.length}`
     : loading
       ? '...'
       : '';
@@ -95,10 +96,11 @@ export function DraftDiffSection() {
 }
 
 function DraftDiffContent({ diff }: { diff: CommitDiff }) {
-  const { identical, similar, onlyInSource, onlyInTarget } = diff;
+  const { identical, equivalent, similar, onlyInSource, onlyInTarget } = diff;
 
   if (
     identical.length === 0 &&
+    equivalent.length === 0 &&
     similar.length === 0 &&
     onlyInSource.length === 0 &&
     onlyInTarget.length === 0
@@ -111,6 +113,12 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       {/* Stats line */}
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {identical.length > 0 && <span>{identical.length} identical</span>}
+        {equivalent.length > 0 && (
+          <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+            <Equal size={12} />
+            {equivalent.length} equivalent
+          </span>
+        )}
         {onlyInTarget.length > 0 && (
           <span className="flex items-center gap-1 text-[var(--diff-added-accent)]">
             <Plus size={12} />
@@ -131,32 +139,72 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         )}
       </div>
 
-      {/* Added sentences */}
+      {/* Identical sentences (gray stripe) */}
+      {identical.map((s) => (
+        <div
+          key={`id-${s.id}`}
+          className="rounded-md border-l-4 border-gray-400 bg-gray-50 dark:bg-gray-900/20 px-3 py-2 text-sm"
+        >
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 mb-1 text-gray-500 dark:text-gray-400"
+          >
+            Identical
+          </Badge>
+          <span className="text-muted-foreground">{s.text}</span>
+        </div>
+      ))}
+
+      {/* Equivalent pairs (high similarity, green stripe) */}
+      {equivalent.map((pair) => (
+        <div
+          key={`eq-${pair.source.id}-${pair.target.id}`}
+          className="rounded-md border-l-4 border-green-500 bg-green-50 dark:bg-green-950/20 px-3 py-2 text-sm"
+        >
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 mb-1 text-green-700 dark:text-green-300"
+          >
+            Equivalent
+          </Badge>
+          <WordDiffDisplay segments={pair.wordDiff} />
+        </div>
+      ))}
+
+      {/* Added sentences (green-accent stripe) */}
       {onlyInTarget.map((s) => (
-        <div key={s.id} className="rounded-md bg-[var(--diff-added-muted)] px-3 py-2 text-sm">
+        <div
+          key={s.id}
+          className="rounded-md border-l-4 border-[var(--diff-added-accent)] bg-[var(--diff-added-bg)] px-3 py-2 text-sm"
+        >
           <span className="text-[var(--diff-added-accent)] font-medium mr-2">+</span>
           {s.text}
         </div>
       ))}
 
-      {/* Removed sentences */}
+      {/* Removed sentences (red-accent stripe) */}
       {onlyInSource.map((s) => (
         <div
           key={s.id}
-          className="rounded-md bg-[var(--diff-removed-muted)] px-3 py-2 text-sm line-through opacity-75"
+          className="rounded-md border-l-4 border-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)] px-3 py-2 text-sm line-through opacity-75"
         >
           <span className="text-[var(--diff-removed-accent)] font-medium mr-2">-</span>
           {s.text}
         </div>
       ))}
 
-      {/* Modified pairs with word-level diff */}
+      {/* Modified pairs with word-level diff (amber stripe) */}
       {similar.map((pair) => (
         <div
-          key={`${pair.source.id}-${pair.target.id}`}
-          className="rounded-md bg-[var(--diff-modified-muted)] px-3 py-2 text-sm"
+          key={`mod-${pair.source.id}-${pair.target.id}`}
+          className="rounded-md border-l-4 border-amber-500 bg-[var(--diff-modified-bg)] px-3 py-2 text-sm"
         >
-          <span className="text-[var(--diff-modified-accent)] font-medium mr-2">~</span>
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 mb-1 text-amber-700 dark:text-amber-300"
+          >
+            Modified
+          </Badge>
           <WordDiffDisplay segments={pair.wordDiff} />
         </div>
       ))}

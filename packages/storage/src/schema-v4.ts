@@ -160,6 +160,7 @@ export const commitsV4 = pgTable(
           start_char: number;
           end_char: number;
         };
+        anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
       }>;
     }>(),
 
@@ -391,6 +392,15 @@ export const leafHistory = pgTable(
 
     /** Who triggered this generation */
     createdBy: text('created_by'),
+
+    /** Attempt number within a generation cycle (1 = first attempt) */
+    attemptNumber: integer('attempt_number').notNull().default(1),
+
+    /** Corrective feedback from corrective-prompt.ts (if retry) */
+    correctiveFeedback: text('corrective_feedback'),
+
+    /** The actual prompt sent to LLM */
+    promptUsed: text('prompt_used'),
   },
   (table) => ({
     leafIdx: index('idx_leaf_history_leaf').on(table.leafId),

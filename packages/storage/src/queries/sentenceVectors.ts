@@ -136,6 +136,47 @@ export async function searchSimilarSentences(
 }
 
 // ============================================================
+// Bulk Retrieval (for conflict detection)
+// ============================================================
+
+/**
+ * Retrieve all sentence vectors for a project.
+ * Used by conflict detection to load existing sentences with embeddings.
+ *
+ * @param excludeCommitHash - Optionally exclude sentences from a specific commit
+ *   (e.g., the commit being created, to avoid self-conflicts)
+ */
+export async function findSentenceVectorsByProject(
+  db: AnyDB,
+  projectId: string,
+  options?: { excludeCommitHash?: string; limit?: number }
+): Promise<SearchResult[]> {
+  const excludeClause = options?.excludeCommitHash
+    ? sql`AND commit_hash != ${options.excludeCommitHash}`
+    : sql``;
+  const limitVal = options?.limit ?? 10000;
+
+  const results = await (
+    db as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> }
+  ).execute(
+    sql`SELECT id, project_id, commit_hash, text, model_id, 1.0 AS similarity
+        FROM sentence_vectors
+        WHERE project_id = ${projectId}
+          ${excludeClause}
+        LIMIT ${limitVal}`
+  );
+
+  return (results.rows as Array<Record<string, unknown>>).map((row) => ({
+    id: row.id as string,
+    project_id: row.project_id as string,
+    commit_hash: row.commit_hash as string,
+    text: row.text as string,
+    model_id: row.model_id as string,
+    similarity: Number(row.similarity),
+  }));
+}
+
+// ============================================================
 // Delete
 // ============================================================
 

@@ -3,6 +3,7 @@
 import { MapPin } from 'lucide-react';
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { SourceContextView } from '@/components/shared/SourceContextView';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { TurnContextData } from '@/lib/api';
 import type { WordDiffSegment } from '@/types/merge';
 
@@ -30,6 +31,8 @@ interface DiffSentenceLineProps {
   highlightEnd?: number;
   /** Callback when "Jump to conversation" is clicked */
   onJumpToConversation?: (conversationId: string) => void;
+  /** Source conversation title for hover tooltip preview */
+  sourceTitle?: string;
 }
 
 const lineStyles = {
@@ -72,6 +75,7 @@ export function DiffSentenceLine({
   highlightStart,
   highlightEnd,
   onJumpToConversation,
+  sourceTitle,
 }: DiffSentenceLineProps) {
   const styles = lineStyles[type];
   const hasDualGutter = baseLineNumber !== undefined || targetLineNumber !== undefined;
@@ -95,34 +99,45 @@ export function DiffSentenceLine({
             {lineNumber ?? ''}
           </span>
         )}
-        <span className={`shrink-0 select-none w-4 text-center ${styles.prefixColor}`}>{styles.prefix}</span>
-        <div
-          className={`flex-1 min-w-0 break-words whitespace-pre-wrap ${styles.text}`}
-        >
+        <span className={`shrink-0 select-none w-4 text-center ${styles.prefixColor}`}>
+          {styles.prefix}
+        </span>
+        <div className={`flex-1 min-w-0 break-words whitespace-pre-wrap ${styles.text}`}>
           {wordDiff && wordDiff.length > 0 ? <WordDiffDisplay segments={wordDiff} /> : text}
         </div>
         {/* Source Trace Button - always shown, disabled when no source */}
-        <button
-          type="button"
-          onClick={hasSource && onSourceClick ? onSourceClick : undefined}
-          disabled={!hasSource}
-          className={`shrink-0 p-1 rounded transition-colors ${
-            hasSource
-              ? expanded
-                ? 'text-[var(--accent-commit)] bg-[var(--hover-bg)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]'
-              : 'text-[var(--text-tertiary)]/30 cursor-not-allowed'
-          }`}
-          title={
-            hasSource
-              ? expanded
-                ? 'Collapse source context'
-                : 'View source context'
-              : 'Source context not available'
-          }
-        >
-          <MapPin className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={hasSource && onSourceClick ? onSourceClick : undefined}
+              disabled={!hasSource}
+              className={`shrink-0 p-1 rounded transition-colors ${
+                hasSource
+                  ? expanded
+                    ? 'text-[var(--accent-commit)] bg-[var(--hover-bg)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]'
+                  : 'text-[var(--text-tertiary)]/30 cursor-not-allowed'
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="max-w-xs">
+            {hasSource ? (
+              <div className="space-y-0.5">
+                {sourceTitle && (
+                  <div className="font-medium text-[10px] opacity-70">From: {sourceTitle}</div>
+                )}
+                <div>
+                  {expanded ? 'Click to collapse source context' : 'Click to view source context'}
+                </div>
+              </div>
+            ) : (
+              'No source reference available'
+            )}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Inline source context via SourceContextView */}

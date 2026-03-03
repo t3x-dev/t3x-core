@@ -180,4 +180,45 @@ describe('truncationUtils', () => {
       expect(checkContentIntegrity('slow red dog', content, 4, 15)).toBe('mismatch');
     });
   });
+
+  describe('checkContentIntegrity with anchor_type', () => {
+    it('uses 0.9 threshold for verbatim', () => {
+      const content = 'The quick brown fox jumps over the lazy dog nearby';
+      // Exact substring match at [4,15] = "quick brown"
+      expect(checkContentIntegrity('quick brown', content, 4, 15, 'verbatim')).toBe('valid');
+    });
+
+    it('uses 0.4 threshold for paraphrase', () => {
+      // sentenceText words: {oauth, 2.0, is, used, for, authentication} = 6
+      // turnContent words: {oauth, 2.0, is, used, for, auth, and, sessions} = 8
+      // Intersection = 5, Union = 9, Jaccard = 5/9 ≈ 0.56 > 0.4
+      const turnContent = 'OAuth 2.0 is used for auth and sessions';
+      const sentenceText = 'OAuth 2.0 is used for authentication';
+      expect(
+        checkContentIntegrity(sentenceText, turnContent, 0, turnContent.length, 'paraphrase')
+      ).toBe('valid');
+    });
+
+    it('always valid for inference', () => {
+      expect(
+        checkContentIntegrity('Completely different text', 'Original text here', 0, 18, 'inference')
+      ).toBe('valid');
+    });
+
+    it('falls back to 0.9 when no anchor_type (backward compat)', () => {
+      const content = 'The quick brown fox jumps';
+      expect(checkContentIntegrity('quick brown', content, 4, 15)).toBe('valid');
+    });
+
+    it('inference still validates boundaries', () => {
+      expect(checkContentIntegrity('text', 'content', -1, 4, 'inference')).toBe('mismatch');
+    });
+
+    it('paraphrase rejects when similarity < 0.4', () => {
+      const content = 'alpha beta gamma delta epsilon';
+      expect(checkContentIntegrity('x y z w', content, 0, content.length, 'paraphrase')).toBe(
+        'mismatch'
+      );
+    });
+  });
 });

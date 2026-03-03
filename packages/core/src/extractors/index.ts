@@ -2,6 +2,7 @@
  * Extractors exports
  */
 
+export { type AdaptiveThresholds, computeAdaptiveThresholds, type FeedbackStats } from './adaptiveThresholds';
 export {
   type ExtractionItem,
   ExtractionParseError,
@@ -64,4 +65,4 @@ export {
   type RingOutput,
   type Segment,
 } from './types';
-export { type VerifiedProposal, verifyProposal } from './verifyProposal';
+export { type OverlapResult, type OverlapStatus, type VerifiedProposal, type VerifyOptions, verifyProposal } from './verifyProposal';

@@ -1,6 +1,8 @@
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useCallback, useRef } from 'react';
+import { ArrowLeft, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useTerminology } from '@/hooks/useTerminology';
+import { getMergeSuggestion, type MergeSuggestion } from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -10,6 +12,7 @@ import { WordDiffDisplay } from './WordDiffDisplay';
 interface MergeSimilarPairCardProps {
   pair: MergeSimilarPair;
   index: number;
+  mergeDraftId?: string;
 }
 
 /**
@@ -20,13 +23,17 @@ interface MergeSimilarPairCardProps {
  * - Source and target text
  * - Word diff visualization
  * - Radio buttons to pick source or target
- * - Constraints for each side
+ * - AI suggestion option (if merge draft ID available)
  */
-export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps) {
+export function MergeSimilarPairCard({ pair, index, mergeDraftId }: MergeSimilarPairCardProps) {
   const resolveSimilarPair = useCanvasStore((s) => s.resolveSimilarPair);
   const { t } = useTerminology();
   const isResolved = pair.resolution !== undefined;
   const isUpdatingRef = useRef(false);
+
+  const [suggestion, setSuggestion] = useState<MergeSuggestion | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const handleSelect = useCallback(
     (pick: 'source' | 'target') => {
@@ -43,6 +50,20 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
     },
     [index, pair.resolution, resolveSimilarPair]
   );
+
+  const handleSuggest = useCallback(async () => {
+    if (!mergeDraftId) return;
+    setSuggestLoading(true);
+    setSuggestError(null);
+    try {
+      const result = await getMergeSuggestion(mergeDraftId, index);
+      setSuggestion(result);
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : 'Failed to get suggestion');
+    } finally {
+      setSuggestLoading(false);
+    }
+  }, [mergeDraftId, index]);
 
   return (
     <div
@@ -110,6 +131,40 @@ export function MergeSimilarPairCard({ pair, index }: MergeSimilarPairCardProps)
           )}
         </div>
       </label>
+
+      {/* AI Suggestion */}
+      {mergeDraftId && (
+        <div className="mt-2 pt-2 border-t border-[var(--stroke-divider)]">
+          {!suggestion && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSuggest}
+              disabled={suggestLoading}
+              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              {suggestLoading ? (
+                <Loader2 size={12} className="animate-spin mr-1" />
+              ) : (
+                <Sparkles size={12} className="mr-1" />
+              )}
+              AI Suggestion
+            </Button>
+          )}
+          {suggestError && <p className="text-xs text-red-500 mt-1">{suggestError}</p>}
+          {suggestion && (
+            <div className="text-xs space-y-1 p-2 rounded bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30">
+              <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                <Sparkles size={10} /> AI Suggestion
+              </div>
+              <div className="text-[var(--text-primary)]">{suggestion.suggestion}</div>
+              {suggestion.reasoning && (
+                <div className="text-[var(--text-tertiary)] italic">{suggestion.reasoning}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

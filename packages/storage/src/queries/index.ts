@@ -142,6 +142,14 @@ export {
   updateDraftV3,
   updateDraftV3Preview,
 } from './drafts-v3';
+// Extraction Feedback (Anchoring L4)
+export {
+  type ExtractionFeedbackStats,
+  getExtractionFeedbackStats,
+  type InsertExtractionFeedbackInput,
+  insertExtractionFeedback,
+  listExtractionFeedback,
+} from './extraction-feedback';
 // Global Settings (key-value config store)
 export {
   deleteGlobalSetting,
@@ -149,13 +157,26 @@ export {
   listGlobalSettings,
   setGlobalSetting,
 } from './global-settings';
+// Knowledge Conflicts (conflict detection persistence)
+export {
+  countConflictsByProject,
+  dismissConflict,
+  findConflictById,
+  findConflictsByProject,
+  type InsertConflictInput,
+  insertConflict,
+  type KnowledgeConflictOutput,
+  resolveConflict,
+} from './knowledge-conflicts';
 // Leaf History (generation history for leaves)
 export {
+  type CreateLeafHistoryInputExtended,
   countHistoryByLeafId,
   createLeafHistory,
   deleteHistoryByLeafId,
   deleteLeafHistory,
   findHistoryByLeafId,
+  findHistoryByLeafIdOrderedByAttempt,
   findLeafHistoryById,
   type ListLeafHistoryOptions,
 } from './leaf-history';
@@ -190,6 +211,16 @@ export {
   type UpdateMergeDraftInput,
   updateMergeDraft,
 } from './merge-drafts';
+// Observable Metrics (event tracking)
+export {
+  getMetricsByProject,
+  getMetricsInTimeRange,
+  getMetricsSummary,
+  type MetricsEventOutput,
+  type MetricsSummaryRow,
+  type RecordMetricInput,
+  recordMetric,
+} from './metrics';
 // Pins (V4 - source selection for commits and context)
 export {
   createPin,
@@ -263,10 +294,17 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Sentence Modifications (audit trail)
+export {
+  findModificationsByDraft,
+  type InsertSentenceModificationInput,
+  insertSentenceModification,
+} from './sentence-modifications';
 // Sentence Vectors (pgvector similarity search)
 export {
   deleteSentenceVectorsByCommit,
   deleteSentenceVectorsByProject,
+  findSentenceVectorsByProject,
   type SearchResult as SentenceVectorSearchResult,
   searchSimilarSentences,
   type UpsertSentenceVectorInput,

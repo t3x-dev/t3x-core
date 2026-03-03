@@ -22,6 +22,7 @@ import type { Leaf, LeafHistory } from '@t3x/core';
 // Generation functions (provided by @t3x/core)
 import {
   AllProvidersFailedError,
+  collectLessons,
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
@@ -56,8 +57,8 @@ import {
   getLLMProvider,
   getProviderRegistry,
 } from '../lib/provider-registry';
-import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   BatchGenerateRequest,
@@ -707,9 +708,14 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
         // 3b. Generate output if not skipped (uses fallback across providers)
         if (needsGeneration) {
           try {
+            // Collect lessons from historical leaves on the same commit
+            const batchHistLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+            const batchLessons = collectLessons(batchHistLeaves);
+
             const result = await generateWithFallback({
               commit,
               leaf,
+              lessons: batchLessons.length > 0 ? batchLessons : undefined,
               additionalInstructions:
                 typeof leaf.config?.user_instruction === 'string'
                   ? leaf.config.user_instruction
@@ -936,10 +942,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
 
+    // Collect lessons from historical leaves on the same commit (#4 feedback loop)
+    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+    const lessons = collectLessons(historicalLeaves);
+
     // Generate with automatic provider fallback
     const result = await generateWithFallback({
       commit,
       leaf,
+      lessons: lessons.length > 0 ? lessons : undefined,
       additionalInstructions:
         typeof leaf.config?.user_instruction === 'string'
           ? leaf.config.user_instruction
@@ -1480,14 +1491,16 @@ const SuggestConstraintsResponse = z.object({
   success: z.literal(true),
   data: z.object({
     suggestions: z.array(SuggestedConstraintSchema),
-    constraints: z.array(z.object({
-      id: z.string(),
-      type: z.enum(['require', 'exclude']),
-      match_mode: z.enum(['exact', 'semantic']),
-      value: z.string(),
-      description: z.string().optional(),
-      reason: z.string().optional(),
-    })),
+    constraints: z.array(
+      z.object({
+        id: z.string(),
+        type: z.enum(['require', 'exclude']),
+        match_mode: z.enum(['exact', 'semantic']),
+        value: z.string(),
+        description: z.string().optional(),
+        reason: z.string().optional(),
+      })
+    ),
     model: z.string(),
   }),
 });
@@ -1497,7 +1510,8 @@ const suggestConstraintsRoute = createRoute({
   path: '/v1/leaves/{id}/suggest-constraints',
   tags: ['Leaves'],
   summary: 'Suggest constraints via LLM',
-  description: 'Uses LLM to analyze commit sentences and suggest appropriate require/exclude constraints for the leaf type.',
+  description:
+    'Uses LLM to analyze commit sentences and suggest appropriate require/exclude constraints for the leaf type.',
   request: {
     params: IdParamSchema,
     body: {
@@ -1546,16 +1560,22 @@ leavesRoutes.openapi(suggestConstraintsRoute, async (c) => {
 
     const sentences = commit.content.sentences;
     if (sentences.length === 0) {
-      return c.json({
-        success: true as const,
-        data: { suggestions: [], constraints: [], model: 'none' },
-      }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: { suggestions: [], constraints: [], model: 'none' },
+        },
+        200
+      );
     }
 
     const registry = await getProviderRegistry();
     const result = await registry.tryWithFallback(
       'generation',
-      async (provider: { id: string; generate: (prompt: string, options?: Record<string, unknown>) => Promise<string> }) => {
+      async (provider: {
+        id: string;
+        generate: (prompt: string, options?: Record<string, unknown>) => Promise<string>;
+      }) => {
         return suggestConstraints(
           provider as Parameters<typeof suggestConstraints>[0],
           sentences,
@@ -1571,14 +1591,17 @@ leavesRoutes.openapi(suggestConstraintsRoute, async (c) => {
     // Convert suggestions to proper Constraint objects with IDs
     const constraints = await suggestionsToConstraints(result.suggestions);
 
-    return c.json({
-      success: true as const,
-      data: {
-        suggestions: result.suggestions,
-        constraints,
-        model: result.model,
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          suggestions: result.suggestions,
+          constraints,
+          model: result.model,
+        },
       },
-    }, 200);
+      200
+    );
   } catch (err) {
     if (err instanceof Error && err.name === 'AllProvidersFailedError') {
       return c.json(
@@ -1586,7 +1609,8 @@ leavesRoutes.openapi(suggestConstraintsRoute, async (c) => {
           success: false as const,
           error: {
             code: 'LLM_NOT_CONFIGURED',
-            message: 'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
+            message:
+              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
           },
         },
         503
@@ -1610,17 +1634,19 @@ const ExtractFromLeafRequest = z.object({
 const ExtractFromLeafResponse = z.object({
   success: z.literal(true),
   data: z.object({
-    sentences: z.array(z.object({
-      id: z.string(),
-      text: z.string(),
-      origin: z.object({
-        type: z.literal('extracted'),
-        segment_id: z.string(),
-        confidence: z.number(),
-      }),
-      position: z.number(),
-      included: z.boolean(),
-    })),
+    sentences: z.array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+        origin: z.object({
+          type: z.literal('extracted'),
+          segment_id: z.string(),
+          confidence: z.number(),
+        }),
+        position: z.number(),
+        included: z.boolean(),
+      })
+    ),
     model: z.string(),
     stats: z.object({
       total_turns: z.number(),
@@ -1636,7 +1662,8 @@ const extractFromLeafRoute = createRoute({
   path: '/v1/leaves/{id}/extract-sentences',
   tags: ['Leaves'],
   summary: 'Extract sentences from leaf output',
-  description: 'Uses LLM to extract structured knowledge sentences from a leaf\'s generated output. Enables the Leaf → Commit feedback loop.',
+  description:
+    "Uses LLM to extract structured knowledge sentences from a leaf's generated output. Enables the Leaf → Commit feedback loop.",
   request: {
     params: IdParamSchema,
     body: {
@@ -1682,20 +1709,21 @@ leavesRoutes.openapi(extractFromLeafRoute, async (c) => {
       return errorResponse(c, 'NO_OUTPUT', `Leaf ${id} has no generated output to extract from`);
     }
 
-    const result = await extractSentencesFromLeafOutput(
-      id,
-      leaf.output,
-      { max_sentences: body.max_sentences }
-    );
+    const result = await extractSentencesFromLeafOutput(id, leaf.output, {
+      max_sentences: body.max_sentences,
+    });
 
-    return c.json({
-      success: true as const,
-      data: {
-        sentences: result.sentences,
-        model: result.model,
-        stats: result.stats,
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          sentences: result.sentences,
+          model: result.model,
+          stats: result.stats,
+        },
       },
-    }, 200);
+      200
+    );
   } catch (err) {
     if (err instanceof Error && err.name === 'AllProvidersFailedError') {
       return c.json(
@@ -1705,6 +1733,158 @@ leavesRoutes.openapi(extractFromLeafRoute, async (c) => {
             code: 'LLM_NOT_CONFIGURED',
             message: 'No LLM provider is configured.',
           },
+        },
+        503
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GENERATION_FAILED', message);
+  }
+});
+
+// ============================================================================
+// POST /v1/leaves/:id/reverse-learn — Learn constraints from failed assertions
+// ============================================================================
+
+const ReverseLearningRequest = z
+  .object({
+    max_suggestions: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .default(5)
+      .openapi({ description: 'Max number of constraint suggestions' }),
+  })
+  .openapi('ReverseLearningRequest');
+
+const ReverseLearningResponse = SuccessResponseSchema(
+  z.object({
+    suggestions: z.array(
+      z.object({
+        type: z.enum(['require', 'exclude']),
+        match_mode: z.enum(['exact', 'semantic']),
+        value: z.string(),
+        reason: z.string(),
+        confidence: z.number(),
+      })
+    ),
+    lessons_used: z.array(z.string()),
+    model: z.string(),
+  })
+);
+
+const reverseLearnRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/reverse-learn',
+  tags: ['Leaves'],
+  summary: 'Learn constraints from failed assertions',
+  description:
+    'Collects lessons from failed assertions on this leaf and sibling leaves, then uses LLM to suggest constraints that would prevent those failures.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: ReverseLearningRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Reverse-learned constraint suggestions',
+      content: { 'application/json': { schema: ReverseLearningResponse } },
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Leaf or commit not found',
+    },
+    422: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'No lessons available to learn from',
+    },
+    503: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'LLM not configured',
+    },
+  },
+});
+
+leavesRoutes.openapi(reverseLearnRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
+    }
+
+    const commit = await findCommitV4ByHash(db, leaf.commit_hash);
+    if (!commit) {
+      return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
+    }
+
+    // Collect lessons from failed assertions on this leaf and siblings
+    const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+    const lessons = collectLessons(allLeaves);
+
+    if (lessons.length === 0) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NO_LESSONS',
+            message: 'No failed assertion lessons found for this leaf or its siblings.',
+          },
+        },
+        422
+      );
+    }
+
+    const llm = await getLLMProvider();
+    if (!llm) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider configured.' },
+        },
+        503
+      );
+    }
+
+    // Use suggestConstraints but augment the instructions with lessons
+    const lessonsContext = lessons
+      .slice(0, 10)
+      .map((l, i) => `${i + 1}. ${l}`)
+      .join('\n');
+
+    const result = await suggestConstraints(llm, commit.content.sentences, leaf.type, {
+      maxSuggestions: body.max_suggestions,
+      instructions: `The following lessons were learned from FAILED validations on previous outputs.
+Generate constraints that would PREVENT these failures:
+
+${lessonsContext}
+
+Focus on constraints that directly address these failures.`,
+    });
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          suggestions: result.suggestions,
+          lessons_used: lessons.slice(0, 10),
+          model: result.model,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider is configured.' },
         },
         503
       );

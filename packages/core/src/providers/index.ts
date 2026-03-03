@@ -42,9 +42,12 @@ export {
 // NLP Provider
 export {
   createGoogleCloudNLPProvider,
+  createLocalNLPProvider,
   type DependencyLabel,
   type GoogleCloudNLPConfig,
   GoogleCloudNLPProvider,
+  LocalNLPProvider,
+  type LocalNLPProviderConfig,
   type NLPAnalysis,
   type NLPEntity,
   type NLPProvider,

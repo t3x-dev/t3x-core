@@ -23,6 +23,14 @@ export {
 } from './commit';
 // Common utilities
 export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+// Conflict Detection (#9)
+export {
+  type ConflictCandidate,
+  type ConflictReport,
+  type DetectConflictsOptions,
+  detectConflicts,
+  type ExistingSentenceWithEmbedding,
+} from './conflict';
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Builder (V4)
 // @see docs/specification/memory-pin-system-design.md
@@ -69,6 +77,7 @@ export {
 } from './diff';
 // Extractors (Ring 1/2/3)
 export {
+  type AdaptiveThresholds,
   // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
@@ -78,6 +87,7 @@ export {
   // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   buildStyleSeed,
+  computeAdaptiveThresholds,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
@@ -98,6 +108,8 @@ export {
   type LLMExtractionOptions,
   type LLMExtractionResult,
   LLMExtractor,
+  type OverlapResult,
+  type OverlapStatus,
   type Polarity,
   // Polarity Rules
   type PolarityRule,
@@ -120,9 +132,19 @@ export {
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
   type VerifiedProposal,
+  type VerifyOptions,
   validateExtractedSentences,
   verifyProposal,
 } from './extractors';
+// Hash / Merkle Tree (#14)
+export {
+  buildMerkleTree,
+  type MembershipProof,
+  type MerkleLeaf,
+  type MerkleTree,
+  type ProofStep,
+  verifyMembership,
+} from './hash';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // @see docs/plans/parallel-dev-guidelines.md
@@ -136,9 +158,9 @@ export {
   buildLeafPrompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
-  // Constraint Suggestion
   type ConstraintSuggestionResult,
   type CorrectivePromptOptions,
+  collectLessons,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   // Default templates
@@ -155,6 +177,11 @@ export {
   getTypeInstructions,
   isGenerationConfigured,
   type LeafTemplate,
+  // Constraint Suggestion
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  multiRoundGenerate,
+  type RoundConfig,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
@@ -183,7 +210,9 @@ export {
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
+  type MergeSuggestion,
   prepareMerge,
+  suggestMerge,
 } from './merge';
 // Provider interfaces and implementations
 export {
@@ -202,6 +231,8 @@ export {
   createGoogleAIEmbeddingProvider,
   // NLP Provider (Google Cloud)
   createGoogleCloudNLPProvider,
+  // NLP Provider (Local fallback)
+  createLocalNLPProvider,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -222,6 +253,8 @@ export {
   type GoogleCloudNLPConfig,
   // NLP Provider (implementations)
   GoogleCloudNLPProvider,
+  LocalNLPProvider,
+  type LocalNLPProviderConfig,
   type NLPAnalysis,
   type NLPEntity,
   type NLPProvider,
