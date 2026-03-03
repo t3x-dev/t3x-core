@@ -504,20 +504,61 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return json.data as T;
 }
 
-// API key for authenticated requests (optional, for production use)
+// API key for authenticated requests (fallback for AUTH_DISABLED=true or manual config)
 const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
-/** Build headers with auth token injected (for callers that can't use fetchWithTimeout) */
-export function getAuthHeaders(extra?: HeadersInit): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (extra) {
-    const entries = extra instanceof Headers ? Array.from(extra.entries()) : Object.entries(extra);
-    for (const [k, v] of entries) headers[k] = v as string;
+// Client-side cache for session API key (avoids HTTP call to /api/auth/session per request)
+let _cachedApiKey: string | null = null;
+let _cacheExpiry = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get the auth token for API requests.
+ *
+ * Priority:
+ * 1. Server-side: API key from NextAuth session (via auth())
+ * 2. Client-side: API key from NextAuth session (via getSession(), cached 5 min)
+ * 3. Fallback: NEXT_PUBLIC_T3X_API_KEY (for manual config / AUTH_DISABLED mode)
+ */
+async function getAuthToken(): Promise<string | null> {
+  // Server-side: get session API key from NextAuth
+  if (typeof window === 'undefined') {
+    try {
+      const { auth } = await import('@/lib/auth');
+      const session = await auth();
+      const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as
+        | string
+        | undefined;
+      if (sessionApiKey) return sessionApiKey;
+    } catch {
+      // auth module not configured (AUTH_DISABLED=true)
+    }
+    return API_KEY || null;
   }
-  if (API_KEY && !headers.Authorization) {
-    headers.Authorization = `Bearer ${API_KEY}`;
+
+  // Client-side: return cached key if still valid
+  if (_cachedApiKey && Date.now() < _cacheExpiry) {
+    return _cachedApiKey;
   }
-  return headers;
+
+  // Client-side: get session API key from NextAuth
+  try {
+    const { getSession } = await import('next-auth/react');
+    const session = await getSession();
+    const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as
+      | string
+      | undefined;
+    if (sessionApiKey) {
+      _cachedApiKey = sessionApiKey;
+      _cacheExpiry = Date.now() + CACHE_TTL_MS;
+      return sessionApiKey;
+    }
+  } catch {
+    // auth module not available
+  }
+
+  // Fallback: static API key
+  return API_KEY || null;
 }
 
 // Single fetch attempt with timeout + abort support
@@ -534,10 +575,13 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
-  // Inject Authorization header if API key is configured
+  // Inject Authorization header if token is available
   const headers = new Headers(options?.headers);
-  if (API_KEY && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (!headers.has('Authorization')) {
+    const token = await getAuthToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   try {

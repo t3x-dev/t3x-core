@@ -662,6 +662,29 @@ async function initializeSchema(client: PGlite): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Auth Migration (Phase 1.2)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    -- Users table (OAuth providers)
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      email TEXT,
+      name TEXT,
+      avatar_url TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
+
+    -- Migration: Add owner_id to projects (nullable — null = public/legacy data)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
+
+    -- Migration: Add user_id to api_keys (nullable — null = legacy key)
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

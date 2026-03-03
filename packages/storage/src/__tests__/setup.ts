@@ -15,14 +15,28 @@ import * as schema from '../schema';
  * Exported for reuse in other packages (e.g., t3x-webui tests)
  */
 export const CREATE_TABLES_SQL = `
+-- Users (OAuth authentication)
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  email TEXT,
+  name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
+
 -- Projects
 CREATE TABLE IF NOT EXISTS projects (
   project_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  owner_id TEXT,
   metadata_json TEXT,
   provider_config TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 
 -- Conversations
 CREATE TABLE IF NOT EXISTS conversations (

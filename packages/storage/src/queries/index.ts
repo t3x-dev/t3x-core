@@ -329,6 +329,14 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
+// Users (OAuth authentication)
+export {
+  type CreateUserInput,
+  createUser,
+  findOrCreateUser,
+  findUserById,
+  findUserByProvider,
+} from './users';
 // Turns
 export {
   type CreateTurnInput,

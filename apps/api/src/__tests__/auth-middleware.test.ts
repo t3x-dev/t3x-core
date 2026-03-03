@@ -64,7 +64,7 @@ describe('Auth Middleware', () => {
     if (originalEnv !== undefined) {
       process.env.AUTH_DISABLED = originalEnv;
     } else {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
     }
   });
 
@@ -81,11 +81,22 @@ describe('Auth Middleware', () => {
       // Should NOT call findApiKeyByValue
       expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
     });
+
+    it('skips auth when AUTH_DISABLED is not set (safe default)', async () => {
+      delete process.env.AUTH_DISABLED;
+
+      const res = await app.request('/api/v1/projects');
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
+    });
   });
 
   describe('public paths', () => {
     it('bypasses auth for /health', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/health');
 
@@ -94,7 +105,7 @@ describe('Auth Middleware', () => {
     });
 
     it('bypasses auth for /api/docs', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/docs');
 
@@ -103,7 +114,7 @@ describe('Auth Middleware', () => {
     });
 
     it('bypasses auth for /api/openapi.json', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/openapi.json');
 
@@ -112,7 +123,7 @@ describe('Auth Middleware', () => {
     });
 
     it('bypasses auth for GET /api/v1/share/:token', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/v1/share/abc123');
 
@@ -123,7 +134,7 @@ describe('Auth Middleware', () => {
 
   describe('missing Authorization header', () => {
     it('returns 401 when no Authorization header', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/v1/projects');
 
@@ -137,7 +148,7 @@ describe('Auth Middleware', () => {
 
   describe('invalid Authorization header format', () => {
     it('returns 401 for malformed Authorization header', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/v1/projects', {
         headers: {
@@ -153,7 +164,7 @@ describe('Auth Middleware', () => {
     });
 
     it('returns 401 for empty Bearer token', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/v1/projects', {
         headers: {
@@ -167,7 +178,7 @@ describe('Auth Middleware', () => {
 
   describe('valid API key', () => {
     it('passes through with valid API key', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const mockApiKey = {
         id: 'ak_test123',
@@ -193,7 +204,7 @@ describe('Auth Middleware', () => {
     });
 
     it('extracts key value from Bearer token', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const mockApiKey = {
         id: 'ak_extract123',
@@ -222,7 +233,7 @@ describe('Auth Middleware', () => {
     });
 
     it('calls touchLastUsed after successful auth', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       const mockApiKey = {
         id: 'ak_touch123',
@@ -254,7 +265,7 @@ describe('Auth Middleware', () => {
 
   describe('invalid API key', () => {
     it('returns 401 for invalid API key', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       mockFindApiKeyByValue.mockResolvedValueOnce(null);
 
@@ -274,7 +285,7 @@ describe('Auth Middleware', () => {
 
   describe('database error handling', () => {
     it('returns 500 when database lookup fails', async () => {
-      delete process.env.AUTH_DISABLED;
+      process.env.AUTH_DISABLED = 'false';
 
       mockFindApiKeyByValue.mockRejectedValueOnce(new Error('DB connection failed'));
 
