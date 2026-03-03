@@ -3998,6 +3998,69 @@ export async function verifyProjectHashChain(projectId: string): Promise<VerifyR
   return handleResponse<VerifyResult>(res);
 }
 
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  project_id: string | null;
+  ref_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export async function listNotifications(projectId?: string): Promise<NotificationItem[]> {
+  const query = new URLSearchParams();
+  if (projectId) query.set('project_id', projectId);
+  const res = await fetchWithTimeout(`${API_V1}/notifications?${query}`);
+  return handleResponse<NotificationItem[]>(res);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+  await handleResponse<{ read: boolean }>(res);
+}
+
+export async function markAllNotificationsRead(projectId?: string): Promise<{ count: number }> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/notifications/read-all${query}`, {
+    method: 'POST',
+  });
+  return handleResponse<{ count: number }>(res);
+}
+
+// ============================================================================
+// Reverse Learning (Constraint Suggestions from Failed Assertions)
+// ============================================================================
+
+export interface ReverseLearnResult {
+  suggestions: SuggestedConstraint[];
+  lessons_used: string[];
+  model: string;
+}
+
+export async function reverseLearnConstraints(
+  leafId: string,
+  maxSuggestions = 5
+): Promise<ReverseLearnResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
+    },
+    30_000
+  );
+  return handleResponse<ReverseLearnResult>(res);
+}
+
 /**
  * Get AI-suggested constraints for a leaf.
  */
