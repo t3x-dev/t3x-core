@@ -1,10 +1,10 @@
 'use client';
 
-import { LayoutGrid, Loader2, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { Loader2, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { type LeafTemplate, TemplateGrid } from '@/components/leaf/TemplateGrid';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,6 +41,16 @@ export function LeafCreationDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [title, setTitle] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<LeafTemplate | null>(null);
+
+  const handleTemplateSelect = (template: LeafTemplate) => {
+    setSelectedTemplate(template);
+    // Map template type to leaf type if possible
+    const leafType = LEAF_TYPES.find((lt) => lt.type === template.type);
+    if (leafType) {
+      setSelectedType(leafType.type);
+    }
+  };
 
   const handleCreate = async () => {
     setIsCreating(true);
@@ -51,7 +61,10 @@ export function LeafCreationDialog({
         type: selectedType,
         title: title || undefined,
         project_id: projectId,
-        constraints: [], // Start empty, user can add in detail page
+        constraints: (selectedTemplate?.constraints ?? []).map((c, i) => ({
+          id: `cst_tpl_${i}`,
+          ...c,
+        })),
       });
 
       toast.success('Leaf created successfully');
@@ -60,6 +73,7 @@ export function LeafCreationDialog({
       // Reset form
       setTitle('');
       setSelectedType('tweet');
+      setSelectedTemplate(null);
 
       // Navigate to leaf detail page
       router.push(`/project/${projectId}/leaf/${leaf.id}`);
@@ -106,6 +120,21 @@ export function LeafCreationDialog({
               placeholder="e.g., User Profile System Prompt"
               disabled={isCreating}
             />
+          </div>
+
+          {/* Template selection */}
+          <div className="space-y-[var(--space-item)]">
+            <Label>Start from Template</Label>
+            <TemplateGrid
+              selected={selectedTemplate?.type ?? null}
+              onSelect={handleTemplateSelect}
+            />
+            {selectedTemplate && selectedTemplate.constraints.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Auto-filled {selectedTemplate.constraints.length} constraint
+                {selectedTemplate.constraints.length > 1 ? 's' : ''}
+              </p>
+            )}
           </div>
 
           {/* Leaf type selection */}
@@ -161,14 +190,6 @@ export function LeafCreationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Link
-            href="/templates"
-            className="mr-auto flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            onClick={() => onOpenChange(false)}
-          >
-            <LayoutGrid className="h-3 w-3" />
-            Or create from a template
-          </Link>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>
             Cancel
           </Button>
