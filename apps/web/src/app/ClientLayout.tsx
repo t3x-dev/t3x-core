@@ -1,5 +1,6 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -8,6 +9,8 @@ import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog';
 import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog';
 import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
 import { Sidebar } from '@/components/Sidebar';
+import { NotificationBell } from '@/components/shared/NotificationBell';
+import { VerificationBadge } from '@/components/shared/VerificationBadge';
 import { showToast } from '@/components/Toast';
 import { Toaster } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -21,6 +24,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
   const density = useSettingsStore((s) => s.density);
+  const params = useParams();
+  const projectId = typeof params?.projectId === 'string' ? params.projectId : null;
 
   // Sync density attribute to document
   useEffect(() => {
@@ -83,6 +88,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               sidebarCollapsed ? 'ml-16' : 'ml-52'
             )}
           >
+            <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
+              {projectId && <VerificationBadge projectId={projectId} />}
+              <NotificationBell />
+            </div>
             <div className="flex flex-1 flex-col">{children}</div>
           </main>
           <Toaster position="bottom-right" richColors closeButton />
