@@ -132,6 +132,14 @@ export default function ProjectDetailPage() {
     }
   }, [projectId, loadedProjectId]);
 
+  // Refresh leaves when page becomes visible (handles returning from commit detail page)
+  useEffect(() => {
+    if (!projectId) return;
+    const onFocus = () => useCanvasStore.getState().refreshLeaves(projectId);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [projectId]);
+
   // Initialize pins store for the project
   useEffect(() => {
     if (projectId) {

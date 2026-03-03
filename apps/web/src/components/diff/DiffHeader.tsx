@@ -3,6 +3,7 @@
 import { ArrowLeft, GitCompare } from 'lucide-react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Button } from '@/components/ui/button';
+import { shortHash as fmtShortHash } from '@/lib/formatters';
 
 interface CommitInfo {
   hash: string;
@@ -31,21 +32,21 @@ interface DiffHeaderProps {
  * overflows or merges with adjacent text.
  */
 function CommitBadge({ label, commit }: { label: string; commit: CommitInfo }) {
-  const shortHash = commit.hash.replace('sha256:', '').slice(0, 8);
-
   return (
     <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide shrink-0">
+      <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide shrink-0">
         {label}
       </span>
       {commit.branch && (
-        <span className="text-xs font-medium text-foreground truncate">{commit.branch}</span>
+        <span className="text-xs font-medium text-[var(--text-primary)] truncate">
+          {commit.branch}
+        </span>
       )}
-      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-        {shortHash}
+      <span className="shrink-0 rounded bg-[var(--surface-elevated)] px-1.5 py-0.5 text-[11px] font-mono text-[var(--text-tertiary)]">
+        {fmtShortHash(commit.hash)}
       </span>
       {commit.message && (
-        <span className="text-xs text-muted-foreground truncate">{commit.message}</span>
+        <span className="text-xs text-[var(--text-tertiary)] truncate">{commit.message}</span>
       )}
     </div>
   );
@@ -59,7 +60,7 @@ export function DiffHeader({
   projectName,
 }: DiffHeaderProps) {
   return (
-    <div className="flex items-center gap-3 pl-6 pr-12 py-3 border-b border-[var(--stroke-divider)] bg-background shrink-0">
+    <div className="flex h-14 items-center gap-3 px-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] shrink-0">
       {mode === 'page' ? (
         <>
           <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
@@ -80,7 +81,7 @@ export function DiffHeader({
       <div className="min-w-0 flex-1">
         <CommitBadge label="Base" commit={baseCommit} />
       </div>
-      <GitCompare className="h-4 w-4 text-muted-foreground shrink-0" />
+      <GitCompare className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
       <div className="min-w-0 flex-1">
         <CommitBadge label="Target" commit={targetCommit} />
       </div>

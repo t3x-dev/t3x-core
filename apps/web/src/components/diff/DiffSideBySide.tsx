@@ -1,8 +1,11 @@
 'use client';
 
-import { CheckCircle, Minus, Plus } from 'lucide-react';
+import { Check, CheckCircle, FileText, MapPin, Minus, Plus } from 'lucide-react';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
+import { SourceContextView } from '@/components/shared/SourceContextView';
 import { EmptyStateInline } from '@/components/ui/empty-state';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
@@ -33,8 +36,8 @@ interface DiffSideBySideProps {
   baseSentences: CommitV4Sentence[];
   targetSentences: CommitV4Sentence[];
   projectId?: string;
-  /** View mode: split (side-by-side) or unified (single column) */
-  viewMode?: 'split' | 'unified';
+  /** View mode: split (side-by-side), unified (single column), or document (readable) */
+  viewMode?: 'split' | 'unified' | 'document';
   /** Show context snippets below changed lines */
   showSnippets?: boolean;
   /** Group sentences by source conversation */
@@ -77,6 +80,16 @@ interface UnifiedLine {
   };
 }
 
+/** Per-segment inline context state (for multiple simultaneous panels) */
+interface InlineContextState {
+  data: TurnContextData | null;
+  loading: boolean;
+  turnHash?: string;
+  highlightStart?: number;
+  highlightEnd?: number;
+  wordDiff?: WordDiffSegment[];
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -84,7 +97,9 @@ interface UnifiedLine {
 const CONTEXT_LINES = 3;
 
 /**
- * Build unified lines in position order with context folding
+ * Build unified lines in position order with context folding.
+ * Added sentences are inserted at their correct target position,
+ * not appended at the end (3.4 fix).
  */
 function buildUnifiedLines(
   baseSentences: CommitV4Sentence[],
@@ -144,15 +159,33 @@ function buildUnifiedLines(
     }
   }
 
+  // --- 3.4 Fix: Insert added items at correct target position ---
+  // Build added lines sorted by target position
+  const sortedAddedLines: UnifiedLine[] = [];
   for (const added of addedItems) {
     const targetSentence = targetMap.get(added.segmentId);
     if (targetSentence) {
-      rawLines.push({
+      sortedAddedLines.push({
         type: 'added',
         targetIndex: targetPositionMap.get(added.segmentId),
         targetSentence,
       });
     }
+  }
+  sortedAddedLines.sort((a, b) => (a.targetIndex ?? 0) - (b.targetIndex ?? 0));
+
+  // Insert each added line at the position where the next line's targetIndex >= added targetIndex
+  for (const addedLine of sortedAddedLines) {
+    const addedTargetIdx = addedLine.targetIndex ?? 0;
+    let insertPos = rawLines.length; // default: append at end
+    for (let i = 0; i < rawLines.length; i++) {
+      const lineTargetIdx = rawLines[i].targetIndex;
+      if (lineTargetIdx !== undefined && lineTargetIdx >= addedTargetIdx) {
+        insertPos = i;
+        break;
+      }
+    }
+    rawLines.splice(insertPos, 0, addedLine);
   }
 
   // Context folding
@@ -210,6 +243,106 @@ function buildUnifiedLines(
   return finalLines;
 }
 
+/**
+ * Build document lines: target document order with change annotations.
+ * Shows the resulting document as a continuous readable text.
+ * No context folding — all sentences are shown.
+ */
+function buildDocumentLines(
+  baseSentences: CommitV4Sentence[],
+  targetSentences: CommitV4Sentence[],
+  segmentDiffs: SegmentDiffItem[]
+): UnifiedLine[] {
+  // Map: base sentence ID → { sentence, index }
+  const baseMap = new Map(baseSentences.map((s, i) => [s.id, { sentence: s, index: i }]));
+
+  // Map: target sentence ID → diff info
+  const targetToDiff = new Map<
+    string,
+    {
+      diffType: 'same' | 'modified';
+      baseSentence: CommitV4Sentence;
+      baseIdx: number;
+      wordDiff?: WordDiffSegment[];
+    }
+  >();
+  const removedDiffs: { baseSentence: CommitV4Sentence; baseIndex: number }[] = [];
+
+  for (const diff of segmentDiffs) {
+    if (diff.diffType === 'same') {
+      const baseInfo = baseMap.get(diff.segmentId);
+      if (baseInfo) {
+        targetToDiff.set(diff.segmentId, {
+          diffType: 'same',
+          baseSentence: baseInfo.sentence,
+          baseIdx: baseInfo.index,
+        });
+      }
+    } else if (diff.diffType === 'modified' && diff.matchedSegmentId) {
+      const baseInfo = baseMap.get(diff.segmentId);
+      if (baseInfo) {
+        targetToDiff.set(diff.matchedSegmentId, {
+          diffType: 'modified',
+          baseSentence: baseInfo.sentence,
+          baseIdx: baseInfo.index,
+          wordDiff: diff.wordDiff,
+        });
+      }
+    } else if (diff.diffType === 'removed') {
+      const baseInfo = baseMap.get(diff.segmentId);
+      if (baseInfo) {
+        removedDiffs.push({ baseSentence: baseInfo.sentence, baseIndex: baseInfo.index });
+      }
+    }
+    // 'added' items will be detected as target sentences without a match
+  }
+
+  const lines: UnifiedLine[] = [];
+
+  // Build lines from target sentences (document order)
+  for (let i = 0; i < targetSentences.length; i++) {
+    const sentence = targetSentences[i];
+    const diffInfo = targetToDiff.get(sentence.id);
+
+    if (diffInfo?.diffType === 'same') {
+      lines.push({
+        type: 'context',
+        targetIndex: i,
+        baseIndex: diffInfo.baseIdx,
+        baseSentence: diffInfo.baseSentence,
+        targetSentence: sentence,
+      });
+    } else if (diffInfo?.diffType === 'modified') {
+      lines.push({
+        type: 'modified',
+        targetIndex: i,
+        baseIndex: diffInfo.baseIdx,
+        baseSentence: diffInfo.baseSentence,
+        targetSentence: sentence,
+        wordDiff: diffInfo.wordDiff,
+      });
+    } else {
+      // Added sentence (no match in base)
+      lines.push({
+        type: 'added',
+        targetIndex: i,
+        targetSentence: sentence,
+      });
+    }
+  }
+
+  // Append removed sentences at end
+  for (const { baseSentence, baseIndex } of removedDiffs) {
+    lines.push({
+      type: 'removed',
+      baseIndex,
+      baseSentence,
+    });
+  }
+
+  return lines;
+}
+
 /** Get the effective conversation ID for a line */
 function getConversationId(line: UnifiedLine): string | null {
   const sentence = line.targetSentence ?? line.baseSentence;
@@ -218,10 +351,6 @@ function getConversationId(line: UnifiedLine): string | null {
 
 /**
  * Insert source group headers between groups of sentences from different conversations.
- *
- * Two-pass approach:
- * 1. First pass: identify group boundaries and count sentences per segment
- * 2. Second pass: build result with headers showing per-segment counts
  */
 function insertGroupHeaders(
   lines: UnifiedLine[],
@@ -353,11 +482,15 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const isDocument = viewMode === 'document';
 
-    // Build unified lines
+    // Build lines based on view mode
     const rawUnifiedLines = useMemo(
-      () => buildUnifiedLines(baseSentences, targetSentences, segmentDiffs),
-      [baseSentences, targetSentences, segmentDiffs]
+      () =>
+        isDocument
+          ? buildDocumentLines(baseSentences, targetSentences, segmentDiffs)
+          : buildUnifiedLines(baseSentences, targetSentences, segmentDiffs),
+      [baseSentences, targetSentences, segmentDiffs, isDocument]
     );
 
     // Optionally insert group headers
@@ -406,24 +539,26 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       },
     }));
 
-    // Inline context state
-    const [expandedSegmentId, setExpandedSegmentId] = useState<string | null>(null);
-    const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
-    const [inlineContextLoading, setInlineContextLoading] = useState(false);
-    const [expandedTurnHash, setExpandedTurnHash] = useState<string | undefined>();
-    const [expandedHighlightStart, setExpandedHighlightStart] = useState<number | undefined>();
-    const [expandedHighlightEnd, setExpandedHighlightEnd] = useState<number | undefined>();
-    const [expandedWordDiff, setExpandedWordDiff] = useState<WordDiffSegment[] | undefined>();
+    // --- 3.2: Multiple simultaneous source context panels ---
+    const [expandedSegmentIds, setExpandedSegmentIds] = useState<Set<string>>(new Set());
+    const [inlineContextMap, setInlineContextMap] = useState<Map<string, InlineContextState>>(
+      new Map()
+    );
 
     const handleSourceToggle = useCallback(
       async (segmentId: string, sentence: CommitV4Sentence, lineWordDiff?: WordDiffSegment[]) => {
-        if (expandedSegmentId === segmentId) {
-          setExpandedSegmentId(null);
-          setInlineContextData(null);
-          setExpandedTurnHash(undefined);
-          setExpandedHighlightStart(undefined);
-          setExpandedHighlightEnd(undefined);
-          setExpandedWordDiff(undefined);
+        // Toggle: if already expanded, collapse it
+        if (expandedSegmentIds.has(segmentId)) {
+          setExpandedSegmentIds((prev) => {
+            const next = new Set(prev);
+            next.delete(segmentId);
+            return next;
+          });
+          setInlineContextMap((prev) => {
+            const next = new Map(prev);
+            next.delete(segmentId);
+            return next;
+          });
           return;
         }
 
@@ -433,13 +568,22 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         const startChar = sentence.source_ref.start_char;
         const endChar = sentence.source_ref.end_char;
 
-        setExpandedSegmentId(segmentId);
-        setExpandedTurnHash(turnHash);
-        setExpandedHighlightStart(startChar);
-        setExpandedHighlightEnd(endChar);
-        setExpandedWordDiff(lineWordDiff);
-        setInlineContextLoading(true);
-        setInlineContextData(null);
+        // Add to expanded set
+        setExpandedSegmentIds((prev) => new Set(prev).add(segmentId));
+
+        // Set loading state in map
+        setInlineContextMap((prev) => {
+          const next = new Map(prev);
+          next.set(segmentId, {
+            data: null,
+            loading: true,
+            turnHash,
+            highlightStart: startChar,
+            highlightEnd: endChar,
+            wordDiff: lineWordDiff,
+          });
+          return next;
+        });
 
         try {
           const data = await api.fetchTurnContextCached(turnHash, {
@@ -448,14 +592,26 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             highlightStart: startChar,
             highlightEnd: endChar,
           });
-          setInlineContextData(data);
+          setInlineContextMap((prev) => {
+            const next = new Map(prev);
+            const existing = next.get(segmentId);
+            if (existing) {
+              next.set(segmentId, { ...existing, data, loading: false });
+            }
+            return next;
+          });
         } catch {
-          setInlineContextData(null);
-        } finally {
-          setInlineContextLoading(false);
+          setInlineContextMap((prev) => {
+            const next = new Map(prev);
+            const existing = next.get(segmentId);
+            if (existing) {
+              next.set(segmentId, { ...existing, data: null, loading: false });
+            }
+            return next;
+          });
         }
       },
-      [expandedSegmentId]
+      [expandedSegmentIds]
     );
 
     // Context modal state
@@ -471,17 +627,31 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const [modalLoading, setModalLoading] = useState(false);
 
     const openContextModal = useCallback(
-      (conversationId: string, turnHash: string, hStart?: number, hEnd?: number, wDiff?: WordDiffSegment[]) => {
-        setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd, wordDiff: wDiff });
+      (
+        conversationId: string,
+        turnHash: string,
+        hStart?: number,
+        hEnd?: number,
+        wDiff?: WordDiffSegment[]
+      ) => {
+        setContextModal({
+          open: true,
+          conversationId,
+          turnHash,
+          highlightStart: hStart,
+          highlightEnd: hEnd,
+          wordDiff: wDiff,
+        });
         setModalLoading(true);
         setModalContextData(null);
 
-        api.fetchTurnContextCached(turnHash, {
-          before: 5,
-          after: 5,
-          highlightStart: hStart,
-          highlightEnd: hEnd,
-        })
+        api
+          .fetchTurnContextCached(turnHash, {
+            before: 5,
+            after: 5,
+            highlightStart: hStart,
+            highlightEnd: hEnd,
+          })
           .then((data) => setModalContextData(data))
           .catch(() => setModalContextData(null))
           .finally(() => setModalLoading(false));
@@ -512,11 +682,51 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [projectId, openContextModal]
     );
 
+    // --- 3.2 Helper: get inline context props for a segment ---
+    const getInlineProps = useCallback(
+      (segmentId: string | undefined) => {
+        if (!segmentId) {
+          return {
+            expanded: false,
+            inlineContextData: null as TurnContextData | null,
+            inlineContextLoading: false,
+            turnHash: undefined as string | undefined,
+            highlightStart: undefined as number | undefined,
+            highlightEnd: undefined as number | undefined,
+          };
+        }
+        const isExpanded = expandedSegmentIds.has(segmentId);
+        const ctx = inlineContextMap.get(segmentId);
+        return {
+          expanded: isExpanded,
+          inlineContextData: ctx?.data ?? null,
+          inlineContextLoading: ctx?.loading ?? false,
+          turnHash: isExpanded ? ctx?.turnHash : undefined,
+          highlightStart: isExpanded ? ctx?.highlightStart : undefined,
+          highlightEnd: isExpanded ? ctx?.highlightEnd : undefined,
+        };
+      },
+      [expandedSegmentIds, inlineContextMap]
+    );
+
+    /** Get the source conversation title for a sentence */
+    const getSourceTitle = useCallback(
+      (sentence: CommitV4Sentence | undefined): string | undefined => {
+        const convId = sentence?.source_ref?.conversation_id;
+        if (!convId) return undefined;
+        return sourceRefTitles?.get(convId) ?? undefined;
+      },
+      [sourceRefTitles]
+    );
+
     // Whether a line is a change (not context/collapsed/group-header)
     const isChangeLine = (line: UnifiedLine) =>
       line.type === 'modified' || line.type === 'added' || line.type === 'removed';
 
-    // Render a split (side-by-side) line
+    // ========================================================================
+    // Render: Split (side-by-side) line
+    // ========================================================================
+
     const renderSplitLine = (line: UnifiedLine, index: number) => {
       if (line.type === 'group-header' && line.groupHeader) {
         return (
@@ -551,9 +761,17 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       const baseId = line.baseSentence?.id;
       const targetId = line.targetSentence?.id;
       const showChange = isChangeLine(line);
+      const baseSegId = baseId;
+      const targetSegId = targetId ? `target-${targetId}` : undefined;
+      const baseInline = getInlineProps(baseSegId);
+      const targetInline = getInlineProps(targetSegId);
 
       return (
-        <div key={`line-${index}-${baseId || targetId}`} data-line-index={index}>
+        <div
+          key={`line-${index}-${baseId || targetId}`}
+          data-line-index={index}
+          data-segment-id={baseId || targetId}
+        >
           <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
             {/* Left (Base) side */}
             {line.type === 'added' ? (
@@ -571,17 +789,21 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 hasSource={!!line.baseSentence?.source_ref?.turn_hash}
                 onSourceClick={() => {
                   if (line.baseSentence) {
-                    const wd = line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'added') : undefined;
+                    const wd =
+                      line.type === 'modified'
+                        ? line.wordDiff?.filter((seg) => seg.type !== 'added')
+                        : undefined;
                     handleSourceToggle(line.baseSentence.id, line.baseSentence, wd);
                   }
                 }}
-                expanded={expandedSegmentId === baseId}
-                inlineContextData={inlineContextData}
-                inlineContextLoading={inlineContextLoading}
-                turnHash={expandedSegmentId === baseId ? expandedTurnHash : undefined}
-                highlightStart={expandedSegmentId === baseId ? expandedHighlightStart : undefined}
-                highlightEnd={expandedSegmentId === baseId ? expandedHighlightEnd : undefined}
-                onJumpToConversation={makeJumpHandler(line.baseSentence, line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'added') : undefined)}
+                sourceTitle={getSourceTitle(line.baseSentence)}
+                {...baseInline}
+                onJumpToConversation={makeJumpHandler(
+                  line.baseSentence,
+                  line.type === 'modified'
+                    ? line.wordDiff?.filter((seg) => seg.type !== 'added')
+                    : undefined
+                )}
               />
             )}
 
@@ -601,21 +823,21 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 hasSource={!!line.targetSentence?.source_ref?.turn_hash}
                 onSourceClick={() => {
                   if (line.targetSentence) {
-                    const wd = line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'removed') : undefined;
+                    const wd =
+                      line.type === 'modified'
+                        ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
+                        : undefined;
                     handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence, wd);
                   }
                 }}
-                expanded={expandedSegmentId === `target-${targetId}`}
-                inlineContextData={inlineContextData}
-                inlineContextLoading={inlineContextLoading}
-                turnHash={expandedSegmentId === `target-${targetId}` ? expandedTurnHash : undefined}
-                highlightStart={
-                  expandedSegmentId === `target-${targetId}` ? expandedHighlightStart : undefined
-                }
-                highlightEnd={
-                  expandedSegmentId === `target-${targetId}` ? expandedHighlightEnd : undefined
-                }
-                onJumpToConversation={makeJumpHandler(line.targetSentence, line.type === 'modified' ? line.wordDiff?.filter((seg) => seg.type !== 'removed') : undefined)}
+                sourceTitle={getSourceTitle(line.targetSentence)}
+                {...targetInline}
+                onJumpToConversation={makeJumpHandler(
+                  line.targetSentence,
+                  line.type === 'modified'
+                    ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
+                    : undefined
+                )}
               />
             )}
           </div>
@@ -645,7 +867,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       );
     };
 
-    // Render a unified (single-column) line
+    // ========================================================================
+    // Render: Unified (single-column) line
+    // ========================================================================
+
     const renderUnifiedLine = (line: UnifiedLine, index: number) => {
       if (line.type === 'group-header' && line.groupHeader) {
         return (
@@ -682,6 +907,11 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
       // For modified lines in unified view, show removed then added
       if (line.type === 'modified') {
+        const baseSegId = line.baseSentence?.id;
+        const targetSegId = line.targetSentence ? `target-${line.targetSentence.id}` : undefined;
+        const baseInline = getInlineProps(baseSegId);
+        const targetInline = getInlineProps(targetSegId);
+
         return (
           <div key={`line-${index}`} data-line-index={index}>
             <DiffSentenceLine
@@ -692,20 +922,19 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               hasSource={!!line.baseSentence?.source_ref?.turn_hash}
               onSourceClick={() => {
                 if (line.baseSentence) {
-                  handleSourceToggle(line.baseSentence.id, line.baseSentence, line.wordDiff?.filter((seg) => seg.type !== 'added'));
+                  handleSourceToggle(
+                    line.baseSentence.id,
+                    line.baseSentence,
+                    line.wordDiff?.filter((seg) => seg.type !== 'added')
+                  );
                 }
               }}
-              expanded={expandedSegmentId === line.baseSentence?.id}
-              inlineContextData={inlineContextData}
-              inlineContextLoading={inlineContextLoading}
-              turnHash={expandedSegmentId === line.baseSentence?.id ? expandedTurnHash : undefined}
-              highlightStart={
-                expandedSegmentId === line.baseSentence?.id ? expandedHighlightStart : undefined
-              }
-              highlightEnd={
-                expandedSegmentId === line.baseSentence?.id ? expandedHighlightEnd : undefined
-              }
-              onJumpToConversation={makeJumpHandler(line.baseSentence, line.wordDiff?.filter((seg) => seg.type !== 'added'))}
+              sourceTitle={getSourceTitle(line.baseSentence)}
+              {...baseInline}
+              onJumpToConversation={makeJumpHandler(
+                line.baseSentence,
+                line.wordDiff?.filter((seg) => seg.type !== 'added')
+              )}
             />
             <DiffSentenceLine
               text={line.targetSentence?.text || ''}
@@ -715,28 +944,19 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               hasSource={!!line.targetSentence?.source_ref?.turn_hash}
               onSourceClick={() => {
                 if (line.targetSentence) {
-                  handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence, line.wordDiff?.filter((seg) => seg.type !== 'removed'));
+                  handleSourceToggle(
+                    `target-${line.targetSentence.id}`,
+                    line.targetSentence,
+                    line.wordDiff?.filter((seg) => seg.type !== 'removed')
+                  );
                 }
               }}
-              expanded={expandedSegmentId === `target-${line.targetSentence?.id}`}
-              inlineContextData={inlineContextData}
-              inlineContextLoading={inlineContextLoading}
-              turnHash={
-                expandedSegmentId === `target-${line.targetSentence?.id}`
-                  ? expandedTurnHash
-                  : undefined
-              }
-              highlightStart={
-                expandedSegmentId === `target-${line.targetSentence?.id}`
-                  ? expandedHighlightStart
-                  : undefined
-              }
-              highlightEnd={
-                expandedSegmentId === `target-${line.targetSentence?.id}`
-                  ? expandedHighlightEnd
-                  : undefined
-              }
-              onJumpToConversation={makeJumpHandler(line.targetSentence, line.wordDiff?.filter((seg) => seg.type !== 'removed'))}
+              sourceTitle={getSourceTitle(line.targetSentence)}
+              {...targetInline}
+              onJumpToConversation={makeJumpHandler(
+                line.targetSentence,
+                line.wordDiff?.filter((seg) => seg.type !== 'removed')
+              )}
             />
             {showSnippets && line.targetSentence?.source_ref && (
               <DiffContextSnippet
@@ -749,14 +969,15 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       // Single line (context, added, removed)
-      // Dual gutters: base # on left, target # on right
+      const segId = line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id;
+      const inlineProps = getInlineProps(segId);
       const baseNum =
         line.type !== 'added' && line.baseIndex != null ? line.baseIndex + 1 : undefined;
       const targetNum =
         line.type !== 'removed' && line.targetIndex != null ? line.targetIndex + 1 : undefined;
 
       return (
-        <div key={`line-${index}`} data-line-index={index}>
+        <div key={`line-${index}`} data-line-index={index} data-segment-id={relevantSentence?.id}>
           <DiffSentenceLine
             text={relevantSentence?.text || ''}
             type={line.type === 'context' ? 'context' : line.type === 'added' ? 'added' : 'removed'}
@@ -770,30 +991,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 handleSourceToggle(id, relevantSentence);
               }
             }}
-            expanded={
-              expandedSegmentId ===
-              (line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id)
-            }
-            inlineContextData={inlineContextData}
-            inlineContextLoading={inlineContextLoading}
-            turnHash={
-              expandedSegmentId ===
-              (line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id)
-                ? expandedTurnHash
-                : undefined
-            }
-            highlightStart={
-              expandedSegmentId ===
-              (line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id)
-                ? expandedHighlightStart
-                : undefined
-            }
-            highlightEnd={
-              expandedSegmentId ===
-              (line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id)
-                ? expandedHighlightEnd
-                : undefined
-            }
+            sourceTitle={getSourceTitle(relevantSentence)}
+            {...inlineProps}
             onJumpToConversation={makeJumpHandler(relevantSentence)}
           />
           {showSnippets && showChange && relevantSentence?.source_ref && (
@@ -806,17 +1005,255 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       );
     };
 
+    // ========================================================================
+    // Render: Document (readable) line
+    // ========================================================================
+
+    /** Track where the "removed" section starts in document view.
+     *  If a group-header immediately precedes the first removed line,
+     *  the divider should appear before that header. */
+    const firstRemovedIndex = useMemo(() => {
+      if (!isDocument) return -1;
+      const rawIdx = unifiedLines.findIndex((l) => l.type === 'removed');
+      if (rawIdx <= 0) return rawIdx;
+      // Move divider before the preceding group-header if any
+      if (unifiedLines[rawIdx - 1]?.type === 'group-header') {
+        return rawIdx - 1;
+      }
+      return rawIdx;
+    }, [unifiedLines, isDocument]);
+
+    const renderDocumentLine = (line: UnifiedLine, index: number) => {
+      if (line.type === 'group-header' && line.groupHeader) {
+        const showDividerBeforeHeader = index === firstRemovedIndex;
+        return (
+          <div key={`group-${index}`} data-line-index={index}>
+            {showDividerBeforeHeader && (
+              <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--stroke-divider)]">
+                <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
+                <span className="text-[10px] font-medium text-[var(--diff-removed-accent)]">
+                  Removed sentences
+                </span>
+                <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
+              </div>
+            )}
+            <DiffSourceGroupHeader
+              conversationId={line.groupHeader.conversationId}
+              conversationTitle={line.groupHeader.title}
+              sentenceCount={line.groupHeader.sentenceCount}
+              avgConfidence={line.groupHeader.avgConfidence}
+              isNewSource={line.groupHeader.isNewSource}
+              projectId={projectId || ''}
+              type={line.groupHeader.type}
+            />
+          </div>
+        );
+      }
+
+      // Document view doesn't use collapsed sections
+      if (line.type === 'collapsed') return null;
+
+      const sentence = line.targetSentence ?? line.baseSentence;
+      if (!sentence) return null;
+
+      const segId =
+        line.type === 'added' || line.type === 'modified' || line.type === 'context'
+          ? line.targetSentence
+            ? `target-${line.targetSentence.id}`
+            : line.baseSentence?.id
+          : line.baseSentence?.id;
+      const inlineProps = getInlineProps(segId);
+
+      // Status badge styles
+      const statusConfig = {
+        context: {
+          border: 'border-transparent',
+          bg: 'bg-[var(--surface-app)]',
+          badge: (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--text-tertiary)] border border-[var(--stroke-divider)]">
+              <Check className="h-2.5 w-2.5" />
+              Unchanged
+            </span>
+          ),
+        },
+        modified: {
+          border: 'border-[var(--diff-modified-line)]',
+          bg: 'bg-[var(--diff-modified-bg)]',
+          badge: (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--diff-modified-accent)] border border-[var(--diff-modified-line)]/30">
+              Modified
+            </span>
+          ),
+        },
+        added: {
+          border: 'border-[var(--diff-added-line)]',
+          bg: 'bg-[var(--diff-added-bg)]',
+          badge: (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--diff-added-accent)] border border-[var(--diff-added-line)]/30">
+              <Plus className="h-2.5 w-2.5" />
+              New
+            </span>
+          ),
+        },
+        removed: {
+          border: 'border-[var(--diff-removed-line)]',
+          bg: 'bg-[var(--diff-removed-bg)]',
+          badge: (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--diff-removed-accent)] border border-[var(--diff-removed-line)]/30">
+              <Minus className="h-2.5 w-2.5" />
+              Removed
+            </span>
+          ),
+        },
+      };
+
+      const lineType = line.type as keyof typeof statusConfig;
+      const config = statusConfig[lineType] ?? statusConfig.context;
+
+      // Render removed divider before first removed line
+      // (only if a group-header didn't already show it)
+      const showRemovedDivider = line.type === 'removed' && index === firstRemovedIndex;
+
+      return (
+        <div
+          key={`doc-${index}-${sentence.id}`}
+          data-line-index={index}
+          data-segment-id={sentence.id}
+        >
+          {showRemovedDivider && (
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--stroke-divider)]">
+              <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
+              <span className="text-[10px] font-medium text-[var(--diff-removed-accent)]">
+                Removed sentences
+              </span>
+              <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
+            </div>
+          )}
+
+          <div
+            className={`flex items-start gap-3 px-4 py-2.5 border-l-2 ${config.border} ${config.bg}`}
+          >
+            {/* Sentence text */}
+            <div className="flex-1 min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">
+              {line.type === 'modified' && line.wordDiff && line.wordDiff.length > 0 ? (
+                <WordDiffDisplay segments={line.wordDiff} />
+              ) : line.type === 'removed' ? (
+                <span className="line-through text-[var(--text-tertiary)]">{sentence.text}</span>
+              ) : (
+                sentence.text
+              )}
+            </div>
+
+            {/* Status badge */}
+            {config.badge}
+
+            {/* Source trace button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sentence.source_ref?.turn_hash) {
+                      const id = line.type === 'removed' ? sentence.id : `target-${sentence.id}`;
+                      handleSourceToggle(id, sentence, line.wordDiff);
+                    }
+                  }}
+                  disabled={!sentence.source_ref?.turn_hash}
+                  className={`shrink-0 p-1 rounded transition-colors ${
+                    sentence.source_ref?.turn_hash
+                      ? inlineProps.expanded
+                        ? 'text-[var(--accent-commit)] bg-[var(--hover-bg)]'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]'
+                      : 'text-[var(--text-tertiary)]/30 cursor-not-allowed'
+                  }`}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                {sentence.source_ref?.turn_hash ? (
+                  <div className="space-y-0.5">
+                    {getSourceTitle(sentence) && (
+                      <div className="font-medium text-[10px] opacity-70">
+                        From: {getSourceTitle(sentence)}
+                      </div>
+                    )}
+                    <div>
+                      {inlineProps.expanded
+                        ? 'Click to collapse source context'
+                        : 'Click to view source context'}
+                    </div>
+                  </div>
+                ) : (
+                  'No source reference available'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Inline source context */}
+          {inlineProps.expanded && inlineProps.turnHash && (
+            <div className="mx-2 mb-1">
+              <SourceContextView
+                turnHash={inlineProps.turnHash}
+                highlightStart={inlineProps.highlightStart}
+                highlightEnd={inlineProps.highlightEnd}
+                wordDiff={line.wordDiff}
+                contextData={inlineProps.inlineContextData}
+                autoFetch={false}
+                loading={inlineProps.inlineContextLoading}
+                showJumpLink={!!makeJumpHandler(sentence, line.wordDiff)}
+                onJumpClick={makeJumpHandler(sentence, line.wordDiff)}
+              />
+            </div>
+          )}
+
+          {/* Context snippet */}
+          {showSnippets && isChangeLine(line) && sentence.source_ref && (
+            <DiffContextSnippet
+              sentence={sentence}
+              onJumpToConversation={makeJumpHandler(sentence)}
+            />
+          )}
+        </div>
+      );
+    };
+
+    // ========================================================================
+    // Main Render
+    // ========================================================================
+
     const isUnified = viewMode === 'unified';
+
+    const renderLine = isDocument
+      ? renderDocumentLine
+      : isUnified
+        ? renderUnifiedLine
+        : renderSplitLine;
 
     return (
       <div className={cn('flex-1 overflow-auto', glass.reading)} ref={containerRef}>
         {/* Column Headers */}
-        {isUnified ? (
+        {isDocument ? (
           <div className="px-4 py-2 flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
-            <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0" title="Base line">
+            <FileText className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+            <span className="text-xs font-medium text-[var(--text-secondary)]">Document View</span>
+            {targetLabel && (
+              <span className="text-[10px] text-[var(--text-tertiary)]">{targetLabel}</span>
+            )}
+          </div>
+        ) : isUnified ? (
+          <div className="px-4 py-2 flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--glass-bg-reading)] sticky top-0 z-10">
+            <span
+              className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0"
+              title="Base line"
+            >
               {baseLabel || 'Base'}
             </span>
-            <span className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0" title="Target line">
+            <span
+              className="text-[10px] font-mono text-[var(--text-tertiary)]/50 w-8 text-right shrink-0"
+              title="Target line"
+            >
               {targetLabel || 'Target'}
             </span>
             <span className="w-4 shrink-0" />
@@ -864,9 +1301,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
         {/* Diff lines */}
         <div className="divide-y divide-[var(--stroke-divider)]">
-          {unifiedLines.map((line, i) =>
-            isUnified ? renderUnifiedLine(line, i) : renderSplitLine(line, i)
-          )}
+          {unifiedLines.map((line, i) => renderLine(line, i))}
         </div>
 
         {/* Empty state */}

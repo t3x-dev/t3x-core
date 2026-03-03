@@ -32,32 +32,16 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-import { TurnBubble } from '@/components/shared/TurnBubble';
-import type { Leaf, TurnContextData } from '@/lib/api';
-import * as api from '@/lib/api';
-import {
-  adjustHighlightsForTruncation,
-  checkContentIntegrity,
-  DEFAULT_CONTEXT_CHARS,
-  DEFAULT_MAX_LENGTH,
-  truncateLongContent,
-} from '@/lib/truncationUtils';
 import type {
-  ContentIntegrityStatus,
-  HighlightRange,
-  SentenceWithSource,
-  TurnBubbleData,
-} from '@/types/sourceContext';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Constants
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Maximum turn content length before truncation */
-const MAX_TURN_LENGTH = DEFAULT_MAX_LENGTH;
-/** Context chars to show around highlights in long turns */
-const TRUNCATION_CONTEXT = DEFAULT_CONTEXT_CHARS;
+  SentenceWithHighlight,
+  TurnWithHighlights,
+} from '@/components/shared/SourceConversationPanel';
+import { SourceConversationPanel } from '@/components/shared/SourceConversationPanel';
+import { SourceSentenceList } from '@/components/shared/SourceSentenceList';
+import type { Leaf } from '@/lib/api';
+import * as api from '@/lib/api';
+import { checkContentIntegrity } from '@/lib/truncationUtils';
+import type { ContentIntegrityStatus, SentenceWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types, keep local aliases for backward compatibility)
@@ -75,15 +59,6 @@ interface CommitSourceContextProps {
   defaultExpanded?: boolean;
   /** Commit-level source refs (V4) for identifying leaf sources */
   sourceRefs?: Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>;
-}
-
-/**
- * Sentence with source info and the expected text at that position
- */
-interface SentenceWithHighlight {
-  sentence: CommitSentence;
-  turnHash: string;
-  highlight: HighlightRange;
 }
 
 /**
@@ -169,20 +144,6 @@ interface LeafWithSentences {
   sentences: LeafSentence[];
   loading: boolean;
   error: string | null;
-}
-
-/**
- * Turn data with fetched context and highlights
- */
-interface TurnWithHighlights {
-  turnHash: string;
-  context: TurnContextData | null;
-  highlights: HighlightRange[];
-  sentences: SentenceWithHighlight[];
-  loading: boolean;
-  error: string | null;
-  /** Content integrity check results per sentence */
-  integrityStatus: Map<string, ContentIntegrityStatus>;
 }
 
 /**
@@ -619,21 +580,7 @@ export function CommitSourceContext({
             Legacy format
           </span>
         </div>
-        <ul className="space-y-[var(--space-item)]">
-          {sentences.map((s) => (
-            <li
-              key={s.id}
-              className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
-            >
-              <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                {s.id}
-              </span>
-              <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                {s.text}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <SourceSentenceList sentences={sentences} />
       </div>
     );
   }
@@ -679,21 +626,7 @@ export function CommitSourceContext({
             Source unavailable
           </span>
         </div>
-        <ul className="space-y-[var(--space-item)]">
-          {sentences.map((s) => (
-            <li
-              key={s.id}
-              className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
-            >
-              <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                {s.id}
-              </span>
-              <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                {s.text}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <SourceSentenceList sentences={sentences} />
       </div>
     );
   }
@@ -823,172 +756,14 @@ export function CommitSourceContext({
         )}
 
         {/* Direct sentences - Turns list */}
-        {hashesToRender.map((turnHash, idx) => {
-          const data = turnData.get(turnHash);
-          const isExpanded = expandedTurns.has(turnHash) || compact;
-
-          // Show error state with sentence fallback for this turn
-          if (!data || data.error) {
-            const sentencesForTurn = byTurn.get(turnHash) || [];
-            return (
-              <div
-                key={turnHash}
-                className="rounded-lg border border-[var(--color-border)] overflow-hidden"
-              >
-                {/* Collapsible header */}
-                <button
-                  type="button"
-                  onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
-                >
-                  {isExpanded ? (
-                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                  ) : (
-                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                  )}
-                  <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
-                    Turn {idx + 1}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-[var(--color-border)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">
-                    Source unavailable
-                  </span>
-                </button>
-
-                {/* Expanded content - show sentences */}
-                {isExpanded && (
-                  <div className="p-3 bg-[var(--color-bg-white)]">
-                    <ul className="space-y-[var(--space-item)]">
-                      {sentencesForTurn.map((sg) => (
-                        <li
-                          key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
-                        >
-                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                            {sg.sentence.id}
-                          </span>
-                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                            {sg.sentence.text}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          const targetTurn = data.context?.target_turn;
-          if (!targetTurn) return null;
-
-          // Check for content integrity issues in this turn
-          const turnHasIntegrityIssues = Array.from(data.integrityStatus.values()).includes(
-            'mismatch'
-          );
-
-          // Check if turn content is very long and needs truncation
-          const isLongTurn = targetTurn.content.length > MAX_TURN_LENGTH;
-
-          // In compact mode, always truncate long turns; otherwise only truncate when collapsed
-          const shouldTruncate = isLongTurn && (compact || !expandedTurns.has(turnHash));
-
-          // Convert to TurnBubbleData with highlights
-          const truncationOptions = {
-            maxLength: MAX_TURN_LENGTH,
-            contextChars: TRUNCATION_CONTEXT,
-          };
-          const turnBubbleData: TurnBubbleData = {
-            turn_hash: targetTurn.turn_hash,
-            role: targetTurn.role,
-            content: shouldTruncate
-              ? truncateLongContent(targetTurn.content, data.highlights, truncationOptions)
-              : targetTurn.content,
-            created_at: targetTurn.created_at,
-            is_target: true,
-            highlights: shouldTruncate
-              ? adjustHighlightsForTruncation(
-                  data.highlights,
-                  targetTurn.content,
-                  truncationOptions
-                )
-              : data.highlights,
-          };
-
-          return (
-            <div
-              key={turnHash}
-              className="rounded-lg border border-[var(--color-border)] overflow-hidden"
-            >
-              {/* Collapsible header (not shown in compact mode for single turn) */}
-              {!compact && (
-                <button
-                  type="button"
-                  onClick={() => toggleSection(turnHash)}
-                  className="w-full flex items-center gap-2 p-2 bg-[var(--color-bg-subtle)] hover:bg-[var(--hover-bg)] transition-colors text-left"
-                >
-                  {isExpanded ? (
-                    <ChevronDown size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                  ) : (
-                    <ChevronRight size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                  )}
-                  <span className="flex-1 text-sm text-[var(--color-text-secondary)]">
-                    {data.context?.conversation_title || `Turn ${idx + 1}`}
-                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                      ({targetTurn.role})
-                    </span>
-                  </span>
-                  {turnHasIntegrityIssues && (
-                    <span
-                      className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
-                      title="Source content may have changed"
-                    >
-                      <AlertTriangle size={10} />
-                      Changed
-                    </span>
-                  )}
-                  {isLongTurn && (
-                    <span className="px-1.5 py-0.5 bg-[var(--status-info-muted)] text-[var(--status-info)] text-[0.65rem] rounded">
-                      Long turn
-                    </span>
-                  )}
-                  <span className="text-xs text-[var(--color-text-muted)]">
-                    {data.sentences.length} sentence{data.sentences.length !== 1 ? 's' : ''}
-                  </span>
-                </button>
-              )}
-
-              {/* Expanded content */}
-              {isExpanded && (
-                <div className="p-2 bg-[var(--color-bg-white)]">
-                  <TurnBubble turn={turnBubbleData} highlightColor="green" showTargetRing={false} />
-
-                  {/* Content integrity warning */}
-                  {turnHasIntegrityIssues && (
-                    <div className="mt-2 p-2 bg-[var(--status-warning-muted)] rounded border border-[var(--status-warning)]/25">
-                      <div className="flex items-start gap-2 text-[var(--status-warning)] text-xs">
-                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Source may have changed</p>
-                          <p className="text-[var(--status-warning)] mt-0.5">
-                            The highlighted text positions may not match the original content.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Long turn indicator - shown when truncated in compact mode */}
-                  {shouldTruncate && (
-                    <div className="mt-2 text-center text-xs text-[var(--color-text-muted)]">
-                      Showing truncated content ({targetTurn.content.length.toLocaleString()} chars
-                      total)
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <SourceConversationPanel
+          turnHashes={turnHashes}
+          turnData={turnData}
+          byTurn={byTurn}
+          expandedTurns={expandedTurns}
+          toggleSection={toggleSection}
+          compact={compact}
+        />
 
         {/* Leaf sections */}
         {leafIdsToRender.map((leafId) => {
@@ -1030,21 +805,10 @@ export function CommitSourceContext({
                 </button>
                 {isExpanded && sentencesForLeaf.length > 0 && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
-                    <ul className="space-y-[var(--space-item)]">
-                      {sentencesForLeaf.map((sg) => (
-                        <li
-                          key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
-                        >
-                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                            {sg.sentence.id}
-                          </span>
-                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                            {sg.sentence.text}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <SourceSentenceList
+                      sentences={sentencesForLeaf.map((sg) => sg.sentence)}
+                      variant="highlighted"
+                    />
                   </div>
                 )}
               </div>
@@ -1090,21 +854,10 @@ export function CommitSourceContext({
                   {leafOutput ? (
                     <LeafOutputWithHighlights output={leafOutput} sentences={sentencesForLeaf} />
                   ) : (
-                    <ul className="space-y-[var(--space-item)]">
-                      {sentencesForLeaf.map((sg) => (
-                        <li
-                          key={sg.sentence.id}
-                          className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
-                        >
-                          <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                            {sg.sentence.id}
-                          </span>
-                          <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                            {sg.sentence.text}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <SourceSentenceList
+                      sentences={sentencesForLeaf.map((sg) => sg.sentence)}
+                      variant="highlighted"
+                    />
                   )}
                 </div>
               )}
@@ -1131,21 +884,7 @@ export function CommitSourceContext({
                 Legacy
               </span>
             </div>
-            <ul className="space-y-1">
-              {unresolvedSentences.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
-                >
-                  <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                    {s.id}
-                  </span>
-                  <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                    {s.text}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <SourceSentenceList sentences={unresolvedSentences} />
           </div>
         )}
       </div>

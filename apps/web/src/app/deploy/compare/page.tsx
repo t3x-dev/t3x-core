@@ -552,16 +552,16 @@ function ComparePageContent() {
   const canCompare = controlConfig && treatmentConfig;
 
   return (
-    <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
-      {/* Header */}
-      <header className="flex items-center justify-between">
+    <div className="flex h-full flex-col">
+      {/* Fixed Header */}
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => router.push('/deploy')}>
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
-          <div className="h-4 w-px bg-border" />
-          <h1 className="text-lg font-semibold">
+          <div className="h-4 w-px bg-[var(--stroke-divider)]" />
+          <h1 className="text-[14px] font-semibold text-[var(--text-primary)]">
             {savedSnapshotId ? 'Saved Comparison' : 'A/B Test Comparison'}
           </h1>
           {savedSnapshotId && (
@@ -658,501 +658,515 @@ function ComparePageContent() {
         </div>
       </header>
 
-      {/* Save Dialog */}
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Comparison</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="Comparison title"
-            value={saveTitle}
-            onChange={(e) => setSaveTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && saveTitle.trim()) handleSave();
-            }}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving || !saveTitle.trim()}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-auto p-[var(--space-page)]">
+        <div className="flex flex-col gap-[var(--space-section)]">
+          {/* Save Dialog */}
+          <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Save Comparison</DialogTitle>
+              </DialogHeader>
+              <Input
+                placeholder="Comparison title"
+                value={saveTitle}
+                onChange={(e) => setSaveTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && saveTitle.trim()) handleSave();
+                }}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={saving || !saveTitle.trim()}>
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* Loading configurations */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
+          {/* Loading configurations */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
 
-      {/* Configuration Selectors */}
-      {!loading && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <ConfigSelector
-            slot="a"
-            selectedConfig={controlConfig}
-            label="Control (Baseline)"
-            badgeColor="bg-blue-500/10 text-[var(--status-info)] border-blue-500/30"
-          />
-          <ConfigSelector
-            slot="b"
-            selectedConfig={treatmentConfig}
-            label="Treatment (Variant)"
-            badgeColor="bg-green-500/10 text-[var(--status-success)] border-green-500/30"
-          />
-        </div>
-      )}
+          {/* Configuration Selectors */}
+          {!loading && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <ConfigSelector
+                slot="a"
+                selectedConfig={controlConfig}
+                label="Control (Baseline)"
+                badgeColor="bg-blue-500/10 text-[var(--status-info)] border-blue-500/30"
+              />
+              <ConfigSelector
+                slot="b"
+                selectedConfig={treatmentConfig}
+                label="Treatment (Variant)"
+                badgeColor="bg-green-500/10 text-[var(--status-success)] border-green-500/30"
+              />
+            </div>
+          )}
 
-      {/* Comparing loading state */}
-      {comparing && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Calculating statistics...</span>
-        </div>
-      )}
+          {/* Comparing loading state */}
+          {comparing && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Calculating statistics...</span>
+            </div>
+          )}
 
-      {/* Error State */}
-      {error && (
-        <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="py-6 text-center text-[var(--status-error)]">{error}</CardContent>
-        </Card>
-      )}
+          {/* Error State */}
+          {error && (
+            <Card className="border-red-500/30 bg-red-500/5">
+              <CardContent className="py-6 text-center text-[var(--status-error)]">
+                {error}
+              </CardContent>
+            </Card>
+          )}
 
-      {/* Comparison Results */}
-      {!comparing && comparisonResult && (
-        <>
-          {/* Statistical Comparison Table */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span>Statistical Comparison</span>
-                {isWinner && (
-                  <Badge className="bg-green-500/10 text-[var(--status-success)] border-green-500/30">
-                    <Trophy className="h-3 w-3 mr-1" />
-                    Treatment (B) wins
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b text-left text-sm">
-                      <th className="pb-3 font-medium">Metric</th>
-                      <th className="pb-3 font-medium text-center">
-                        <span className="inline-flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-blue-500" />
-                          Control (A)
-                        </span>
-                      </th>
-                      <th className="pb-3 font-medium text-center">
-                        <span className="inline-flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-green-500" />
-                          Treatment (B)
-                        </span>
-                      </th>
-                      <th className="pb-3 font-medium text-center">Delta</th>
-                      <th className="pb-3 font-medium text-center">95% CI</th>
-                      <th className="pb-3 font-medium text-center">p-value</th>
-                      <th className="pb-3 font-medium text-center">Sig.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Pass Rate */}
-                    {(() => {
-                      const controlCI = calculateProportionCI(
-                        comparisonResult.control.pass_rate,
-                        comparisonResult.control.run_count
-                      );
-                      const treatmentCI = calculateProportionCI(
-                        comparisonResult.treatment.pass_rate,
-                        comparisonResult.treatment.run_count
-                      );
-                      return (
-                        <tr className="border-b">
-                          <td className="py-3 text-sm font-medium">Pass Rate</td>
-                          <td className="py-3 text-center">
-                            <div className="font-mono text-sm">
-                              {Math.round(comparisonResult.control.pass_rate * 100)}%
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              ({formatCI(controlCI)})
-                            </div>
-                          </td>
-                          <td className="py-3 text-center">
-                            <div className="font-mono text-sm">
-                              {Math.round(comparisonResult.treatment.pass_rate * 100)}%
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              ({formatCI(treatmentCI)})
-                            </div>
-                          </td>
-                          <td className="py-3 text-center">
-                            <MetricsDelta
-                              v1={comparisonResult.control.pass_rate}
-                              v2={comparisonResult.treatment.pass_rate}
-                            />
-                          </td>
-                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                            {formatCI([
-                              treatmentCI[0] - controlCI[1],
-                              treatmentCI[1] - controlCI[0],
-                            ])}
-                          </td>
-                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                            {comparisonResult.comparison.pass_rate.pValue.toFixed(3)}
-                          </td>
-                          <td className="py-3 text-center">
-                            {comparisonResult.comparison.pass_rate.isSignificant ? (
-                              <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">─</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })()}
-
-                    {/* Avg Score */}
-                    {(() => {
-                      const controlCI = calculateMeanCI(
-                        comparisonResult.control.avg_score,
-                        comparisonResult.control.run_count
-                      );
-                      const treatmentCI = calculateMeanCI(
-                        comparisonResult.treatment.avg_score,
-                        comparisonResult.treatment.run_count
-                      );
-                      return (
-                        <tr className="border-b">
-                          <td className="py-3 text-sm font-medium">Avg Score</td>
-                          <td className="py-3 text-center">
-                            <div className="font-mono text-sm">
-                              {comparisonResult.control.avg_score.toFixed(2)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              ({formatCI(controlCI, false)})
-                            </div>
-                          </td>
-                          <td className="py-3 text-center">
-                            <div className="font-mono text-sm">
-                              {comparisonResult.treatment.avg_score.toFixed(2)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              ({formatCI(treatmentCI, false)})
-                            </div>
-                          </td>
-                          <td className="py-3 text-center">
-                            <MetricsDelta
-                              v1={comparisonResult.control.avg_score}
-                              v2={comparisonResult.treatment.avg_score}
-                            />
-                          </td>
-                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                            {formatCI(
-                              [treatmentCI[0] - controlCI[1], treatmentCI[1] - controlCI[0]],
-                              false
-                            )}
-                          </td>
-                          <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                            {comparisonResult.comparison.avg_score.pValue.toFixed(3)}
-                          </td>
-                          <td className="py-3 text-center">
-                            {comparisonResult.comparison.avg_score.isSignificant ? (
-                              <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">─</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })()}
-
-                    {/* Avg Latency */}
-                    <tr className="border-b">
-                      <td className="py-3 text-sm font-medium">Avg Latency</td>
-                      <td className="py-3 text-center font-mono text-sm">
-                        {formatLatency(comparisonResult.control.avg_latency_ms)}
-                      </td>
-                      <td className="py-3 text-center font-mono text-sm">
-                        {formatLatency(comparisonResult.treatment.avg_latency_ms)}
-                      </td>
-                      <td className="py-3 text-center">
-                        <span
-                          className={cn(
-                            'text-xs font-mono',
-                            comparisonResult.comparison.avg_latency.delta < 0
-                              ? 'text-[var(--status-success)]'
-                              : comparisonResult.comparison.avg_latency.delta > 0
-                                ? 'text-[var(--status-error)]'
-                                : 'text-muted-foreground'
-                          )}
-                        >
-                          {comparisonResult.comparison.avg_latency.delta > 0 ? '+' : ''}
-                          {formatLatency(comparisonResult.comparison.avg_latency.delta)}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                    </tr>
-
-                    {/* Avg Tokens */}
-                    <tr className="border-b last:border-0">
-                      <td className="py-3 text-sm font-medium">Avg Tokens</td>
-                      <td className="py-3 text-center font-mono text-sm">
-                        {Math.round(comparisonResult.control.avg_tokens)}
-                      </td>
-                      <td className="py-3 text-center font-mono text-sm">
-                        {Math.round(comparisonResult.treatment.avg_tokens)}
-                      </td>
-                      <td className="py-3 text-center">
-                        <span
-                          className={cn(
-                            'text-xs font-mono',
-                            comparisonResult.comparison.avg_tokens.delta < 0
-                              ? 'text-[var(--status-success)]'
-                              : comparisonResult.comparison.avg_tokens.delta > 0
-                                ? 'text-[var(--status-error)]'
-                                : 'text-muted-foreground'
-                          )}
-                        >
-                          {comparisonResult.comparison.avg_tokens.delta > 0 ? '+' : ''}
-                          {Math.round(comparisonResult.comparison.avg_tokens.delta)}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                      <td className="py-3 text-center text-xs text-muted-foreground">─</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Sample size warning */}
-              {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
-                !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
-                <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-[var(--status-warning)]">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    Sample size may be insufficient for reliable significance detection
-                    (recommended: n &ge; 30 per group)
-                  </span>
-                </div>
-              )}
-
-              {/* Significance note */}
-              <p className="mt-4 text-xs text-muted-foreground">
-                * Statistical significance: p &lt; 0.05. Pass rate: two-proportion z-test; Avg
-                score: Welch's t-test. CI = 95% confidence interval (Wilson score for proportions).
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Individual Runs Section */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span>Individual Runs</span>
-                <div className="flex gap-1">
-                  <Button
-                    variant={runFilter === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setRunFilter('all')}
-                  >
-                    All
-                  </Button>
-                  <Button
-                    variant={runFilter === 'a' ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn(
-                      'h-7 px-2 text-xs',
-                      runFilter === 'a' && 'bg-[var(--status-info)] hover:bg-[var(--status-info)]'
+          {/* Comparison Results */}
+          {!comparing && comparisonResult && (
+            <>
+              {/* Statistical Comparison Table */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Statistical Comparison</span>
+                    {isWinner && (
+                      <Badge className="bg-green-500/10 text-[var(--status-success)] border-green-500/30">
+                        <Trophy className="h-3 w-3 mr-1" />
+                        Treatment (B) wins
+                      </Badge>
                     )}
-                    onClick={() => setRunFilter('a')}
-                  >
-                    <span className="h-2 w-2 rounded-full bg-blue-400 mr-1" />A
-                  </Button>
-                  <Button
-                    variant={runFilter === 'b' ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn(
-                      'h-7 px-2 text-xs',
-                      runFilter === 'b' &&
-                        'bg-[var(--status-success)] hover:bg-[var(--status-success)]'
-                    )}
-                    onClick={() => setRunFilter('b')}
-                  >
-                    <span className="h-2 w-2 rounded-full bg-green-400 mr-1" />B
-                  </Button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingRuns ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">Loading runs...</span>
-                </div>
-              ) : (
-                (() => {
-                  // Combine and filter runs based on selection
-                  const taggedControlRuns = controlRuns.map((r) => ({
-                    ...r,
-                    group: 'a' as const,
-                  }));
-                  const taggedTreatmentRuns = treatmentRuns.map((r) => ({
-                    ...r,
-                    group: 'b' as const,
-                  }));
-
-                  let combinedRuns =
-                    runFilter === 'a'
-                      ? taggedControlRuns
-                      : runFilter === 'b'
-                        ? taggedTreatmentRuns
-                        : [...taggedControlRuns, ...taggedTreatmentRuns];
-
-                  // Sort by created_at descending
-                  combinedRuns = combinedRuns.sort(
-                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                  );
-
-                  // Limit to 10 runs
-                  combinedRuns = combinedRuns.slice(0, 10);
-
-                  if (combinedRuns.length === 0) {
-                    return (
-                      <div className="py-8 text-center text-sm text-muted-foreground">
-                        No runs found for the selected configurations
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">Group</TableHead>
-                          <TableHead>Run ID</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Score</TableHead>
-                          <TableHead className="text-right">Latency</TableHead>
-                          <TableHead>Time</TableHead>
-                          <TableHead className="w-20">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {combinedRuns.map((run) => {
-                          const metrics = getRunMetrics(run);
-                          return (
-                            <TableRow
-                              key={run.run_id}
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => router.push(`/deploy/eval/${run.run_id}`)}
-                            >
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-xs',
-                                    run.group === 'a'
-                                      ? 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30'
-                                      : 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
-                                  )}
-                                >
-                                  {run.group.toUpperCase()}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <code className="text-xs">{run.run_id.slice(0, 12)}...</code>
-                              </TableCell>
-                              <TableCell>
-                                {metrics.passed !== null ? (
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      metrics.passed
-                                        ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
-                                        : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
-                                    )}
-                                  >
-                                    {metrics.passed ? 'passed' : 'failed'}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-muted-foreground">
-                                    {run.status}
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-sm">
-                                {metrics.score !== null ? (
-                                  <span
-                                    className={
-                                      metrics.passed
-                                        ? 'text-[var(--status-success)]'
-                                        : 'text-[var(--status-error)]'
-                                    }
-                                  >
-                                    {formatScore(metrics.score)}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                                {formatLatency(metrics.latencyMs ?? 0)}
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                {new Date(run.created_at).toLocaleString()}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    router.push(`/deploy/eval/${run.run_id}`);
-                                  }}
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b text-left text-sm">
+                          <th className="pb-3 font-medium">Metric</th>
+                          <th className="pb-3 font-medium text-center">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="h-2 w-2 rounded-full bg-blue-500" />
+                              Control (A)
+                            </span>
+                          </th>
+                          <th className="pb-3 font-medium text-center">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Treatment (B)
+                            </span>
+                          </th>
+                          <th className="pb-3 font-medium text-center">Delta</th>
+                          <th className="pb-3 font-medium text-center">95% CI</th>
+                          <th className="pb-3 font-medium text-center">p-value</th>
+                          <th className="pb-3 font-medium text-center">Sig.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Pass Rate */}
+                        {(() => {
+                          const controlCI = calculateProportionCI(
+                            comparisonResult.control.pass_rate,
+                            comparisonResult.control.run_count
                           );
-                        })}
-                      </TableBody>
-                    </Table>
-                  );
-                })()
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+                          const treatmentCI = calculateProportionCI(
+                            comparisonResult.treatment.pass_rate,
+                            comparisonResult.treatment.run_count
+                          );
+                          return (
+                            <tr className="border-b">
+                              <td className="py-3 text-sm font-medium">Pass Rate</td>
+                              <td className="py-3 text-center">
+                                <div className="font-mono text-sm">
+                                  {Math.round(comparisonResult.control.pass_rate * 100)}%
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  ({formatCI(controlCI)})
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <div className="font-mono text-sm">
+                                  {Math.round(comparisonResult.treatment.pass_rate * 100)}%
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  ({formatCI(treatmentCI)})
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <MetricsDelta
+                                  v1={comparisonResult.control.pass_rate}
+                                  v2={comparisonResult.treatment.pass_rate}
+                                />
+                              </td>
+                              <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                                {formatCI([
+                                  treatmentCI[0] - controlCI[1],
+                                  treatmentCI[1] - controlCI[0],
+                                ])}
+                              </td>
+                              <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                                {comparisonResult.comparison.pass_rate.pValue.toFixed(3)}
+                              </td>
+                              <td className="py-3 text-center">
+                                {comparisonResult.comparison.pass_rate.isSignificant ? (
+                                  <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">─</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })()}
 
-      {/* Empty State */}
-      {!loading && !comparing && !canCompare && (
-        <Card>
-          <CardContent className="flex h-64 flex-col items-center justify-center text-center">
-            <ArrowLeftRight className="mb-[var(--space-group)] h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
-            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Choose a control configuration (A) and a treatment configuration (B) from the
-              dropdowns above to see an A/B test comparison with statistical significance.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+                        {/* Avg Score */}
+                        {(() => {
+                          const controlCI = calculateMeanCI(
+                            comparisonResult.control.avg_score,
+                            comparisonResult.control.run_count
+                          );
+                          const treatmentCI = calculateMeanCI(
+                            comparisonResult.treatment.avg_score,
+                            comparisonResult.treatment.run_count
+                          );
+                          return (
+                            <tr className="border-b">
+                              <td className="py-3 text-sm font-medium">Avg Score</td>
+                              <td className="py-3 text-center">
+                                <div className="font-mono text-sm">
+                                  {comparisonResult.control.avg_score.toFixed(2)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  ({formatCI(controlCI, false)})
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <div className="font-mono text-sm">
+                                  {comparisonResult.treatment.avg_score.toFixed(2)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  ({formatCI(treatmentCI, false)})
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <MetricsDelta
+                                  v1={comparisonResult.control.avg_score}
+                                  v2={comparisonResult.treatment.avg_score}
+                                />
+                              </td>
+                              <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                                {formatCI(
+                                  [treatmentCI[0] - controlCI[1], treatmentCI[1] - controlCI[0]],
+                                  false
+                                )}
+                              </td>
+                              <td className="py-3 text-center font-mono text-xs text-muted-foreground">
+                                {comparisonResult.comparison.avg_score.pValue.toFixed(3)}
+                              </td>
+                              <td className="py-3 text-center">
+                                {comparisonResult.comparison.avg_score.isSignificant ? (
+                                  <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] mx-auto" />
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">─</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })()}
+
+                        {/* Avg Latency */}
+                        <tr className="border-b">
+                          <td className="py-3 text-sm font-medium">Avg Latency</td>
+                          <td className="py-3 text-center font-mono text-sm">
+                            {formatLatency(comparisonResult.control.avg_latency_ms)}
+                          </td>
+                          <td className="py-3 text-center font-mono text-sm">
+                            {formatLatency(comparisonResult.treatment.avg_latency_ms)}
+                          </td>
+                          <td className="py-3 text-center">
+                            <span
+                              className={cn(
+                                'text-xs font-mono',
+                                comparisonResult.comparison.avg_latency.delta < 0
+                                  ? 'text-[var(--status-success)]'
+                                  : comparisonResult.comparison.avg_latency.delta > 0
+                                    ? 'text-[var(--status-error)]'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {comparisonResult.comparison.avg_latency.delta > 0 ? '+' : ''}
+                              {formatLatency(comparisonResult.comparison.avg_latency.delta)}
+                            </span>
+                          </td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                        </tr>
+
+                        {/* Avg Tokens */}
+                        <tr className="border-b last:border-0">
+                          <td className="py-3 text-sm font-medium">Avg Tokens</td>
+                          <td className="py-3 text-center font-mono text-sm">
+                            {Math.round(comparisonResult.control.avg_tokens)}
+                          </td>
+                          <td className="py-3 text-center font-mono text-sm">
+                            {Math.round(comparisonResult.treatment.avg_tokens)}
+                          </td>
+                          <td className="py-3 text-center">
+                            <span
+                              className={cn(
+                                'text-xs font-mono',
+                                comparisonResult.comparison.avg_tokens.delta < 0
+                                  ? 'text-[var(--status-success)]'
+                                  : comparisonResult.comparison.avg_tokens.delta > 0
+                                    ? 'text-[var(--status-error)]'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {comparisonResult.comparison.avg_tokens.delta > 0 ? '+' : ''}
+                              {Math.round(comparisonResult.comparison.avg_tokens.delta)}
+                            </span>
+                          </td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                          <td className="py-3 text-center text-xs text-muted-foreground">─</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Sample size warning */}
+                  {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
+                    !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
+                    <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-[var(--status-warning)]">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>
+                        Sample size may be insufficient for reliable significance detection
+                        (recommended: n &ge; 30 per group)
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Significance note */}
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    * Statistical significance: p &lt; 0.05. Pass rate: two-proportion z-test; Avg
+                    score: Welch's t-test. CI = 95% confidence interval (Wilson score for
+                    proportions).
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Individual Runs Section */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Individual Runs</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant={runFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setRunFilter('all')}
+                      >
+                        All
+                      </Button>
+                      <Button
+                        variant={runFilter === 'a' ? 'default' : 'outline'}
+                        size="sm"
+                        className={cn(
+                          'h-7 px-2 text-xs',
+                          runFilter === 'a' &&
+                            'bg-[var(--status-info)] hover:bg-[var(--status-info)]'
+                        )}
+                        onClick={() => setRunFilter('a')}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-blue-400 mr-1" />A
+                      </Button>
+                      <Button
+                        variant={runFilter === 'b' ? 'default' : 'outline'}
+                        size="sm"
+                        className={cn(
+                          'h-7 px-2 text-xs',
+                          runFilter === 'b' &&
+                            'bg-[var(--status-success)] hover:bg-[var(--status-success)]'
+                        )}
+                        onClick={() => setRunFilter('b')}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-green-400 mr-1" />B
+                      </Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingRuns ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">Loading runs...</span>
+                    </div>
+                  ) : (
+                    (() => {
+                      // Combine and filter runs based on selection
+                      const taggedControlRuns = controlRuns.map((r) => ({
+                        ...r,
+                        group: 'a' as const,
+                      }));
+                      const taggedTreatmentRuns = treatmentRuns.map((r) => ({
+                        ...r,
+                        group: 'b' as const,
+                      }));
+
+                      let combinedRuns =
+                        runFilter === 'a'
+                          ? taggedControlRuns
+                          : runFilter === 'b'
+                            ? taggedTreatmentRuns
+                            : [...taggedControlRuns, ...taggedTreatmentRuns];
+
+                      // Sort by created_at descending
+                      combinedRuns = combinedRuns.sort(
+                        (a, b) =>
+                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                      );
+
+                      // Limit to 10 runs
+                      combinedRuns = combinedRuns.slice(0, 10);
+
+                      if (combinedRuns.length === 0) {
+                        return (
+                          <div className="py-8 text-center text-sm text-muted-foreground">
+                            No runs found for the selected configurations
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-12">Group</TableHead>
+                              <TableHead>Run ID</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Score</TableHead>
+                              <TableHead className="text-right">Latency</TableHead>
+                              <TableHead>Time</TableHead>
+                              <TableHead className="w-20">Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {combinedRuns.map((run) => {
+                              const metrics = getRunMetrics(run);
+                              return (
+                                <TableRow
+                                  key={run.run_id}
+                                  className="cursor-pointer hover:bg-muted/50"
+                                  onClick={() => router.push(`/deploy/eval/${run.run_id}`)}
+                                >
+                                  <TableCell>
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-xs',
+                                        run.group === 'a'
+                                          ? 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30'
+                                          : 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
+                                      )}
+                                    >
+                                      {run.group.toUpperCase()}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <code className="text-xs">{run.run_id.slice(0, 12)}...</code>
+                                  </TableCell>
+                                  <TableCell>
+                                    {metrics.passed !== null ? (
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          metrics.passed
+                                            ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
+                                            : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+                                        )}
+                                      >
+                                        {metrics.passed ? 'passed' : 'failed'}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-muted-foreground">
+                                        {run.status}
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-sm">
+                                    {metrics.score !== null ? (
+                                      <span
+                                        className={
+                                          metrics.passed
+                                            ? 'text-[var(--status-success)]'
+                                            : 'text-[var(--status-error)]'
+                                        }
+                                      >
+                                        {formatScore(metrics.score)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                                    {formatLatency(metrics.latencyMs ?? 0)}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {new Date(run.created_at).toLocaleString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        router.push(`/deploy/eval/${run.run_id}`);
+                                      }}
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      );
+                    })()
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Empty State */}
+          {!loading && !comparing && !canCompare && (
+            <Card>
+              <CardContent className="flex h-64 flex-col items-center justify-center text-center">
+                <ArrowLeftRight className="mb-[var(--space-group)] h-12 w-12 text-muted-foreground/50" />
+                <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Choose a control configuration (A) and a treatment configuration (B) from the
+                  dropdowns above to see an A/B test comparison with statistical significance.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

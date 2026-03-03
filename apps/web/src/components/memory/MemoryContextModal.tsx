@@ -381,8 +381,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
         <div className="flex flex-1 min-h-0 mt-2 border-t border-[var(--stroke-default)] overflow-hidden">
           {/* Left panel: List */}
           <div
-            className="w-[320px] shrink-0 border-r border-[var(--stroke-default)] flex flex-col"
-            style={{ background: 'oklch(0.15 0.008 260 / 85%)' }}
+            className="w-[320px] shrink-0 border-r border-[var(--stroke-default)] flex flex-col bg-[var(--surface-panel)]"
           >
             <Tabs defaultValue="conversations" className="flex-1 min-h-0 flex flex-col">
               <TabsList className="w-full justify-start rounded-none border-b border-[var(--stroke-divider)] bg-transparent px-2 pt-2 h-auto">

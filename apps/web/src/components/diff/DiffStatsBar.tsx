@@ -1,6 +1,15 @@
 'use client';
 
-import { AlignJustify, Check, Columns2, Minus, Paperclip, Pencil, Plus } from 'lucide-react';
+import {
+  AlignJustify,
+  Check,
+  Columns2,
+  FileText,
+  Minus,
+  Paperclip,
+  Pencil,
+  Plus,
+} from 'lucide-react';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
@@ -12,8 +21,8 @@ interface DiffStatsBarProps {
   removed: number;
   onJump?: (section: string) => void;
   /** View mode toggle (page mode only) */
-  viewMode?: 'split' | 'unified';
-  onViewModeChange?: (mode: 'split' | 'unified') => void;
+  viewMode?: 'split' | 'unified' | 'document';
+  onViewModeChange?: (mode: 'split' | 'unified' | 'document') => void;
   /** Context snippets toggle (page mode only) */
   showSnippets?: boolean;
   onToggleSnippets?: () => void;
@@ -111,9 +120,22 @@ export function DiffStatsBar({
         <div className="inline-flex rounded-md border border-[var(--stroke-divider)] overflow-hidden">
           <button
             type="button"
-            onClick={() => onViewModeChange('split')}
+            onClick={() => onViewModeChange('document')}
             className={cn(
               'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors',
+              viewMode === 'document'
+                ? 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+            title="Document view"
+          >
+            <FileText className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewModeChange('split')}
+            className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors border-l border-[var(--stroke-divider)]',
               viewMode === 'split'
                 ? 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
                 : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'

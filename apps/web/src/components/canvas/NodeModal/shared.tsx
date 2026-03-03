@@ -375,7 +375,9 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
             >
               <div
                 className={cn('w-1 self-stretch rounded-full shrink-0', barColor)}
-                title={confidence !== undefined ? `Confidence: ${confidence.toFixed(2)}` : undefined}
+                title={
+                  confidence !== undefined ? `Confidence: ${confidence.toFixed(2)}` : undefined
+                }
               />
               <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
