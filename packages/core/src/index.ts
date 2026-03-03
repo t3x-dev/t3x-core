@@ -231,6 +231,8 @@ export {
   createGoogleAIEmbeddingProvider,
   // NLP Provider (Google Cloud)
   createGoogleCloudNLPProvider,
+  // NLP Provider (Local fallback)
+  createLocalNLPProvider,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -251,6 +253,8 @@ export {
   type GoogleCloudNLPConfig,
   // NLP Provider (implementations)
   GoogleCloudNLPProvider,
+  LocalNLPProvider,
+  type LocalNLPProviderConfig,
   type NLPAnalysis,
   type NLPEntity,
   type NLPProvider,

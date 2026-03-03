@@ -139,6 +139,22 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         )}
       </div>
 
+      {/* Identical sentences (gray stripe) */}
+      {identical.map((s) => (
+        <div
+          key={`id-${s.id}`}
+          className="rounded-md border-l-4 border-gray-400 bg-gray-50 dark:bg-gray-900/20 px-3 py-2 text-sm"
+        >
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 mb-1 text-gray-500 dark:text-gray-400"
+          >
+            Identical
+          </Badge>
+          <span className="text-muted-foreground">{s.text}</span>
+        </div>
+      ))}
+
       {/* Equivalent pairs (high similarity, green stripe) */}
       {equivalent.map((pair) => (
         <div
@@ -155,19 +171,22 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         </div>
       ))}
 
-      {/* Added sentences */}
+      {/* Added sentences (green-accent stripe) */}
       {onlyInTarget.map((s) => (
-        <div key={s.id} className="rounded-md bg-[var(--diff-added-muted)] px-3 py-2 text-sm">
+        <div
+          key={s.id}
+          className="rounded-md border-l-4 border-[var(--diff-added-accent)] bg-[var(--diff-added-bg)] px-3 py-2 text-sm"
+        >
           <span className="text-[var(--diff-added-accent)] font-medium mr-2">+</span>
           {s.text}
         </div>
       ))}
 
-      {/* Removed sentences */}
+      {/* Removed sentences (red-accent stripe) */}
       {onlyInSource.map((s) => (
         <div
           key={s.id}
-          className="rounded-md bg-[var(--diff-removed-muted)] px-3 py-2 text-sm line-through opacity-75"
+          className="rounded-md border-l-4 border-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)] px-3 py-2 text-sm line-through opacity-75"
         >
           <span className="text-[var(--diff-removed-accent)] font-medium mr-2">-</span>
           {s.text}
@@ -178,7 +197,7 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       {similar.map((pair) => (
         <div
           key={`mod-${pair.source.id}-${pair.target.id}`}
-          className="rounded-md border-l-4 border-amber-500 bg-[var(--diff-modified-muted)] px-3 py-2 text-sm"
+          className="rounded-md border-l-4 border-amber-500 bg-[var(--diff-modified-bg)] px-3 py-2 text-sm"
         >
           <Badge
             variant="outline"
