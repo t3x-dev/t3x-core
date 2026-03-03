@@ -9,7 +9,7 @@
  * This module implements L2/L3 verification.
  */
 
-import type { CommitV4 } from '@t3x/core';
+import { buildMerkleTree, type CommitV4 } from '@t3x/core';
 import type { AnyDB } from '../adapters';
 import { computeCommitV4Hash, findCommitsV4ByProject } from '../queries';
 
@@ -35,6 +35,8 @@ export interface VerifyChainResult {
     parent_not_found: string[];
     other: string[];
   };
+  /** Merkle root per commit: commit_hash → merkle_root */
+  merkle_roots: Record<string, string>;
   verified_at: string;
 }
 
@@ -60,6 +62,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       verified_depth: 0,
       entry_points: 0,
       errors: { hash_mismatch: [], parent_not_found: [], other: [] },
+      merkle_roots: {},
       verified_at: new Date().toISOString(),
     };
   }
@@ -150,6 +153,17 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
+  // Step 4: Build Merkle tree for each commit's sentences
+  const merkleRoots: Record<string, string> = {};
+  for (const commit of commits) {
+    const sentences = commit.content.sentences.map((s) => ({
+      id: s.id,
+      text: s.text,
+    }));
+    const tree = buildMerkleTree(sentences);
+    merkleRoots[commit.hash] = tree.root;
+  }
+
   const allErrors = [...hashMismatch, ...parentNotFound, ...other];
 
   return {
@@ -162,6 +176,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       parent_not_found: parentNotFound,
       other,
     },
+    merkle_roots: merkleRoots,
     verified_at: new Date().toISOString(),
   };
 }

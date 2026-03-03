@@ -5,7 +5,7 @@
  * Tracks accept/reject/edit/undo per SemanticPoint for adaptive calibration.
  */
 
-import { eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { extractionFeedback } from '../schema-extraction-feedback';
 
@@ -23,7 +23,7 @@ export interface InsertExtractionFeedbackInput {
 
 export async function insertExtractionFeedback(
   db: AnyDB,
-  input: InsertExtractionFeedbackInput,
+  input: InsertExtractionFeedbackInput
 ): Promise<void> {
   await db.insert(extractionFeedback).values({
     id: input.id,
@@ -46,7 +46,7 @@ export interface ExtractionFeedbackStats {
 
 export async function getExtractionFeedbackStats(
   db: AnyDB,
-  projectId: string,
+  projectId: string
 ): Promise<ExtractionFeedbackStats> {
   const rows = await db
     .select()
@@ -70,7 +70,7 @@ export async function getExtractionFeedbackStats(
 export async function listExtractionFeedback(
   db: AnyDB,
   projectId: string,
-  options?: { draftId?: string; limit?: number },
+  options?: { draftId?: string; limit?: number }
 ) {
   let query = db
     .select()
@@ -83,7 +83,10 @@ export async function listExtractionFeedback(
       .select()
       .from(extractionFeedback)
       .where(
-        sql`${extractionFeedback.projectId} = ${projectId} AND ${extractionFeedback.draftId} = ${options.draftId}`,
+        and(
+          eq(extractionFeedback.projectId, projectId),
+          eq(extractionFeedback.draftId, options.draftId)
+        )
       )
       .orderBy(extractionFeedback.createdAt);
   }

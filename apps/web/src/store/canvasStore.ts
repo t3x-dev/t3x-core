@@ -69,7 +69,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     openNodeId: null,
     modalViewMode: null,
     deletionConfirmation: null,
-
     setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
     openNodeModal: (nodeId, viewMode = 'commit') =>
@@ -403,6 +402,32 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           }
         } catch {
           // Drafts loading is non-critical — don't fail canvas load
+        }
+
+        // Load auto-drafts and attach IDs to conversation nodes
+        try {
+          const autoDrafts = await api.listDraftsV3(projectId, 'auto');
+          // Build conversationId → draft.id map
+          const convToAutoDraft = new Map<string, string>();
+          for (const draft of autoDrafts) {
+            for (const s of draft.sentences) {
+              if (s.source?.conversation_id) {
+                convToAutoDraft.set(s.source.conversation_id, draft.id);
+                break; // one auto-draft per conversation is enough
+              }
+            }
+          }
+          // Attach autoDraftId to conversation nodes
+          for (const node of nodes) {
+            if (node.data.conversationId) {
+              const autoDraftId = convToAutoDraft.get(node.data.conversationId);
+              if (autoDraftId) {
+                node.data.autoDraftId = autoDraftId;
+              }
+            }
+          }
+        } catch {
+          // Auto-drafts loading is non-critical
         }
 
         // Check for main commits
@@ -950,7 +975,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       try {
         const response = await fetch(`${API_V1}/merge/drafts`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: api.getAuthHeaders(),
           body: JSON.stringify({
             project_id: state.projectId,
             source_hash: sourceHash,

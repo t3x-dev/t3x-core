@@ -452,7 +452,8 @@ export function CommitSourceContext({
                 sg.sentence.text,
                 context.target_turn.content,
                 sg.highlight.start,
-                sg.highlight.end
+                sg.highlight.end,
+                sg.sentence.anchor_type
               );
               integrityStatus.set(sg.sentence.id, status);
             }

@@ -229,7 +229,10 @@ CREATE TABLE IF NOT EXISTS leaf_history (
   config JSONB NOT NULL,
   model TEXT NOT NULL,
   generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_by TEXT
+  created_by TEXT,
+  attempt_number INTEGER NOT NULL DEFAULT 1,
+  corrective_feedback TEXT,
+  prompt_used TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
 CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
@@ -383,6 +386,36 @@ CREATE TABLE IF NOT EXISTS extraction_feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_extraction_feedback_project ON extraction_feedback(project_id);
 CREATE INDEX IF NOT EXISTS idx_extraction_feedback_draft ON extraction_feedback(draft_id);
+
+-- Knowledge Conflicts (S15 conflict detection persistence)
+CREATE TABLE IF NOT EXISTS knowledge_conflicts (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  new_sentence_id TEXT NOT NULL,
+  new_commit_hash TEXT NOT NULL,
+  existing_sentence_id TEXT NOT NULL,
+  existing_commit_hash TEXT NOT NULL,
+  cosine REAL NOT NULL,
+  jaccard REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  resolution TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_conflicts_project ON knowledge_conflicts(project_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_conflicts_status ON knowledge_conflicts(status);
+
+-- Metrics Events (S17 Observable Metrics)
+CREATE TABLE IF NOT EXISTS metrics_events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  value REAL NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_events_project ON metrics_events(project_id);
+CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
 
 `;
 

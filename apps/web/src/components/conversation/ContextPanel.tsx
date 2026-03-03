@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getAuthHeaders } from '@/lib/api';
 import { usePinsStore } from '@/store/pinsStore';
 import { EditContextDialog } from './EditContextDialog';
 
@@ -49,7 +50,8 @@ export function ContextPanel({
     setIsExporting(true);
     try {
       const response = await fetch(
-        `${API_V1}/conversations/${conversationId}/context-export?format=${format}`
+        `${API_V1}/conversations/${conversationId}/context-export?format=${format}`,
+        { headers: getAuthHeaders() }
       );
 
       if (!response.ok) {
@@ -85,7 +87,9 @@ export function ContextPanel({
   const handleCopyToClipboard = async () => {
     setIsExporting(true);
     try {
-      const response = await fetch(`${API_V1}/conversations/${conversationId}/memory`);
+      const response = await fetch(`${API_V1}/conversations/${conversationId}/memory`, {
+        headers: getAuthHeaders(),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to get context');

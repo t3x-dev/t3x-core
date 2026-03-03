@@ -6,16 +6,11 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { MergeSimilarPair } from './types';
-
-export interface MergeSuggestion {
-  suggestion: string;
-  reasoning: string;
-}
+import type { MergeSimilarPair, MergeSuggestion } from './types';
 
 export async function suggestMerge(
   pair: MergeSimilarPair,
-  llm?: LLMProvider,
+  llm?: LLMProvider
 ): Promise<MergeSuggestion | null> {
   if (!llm) return null;
 

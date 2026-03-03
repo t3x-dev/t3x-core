@@ -18,6 +18,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { CommitV4, Sentence } from '@t3x/core';
+import { detectConflicts } from '@t3x/core';
 import {
   createCommitV4,
   deleteCommitV4,
@@ -29,11 +30,13 @@ import {
   getCommitsV4ByHashes,
   MainBranchLinearityError,
   ParentNotFoundErrorV4,
+  searchSimilarSentences,
   updateBranchHead,
   updateCommitV4Position,
   validateMainBranchLinearity,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
+import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import {
@@ -655,6 +658,114 @@ commitsV4Routes.openapi(deleteCommitV4Route, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'DELETE_FAILED', message);
+  }
+});
+
+// ============================================================
+// POST /v1/commits-v4/:hash/check-conflicts — Detect cross-conversation conflicts
+// ============================================================
+
+const ConflictCandidateSchema = z.object({
+  new_sentence_id: z.string(),
+  new_sentence_text: z.string(),
+  existing_sentence_id: z.string(),
+  existing_sentence_text: z.string(),
+  existing_commit_hash: z.string(),
+  cosine: z.number(),
+  jaccard: z.number(),
+});
+
+const checkConflictsRoute = createRoute({
+  method: 'post',
+  path: '/v1/commits-v4/{hash}/check-conflicts',
+  tags: ['Commits V4'],
+  summary: 'Detect cross-conversation conflicts for a commit',
+  request: { params: HashParamSchema },
+  responses: {
+    200: {
+      description: 'Conflict report',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              conflicts: z.array(ConflictCandidateSchema),
+              checked_count: z.number(),
+            })
+          ),
+        },
+      },
+    },
+    404: {
+      description: 'Commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    400: {
+      description: 'Embedder not configured or invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitsV4Routes.openapi(checkConflictsRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const decodedHash = decodeURIComponent(hash);
+
+  try {
+    const embedder = getEmbedder();
+    if (!embedder) {
+      return errorResponse(c, 'SEMANTIC_NOT_SUPPORTED', 'No embedding provider configured');
+    }
+
+    const db = await getDB();
+    const commit = await findCommitV4ByHash(db, decodedHash);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
+    }
+
+    const sentences = commit.content.sentences;
+    if (sentences.length === 0) {
+      return c.json({ success: true as const, data: { conflicts: [], checked_count: 0 } }, 200);
+    }
+
+    // Fetch existing project sentences with embeddings via similarity search
+    // For each new sentence, search for similar existing sentences (excluding this commit)
+    const existingSentences: Array<{
+      id: string;
+      text: string;
+      commit_hash: string;
+      embedding: number[];
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const s of sentences) {
+      const emb = await embedder.encode([s.text]);
+      const results = await searchSimilarSentences(
+        db,
+        commit.project_id ?? '',
+        emb[0],
+        10,
+        decodedHash
+      );
+      for (const r of results) {
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          const rEmb = await embedder.encode([r.text]);
+          existingSentences.push({
+            id: r.id,
+            text: r.text,
+            commit_hash: r.commit_hash,
+            embedding: rEmb[0],
+          });
+        }
+      }
+    }
+
+    const report = await detectConflicts(sentences, existingSentences, embedder);
+
+    return c.json({ success: true as const, data: report }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'INTERNAL_ERROR', message);
   }
 });
 

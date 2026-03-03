@@ -42,19 +42,24 @@ export interface VerifyOptions {
 export function verifyProposal(
   proposal: ExtractionProposal,
   existingSPs: SemanticPoint[],
-  turns: TurnInput[],
-  options?: VerifyOptions,
+  turns: TurnInput[]
 ): VerifiedProposal | null;
 export function verifyProposal(
   proposal: ExtractionProposal,
   existingSPs: SemanticPoint[],
   turns: TurnInput[],
-  options?: VerifyOptions,
+  options: VerifyOptions
+): Promise<VerifiedProposal | null>;
+export function verifyProposal(
+  proposal: ExtractionProposal,
+  existingSPs: SemanticPoint[],
+  turns: TurnInput[],
+  options?: VerifyOptions
 ): Promise<VerifiedProposal | null> | VerifiedProposal | null {
   // Check 1: For modify/reinforce proposals, target must exist
   if ((proposal.type === 'modify' || proposal.type === 'reinforce') && proposal.target_sp_id) {
     const targetExists = existingSPs.some(
-      (sp) => sp.id === proposal.target_sp_id && sp.status !== 'undone',
+      (sp) => sp.id === proposal.target_sp_id && sp.status !== 'undone'
     );
     if (!targetExists) return null;
   }
@@ -124,7 +129,7 @@ export function verifyProposal(
 async function detectOverlap(
   proposal: VerifiedProposal,
   embedder: EmbeddingProvider,
-  existingEmbeddings: Map<string, number[]>,
+  existingEmbeddings: Map<string, number[]>
 ): Promise<VerifiedProposal> {
   const [proposalVec] = await embedder.encode([proposal.text]);
 

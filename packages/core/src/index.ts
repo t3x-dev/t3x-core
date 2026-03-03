@@ -44,13 +44,6 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
-// Hash / Merkle Tree (#14)
-export {
-  buildMerkleTree,
-  type MembershipProof,
-  type MerkleTree,
-  verifyMembership,
-} from './hash';
 // Diff Engine
 export {
   buildSimilarityMatrix,
@@ -91,10 +84,10 @@ export {
   type AnchorType,
   // LLM Extraction
   buildExtractionPrompt,
-  computeAdaptiveThresholds,
   // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   buildStyleSeed,
+  computeAdaptiveThresholds,
   createEmptyRing1,
   createEmptyRing2,
   createEmptyRing3,
@@ -115,6 +108,8 @@ export {
   type LLMExtractionOptions,
   type LLMExtractionResult,
   LLMExtractor,
+  type OverlapResult,
+  type OverlapStatus,
   type Polarity,
   // Polarity Rules
   type PolarityRule,
@@ -136,13 +131,20 @@ export {
   spToSentence,
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
-  type OverlapResult,
-  type OverlapStatus,
   type VerifiedProposal,
   type VerifyOptions,
   validateExtractedSentences,
   verifyProposal,
 } from './extractors';
+// Hash / Merkle Tree (#14)
+export {
+  buildMerkleTree,
+  type MembershipProof,
+  type MerkleLeaf,
+  type MerkleTree,
+  type ProofStep,
+  verifyMembership,
+} from './hash';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // @see docs/plans/parallel-dev-guidelines.md
@@ -156,14 +158,9 @@ export {
   buildLeafPrompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
-  collectLessons,
-  // Constraint Suggestion
-  type MultiRoundOptions,
-  type MultiRoundResult,
-  multiRoundGenerate,
-  type RoundConfig,
   type ConstraintSuggestionResult,
   type CorrectivePromptOptions,
+  collectLessons,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   // Default templates
@@ -180,6 +177,11 @@ export {
   getTypeInstructions,
   isGenerationConfigured,
   type LeafTemplate,
+  // Constraint Suggestion
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  multiRoundGenerate,
+  type RoundConfig,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,

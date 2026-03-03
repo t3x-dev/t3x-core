@@ -2,6 +2,7 @@ import type { MergeSummaryData } from '@t3x/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
+import { getAuthHeaders } from '@/lib/api';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { CommitV3 } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
@@ -27,7 +28,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
     try {
       const response = await fetch(`${API_V1}/merge/prepare`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
       });
 
@@ -139,7 +140,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
 
       const response = await fetch(`${API_V1}/merge/execute`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           source_hash: mergeState.sourceHash,
           target_hash: mergeState.targetHash,

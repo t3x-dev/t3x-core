@@ -35,6 +35,7 @@ import {
   forkDraftV3,
   insertAutoDraftV3,
   insertDraftV3,
+  insertExtractionFeedback,
   listDraftV3ByProject,
   promoteDraftV3,
   searchSimilarSentences,
@@ -1307,6 +1308,26 @@ draftsRoutes.openapi(reviewActionRoute, async (c) => {
     }
 
     await updateDraftV3(db, draftId, { semantic_points: sps }, draft.revision);
+
+    // Record extraction feedback (L4 anchoring) — fire-and-forget
+    // Map UI actions to feedback action types
+    const feedbackAction: 'accept' | 'reject' | 'edit' | 'undo' =
+      action === 'accept_change' ? 'accept' : action === 'dismiss' ? 'reject' : action;
+    try {
+      await insertExtractionFeedback(db, {
+        id: `ef_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        project_id: draft.project_id,
+        draft_id: draftId,
+        sp_id: sp_id,
+        action: feedbackAction,
+        inference_type: sp.inference_type,
+        confidence: sp.confidence,
+        zone: sp.zone,
+        edited_text: edited_text,
+      });
+    } catch {
+      // Feedback recording is non-critical
+    }
 
     return c.json(
       {

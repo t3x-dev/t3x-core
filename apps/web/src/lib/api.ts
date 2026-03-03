@@ -507,6 +507,19 @@ async function handleResponse<T>(response: Response): Promise<T> {
 // API key for authenticated requests (optional, for production use)
 const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
+/** Build headers with auth token injected (for callers that can't use fetchWithTimeout) */
+export function getAuthHeaders(extra?: HeadersInit): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (extra) {
+    const entries = extra instanceof Headers ? Array.from(extra.entries()) : Object.entries(extra);
+    for (const [k, v] of entries) headers[k] = v as string;
+  }
+  if (API_KEY && !headers.Authorization) {
+    headers.Authorization = `Bearer ${API_KEY}`;
+  }
+  return headers;
+}
+
 // Single fetch attempt with timeout + abort support
 async function fetchOnce(
   url: string,
@@ -1348,6 +1361,33 @@ export async function createCommitV4(
 }
 
 // ============================================================================
+// Conflict Detection
+// ============================================================================
+
+export interface ConflictCandidate {
+  new_sentence_id: string;
+  new_sentence_text: string;
+  existing_sentence_id: string;
+  existing_sentence_text: string;
+  existing_commit_hash: string;
+  cosine: number;
+  jaccard: number;
+}
+
+export interface ConflictReport {
+  conflicts: ConflictCandidate[];
+  checked_count: number;
+}
+
+export async function checkConflicts(commitHash: string): Promise<ConflictReport> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/check-conflicts`,
+    { method: 'POST' }
+  );
+  return handleResponse<ConflictReport>(res);
+}
+
+// ============================================================================
 // Diff & Merge
 // ============================================================================
 
@@ -1443,6 +1483,28 @@ export async function diffRaw(
     }),
   });
   return handleResponse<DiffResultRaw>(res);
+}
+
+// ============================================================================
+// Merge Suggestions
+// ============================================================================
+
+export interface MergeSuggestion {
+  suggestion: string;
+  reasoning: string;
+}
+
+export async function getMergeSuggestion(
+  draftId: string,
+  pairIndex: number
+): Promise<MergeSuggestion | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}/suggest/${pairIndex}`,
+    { method: 'POST' },
+    30_000
+  );
+  const data = await handleResponse<{ suggestion: MergeSuggestion | null }>(res);
+  return data.suggestion;
 }
 
 // ============================================================================
@@ -2783,10 +2845,10 @@ export async function validateLeafOutput(
 export async function* chatStream(
   request: ChatRequest
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  // Call API server directly
+  // Call API server directly (streaming — can't use fetchWithTimeout)
   const res = await fetch(`${API_V1}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(request),
   });
 
@@ -3786,7 +3848,7 @@ export async function* streamUrlImport(
 ): AsyncGenerator<ImportStreamEvent> {
   const res = await fetch(`${API_V1}/import/url/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ url, project_id: projectId }),
   });
 
@@ -3806,8 +3868,12 @@ export async function* streamDocumentImport(
   formData.append('file', file);
   formData.append('project_id', projectId);
 
+  // FormData: don't set Content-Type (browser sets multipart boundary), only inject auth
+  const docHeaders: HeadersInit = {};
+  if (API_KEY) (docHeaders as Record<string, string>).Authorization = `Bearer ${API_KEY}`;
   const res = await fetch(`${API_V1}/import/document/stream`, {
     method: 'POST',
+    headers: docHeaders,
     body: formData,
   });
 
@@ -3826,7 +3892,7 @@ export async function* streamPlatformImport(
 ): AsyncGenerator<ImportStreamEvent> {
   const res = await fetch(`${API_V1}/import/platform/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({
       project_id: projectId,
       platform_data: platformData,
@@ -4023,4 +4089,75 @@ export async function reviewAction(
     body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
   });
   return handleResponse<ReviewActionResult>(res);
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  project_id: string | null;
+  ref_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export async function listNotifications(projectId?: string): Promise<NotificationItem[]> {
+  const query = new URLSearchParams();
+  if (projectId) query.set('project_id', projectId);
+  const res = await fetchWithTimeout(`${API_V1}/notifications?${query}`);
+  return handleResponse<NotificationItem[]>(res);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+  await handleResponse<{ read: boolean }>(res);
+}
+
+export async function markAllNotificationsRead(projectId?: string): Promise<{ count: number }> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/notifications/read-all${query}`, {
+    method: 'POST',
+  });
+  return handleResponse<{ count: number }>(res);
+}
+
+// ============================================================================
+// Reverse Learning (Constraint Suggestions from Failed Assertions)
+// ============================================================================
+
+export interface SuggestedConstraint {
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  reason: string;
+  confidence: number;
+}
+
+export interface ReverseLearnResult {
+  suggestions: SuggestedConstraint[];
+  lessons_used: string[];
+  model: string;
+}
+
+export async function reverseLearnConstraints(
+  leafId: string,
+  maxSuggestions = 5
+): Promise<ReverseLearnResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
+    },
+    30_000
+  );
+  return handleResponse<ReverseLearnResult>(res);
 }

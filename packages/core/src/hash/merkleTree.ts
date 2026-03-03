@@ -48,9 +48,7 @@ function hashPair(left: string, right: string): string {
   return `sha256:${sha256(`${l}:${r}`)}`;
 }
 
-export function buildMerkleTree(
-  sentences: { id: string; text: string }[],
-): MerkleTree {
+export function buildMerkleTree(sentences: { id: string; text: string }[]): MerkleTree {
   if (sentences.length === 0) {
     return {
       root: `sha256:${sha256('empty')}`,
@@ -91,10 +89,7 @@ export function buildMerkleTree(
   };
 }
 
-export function verifyMembership(
-  tree: MerkleTree,
-  sentenceId: string,
-): MembershipProof | null {
+export function verifyMembership(tree: MerkleTree, sentenceId: string): MembershipProof | null {
   const leaf = tree.leaves.find((l) => l.id === sentenceId);
   if (!leaf) return null;
 

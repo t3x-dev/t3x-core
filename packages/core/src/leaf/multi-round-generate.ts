@@ -10,8 +10,6 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { CommitV4, Leaf } from '../types/v4';
-import { buildLeafPrompt } from './build-prompt';
-import type { GenerateOptions } from './types';
 
 export interface RoundConfig {
   name: string;
@@ -39,9 +37,7 @@ export interface MultiRoundResult {
   rounds: RoundResult[];
 }
 
-export async function multiRoundGenerate(
-  options: MultiRoundOptions,
-): Promise<MultiRoundResult> {
+export async function multiRoundGenerate(options: MultiRoundOptions): Promise<MultiRoundResult> {
   const {
     commit,
     leaf,
@@ -83,16 +79,16 @@ function buildRoundPrompt(
   leaf: Leaf,
   round: RoundConfig,
   previousOutput: string,
-  roundIndex: number,
+  roundIndex: number
 ): string {
   const sentences = commit.content.sentences.map((s) => s.text).join('\n');
-  const constraints = (leaf.constraints ?? [])
-    .map((c) => `[${c.type}] ${c.value}`)
-    .join('\n');
+  const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
 
   const parts: string[] = [];
 
-  parts.push(`You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".`);
+  parts.push(
+    `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".`
+  );
   parts.push(`\nKnowledge base:\n${sentences}`);
 
   if (constraints) {

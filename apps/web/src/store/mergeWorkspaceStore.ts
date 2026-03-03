@@ -158,10 +158,7 @@ export interface MergeCheck {
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_V1}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: api.getAuthHeaders(options?.headers),
   });
 
   const data = await response.json();

@@ -1,30 +1,87 @@
 'use client';
 
-import { Check, Pencil, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, Check, CheckCheck, Pencil, Plus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { SemanticPointAPI } from '@/lib/api';
 import { EvidenceDisplay } from './EvidenceDisplay';
-import { SemanticPointCard } from './SemanticPointCard';
 
 interface ReviewItemProps {
   point: SemanticPointAPI;
+  currentText?: string;
   onAccept: (id: string) => void;
   onDismiss: (id: string) => void;
   onEdit: (id: string, text: string) => void;
 }
 
-export function ReviewItem({ point, onAccept, onDismiss, onEdit }: ReviewItemProps) {
+export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: ReviewItemProps) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(point.text);
+
+  // Sync editText when point.text changes (e.g., parent re-renders with updated data)
+  useEffect(() => {
+    if (!editing) {
+      setEditText(point.text);
+    }
+  }, [point.text, editing]);
+
+  const isModify = !!currentText;
 
   return (
     <div className="space-y-2 rounded-md border border-amber-200 dark:border-amber-800 p-3">
       {!editing ? (
         <>
-          <SemanticPointCard point={point} />
+          <div className="flex items-center gap-1.5 mb-1">
+            {isModify ? (
+              <Badge
+                variant="outline"
+                className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px]"
+              >
+                <Pencil className="mr-0.5 h-2.5 w-2.5" /> Modify
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px]"
+              >
+                <Plus className="mr-0.5 h-2.5 w-2.5" /> New
+              </Badge>
+            )}
+            {point.inference_type && (
+              <Badge variant="secondary" className="text-[10px]">
+                {point.inference_type}
+              </Badge>
+            )}
+            {point.confidence != null && (
+              <span className="text-[10px] text-muted-foreground">
+                {Math.round(point.confidence * 100)}%
+              </span>
+            )}
+            {point.routing_reason && (
+              <span className="text-[10px] text-muted-foreground italic">
+                {point.routing_reason}
+              </span>
+            )}
+          </div>
+
+          {isModify ? (
+            <div className="flex items-start gap-2 text-sm">
+              <span className="rounded bg-muted px-1.5 py-0.5 line-through text-muted-foreground">
+                {currentText}
+              </span>
+              <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="rounded bg-green-50 dark:bg-green-950/30 px-1.5 py-0.5 font-medium">
+                {point.text}
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm font-medium">{point.text}</p>
+          )}
+
           <EvidenceDisplay evidence={point.evidence} />
+
           <div className="flex items-center gap-1.5 pt-1">
             <Button size="sm" variant="outline" onClick={() => onAccept(point.id)}>
               <Check className="mr-1 h-3 w-3" /> Accept
@@ -43,12 +100,13 @@ export function ReviewItem({ point, onAccept, onDismiss, onEdit }: ReviewItemPro
           <div className="flex gap-1.5">
             <Button
               size="sm"
+              disabled={!editText.trim()}
               onClick={() => {
                 onEdit(point.id, editText);
                 setEditing(false);
               }}
             >
-              Save
+              <CheckCheck className="mr-1 h-3 w-3" /> Save & Accept
             </Button>
             <Button
               size="sm"

@@ -13,11 +13,12 @@
 export { executeMerge } from './executeMerge';
 export { prepareMerge } from './prepareMerge';
 // Smart merge suggestion (#10)
-export { type MergeSuggestion, suggestMerge } from './suggestMerge';
+export { suggestMerge } from './suggestMerge';
 
 // Two-way merge types
 export type {
   Merge2WayResult,
   MergeCandidate,
   MergeSimilarPair,
+  MergeSuggestion,
 } from './types';

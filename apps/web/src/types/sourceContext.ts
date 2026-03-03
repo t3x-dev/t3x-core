@@ -44,6 +44,8 @@ export interface SentenceWithSource {
    * Undefined for sentences created directly in this commit.
    */
   inherited_from?: string;
+  /** Anchor type for integrity checking threshold selection */
+  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 /**

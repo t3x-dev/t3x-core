@@ -32,10 +32,12 @@ export * from './adapters';
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
-
+// Extraction Feedback Schema (Anchoring L4)
+export * from './schema-extraction-feedback';
+// Knowledge Conflicts Schema (conflict detection persistence)
+export * from './schema-knowledge-conflicts';
+// Observable Metrics Schema (event tracking)
+export * from './schema-metrics';
 // V4 Schema (commits_v4, leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';
-
-// Extraction Feedback Schema (Anchoring L4)
-export * from './schema-extraction-feedback';

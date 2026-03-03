@@ -36,6 +36,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -366,7 +367,10 @@ function CommitV4Content({
           <>
             <ul className="mt-1 space-y-0.5">
               {displaySentences.map((s) => (
-                <li key={s.id} className="flex items-start gap-1 text-xs text-[var(--text-secondary)]">
+                <li
+                  key={s.id}
+                  className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
+                >
                   {s.confidence !== undefined && (
                     <span
                       className={cn(
@@ -481,6 +485,7 @@ function UnitNode(props: Props) {
   const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
   const leafContextMenuHandler = useCanvasStore((state) => state.leafContextMenuHandler);
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
+  const loadProjectData = useCanvasStore((state) => state.loadProjectData);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Pin store
@@ -987,6 +992,18 @@ function UnitNode(props: Props) {
                     ? 'URL Import'
                     : 'Doc Import'}
               </span>
+            </div>
+          )}
+
+          {/* Auto-draft badge (conversation nodes with available auto-draft) */}
+          {isStaging && data.autoDraftId && (
+            <div className="flex items-center gap-1 mb-[var(--space-item)]">
+              <AutoDraftBadge
+                autoDraftId={data.autoDraftId}
+                onPromoted={() => {
+                  if (projectId) loadProjectData(projectId);
+                }}
+              />
             </div>
           )}
 
