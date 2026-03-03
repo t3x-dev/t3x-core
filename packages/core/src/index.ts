@@ -338,6 +338,7 @@ export {
   // Share Token
   type ShareToken,
   // User (authentication)
+  type Account,
   type User,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

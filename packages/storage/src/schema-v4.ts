@@ -29,46 +29,78 @@ import {
 import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// users: Authentication (OAuth providers)
+// users: Authentication (identity, keyed by email)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Registered users via OAuth providers (e.g., GitHub).
+ * Registered users (identity records).
  *
+ * Provider-specific info lives in the `accounts` table (many-to-one).
  * In AUTH_DISABLED mode, no users exist. Projects with owner_id=null
  * are public/legacy data accessible to everyone.
  */
-export const users = pgTable(
-  'users',
+export const users = pgTable('users', {
+  /** Unique ID: "user_" + nanoid(12) */
+  id: text('id').primaryKey(),
+
+  /** Email address (may be null if provider doesn't expose it) */
+  email: text('email'),
+
+  /** True when at least one provider has confirmed the email */
+  emailVerified: boolean('email_verified').notNull().default(false),
+
+  /** Display name */
+  name: text('name'),
+
+  /** Avatar URL */
+  avatarUrl: text('avatar_url'),
+
+  /** Creation time */
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type UserRecord = typeof users.$inferSelect;
+export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// accounts: OAuth Provider Records (many-to-one with users)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * OAuth provider accounts linked to users.
+ *
+ * Multiple accounts can map to the same user when emails match
+ * across providers (auto-linking).
+ */
+export const accounts = pgTable(
+  'accounts',
   {
-    /** Unique ID: "user_" + nanoid(12) */
+    /** Unique ID: "acct_" + nanoid(12) */
     id: text('id').primaryKey(),
 
-    /** OAuth provider name (e.g., 'github') */
+    /** The user this account belongs to */
+    userId: text('user_id').notNull(),
+
+    /** OAuth provider name (e.g., 'github', 'google') */
     provider: text('provider').notNull(),
 
     /** User ID from the OAuth provider */
-    providerId: text('provider_id').notNull(),
-
-    /** Email address (may be null) */
-    email: text('email'),
-
-    /** Display name */
-    name: text('name'),
-
-    /** Avatar URL */
-    avatarUrl: text('avatar_url'),
+    providerAccountId: text('provider_account_id').notNull(),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+    providerUniqueIdx: uniqueIndex('idx_accounts_provider').on(
+      table.provider,
+      table.providerAccountId
+    ),
+    userIdx: index('idx_accounts_user').on(table.userId),
   })
 );
 
-export type UserRecord = typeof users.$inferSelect;
-export type UserInsert = typeof users.$inferInsert;
+export type AccountRecord = typeof accounts.$inferSelect;
+export type AccountInsert = typeof accounts.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage

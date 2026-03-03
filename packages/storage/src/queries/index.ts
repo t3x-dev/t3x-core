@@ -291,13 +291,16 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
-// Users (OAuth authentication)
+// Users & Accounts (multi-provider authentication)
 export {
   type CreateUserInput,
+  createAccount,
   createUser,
+  findAccountByProvider,
+  findAccountsByUser,
   findOrCreateUser,
+  findUserByEmail,
   findUserById,
-  findUserByProvider,
 } from './users';
 // Turns
 export {

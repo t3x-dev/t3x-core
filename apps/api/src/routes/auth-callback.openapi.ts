@@ -29,6 +29,7 @@ const AuthCallbackRequest = z.object({
   provider: z.string().min(1),
   provider_id: z.string().min(1),
   email: z.string().nullable().optional(),
+  email_verified: z.boolean().optional(),
   name: z.string().nullable().optional(),
   avatar_url: z.string().nullable().optional(),
 });

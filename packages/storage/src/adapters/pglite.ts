@@ -607,6 +607,48 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Migration: Add user_id to api_keys (nullable — null = legacy key)
     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
 
+    -- ═══════════════════════════════════════════════════════════════
+    -- Auth Migration Phase 2: Multi-provider (users + accounts split)
+    -- ═══════════════════════════════════════════════════════════════
+
+    -- Accounts table (one row per OAuth provider per user)
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
+    CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
+
+    -- Migrate existing users.provider/provider_id → accounts table
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'provider'
+      ) THEN
+        INSERT INTO accounts (id, user_id, provider, provider_account_id, created_at)
+        SELECT 'acct_' || substr(md5(id || provider), 1, 12), id, provider, provider_id, created_at
+        FROM users
+        ON CONFLICT DO NOTHING;
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE users DROP COLUMN IF EXISTS provider;
+        ALTER TABLE users DROP COLUMN IF EXISTS provider_id;
+      END IF;
+    END $$;
+
+    -- Ensure email_verified column exists (for fresh installs that skip the IF block)
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+    -- Unique index on email (partial — only non-null emails)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+
+    -- Drop old provider unique index (may not exist on fresh installs)
+    DROP INDEX IF EXISTS idx_users_provider_unique;
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

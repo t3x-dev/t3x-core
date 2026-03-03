@@ -10,6 +10,7 @@
 
 import NextAuth from 'next-auth';
 import GitHub from 'next-auth/providers/github';
+import Google from 'next-auth/providers/google';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -17,6 +18,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
   ],
 
@@ -53,8 +58,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               provider: account.provider,
               provider_id: account.providerAccountId,
               email: profile.email ?? null,
-              name: profile.name ?? (profile as Record<string, unknown>).login ?? null,
-              avatar_url: (profile as Record<string, unknown>).avatar_url ?? null,
+              email_verified:
+                (profile as Record<string, unknown>).email_verified === true,
+              name:
+                profile.name ??
+                ((profile as Record<string, unknown>).login as string | undefined) ??
+                null,
+              avatar_url:
+                ((profile as Record<string, unknown>).avatar_url as string | undefined) ??
+                ((profile as Record<string, unknown>).picture as string | undefined) ??
+                null,
             }),
           });
 
@@ -86,7 +99,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           null;
         token.email = profile.email ?? null;
         token.picture =
-          ((profile as Record<string, unknown>).avatar_url as string | undefined) ?? undefined;
+          ((profile as Record<string, unknown>).avatar_url as string | undefined) ??
+          ((profile as Record<string, unknown>).picture as string | undefined) ??
+          undefined;
       }
 
       return token;
