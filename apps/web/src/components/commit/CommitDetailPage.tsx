@@ -685,8 +685,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                       className="fixed inset-0 z-40"
                       onClick={() => setLeafMenuOpen(false)}
                       onKeyDown={() => {}}
-                      role="button"
-                      tabIndex={-1}
+                      role="presentation"
                     />
                     <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-1 shadow-lg">
                       {leafTypeOptions.map((opt) => (

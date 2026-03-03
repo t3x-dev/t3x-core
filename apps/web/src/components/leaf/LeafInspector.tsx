@@ -153,7 +153,6 @@ function AddConstraintInline({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-        autoFocus
       />
       <div className="flex gap-1">
         <Button
