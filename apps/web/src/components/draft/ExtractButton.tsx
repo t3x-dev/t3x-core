@@ -38,7 +38,11 @@ export function ExtractButton({
   };
 
   return (
-    <Button onClick={handleExtract} disabled={disabled || loading} variant="outline">
+    <Button
+      onClick={handleExtract}
+      disabled={disabled || loading || !conversationId}
+      variant="outline"
+    >
       {loading ? (
         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
       ) : (
