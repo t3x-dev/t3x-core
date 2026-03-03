@@ -25,6 +25,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
+import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
+import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
@@ -716,6 +718,21 @@ export default function LeafDetailPage() {
             onAdd={handleAddConstraint}
             saving={saving}
           />
+
+          {/* Reverse-learn constraints from failed assertions */}
+          {leaf.assertions?.some((a: Assertion) => !a.passed) && (
+            <LearnFromEditSuggestion
+              leafId={leafId}
+              onAddConstraint={(constraint) => {
+                handleAddConstraint(constraint.type, constraint.value, constraint.match_mode);
+              }}
+            />
+          )}
+
+          {/* Extract leaf output back to a draft */}
+          {leaf.output && (
+            <LeafExtractToDraft leafId={leafId} projectId={projectId} outputText={leaf.output} />
+          )}
 
           {/* ③ USER INSTRUCTION — optional LLM guidance */}
           <UserInstructionSection
