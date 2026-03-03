@@ -26,6 +26,20 @@
 export type { CorrectivePromptOptions } from './corrective-prompt';
 export { buildCorrectivePrompt } from './corrective-prompt';
 // ═══════════════════════════════════════════════════════════════════════════
+// Lesson Collector (Upgrade #4: Feedback Loop)
+// ═══════════════════════════════════════════════════════════════════════════
+export { collectLessons } from './lesson-collector';
+// ═══════════════════════════════════════════════════════════════════════════
+// Multi-Round Generation (#12)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  multiRoundGenerate,
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  type RoundConfig,
+  type RoundResult,
+} from './multi-round-generate';
+// ═══════════════════════════════════════════════════════════════════════════
 // Constraint Suggestion Exports
 // ═══════════════════════════════════════════════════════════════════════════
 export type {

@@ -33,6 +33,17 @@ const TemplateVariableSchema = z.object({
   defaultValue: z.string().optional(),
 });
 
+const DefaultConstraintSchema = z.object({
+  type: z.enum(['require', 'exclude']),
+  match_mode: z.enum(['exact', 'semantic']),
+  value: z.string(),
+});
+
+const SemanticThresholdSchema = z.object({
+  require: z.number().min(0).max(1),
+  exclude: z.number().min(0).max(1),
+});
+
 const TemplateSchema = z.object({
   template_id: z.string(),
   title: z.string(),
@@ -44,6 +55,8 @@ const TemplateSchema = z.object({
   variables: z.array(TemplateVariableSchema),
   tags: z.array(z.string()),
   is_builtin: z.boolean(),
+  default_constraints: z.array(DefaultConstraintSchema),
+  semantic_threshold: SemanticThresholdSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -57,6 +70,8 @@ const CreateTemplateRequest = z.object({
   user_prompt: z.string().min(1).max(50000),
   variables: z.array(TemplateVariableSchema).default([]),
   tags: z.array(z.string()).default([]),
+  default_constraints: z.array(DefaultConstraintSchema).default([]),
+  semantic_threshold: SemanticThresholdSchema.optional(),
 });
 
 const TemplateIdParam = z.object({
@@ -90,6 +105,12 @@ function formatTemplate(row: {
   variables: Array<{ name: string; description: string; required: boolean; defaultValue?: string }>;
   tags: string[];
   isBuiltin: boolean;
+  defaultConstraints: Array<{
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+  }> | null;
+  semanticThreshold: { require: number; exclude: number } | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -104,6 +125,8 @@ function formatTemplate(row: {
     variables: row.variables,
     tags: row.tags,
     is_builtin: row.isBuiltin,
+    default_constraints: row.defaultConstraints ?? [],
+    semantic_threshold: row.semanticThreshold ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -285,6 +308,8 @@ templatesRoutes.openapi(createTemplateRoute, async (c) => {
       user_prompt: body.user_prompt,
       variables: body.variables,
       tags: body.tags,
+      default_constraints: body.default_constraints,
+      semantic_threshold: body.semantic_threshold,
     });
 
     return c.json({ success: true as const, data: formatTemplate(row) }, 201);

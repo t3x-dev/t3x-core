@@ -7,6 +7,11 @@
 
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
 
+export interface MergeSuggestion {
+  suggestion: string;
+  reasoning: string;
+}
+
 /**
  * A pair of similar sentences the user must choose between.
  * 相似句子对 - 用户必须在 source 和 target 之间选择一个
@@ -23,6 +28,8 @@ export interface MergeSimilarPair {
   wordDiff: WordDiffSegment[];
   /** User's choice: 'source' or 'target' (no custom text allowed) (用户选择) */
   resolution?: 'source' | 'target';
+  /** LLM-suggested merged text (#10), null if no LLM configured */
+  suggestion?: MergeSuggestion | null;
   // REMOVED: sourceConstraints, targetConstraints (V4: constraints belong to Leaf)
 }
 

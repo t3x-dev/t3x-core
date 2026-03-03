@@ -545,9 +545,7 @@ async function getAuthToken(): Promise<string | null> {
   try {
     const { getSession } = await import('next-auth/react');
     const session = await getSession();
-    const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as
-      | string
-      | undefined;
+    const sessionApiKey = (session as Record<string, unknown> | null)?.apiKey as string | undefined;
     if (sessionApiKey) {
       _cachedApiKey = sessionApiKey;
       _cacheExpiry = Date.now() + CACHE_TTL_MS;
@@ -1405,6 +1403,33 @@ export async function createCommitV4(
 }
 
 // ============================================================================
+// Conflict Detection
+// ============================================================================
+
+export interface ConflictCandidate {
+  new_sentence_id: string;
+  new_sentence_text: string;
+  existing_sentence_id: string;
+  existing_sentence_text: string;
+  existing_commit_hash: string;
+  cosine: number;
+  jaccard: number;
+}
+
+export interface ConflictReport {
+  conflicts: ConflictCandidate[];
+  checked_count: number;
+}
+
+export async function checkConflicts(commitHash: string): Promise<ConflictReport> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/check-conflicts`,
+    { method: 'POST' }
+  );
+  return handleResponse<ConflictReport>(res);
+}
+
+// ============================================================================
 // Diff & Merge
 // ============================================================================
 
@@ -1500,6 +1525,28 @@ export async function diffRaw(
     }),
   });
   return handleResponse<DiffResultRaw>(res);
+}
+
+// ============================================================================
+// Merge Suggestions
+// ============================================================================
+
+export interface MergeSuggestion {
+  suggestion: string;
+  reasoning: string;
+}
+
+export async function getMergeSuggestion(
+  draftId: string,
+  pairIndex: number
+): Promise<MergeSuggestion | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}/suggest/${pairIndex}`,
+    { method: 'POST' },
+    30_000
+  );
+  const data = await handleResponse<{ suggestion: MergeSuggestion | null }>(res);
+  return data.suggestion;
 }
 
 // ============================================================================
@@ -3949,6 +3996,69 @@ export interface ExtractToDraftResult {
 export async function verifyProjectHashChain(projectId: string): Promise<VerifyResult> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/verify`);
   return handleResponse<VerifyResult>(res);
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  project_id: string | null;
+  ref_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export async function listNotifications(projectId?: string): Promise<NotificationItem[]> {
+  const query = new URLSearchParams();
+  if (projectId) query.set('project_id', projectId);
+  const res = await fetchWithTimeout(`${API_V1}/notifications?${query}`);
+  return handleResponse<NotificationItem[]>(res);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+  await handleResponse<{ read: boolean }>(res);
+}
+
+export async function markAllNotificationsRead(projectId?: string): Promise<{ count: number }> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/notifications/read-all${query}`, {
+    method: 'POST',
+  });
+  return handleResponse<{ count: number }>(res);
+}
+
+// ============================================================================
+// Reverse Learning (Constraint Suggestions from Failed Assertions)
+// ============================================================================
+
+export interface ReverseLearnResult {
+  suggestions: SuggestedConstraint[];
+  lessons_used: string[];
+  model: string;
+}
+
+export async function reverseLearnConstraints(
+  leafId: string,
+  maxSuggestions = 5
+): Promise<ReverseLearnResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
+    },
+    30_000
+  );
+  return handleResponse<ReverseLearnResult>(res);
 }
 
 /**

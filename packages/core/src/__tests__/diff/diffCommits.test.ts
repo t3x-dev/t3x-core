@@ -175,4 +175,68 @@ describe('diffCommits', () => {
       expect(result.similar).toHaveLength(1);
     });
   });
+
+  // ===========================================================================
+  // Large input performance
+  // ===========================================================================
+  describe('large input performance', () => {
+    it('greedy path (250+250) completes in time', () => {
+      // 250 per side → max=250 > GREEDY_THRESHOLD(200), uses greedy O(N×M)
+      const source = Array.from({ length: 250 }, (_, i) =>
+        sent(
+          `src_${i}`,
+          `Sentence about topic ${i % 20} with unique detail number ${i} and additional context`
+        )
+      );
+      const target = Array.from({ length: 250 }, (_, i) =>
+        sent(
+          `tgt_${i}`,
+          `Sentence about topic ${i % 20} with different content number ${i} and more context`
+        )
+      );
+
+      const start = performance.now();
+      const result = diffCommits(source, target);
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(5000);
+      expect(
+        result.similar.length + result.onlyInSource.length + result.onlyInTarget.length
+      ).toBeGreaterThan(0);
+    });
+
+    it('bucketed path (501+501) finds correct similar pairs', () => {
+      // 501 per side → max=501 > BUCKET_THRESHOLD(500), triggers bucketed greedy
+      const source = Array.from({ length: 501 }, (_, i) =>
+        sent(`src_${i}`, `Knowledge point ${i} about topic ${i % 15} with details`)
+      );
+      const target = Array.from({ length: 501 }, (_, i) =>
+        sent(
+          `tgt_${i}`,
+          i < 20
+            ? `Knowledge point ${i} about topic ${i % 15} with updated details`
+            : `Completely new sentence number ${i} with fresh content here`
+        )
+      );
+
+      const start = performance.now();
+      const result = diffCommits(source, target);
+      const elapsed = performance.now() - start;
+
+      // Bucketed path should be fast even in full suite
+      expect(elapsed).toBeLessThan(5000);
+
+      // The first 20 targets share most words with corresponding sources
+      // Bucketing should find at least some of these (same starting tokens)
+      expect(result.similar.length).toBeGreaterThanOrEqual(10);
+
+      // Total should account for all sentences
+      const total =
+        result.identical.length +
+        result.similar.length * 2 +
+        result.onlyInSource.length +
+        result.onlyInTarget.length;
+      expect(total).toBe(1002);
+    });
+  });
 });

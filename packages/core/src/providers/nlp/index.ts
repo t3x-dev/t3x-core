@@ -21,3 +21,9 @@ export {
   type GoogleCloudNLPConfig,
   GoogleCloudNLPProvider,
 } from './google-cloud';
+
+export {
+  createLocalNLPProvider,
+  LocalNLPProvider,
+  type LocalNLPProviderConfig,
+} from './local';

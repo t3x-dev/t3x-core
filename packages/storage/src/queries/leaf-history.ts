@@ -9,7 +9,7 @@
 
 import type { CreateLeafHistoryInput, LeafConfig, LeafHistory } from '@t3x/core';
 import { generateLeafHistoryId } from '@t3x/core';
-import { desc, eq } from 'drizzle-orm';
+import { asc, count, desc, eq } from 'drizzle-orm';
 
 import type { AnyDB } from '../adapters';
 import { type LeafHistoryRecord, leafHistory } from '../schema-v4';
@@ -23,6 +23,17 @@ export interface ListLeafHistoryOptions {
   offset?: number;
 }
 
+/**
+ * Extended input that includes S16 columns (attempt_number, corrective_feedback, prompt_used).
+ * The base CreateLeafHistoryInput from @t3x/core is not modified;
+ * extra fields are handled at the storage layer only.
+ */
+export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {
+  attempt_number?: number;
+  corrective_feedback?: string;
+  prompt_used?: string;
+};
+
 // ============================================================
 // Query Functions
 // ============================================================
@@ -31,13 +42,15 @@ export interface ListLeafHistoryOptions {
  * Create a new LeafHistory entry
  *
  * @param db - Database instance
- * @param input - History data
+ * @param input - History data (accepts base or extended input with S16 columns)
  * @returns Created history entry
  */
 export async function createLeafHistory(
   db: AnyDB,
-  input: CreateLeafHistoryInput
-): Promise<LeafHistory> {
+  input: CreateLeafHistoryInputExtended
+): Promise<
+  LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string }
+> {
   const id = generateLeafHistoryId();
   const now = new Date();
 
@@ -51,6 +64,9 @@ export async function createLeafHistory(
       model: input.model,
       generatedAt: now,
       createdBy: input.created_by ?? null,
+      attemptNumber: input.attempt_number ?? 1,
+      correctiveFeedback: input.corrective_feedback ?? null,
+      promptUsed: input.prompt_used ?? null,
     })
     .returning();
 
@@ -60,7 +76,13 @@ export async function createLeafHistory(
 /**
  * Find a LeafHistory entry by ID
  */
-export async function findLeafHistoryById(db: AnyDB, id: string): Promise<LeafHistory | null> {
+export async function findLeafHistoryById(
+  db: AnyDB,
+  id: string
+): Promise<
+  | (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })
+  | null
+> {
   const [row] = await db.select().from(leafHistory).where(eq(leafHistory.id, id)).limit(1);
 
   return row ? rowToLeafHistory(row) : null;
@@ -69,13 +91,16 @@ export async function findLeafHistoryById(db: AnyDB, id: string): Promise<LeafHi
 /**
  * Find all history entries for a Leaf
  *
- * Returns history ordered by generatedAt descending (newest first).
+ * Returns history ordered by generatedAt descending (newest first),
+ * then by attemptNumber ascending as secondary sort.
  */
 export async function findHistoryByLeafId(
   db: AnyDB,
   leafId: string,
   options: ListLeafHistoryOptions = {}
-): Promise<LeafHistory[]> {
+): Promise<
+  (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })[]
+> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
@@ -83,7 +108,7 @@ export async function findHistoryByLeafId(
     .select()
     .from(leafHistory)
     .where(eq(leafHistory.leafId, leafId))
-    .orderBy(desc(leafHistory.generatedAt), leafHistory.id)
+    .orderBy(desc(leafHistory.generatedAt), leafHistory.attemptNumber, leafHistory.id)
     .limit(limit)
     .offset(offset);
 
@@ -94,9 +119,12 @@ export async function findHistoryByLeafId(
  * Count history entries for a Leaf
  */
 export async function countHistoryByLeafId(db: AnyDB, leafId: string): Promise<number> {
-  const rows = await db.select().from(leafHistory).where(eq(leafHistory.leafId, leafId));
+  const rows = await db
+    .select({ count: count() })
+    .from(leafHistory)
+    .where(eq(leafHistory.leafId, leafId));
 
-  return rows.length;
+  return rows[0]?.count ?? 0;
 }
 
 /**
@@ -121,14 +149,36 @@ export async function deleteHistoryByLeafId(db: AnyDB, leafId: string): Promise<
   return result.length;
 }
 
+/**
+ * Find all history entries for a Leaf ordered by attempt_number ASC.
+ *
+ * Useful for viewing the corrective iteration sequence.
+ */
+export async function findHistoryByLeafIdOrderedByAttempt(
+  db: AnyDB,
+  leafId: string
+): Promise<
+  (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })[]
+> {
+  const rows = await db
+    .select()
+    .from(leafHistory)
+    .where(eq(leafHistory.leafId, leafId))
+    .orderBy(asc(leafHistory.attemptNumber), leafHistory.id);
+
+  return rows.map(rowToLeafHistory);
+}
+
 // ============================================================
 // Helpers
 // ============================================================
 
 /**
- * Convert database row to LeafHistory type
+ * Convert database row to LeafHistory type (including S16 columns)
  */
-function rowToLeafHistory(row: LeafHistoryRecord): LeafHistory {
+function rowToLeafHistory(
+  row: LeafHistoryRecord
+): LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string } {
   return {
     id: row.id,
     leaf_id: row.leafId,
@@ -137,5 +187,8 @@ function rowToLeafHistory(row: LeafHistoryRecord): LeafHistory {
     model: row.model,
     generated_at: row.generatedAt.toISOString(),
     created_by: row.createdBy ?? undefined,
+    attempt_number: row.attemptNumber,
+    corrective_feedback: row.correctiveFeedback ?? undefined,
+    prompt_used: row.promptUsed ?? undefined,
   };
 }

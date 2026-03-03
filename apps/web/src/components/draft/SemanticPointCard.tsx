@@ -1,8 +1,9 @@
 'use client';
 
-import { Undo2 } from 'lucide-react';
+import { Info, Lock, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { SemanticPointAPI } from '@/lib/api';
 
 interface SemanticPointCardProps {
@@ -16,6 +17,7 @@ const statusColors: Record<string, string> = {
   auto_landed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   reviewed: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   modified: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  reinforced: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
   undone: 'bg-red-100 text-red-800 line-through opacity-50',
 };
 
@@ -36,12 +38,26 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
             </Badge>
           )}
           {point.confidence != null && (
-            <span className="text-xs text-muted-foreground">
-              {Math.round(point.confidence * 100)}%
-            </span>
+            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
+              {point.confidence.toFixed(2)}
+            </Badge>
+          )}
+          {point.routing_reason && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info
+                  className="h-3 w-3 text-muted-foreground cursor-help"
+                  aria-label="Routing reason"
+                />
+              </TooltipTrigger>
+              <TooltipContent>{point.routing_reason}</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
+      {point.status === 'inherited' && !showUndo && (
+        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Inherited" />
+      )}
       {showUndo && point.status !== 'undone' && onUndo && (
         <Button
           variant="ghost"

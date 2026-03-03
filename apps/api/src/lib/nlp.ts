@@ -1,11 +1,11 @@
 /**
  * NLP Provider for Ring Extraction
  *
- * Uses Google Cloud Natural Language API for high-quality analysis.
- * GOOGLE_CLOUD_NLP_KEY is required - no fallback provider.
+ * Uses Google Cloud Natural Language API when GOOGLE_CLOUD_NLP_KEY is set.
+ * Falls back to local Intl.Segmenter-based provider for development without GCP.
  */
 
-import { createGoogleCloudNLPProvider, type NLPProvider } from '@t3x/core';
+import { createGoogleCloudNLPProvider, createLocalNLPProvider, type NLPProvider } from '@t3x/core';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { pinoLogger } from '../middleware/logger';
 
@@ -32,26 +32,23 @@ let nlpProvider: NLPProvider | null = null;
 /**
  * Get the NLP provider instance
  *
- * Requires GOOGLE_CLOUD_NLP_KEY to be set.
- * Throws error if not configured - no fallback to SimpleNLPProvider.
+ * Uses Google Cloud NLP when GOOGLE_CLOUD_NLP_KEY is set.
+ * Falls back to local Intl.Segmenter-based provider otherwise.
  */
 export function getNLPProvider(): NLPProvider {
   if (!nlpProvider) {
     const googleApiKey = process.env.GOOGLE_CLOUD_NLP_KEY;
 
-    if (!googleApiKey) {
-      throw new Error(
-        '[nlp] GOOGLE_CLOUD_NLP_KEY is not set. ' +
-          'Google Cloud NLP is required for Ring extraction. ' +
-          'Set the environment variable in .env file.'
-      );
+    if (googleApiKey) {
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+      pinoLogger.info({ proxy: proxyUrl || undefined }, 'using Google Cloud NLP provider');
+      nlpProvider = createGoogleCloudNLPProvider(googleApiKey, {
+        fetch: getProxyFetch(),
+      });
+    } else {
+      pinoLogger.info('GOOGLE_CLOUD_NLP_KEY not set, using local NLP provider (Intl.Segmenter)');
+      nlpProvider = createLocalNLPProvider();
     }
-
-    const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-    pinoLogger.info({ proxy: proxyUrl || undefined }, "using Google Cloud NLP provider");
-    nlpProvider = createGoogleCloudNLPProvider(googleApiKey, {
-      fetch: getProxyFetch(),
-    });
   }
   return nlpProvider;
 }

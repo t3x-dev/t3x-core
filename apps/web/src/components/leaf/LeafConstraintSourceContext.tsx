@@ -322,7 +322,8 @@ export function LeafConstraintSourceContext({
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
   const hasUserInteracted = useRef(false);
   const [mode, setMode] = useState<SelectionMode>('require');
-  const [_hoveredConstraintId, setHoveredConstraintId] = useState<string | null>(null);
+  // Hover callback for constraint list (value not yet used for visual highlight)
+  const handleConstraintHover = useCallback((_id: string | null) => {}, []);
 
   // Refs for each turn's bubble container (for offset calculation)
   const turnBubbleRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -461,7 +462,8 @@ export function LeafConstraintSourceContext({
                   sg.sentence.text,
                   context.target_turn.content,
                   sg.highlight.start,
-                  sg.highlight.end
+                  sg.highlight.end,
+                  sg.sentence.anchor_type
                 );
                 integrityStatus.set(sg.sentence.id, status);
               }
@@ -928,7 +930,7 @@ export function LeafConstraintSourceContext({
         <ConstraintList
           constraints={constraints}
           onRemove={onRemove}
-          onHover={setHoveredConstraintId}
+          onHover={handleConstraintHover}
           saving={saving}
         />
       )}

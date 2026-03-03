@@ -7,17 +7,19 @@
  * and inline constraint validation results (Error Lens pattern).
  */
 
-import { AlertTriangle, CheckCircle, GripVertical, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { AlertTriangle, CheckCircle, GripVertical, Lock, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DraftSentence } from '@/lib/api';
 import { getConstraintResultsForSentence } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 interface SentenceCardProps {
   sentence: DraftSentence;
+  inherited?: boolean;
   isDragOver?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragOver?: (e: React.DragEvent) => void;
@@ -27,6 +29,7 @@ interface SentenceCardProps {
 
 export function SentenceCard({
   sentence,
+  inherited = false,
   isDragOver,
   onDragStart,
   onDragOver,
@@ -35,6 +38,12 @@ export function SentenceCard({
 }: SentenceCardProps) {
   const { toggleSentence, removeSentence } = useDraftWorkspaceStore();
   const constraints = useDraftWorkspaceStore((s) => s.draft?.constraints ?? []);
+  const [locked, setLocked] = useState(inherited);
+
+  // Sync locked state when inherited prop changes
+  useEffect(() => {
+    setLocked(inherited);
+  }, [inherited]);
 
   const constraintResults = useMemo(
     () => getConstraintResultsForSentence(sentence, constraints),
@@ -46,31 +55,58 @@ export function SentenceCard({
   return (
     <div
       data-sentence-id={sentence.id}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      draggable={!locked}
+      onDragStart={locked ? undefined : onDragStart}
+      onDragOver={locked ? undefined : onDragOver}
+      onDrop={locked ? undefined : onDrop}
+      onDragEnd={locked ? undefined : onDragEnd}
       className={`group flex items-start gap-2 rounded-lg border p-3 transition-colors ${
-        sentence.included
-          ? 'border-border bg-[var(--surface-card)]'
-          : 'border-border/50 bg-muted/30 opacity-60'
+        locked
+          ? 'border-border/50 bg-muted/50'
+          : sentence.included
+            ? 'border-border bg-[var(--surface-card)]'
+            : 'border-border/50 bg-muted/30 opacity-60'
       } ${isDragOver ? 'border-primary border-t-2' : ''}`}
     >
-      {/* Drag handle */}
-      <GripVertical className="h-4 w-4 mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing" />
+      {/* Drag handle or Lock */}
+      {locked ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="mt-0.5 shrink-0"
+              onClick={() => {
+                if (window.confirm('Unlock this inherited sentence for editing?')) {
+                  setLocked(false);
+                }
+              }}
+              aria-label="Unlock inherited sentence"
+            >
+              <Lock className="h-4 w-4 text-muted-foreground/60" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Inherited from parent. Click to unlock.</TooltipContent>
+        </Tooltip>
+      ) : (
+        <GripVertical className="h-4 w-4 mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing" />
+      )}
 
       {/* Include checkbox */}
       <Checkbox
         checked={sentence.included}
         onCheckedChange={() => toggleSentence(sentence.id)}
         className="mt-0.5"
+        disabled={locked}
         aria-label={sentence.included ? 'Exclude sentence' : 'Include sentence'}
       />
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-foreground leading-relaxed">{sentence.text}</p>
+        <p
+          className={`text-sm leading-relaxed ${locked ? 'text-muted-foreground' : 'text-foreground'}`}
+        >
+          {sentence.text}
+        </p>
         {originLabel && (
           <Badge variant="secondary" className="mt-1.5 text-xs">
             {originLabel}
@@ -103,16 +139,18 @@ export function SentenceCard({
         )}
       </div>
 
-      {/* Remove button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-        onClick={() => removeSentence(sentence.id)}
-        aria-label="Remove sentence"
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
+      {/* Remove button (hidden when locked) */}
+      {!locked && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+          onClick={() => removeSentence(sentence.id)}
+          aria-label="Remove sentence"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
 }

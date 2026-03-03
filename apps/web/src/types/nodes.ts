@@ -609,6 +609,8 @@ export interface CanvasNodeData {
   // ============================================
   /** Link to drafts_v3 record (when commitStatus === 'draft') */
   draftId?: string;
+  /** Auto-draft ID available for this conversation (status === 'auto') */
+  autoDraftId?: string;
 
   // ============================================
   // Deprecated fields (keep for migration)
