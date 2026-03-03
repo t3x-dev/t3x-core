@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { type VerifyResult, verifyProjectHashChain } from '@/lib/api';
+import { formatTimeAgo } from '@/lib/timeUtils';
 
 type VerificationState = 'idle' | 'loading' | 'verified' | 'failed';
 
@@ -34,12 +35,18 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleVerify}>
-            <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-            Verify
-          </Button>
+          <Badge
+            variant="outline"
+            className="gap-1 text-xs cursor-pointer bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800"
+            onClick={handleVerify}
+            role="button"
+            tabIndex={0}
+          >
+            <Shield className="h-3.5 w-3.5" />
+            Unverified
+          </Badge>
         </TooltipTrigger>
-        <TooltipContent>Verify hash chain integrity</TooltipContent>
+        <TooltipContent>Click to verify hash chain integrity</TooltipContent>
       </Tooltip>
     );
   }
@@ -91,9 +98,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
                 <span>Entry points:</span>
                 <span className="font-mono">{result.entry_points}</span>
                 <span>Verified at:</span>
-                <span className="font-mono">
-                  {new Date(result.verified_at).toLocaleTimeString()}
-                </span>
+                <span className="font-mono">{formatTimeAgo(result.verified_at)}</span>
               </div>
 
               {!result.valid && (

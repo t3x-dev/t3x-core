@@ -2,8 +2,10 @@
 
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
 import { type ConflictCandidate, checkConflicts } from '@/lib/api';
+import { wordDiff } from '@/lib/diffUtils';
 
 interface ConflictPanelProps {
   commitHash: string;
@@ -70,25 +72,26 @@ export function ConflictPanel({ commitHash }: ConflictPanelProps) {
           {conflicts.length} potential conflict{conflicts.length !== 1 ? 's' : ''}
         </span>
       </div>
-      {conflicts.map((c) => (
-        <div
-          key={`${c.new_sentence_id}-${c.existing_sentence_id}`}
-          className="text-xs space-y-1 p-2 rounded bg-white/50 dark:bg-black/20"
-        >
-          <div>
-            <span className="font-medium text-[var(--text-primary)]">New:</span>{' '}
-            <span className="text-[var(--text-secondary)]">{c.new_sentence_text}</span>
+      {conflicts.map((c) => {
+        const segments = wordDiff(c.existing_sentence_text, c.new_sentence_text);
+        return (
+          <div
+            key={`${c.new_sentence_id}-${c.existing_sentence_id}`}
+            className="text-xs space-y-1.5 p-2 rounded bg-white/50 dark:bg-black/20"
+          >
+            <div>
+              <span className="font-medium text-[var(--text-primary)]">Diff:</span>
+              <div className="mt-0.5">
+                <WordDiffDisplay segments={segments} />
+              </div>
+            </div>
+            <div className="text-[var(--text-tertiary)]">
+              cosine: {c.cosine.toFixed(2)} · jaccard: {c.jaccard.toFixed(2)} · commit:{' '}
+              {c.existing_commit_hash.replace('sha256:', '').slice(0, 7)}
+            </div>
           </div>
-          <div>
-            <span className="font-medium text-[var(--text-primary)]">Existing:</span>{' '}
-            <span className="text-[var(--text-secondary)]">{c.existing_sentence_text}</span>
-          </div>
-          <div className="text-[var(--text-tertiary)]">
-            cosine: {c.cosine.toFixed(2)} · jaccard: {c.jaccard.toFixed(2)} · commit:{' '}
-            {c.existing_commit_hash.replace('sha256:', '').slice(0, 7)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

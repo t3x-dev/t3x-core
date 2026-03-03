@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, FileText, Loader2, Sparkles, X } from 'lucide-react';
+import { Eye, FileText, Loader2, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type DraftV3, getDraftV3, promoteDraft } from '@/lib/api';
+import { type DraftV3, deleteDraftV3, getDraftV3, promoteDraft } from '@/lib/api';
 
 interface PromotePreviewDialogProps {
   open: boolean;
@@ -21,6 +21,7 @@ interface PromotePreviewDialogProps {
   autoDraftId: string;
   onPromoted?: (draftId: string) => void;
   onViewFull?: (draftId: string) => void;
+  onDiscarded?: () => void;
 }
 
 export function PromotePreviewDialog({
@@ -29,10 +30,12 @@ export function PromotePreviewDialog({
   autoDraftId,
   onPromoted,
   onViewFull,
+  onDiscarded,
 }: PromotePreviewDialogProps) {
   const [draft, setDraft] = useState<DraftV3 | null>(null);
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
 
   useEffect(() => {
     if (!open || !autoDraftId) return;
@@ -118,10 +121,41 @@ export function PromotePreviewDialog({
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="mr-auto">
-            <X className="h-3.5 w-3.5 mr-1" />
-            Close
-          </Button>
+          <div className="mr-auto flex gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+              <X className="h-3.5 w-3.5 mr-1" />
+              Close
+            </Button>
+            {draft && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                disabled={discarding}
+                onClick={async () => {
+                  if (!window.confirm('Discard this auto-draft? This cannot be undone.')) return;
+                  setDiscarding(true);
+                  try {
+                    await deleteDraftV3(autoDraftId);
+                    toast.success('Auto-draft discarded');
+                    onDiscarded?.();
+                    onOpenChange(false);
+                  } catch {
+                    toast.error('Failed to discard draft');
+                  } finally {
+                    setDiscarding(false);
+                  }
+                }}
+              >
+                {discarding ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                )}
+                Discard
+              </Button>
+            )}
+          </div>
           {onViewFull && draft && (
             <Button
               variant="outline"

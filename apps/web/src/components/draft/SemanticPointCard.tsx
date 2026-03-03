@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, Undo2 } from 'lucide-react';
+import { Info, Lock, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -38,9 +38,9 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
             </Badge>
           )}
           {point.confidence != null && (
-            <span className="text-xs text-muted-foreground">
-              {Math.round(point.confidence * 100)}%
-            </span>
+            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
+              {point.confidence.toFixed(2)}
+            </Badge>
           )}
           {point.routing_reason && (
             <Tooltip>
@@ -55,6 +55,9 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
           )}
         </div>
       </div>
+      {point.status === 'inherited' && !showUndo && (
+        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Inherited" />
+      )}
       {showUndo && point.status !== 'undone' && onUndo && (
         <Button
           variant="ghost"

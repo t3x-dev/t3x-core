@@ -83,14 +83,29 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
           <EvidenceDisplay evidence={point.evidence} />
 
           <div className="flex items-center gap-1.5 pt-1">
-            <Button size="sm" variant="outline" onClick={() => onAccept(point.id)}>
-              <Check className="mr-1 h-3 w-3" /> Accept
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+              onClick={() => onAccept(point.id)}
+            >
+              <Check className="mr-1 h-3 w-3" /> {isModify ? 'Accept Change' : 'Accept'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-blue-700 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-950/30"
+              onClick={() => setEditing(true)}
+            >
               <Pencil className="mr-1 h-3 w-3" /> Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => onDismiss(point.id)}>
-              <X className="mr-1 h-3 w-3" /> Dismiss
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => onDismiss(point.id)}
+            >
+              <X className="mr-1 h-3 w-3" /> {isModify ? 'Keep Current' : 'Dismiss'}
             </Button>
           </div>
         </>

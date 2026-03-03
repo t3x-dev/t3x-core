@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowUpRight, Loader2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,12 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
   const [selectedDraftId, setSelectedDraftId] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [floatingBtn, setFloatingBtn] = useState<{
+    top: number;
+    left: number;
+    text: string;
+  } | null>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   const handleOpen = useCallback(async () => {
     setExtractedText(outputText);
@@ -71,10 +77,69 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     }
   }, [selectedDraftId, extractedText, leafId]);
 
+  const handleSelectionChange = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !outputRef.current) {
+      setFloatingBtn(null);
+      return;
+    }
+    if (!outputRef.current.contains(sel.anchorNode)) {
+      setFloatingBtn(null);
+      return;
+    }
+    const selectedText = sel.toString().trim();
+    if (!selectedText) {
+      setFloatingBtn(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = outputRef.current.getBoundingClientRect();
+    setFloatingBtn({
+      top: rect.top - containerRect.top - 32,
+      left: rect.left - containerRect.left + rect.width / 2,
+      text: selectedText,
+    });
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [handleSelectionChange]);
+
+  const handleFloatingClick = useCallback(() => {
+    if (!floatingBtn) return;
+    setExtractedText(floatingBtn.text);
+    setFloatingBtn(null);
+    setDialogOpen(true);
+    setLoading(true);
+    listDraftsV3(projectId, 'editing')
+      .then((d) => {
+        setDrafts(d);
+        if (d.length > 0) setSelectedDraftId(d[0].id);
+      })
+      .catch(() => toast.error('Failed to load drafts'))
+      .finally(() => setLoading(false));
+  }, [floatingBtn, projectId]);
+
   if (!outputText) return null;
 
   return (
     <>
+      <div ref={outputRef} className="relative">
+        {floatingBtn && (
+          <button
+            type="button"
+            className="absolute z-10 flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs shadow-md hover:bg-accent transition-colors"
+            style={{ top: floatingBtn.top, left: floatingBtn.left, transform: 'translateX(-50%)' }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleFloatingClick}
+          >
+            <ArrowUpRight className="h-3 w-3" />
+            Add to Draft
+          </button>
+        )}
+      </div>
       <Button variant="outline" size="sm" className="gap-1" onClick={handleOpen}>
         <ArrowUpRight className="h-3.5 w-3.5" />
         Add to Draft
