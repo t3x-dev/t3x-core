@@ -44,6 +44,8 @@ export interface SentenceWithSource {
    * Undefined for sentences created directly in this commit.
    */
   inherited_from?: string;
+  /** Anchor type for integrity checking threshold selection */
+  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 /**
@@ -138,7 +140,7 @@ export interface TurnBubbleData {
 /**
  * Highlight color options.
  */
-export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed';
+export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed' | 'amber' | 'blue';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Data Types

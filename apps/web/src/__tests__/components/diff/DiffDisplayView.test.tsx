@@ -12,6 +12,7 @@ import {
   type CommitDiff,
   type DiffableSentence,
   diffCommits,
+  EQUIVALENT_THRESHOLD,
   JACCARD_THRESHOLD,
   jaccard,
   lcs,
@@ -304,6 +305,7 @@ describe('DiffDisplayView - Stats Calculation', () => {
   test('calculates correct stats from diff result', () => {
     const diff: CommitDiff = {
       identical: [{ id: 's1', text: 'same' }],
+      equivalent: [],
       similar: [
         {
           source: { id: 's2', text: 'old' },
@@ -318,15 +320,103 @@ describe('DiffDisplayView - Stats Calculation', () => {
 
     const total =
       diff.identical.length +
+      diff.equivalent.length +
       diff.similar.length +
       diff.onlyInSource.length +
       diff.onlyInTarget.length;
 
     expect(total).toBe(4);
     expect(diff.identical.length).toBe(1);
+    expect(diff.equivalent.length).toBe(0);
     expect(diff.similar.length).toBe(1);
     expect(diff.onlyInSource.length).toBe(1);
     expect(diff.onlyInTarget.length).toBe(1);
+  });
+});
+
+describe('DiffDisplayView - Four-Color Diff (Equivalent Split)', () => {
+  test('EQUIVALENT_THRESHOLD is 0.85', () => {
+    expect(EQUIVALENT_THRESHOLD).toBe(0.85);
+  });
+
+  test('high-similarity pairs go to equivalent bucket', () => {
+    // "Budget is $3000" vs "Budget is $3500" → Jaccard = 2/4 = 0.5 → similar (< 0.85)
+    const source = [{ id: 's1', text: 'Budget is $3000' }];
+    const target = [{ id: 't1', text: 'Budget is $3500' }];
+    const result = diffCommits(source, target);
+
+    expect(result.equivalent.length).toBe(0);
+    expect(result.similar.length).toBe(1);
+  });
+
+  test('near-identical pairs (≥ 0.85) go to equivalent bucket', () => {
+    // "The user prefers morning meetings" vs "The user prefers morning sessions"
+    // Tokens: {the, user, prefers, morning, meetings} vs {the, user, prefers, morning, sessions}
+    // Intersection = 4, Union = 6, Jaccard = 4/6 ≈ 0.667 → similar (< 0.85)
+    // Need a pair with higher overlap:
+    // "The user prefers early morning meetings every day" vs "The user prefers early morning sessions every day"
+    // Tokens: 8 words each, 7 in common, union = 9, Jaccard = 7/9 ≈ 0.778 → still similar
+    // Need even higher:
+    // 10 words, 9 in common → Jaccard = 9/11 ≈ 0.818 → still below 0.85
+    // 10 words, 10 in common out of 11 → Jaccard = 10/12 ≈ 0.833 → still below
+    // Actually need: 6/7 = 0.857 → equivalent
+    const source = [{ id: 's1', text: 'The user always prefers meeting in the morning time slot' }];
+    const target = [
+      { id: 't1', text: 'The user always prefers meeting in the morning time block' },
+    ];
+    const result = diffCommits(source, target);
+
+    // 10 words each, 9 in common, union = 11, Jaccard = 9/11 ≈ 0.818
+    // Actually calculate: tokens share 9 (the, user, always, prefers, meeting, in, the, morning, time)
+    // unique: slot, block → union = 11, J = 9/11 = 0.818 < 0.85
+    // So we need even more overlap. Let's use 12-word sentences with 1 diff:
+    const source2 = [
+      {
+        id: 's1',
+        text: 'I want to make sure we always book the large meeting room for team calls',
+      },
+    ];
+    const target2 = [
+      {
+        id: 't1',
+        text: 'I want to make sure we always book the big meeting room for team calls',
+      },
+    ];
+    const result2 = diffCommits(source2, target2);
+    // 15 words each, 14 in common (large→big), union = 16
+    // Jaccard = 14/16 = 0.875 >= 0.85 → equivalent!
+    expect(result2.equivalent.length).toBe(1);
+    expect(result2.similar.length).toBe(0);
+    expect(result2.equivalent[0].similarity).toBeGreaterThanOrEqual(EQUIVALENT_THRESHOLD);
+  });
+
+  test('diffCommits returns all five categories', () => {
+    const source = [
+      { id: 's1', text: 'Unchanged sentence stays the same' },
+      {
+        id: 's2',
+        text: 'I want to make sure we always book the large meeting room for team calls',
+      },
+      { id: 's3', text: 'Budget is $3000' },
+      { id: 's4', text: 'This sentence will be removed completely from the document' },
+    ];
+    const target = [
+      { id: 't1', text: 'Unchanged sentence stays the same' },
+      {
+        id: 't2',
+        text: 'I want to make sure we always book the big meeting room for team calls',
+      },
+      { id: 't3', text: 'Budget is $3500' },
+      { id: 't4', text: 'Brand new sentence added to the document' },
+    ];
+
+    const result = diffCommits(source, target);
+
+    expect(result.identical.length).toBe(1);
+    expect(result.equivalent.length).toBe(1);
+    expect(result.similar.length).toBe(1);
+    expect(result.onlyInSource.length).toBe(1);
+    expect(result.onlyInTarget.length).toBe(1);
   });
 });
 

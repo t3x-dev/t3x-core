@@ -303,6 +303,32 @@ export async function suggestLeafConstraints(
 }
 
 // ============================================================================
+// Reverse Learning (Constraint Suggestions from Failed Assertions)
+// ============================================================================
+
+export interface ReverseLearnResult {
+  suggestions: SuggestedConstraint[];
+  lessons_used: string[];
+  model: string;
+}
+
+export async function reverseLearnConstraints(
+  leafId: string,
+  maxSuggestions = 5
+): Promise<ReverseLearnResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
+    },
+    30_000
+  );
+  return handleResponse<ReverseLearnResult>(res);
+}
+
+// ============================================================================
 // Curate Preview API
 // ============================================================================
 

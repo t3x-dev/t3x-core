@@ -73,7 +73,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
-      - AUTH_DISABLED=true
+      - AUTH_DISABLED=${AUTH_DISABLED:-true}
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
       - GOOGLE_CLOUD_NLP_KEY
@@ -102,9 +102,17 @@ services:
       # Note: NEXT_PUBLIC_* env vars are set at BUILD time in Dockerfile
       # Runtime values here are ignored by client-side code
       - NEXT_PUBLIC_API_URL=http://t3x-api:8000
+      # Server-side API URL for inter-container calls (NextAuth callback, SSR, etc.)
+      - T3X_API_URL=http://t3x-api:8000
       - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
       # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
       - HOSTNAME=0.0.0.0
+      # Auth configuration
+      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)
       - ANTHROPIC_API_KEY
     depends_on:

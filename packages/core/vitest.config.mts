@@ -10,4 +10,8 @@ export default defineConfig({
     // Longer timeout for async operations
     testTimeout: 10000,
   },
+  bench: {
+    globals: true,
+    include: ['src/**/*.bench.ts'],
+  },
 });

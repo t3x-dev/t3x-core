@@ -4,10 +4,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
+import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LeafInspector } from '@/components/leaf/LeafInspector';
 import { LeafOutputDisplay } from '@/components/leaf/LeafOutputDisplay';
 import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
 import { LeafWorkspaceHeader } from '@/components/leaf/LeafWorkspaceHeader';
+import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
 import { SentenceSourcePanel } from '@/components/leaf/SentenceSourcePanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
@@ -325,6 +327,21 @@ export default function LeafDetailPage() {
               hoveredSentenceId={hoveredSentenceId}
               onHoverSentence={setHoveredSentenceId}
             />
+
+            {/* Reverse-learn: suggest constraints from failed assertions */}
+            {leaf.assertions?.some((a) => !a.passed) && (
+              <LearnFromEditSuggestion
+                leafId={leafId}
+                onAddConstraint={(constraint) => {
+                  handleAddConstraint(constraint.type, constraint.value, constraint.match_mode);
+                }}
+              />
+            )}
+
+            {/* Extract leaf output to draft */}
+            {leaf.output && (
+              <LeafExtractToDraft leafId={leafId} projectId={projectId} outputText={leaf.output} />
+            )}
 
             {/* Display mode: Lineage Summary */}
             {mode === 'display' && leaf.output && (

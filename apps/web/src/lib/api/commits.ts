@@ -287,3 +287,33 @@ export async function createCommitV4(
   });
   return handleResponse<CommitV4>(res);
 }
+
+// ============================================================================
+// Conflict Detection
+// ============================================================================
+
+export interface ConflictCandidate {
+  new_sentence_id: string;
+  new_sentence_text: string;
+  existing_sentence_id: string;
+  existing_sentence_text: string;
+  existing_commit_hash: string;
+  cosine: number;
+  jaccard: number;
+}
+
+export interface ConflictReport {
+  conflicts: ConflictCandidate[];
+  checked_count: number;
+}
+
+/**
+ * Check for semantic conflicts between a commit's sentences and existing commits
+ */
+export async function checkConflicts(commitHash: string): Promise<ConflictReport> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/check-conflicts`,
+    { method: 'POST' }
+  );
+  return handleResponse<ConflictReport>(res);
+}

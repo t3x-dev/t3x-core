@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { verifyProposal } from '../verifyProposal';
 import type { ExtractionProposal, SemanticPoint } from '../../types/v4';
 import type { TurnInput } from '../extractionPrompt';
+import type { EmbeddingProvider } from '../../providers/embedding/base';
 
 const turns: TurnInput[] = [
   {
@@ -135,5 +136,105 @@ describe('verifyProposal', () => {
       turns
     );
     expect(result).toBeNull();
+  });
+});
+
+describe('overlap detection (L2)', () => {
+  // Vectors: identical → cosine 1.0, orthogonal → cosine 0.0
+  const vecA = [1, 0, 0];
+  const vecSimilar = [0.98, 0.1, 0.1]; // cosine ~0.97
+  const vecModerate = [0.7, 0.7, 0.1]; // cosine ~0.70
+  const vecDifferent = [0, 0, 1]; // cosine 0.0
+
+  function makeMockEmbedder(returnVec: number[]): EmbeddingProvider {
+    return {
+      id: 'mock:test',
+      dim: 3,
+      encode: vi.fn().mockResolvedValue([returnVec]),
+      similarity: (a, b) => {
+        let dot = 0, na = 0, nb = 0;
+        for (let i = 0; i < a.length; i++) {
+          dot += a[i] * b[i];
+          na += a[i] * a[i];
+          nb += b[i] * b[i];
+        }
+        const d = Math.sqrt(na) * Math.sqrt(nb);
+        return d === 0 ? 0 : dot / d;
+      },
+    };
+  }
+
+  const spsWithEmbedding: SemanticPoint[] = [{
+    id: 'sp_existing',
+    text: 'User likes dark mode.',
+    extraction_mode: 'llm_extracted',
+    status: 'auto_landed',
+    zone: 'ready',
+    evidence: [],
+    confidence: 0.9,
+    position: 0,
+    staged: true,
+  }];
+
+  it('returns duplicate when cosine >= 0.95', async () => {
+    const embedder = makeMockEmbedder(vecA);
+    const result = await verifyProposal(
+      makeProposal(),
+      spsWithEmbedding,
+      turns,
+      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
+    );
+    expect(result).not.toBeNull();
+    expect(result!.overlap).toBeDefined();
+    expect(result!.overlap!.status).toBe('duplicate');
+    expect(result!.overlap!.matched_sp_id).toBe('sp_existing');
+  });
+
+  it('returns potential_conflict for cosine in [0.85, 0.95)', async () => {
+    // vecForConflict embedded against vecA: cosine ~0.90
+    const vecForConflict = [0.9, 0.4, 0.1];
+    const embedder = makeMockEmbedder(vecForConflict);
+    const result = await verifyProposal(
+      makeProposal(),
+      spsWithEmbedding,
+      turns,
+      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
+    );
+    expect(result).not.toBeNull();
+    expect(result!.overlap).toBeDefined();
+    expect(result!.overlap!.status).toBe('potential_conflict');
+    expect(result!.overlap!.cosine).toBeGreaterThanOrEqual(0.85);
+    expect(result!.overlap!.cosine).toBeLessThan(0.95);
+  });
+
+  it('returns unique for cosine < 0.85', async () => {
+    const embedder = makeMockEmbedder(vecDifferent);
+    const result = await verifyProposal(
+      makeProposal(),
+      spsWithEmbedding,
+      turns,
+      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
+    );
+    expect(result).not.toBeNull();
+    expect(result!.overlap).toBeDefined();
+    expect(result!.overlap!.status).toBe('unique');
+  });
+
+  it('skips overlap when no embedder provided', () => {
+    const result = verifyProposal(makeProposal(), existingSPs, turns);
+    expect(result).not.toBeNull();
+    expect(result!.overlap).toBeUndefined();
+  });
+
+  it('skips overlap when existingEmbeddings is empty', async () => {
+    const embedder = makeMockEmbedder(vecA);
+    const result = await verifyProposal(
+      makeProposal(),
+      existingSPs,
+      turns,
+      { embedder, existingEmbeddings: new Map() }
+    );
+    expect(result).not.toBeNull();
+    expect(result!.overlap).toBeUndefined();
   });
 });

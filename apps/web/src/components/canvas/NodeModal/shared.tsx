@@ -326,6 +326,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
                 end_char: s.source_ref.end_char,
               }
             : undefined,
+          anchor_type: s.anchor_type,
         }))
       : (commit as CommitV3Display).sentences.map((s) => ({
           id: s.id,

@@ -8,6 +8,7 @@ import {
   deleteHistoryByLeafId,
   deleteLeafHistory,
   findHistoryByLeafId,
+  findHistoryByLeafIdOrderedByAttempt,
   findLeafHistoryById,
 } from '../queries/leaf-history';
 import { createLeaf } from '../queries/leaves';
@@ -290,6 +291,124 @@ describe('Leaf History Storage', () => {
     it('returns 0 for leaf with no history', async () => {
       const deletedCount = await deleteHistoryByLeafId(db, 'leaf_no_hist');
       expect(deletedCount).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // S16: attempt_number, corrective_feedback, prompt_used
+  // =========================================================================
+  describe('S16 columns (attempt_number, corrective_feedback, prompt_used)', () => {
+    it('creates history with explicit attempt_number', async () => {
+      const history = await createLeafHistory(db, {
+        leaf_id: testLeafId,
+        output: 'Attempt 3 output',
+        config: {},
+        model: 'gpt-4',
+        attempt_number: 3,
+      });
+
+      expect(history.attempt_number).toBe(3);
+    });
+
+    it('creates history with corrective_feedback and prompt_used', async () => {
+      const history = await createLeafHistory(db, {
+        leaf_id: testLeafId,
+        output: 'Corrected output',
+        config: {},
+        model: 'gpt-4',
+        attempt_number: 2,
+        corrective_feedback: 'The tone was too formal, make it casual.',
+        prompt_used: 'Write a casual tweet about AI. Context: ...',
+      });
+
+      expect(history.attempt_number).toBe(2);
+      expect(history.corrective_feedback).toBe('The tone was too formal, make it casual.');
+      expect(history.prompt_used).toBe('Write a casual tweet about AI. Context: ...');
+    });
+
+    it('defaults attempt_number to 1 when not provided', async () => {
+      const history = await createLeafHistory(db, {
+        leaf_id: testLeafId,
+        output: 'Default attempt output',
+        config: {},
+        model: 'gpt-4',
+      });
+
+      expect(history.attempt_number).toBe(1);
+      expect(history.corrective_feedback).toBeUndefined();
+      expect(history.prompt_used).toBeUndefined();
+    });
+
+    it('findHistoryByLeafIdOrderedByAttempt returns in ascending attempt order', async () => {
+      // Create a fresh leaf for this test
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Test' },
+        sentences: [{ id: 's_attempt_order', text: 'Attempt ordering test' }],
+        project_id: testProjectId,
+      });
+      const leaf = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: 'tweet',
+        project_id: testProjectId,
+      });
+
+      // Insert out of order
+      await createLeafHistory(db, {
+        leaf_id: leaf.id,
+        output: 'Third attempt',
+        config: {},
+        model: 'gpt-4',
+        attempt_number: 3,
+        corrective_feedback: 'Still not right',
+        prompt_used: 'Prompt v3',
+      });
+      await createLeafHistory(db, {
+        leaf_id: leaf.id,
+        output: 'First attempt',
+        config: {},
+        model: 'gpt-4',
+        attempt_number: 1,
+        prompt_used: 'Prompt v1',
+      });
+      await createLeafHistory(db, {
+        leaf_id: leaf.id,
+        output: 'Second attempt',
+        config: {},
+        model: 'gpt-4',
+        attempt_number: 2,
+        corrective_feedback: 'Too formal',
+        prompt_used: 'Prompt v2',
+      });
+
+      const ordered = await findHistoryByLeafIdOrderedByAttempt(db, leaf.id);
+      expect(ordered).toHaveLength(3);
+      expect(ordered[0].attempt_number).toBe(1);
+      expect(ordered[0].output).toBe('First attempt');
+      expect(ordered[1].attempt_number).toBe(2);
+      expect(ordered[1].output).toBe('Second attempt');
+      expect(ordered[1].corrective_feedback).toBe('Too formal');
+      expect(ordered[2].attempt_number).toBe(3);
+      expect(ordered[2].output).toBe('Third attempt');
+      expect(ordered[2].prompt_used).toBe('Prompt v3');
+    });
+
+    it('persists S16 fields via findLeafHistoryById', async () => {
+      const created = await createLeafHistory(db, {
+        leaf_id: testLeafId,
+        output: 'Persist check',
+        config: {},
+        model: 'claude-3',
+        attempt_number: 5,
+        corrective_feedback: 'Add more examples',
+        prompt_used: 'Full prompt text here',
+      });
+
+      const found = await findLeafHistoryById(db, created.id);
+      expect(found).toBeDefined();
+      expect(found!.attempt_number).toBe(5);
+      expect(found!.corrective_feedback).toBe('Add more examples');
+      expect(found!.prompt_used).toBe('Full prompt text here');
     });
   });
 });

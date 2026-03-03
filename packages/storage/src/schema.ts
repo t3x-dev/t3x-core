@@ -34,13 +34,19 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 /**
  * Projects - Top level container for conversations and commits
  */
-export const projects = pgTable('projects', {
-  projectId: text('project_id').primaryKey(),
-  name: text('name').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  metadataJson: text('metadata_json'),
-  providerConfig: text('provider_config'), // JSON: project-level provider overrides
-});
+export const projects = pgTable(
+  'projects',
+  {
+    projectId: text('project_id').primaryKey(),
+    name: text('name').notNull(),
+    /** Owner user ID. null = public/legacy data (AUTH_DISABLED era) */
+    ownerId: text('owner_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    metadataJson: text('metadata_json'),
+    providerConfig: text('provider_config'), // JSON: project-level provider overrides
+  },
+  (table) => [index('idx_projects_owner').on(table.ownerId)]
+);
 
 /**
  * Global Settings - Key-value store for app-wide configuration
@@ -404,6 +410,17 @@ export const templates = pgTable(
     >(),
     tags: jsonb('tags').$type<string[]>().notNull().default([]),
     isBuiltin: boolean('is_builtin').notNull().default(false),
+    /** Default constraints applied when using this template */
+    defaultConstraints: jsonb('default_constraints')
+      .$type<
+        Array<{ type: 'require' | 'exclude'; match_mode: 'exact' | 'semantic'; value: string }>
+      >()
+      .default([]),
+    /** Default semantic thresholds for validation */
+    semanticThreshold: jsonb('semantic_threshold').$type<{
+      require: number;
+      exclude: number;
+    } | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },

@@ -68,6 +68,16 @@ export interface Sentence {
    * This preserves determinism while enabling inheritance tracking.
    */
   inherited_from?: string;
+
+  /**
+   * How the evidence anchor relates to the source text.
+   * - verbatim: exact quote from the source
+   * - paraphrase: meaning preserved but rewording applied
+   * - inference: derived from source through reasoning
+   *
+   * Second-class field: Does NOT participate in hash calculation.
+   */
+  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 export interface SentenceSourceRef {
@@ -663,6 +673,39 @@ export interface MergeV4Result {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// User (Authentication)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A registered user (via OAuth provider).
+ *
+ * Users own projects via projects.owner_id.
+ * In AUTH_DISABLED mode, no users exist and owner_id is null.
+ */
+export interface User {
+  /** Unique ID, format: "user_" + nanoid(12) */
+  id: string;
+
+  /** OAuth provider name (e.g., 'github') */
+  provider: string;
+
+  /** User ID from the OAuth provider */
+  provider_id: string;
+
+  /** Email address (may be null if provider doesn't expose it) */
+  email: string | null;
+
+  /** Display name */
+  name: string | null;
+
+  /** Avatar URL */
+  avatar_url: string | null;
+
+  /** When the user was created, ISO8601 */
+  created_at: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // API Key (Authentication)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -687,6 +730,9 @@ export interface ApiKey {
 
   /** Scope: if set, key is scoped to this project. null = global */
   project_id: string | null;
+
+  /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
+  user_id: string | null;
 
   /** When the key was created, ISO8601 */
   created_at: string;
@@ -931,10 +977,13 @@ export interface SemanticPoint {
  * Enables delta-in: only process turns after the cursor.
  */
 export interface ExtractionCursor {
-  cursors: Record<string, {
-    last_processed_turn: string;
-    processed_at: string;
-  }>;
+  cursors: Record<
+    string,
+    {
+      last_processed_turn: string;
+      processed_at: string;
+    }
+  >;
 }
 
 /**
@@ -966,7 +1015,6 @@ export interface EvidenceAnchor {
  */
 export interface SentenceV5 extends Sentence {
   supporting_refs?: SentenceSourceRef[];
-  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
 }
 
 /**

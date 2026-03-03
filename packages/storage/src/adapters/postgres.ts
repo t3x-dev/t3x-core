@@ -492,6 +492,57 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       value TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- API Keys table (Authentication)
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      key_prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
+
+    -- Webhooks table (Event Subscription)
+    CREATE TABLE IF NOT EXISTS webhooks (
+      webhook_id TEXT PRIMARY KEY,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      events JSONB NOT NULL,
+      secret TEXT,
+      active TEXT NOT NULL DEFAULT 'true',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Auth Migration (Phase 1.2)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    -- Users table (OAuth providers)
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      email TEXT,
+      name TEXT,
+      avatar_url TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
+
+    -- Migration: Add owner_id to projects (nullable — null = public/legacy data)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
+
+    -- Migration: Add user_id to api_keys (nullable — null = legacy key)
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

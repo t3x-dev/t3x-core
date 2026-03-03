@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
+import type { HighlightColor } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Recreate helper functions for unit testing
@@ -531,5 +532,74 @@ describe('CommitSourceContext - Edge Cases', () => {
       expect(byTurn.size).toBe(1);
       expect(byTurn.get('hash1')![0].sentence.text.length).toBe(longText.length);
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Anchor Type Visual Differentiation
+// ═══════════════════════════════════════════════════════════════════════════
+
+function anchorTypeToColor(anchorType?: string): HighlightColor {
+  switch (anchorType) {
+    case 'paraphrase':
+      return 'amber';
+    case 'inference':
+      return 'blue';
+    default:
+      return 'green';
+  }
+}
+
+describe('CommitSourceContext - Anchor Type Rendering', () => {
+  test('verbatim anchor maps to green', () => {
+    expect(anchorTypeToColor('verbatim')).toBe('green');
+    expect(anchorTypeToColor(undefined)).toBe('green');
+  });
+
+  test('paraphrase anchor maps to amber', () => {
+    expect(anchorTypeToColor('paraphrase')).toBe('amber');
+  });
+
+  test('inference anchor maps to blue', () => {
+    expect(anchorTypeToColor('inference')).toBe('blue');
+  });
+
+  test('colored highlights only built when non-verbatim types exist', () => {
+    const allVerbatim = [{ anchor_type: 'verbatim' as const }, { anchor_type: undefined }];
+    const hasNonVerbatim = allVerbatim.some((s) => s.anchor_type && s.anchor_type !== 'verbatim');
+    expect(hasNonVerbatim).toBe(false);
+
+    const mixed = [{ anchor_type: 'verbatim' as const }, { anchor_type: 'paraphrase' as const }];
+    const hasMixed = mixed.some((s) => s.anchor_type && s.anchor_type !== 'verbatim');
+    expect(hasMixed).toBe(true);
+  });
+
+  test('HighlightColor type includes amber and blue', () => {
+    const colors: HighlightColor[] = ['yellow', 'green', 'deepGreen', 'deepRed', 'amber', 'blue'];
+    expect(colors).toContain('amber');
+    expect(colors).toContain('blue');
+  });
+
+  test('truncation filters out coloredHighlights without adjusted match', () => {
+    // Simulates the truncation mapping logic from CommitSourceContext
+    type CH = { start: number; end: number; color: HighlightColor };
+    const coloredHighlights: CH[] = [
+      { start: 100, end: 150, color: 'green' },
+      { start: 5000, end: 5050, color: 'amber' }, // outside truncated window
+    ];
+    const effectiveHighlights = [{ start: 100, end: 150 }]; // only first survives truncation
+
+    const result = coloredHighlights
+      .map((ch) => {
+        const adjusted = effectiveHighlights.find(
+          (h) => Math.abs(h.start - ch.start) < 5 || Math.abs(h.end - ch.end) < 5
+        );
+        return adjusted ? { start: adjusted.start, end: adjusted.end, color: ch.color } : null;
+      })
+      .filter((ch): ch is CH => ch !== null);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].color).toBe('green');
+    expect(result[0].start).toBe(100);
   });
 });

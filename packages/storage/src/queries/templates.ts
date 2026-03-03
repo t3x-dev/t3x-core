@@ -27,6 +27,12 @@ export interface CreateTemplateInput {
   }>;
   tags?: string[];
   is_builtin?: boolean;
+  default_constraints?: Array<{
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+  }>;
+  semantic_threshold?: { require: number; exclude: number };
 }
 
 export interface ListTemplatesOptions {
@@ -59,6 +65,8 @@ export async function createTemplate(db: AnyDB, input: CreateTemplateInput) {
       variables: input.variables,
       tags: input.tags ?? [],
       isBuiltin: input.is_builtin ?? false,
+      defaultConstraints: input.default_constraints ?? [],
+      semanticThreshold: input.semantic_threshold ?? null,
       createdAt: now,
       updatedAt: now,
     })

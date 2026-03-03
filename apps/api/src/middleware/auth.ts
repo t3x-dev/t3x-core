@@ -21,7 +21,7 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = ['/api/v1/share/'];
+const PUBLIC_PREFIXES = ['/api/v1/share/', '/api/v1/auth/callback'];
 
 function isPublicPath(path: string): boolean {
   if (PUBLIC_PATHS.includes(path)) return true;
@@ -34,12 +34,12 @@ function isPublicPath(path: string): boolean {
 /**
  * Authentication middleware for Hono.
  *
- * When AUTH_DISABLED=true, all requests pass through without authentication.
- * Otherwise, requires a valid API key via `Authorization: Bearer <key>` header.
+ * Auth is DISABLED by default (safe for local dev without .env).
+ * Only enabled when AUTH_DISABLED is explicitly set to 'false'.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // Skip auth if disabled (local development)
-  if (process.env.AUTH_DISABLED === 'true') {
+  // Skip auth unless explicitly enabled (AUTH_DISABLED=false)
+  if (process.env.AUTH_DISABLED !== 'false') {
     return next();
   }
 

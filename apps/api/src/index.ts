@@ -20,6 +20,7 @@ import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import {
   agentDraftRoutes,
+  authCallbackRoutes,
   branchRoutes,
   chatRoutes,
   commitsV3Routes,
@@ -42,6 +43,8 @@ import {
 import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
+import { ingestRoutes } from './routes/ingest.openapi';
+import { notificationsRoutes } from './routes/notifications.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
@@ -144,7 +147,10 @@ api.route('/', templatesRoutes); // /v1/templates
 api.route('/', webhooksRoutes); // /v1/webhooks
 api.route('/', recipesRoutes); // /v1/projects/:projectId/recipes
 api.route('/', importRoutes); // /v1/import
+api.route('/', ingestRoutes); // /v1/projects/:projectId/ingest/webhook
+api.route('/', notificationsRoutes); // /v1/notifications
 api.route('/', providersRoutes); // /v1/providers
+api.route('/', authCallbackRoutes); // /v1/auth/callback
 
 // OpenAPI spec endpoint
 api.doc('/openapi.json', {
@@ -173,6 +179,7 @@ api.doc('/openapi.json', {
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
     { name: 'Runner', description: 'Grey-box agent evaluation' },
+    { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
     { name: 'API Keys', description: 'API key management (create, list, revoke)' },
     { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
     { name: 'Comparisons', description: 'Saved A/B comparison snapshots' },

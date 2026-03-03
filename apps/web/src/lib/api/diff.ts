@@ -98,3 +98,28 @@ export async function diffRaw(
   });
   return handleResponse<DiffResultRaw>(res);
 }
+
+// ============================================================================
+// Merge Suggestions
+// ============================================================================
+
+export interface MergeSuggestion {
+  suggestion: string;
+  reasoning: string;
+}
+
+/**
+ * Get AI merge suggestion for a similar pair in a merge draft
+ */
+export async function getMergeSuggestion(
+  draftId: string,
+  pairIndex: number
+): Promise<MergeSuggestion | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}/suggest/${pairIndex}`,
+    { method: 'POST' },
+    30_000
+  );
+  const data = await handleResponse<{ suggestion: MergeSuggestion | null }>(res);
+  return data.suggestion;
+}

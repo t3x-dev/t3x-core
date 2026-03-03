@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 40 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(40);
+  it('has 48 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(48);
   });
 
   it('key equals value for every code', () => {
@@ -27,6 +27,7 @@ describe('ErrorCodes', () => {
         "AUTH_ERROR": "AUTH_ERROR",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
+        "COMPARE_FAILED": "COMPARE_FAILED",
         "CONFLICT": "CONFLICT",
         "CONVERSATION_NOT_FOUND": "CONVERSATION_NOT_FOUND",
         "CREATE_FAILED": "CREATE_FAILED",
@@ -39,6 +40,7 @@ describe('ErrorCodes', () => {
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
         "HASH_CONFLICT": "HASH_CONFLICT",
+        "HISTORY_FAILED": "HISTORY_FAILED",
         "HISTORY_MISMATCH": "HISTORY_MISMATCH",
         "HISTORY_NOT_FOUND": "HISTORY_NOT_FOUND",
         "INTERNAL_ERROR": "INTERNAL_ERROR",
@@ -47,16 +49,22 @@ describe('ErrorCodes', () => {
         "LIST_FAILED": "LIST_FAILED",
         "MAIN_NOT_HEAD": "MAIN_NOT_HEAD",
         "MAIN_ROOT_EXISTS": "MAIN_ROOT_EXISTS",
+        "MERGE_FAILED": "MERGE_FAILED",
         "NOT_FOUND": "NOT_FOUND",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",
         "PIN_NOT_FOUND": "PIN_NOT_FOUND",
         "PROJECT_NOT_FOUND": "PROJECT_NOT_FOUND",
+        "PROMOTE_FAILED": "PROMOTE_FAILED",
         "RATE_LIMITED": "RATE_LIMITED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
+        "RESTORE_FAILED": "RESTORE_FAILED",
+        "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UPDATE_FAILED": "UPDATE_FAILED",
@@ -106,6 +114,13 @@ describe('ErrorStatusCodes', () => {
       'INTERNAL_ERROR',
       'DATABASE_ERROR',
       'GENERATION_FAILED',
+      'HISTORY_FAILED',
+      'SUGGEST_FAILED',
+      'PROMOTE_FAILED',
+      'REVIEW_ACTION_FAILED',
+      'RESTORE_FAILED',
+      'COMPARE_FAILED',
+      'MERGE_FAILED',
     ];
     for (const code of serverCodes) {
       expect(ErrorStatusCodes[code]).toBe(500);

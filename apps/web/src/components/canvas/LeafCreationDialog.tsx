@@ -1,10 +1,10 @@
 'use client';
 
-import { LayoutGrid, Loader2, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { Loader2, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { type LeafTemplate, TemplateGrid } from '@/components/leaf/TemplateGrid';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,6 +41,25 @@ export function LeafCreationDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [title, setTitle] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<LeafTemplate | null>(null);
+
+  const resetForm = () => {
+    setTitle('');
+    setSelectedType('tweet');
+    setSelectedTemplate(null);
+  };
+
+  const handleTemplateSelect = (template: LeafTemplate) => {
+    if (template.type === 'custom') {
+      setSelectedTemplate(null);
+      return;
+    }
+    setSelectedTemplate(template);
+    const leafType = LEAF_TYPES.find((lt) => lt.type === template.type);
+    if (leafType) {
+      setSelectedType(leafType.type);
+    }
+  };
 
   const handleCreate = async () => {
     setIsCreating(true);
@@ -51,15 +70,17 @@ export function LeafCreationDialog({
         type: selectedType,
         title: title || undefined,
         project_id: projectId,
-        constraints: [], // Start empty, user can add in detail page
+        constraints: (selectedTemplate?.constraints ?? []).map((c, i) => ({
+          id: `cst_tpl_${i}`,
+          ...c,
+        })),
+        ...(selectedTemplate?.semantic_threshold
+          ? { config: { semantic_threshold: selectedTemplate.semantic_threshold } }
+          : {}),
       });
 
       toast.success('Leaf created successfully');
       onOpenChange(false);
-
-      // Reset form
-      setTitle('');
-      setSelectedType('tweet');
 
       // Navigate to leaf detail page
       router.push(`/project/${projectId}/leaf/${leaf.id}`);
@@ -82,7 +103,13 @@ export function LeafCreationDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) resetForm();
+        onOpenChange(v);
+      }}
+    >
       <DialogContent
         className="w-[90vw] max-w-[540px] bg-[var(--color-bg-white)] overflow-hidden z-[60]"
         overlayClassName="z-[60]"
@@ -108,6 +135,21 @@ export function LeafCreationDialog({
             />
           </div>
 
+          {/* Template selection */}
+          <div className="space-y-[var(--space-item)]">
+            <Label>Start from Template</Label>
+            <TemplateGrid
+              selected={selectedTemplate?.type ?? null}
+              onSelect={handleTemplateSelect}
+            />
+            {selectedTemplate && selectedTemplate.constraints.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Auto-filled {selectedTemplate.constraints.length} constraint
+                {selectedTemplate.constraints.length > 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+
           {/* Leaf type selection */}
           <div className="space-y-[var(--space-item)]">
             <Label>Leaf Type</Label>
@@ -120,7 +162,10 @@ export function LeafCreationDialog({
                     <button
                       key={leafType.type}
                       type="button"
-                      onClick={() => setSelectedType(leafType.type)}
+                      onClick={() => {
+                        setSelectedType(leafType.type);
+                        setSelectedTemplate(null);
+                      }}
                       disabled={isCreating}
                       className={cn(
                         'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors min-w-0',
@@ -161,14 +206,6 @@ export function LeafCreationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Link
-            href="/templates"
-            className="mr-auto flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            onClick={() => onOpenChange(false)}
-          >
-            <LayoutGrid className="h-3 w-3" />
-            Or create from a template
-          </Link>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>
             Cancel
           </Button>

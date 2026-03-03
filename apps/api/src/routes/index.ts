@@ -3,6 +3,7 @@
  */
 
 export { agentDraftRoutes } from './agent-drafts';
+export { authCallbackRoutes } from './auth-callback.openapi';
 export { branchRoutes } from './branches';
 export { chatRoutes } from './chat';
 export { commitsV3Routes } from './commits-v3.openapi';

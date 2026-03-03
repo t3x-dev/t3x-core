@@ -29,6 +29,48 @@ import {
 import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// users: Authentication (OAuth providers)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Registered users via OAuth providers (e.g., GitHub).
+ *
+ * In AUTH_DISABLED mode, no users exist. Projects with owner_id=null
+ * are public/legacy data accessible to everyone.
+ */
+export const users = pgTable(
+  'users',
+  {
+    /** Unique ID: "user_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** OAuth provider name (e.g., 'github') */
+    provider: text('provider').notNull(),
+
+    /** User ID from the OAuth provider */
+    providerId: text('provider_id').notNull(),
+
+    /** Email address (may be null) */
+    email: text('email'),
+
+    /** Display name */
+    name: text('name'),
+
+    /** Avatar URL */
+    avatarUrl: text('avatar_url'),
+
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+  })
+);
+
+export type UserRecord = typeof users.$inferSelect;
+export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -86,6 +128,7 @@ export const commitsV4 = pgTable(
           start_char: number;
           end_char: number;
         };
+        anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
       }>;
     }>(),
 
@@ -317,6 +360,15 @@ export const leafHistory = pgTable(
 
     /** Who triggered this generation */
     createdBy: text('created_by'),
+
+    /** Attempt number within a generation cycle (1 = first attempt) */
+    attemptNumber: integer('attempt_number').notNull().default(1),
+
+    /** Corrective feedback from corrective-prompt.ts (if retry) */
+    correctiveFeedback: text('corrective_feedback'),
+
+    /** The actual prompt sent to LLM */
+    promptUsed: text('prompt_used'),
   },
   (table) => ({
     leafIdx: index('idx_leaf_history_leaf').on(table.leafId),
@@ -443,10 +495,13 @@ export const apiKeys = pgTable(
     /** Human-readable label */
     name: text('name').notNull(),
 
-    /** Project scope (null = global) */
+    /** Project scope (null = user-level key, can access all user's projects) */
     projectId: text('project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
     }),
+
+    /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
+    userId: text('user_id'),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

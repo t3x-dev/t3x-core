@@ -41,7 +41,7 @@ import { SourceSentenceList } from '@/components/shared/SourceSentenceList';
 import type { Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 import { checkContentIntegrity } from '@/lib/truncationUtils';
-import type { ContentIntegrityStatus, SentenceWithSource } from '@/types/sourceContext';
+import type { ColoredHighlightRange, ContentIntegrityStatus, HighlightColor, SentenceWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types, keep local aliases for backward compatibility)
@@ -67,6 +67,42 @@ interface CommitSourceContextProps {
 interface LeafSentence {
   sentence: CommitSentence;
   leafId: string;
+}
+
+/**
+ * Map anchor_type to highlight color for visual differentiation.
+ * - verbatim (default): green solid highlight
+ * - paraphrase: amber dashed border
+ * - inference: blue dotted border
+ */
+function anchorTypeToColor(anchorType?: string): HighlightColor {
+  switch (anchorType) {
+    case 'paraphrase':
+      return 'amber';
+    case 'inference':
+      return 'blue';
+    default:
+      return 'green';
+  }
+}
+
+/**
+ * Build colored highlights from sentences with anchor_type info.
+ * Returns coloredHighlights when mixed anchor_types exist, undefined otherwise.
+ */
+function buildColoredHighlights(
+  sentences: SentenceWithHighlight[]
+): ColoredHighlightRange[] | undefined {
+  const hasNonVerbatim = sentences.some(
+    (s) => s.sentence.anchor_type && s.sentence.anchor_type !== 'verbatim'
+  );
+  if (!hasNonVerbatim) return undefined;
+
+  return sentences.map((s) => ({
+    start: s.highlight.start,
+    end: s.highlight.end,
+    color: anchorTypeToColor(s.sentence.anchor_type),
+  }));
 }
 
 /**
@@ -413,7 +449,8 @@ export function CommitSourceContext({
                 sg.sentence.text,
                 context.target_turn.content,
                 sg.highlight.start,
-                sg.highlight.end
+                sg.highlight.end,
+                sg.sentence.anchor_type
               );
               integrityStatus.set(sg.sentence.id, status);
             }
@@ -764,6 +801,7 @@ export function CommitSourceContext({
           toggleSection={toggleSection}
           compact={compact}
         />
+
 
         {/* Leaf sections */}
         {leafIdsToRender.map((leafId) => {

@@ -591,3 +591,40 @@ export async function* streamPlatformImport(
 
   yield* parseSseStream(res);
 }
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  project_id: string | null;
+  ref_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export async function listNotifications(projectId?: string): Promise<NotificationItem[]> {
+  const query = new URLSearchParams();
+  if (projectId) query.set('project_id', projectId);
+  const res = await fetchWithTimeout(`${API_V1}/notifications?${query}`);
+  return handleResponse<NotificationItem[]>(res);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+  await handleResponse<{ read: boolean }>(res);
+}
+
+export async function markAllNotificationsRead(projectId?: string): Promise<{ count: number }> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/notifications/read-all${query}`, {
+    method: 'POST',
+  });
+  return handleResponse<{ count: number }>(res);
+}

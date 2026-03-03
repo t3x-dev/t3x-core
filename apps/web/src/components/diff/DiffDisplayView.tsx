@@ -25,7 +25,7 @@ import {
   Pencil,
   Plus,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
@@ -103,6 +103,7 @@ interface DiffStatsBadgeProps {
 function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
   const total =
     diff.identical.length +
+    diff.equivalent.length +
     diff.similar.length +
     diff.onlyInSource.length +
     diff.onlyInTarget.length;
@@ -112,6 +113,11 @@ function DiffStatsBadge({ diff }: DiffStatsBadgeProps) {
       <span className="text-[var(--text-tertiary)]">{total} sentences</span>
       {diff.identical.length > 0 && (
         <span className="text-[var(--diff-identical-text)]">{diff.identical.length} unchanged</span>
+      )}
+      {diff.equivalent.length > 0 && (
+        <span className="text-green-600 dark:text-green-400">
+          {diff.equivalent.length} equivalent
+        </span>
       )}
       {diff.similar.length > 0 && (
         <span className="text-[var(--diff-modified-accent)]">{diff.similar.length} modified</span>
@@ -503,6 +509,7 @@ export function DiffDisplayView({
 
   // Inline context state
   const [expandedSentenceId, setExpandedSentenceId] = useState<string | null>(null);
+  const expandedSentenceRef = useRef<string | null>(null);
   const [inlineContextData, setInlineContextData] = useState<TurnContextData | null>(null);
   const [inlineContextLoading, setInlineContextLoading] = useState(false);
 
@@ -547,6 +554,7 @@ export function DiffDisplayView({
 
     // Build lookup maps for quick access
     const identicalTexts = new Set(diff.identical.map((s) => s.text));
+    const equivalentSourceIds = new Map(diff.equivalent.map((p) => [p.source.id, p]));
     const similarSourceIds = new Map(diff.similar.map((p) => [p.source.id, p]));
     const removedIds = new Set(diff.onlyInSource.map((s) => s.id));
 
@@ -559,6 +567,18 @@ export function DiffDisplayView({
           sourceText: s.text,
           sourceSentence: sourceMap.get(s.id),
           targetSentence: textToTargetMap.get(s.text),
+        });
+      } else if (equivalentSourceIds.has(s.id)) {
+        // Equivalent sentence (high similarity, minor phrasing)
+        const pair = equivalentSourceIds.get(s.id)!;
+        lines.push({
+          type: 'modified',
+          sourceText: pair.source.text,
+          targetText: pair.target.text,
+          wordDiff: pair.wordDiff,
+          similarity: pair.similarity,
+          sourceSentence: sourceMap.get(pair.source.id),
+          targetSentence: targetMap.get(pair.target.id),
         });
       } else if (similarSourceIds.has(s.id)) {
         // Modified sentence
@@ -602,12 +622,15 @@ export function DiffDisplayView({
       // Toggle: if already expanded, collapse
       if (expandedSentenceId === sentence.id) {
         setExpandedSentenceId(null);
+        expandedSentenceRef.current = null;
         setInlineContextData(null);
         return;
       }
 
       // Expand inline
-      setExpandedSentenceId(sentence.id);
+      const requestId = sentence.id;
+      setExpandedSentenceId(requestId);
+      expandedSentenceRef.current = requestId;
       setContextSentence(sentence); // keep for modal fallback
       setInlineContextLoading(true);
       setInlineContextData(null);
@@ -619,11 +642,16 @@ export function DiffDisplayView({
           highlightStart: sentence.source.start_char,
           highlightEnd: sentence.source.end_char,
         });
+        // Guard: only apply if this sentence is still the expanded one
+        if (expandedSentenceRef.current !== requestId) return;
         setInlineContextData(data);
       } catch {
+        if (expandedSentenceRef.current !== requestId) return;
         setInlineContextData(null);
       } finally {
-        setInlineContextLoading(false);
+        if (expandedSentenceRef.current === requestId) {
+          setInlineContextLoading(false);
+        }
       }
     },
     [expandedSentenceId]
@@ -726,6 +754,23 @@ export function DiffDisplayView({
                 type="identical"
                 sourceSentence={sourceMap.get(s.id)}
                 targetSentence={textToTargetMap.get(s.text)}
+                onTraceSource={handleTraceSource}
+                expandedSentenceId={expandedSentenceId}
+                inlineContextData={inlineContextData}
+                inlineContextLoading={inlineContextLoading}
+                onOpenModal={handleOpenModal}
+              />
+            ))}
+
+            {/* Equivalent pairs (high similarity) */}
+            {diff.equivalent.map((pair) => (
+              <SideBySideRow
+                key={`equivalent-${pair.source.id}-${pair.target.id}`}
+                type="modified"
+                sourceSentence={sourceMap.get(pair.source.id)}
+                targetSentence={targetMap.get(pair.target.id)}
+                wordDiff={pair.wordDiff}
+                similarity={pair.similarity}
                 onTraceSource={handleTraceSource}
                 expandedSentenceId={expandedSentenceId}
                 inlineContextData={inlineContextData}
