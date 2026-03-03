@@ -12,8 +12,11 @@
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
+import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { CommitV4, DiffResultRaw } from '@/lib/api';
 import { diffRaw, getCommitV4 } from '@/lib/api';
+import { shortHash } from '@/lib/formatters';
 import { useProjectStore } from '@/store/projectStore';
 import { DiffHeader } from './DiffHeader';
 import type { DiffSideBySideHandle } from './DiffSideBySide';
@@ -46,12 +49,9 @@ export interface SourceInfo {
 // ============================================================================
 
 /** Format column label: "branch @ shortHash" or just shortHash */
-function formatCommitLabel(
-  branch: string | null | undefined,
-  hash: string
-): string {
-  const shortHash = hash.replace('sha256:', '').slice(0, 7);
-  return branch ? `${branch} @ ${shortHash}` : shortHash;
+function formatCommitLabel(branch: string | null | undefined, hash: string): string {
+  const short = shortHash(hash);
+  return branch ? `${branch} @ ${short}` : short;
 }
 
 /** Build source map from both commits' sentences and source_refs */
@@ -138,7 +138,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [diffData, setDiffData] = useState<DiffResultRaw | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'unified' | 'document'>('document');
   const [showSourceCards, setShowSourceCards] = useState(true);
   const [showSnippets, setShowSnippets] = useState(false);
 
@@ -203,6 +203,24 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     sideBySideRef.current?.scrollToSource?.(conversationId);
   }, []);
 
+  // Navigable segment IDs for keyboard nav (only changed segments)
+  const changedSegmentIds = useMemo(() => {
+    if (!diffData) return [];
+    return diffData.segmentDiffs.filter((s) => s.diffType !== 'same').map((s) => s.segmentId);
+  }, [diffData]);
+
+  // Keyboard navigation for diff changes
+  useKeyboardNavigation({
+    ids: changedSegmentIds,
+    onSelect: (id) => {
+      if (id) {
+        const el = document.querySelector(`[data-segment-id="${id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+    enabled: !loading && !!diffData,
+  });
+
   // Loading state
   if (loading) {
     return (
@@ -266,7 +284,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         />
       )}
 
-      {/* Layer 2: Stats Bar */}
+      {/* Layer 2: Stats Bar + Keyboard Hints */}
       <DiffStatsBar
         identical={diffData.stats.sameCount}
         modified={diffData.stats.modifiedCount}
@@ -278,6 +296,16 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         showSnippets={showSnippets}
         onToggleSnippets={() => setShowSnippets((v) => !v)}
       />
+      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-6 py-1.5">
+        <div className="ml-auto w-fit">
+          <KeyboardHintBar
+            hints={[
+              { key: 'j k', label: 'navigate changes' },
+              { key: 'esc', label: 'deselect' },
+            ]}
+          />
+        </div>
+      </div>
 
       {/* Layer 3: Diff Body */}
       <DiffSideBySide

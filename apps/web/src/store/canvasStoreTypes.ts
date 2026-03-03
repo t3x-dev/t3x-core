@@ -43,9 +43,34 @@ export interface LeafPanelSlice {
   removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
 }
 
+// Node CRUD slice interface
+export interface NodeSlice {
+  loadProjectData: (projectId: string) => Promise<void>;
+  refreshLeaves: (projectId: string) => Promise<void>;
+  clearCanvas: () => void;
+  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
+  addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
+  updateNode: (id: string, patch: Partial<CanvasNodeData>) => void;
+  updateNodeId: (oldId: string, newId: string) => void;
+}
+
+// Commit operations slice interface
+export interface CommitSlice {
+  commitPendingCommit: (id: string) => void;
+  addPendingCommitFromConversation: (conversationId: string) => Promise<void>;
+  addConversationFromCommit: (commitId: string) => Promise<void>;
+  addPendingCommitFromCommit: (commitId: string) => void;
+  addUnitFromUnit: (unitId: string) => void;
+  createMergePendingCommit: (commitId: string) => Promise<string | null>;
+  getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
+  canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
+}
+
 // Full combined canvas store state
 export type CanvasState = MergeSlice &
-  LeafPanelSlice & {
+  LeafPanelSlice &
+  NodeSlice &
+  CommitSlice & {
     nodes: Node<CanvasNodeData>[];
     edges: Edge[];
     hasMainCommit: boolean;
@@ -62,22 +87,8 @@ export type CanvasState = MergeSlice &
     modalViewMode: 'conversation' | 'commit' | null;
     openNodeModal: (nodeId: string, viewMode?: 'conversation' | 'commit') => void;
     closeNodeModal: () => void;
-    // Data loading
-    loadProjectData: (projectId: string) => Promise<void>;
-    clearCanvas: () => void;
     // Deletion confirmation state
     deletionConfirmation: DeletionConfirmation;
-    addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
-    addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
-    updateNode: (id: string, patch: Partial<CanvasNodeData>) => void;
-    commitPendingCommit: (id: string) => void;
-    addPendingCommitFromConversation: (conversationId: string) => Promise<void>;
-    addConversationFromCommit: (commitId: string) => Promise<void>;
-    addPendingCommitFromCommit: (commitId: string) => void;
-    addUnitFromUnit: (unitId: string) => void;
-    createMergePendingCommit: (commitId: string) => Promise<string | null>;
-    getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
-    canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
     onNodesChange: (changes: NodeChange[]) => void;
     onEdgesChange: (changes: EdgeChange[]) => void;
     onConnect: (connection: Connection) => void;
@@ -109,8 +120,6 @@ export type CanvasState = MergeSlice &
     // Deletion confirmation methods
     confirmDeletion: () => void;
     cancelDeletion: () => void;
-    // Update node ID (for syncing local pending commit with API commit_hash)
-    updateNodeId: (oldId: string, newId: string) => void;
     // Get direct upstream source nodes for a pending commit
     getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
     // Leaf context menu handler (set by CanvasWorkspace, consumed by CanvasNodes)

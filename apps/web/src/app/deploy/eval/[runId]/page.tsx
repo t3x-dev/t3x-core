@@ -27,6 +27,7 @@ import { ChartToggle } from '@/components/optimiser/charts/ChartToggle';
 import { ReportHeader } from '@/components/optimiser/ReportHeader';
 import { type StepRecord, TraceTimeline } from '@/components/optimiser/trace';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
+import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import {
   type CommitV4,
   type CommitV4SentenceSourceRef,
@@ -404,6 +406,24 @@ export default function RunDetailPage() {
     }
   }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins, router]);
 
+  // Keyboard navigation for assertions
+  const assertionIds = useMemo(
+    () => (run ? parseRunData(run).llmAssertions.map((a) => a.id) : []),
+    [run?.run_id]
+  );
+
+  const { activeId: activeAssertionId } = useKeyboardNavigation({
+    ids: assertionIds,
+    onSelect: (id) => {
+      if (id) {
+        const el = document.querySelector(`[data-assertion-id="${id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    },
+    onAction: (id) => toggleAssertion(id),
+    enabled: !loading && activeTab === 'assertions',
+  });
+
   if (loading) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
@@ -443,447 +463,475 @@ export default function RunDetailPage() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
-        {/* Header */}
-        <header className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => router.push('/deploy')}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Breadcrumb
-                segments={[
-                  { label: 'Home', href: '/' },
-                  ...(run.project_id
-                    ? [
-                        {
-                          label: getProject(run.project_id)?.name || 'Project',
-                          href: `/project/${run.project_id}`,
-                        },
-                      ]
-                    : []),
-                  ...(run.leaf?.id?.startsWith('leaf_') && run.project_id
-                    ? [
-                        {
-                          label: run.leaf.title || run.leaf.id,
-                          href: `/project/${run.project_id}/leaf/${run.leaf.id}`,
-                        },
-                      ]
-                    : []),
-                  { label: run.title || `Run ${runId.slice(0, 8)}` },
-                ]}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => exportRunAsMarkdown(run)}>
-                    Export as Markdown
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportRunAsJSON(run)}>
-                    Export as JSON
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <ShareLinkButton entityType="run" entityId={runId} />
-              {run.project_id && run.leaf && (
-                <PinButton projectId={run.project_id} type="leaf" refId={run.leaf.id} />
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/deploy/compare?v1=${runId}`)}
-              >
-                <GitCompare className="h-4 w-4" />
-                Compare
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
+      <div className="flex h-full flex-col">
+        {/* Fixed Header */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/deploy')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <Breadcrumb
+              segments={[
+                { label: 'Home', href: '/' },
+                ...(run.project_id
+                  ? [
+                      {
+                        label: getProject(run.project_id)?.name || 'Project',
+                        href: `/project/${run.project_id}`,
+                      },
+                    ]
+                  : []),
+                ...(run.leaf?.id?.startsWith('leaf_') && run.project_id
+                  ? [
+                      {
+                        label: run.leaf.title || run.leaf.id,
+                        href: `/project/${run.project_id}/leaf/${run.leaf.id}`,
+                      },
+                    ]
+                  : []),
+                { label: run.title || `Run ${runId.slice(0, 8)}` },
+              ]}
+            />
           </div>
-          <ReportHeader
-            runId={runId}
-            title={run.title}
-            description={run.description}
-            tags={run.tags}
-            status={run.status}
-            createdAt={run.created_at}
-            onUpdate={handleUpdateRun}
-          />
+          <div className="flex items-center gap-2">
+            <KeyboardHintBar
+              hints={[
+                { key: 'j k', label: 'navigate' },
+                { key: 'o', label: 'toggle' },
+                { key: 'esc', label: 'deselect' },
+              ]}
+            />
+            <span className="h-4 w-px bg-[var(--stroke-divider)]" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportRunAsMarkdown(run)}>
+                  Export as Markdown
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportRunAsJSON(run)}>
+                  Export as JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ShareLinkButton entityType="run" entityId={runId} />
+            {run.project_id && run.leaf && (
+              <PinButton projectId={run.project_id} type="leaf" refId={run.leaf.id} />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/deploy/compare?v1=${runId}`)}
+            >
+              <GitCompare className="h-4 w-4" />
+              Compare
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </header>
 
-        {/* Milestone: Eval Complete Summary Card */}
-        {(run.status === 'completed' || run.status === 'failed') && llmAssertions.length > 0 && (
-          <div
-            className={cn(
-              'flex items-center gap-3 rounded-lg border px-4 py-3',
-              passed
-                ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)]'
-                : 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)]'
-            )}
-          >
-            {passed ? (
-              <CheckCircle className="h-5 w-5 shrink-0 text-[var(--diff-added-accent)]" />
-            ) : (
-              <XCircle className="h-5 w-5 shrink-0 text-[var(--diff-removed-accent)]" />
-            )}
-            <span
-              className={cn(
-                'text-sm font-medium',
-                passed ? 'text-[var(--diff-added-text)]' : 'text-[var(--diff-removed-text)]'
-              )}
-            >
-              Confidence report ready —{' '}
-              {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
-              {llmAssertions.length} passed
-            </span>
-            {score !== undefined && (
-              <span
-                className={cn(
-                  'ml-auto font-mono text-sm font-semibold',
-                  passed ? 'text-[var(--diff-added-accent)]' : 'text-[var(--diff-removed-accent)]'
-                )}
-              >
-                {Math.round(score * 100)}%
-              </span>
-            )}
-          </div>
-        )}
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-auto p-[var(--space-page)]">
+          <div className="flex flex-col gap-[var(--space-section)]">
+            <ReportHeader
+              runId={runId}
+              title={run.title}
+              description={run.description}
+              tags={run.tags}
+              status={run.status}
+              createdAt={run.created_at}
+              onUpdate={handleUpdateRun}
+            />
 
-        {/* Status Bar */}
-        <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/30 px-4 py-3">
-          {/* Pass/Fail Badge */}
-          {run.status === 'completed' || run.status === 'failed' ? (
-            <Badge
-              variant="outline"
-              className={cn(
-                'px-3 py-1 text-sm',
-                passed
-                  ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
-                  : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+            {/* Milestone: Eval Complete Summary Card */}
+            {(run.status === 'completed' || run.status === 'failed') &&
+              llmAssertions.length > 0 && (
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg border px-4 py-3',
+                    passed
+                      ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)]'
+                      : 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)]'
+                  )}
+                >
+                  {passed ? (
+                    <CheckCircle className="h-5 w-5 shrink-0 text-[var(--diff-added-accent)]" />
+                  ) : (
+                    <XCircle className="h-5 w-5 shrink-0 text-[var(--diff-removed-accent)]" />
+                  )}
+                  <span
+                    className={cn(
+                      'text-sm font-medium',
+                      passed ? 'text-[var(--diff-added-text)]' : 'text-[var(--diff-removed-text)]'
+                    )}
+                  >
+                    Confidence report ready —{' '}
+                    {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
+                    {llmAssertions.length} passed
+                  </span>
+                  {score !== undefined && (
+                    <span
+                      className={cn(
+                        'ml-auto font-mono text-sm font-semibold',
+                        passed
+                          ? 'text-[var(--diff-added-accent)]'
+                          : 'text-[var(--diff-removed-accent)]'
+                      )}
+                    >
+                      {Math.round(score * 100)}%
+                    </span>
+                  )}
+                </div>
               )}
-            >
-              {passed ? (
-                <CheckCircle className="mr-1 h-4 w-4" />
+
+            {/* Status Bar */}
+            <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/30 px-4 py-3">
+              {/* Pass/Fail Badge */}
+              {run.status === 'completed' || run.status === 'failed' ? (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'px-3 py-1 text-sm',
+                    passed
+                      ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
+                      : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+                  )}
+                >
+                  {passed ? (
+                    <CheckCircle className="mr-1 h-4 w-4" />
+                  ) : (
+                    <XCircle className="mr-1 h-4 w-4" />
+                  )}
+                  {passed ? 'Passed' : 'Failed'}
+                </Badge>
               ) : (
-                <XCircle className="mr-1 h-4 w-4" />
+                <Badge
+                  variant="outline"
+                  className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-[var(--status-info)]"
+                >
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  {run.status}
+                </Badge>
               )}
-              {passed ? 'Passed' : 'Failed'}
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-[var(--status-info)]"
-            >
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              {run.status}
-            </Badge>
-          )}
 
-          <div className="h-4 w-px bg-border" />
+              <div className="h-4 w-px bg-border" />
 
-          {/* Score */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Score:</span>
-            <span
-              className={cn(
-                'font-mono font-semibold',
-                passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
-              )}
-            >
-              {score !== undefined ? `${Math.round(score * 100)}%` : '-'}
-            </span>
-          </div>
-
-          <div className="h-4 w-px bg-border" />
-
-          {/* Latency */}
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">
-              {traceSummary?.latency_ms ? formatDuration(traceSummary.latency_ms) : '-'}
-            </span>
-          </div>
-
-          <div className="h-4 w-px bg-border" />
-
-          {/* Tokens */}
-          <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">
-              {traceSummary?.tokens?.total_tokens
-                ? formatTokens(traceSummary.tokens.total_tokens)
-                : '-'}{' '}
-              tokens
-            </span>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="trace">Trace</TabsTrigger>
-            <TabsTrigger value="assertions">Assertions</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent
-            value="overview"
-            className="mt-[var(--space-group)] space-y-[var(--space-section)]"
-          >
-            <div className="grid gap-[var(--space-section)] lg:grid-cols-2">
-              {/* Dimension Scores */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Dimension Scores</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {dimensionScores ? (
-                    <ChartToggle scores={dimensionScores} />
-                  ) : (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                      No dimension scores available
-                    </div>
+              {/* Score */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Score:</span>
+                <span
+                  className={cn(
+                    'font-mono font-semibold',
+                    passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
                   )}
-                </CardContent>
-              </Card>
+                >
+                  {score !== undefined ? `${Math.round(score * 100)}%` : '-'}
+                </span>
+              </div>
 
-              {/* Trajectory Summary */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Trajectory Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {traceSummary ? (
-                    <div className="space-y-[var(--space-group)]">
-                      {/* Steps */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                          <p className="text-2xl font-bold">
-                            {traceSummary.trajectory.total_steps}
-                          </p>
-                          <p className="text-xs text-muted-foreground">Total Steps</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                          <p className="text-2xl font-bold">{traceSummary.trajectory.llm_calls}</p>
-                          <p className="text-xs text-muted-foreground">LLM Calls</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                          <p className="text-2xl font-bold">{traceSummary.trajectory.tool_calls}</p>
-                          <p className="text-xs text-muted-foreground">Tool Calls</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                          <p className="text-2xl font-bold text-[var(--status-error)]">
-                            {traceSummary.trajectory.failed_steps}
-                          </p>
-                          <p className="text-xs text-muted-foreground">Failed Steps</p>
-                        </div>
-                      </div>
+              <div className="h-4 w-px bg-border" />
 
-                      {/* Token breakdown */}
-                      <div className="rounded-lg border p-3">
-                        <p className="mb-[var(--space-item)] text-sm font-medium">Token Usage</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Prompt</span>
-                            <span className="font-mono">
-                              {formatTokens(traceSummary.tokens.prompt_tokens)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Completion</span>
-                            <span className="font-mono">
-                              {formatTokens(traceSummary.tokens.completion_tokens)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between border-t pt-1">
-                            <span className="font-medium">Total</span>
-                            <span className="font-mono font-medium">
-                              {formatTokens(traceSummary.tokens.total_tokens)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                      No trajectory data available
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Latency */}
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {traceSummary?.latency_ms ? formatDuration(traceSummary.latency_ms) : '-'}
+                </span>
+              </div>
+
+              <div className="h-4 w-px bg-border" />
+
+              {/* Tokens */}
+              <div className="flex items-center gap-2">
+                <Coins className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {traceSummary?.tokens?.total_tokens
+                    ? formatTokens(traceSummary.tokens.total_tokens)
+                    : '-'}{' '}
+                  tokens
+                </span>
+              </div>
             </div>
 
-            {/* Violations & Suggestions */}
-            <AssertionsSection violations={violations} suggestion={suggestion} />
-          </TabsContent>
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+              <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="trace">Trace</TabsTrigger>
+                <TabsTrigger value="assertions">Assertions</TabsTrigger>
+              </TabsList>
 
-          {/* Trace Tab */}
-          <TabsContent value="trace" className="mt-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Execution Trace</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TraceTimeline steps={steps} />
-              </CardContent>
-            </Card>
-          </TabsContent>
+              {/* Overview Tab */}
+              <TabsContent
+                value="overview"
+                className="mt-[var(--space-group)] space-y-[var(--space-section)]"
+              >
+                <div className="grid gap-[var(--space-section)] lg:grid-cols-2">
+                  {/* Dimension Scores */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Dimension Scores</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {dimensionScores ? (
+                        <ChartToggle scores={dimensionScores} />
+                      ) : (
+                        <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                          No dimension scores available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
 
-          {/* Assertions Tab — unified: data from result_json, with Pin + Re-tune actions */}
-          <TabsContent value="assertions" className="mt-4 space-y-6">
-            {llmAssertions.length > 0 ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    Assertions
-                    <Badge variant="outline" className="text-xs font-normal">
-                      {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/{llmAssertions.length}{' '}
-                      passed
-                    </Badge>
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Runner evaluation results. Select assertions to pin lessons into future
-                    conversations, or Re-tune to start a new iteration.
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {llmAssertions.map((assertion) => {
-                      const isFailed = assertion.type === 'fail' || assertion.passed === false;
-                      const isWarning = assertion.type === 'warning';
-                      const isPassed = !isFailed && !isWarning;
-                      return (
-                        <div
-                          key={assertion.id}
-                          className={cn(
-                            'rounded-lg border p-3',
-                            isFailed
-                              ? 'border-red-500/30 bg-red-500/5'
-                              : isWarning
-                                ? 'border-yellow-500/30 bg-yellow-500/5'
-                                : 'border-green-500/30 bg-green-500/5'
-                          )}
-                        >
-                          <div className="flex items-start gap-3">
-                            <Checkbox
-                              checked={selectedAssertionIds.has(assertion.id)}
-                              onCheckedChange={() => toggleAssertion(assertion.id)}
-                              className="mt-0.5"
-                            />
-                            {isFailed ? (
-                              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                            ) : isWarning ? (
-                              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
-                            ) : (
-                              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="outline" className="text-xs">
-                                  {assertion.category}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-xs',
-                                    isFailed
-                                      ? 'border-red-500/30 text-[var(--status-error)]'
-                                      : isWarning
-                                        ? 'border-yellow-500/30 text-[var(--status-warning)]'
-                                        : 'border-green-500/30 text-[var(--status-success)]'
-                                  )}
-                                >
-                                  {isPassed ? 'passed' : isFailed ? 'failed' : 'warning'}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  {Math.round(assertion.confidence * 100)}% confidence
+                  {/* Trajectory Summary */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Trajectory Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {traceSummary ? (
+                        <div className="space-y-[var(--space-group)]">
+                          {/* Steps */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                              <p className="text-2xl font-bold">
+                                {traceSummary.trajectory.total_steps}
+                              </p>
+                              <p className="text-xs text-muted-foreground">Total Steps</p>
+                            </div>
+                            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                              <p className="text-2xl font-bold">
+                                {traceSummary.trajectory.llm_calls}
+                              </p>
+                              <p className="text-xs text-muted-foreground">LLM Calls</p>
+                            </div>
+                            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                              <p className="text-2xl font-bold">
+                                {traceSummary.trajectory.tool_calls}
+                              </p>
+                              <p className="text-xs text-muted-foreground">Tool Calls</p>
+                            </div>
+                            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                              <p className="text-2xl font-bold text-[var(--status-error)]">
+                                {traceSummary.trajectory.failed_steps}
+                              </p>
+                              <p className="text-xs text-muted-foreground">Failed Steps</p>
+                            </div>
+                          </div>
+
+                          {/* Token breakdown */}
+                          <div className="rounded-lg border p-3">
+                            <p className="mb-[var(--space-item)] text-sm font-medium">
+                              Token Usage
+                            </p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Prompt</span>
+                                <span className="font-mono">
+                                  {formatTokens(traceSummary.tokens.prompt_tokens)}
                                 </span>
                               </div>
-                              <p className="mt-1 text-sm">{assertion.message}</p>
-                              {assertion.patch_suggestion && (
-                                <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
-                                  <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
-                                  <div>
-                                    <span className="font-medium text-amber-700">Lesson: </span>
-                                    <span className="text-amber-900">{assertion.patch_suggestion}</span>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Lineage link: assertion → constraint → sentence → source conversation turn */}
-                              {assertion.constraint_id &&
-                                constraintSourceRefMap.get(assertion.constraint_id) &&
-                                projectId && (
-                                  <Link
-                                    href={`/project/${projectId}/conversation/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
-                                    className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
-                                  >
-                                    <MapPin size={10} />
-                                    View source
-                                  </Link>
-                                )}
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Completion</span>
+                                <span className="font-mono">
+                                  {formatTokens(traceSummary.tokens.completion_tokens)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t pt-1">
+                                <span className="font-medium">Total</span>
+                                <span className="font-mono font-medium">
+                                  {formatTokens(traceSummary.tokens.total_tokens)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ) : (
+                        <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                          No trajectory data available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
 
-                  {/* Pin Selected & Re-tune buttons */}
-                  <div className="mt-4 flex items-center gap-3 border-t pt-4">
-                    <Button
-                      size="sm"
-                      disabled={selectedAssertionIds.size === 0 || pinning || !projectId}
-                      onClick={handlePinAssertions}
-                    >
-                      {pinning ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Pin className="h-4 w-4" />
-                      )}
-                      {leafPinned ? 'Update Pin' : 'Pin Selected'}
-                      <Badge variant="secondary" className="ml-1 text-xs">
-                        {selectedAssertionIds.size}
-                      </Badge>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={selectedAssertionIds.size === 0 || retuning || !leaf?.commit_hash}
-                      onClick={handleRetune}
-                    >
-                      {retuning ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      Re-tune
-                    </Button>
-                    {pinSuccess && (
-                      <span className="text-xs text-green-600">
-                        Pinned — lessons will be available in future conversations.
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  No assertions available
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
+                {/* Violations & Suggestions */}
+                <AssertionsSection violations={violations} suggestion={suggestion} />
+              </TabsContent>
+
+              {/* Trace Tab */}
+              <TabsContent value="trace" className="mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Execution Trace</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TraceTimeline steps={steps} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Assertions Tab — unified: data from result_json, with Pin + Re-tune actions */}
+              <TabsContent value="assertions" className="mt-4 space-y-6">
+                {llmAssertions.length > 0 ? (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        Assertions
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {llmAssertions.filter((a) => a.passed || a.type === 'pass').length}/
+                          {llmAssertions.length} passed
+                        </Badge>
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Runner evaluation results. Select assertions to pin lessons into future
+                        conversations, or Re-tune to start a new iteration.
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {llmAssertions.map((assertion) => {
+                          const isFailed = assertion.type === 'fail' || assertion.passed === false;
+                          const isWarning = assertion.type === 'warning';
+                          const isPassed = !isFailed && !isWarning;
+                          return (
+                            <div
+                              key={assertion.id}
+                              data-assertion-id={assertion.id}
+                              className={cn(
+                                'rounded-lg border p-3 transition-shadow',
+                                isFailed
+                                  ? 'border-red-500/30 bg-red-500/5'
+                                  : isWarning
+                                    ? 'border-yellow-500/30 bg-yellow-500/5'
+                                    : 'border-green-500/30 bg-green-500/5',
+                                activeAssertionId === assertion.id &&
+                                  'ring-2 ring-[var(--accent-primary)]'
+                              )}
+                            >
+                              <div className="flex items-start gap-3">
+                                <Checkbox
+                                  checked={selectedAssertionIds.has(assertion.id)}
+                                  onCheckedChange={() => toggleAssertion(assertion.id)}
+                                  className="mt-0.5"
+                                />
+                                {isFailed ? (
+                                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                                ) : isWarning ? (
+                                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                                ) : (
+                                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant="outline" className="text-xs">
+                                      {assertion.category}
+                                    </Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-xs',
+                                        isFailed
+                                          ? 'border-red-500/30 text-[var(--status-error)]'
+                                          : isWarning
+                                            ? 'border-yellow-500/30 text-[var(--status-warning)]'
+                                            : 'border-green-500/30 text-[var(--status-success)]'
+                                      )}
+                                    >
+                                      {isPassed ? 'passed' : isFailed ? 'failed' : 'warning'}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                      {Math.round(assertion.confidence * 100)}% confidence
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-sm">{assertion.message}</p>
+                                  {assertion.patch_suggestion && (
+                                    <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
+                                      <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                                      <div>
+                                        <span className="font-medium text-amber-700">Lesson: </span>
+                                        <span className="text-amber-900">
+                                          {assertion.patch_suggestion}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Lineage link: assertion → constraint → sentence → source conversation turn */}
+                                  {assertion.constraint_id &&
+                                    constraintSourceRefMap.get(assertion.constraint_id) &&
+                                    projectId && (
+                                      <Link
+                                        href={`/project/${projectId}/conversation/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
+                                        className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
+                                      >
+                                        <MapPin size={10} />
+                                        View source
+                                      </Link>
+                                    )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Pin Selected & Re-tune buttons */}
+                      <div className="mt-4 flex items-center gap-3 border-t pt-4">
+                        <Button
+                          size="sm"
+                          disabled={selectedAssertionIds.size === 0 || pinning || !projectId}
+                          onClick={handlePinAssertions}
+                        >
+                          {pinning ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Pin className="h-4 w-4" />
+                          )}
+                          {leafPinned ? 'Update Pin' : 'Pin Selected'}
+                          <Badge variant="secondary" className="ml-1 text-xs">
+                            {selectedAssertionIds.size}
+                          </Badge>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            selectedAssertionIds.size === 0 || retuning || !leaf?.commit_hash
+                          }
+                          onClick={handleRetune}
+                        >
+                          {retuning ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                          Re-tune
+                        </Button>
+                        {pinSuccess && (
+                          <span className="text-xs text-green-600">
+                            Pinned — lessons will be available in future conversations.
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                      No assertions available
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
       </div>
     </ErrorBoundary>
   );

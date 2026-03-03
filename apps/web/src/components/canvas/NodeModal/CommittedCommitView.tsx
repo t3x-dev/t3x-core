@@ -6,6 +6,7 @@ import {
   Clock,
   Copy,
   Download,
+  ExternalLink,
   FileJson,
   FileText,
   GitBranch,
@@ -15,6 +16,7 @@ import {
   Tag,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -222,6 +224,20 @@ export function CommittedCommitView({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            {/* Open Full Page link */}
+            {data.commitHash && (routeProjectId || projectId) && (
+              <Link
+                href={`/project/${routeProjectId || projectId}/commit/${encodeURIComponent(data.commitHash)}`}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium',
+                  'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+                  'hover:bg-[var(--hover-bg)] transition-colors'
+                )}
+              >
+                <ExternalLink size={14} />
+                <span>Open Full Page</span>
+              </Link>
+            )}
             {data.commitV4 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

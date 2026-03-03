@@ -10,7 +10,6 @@ import {
   Circle,
   Clock,
   Copy,
-  Eye,
   FileOutput,
   FilePlus,
   FileText,
@@ -35,7 +34,7 @@ import {
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { ComponentType } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
@@ -228,7 +227,7 @@ const PREVIEW_MAX_CONSTRAINTS = 3;
  * CommitV3 content section - shows sentences and constraints
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  */
-function CommitV3Content({
+const CommitV3Content = memo(function CommitV3Content({
   commit,
   onViewFull,
   projectId,
@@ -314,7 +313,7 @@ function CommitV3Content({
       )}
     </div>
   );
-}
+});
 
 /**
  * CommitV4 content section - shows sentences only (constraints are in Leaves)
@@ -323,7 +322,7 @@ function CommitV3Content({
  * Note: V4 sentences use source_ref (conversation_id + turn_hash) without
  * character positions, so we show a compact list with View full link.
  */
-function CommitV4Content({
+const CommitV4Content = memo(function CommitV4Content({
   commit,
   onViewFull,
   projectId: _projectId, // Reserved for future TruncatedCommitView integration
@@ -424,7 +423,7 @@ function CommitV4Content({
       </div>
     </div>
   );
-}
+});
 
 // Semantic zoom — 3-tier with hysteresis
 // overview (dots) at very low zoom, default (cards), detail (expanded) at high zoom
@@ -458,8 +457,164 @@ function useSemanticZoom(): ZoomTier {
   return tierRef.current;
 }
 
+/**
+ * NodeLeavesSection - Renders the expandable leaves list for a commit node.
+ * Extracted and memoized to avoid re-rendering the leaf list when unrelated
+ * node state (e.g. content expansion, hover lineage) changes.
+ */
+const NodeLeavesSection = memo(function NodeLeavesSection({
+  leaves,
+  totalPassed,
+  totalAssertions,
+  leavesExpanded,
+  setLeavesExpanded,
+  isDetail,
+  prefersReducedMotion,
+  projectId,
+  nodeId,
+  leafContextMenuHandler,
+  removeLeafFromNode,
+}: {
+  leaves: EmbeddedLeaf[];
+  totalPassed: number;
+  totalAssertions: number;
+  leavesExpanded: boolean;
+  setLeavesExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  isDetail: boolean;
+  prefersReducedMotion: boolean;
+  projectId?: string;
+  nodeId: string;
+  leafContextMenuHandler:
+    | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
+    | null
+    | undefined;
+  removeLeafFromNode: (nodeId: string, leafId: string) => void;
+}) {
+  const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
+    if (!projectId || !leaf.id) return undefined;
+    return `/project/${projectId}/leaf/${leaf.id}`;
+  };
+
+  return (
+    <div className="border-t border-[var(--stroke-divider)]">
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
+        onClick={() => setLeavesExpanded((prev) => !prev)}
+        type="button"
+      >
+        <span className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+          Leaves ({leaves.length})
+          {totalAssertions > 0 && (
+            <span className="ml-1.5 normal-case font-normal">
+              <span className="text-[var(--status-success)]">{totalPassed}</span>
+              <span className="text-[var(--text-tertiary)]/50">/</span>
+              <span className="text-[var(--text-tertiary)]">{totalAssertions}</span>
+            </span>
+          )}
+        </span>
+        <ChevronRight
+          size={12}
+          className={cn(
+            'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
+            (leavesExpanded || isDetail) && 'rotate-90'
+          )}
+        />
+      </button>
+      <AnimatePresence>
+        {(leavesExpanded || isDetail) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-2 space-y-1 nodrag">
+              {leaves.map((leaf) => {
+                const LeafIcon = getLeafIcon(leaf.type);
+                const leafHref = getLeafHref(leaf);
+                const leafContent = (
+                  <>
+                    <div className="w-5 h-5 rounded flex items-center justify-center bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]">
+                      <LeafIcon size={12} />
+                    </div>
+                    <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">
+                      {leaf.title}
+                    </span>
+                    {leaf.status && (
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded',
+                          leaf.status === 'running' &&
+                            'bg-[var(--status-info-muted)] text-[var(--status-info)]',
+                          leaf.status === 'passed' &&
+                            'bg-[var(--status-success-muted)] text-[var(--status-success)]',
+                          leaf.status === 'failed' &&
+                            'bg-[var(--status-error-muted)] text-[var(--status-error)]',
+                          leaf.status === 'pending' &&
+                            'bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
+                          leaf.status === 'idle' &&
+                            'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'
+                        )}
+                      >
+                        {leaf.status === 'running' && (
+                          <Loader2 size={10} className="animate-spin" />
+                        )}
+                        {leaf.status === 'passed' && <Check size={10} />}
+                        {leaf.status === 'failed' && <X size={10} />}
+                        {leaf.status === 'pending' && <Clock size={10} />}
+                        {leaf.status === 'idle' && <Circle size={10} />}
+                        {leaf.status === 'passed' && leaf.passedCount !== undefined
+                          ? `${leaf.passedCount}/${(leaf.passedCount || 0) + (leaf.failedCount || 0)}`
+                          : leaf.status}
+                      </span>
+                    )}
+                  </>
+                );
+                return (
+                  <div
+                    key={leaf.id}
+                    data-node-type="leaf"
+                    className="group/leaf flex items-center gap-1"
+                    onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, nodeId)}
+                  >
+                    {leafHref ? (
+                      <Link
+                        href={leafHref}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--hover-bg)] transition-colors cursor-pointer flex-1 min-w-0"
+                      >
+                        {leafContent}
+                      </Link>
+                    ) : (
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-md flex-1 min-w-0">
+                        {leafContent}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-[var(--status-error-muted)] text-[var(--text-tertiary)]/50 hover:text-[var(--status-error)] transition-all shrink-0"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeLeafFromNode(nodeId, leaf.id);
+                      }}
+                      aria-label={`Remove leaf ${leaf.title || leaf.id}`}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
-function UnitNode(props: Props) {
+const UnitNode = memo(function UnitNode(props: Props) {
   const { data, selected, id } = props;
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
@@ -636,22 +791,11 @@ function UnitNode(props: Props) {
         action: () => openNodeModal(id, 'commit'),
       };
     }
-    if (isCommitted && (!data.leaves || data.leaves.length === 0)) {
+    if (isCommitted) {
       return {
         label: 'Create Output',
         icon: Plus,
         action: () => openLeafPanel(id),
-      };
-    }
-    if (isCommitted && data.leaves && data.leaves.length > 0) {
-      const firstLeaf = data.leaves[0];
-      const leafHref = getLeafHref(firstLeaf);
-      return {
-        label: 'View Output',
-        icon: Eye,
-        action: () => {
-          if (leafHref) router.push(leafHref);
-        },
       };
     }
     return null;
@@ -1202,119 +1346,19 @@ function UnitNode(props: Props) {
             SECTION 3: LEAVES (if any)
             ═══════════════════════════════════════════ */}
         {data.leaves && data.leaves.length > 0 && (
-          <div className="border-t border-[var(--stroke-divider)]">
-            <button
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
-              onClick={() => setLeavesExpanded((prev) => !prev)}
-              type="button"
-            >
-              <span className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                Leaves ({data.leaves.length})
-                {totalAssertions > 0 && (
-                  <span className="ml-1.5 normal-case font-normal">
-                    <span className="text-[var(--status-success)]">{totalPassed}</span>
-                    <span className="text-[var(--text-tertiary)]/50">/</span>
-                    <span className="text-[var(--text-tertiary)]">{totalAssertions}</span>
-                  </span>
-                )}
-              </span>
-              <ChevronRight
-                size={12}
-                className={cn(
-                  'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
-                  (leavesExpanded || isDetail) && 'rotate-90'
-                )}
-              />
-            </button>
-            <AnimatePresence>
-              {(leavesExpanded || isDetail) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-3 pb-2 space-y-1 nodrag">
-                    {data.leaves.map((leaf) => {
-                      const LeafIcon = getLeafIcon(leaf.type);
-                      const leafHref = getLeafHref(leaf);
-                      const leafContent = (
-                        <>
-                          <div className="w-5 h-5 rounded flex items-center justify-center bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]">
-                            <LeafIcon size={12} />
-                          </div>
-                          <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">
-                            {leaf.title}
-                          </span>
-                          {leaf.status && (
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded',
-                                leaf.status === 'running' &&
-                                  'bg-[var(--status-info-muted)] text-[var(--status-info)]',
-                                leaf.status === 'passed' &&
-                                  'bg-[var(--status-success-muted)] text-[var(--status-success)]',
-                                leaf.status === 'failed' &&
-                                  'bg-[var(--status-error-muted)] text-[var(--status-error)]',
-                                leaf.status === 'pending' &&
-                                  'bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
-                                leaf.status === 'idle' &&
-                                  'bg-[var(--hover-bg)] text-[var(--text-tertiary)]'
-                              )}
-                            >
-                              {leaf.status === 'running' && (
-                                <Loader2 size={10} className="animate-spin" />
-                              )}
-                              {leaf.status === 'passed' && <Check size={10} />}
-                              {leaf.status === 'failed' && <X size={10} />}
-                              {leaf.status === 'pending' && <Clock size={10} />}
-                              {leaf.status === 'idle' && <Circle size={10} />}
-                              {leaf.status === 'passed' && leaf.passedCount !== undefined
-                                ? `${leaf.passedCount}/${(leaf.passedCount || 0) + (leaf.failedCount || 0)}`
-                                : leaf.status}
-                            </span>
-                          )}
-                        </>
-                      );
-                      return (
-                        <div
-                          key={leaf.id}
-                          data-node-type="leaf"
-                          className="group/leaf flex items-center gap-1"
-                          onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, id)}
-                        >
-                          {leafHref ? (
-                            <Link
-                              href={leafHref}
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--hover-bg)] transition-colors cursor-pointer flex-1 min-w-0"
-                            >
-                              {leafContent}
-                            </Link>
-                          ) : (
-                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md flex-1 min-w-0">
-                              {leafContent}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-[var(--status-error-muted)] text-[var(--text-tertiary)]/50 hover:text-[var(--status-error)] transition-all shrink-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              removeLeafFromNode(id, leaf.id);
-                            }}
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <NodeLeavesSection
+            leaves={data.leaves}
+            totalPassed={totalPassed}
+            totalAssertions={totalAssertions}
+            leavesExpanded={leavesExpanded}
+            setLeavesExpanded={setLeavesExpanded}
+            isDetail={isDetail}
+            prefersReducedMotion={prefersReducedMotion}
+            projectId={projectId}
+            nodeId={id}
+            leafContextMenuHandler={leafContextMenuHandler}
+            removeLeafFromNode={removeLeafFromNode}
+          />
         )}
       </motion.div>
 
@@ -1366,7 +1410,7 @@ function UnitNode(props: Props) {
       </NodeToolbar>
     </>
   );
-}
+});
 
 export const canvasNodeTypes = {
   unit: UnitNode,

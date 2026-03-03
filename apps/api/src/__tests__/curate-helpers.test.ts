@@ -79,7 +79,7 @@ describe('extractChunksFromTurns', () => {
       expect(result.chunks[0].text).toBe('Test sentence.');
     });
 
-    it('throws error when ring3 missing (Fail-Fast, no silent fallback)', () => {
+    it('falls back to regex splitting when ring3 is missing (with warning)', () => {
       const turns = [
         {
           role: 'user',
@@ -88,9 +88,13 @@ describe('extractChunksFromTurns', () => {
         },
       ];
 
-      // Fail-Fast: Do not silently fallback to treating entire content as one chunk
-      // This ensures users know when NLP extraction is missing
-      expect(() => extractChunksFromTurns(turns, computeHash)).toThrow(/Ring3 missing for turn 0/);
+      // Ring3 missing triggers regex fallback (graceful degradation)
+      const result = extractChunksFromTurns(turns, computeHash);
+      expect(result.chunks.length).toBeGreaterThan(0);
+      expect(result.chunks[0].text).toContain('No segments here');
+      // Warning is emitted about missing Ring3
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings[0]).toMatch(/no Ring3 data/);
     });
 
     it('allows empty segments array (valid for empty/punctuation-only content)', () => {

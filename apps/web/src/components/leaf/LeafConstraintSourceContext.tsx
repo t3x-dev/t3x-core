@@ -73,6 +73,8 @@ interface LeafConstraintSourceContextProps {
   saving?: boolean;
   /** Compact mode (default: false) */
   compact?: boolean;
+  /** Hide header, mode toggle, and legend (for use inside sidebar sections) */
+  hideChrome?: boolean;
   /** Default expanded state (default: first turn expanded) */
   defaultExpanded?: boolean;
   /** User instruction (soft prompt) for LLM generation */
@@ -313,6 +315,7 @@ export function LeafConstraintSourceContext({
   onRemove,
   saving,
   compact = false,
+  hideChrome = false,
   defaultExpanded = true,
   userInstruction,
   onUpdateUserInstruction,
@@ -617,58 +620,66 @@ export function LeafConstraintSourceContext({
   const constraintCount = constraints.length;
 
   return (
-    <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <MessageSquare size={14} className="text-[var(--status-success)]" />
-          <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
-            Source Context
-          </h3>
-          {constraintCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-[var(--status-success-muted)] text-[var(--status-success)] text-[0.65rem] rounded">
-              {constraintCount} constraint{constraintCount !== 1 ? 's' : ''} highlighted
-            </span>
-          )}
-          {hasIntegrityIssues && (
-            <span
-              className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
-              title="Some source content may have changed since this commit"
-            >
-              <AlertTriangle size={10} />
-              Modified
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {showCollapseControls && (
-            <div className="flex items-center gap-1 text-[0.65rem]">
-              <button
-                type="button"
-                onClick={expandAll}
-                className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
+    <div
+      className={cn(
+        hideChrome
+          ? ''
+          : 'p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]'
+      )}
+    >
+      {/* Header (hidden when inside sidebar section) */}
+      {!hideChrome && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={14} className="text-[var(--status-success)]" />
+            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">
+              Source Context
+            </h3>
+            {constraintCount > 0 && (
+              <span className="px-1.5 py-0.5 bg-[var(--status-success-muted)] text-[var(--status-success)] text-[0.65rem] rounded">
+                {constraintCount} constraint{constraintCount !== 1 ? 's' : ''} highlighted
+              </span>
+            )}
+            {hasIntegrityIssues && (
+              <span
+                className="px-1.5 py-0.5 bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[0.65rem] rounded flex items-center gap-1"
+                title="Some source content may have changed since this commit"
               >
-                Expand all
-              </button>
-              <span className="text-[var(--color-border)]">|</span>
-              <button
-                type="button"
-                onClick={collapseAll}
-                className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
-              >
-                Collapse
-              </button>
-            </div>
-          )}
-          <span className="text-xs text-[var(--color-text-muted)]">
-            {sentences.length} sentence{sentences.length !== 1 ? 's' : ''} from {turnHashes.length}{' '}
-            turn{turnHashes.length !== 1 ? 's' : ''}
-          </span>
+                <AlertTriangle size={10} />
+                Modified
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {showCollapseControls && (
+              <div className="flex items-center gap-1 text-[0.65rem]">
+                <button
+                  type="button"
+                  onClick={expandAll}
+                  className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
+                >
+                  Expand all
+                </button>
+                <span className="text-[var(--color-border)]">|</span>
+                <button
+                  type="button"
+                  onClick={collapseAll}
+                  className="text-[var(--status-info)] hover:text-[var(--status-info)] hover:underline"
+                >
+                  Collapse
+                </button>
+              </div>
+            )}
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {sentences.length} sentence{sentences.length !== 1 ? 's' : ''} from{' '}
+              {turnHashes.length} turn{turnHashes.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Mode toggle + Legend */}
-      {isEditable && (
+      {/* Mode toggle (hidden when inside sidebar section) */}
+      {!hideChrome && isEditable && (
         <div className="flex items-center gap-2 mb-3">
           <Button
             size="sm"
@@ -694,25 +705,27 @@ export function LeafConstraintSourceContext({
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)] mb-3">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-sm bg-[var(--status-success-muted)]" />
-          Sentence
-        </span>
-        {constraintCount > 0 && (
-          <>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 dark:bg-emerald-800" />
-              Must Have
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-800" />
-              Must Not Have
-            </span>
-          </>
-        )}
-      </div>
+      {/* Legend (hidden when inside sidebar section) */}
+      {!hideChrome && (
+        <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)] mb-3">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm bg-[var(--status-success-muted)]" />
+            Sentence
+          </span>
+          {constraintCount > 0 && (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 dark:bg-emerald-800" />
+                Must Have
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-800" />
+                Must Not Have
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Turns list */}
       <div className="space-y-[var(--space-item)]">
