@@ -10,6 +10,8 @@ import { splitIntoParagraphs } from '../paragraph-splitter';
 import type { ParseResult } from '../types';
 
 const USER_AGENT = 'T3X-Importer/1.0';
+const FETCH_TIMEOUT_MS = 30000;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /** Match Reddit thread URLs */
 const REDDIT_PATTERN = /^https?:\/\/(www\.|old\.|new\.)?reddit\.com\/r\/([^/]+)\/comments\/([^/]+)/;
@@ -44,13 +46,24 @@ export async function parseRedditUrl(url: string): Promise<ParseResult> {
 
   const response = await fetch(jsonUrl, {
     headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
     throw new Error(`Reddit API returned ${response.status}`);
   }
 
-  const data = (await response.json()) as RedditListing[];
+  const contentLength = response.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
+    throw new Error(`Reddit response too large (${contentLength} bytes)`);
+  }
+
+  const responseBuffer = await response.arrayBuffer();
+  if (responseBuffer.byteLength > MAX_RESPONSE_BYTES) {
+    throw new Error(`Reddit response too large (${responseBuffer.byteLength} bytes)`);
+  }
+
+  const data = JSON.parse(new TextDecoder().decode(responseBuffer)) as RedditListing[];
   if (!Array.isArray(data) || data.length < 1) {
     throw new Error('Invalid Reddit response format');
   }

@@ -64,6 +64,8 @@ interface UnifiedLine {
   targetSentence?: CommitV4Sentence;
   wordDiff?: WordDiffSegment[];
   collapsedCount?: number;
+  /** The actual lines hidden by this collapsed section (for expand) */
+  collapsedLines?: UnifiedLine[];
   /** Collapse range for hunk header display */
   collapseBaseStart?: number;
   collapseBaseEnd?: number;
@@ -214,6 +216,7 @@ function buildUnifiedLines(
         finalLines.push({
           type: 'collapsed',
           collapsedCount: count,
+          collapsedLines: rawLines.slice(collapseStart, collapseEnd + 1),
           collapseBaseStart: rawLines[collapseStart].baseIndex,
           collapseBaseEnd: rawLines[collapseEnd].baseIndex,
           collapseTargetStart: rawLines[collapseStart].targetIndex,
@@ -233,6 +236,7 @@ function buildUnifiedLines(
     finalLines.push({
       type: 'collapsed',
       collapsedCount: count,
+      collapsedLines: rawLines.slice(collapseStart, collapseEnd + 1),
       collapseBaseStart: rawLines[collapseStart].baseIndex,
       collapseBaseEnd: rawLines[collapseEnd].baseIndex,
       collapseTargetStart: rawLines[collapseStart].targetIndex,
@@ -547,13 +551,19 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
     const handleSourceToggle = useCallback(
       async (segmentId: string, sentence: CommitV4Sentence, lineWordDiff?: WordDiffSegment[]) => {
-        // Toggle: if already expanded, collapse it
-        if (expandedSegmentIds.has(segmentId)) {
-          setExpandedSegmentIds((prev) => {
+        // Use updater form to avoid stale closure over expandedSegmentIds
+        let wasExpanded = false;
+        setExpandedSegmentIds((prev) => {
+          wasExpanded = prev.has(segmentId);
+          if (wasExpanded) {
             const next = new Set(prev);
             next.delete(segmentId);
             return next;
-          });
+          }
+          return new Set([...prev, segmentId]);
+        });
+
+        if (wasExpanded) {
           setInlineContextMap((prev) => {
             const next = new Map(prev);
             next.delete(segmentId);
@@ -567,9 +577,6 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         const turnHash = sentence.source_ref.turn_hash;
         const startChar = sentence.source_ref.start_char;
         const endChar = sentence.source_ref.end_char;
-
-        // Add to expanded set
-        setExpandedSegmentIds((prev) => new Set(prev).add(segmentId));
 
         // Set loading state in map
         setInlineContextMap((prev) => {
@@ -611,7 +618,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           });
         }
       },
-      [expandedSegmentIds]
+      []
     );
 
     // Context modal state
@@ -745,6 +752,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       if (line.type === 'collapsed') {
+        const isExpanded = expandedSections.has(index);
         return (
           <div key={`collapsed-${index}`} data-line-index={index}>
             <DiffHunkHeader
@@ -752,8 +760,49 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               targetRange={formatHunkRange(line.collapseTargetStart, line.collapseTargetEnd)}
               label={`··· ${line.collapsedCount} unchanged ···`}
               onToggle={() => toggleSection(index)}
-              isExpanded={expandedSections.has(index)}
+              isExpanded={isExpanded}
             />
+            {isExpanded &&
+              line.collapsedLines?.map((cLine, ci) => {
+                const cBaseId = cLine.baseSentence?.id;
+                const cTargetId = cLine.targetSentence?.id;
+                return (
+                  <div
+                    key={`expanded-${index}-${ci}-${cBaseId || cTargetId}`}
+                    data-segment-id={cBaseId || cTargetId}
+                  >
+                    <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
+                      <DiffSentenceLine
+                        text={cLine.baseSentence?.text || ''}
+                        type="context"
+                        lineNumber={cLine.baseIndex != null ? cLine.baseIndex + 1 : undefined}
+                        hasSource={!!cLine.baseSentence?.source_ref?.turn_hash}
+                        onSourceClick={() => {
+                          if (cLine.baseSentence) {
+                            handleSourceToggle(cLine.baseSentence.id, cLine.baseSentence);
+                          }
+                        }}
+                        sourceTitle={getSourceTitle(cLine.baseSentence)}
+                      />
+                      <DiffSentenceLine
+                        text={cLine.targetSentence?.text || ''}
+                        type="context"
+                        lineNumber={cLine.targetIndex != null ? cLine.targetIndex + 1 : undefined}
+                        hasSource={!!cLine.targetSentence?.source_ref?.turn_hash}
+                        onSourceClick={() => {
+                          if (cLine.targetSentence) {
+                            handleSourceToggle(
+                              `target-${cLine.targetSentence.id}`,
+                              cLine.targetSentence
+                            );
+                          }
+                        }}
+                        sourceTitle={getSourceTitle(cLine.targetSentence)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         );
       }
@@ -889,6 +938,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       if (line.type === 'collapsed') {
+        const isExpanded = expandedSections.has(index);
         return (
           <div key={`collapsed-${index}`} data-line-index={index}>
             <DiffHunkHeader
@@ -896,8 +946,34 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               targetRange={formatHunkRange(line.collapseTargetStart, line.collapseTargetEnd)}
               label={`··· ${line.collapsedCount} unchanged ···`}
               onToggle={() => toggleSection(index)}
-              isExpanded={expandedSections.has(index)}
+              isExpanded={isExpanded}
             />
+            {isExpanded &&
+              line.collapsedLines?.map((cLine, ci) => {
+                const cSentence = cLine.targetSentence ?? cLine.baseSentence;
+                const cBaseNum = cLine.baseIndex != null ? cLine.baseIndex + 1 : undefined;
+                const cTargetNum = cLine.targetIndex != null ? cLine.targetIndex + 1 : undefined;
+                return (
+                  <div
+                    key={`expanded-${index}-${ci}-${cSentence?.id}`}
+                    data-segment-id={cSentence?.id}
+                  >
+                    <DiffSentenceLine
+                      text={cSentence?.text || ''}
+                      type="context"
+                      baseLineNumber={cBaseNum}
+                      targetLineNumber={cTargetNum}
+                      hasSource={!!cSentence?.source_ref?.turn_hash}
+                      onSourceClick={() => {
+                        if (cSentence) {
+                          handleSourceToggle(cSentence.id, cSentence);
+                        }
+                      }}
+                      sourceTitle={getSourceTitle(cSentence)}
+                    />
+                  </div>
+                );
+              })}
           </div>
         );
       }

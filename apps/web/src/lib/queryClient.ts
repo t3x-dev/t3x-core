@@ -35,8 +35,12 @@ export function setCacheError(key: string, error: Error): void {
 export function invalidateCache(keyOrPrefix: string): void {
   if (keyOrPrefix.endsWith('*')) {
     const prefix = keyOrPrefix.slice(0, -1);
+    const toDelete: string[] = [];
     for (const key of cache.keys()) {
-      if (key.startsWith(prefix)) cache.delete(key);
+      if (key.startsWith(prefix)) toDelete.push(key);
+    }
+    for (const key of toDelete) {
+      cache.delete(key);
     }
   } else {
     cache.delete(keyOrPrefix);

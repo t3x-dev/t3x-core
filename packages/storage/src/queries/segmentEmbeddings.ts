@@ -4,7 +4,7 @@
  * CRUD operations for segment embeddings using Drizzle ORM.
  */
 
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type SegmentEmbedding, segmentEmbeddings } from '../schema';
 
@@ -148,6 +148,9 @@ export async function findSegmentEmbeddingsByTurn(
 
 /**
  * Find segment embeddings for multiple turns
+ *
+ * Fix 6: Use inArray() instead of raw sql template literal IN syntax.
+ * The raw sql`${col} IN ${array}` form is incorrect Drizzle syntax.
  */
 export async function findSegmentEmbeddingsByTurns(
   db: AnyDB,
@@ -160,7 +163,7 @@ export async function findSegmentEmbeddingsByTurns(
   const results = await db
     .select()
     .from(segmentEmbeddings)
-    .where(sql`${segmentEmbeddings.turnHash} IN ${turnHashes}`)
+    .where(inArray(segmentEmbeddings.turnHash, turnHashes))
     .orderBy(segmentEmbeddings.turnHash, segmentEmbeddings.segmentIndex);
 
   // Group by turn_hash

@@ -269,8 +269,12 @@ export class DiffEngine {
     }
 
     // 4. Check unmatched segments in source/target (added)
+    // Deduplicate by text: if source ADDED and target ADDED have identical text, keep only one.
+    const addedTexts = new Set<string>();
+
     for (const sourceSeg of sourceSegments) {
       if (!sourceMatchedIds.has(sourceSeg.segmentId)) {
+        addedTexts.add(sourceSeg.text);
         segmentDiffs.push({
           segmentId: sourceSeg.segmentId,
           text: sourceSeg.text,
@@ -281,6 +285,10 @@ export class DiffEngine {
 
     for (const targetSeg of targetSegments) {
       if (!targetMatchedIds.has(targetSeg.segmentId)) {
+        if (addedTexts.has(targetSeg.text)) {
+          // Already emitted an identical ADDED segment from source — skip duplicate
+          continue;
+        }
         segmentDiffs.push({
           segmentId: targetSeg.segmentId,
           text: targetSeg.text,
@@ -309,34 +317,41 @@ export class DiffEngine {
     targetVecs: number[][]
   ): Map<string, SegmentMatch> {
     const matches = new Map<string, SegmentMatch>();
+    const usedTargetIds = new Set<string>();
+
+    // Build similarity matrix: for each base, collect all target similarities
+    const allPairs: Array<{ baseIdx: number; targetIdx: number; similarity: number }> = [];
 
     for (let i = 0; i < baseSegments.length; i++) {
-      const baseSeg = baseSegments[i];
       const baseVec = baseVecs[i];
-
-      let bestSimilarity = 0;
-      let bestTargetIdx = -1;
-
-      // Find highest similarity target segment
       for (let j = 0; j < targetSegments.length; j++) {
-        const targetVec = targetVecs[j];
-        const similarity = this.embeddingProvider.similarity(baseVec, targetVec);
-
-        if (similarity > bestSimilarity) {
-          bestSimilarity = similarity;
-          bestTargetIdx = j;
+        const similarity = this.embeddingProvider.similarity(baseVec, targetVecs[j]);
+        if (similarity > 0) {
+          allPairs.push({ baseIdx: i, targetIdx: j, similarity });
         }
       }
+    }
 
-      // Record best match
-      if (bestTargetIdx >= 0) {
-        matches.set(baseSeg.segmentId, {
-          sourceSegmentId: baseSeg.segmentId,
-          targetSegmentId: targetSegments[bestTargetIdx].segmentId,
-          similarity: bestSimilarity,
-          matched: bestSimilarity >= this.threshold,
-        });
+    // Sort by similarity descending for greedy one-to-one assignment
+    allPairs.sort((a, b) => b.similarity - a.similarity);
+    const usedBaseIds = new Set<string>();
+
+    for (const { baseIdx, targetIdx, similarity } of allPairs) {
+      const baseSeg = baseSegments[baseIdx];
+      const targetSeg = targetSegments[targetIdx];
+
+      if (usedBaseIds.has(baseSeg.segmentId) || usedTargetIds.has(targetSeg.segmentId)) {
+        continue;
       }
+
+      matches.set(baseSeg.segmentId, {
+        sourceSegmentId: baseSeg.segmentId,
+        targetSegmentId: targetSeg.segmentId,
+        similarity,
+        matched: similarity >= this.threshold,
+      });
+      usedBaseIds.add(baseSeg.segmentId);
+      usedTargetIds.add(targetSeg.segmentId);
     }
 
     return matches;

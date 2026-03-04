@@ -9,6 +9,7 @@
 export {
   type CreateApiKeyInput,
   createApiKey,
+  findActiveApiKeyByName,
   findApiKeyById,
   findApiKeyByValue,
   listApiKeys,
@@ -56,6 +57,7 @@ export {
   type CreateCommitV4Options,
   computeCommitV4Hash,
   createCommitV4,
+  createCommitV4Atomic,
   deleteCommitV4,
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
@@ -128,6 +130,7 @@ export {
 export {
   abandonDraftV3,
   ConflictError,
+  NotFoundError,
   commitDraftV3,
   deleteDraftV3,
   findAutoDraftsByConversation,

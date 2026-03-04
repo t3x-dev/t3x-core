@@ -984,10 +984,14 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     }
 
     // If auto-validation produced assertions, store them on the leaf
+    // Capture the return value so the final response reflects the updated assertions
     if (result.validation) {
-      await updateLeaf(db, id, {
+      const leafWithAssertions = await updateLeaf(db, id, {
         assertions: result.validation.assertions,
       });
+      if (leafWithAssertions) {
+        Object.assign(updatedLeaf, leafWithAssertions);
+      }
     }
 
     // Save to generation history (non-blocking - don't fail if history save fails)
@@ -1029,7 +1033,7 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
         success: true as const,
         data: {
           output: result.output,
-          generated_at: updatedLeaf.generated_at!,
+          generated_at: updatedLeaf.generated_at ?? new Date().toISOString(),
           ...(result.validation
             ? {
                 validation: {
@@ -1224,21 +1228,22 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // First, get the leaf to find its project_id for pin cleanup
+    // Fetch leaf first to obtain project_id needed for pin cleanup.
+    // Then immediately attempt delete — if it returns false (concurrent delete),
+    // return 404. Pin cleanup only runs when delete actually succeeds.
     const leaf = await findLeafById(db, id);
-    if (!leaf) {
-      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
-    }
 
-    // Delete the leaf
     const deleted = await deleteLeaf(db, id);
 
     if (!deleted) {
+      // Leaf was not found (either never existed or concurrently deleted)
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    // Clean up associated pins (leaf pins that reference this leaf)
-    await deletePinByRef(db, leaf.project_id, 'leaf', id);
+    // Clean up associated pins only when delete succeeded
+    if (leaf) {
+      await deletePinByRef(db, leaf.project_id, 'leaf', id);
+    }
 
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {

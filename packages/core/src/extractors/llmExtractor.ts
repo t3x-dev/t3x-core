@@ -78,6 +78,8 @@ export class LLMExtractor {
         if (!sourceRef) {
           confidence = Math.min(confidence, 0.6);
         }
+      } else {
+        confidence *= 0.5;
       }
 
       return {

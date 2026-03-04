@@ -307,7 +307,7 @@ describe('Drafts V2 Features', () => {
         body: JSON.stringify({ message: 'Commit without vectors' }),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
@@ -335,7 +335,7 @@ describe('Drafts V2 Features', () => {
         body: JSON.stringify({ message: 'Commit with failing embedder' }),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();

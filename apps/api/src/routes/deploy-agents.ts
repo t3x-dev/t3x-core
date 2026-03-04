@@ -22,6 +22,23 @@ import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 
+/** Mask auth tokens in responses to avoid leaking secrets. */
+function maskAuth(authJson: string | null): unknown {
+  if (!authJson) return null;
+  try {
+    const auth = JSON.parse(authJson);
+    if (auth?.token) {
+      auth.token =
+        auth.token.length > 8
+          ? `${auth.token.slice(0, 4)}****${auth.token.slice(-4)}`
+          : '********';
+    }
+    return auth;
+  } catch {
+    return null;
+  }
+}
+
 export const deployAgentRoutes = new Hono();
 
 /**
@@ -29,8 +46,8 @@ export const deployAgentRoutes = new Hono();
  */
 deployAgentRoutes.get('/v1/deploy-agents', async (c) => {
   const projectId = c.req.query('project_id') ?? undefined;
-  const limit = parseInt(c.req.query('limit') ?? '100', 10);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
+  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
 
   try {
     const db = await getDB();
@@ -42,7 +59,7 @@ deployAgentRoutes.get('/v1/deploy-agents', async (c) => {
       name: a.name,
       endpoint: a.endpoint,
       type: a.type,
-      auth: a.authJson ? JSON.parse(a.authJson) : null,
+      auth: maskAuth(a.authJson),
       status: a.status,
       last_run_id: a.lastRunId,
       last_run_at: a.lastRunAt?.toISOString() ?? null,
@@ -151,7 +168,7 @@ deployAgentRoutes.get('/v1/deploy-agents/:id', async (c) => {
       name: agent.name,
       endpoint: agent.endpoint,
       type: agent.type,
-      auth: agent.authJson ? JSON.parse(agent.authJson) : null,
+      auth: maskAuth(agent.authJson),
       status: agent.status,
       last_run_id: agent.lastRunId,
       last_run_at: agent.lastRunAt?.toISOString() ?? null,
@@ -213,7 +230,7 @@ deployAgentRoutes.put('/v1/deploy-agents/:id', async (c) => {
       name: agent.name,
       endpoint: agent.endpoint,
       type: agent.type,
-      auth: agent.authJson ? JSON.parse(agent.authJson) : null,
+      auth: maskAuth(agent.authJson),
       status: agent.status,
       last_run_id: agent.lastRunId,
       last_run_at: agent.lastRunAt?.toISOString() ?? null,

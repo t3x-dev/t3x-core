@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 48 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(48);
+  it('has 54 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(54);
   });
 
   it('key equals value for every code', () => {
@@ -35,6 +35,7 @@ describe('ErrorCodes', () => {
         "DELETE_FAILED": "DELETE_FAILED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
+        "EXTRACTION_FAILED": "EXTRACTION_FAILED",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
@@ -45,8 +46,11 @@ describe('ErrorCodes', () => {
         "HISTORY_NOT_FOUND": "HISTORY_NOT_FOUND",
         "INTERNAL_ERROR": "INTERNAL_ERROR",
         "INVALID_REQUEST": "INVALID_REQUEST",
+        "INVALID_STATUS": "INVALID_STATUS",
         "LEAF_NOT_FOUND": "LEAF_NOT_FOUND",
+        "LEARN_FAILED": "LEARN_FAILED",
         "LIST_FAILED": "LIST_FAILED",
+        "LLM_NOT_CONFIGURED": "LLM_NOT_CONFIGURED",
         "MAIN_NOT_HEAD": "MAIN_NOT_HEAD",
         "MAIN_ROOT_EXISTS": "MAIN_ROOT_EXISTS",
         "MERGE_FAILED": "MERGE_FAILED",
@@ -67,8 +71,10 @@ describe('ErrorCodes', () => {
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
+        "UNRESOLVED_PAIRS": "UNRESOLVED_PAIRS",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
+        "VERIFY_FAILED": "VERIFY_FAILED",
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
       }
     `);

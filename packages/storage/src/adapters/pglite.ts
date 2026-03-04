@@ -511,12 +511,23 @@ async function initializeSchema(client: PGlite): Promise<void> {
       url TEXT NOT NULL,
       events JSONB NOT NULL,
       secret TEXT,
-      active TEXT NOT NULL DEFAULT 'true',
+      active INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+
+    -- Migration: Fix webhooks.active column type (TEXT → INTEGER)
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'webhooks' AND column_name = 'active' AND data_type = 'text'
+      ) THEN
+        ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER USING CASE WHEN active = 'true' THEN 1 ELSE 0 END;
+      END IF;
+    END $$;
 
     -- Drafts V3 table (Workbench / pre-commit working area)
     CREATE TABLE IF NOT EXISTS drafts_v3 (
@@ -652,7 +663,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Recipes table (automation workflows)
     CREATE TABLE IF NOT EXISTS recipes (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(project_id),
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT,
       trigger JSONB NOT NULL,

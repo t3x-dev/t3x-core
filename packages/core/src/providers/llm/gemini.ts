@@ -59,6 +59,9 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetchWithProxy(url, {
         method: 'POST',
@@ -73,8 +76,10 @@ export class GeminiProvider implements LLMProvider {
             ...(options?.stopSequences && { stopSequences: options.stopSequences }),
           },
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const responseText = await response.text();
 
       if (!response.ok) {
@@ -98,7 +103,11 @@ export class GeminiProvider implements LLMProvider {
 
       return text;
     } catch (error) {
+      clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
       throw new LLMProviderError(
         this.id,
         undefined,

@@ -81,16 +81,18 @@ describe('Auth Middleware', () => {
       // Should NOT call findApiKeyByValue
       expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
     });
+  });
 
-    it('skips auth when AUTH_DISABLED is not set (safe default)', async () => {
+  describe('AUTH_DISABLED not set', () => {
+    it('enforces auth when AUTH_DISABLED is not set (secure default)', async () => {
       delete process.env.AUTH_DISABLED;
 
       const res = await app.request('/api/v1/projects');
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
       const data = await res.json();
-      expect(data.success).toBe(true);
-      expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('UNAUTHORIZED');
     });
   });
 

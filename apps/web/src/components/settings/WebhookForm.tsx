@@ -90,7 +90,12 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
     [isEdit, url, events, secret, projectId, active, onSubmit]
   );
 
-  const isValid = url.trim() !== '' && events.length > 0;
+  const isValidUrl = (s: string) => {
+    try { new URL(s); return true; } catch { return false; }
+  };
+  const urlTrimmed = url.trim();
+  const urlFormatError = urlTrimmed !== '' && !isValidUrl(urlTrimmed);
+  const isValid = urlTrimmed !== '' && isValidUrl(urlTrimmed) && events.length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -107,7 +112,13 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
           onChange={(e) => setUrl(e.target.value)}
           required
           disabled={loading}
+          aria-describedby={urlFormatError ? 'webhook-url-error' : undefined}
         />
+        {urlFormatError && (
+          <p id="webhook-url-error" className="text-xs text-red-500">
+            Please enter a valid URL (e.g. https://example.com/webhook).
+          </p>
+        )}
         <p className="text-xs text-[var(--text-tertiary)]">
           The URL that will receive webhook POST requests.
         </p>

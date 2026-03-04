@@ -21,6 +21,11 @@ import {
 } from '../schemas/api-key-contracts';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
+/** Strip sensitive fields (key_hash, user_id) from API key records. */
+function toSafeApiKey({ key_hash, user_id, ...safe }: Record<string, unknown>) {
+  return safe;
+}
+
 export const apiKeysRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -132,7 +137,7 @@ apiKeysRoutes.openapi(listApiKeysRoute, async (c) => {
 
     return c.json({
       success: true as const,
-      data: keys,
+      data: keys.map((k) => toSafeApiKey(k as unknown as Record<string, unknown>)),
     });
   } catch (err) {
     pinoLogger.error({ err }, "error listing API keys");
@@ -189,7 +194,7 @@ apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
 
     return c.json({
       success: true as const,
-      data: revoked,
+      data: toSafeApiKey(revoked as unknown as Record<string, unknown>),
     });
   } catch (err) {
     pinoLogger.error({ err }, "error revoking API key");

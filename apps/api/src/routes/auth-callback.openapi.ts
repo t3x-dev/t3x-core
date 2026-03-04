@@ -11,7 +11,7 @@
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { API_KEY_VALUE_PREFIX } from '@t3x/core';
-import { createApiKey, findOrCreateUser } from '@t3x/storage';
+import { createApiKey, findActiveApiKeyByName, findOrCreateUser, revokeApiKey } from '@t3x/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
@@ -81,10 +81,18 @@ authCallbackRoutes.openapi(authCallbackRoute, async (c) => {
     const db = await getDB();
     const user = await findOrCreateUser(db, body);
 
-    // Generate a session API key for the WebUI to use
+    // Revoke any existing session key for this user before creating a new one
+    // (prevents unbounded key accumulation across repeated logins)
+    const sessionKeyName = `session:${user.id}`;
+    const existingKey = await findActiveApiKeyByName(db, sessionKeyName);
+    if (existingKey) {
+      await revokeApiKey(db, existingKey.id);
+    }
+
+    // Generate a fresh session API key for the WebUI to use
     const rawKey = `${API_KEY_VALUE_PREFIX}${randomBytes(24).toString('base64url')}`;
     await createApiKey(db, {
-      name: `session:${user.id}`,
+      name: sessionKeyName,
       userId: user.id,
       keyValue: rawKey,
     });

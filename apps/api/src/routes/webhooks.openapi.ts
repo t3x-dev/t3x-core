@@ -20,6 +20,7 @@ import {
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { isInternalUrl } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreateWebhookRequest,
@@ -31,6 +32,25 @@ import {
 export const webhooksRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+/**
+ * Mask a webhook secret for list/get responses.
+ * Shows only the last 4 characters so the user can identify which secret was set
+ * without exposing the full value.
+ */
+function maskSecret(secret: string | null | undefined): string | null {
+  if (!secret) return null;
+  if (secret.length <= 4) return '****';
+  return `****${secret.slice(-4)}`;
+}
+
+/**
+ * Map a webhook record to API response, masking the secret.
+ * The full secret is only returned on CREATE so the user can save it once.
+ */
+function toMaskedWebhook<T extends { secret?: string | null }>(webhook: T): T {
+  return { ...webhook, secret: maskSecret(webhook.secret) };
+}
 
 // ============================================================
 // POST /v1/webhooks — Create webhook
@@ -61,6 +81,10 @@ const createWebhookRoute = createRoute({
 
 webhooksRoutes.openapi(createWebhookRoute, async (c) => {
   const body = c.req.valid('json');
+
+  if (isInternalUrl(body.url)) {
+    return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
+  }
 
   try {
     const db = await getDB();
@@ -104,7 +128,7 @@ webhooksRoutes.openapi(listWebhooksRoute, async (c) => {
   try {
     const db = await getDB();
     const hooks = await listWebhooks(db, { projectId: project_id });
-    return c.json({ success: true as const, data: hooks });
+    return c.json({ success: true as const, data: hooks.map(toMaskedWebhook) });
   } catch (err) {
     return errorResponse(c, 'LIST_FAILED', 'Failed to list webhooks');
   }
@@ -146,7 +170,7 @@ webhooksRoutes.openapi(getWebhookRoute, async (c) => {
       return errorResponse(c, 'WEBHOOK_NOT_FOUND', `Webhook not found: ${id}`);
     }
 
-    return c.json({ success: true as const, data: webhook });
+    return c.json({ success: true as const, data: toMaskedWebhook(webhook) });
   } catch (err) {
     return errorResponse(c, 'GET_FAILED', 'Failed to get webhook');
   }
@@ -184,6 +208,10 @@ webhooksRoutes.openapi(updateWebhookRoute, async (c) => {
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
 
+  if (body.url && isInternalUrl(body.url)) {
+    return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
+  }
+
   try {
     const db = await getDB();
 
@@ -197,7 +225,7 @@ webhooksRoutes.openapi(updateWebhookRoute, async (c) => {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to update webhook');
     }
 
-    return c.json({ success: true as const, data: updated });
+    return c.json({ success: true as const, data: toMaskedWebhook(updated) });
   } catch (err) {
     return errorResponse(c, 'UPDATE_FAILED', 'Failed to update webhook');
   }
@@ -221,7 +249,7 @@ const deleteWebhookRoute = createRoute({
       description: 'Webhook deleted',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ deleted: z.boolean() })),
+          schema: SuccessResponseSchema(z.object({ deleted: z.boolean(), id: z.string() })),
         },
       },
     },
@@ -248,7 +276,7 @@ webhooksRoutes.openapi(deleteWebhookRoute, async (c) => {
       return errorResponse(c, 'DELETE_FAILED', 'Failed to delete webhook');
     }
 
-    return c.json({ success: true as const, data: { deleted: true } });
+    return c.json({ success: true as const, data: { deleted: true, id } });
   } catch (err) {
     return errorResponse(c, 'DELETE_FAILED', 'Failed to delete webhook');
   }
@@ -309,6 +337,10 @@ webhooksRoutes.openapi(testWebhookRoute, async (c) => {
       const { createHmac } = await import('node:crypto');
       const signature = createHmac('sha256', webhook.secret).update(body).digest('hex');
       headers['X-T3X-Signature'] = signature;
+    }
+
+    if (isInternalUrl(webhook.url)) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
     }
 
     const response = await fetch(webhook.url, {

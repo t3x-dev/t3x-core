@@ -19,8 +19,9 @@ import type {
   MergeSummaryData,
   SentenceV4,
 } from '@t3x/core';
-import { computeJCSHash } from '@t3x/core';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { computeCommitV4Hash } from '@t3x/core';
+export { computeCommitV4Hash } from '@t3x/core';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
 
@@ -54,6 +55,17 @@ export interface CreateCommitV4Options {
 }
 
 /**
+ * Result type for findCommitV4History, including a truncation flag.
+ *
+ * Fix 5: Add truncated flag so callers know the result may be incomplete.
+ */
+export interface CommitV4HistoryResult {
+  commits: CommitV4[];
+  /** True when the walk hit `limit` before exhausting the DAG. */
+  truncated: boolean;
+}
+
+/**
  * Error thrown when parent commits are not found in strict mode
  */
 export class ParentNotFoundErrorV4 extends Error {
@@ -83,58 +95,19 @@ export class ParentHashIntegrityError extends Error {
 }
 
 // ============================================================
-// Hash Computation
-// ============================================================
-
-/**
- * Compute CommitV4 hash from first-class fields only.
- *
- * First-class fields (participate in hash):
- * - schema: 't3x/commit/v4'
- * - parents: string[]
- * - author: CommitAuthor
- * - committed_at: ISO8601 string
- * - content: { sentences: Sentence[] }
- *
- * Second-class fields (NOT in hash):
- * - project_id, message, branch, source_refs, position_x, position_y, created_at
- * - Sentence.inherited_from (inheritance tracking, does not affect content identity)
- */
-export function computeCommitV4Hash(data: {
-  schema: 't3x/commit/v4';
-  parents: string[];
-  author: CommitAuthorV4;
-  committed_at: string;
-  content: { sentences: SentenceV4[] };
-}): string {
-  // Strip second-class fields from sentences before hashing.
-  // inherited_from is metadata about provenance, not part of content identity.
-  // Explicitly omit undefined optional fields to avoid relying on JCS stripping behavior.
-  const normalizedSentences = data.content.sentences.map((s) => {
-    const norm: Record<string, unknown> = { id: s.id, text: s.text };
-    if (s.confidence !== undefined) norm.confidence = s.confidence;
-    if (s.source_ref !== undefined) norm.source_ref = s.source_ref;
-    // inherited_from intentionally excluded from hash
-    return norm;
-  });
-
-  return computeJCSHash({
-    schema: data.schema,
-    parents: data.parents,
-    author: data.author,
-    committed_at: data.committed_at,
-    content: { sentences: normalizedSentences },
-  });
-}
-
-// ============================================================
 // Query Functions
 // ============================================================
 
 /**
  * Create a new CommitV4
  *
- * @param db - Database instance
+ * Fix 7: When branch + project_id are both present, the insert is performed
+ * inside a transaction so that callers who first call validateMainBranchLinearity
+ * (passing the same `db` or transaction) and then call createCommitV4 can wrap
+ * both calls in db.transaction() for full atomicity. The function accepts any
+ * AnyDB value — including a Drizzle transaction object — transparently.
+ *
+ * @param db - Database instance (or a Drizzle transaction from db.transaction())
  * @param input - Commit data (without hash - will be computed)
  * @param options - Optional settings (strictParents defaults to true)
  * @throws ParentNotFoundErrorV4 if strictParents=true and any parent doesn't exist
@@ -223,6 +196,30 @@ export async function createCommitV4(
     .returning();
 
   return rowToCommitV4(row);
+}
+
+/**
+ * Create a CommitV4 on main branch with linearity validation, atomically.
+ *
+ * Fix 7: Wraps validateMainBranchLinearity + createCommitV4 in a single
+ * database transaction to prevent two concurrent inserts from both passing
+ * the linearity check and then forking the main branch.
+ *
+ * Use this instead of calling validateMainBranchLinearity + createCommitV4
+ * separately when inserting to main.
+ */
+export async function createCommitV4Atomic(
+  db: AnyDB,
+  input: CreateCommitV4Input,
+  options: CreateCommitV4Options = {}
+): Promise<CommitV4> {
+  return db.transaction(async (tx) => {
+    if (input.branch && input.project_id) {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.project_id || ''}))`);
+      await validateMainBranchLinearity(tx as AnyDB, input.project_id, input.branch, input.parents ?? []);
+    }
+    return createCommitV4(tx as AnyDB, input, options);
+  });
 }
 
 /**
@@ -361,9 +358,10 @@ export async function getCommitV4Parents(db: AnyDB, hash: string): Promise<Commi
 /**
  * Walk the parent chain from a given commit (BFS traversal).
  *
- * Returns an ordered list of ancestor commits starting from the given hash.
- * Handles DAG (multiple parents) gracefully — visits breadth-first.
- * Missing/deleted parents are skipped with a warning.
+ * Fix 5: Pre-fetches all commits for the project in a single query and
+ * performs the BFS in memory to eliminate N+1 database round-trips.
+ * Returns { commits, truncated } — truncated=true signals that `limit` was
+ * hit before the full DAG was explored.
  *
  * @param db - Database instance
  * @param hash - Starting commit hash
@@ -373,17 +371,50 @@ export async function findCommitV4History(
   db: AnyDB,
   hash: string,
   limit = 50
-): Promise<CommitV4[]> {
+): Promise<CommitV4HistoryResult> {
+  // Look up start commit to determine its project
+  const startCommit = await findCommitV4ByHash(db, hash);
+  if (!startCommit) {
+    return { commits: [], truncated: false };
+  }
+
+  // Pre-fetch all commits for the project in one query (up to a reasonable ceiling)
+  const PREFETCH_LIMIT = 5000;
+  const allRows = startCommit.project_id
+    ? await db
+        .select()
+        .from(commitsV4)
+        .where(eq(commitsV4.projectId, startCommit.project_id))
+        .limit(PREFETCH_LIMIT)
+    : [];
+
+  // Build in-memory map — also include the start commit itself
+  const commitMap = new Map<string, CommitV4>();
+  for (const row of allRows) {
+    commitMap.set(row.hash, rowToCommitV4(row));
+  }
+  // Ensure start commit is reachable even when project_id is absent
+  if (!commitMap.has(hash)) {
+    commitMap.set(hash, startCommit);
+  }
+
+  // BFS in memory
   const history: CommitV4[] = [];
   const visited = new Set<string>();
   const queue: string[] = [hash];
+  let truncated = false;
 
-  while (queue.length > 0 && history.length < limit) {
+  while (queue.length > 0) {
+    if (history.length >= limit) {
+      truncated = true;
+      break;
+    }
+
     const currentHash = queue.shift()!;
     if (visited.has(currentHash)) continue;
     visited.add(currentHash);
 
-    const commit = await findCommitV4ByHash(db, currentHash);
+    const commit = commitMap.get(currentHash);
     if (!commit) {
       console.warn(`[findCommitV4History] Commit not found: ${currentHash}, skipping`);
       continue;
@@ -398,7 +429,7 @@ export async function findCommitV4History(
     }
   }
 
-  return history;
+  return { commits: history, truncated };
 }
 
 // ============================================================
@@ -453,11 +484,16 @@ export async function validateMainBranchLinearity(
     if (mainCommits.length > 0) {
       const childParents = new Set(mainCommits.flatMap((c) => c.parents));
       const heads = mainCommits.filter((c) => !childParents.has(c.hash));
-      const headHash = heads.length === 1 ? heads[0].hash : null;
-      if (headHash && !parents.includes(headHash)) {
+      if (heads.length > 1) {
         throw new MainBranchLinearityError(
           'MAIN_NOT_HEAD',
-          'Can only extend main branch from its latest commit'
+          `Main branch has ${heads.length} heads — resolve before committing`
+        );
+      }
+      if (heads.length === 1 && !parents.includes(heads[0].hash)) {
+        throw new MainBranchLinearityError(
+          'MAIN_NOT_HEAD',
+          'New commit must extend from the latest main branch commit'
         );
       }
     }

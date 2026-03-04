@@ -120,9 +120,6 @@ export async function updateDraft(
   draftId: string,
   input: UpdateDraftInput
 ): Promise<Draft | null> {
-  const existing = await findDraftById(db, draftId);
-  if (!existing) return null;
-
   const updates: Partial<NewAgentDraft> = {};
   if (input.text !== undefined) updates.text = input.text;
   if (input.mustHave !== undefined) updates.mustHaveJson = JSON.stringify(input.mustHave);
@@ -147,9 +144,6 @@ export async function updateDraftStatus(
   draftId: string,
   status: DraftStatus
 ): Promise<Draft | null> {
-  const existing = await findDraftById(db, draftId);
-  if (!existing) return null;
-
   // Set completedAt when transitioning to adopted/superseded
   const completedAt = status !== 'ephemeral' ? new Date() : null;
 

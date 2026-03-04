@@ -115,6 +115,9 @@ let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 /** Generation counter to discard stale preview results */
 let previewGeneration = 0;
 
+/** Save status reset timer — tracked so reset() can cancel it */
+let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** Schedule auto-preview regeneration if enabled and preview is stale */
 function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
   if (!get().autoPreview || newPreviewStatus !== 'stale') return;
@@ -457,7 +460,9 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       });
 
       // Reset to idle after 2 seconds
-      setTimeout(() => {
+      if (saveStatusTimer) clearTimeout(saveStatusTimer);
+      saveStatusTimer = setTimeout(() => {
+        saveStatusTimer = null;
         const current = get();
         if (current.saveStatus === 'saved') {
           set({ saveStatus: 'idle' });
@@ -532,6 +537,12 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       clearTimeout(autoPreviewTimer);
       autoPreviewTimer = null;
     }
+    if (saveStatusTimer) {
+      clearTimeout(saveStatusTimer);
+      saveStatusTimer = null;
+    }
+    // Reset generation counter so stale in-flight previews don't clobber state after navigation
+    previewGeneration = 0;
     set(initialState);
   },
 }));

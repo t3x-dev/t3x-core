@@ -5,6 +5,8 @@
  * Fire-and-forget — errors are logged but don't propagate.
  */
 
+import { isInternalUrl } from './ssrf';
+
 interface RecipeStep {
   action: 'send_webhook' | 'run_eval' | 'export_report';
   config: Record<string, unknown>;
@@ -50,6 +52,14 @@ export async function executeRecipe(
       switch (step.action) {
         case 'send_webhook': {
           const url = step.config.url as string;
+          if (url && isInternalUrl(url)) {
+            results.push({
+              action: step.action,
+              success: false,
+              error: 'Webhook URL targets a blocked internal address',
+            });
+            break;
+          }
           if (url && deps.webhookDispatch) {
             await deps.webhookDispatch(url, {
               recipe_id: recipe.id,
@@ -73,9 +83,14 @@ export async function executeRecipe(
             break;
           }
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
+          const runEvalHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKey = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKey) {
+            runEvalHeaders['Authorization'] = `Bearer ${internalKey}`;
+          }
           const res = await fetch(`${baseUrl}/v1/runs`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: runEvalHeaders,
             body: JSON.stringify({
               leaf_id: leafId,
               project_id: context.projectId,
@@ -111,7 +126,12 @@ export async function executeRecipe(
             break;
           }
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
-          const res = await fetch(`${baseUrl}/v1/runs/${runId}`);
+          const exportHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKeyExport = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKeyExport) {
+            exportHeaders['Authorization'] = `Bearer ${internalKeyExport}`;
+          }
+          const res = await fetch(`${baseUrl}/v1/runs/${runId}`, { headers: exportHeaders });
           if (!res.ok) {
             results.push({
               action: step.action,
@@ -135,7 +155,7 @@ export async function executeRecipe(
           // Mark run as exported via PATCH (title/description/tags)
           await fetch(`${baseUrl}/v1/runs/${runId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: exportHeaders,
             body: JSON.stringify({
               description: `Exported by recipe "${recipe.name}" at ${report.exported_at}`,
               tags: [`recipe:${recipe.id}`, 'exported'],

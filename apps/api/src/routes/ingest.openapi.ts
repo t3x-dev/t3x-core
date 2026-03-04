@@ -38,10 +38,10 @@ const IngestWebhookRequest = z
       description:
         'Existing conversation ID to append to. If omitted, a new conversation is created.',
     }),
-    title: z.string().optional().openapi({
+    title: z.string().max(1000).optional().openapi({
       description: 'Title for new conversation. Ignored if conversation_id is provided.',
     }),
-    source: z.string().optional().openapi({
+    source: z.string().max(500).optional().openapi({
       description: 'Source identifier (e.g., "slack", "discord", "custom")',
     }),
   })

@@ -95,6 +95,8 @@ function mapNormToOrig(
  * Window size = quote length ± 20%.
  */
 function slidingLevenshtein(content: string, quote: string): FuzzyLocateResult | null {
+  if (content.length > 10_000) return null;
+
   const qLen = quote.length;
   const minWin = Math.max(1, Math.floor(qLen * 0.8));
   const maxWin = Math.ceil(qLen * 1.2);

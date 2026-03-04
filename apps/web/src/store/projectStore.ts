@@ -109,8 +109,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
       notify?.(`Created project "${name}"`, 'success');
       return projectSummary;
-    } catch (_err) {
-      // Log error and notify user
+    } catch (err) {
+      // Only create a local offline project for network errors (TypeError from fetch).
+      // HTTP 4xx/5xx errors propagate so the UI can display them properly.
+      if (!(err instanceof TypeError)) {
+        throw err;
+      }
+
       notify?.(`API unavailable - created offline project "${name}"`, 'warning');
 
       const projectSummary: ProjectSummary = {
@@ -153,19 +158,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       await api.deleteProject(id);
       notify?.(`Deleted "${project?.name || id}"`, 'success');
     } catch (err) {
-      // Restore project on failure
-      if (project) {
-        set((state) => ({
-          projects: [project, ...state.projects],
-        }));
-      }
-
       const error = err instanceof Error ? err : new Error(String(err));
 
-      // Check if it's a 404 (already deleted) - don't restore in this case
+      // If 404, the project was already deleted on the server — don't restore
       if (error.message.includes('404') || error.message.includes('not found')) {
         notify?.(`Project was already deleted from server`, 'warning');
       } else {
+        // Restore project on non-404 failure
+        if (project) {
+          set((state) => ({
+            projects: [project, ...state.projects],
+          }));
+        }
         notify?.(`Failed to delete: ${error.message}`, 'error');
       }
     }

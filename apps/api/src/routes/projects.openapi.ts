@@ -3,16 +3,17 @@
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  branches,
+  commitsV4,
+  conversations,
   deleteProject,
-  findBranchesByProject,
-  findCommitsV4ByProject,
-  findConversationsByProject,
   findProjects,
   findProjectWithStats,
   insertProject,
   updateProject,
   verifyHashChain,
 } from '@t3x/storage/pglite';
+import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {
   ErrorResponseSchema,
@@ -66,22 +67,34 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     const db = await getDB();
     const projects = await findProjects(db, { limit, offset });
 
-    // Enrich each project with counts (conversations, V4 commits, branches)
+    // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
     const apiProjects = await Promise.all(
       projects.map(async (p) => {
-        const [convs, commits, branchesList] = await Promise.all([
-          findConversationsByProject(db, { projectId: p.projectId, limit: 10000 }),
-          findCommitsV4ByProject(db, p.projectId, { limit: 10000 }),
-          findBranchesByProject(db, { projectId: p.projectId, limit: 10000 }),
+        const [convCountRow, commitCountRow, branchCountRow] = await Promise.all([
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(conversations)
+            .where(eq(conversations.projectId, p.projectId))
+            .then((rows) => rows[0]),
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(commitsV4)
+            .where(eq(commitsV4.projectId, p.projectId))
+            .then((rows) => rows[0]),
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(branches)
+            .where(eq(branches.projectId, p.projectId))
+            .then((rows) => rows[0]),
         ]);
         return {
           project_id: p.projectId,
           name: p.name,
           created_at: p.createdAt.toISOString(),
           metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
-          conversations_count: convs.length,
-          commits_count: commits.length,
-          branches_count: branchesList.length,
+          conversations_count: Number(convCountRow?.count ?? 0),
+          commits_count: Number(commitCountRow?.count ?? 0),
+          branches_count: Number(branchCountRow?.count ?? 0),
         };
       })
     );
@@ -202,10 +215,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const [project, v4Commits] = await Promise.all([
-      findProjectWithStats(db, id),
-      findCommitsV4ByProject(db, id, { limit: 10000 }),
-    ]);
+    const project = await findProjectWithStats(db, id);
 
     if (!project) {
       return c.json(
@@ -217,6 +227,13 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
+    // Use COUNT(*) query for v4 commits — same pattern as list endpoint
+    const [v4CommitCountRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(commitsV4)
+      .where(eq(commitsV4.projectId, id));
+    const v4CommitsCount = Number(v4CommitCountRow?.count ?? 0);
+
     const apiProject = {
       project_id: project.projectId,
       name: project.name,
@@ -225,7 +242,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
-      commits_count: v4Commits.length || project.stats.commitsCount,
+      commits_count: v4CommitsCount || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
     };

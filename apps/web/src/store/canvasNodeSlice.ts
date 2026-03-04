@@ -34,6 +34,9 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         }),
       ]);
 
+      // Guard: discard results if the project changed while we were fetching
+      if (get().projectId !== projectId) return;
+
       const conversations = convResponse.conversations;
 
       // Convert V4 commits to V2-compatible format for unitToNode
@@ -388,8 +391,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           if (!commitHash) return node;
           const newLeaves = leavesByCommit.get(commitHash) || [];
           const oldLeaves = node.data.leaves || [];
-          // Only update if leaf count changed
-          if (newLeaves.length === oldLeaves.length) return node;
+          // Only update if the set of leaf IDs actually changed
+          const oldIds = oldLeaves.map((l) => l.id).sort().join(',');
+          const newIds = newLeaves.map((l) => l.id).sort().join(',');
+          if (oldIds === newIds) return node;
           return { ...node, data: { ...node.data, leaves: newLeaves } };
         }),
       }));

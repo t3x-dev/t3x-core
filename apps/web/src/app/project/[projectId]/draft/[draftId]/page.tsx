@@ -26,6 +26,14 @@ export default function DraftPage() {
     }
   }, [draftId, loadDraft]);
 
+  // Reset store on unmount so stale draft state is not carried over if the
+  // user navigates to a different draft or back to the canvas.
+  useEffect(() => {
+    return () => {
+      useDraftWorkspaceStore.getState().reset();
+    };
+  }, []);
+
   const handleClose = () => {
     reset();
     router.push(`/project/${projectId}`);

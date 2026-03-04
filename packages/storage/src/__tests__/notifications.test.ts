@@ -89,7 +89,8 @@ describe('Notifications Storage', () => {
       const list = await listNotifications(db, { project_id: testProjectId });
       expect(list.length).toBeGreaterThanOrEqual(1);
       for (const n of list) {
-        expect(n.projectId).toBe(testProjectId);
+        // listNotifications returns project-specific + global (null) notifications
+        expect([testProjectId, null]).toContain(n.projectId);
       }
     });
 

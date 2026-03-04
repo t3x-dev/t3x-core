@@ -94,6 +94,11 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     return () => clearTimeout(timer);
   }, [isDirty, saveDraft]);
 
+  const handleCancel = useCallback(async () => {
+    await cancelMerge();
+    onClose();
+  }, [cancelMerge, onClose]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -117,15 +122,20 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         setSidebarCollapsed((prev) => !prev);
       }
 
-      // Escape to close (only if dialog is not open)
+      // Escape to cancel merge (only if dialog is not open)
       if (e.key === 'Escape' && !showReviewDialog) {
-        onClose();
+        // Don't cancel if user is typing in an input
+        const active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable'))) {
+          return; // let the input handle Escape
+        }
+        handleCancel();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveDraft, canCommit, onClose, showReviewDialog]);
+  }, [saveDraft, canCommit, handleCancel, showReviewDialog]);
 
   const handleOpenReview = useCallback(() => {
     setShowReviewDialog(true);
@@ -135,11 +145,6 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   const handleConfirmMerge = useCallback(async () => {
     await commitMerge();
   }, [commitMerge]);
-
-  const handleCancel = useCallback(async () => {
-    await cancelMerge();
-    onClose();
-  }, [cancelMerge, onClose]);
 
   if (!prepared) {
     return (

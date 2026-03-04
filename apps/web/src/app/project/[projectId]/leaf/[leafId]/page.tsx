@@ -156,12 +156,7 @@ export default function LeafDetailPage() {
         <ErrorMessage
           error={error}
           onRetry={() => {
-            setError(null);
-            setLoading(true);
-            getLeaf(leafId)
-              .then(setLeaf)
-              .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
-              .finally(() => setLoading(false));
+            window.location.reload();
           }}
         />
       </div>

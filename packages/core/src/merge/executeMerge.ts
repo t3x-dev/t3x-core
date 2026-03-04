@@ -62,7 +62,8 @@ export function executeMerge(
   targetCommitHash: string,
   author: CommitAuthor,
   message: string,
-  projectId: string
+  projectId: string,
+  committedAt?: string
 ): CommitV4 {
   const sentences: SentenceV4[] = [];
 
@@ -120,7 +121,7 @@ export function executeMerge(
     }
   }
 
-  const committedAt = new Date().toISOString();
+  const timestamp = committedAt ?? new Date().toISOString();
 
   // Build first-class data for hash computation
   // 构建一等字段用于计算哈希
@@ -128,7 +129,7 @@ export function executeMerge(
     schema: 't3x/commit/v4' as const,
     parents: [sourceCommitHash, targetCommitHash],
     author,
-    committed_at: committedAt,
+    committed_at: timestamp,
     content: {
       sentences,
     },
@@ -143,7 +144,7 @@ export function executeMerge(
     schema: 't3x/commit/v4',
     parents: [sourceCommitHash, targetCommitHash],
     author,
-    committed_at: committedAt,
+    committed_at: timestamp,
     content: {
       sentences,
     },

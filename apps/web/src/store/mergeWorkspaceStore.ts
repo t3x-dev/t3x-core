@@ -306,6 +306,9 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
   };
 }
 
+// Module-level save status timer — tracked so reset() can cancel it
+let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
 // ============================================================================
 // Store
 // ============================================================================
@@ -472,7 +475,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       });
 
       // Reset to idle after 2 seconds
-      setTimeout(() => {
+      if (saveStatusTimer) clearTimeout(saveStatusTimer);
+      saveStatusTimer = setTimeout(() => {
+        saveStatusTimer = null;
         const current = get();
         if (current.saveStatus === 'saved') {
           set({ saveStatus: 'idle' });
@@ -505,7 +510,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         }),
       });
 
-      set({ status: 'committed', isDirty: false });
+      set({
+        status: 'committed',
+        isDirty: false,
+        extendedResolutions: {},
+        contextCache: {},
+        contextLoadingStates: {},
+      });
 
       // Force canvas to reload data by clearing its projectId
       // This ensures the new merge commit will be displayed
@@ -538,6 +549,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   reset: () => {
+    if (saveStatusTimer) {
+      clearTimeout(saveStatusTimer);
+      saveStatusTimer = null;
+    }
     set(initialState);
   },
 

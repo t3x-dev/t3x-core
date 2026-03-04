@@ -16,6 +16,8 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { restoreFromCfpack } from '@t3x/storage/backup';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
+import { jsonError } from '../lib/response';
+import { isInternalUrl } from '../lib/ssrf';
 import {
   checkDuplicate,
   computeContentHash,
@@ -166,10 +168,10 @@ const importCfpackRoute = createRoute({
                 created_at: z.string(),
               })
             ),
-            commits_v3: z.array(z.record(z.unknown())).optional().default([]),
-            commits_v4: z.array(z.record(z.unknown())).optional().default([]),
-            leaves: z.array(z.record(z.unknown())).optional().default([]),
-            pins: z.array(z.record(z.unknown())).optional().default([]),
+            commits_v3: z.array(z.record(z.unknown())).max(10000).optional().default([]),
+            commits_v4: z.array(z.record(z.unknown())).max(10000).optional().default([]),
+            leaves: z.array(z.record(z.unknown())).max(10000).optional().default([]),
+            pins: z.array(z.record(z.unknown())).max(10000).optional().default([]),
             meta: z.object({
               exported_at: z.string(),
               exported_by: z.string(),
@@ -719,7 +721,7 @@ const platformImportRoute = createRoute({
         'application/json': {
           schema: z.object({
             project_id: z.string(),
-            platform_data: z.string(), // JSON string of platform export
+            platform_data: z.string().max(50_000_000), // JSON string of platform export (50 MB max)
             conversation_ids: z.array(z.string()).optional(), // Select specific conversations
           }),
         },
@@ -846,14 +848,14 @@ importRoutes.post('/v1/import/url/stream', async (c) => {
   const body = await c.req.json<{ url: string; project_id: string }>();
   const { url, project_id } = body;
 
-  if (!url || !project_id) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'INVALID_REQUEST', message: 'url and project_id required' },
-      },
-      400
-    );
+  if (!project_id || typeof project_id !== 'string') {
+    return jsonError(c, 'INVALID_REQUEST', 'project_id is required', 400);
+  }
+  if (!url || typeof url !== 'string') {
+    return jsonError(c, 'INVALID_REQUEST', 'url is required', 400);
+  }
+  if (isInternalUrl(url)) {
+    return jsonError(c, 'INVALID_REQUEST', 'URL targets a blocked internal address', 400);
   }
 
   const stream = new ReadableStream({
@@ -1042,14 +1044,11 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
   }>();
   const { project_id, platform_data, conversation_ids } = body;
 
-  if (!project_id || !platform_data) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'INVALID_REQUEST', message: 'project_id and platform_data required' },
-      },
-      400
-    );
+  if (!project_id || typeof project_id !== 'string') {
+    return jsonError(c, 'INVALID_REQUEST', 'project_id is required', 400);
+  }
+  if (!platform_data || typeof platform_data !== 'string') {
+    return jsonError(c, 'INVALID_REQUEST', 'platform_data is required', 400);
   }
 
   const stream = new ReadableStream({

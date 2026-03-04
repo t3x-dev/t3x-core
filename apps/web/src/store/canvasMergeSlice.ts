@@ -160,8 +160,8 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
 
       const mergeCommit = json.data as CommitV3 & { merge_summary?: MergeSummaryData };
 
-      // Get current nodes and edges to add the merge commit node
-      const { nodes, edges } = get();
+      // Get current nodes to calculate merge node position
+      const { nodes } = get();
 
       // Find source and target nodes to calculate merge node position
       const sourceNode = nodes.find((n) => n.id === mergeState.sourceHash);
@@ -247,14 +247,14 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         style: edgeStyle,
       }));
 
-      // Update state with new node and edges
-      set({
-        nodes: [...nodes, mergeNode],
-        edges: [...edges, ...newEdges],
+      // Update state with new node and edges (use callback to avoid stale state after await)
+      set((state) => ({
+        nodes: [...state.nodes, mergeNode],
+        edges: [...state.edges, ...newEdges],
         mergeState: null,
         mergeLoading: false,
         mergeError: null,
-      });
+      }));
 
       notifyCallback?.('Merge executed successfully', 'success');
 

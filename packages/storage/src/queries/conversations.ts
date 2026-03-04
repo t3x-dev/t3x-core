@@ -96,15 +96,15 @@ export async function findConversationsByProject(
 
 /**
  * Update a conversation
+ *
+ * Fix 8: Removed the preliminary read (TOCTOU). The UPDATE itself returns the
+ * updated row; if 0 rows are returned the conversation does not exist.
  */
 export async function updateConversation(
   db: AnyDB,
   conversationId: string,
   updates: UpdateConversationInput
 ): Promise<Conversation | null> {
-  const existing = await findConversationById(db, conversationId);
-  if (!existing) return null;
-
   const updateData: Partial<NewConversation> = {};
   if (updates.title !== undefined) {
     updateData.title = updates.title;
@@ -145,7 +145,7 @@ export async function deleteConversation(db: AnyDB, conversationId: string): Pro
  */
 export async function getConversationTurnCount(db: AnyDB, conversationId: string): Promise<number> {
   const [result] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(turns)
     .where(eq(turns.conversationId, conversationId));
 

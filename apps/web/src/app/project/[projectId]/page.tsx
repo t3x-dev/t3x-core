@@ -3,7 +3,7 @@
 import { Activity, Cpu, Search, Settings, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { GuidedTour } from '@/components/onboarding/GuidedTour';
@@ -21,6 +21,14 @@ import { useProjectStore } from '@/store/projectStore';
 import { useSettingsStore, type ViewMode } from '@/store/settingsStore';
 
 export default function ProjectDetailPage() {
+  return (
+    <Suspense>
+      <ProjectDetailPageContent />
+    </Suspense>
+  );
+}
+
+function ProjectDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
@@ -56,7 +64,7 @@ export default function ProjectDetailPage() {
       hasCommit: types.has('commit') || types.has('pending'),
       hasBranch: nodes.some((n) => n.data?.branch && n.data.branch !== 'main'),
       hasLeaf: types.has('leaf'),
-      hasMerge: nodes.some((n) => n.data?.isMerge),
+      hasMerge: nodes.some((n) => n.data?.isMergeCommit),
     };
   }, [nodes]);
 

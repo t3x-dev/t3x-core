@@ -6,6 +6,7 @@
  */
 
 import { sha256 } from '@t3x/core';
+import { isInternalUrl } from '../ssrf';
 import { extractArticle } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';
@@ -59,6 +60,12 @@ function validateUrl(url: string): void {
     if (pattern.test(hostname)) {
       throw new Error('Private/reserved IP addresses are not allowed');
     }
+  }
+
+  // Additional check using shared SSRF utility (covers ::ffff: mapped addresses,
+  // metadata.google.internal, and other patterns the regex list above may miss)
+  if (isInternalUrl(url)) {
+    throw new Error('URL targets a blocked internal address');
   }
 }
 

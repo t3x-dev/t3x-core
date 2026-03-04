@@ -176,11 +176,21 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [generateSuccessBanner, setGenerateSuccessBanner] = useState<string | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const exportTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Cleanup banner/export timers on unmount to avoid setState on unmounted component
+  useEffect(() => {
+    return () => {
+      clearTimeout(bannerTimerRef.current);
+      clearTimeout(exportTimerRef.current);
+    };
+  }, []);
 
   // Assertion selection & Re-tune state
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
   const [retuning, setRetuning] = useState(false);
-  const { fetchPins, isPinned, getPinByRef } = usePinsStore();
+  const { fetchPins, isPinned, getPinByRef, invalidatePins } = usePinsStore();
   const leafPinned = isPinned('leaf', leafId);
   const existingPin = getPinByRef('leaf', leafId);
 
@@ -263,6 +273,8 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
         selectedAssertionIds: Array.from(selectedAssertionIds),
         existingPinId: existingPin?.id,
       });
+      // Invalidate so fetchPins bypasses the "already initialized" guard
+      invalidatePins();
       await fetchPins(projectId);
       return conversationId;
     } catch (_err) {
@@ -271,7 +283,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     } finally {
       setRetuning(false);
     }
-  }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins]);
+  }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins, invalidatePins]);
 
   // Generate progress phase messages
   const generateProgressMessages = useMemo(
@@ -498,7 +510,8 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
       if (updatedLeaf.output) {
         const wordCount = updatedLeaf.output.trim().split(/\s+/).length;
         setGenerateSuccessBanner(`Output ready — ${wordCount} words`);
-        setTimeout(() => setGenerateSuccessBanner(null), 3000);
+        clearTimeout(bannerTimerRef.current);
+        bannerTimerRef.current = setTimeout(() => setGenerateSuccessBanner(null), 3000);
       }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Generation failed';
@@ -548,7 +561,8 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
 
       // Auto-clear success message after 3 seconds
       if (result.success) {
-        setTimeout(() => setExportMessage(null), 3000);
+        clearTimeout(exportTimerRef.current);
+        exportTimerRef.current = setTimeout(() => setExportMessage(null), 3000);
       }
     } catch {
       setExportMessage({ type: 'error', text: 'Export failed' });

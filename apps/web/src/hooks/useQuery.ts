@@ -16,8 +16,9 @@ interface UseQueryResult<T> {
   refetch: () => void;
 }
 
-// Simple cache for deduplication
+// Simple cache for deduplication (capped at 200 entries to prevent unbounded growth)
 const queryCache = new Map<string, { data: unknown; timestamp: number }>();
+const QUERY_CACHE_MAX_SIZE = 200;
 
 function getCacheKey(queryKey: unknown[]): string {
   return JSON.stringify(queryKey);
@@ -58,6 +59,11 @@ export function useQuery<T>({
       const result = await queryFnRef.current();
       if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
       setData(result);
+      // Evict oldest entry if cache exceeds max size
+      if (queryCache.size >= QUERY_CACHE_MAX_SIZE) {
+        const oldestKey = queryCache.keys().next().value;
+        if (oldestKey !== undefined) queryCache.delete(oldestKey);
+      }
       queryCache.set(requestKey, { data: result, timestamp: Date.now() });
     } catch (err) {
       if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
@@ -84,16 +90,26 @@ export function useQuery<T>({
   return { data, isLoading, error, refetch };
 }
 
-// Utility to invalidate cache entries
+// Utility to invalidate cache entries by prefix
 export function invalidateQueries(keyPrefix: string): void {
+  const toDelete: string[] = [];
   for (const key of queryCache.keys()) {
-    if (key.startsWith(`["${keyPrefix}"`)) {
-      queryCache.delete(key);
+    // Match serialized keys where the prefix appears as first or any element
+    if (key.startsWith(`["${keyPrefix}"`) || key.includes(`"${keyPrefix}"`)) {
+      toDelete.push(key);
     }
+  }
+  for (const key of toDelete) {
+    queryCache.delete(key);
   }
 }
 
-// Clear all cache
+// Clear all cache entries (use on project navigation to prevent cross-project stale data)
 export function clearQueryCache(): void {
+  queryCache.clear();
+}
+
+// Alias for clarity — clears the entire module-level cache
+export function clearAllCache(): void {
   queryCache.clear();
 }

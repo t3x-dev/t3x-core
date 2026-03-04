@@ -51,18 +51,50 @@ interface TokenizedSentence {
 /**
  * Stage 1: Find sentences with identical text
  *
- * O(N+M) using hash sets for fast lookup.
+ * O(N+M) using frequency maps to correctly handle duplicate texts.
  */
 function findExactMatches(
   sentencesA: DiffableSentence[],
   sentencesB: DiffableSentence[]
 ): ExactMatchResult {
-  const textsB = new Set(sentencesB.map((s) => s.text));
-  const textsA = new Set(sentencesA.map((s) => s.text));
+  // Build frequency map for B texts
+  const freqB = new Map<string, number>();
+  for (const s of sentencesB) {
+    freqB.set(s.text, (freqB.get(s.text) ?? 0) + 1);
+  }
 
-  const identical = sentencesA.filter((s) => textsB.has(s.text));
-  const unmatchedA = sentencesA.filter((s) => !textsB.has(s.text));
-  const unmatchedB = sentencesB.filter((s) => !textsA.has(s.text));
+  // Build frequency map for A texts
+  const freqA = new Map<string, number>();
+  for (const s of sentencesA) {
+    freqA.set(s.text, (freqA.get(s.text) ?? 0) + 1);
+  }
+
+  // Match up to min(countA, countB) copies per text
+  const remainingB = new Map(freqB);
+  const identical: DiffableSentence[] = [];
+  const unmatchedA: DiffableSentence[] = [];
+
+  for (const s of sentencesA) {
+    const count = remainingB.get(s.text) ?? 0;
+    if (count > 0) {
+      identical.push(s);
+      remainingB.set(s.text, count - 1);
+    } else {
+      unmatchedA.push(s);
+    }
+  }
+
+  const remainingA = new Map(freqA);
+  const unmatchedB: DiffableSentence[] = [];
+
+  for (const s of sentencesB) {
+    const count = remainingA.get(s.text) ?? 0;
+    if (count > 0) {
+      remainingA.set(s.text, count - 1);
+    } else {
+      unmatchedB.push(s);
+    }
+  }
 
   return { identical, unmatchedA, unmatchedB };
 }

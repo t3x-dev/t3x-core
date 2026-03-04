@@ -66,23 +66,39 @@ class RateLimiter {
 
 // Singleton limiters
 const ipLimiter = new RateLimiter(200); // L1: 200/min per IP
+const unknownLimiter = new RateLimiter(10); // L1 fallback: 10/min for requests without IP headers
 const keyLimiter = new RateLimiter(100); // L2: 100/min per API key
 
-function getClientIp(c: Context): string {
+function getClientIp(c: Context): string | null {
   return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown'
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || null
   );
 }
 
 /**
  * L1 Rate Limit — IP-based, applied before auth.
  * 200 requests per minute per IP address.
+ * Requests without IP headers use a separate bucket with a 10/min limit.
+ * A unique key per request object prevents all unknown-IP requests from sharing one bucket.
  */
 export async function rateLimitL1(c: Context, next: Next) {
   const ip = getClientIp(c);
-  const result = ipLimiter.check(`ip:${ip}`);
 
-  c.header('X-RateLimit-Limit', '200');
+  let result: { allowed: boolean; remaining: number; resetAt: number };
+  let limitHeader: string;
+
+  if (ip) {
+    result = ipLimiter.check(`ip:${ip}`);
+    limitHeader = '200';
+  } else {
+    // No IP available — use a fixed key per pathname so rate limiting still applies.
+    // All requests without IP headers to the same path share a single bucket.
+    const fallbackKey = `unknown-ip:${new URL(c.req.url).pathname}`;
+    result = unknownLimiter.check(fallbackKey);
+    limitHeader = '10';
+  }
+
+  c.header('X-RateLimit-Limit', limitHeader);
   c.header('X-RateLimit-Remaining', String(result.remaining));
   c.header('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)));
 

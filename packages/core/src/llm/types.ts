@@ -52,13 +52,26 @@ export interface LLMProvider {
 }
 
 /**
+ * Derive an error code from an HTTP status code.
+ */
+function deriveCode(statusCode: number | undefined): string {
+  if (statusCode === undefined) return 'NETWORK_ERROR';
+  if (statusCode === 429) return 'RATE_LIMIT';
+  if (statusCode === 503) return 'OVERLOADED';
+  if (statusCode === 401 || statusCode === 403) return 'AUTH_ERROR';
+  if (statusCode >= 500) return 'SERVER_ERROR';
+  return 'API_ERROR';
+}
+
+/**
  * LLM Provider error
  */
 export class LLMProviderError extends Error {
   constructor(
     public readonly providerId: string,
     public readonly statusCode: number | undefined,
-    message: string
+    message: string,
+    public readonly code: string = deriveCode(statusCode)
   ) {
     super(`[${providerId}] ${message}`);
     this.name = 'LLMProviderError';

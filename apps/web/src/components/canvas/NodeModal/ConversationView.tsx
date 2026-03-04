@@ -69,6 +69,10 @@ export function ConversationView({
   projectId,
   isStagingUnit,
   quickActions,
+  onSaveConstraints: _onSaveConstraints,
+  effectiveConstraints: _effectiveConstraints,
+  onUpdateConstraintOverrides: _onUpdateConstraintOverrides,
+  isConversationLocked: _isConversationLocked,
   onShowCommitConfig,
 }: ConversationViewProps) {
   const { t } = useTerminology();
@@ -483,6 +487,7 @@ export function ConversationView({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="node-modal-title"
     >
       <div
         className={cn(
@@ -494,7 +499,7 @@ export function ConversationView({
         {/* Top Bar */}
         <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2 id="node-modal-title" className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
               {isStagingUnit ? 'Unit (Staging)' : 'Unit'}: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>

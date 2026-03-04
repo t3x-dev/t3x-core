@@ -46,8 +46,8 @@ conversationRoutes.get('/v1/conversations', async (c) => {
     return jsonError(c, 'INVALID_REQUEST', 'project_id query param is required', 400);
   }
 
-  const limit = parseInt(c.req.query('limit') ?? '100', 10);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
+  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
 
   try {
     const db = await getDB();
