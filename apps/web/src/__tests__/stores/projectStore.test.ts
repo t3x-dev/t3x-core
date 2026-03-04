@@ -229,7 +229,10 @@ describe('Project Store', () => {
     });
 
     it('creates offline project when API fails', async () => {
-      vi.mocked(api.createProject).mockRejectedValueOnce(new Error('API unavailable'));
+      // addProject only falls back to an offline project on TypeError (network failure).
+      // Generic Error instances are re-thrown so the UI can display them. Simulate a
+      // network-level failure with TypeError (the error fetch() itself throws).
+      vi.mocked(api.createProject).mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -306,9 +309,8 @@ describe('Project Store', () => {
 
       await useProjectStore.getState().deleteProject('proj_123');
 
-      // Project is restored (current behavior - restore happens before 404 check)
-      // The 404 check only changes the notification message
-      expect(useProjectStore.getState().projects).toHaveLength(1);
+      // Project is NOT restored on 404 — it was already deleted server-side
+      expect(useProjectStore.getState().projects).toHaveLength(0);
       expect(notifyCallback).toHaveBeenCalledWith(
         expect.stringContaining('already deleted'),
         'warning'

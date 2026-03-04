@@ -39,6 +39,7 @@ import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { type ConversationContext, getConversationContext } from '@/lib/api';
@@ -638,7 +639,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
-  const leafContextMenuHandler = useCanvasStore((state) => state.leafContextMenuHandler);
+  // Read from module-level ref to avoid Zustand re-renders on every callback update
+  const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const loadProjectData = useCanvasStore((state) => state.loadProjectData);
   const notify = useProjectStore((state) => state.notifyCallback);
@@ -653,9 +655,11 @@ const UnitNode = memo(function UnitNode(props: Props) {
   useEffect(() => {
     if (!data.conversationId || data.conversationId.startsWith('orphan-')) return;
 
+    let cancelled = false;
     getConversationContext(data.conversationId)
-      .then(setContextConfig)
+      .then((ctx) => { if (!cancelled) setContextConfig(ctx); })
       .catch(() => {}); // Silent fail - context indicator just won't show
+    return () => { cancelled = true; };
   }, [data.conversationId]);
 
   // Context label helper
@@ -744,9 +748,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
     e.stopPropagation();
     const hash =
       data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
-    navigator.clipboard.writeText(hash);
-    setCopiedHash(true);
-    setTimeout(() => setCopiedHash(false), 2000);
+    navigator.clipboard.writeText(hash)
+      .then(() => {
+        setCopiedHash(true);
+        setTimeout(() => setCopiedHash(false), 2000);
+      })
+      .catch(() => {}); // Silently fail on clipboard permission denial
   };
 
   // Lineage card hover handlers (400ms open delay, immediate close)

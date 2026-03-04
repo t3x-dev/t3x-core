@@ -44,8 +44,8 @@ import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
-import { notificationsRoutes } from './routes/notifications.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
+import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
 import { recipesRoutes } from './routes/recipes.openapi';
@@ -234,7 +234,7 @@ app.onError((err, c) => {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: err.message || 'Internal server error',
+        message: 'Internal server error',
       },
     },
     500

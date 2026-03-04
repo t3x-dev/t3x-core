@@ -11,6 +11,8 @@ import type { ParseResult } from '../types';
 
 const GITHUB_API = 'https://api.github.com';
 const USER_AGENT = 'T3X-Importer/1.0';
+const FETCH_TIMEOUT_MS = 30000;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /** Match GitHub issue/PR URLs */
 const GITHUB_PATTERN = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)/;
@@ -44,9 +46,13 @@ export async function parseGitHubUrl(url: string): Promise<ParseResult> {
   // Fetch issue/PR data
   const issueUrl = `${GITHUB_API}/repos/${owner}/${repo}/issues/${number}`;
   const [issueRes, commentsRes] = await Promise.all([
-    fetch(issueUrl, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' } }),
+    fetch(issueUrl, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    }),
     fetch(`${issueUrl}/comments?per_page=100`, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     }),
   ]);
 
@@ -54,10 +60,27 @@ export async function parseGitHubUrl(url: string): Promise<ParseResult> {
     throw new Error(`GitHub API returned ${issueRes.status}: ${await issueRes.text()}`);
   }
 
-  const issue = (await issueRes.json()) as GitHubIssue;
-  const comments: GitHubComment[] = commentsRes.ok
-    ? ((await commentsRes.json()) as GitHubComment[])
-    : [];
+  // Validate response size before consuming body
+  const issueContentLength = issueRes.headers.get('content-length');
+  if (issueContentLength && parseInt(issueContentLength, 10) > MAX_RESPONSE_BYTES) {
+    throw new Error(`GitHub issue response too large (${issueContentLength} bytes)`);
+  }
+  const issueBuffer = await issueRes.arrayBuffer();
+  if (issueBuffer.byteLength > MAX_RESPONSE_BYTES) {
+    throw new Error(`GitHub issue response too large (${issueBuffer.byteLength} bytes)`);
+  }
+  const issue = JSON.parse(new TextDecoder().decode(issueBuffer)) as GitHubIssue;
+
+  let comments: GitHubComment[] = [];
+  if (commentsRes.ok) {
+    const commentsContentLength = commentsRes.headers.get('content-length');
+    if (!commentsContentLength || parseInt(commentsContentLength, 10) <= MAX_RESPONSE_BYTES) {
+      const commentsBuffer = await commentsRes.arrayBuffer();
+      if (commentsBuffer.byteLength <= MAX_RESPONSE_BYTES) {
+        comments = JSON.parse(new TextDecoder().decode(commentsBuffer)) as GitHubComment[];
+      }
+    }
+  }
 
   // Build markdown content
   const lines: string[] = [];

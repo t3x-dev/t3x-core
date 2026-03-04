@@ -12,6 +12,12 @@ import { create } from 'zustand';
 import * as api from '@/lib/api';
 import type { NotifyCallback } from './canvasStoreTypes';
 
+// Module-level flag to prevent concurrent fetchPins calls for the same project.
+// Tracks the projectId currently being fetched (set synchronously before any
+// await) so two concurrent calls for the same project are de-duplicated, while
+// a call for a different project is still allowed through.
+let fetchInProgressFor: string | null = null;
+
 interface PinsState {
   /** All pins for the current project */
   pins: Pin[];
@@ -33,6 +39,9 @@ interface PinsState {
   removePin: (pinId: string) => Promise<void>;
   updatePinAssertions: (pinId: string, assertionIds: string[]) => Promise<Pin | null>;
 
+  // Invalidation — clears initialized so next fetchPins re-fetches (e.g. after retune)
+  invalidatePins: () => void;
+
   // Selectors
   isPinned: (type: PinType, refId: string) => boolean;
   getPinByRef: (type: PinType, refId: string) => Pin | undefined;
@@ -49,12 +58,14 @@ export const usePinsStore = create<PinsState>((set, get) => ({
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
 
   fetchPins: async (projectId: string) => {
-    // Skip if already loading
-    if (get().loading) return;
+    // Module-level flag prevents two concurrent calls for the same project that
+    // both see loading=false before the first set({ loading: true }) resolves.
+    if (fetchInProgressFor === projectId) return;
 
     // Skip if already loaded for this project
     if (get().initialized && get().currentProjectId === projectId) return;
 
+    fetchInProgressFor = projectId;
     set({ loading: true, error: null });
     try {
       const pins = await api.listPins(projectId);
@@ -73,6 +84,8 @@ export const usePinsStore = create<PinsState>((set, get) => ({
         currentProjectId: projectId,
       });
       get().notifyCallback?.(`Failed to load pins: ${error.message}`, 'error');
+    } finally {
+      fetchInProgressFor = null;
     }
   },
 
@@ -156,6 +169,9 @@ export const usePinsStore = create<PinsState>((set, get) => ({
       return null;
     }
   },
+
+  // Invalidation
+  invalidatePins: () => set({ initialized: false }),
 
   // Selectors
   isPinned: (type: PinType, refId: string) => {

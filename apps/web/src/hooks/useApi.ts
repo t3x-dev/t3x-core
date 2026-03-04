@@ -63,20 +63,16 @@ function useApiCall<T, D extends unknown[]>(
     }
   }, []);
 
-  // Refetch when deps change
-  useEffect(() => {
-    doFetch();
-    // deps are passed explicitly here
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  // Cleanup on unmount
+  // Refetch when deps change; reset mountedRef on re-mount (StrictMode safe)
   useEffect(() => {
     mountedRef.current = true;
+    doFetch();
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+    // deps are passed explicitly here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 
   return { data, loading, error, refetch: doFetch };
 }

@@ -100,41 +100,56 @@ The client must resolve all similarPairs (choose 'source' or 'target') and decid
 
 mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   const { source_hash, target_hash } = c.req.valid('json');
-  const db = await getDB();
 
-  // Load V4 commits
-  const sourceCommit = await findCommitV4ByHash(db, source_hash);
-  if (!sourceCommit) {
+  try {
+    const db = await getDB();
+
+    // Load V4 commits
+    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    if (!sourceCommit) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NOT_FOUND',
+            message: `Source commit not found: ${source_hash}`,
+          },
+        },
+        404
+      );
+    }
+
+    const targetCommit = await findCommitV4ByHash(db, target_hash);
+    if (!targetCommit) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NOT_FOUND',
+            message: `Target commit not found: ${target_hash}`,
+          },
+        },
+        404
+      );
+    }
+
+    // Prepare merge using V4 sentences (DiffableSentence[])
+    const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
+
+    return c.json({ success: true as const, data: prepared }, 200);
+  } catch (error) {
     return c.json(
       {
         success: false as const,
         error: {
-          code: 'NOT_FOUND',
-          message: `Source commit not found: ${source_hash}`,
+          code: 'INTERNAL_ERROR',
+          message:
+            error instanceof Error ? error.message : 'Unexpected error during merge preparation',
         },
       },
-      404
+      500
     );
   }
-
-  const targetCommit = await findCommitV4ByHash(db, target_hash);
-  if (!targetCommit) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'NOT_FOUND',
-          message: `Target commit not found: ${target_hash}`,
-        },
-      },
-      404
-    );
-  }
-
-  // Prepare merge using V4 sentences (DiffableSentence[])
-  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
-
-  return c.json({ success: true as const, data: prepared }, 200);
 });
 
 // ============================================================================
@@ -173,7 +188,7 @@ Executes a merge after the user has made all resolution decisions.
     },
   },
   responses: {
-    200: {
+    201: {
       description: 'Merge executed successfully',
       content: {
         'application/json': {
@@ -218,6 +233,26 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     );
   }
 
+  // Validate that all onlyInSource and onlyInTarget items have keep explicitly set
+  const undefinedKeepSource = prepared.onlyInSource.filter(
+    (item: { keep?: boolean }) => item.keep === undefined || item.keep === null
+  );
+  const undefinedKeepTarget = prepared.onlyInTarget.filter(
+    (item: { keep?: boolean }) => item.keep === undefined || item.keep === null
+  );
+  if (undefinedKeepSource.length > 0 || undefinedKeepTarget.length > 0) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: `All onlyInSource and onlyInTarget items must have 'keep' explicitly set to true or false. Missing: ${undefinedKeepSource.length} source item(s), ${undefinedKeepTarget.length} target item(s)`,
+        },
+      },
+      400
+    );
+  }
+
   // Get author from context
   const author = getAuthorFromContext(c);
   const db = await getDB();
@@ -238,7 +273,19 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       );
     }
 
-    const projectId = sourceCommit.project_id || '';
+    if (!sourceCommit.project_id) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'INVALID_REQUEST',
+            message: 'Source commit has no project_id',
+          },
+        },
+        400
+      );
+    }
+    const projectId = sourceCommit.project_id;
 
     // Execute merge - returns CommitV4
     const mergeCommit = executeMerge(
@@ -313,7 +360,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },
-      200
+      201
     );
   } catch (error) {
     return c.json(
@@ -612,7 +659,7 @@ const commitDraftRoute = createRoute({
     },
   },
   responses: {
-    200: {
+    201: {
       description: 'Merge committed',
       content: { 'application/json': { schema: z.any() } },
     },
@@ -720,14 +767,13 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       merge_summary: draftMergeSummary,
     };
 
-    // Save to storage as V4 commit
-    await createCommitV4(db, commitInput, { strictParents: false });
-
-    // Update branch head
-    await updateBranchHead(db, draft.projectId, targetBranch, mergeCommit.hash);
-
-    // Mark draft as committed
-    await commitMergeDraft(db, id);
+    // Save commit + update branch head + mark draft committed atomically
+    // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
+    await (db as any).transaction(async (tx: typeof db) => {
+      await createCommitV4(tx, commitInput, { strictParents: false });
+      await updateBranchHead(tx, draft.projectId, targetBranch, mergeCommit.hash);
+      await commitMergeDraft(tx, id);
+    });
 
     // Fire webhook + notification (fire-and-forget)
     webhookDispatcher.dispatch(
@@ -752,7 +798,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: draftMergeSummary } },
-      200
+      201
     );
   } catch (error) {
     return c.json(

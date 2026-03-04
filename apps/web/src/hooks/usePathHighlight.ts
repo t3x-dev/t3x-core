@@ -45,22 +45,30 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
       };
     }
 
-    const adjacency = new Map<string, Set<string>>();
+    // Directed (source→target) adjacency for branch/main BFS — ensures traversal
+    // only follows edges in commit order and does not traverse upstream
+    const forwardAdj = new Map<string, Set<string>>();
+    // Undirected adjacency for 1-hop node highlighting
+    const undirectedAdj = new Map<string, Set<string>>();
     for (const edge of edges) {
-      const out = adjacency.get(edge.source) ?? new Set<string>();
-      out.add(edge.target);
-      adjacency.set(edge.source, out);
+      const fwd = forwardAdj.get(edge.source) ?? new Set<string>();
+      fwd.add(edge.target);
+      forwardAdj.set(edge.source, fwd);
 
-      const inbound = adjacency.get(edge.target) ?? new Set<string>();
+      const out = undirectedAdj.get(edge.source) ?? new Set<string>();
+      out.add(edge.target);
+      undirectedAdj.set(edge.source, out);
+
+      const inbound = undirectedAdj.get(edge.target) ?? new Set<string>();
       inbound.add(edge.source);
-      adjacency.set(edge.target, inbound);
+      undirectedAdj.set(edge.target, inbound);
     }
 
-    // Node-click highlighting: 1-hop neighbors only
+    // Node-click highlighting: 1-hop neighbors only (undirected — includes both parents and children)
     if (highlight.mode === 'node') {
       const { nodeId } = highlight;
       const connected = new Set<string>([nodeId]);
-      const neighbors = adjacency.get(nodeId);
+      const neighbors = undirectedAdj.get(nodeId);
       if (neighbors) {
         for (const id of neighbors) {
           connected.add(id);
@@ -96,7 +104,8 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
     const queue = [...startNodes];
     while (queue.length > 0) {
       const current = queue.shift()!;
-      const neighbors = adjacency.get(current);
+      // Use directed forward adjacency: branch BFS only traverses parent→child direction
+      const neighbors = forwardAdj.get(current);
       if (!neighbors) {
         continue;
       }

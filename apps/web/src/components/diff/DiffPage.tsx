@@ -237,17 +237,25 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   if (error || !diffData) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
-        <div className="text-center max-w-md">
-          <div className="text-4xl mb-4">:(</div>
-          <h1 className="text-xl font-semibold mb-2">Failed to load diff</h1>
-          <p className="text-muted-foreground mb-4">{error || 'Unknown error'}</p>
-          <button
-            type="button"
-            onClick={handleBack}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            Back to canvas
-          </button>
+        <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
+          <h2 className="text-lg font-semibold text-red-600 mb-2">Failed to load diff</h2>
+          <p className="text-sm text-muted-foreground mb-4">{error || 'An unexpected error occurred'}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--stroke-default)] text-[var(--text-primary)] rounded-md hover:bg-[var(--hover-bg)] text-sm"
+            >
+              Back to canvas
+            </button>
+          </div>
         </div>
       </div>
     );

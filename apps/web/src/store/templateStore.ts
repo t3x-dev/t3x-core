@@ -21,6 +21,9 @@ interface TemplateState {
   createTemplate: (input: api.CreateTemplateInput) => Promise<Template>;
 }
 
+// Generation counter to discard stale fetch results when filters change rapidly
+let fetchGen = 0;
+
 export const useTemplateStore = create<TemplateState>((set, get) => ({
   templates: [],
   loading: false,
@@ -30,6 +33,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
   search: '',
 
   fetchTemplates: async () => {
+    const gen = ++fetchGen;
     const { category, leafType, search } = get();
     set({ loading: true, error: null });
     try {
@@ -38,8 +42,11 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
         leaf_type: leafType ?? undefined,
         search: search || undefined,
       });
+      // Discard stale results if a newer fetch was triggered
+      if (gen !== fetchGen) return;
       set({ templates, loading: false });
     } catch (err) {
+      if (gen !== fetchGen) return;
       set({
         error: err instanceof Error ? err.message : 'Failed to load templates',
         loading: false,

@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type NotificationInsert, type NotificationRecord, notifications } from '../schema-v4';
 
@@ -71,7 +71,9 @@ export async function listNotifications(
   const conditions = [];
 
   if (options?.project_id) {
-    conditions.push(eq(notifications.projectId, options.project_id));
+    conditions.push(
+      or(eq(notifications.projectId, options.project_id), isNull(notifications.projectId))
+    );
   }
   if (options?.unread_only) {
     conditions.push(eq(notifications.read, false));

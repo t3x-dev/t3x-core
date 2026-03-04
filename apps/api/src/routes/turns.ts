@@ -34,8 +34,8 @@ turnRoutes.get('/v1/turns', async (c) => {
     return jsonError(c, 'INVALID_REQUEST', 'conversation_id query param is required', 400);
   }
 
-  const limit = parseInt(c.req.query('limit') ?? '100', 10);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
+  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
   const orderParam = c.req.query('order');
   const order = orderParam === 'desc' ? 'desc' : 'asc';
 
@@ -205,7 +205,7 @@ turnRoutes.get('/v1/turns/:hash', async (c) => {
  */
 turnRoutes.get('/v1/turns/:hash/chain', async (c) => {
   const turnHash = decodeURIComponent(c.req.param('hash'));
-  const limit = parseInt(c.req.query('limit') ?? '50', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 1000);
 
   try {
     const db = await getDB();

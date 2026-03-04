@@ -102,13 +102,39 @@ export function incrementalDiffCommits(
     return [cache.result, cache];
   }
 
-  // ---------- Step 1: Exact match (O(N+M)) ----------
-  const targetTextSet = new Set(target.map((s) => s.text));
-  const sourceTextSet = new Set(source.map((s) => s.text));
+  // ---------- Step 1: Exact match (O(N+M)) using frequency maps ----------
+  const targetFreq = new Map<string, number>();
+  for (const s of target) {
+    targetFreq.set(s.text, (targetFreq.get(s.text) ?? 0) + 1);
+  }
+  const sourceFreq = new Map<string, number>();
+  for (const s of source) {
+    sourceFreq.set(s.text, (sourceFreq.get(s.text) ?? 0) + 1);
+  }
 
-  const identical = source.filter((s) => targetTextSet.has(s.text));
-  const unmatchedSource = source.filter((s) => !targetTextSet.has(s.text));
-  const unmatchedTarget = target.filter((s) => !sourceTextSet.has(s.text));
+  const remainingTarget = new Map(targetFreq);
+  const identical: DiffableSentence[] = [];
+  const unmatchedSource: DiffableSentence[] = [];
+  for (const s of source) {
+    const count = remainingTarget.get(s.text) ?? 0;
+    if (count > 0) {
+      identical.push(s);
+      remainingTarget.set(s.text, count - 1);
+    } else {
+      unmatchedSource.push(s);
+    }
+  }
+
+  const remainingSource = new Map(sourceFreq);
+  const unmatchedTarget: DiffableSentence[] = [];
+  for (const s of target) {
+    const count = remainingSource.get(s.text) ?? 0;
+    if (count > 0) {
+      remainingSource.set(s.text, count - 1);
+    } else {
+      unmatchedTarget.push(s);
+    }
+  }
 
   // ---------- Step 2: Identify stable similar pairs ----------
   // A pair is stable if both sides still exist in unmatched with same text.

@@ -134,6 +134,9 @@ export function MergeDiffLine({
             styles.prefix
           )}
         </span>
+        <span className="sr-only">
+          {type === 'added' ? 'Added' : type === 'removed' ? 'Removed' : 'Unchanged'}
+        </span>
 
         {/* Checkbox for keep/discard */}
         {checkable && (

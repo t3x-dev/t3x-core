@@ -293,10 +293,13 @@ function SideBySideRow({
           {sourceSentence ? (
             <div className="flex flex-col gap-1">
               {DiffIcon && (type === 'removed' || type === 'modified') && (
-                <DiffIcon
-                  className="h-3.5 w-3.5 shrink-0 text-[var(--diff-removed-accent)] mb-0.5"
-                  aria-hidden="true"
-                />
+                <>
+                  <DiffIcon
+                    className="h-3.5 w-3.5 shrink-0 text-[var(--diff-removed-accent)] mb-0.5"
+                    aria-hidden="true"
+                  />
+                  <span className="sr-only">{type === 'removed' ? 'Removed' : 'Modified'}</span>
+                </>
               )}
               {type === 'modified' && wordDiffSegments ? (
                 <div>
@@ -324,15 +327,18 @@ function SideBySideRow({
           {targetSentence ? (
             <div className="flex flex-col gap-1">
               {DiffIcon && (type === 'added' || type === 'modified') && (
-                <DiffIcon
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0 mb-0.5',
-                    type === 'added'
-                      ? 'text-[var(--diff-added-accent)]'
-                      : 'text-[var(--diff-modified-accent)]'
-                  )}
-                  aria-hidden="true"
-                />
+                <>
+                  <DiffIcon
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0 mb-0.5',
+                      type === 'added'
+                        ? 'text-[var(--diff-added-accent)]'
+                        : 'text-[var(--diff-modified-accent)]'
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="sr-only">{type === 'added' ? 'Added' : 'Modified'}</span>
+                </>
               )}
               {type === 'modified' && wordDiffSegments ? (
                 <div>

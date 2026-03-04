@@ -33,6 +33,7 @@ export function useScrollSync({
   const activeSentenceRef = useRef<string | null>(null);
   const isScrollingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Find topmost visible sentence in source container
   const getTopmostSentenceId = useCallback((): string | null => {
@@ -62,9 +63,13 @@ export function useScrollSync({
       if (el) {
         isScrollingRef.current = true;
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        setTimeout(() => {
+        // 800ms better matches actual smooth-scroll duration and prevents
+        // source scroll handler from firing while target is still animating
+        if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = setTimeout(() => {
+          scrollTimerRef.current = null;
           isScrollingRef.current = false;
-        }, 500);
+        }, 800);
       }
     },
     [targetRef]
@@ -94,6 +99,7 @@ export function useScrollSync({
     return () => {
       source.removeEventListener('scroll', handleScroll);
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
     };
   }, [enabled, sourceRef, getTopmostSentenceId, scrollTargetToSentence]);
 

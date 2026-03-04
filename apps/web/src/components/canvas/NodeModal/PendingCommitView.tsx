@@ -27,7 +27,6 @@ import type { CanvasNodeData } from '@/types/nodes';
 import { PendingSourceEditor } from '../SelectableTextBlock';
 import { CommitConfigStep } from './CommitConfigStep';
 import { renderPhraseWithKeywords } from './helpers';
-import type { NodeQuickAction } from './NodeModal';
 import { PendingSuccessPage } from './PendingSuccessPage';
 
 interface PendingCommitViewProps {
@@ -39,8 +38,6 @@ interface PendingCommitViewProps {
   onConvertDraft: (() => void) | undefined;
   onBranchChange: ((branch: 'main' | 'branch') => void) | undefined;
   onBranchNameChange: ((name: string) => void) | undefined;
-  quickActions: NodeQuickAction[] | undefined;
-  onHideCommitConfig: () => void;
 }
 
 export function PendingCommitView({
@@ -51,7 +48,6 @@ export function PendingCommitView({
   onConvertDraft,
   onBranchChange,
   onBranchNameChange,
-  quickActions: _quickActions,
 }: PendingCommitViewProps) {
   const data = node.data;
 
@@ -85,6 +81,7 @@ export function PendingCommitView({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="node-modal-title"
     >
       <div
         className={cn(
@@ -99,7 +96,7 @@ export function PendingCommitView({
             <div className="text-[0.85rem] font-bold text-[var(--accent-conversation)] bg-[var(--hover-bg)] px-2.5 py-1 rounded-md">
               t3x
             </div>
-            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2 id="node-modal-title" className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
               Commit: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>

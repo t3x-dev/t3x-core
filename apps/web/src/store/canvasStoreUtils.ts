@@ -28,17 +28,19 @@ export const canConnect = (source?: Node<CanvasNodeData>, target?: Node<CanvasNo
   return connectionMatrix[source.data.kind]?.includes(target.data.kind) ?? false;
 };
 
-let nodeCounter = 4;
-let edgeCounter = 3;
+// resetCounters / getNodeCounter are kept as no-ops / stubs for backward
+// compatibility with callers in canvasCommitSlice.ts.
+// nextNodeId/nextEdgeId now use timestamp + random suffix to avoid
+// collisions between multiple concurrent store instances or hot-reloads.
+export const resetCounters = () => {};
 
-export const resetCounters = () => {
-  nodeCounter = 1;
-  edgeCounter = 1;
-};
+// Returns a value that is unique enough for display-only entryId labels.
+export const getNodeCounter = () => Date.now();
 
-export const getNodeCounter = () => nodeCounter;
-export const nextNodeId = () => `node-${nodeCounter++}`;
-export const nextEdgeId = () => `edge-${edgeCounter++}`;
+export const nextNodeId = () =>
+  `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+export const nextEdgeId = () =>
+  `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 };
 export const edgeType: Edge['type'] = 'animated';
 /** Backflow edge: Leaf → Commit feedback (dashed violet) */

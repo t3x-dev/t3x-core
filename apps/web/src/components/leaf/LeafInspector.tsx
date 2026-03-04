@@ -72,6 +72,7 @@ function ConstraintPill({
       {editable && (
         <button
           type="button"
+          aria-label={`Remove constraint: ${constraint.value.slice(0, 50)}`}
           className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"
           onClick={onRemove}
           disabled={disabled}
@@ -433,16 +434,18 @@ export function LeafInspector({
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all"
+            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => onExport('json')}
+            disabled={!leaf.output}
           >
             <Share2 className="h-3.5 w-3.5 shrink-0" />
             Share via API
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all"
+            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => onExport('markdown')}
+            disabled={!leaf.output}
           >
             <Mail className="h-3.5 w-3.5 shrink-0" />
             Export Markdown

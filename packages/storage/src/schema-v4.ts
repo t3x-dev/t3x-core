@@ -213,7 +213,15 @@ export const leaves = pgTable(
     /** Unique ID: "leaf_" + nanoid(12) */
     id: text('id').primaryKey(),
 
-    /** The commit this leaf uses for knowledge */
+    /**
+     * The commit this leaf uses for knowledge.
+     *
+     * Fix 14 (no-fk note): No foreign key is declared here intentionally.
+     * Leaves can reference commits from both commits_v4 AND commits_v3 (legacy),
+     * so a single FK to one table would be incorrect. Application-level
+     * validation (in the leaves query layer) is responsible for confirming that
+     * the referenced commit exists before creating or updating a leaf.
+     */
     commitHash: text('commit_hash').notNull(),
 
     /** Output type: 'deploy_agent' | 'tweet' | 'weibo' | etc. */
@@ -471,7 +479,15 @@ export const leafOutputEdits = pgTable(
       .notNull()
       .references(() => leaves.id, { onDelete: 'cascade' }),
 
-    /** Project for easy querying */
+    /**
+     * Project for easy querying (denormalized from leafId's leaf row).
+     *
+     * Fix 19 (no-fk note): The FK to projects is intentionally omitted here.
+     * Cascade integrity flows through leafId → leaves.id ON DELETE CASCADE,
+     * which in turn cascades from projects. Adding a redundant FK to projects
+     * would require explicit ordering during deletion and provides no additional
+     * safety beyond what the leafId FK already guarantees.
+     */
     projectId: text('project_id').notNull(),
 
     /** The output text before the edit */
@@ -641,8 +657,20 @@ export const webhooks = pgTable(
     /** Secret for HMAC-SHA256 signature (null = no signing) */
     secret: text('secret'),
 
-    /** Whether the webhook is active */
-    active: text('active').notNull().default('true'),
+    /**
+     * Whether the webhook is active.
+     *
+     * Fix 13: Stored as INTEGER (1 = active, 0 = inactive) to match the
+     * project-wide integer-boolean convention (see branches.isCurrent).
+     *
+     * NOTE: Databases created before this fix used TEXT DEFAULT 'true'. A
+     * migration is required for existing deployments:
+     *   -- For PostgreSQL:
+     *   ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER
+     *     USING (CASE WHEN active = 'true' THEN 1 ELSE 0 END);
+     *   ALTER TABLE webhooks ALTER COLUMN active SET DEFAULT 1;
+     */
+    active: integer('active').notNull().default(1),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -861,7 +889,7 @@ export const recipes = pgTable('recipes', {
   id: text('id').primaryKey(), // recipe_{nanoid}
   project_id: text('project_id')
     .notNull()
-    .references(() => projects.projectId),
+    .references(() => projects.projectId, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   trigger: jsonb('trigger').notNull().$type<{

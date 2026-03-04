@@ -100,7 +100,7 @@ notificationsRoutes.openapi(listNotificationsRoute, async (c) => {
 
   const rows = await listNotificationsFromDB(db, {
     project_id,
-    unread_only: unread_only === 'true',
+    unread_only: ['true', '1', 'yes'].includes(unread_only?.toLowerCase() ?? ''),
     limit: 100,
   });
 

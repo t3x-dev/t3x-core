@@ -19,7 +19,10 @@ export async function suggestMerge(
   try {
     const response = await llm.generate(prompt, { temperature: 0.3, maxTokens: 500 });
     return parseSuggestion(response);
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[suggestMerge] LLM suggestion failed:', error instanceof Error ? error.message : String(error));
+    }
     return null;
   }
 }
@@ -47,7 +50,9 @@ Respond in JSON: {"suggestion": "...", "reasoning": "..."}`;
 
 function parseSuggestion(response: string): MergeSuggestion | null {
   try {
-    const parsed = JSON.parse(response);
+    const fenceMatch = response.trim().match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+    const cleaned = fenceMatch ? fenceMatch[1].trim() : response.trim();
+    const parsed = JSON.parse(cleaned);
     if (typeof parsed.suggestion !== 'string' || !parsed.suggestion) return null;
     return {
       suggestion: parsed.suggestion,

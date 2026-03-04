@@ -531,7 +531,7 @@ describe('Drafts V3 Routes', () => {
         body: JSON.stringify({ message: 'My first commit' }),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
@@ -595,7 +595,7 @@ describe('Drafts V3 Routes', () => {
         body: JSON.stringify({}),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const data: ApiResponse = await res.json();
       expect(data.data.commit).toBeDefined();
       expect(data.data.leaf).toBeDefined();

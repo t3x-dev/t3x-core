@@ -82,12 +82,18 @@ describe('getNumericId', () => {
 });
 
 describe('resetCounters / nextNodeId / nextEdgeId', () => {
-  it('generates sequential IDs after reset', () => {
+  it('generates unique IDs with correct prefix', () => {
     resetCounters();
-    expect(nextNodeId()).toBe('node-1');
-    expect(nextNodeId()).toBe('node-2');
-    expect(nextEdgeId()).toBe('edge-1');
-    expect(nextEdgeId()).toBe('edge-2');
+    const n1 = nextNodeId();
+    const n2 = nextNodeId();
+    const e1 = nextEdgeId();
+    const e2 = nextEdgeId();
+    expect(n1).toMatch(/^node-/);
+    expect(n2).toMatch(/^node-/);
+    expect(e1).toMatch(/^edge-/);
+    expect(e2).toMatch(/^edge-/);
+    // All IDs should be unique
+    expect(new Set([n1, n2, e1, e2]).size).toBe(4);
   });
 });
 

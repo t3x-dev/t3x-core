@@ -93,19 +93,20 @@ function DeployPageContent() {
 
       // Check if any agents are stuck in 'running' status
       // If their last run is completed/failed, reset status to idle
-      for (const agent of agents) {
-        if (agent.status === 'running' && agent.last_run_id) {
-          try {
-            const runsData = await listEngineRuns();
+      const stuckAgents = agents.filter((a) => a.status === 'running' && a.last_run_id);
+      if (stuckAgents.length > 0) {
+        try {
+          const runsData = await listEngineRuns();
+          for (const agent of stuckAgents) {
             const lastRun = runsData.runs.find((r) => r.run_id === agent.last_run_id);
             if (lastRun && (lastRun.status === 'completed' || lastRun.status === 'failed')) {
               // Run completed, reset agent status
               await updateDeployAgent(agent.deploy_agent_id, { status: 'idle' });
               agent.status = 'idle';
             }
-          } catch (_err) {
-            // Agent status sync is best-effort; failures are non-critical
           }
+        } catch (_err) {
+          // Agent status sync is best-effort; failures are non-critical
         }
       }
 
@@ -191,7 +192,7 @@ function DeployPageContent() {
         type: 'http',
       });
 
-      setDeployAgents([...deployAgents, agent]);
+      setDeployAgents((prev) => [...prev, agent]);
       setNewAgent({ id: '', name: '', endpoint: '' });
       setShowAddAgent(false);
     } catch (_err) {
@@ -209,7 +210,7 @@ function DeployPageContent() {
       await deleteDeployAgent(agent.deploy_agent_id);
 
       // Update local state
-      setDeployAgents(deployAgents.filter((a) => a.deploy_agent_id !== agent.deploy_agent_id));
+      setDeployAgents((prev) => prev.filter((a) => a.deploy_agent_id !== agent.deploy_agent_id));
     } catch (_err) {
       showToast('Failed to delete deploy agent', 'error');
     }

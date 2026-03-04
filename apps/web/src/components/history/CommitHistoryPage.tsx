@@ -67,12 +67,15 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   // Fetch commits for selected branch
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
         const branch = selectedBranch === 'all' ? undefined : selectedBranch;
         const commitList = await listCommitsV4(projectId, branch, 100, 0);
+
+        if (cancelled) return;
 
         // Sort by committed_at descending (newest first)
         commitList.sort(
@@ -84,6 +87,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
         const BATCH_SIZE = 10;
 
         for (let i = 0; i < commitList.length; i += BATCH_SIZE) {
+          if (cancelled) return;
           const batch = commitList.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(
             batch.map(async (commit) => {
@@ -106,14 +110,15 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
           results.push(...batchResults);
         }
 
-        setCommits(results);
+        if (!cancelled) setCommits(results);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load history');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load history');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     load();
+    return () => { cancelled = true; };
   }, [projectId, selectedBranch]);
 
   // Keyboard navigation

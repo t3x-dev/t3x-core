@@ -71,6 +71,7 @@ export class LocalNLPProvider implements NLPProvider {
     const tokens: NLPToken[] = [];
     let offset = 0;
 
+    // First pass: build tokens with POS
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       const foundAt = text.indexOf(word, offset);
@@ -78,7 +79,6 @@ export class LocalNLPProvider implements NLPProvider {
       const endOffset = beginOffset + word.length;
       offset = endOffset;
 
-      // Simple POS heuristic
       const cleaned = word.replace(/[^\w]/g, '');
       const pos = this.guessPOS(cleaned);
 
@@ -90,8 +90,22 @@ export class LocalNLPProvider implements NLPProvider {
         beginOffset,
         endOffset,
         headIndex: -1,
-        dependencyLabel: i === 0 ? 'ROOT' : 'UNKNOWN',
+        dependencyLabel: 'DEP',
       });
+    }
+
+    // Second pass: assign ROOT to the first VERB token.
+    // If no VERB is found, fall back to labelling the first token as ROOT.
+    let rootAssigned = false;
+    for (const token of tokens) {
+      if (token.pos === 'VERB') {
+        token.dependencyLabel = 'ROOT';
+        rootAssigned = true;
+        break;
+      }
+    }
+    if (!rootAssigned && tokens.length > 0) {
+      tokens[0].dependencyLabel = 'ROOT';
     }
 
     return tokens;

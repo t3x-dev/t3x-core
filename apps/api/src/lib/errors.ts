@@ -102,6 +102,14 @@ export const ErrorCodes = {
   RESTORE_FAILED: 'RESTORE_FAILED',
   COMPARE_FAILED: 'COMPARE_FAILED',
   MERGE_FAILED: 'MERGE_FAILED',
+  LEARN_FAILED: 'LEARN_FAILED',
+  EXTRACTION_FAILED: 'EXTRACTION_FAILED',
+
+  // Verification / merge state errors
+  VERIFY_FAILED: 'VERIFY_FAILED',
+  INVALID_STATUS: 'INVALID_STATUS',
+  UNRESOLVED_PAIRS: 'UNRESOLVED_PAIRS',
+  LLM_NOT_CONFIGURED: 'LLM_NOT_CONFIGURED',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -193,6 +201,14 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   RESTORE_FAILED: 500,
   COMPARE_FAILED: 500,
   MERGE_FAILED: 500,
+  LEARN_FAILED: 500,
+  EXTRACTION_FAILED: 500,
+
+  // Verification / merge state errors
+  VERIFY_FAILED: 500,
+  INVALID_STATUS: 400,
+  UNRESOLVED_PAIRS: 400,
+  LLM_NOT_CONFIGURED: 400,
 };
 
 /**

@@ -764,6 +764,10 @@ commitsV4Routes.openapi(checkConflictsRoute, async (c) => {
       return c.json({ success: true as const, data: { conflicts: [], checked_count: 0 } }, 200);
     }
 
+    // Batch-encode all new sentence texts in a single embedder call
+    const sentenceTexts = sentences.map((s) => s.text);
+    const sentenceEmbeddings = await embedder.encode(sentenceTexts);
+
     // Fetch existing project sentences with embeddings via similarity search
     // For each new sentence, search for similar existing sentences (excluding this commit)
     const existingSentences: Array<{
@@ -774,26 +778,33 @@ commitsV4Routes.openapi(checkConflictsRoute, async (c) => {
     }> = [];
     const seen = new Set<string>();
 
-    for (const s of sentences) {
-      const emb = await embedder.encode([s.text]);
+    // Collect all unique existing sentence records that need embeddings
+    const existingTextsToEmbed: Array<{ id: string; text: string; commit_hash: string }> = [];
+
+    for (let i = 0; i < sentences.length; i++) {
       const results = await searchSimilarSentences(
         db,
         commit.project_id ?? '',
-        emb[0],
+        sentenceEmbeddings[i],
         10,
         decodedHash
       );
       for (const r of results) {
         if (!seen.has(r.id)) {
           seen.add(r.id);
-          const rEmb = await embedder.encode([r.text]);
-          existingSentences.push({
-            id: r.id,
-            text: r.text,
-            commit_hash: r.commit_hash,
-            embedding: rEmb[0],
-          });
+          existingTextsToEmbed.push({ id: r.id, text: r.text, commit_hash: r.commit_hash });
         }
+      }
+    }
+
+    // Batch-encode all unique existing sentence texts in a single embedder call
+    if (existingTextsToEmbed.length > 0) {
+      const existingEmbeddings = await embedder.encode(existingTextsToEmbed.map((r) => r.text));
+      for (let i = 0; i < existingTextsToEmbed.length; i++) {
+        existingSentences.push({
+          ...existingTextsToEmbed[i],
+          embedding: existingEmbeddings[i],
+        });
       }
     }
 

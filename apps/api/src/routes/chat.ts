@@ -106,6 +106,7 @@ async function callClaudeNonStreaming(
         content: m.content,
       })),
     }),
+    signal: AbortSignal.timeout(120000),
   });
 
   const responseText = await response.text();
@@ -158,8 +159,9 @@ chatRoutes.post('/v1/chat', async (c) => {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
   }
 
-  if (!body?.messages || body.messages.length === 0) {
-    return jsonError(c, 'INVALID_REQUEST', 'messages array is required', 400);
+  const messages = body?.messages;
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
+    return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
   }
 
   // Determine provider
@@ -178,13 +180,13 @@ chatRoutes.post('/v1/chat', async (c) => {
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
   const temperature = body.temperature ?? 0.7;
-  const maxTokens = body.max_tokens ?? 4096;
+  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens)) || 4096, 1), 16384);
 
   try {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
       const result = await callClaudeNonStreaming(
-        body.messages,
+        messages,
         model,
         apiKey,
         temperature,
@@ -218,8 +220,9 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
   }
 
-  if (!body?.messages || body.messages.length === 0) {
-    return jsonError(c, 'INVALID_REQUEST', 'messages array is required', 400);
+  const messages = body?.messages;
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
+    return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
   }
 
   // Determine provider
@@ -238,14 +241,14 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
   const temperature = body.temperature ?? 0.7;
-  const maxTokens = body.max_tokens ?? 4096;
+  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens)) || 4096, 1), 16384);
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
         if (provider === 'claude' || provider === 'anthropic') {
           const result = await callClaudeNonStreaming(
-            body!.messages!,
+            messages,
             model,
             apiKey,
             temperature,

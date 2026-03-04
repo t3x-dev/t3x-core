@@ -17,6 +17,7 @@ import {
   projects,
   turns,
 } from '../schema';
+import { commitsV4 } from '../schema-v4';
 
 export interface CreateProjectInput {
   name: string;
@@ -89,15 +90,15 @@ export async function findProjects(
 
 /**
  * Update a project
+ *
+ * Fix 8: Removed the preliminary read (TOCTOU). The UPDATE itself returns the
+ * updated row; if 0 rows are returned the project does not exist.
  */
 export async function updateProject(
   db: AnyDB,
   projectId: string,
   updates: { name?: string; metadata?: Record<string, unknown>; providerConfig?: string | null }
 ): Promise<Project | null> {
-  const existing = await findProjectById(db, projectId);
-  if (!existing) return null;
-
   const updateData: Partial<NewProject> = {};
   if (updates.name !== undefined) {
     updateData.name = updates.name;
@@ -139,27 +140,32 @@ export async function findProjectWithStats(
 
   // Get counts for all related entities
   const [convCount] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(conversations)
     .where(eq(conversations.projectId, projectId));
 
   const [turnCount] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(turns)
     .where(eq(turns.projectId, projectId));
 
-  const [commitCount] = await db
-    .select({ count: sql<number>`count(*)` })
+  const [commitV3Count] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(commitsV3)
     .where(eq(commitsV3.projectId, projectId));
 
+  const [commitV4Count] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(commitsV4)
+    .where(eq(commitsV4.projectId, projectId));
+
   const [branchCount] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(branches)
     .where(eq(branches.projectId, projectId));
 
   const [draftCount] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(agentDrafts)
     .where(eq(agentDrafts.projectId, projectId));
 
@@ -168,7 +174,7 @@ export async function findProjectWithStats(
     stats: {
       conversationsCount: Number(convCount?.count ?? 0),
       turnsCount: Number(turnCount?.count ?? 0),
-      commitsCount: Number(commitCount?.count ?? 0),
+      commitsCount: Number(commitV3Count?.count ?? 0) + Number(commitV4Count?.count ?? 0),
       branchesCount: Number(branchCount?.count ?? 0),
       draftsCount: Number(draftCount?.count ?? 0),
     },

@@ -59,6 +59,7 @@ export function LeafComposerDock({
   const [value, setValue] = useState(instruction);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const savedFeedbackTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [compareOpen, setCompareOpen] = useState(false);
 
   // Provider/model state
@@ -110,7 +111,8 @@ export function LeafComposerDock({
     debounceRef.current = setTimeout(async () => {
       await onUpdateInstruction(value);
       setSavedFeedback(true);
-      setTimeout(() => setSavedFeedback(false), 1500);
+      clearTimeout(savedFeedbackTimer.current);
+      savedFeedbackTimer.current = setTimeout(() => setSavedFeedback(false), 1500);
     }, 500);
   }, [value, instruction, onUpdateInstruction]);
 
@@ -118,6 +120,7 @@ export function LeafComposerDock({
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      clearTimeout(savedFeedbackTimer.current);
     };
   }, []);
 

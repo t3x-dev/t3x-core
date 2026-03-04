@@ -344,9 +344,16 @@ export async function getConfigurationStats(
   >();
 
   for (const run of allRuns) {
-    const metadata = JSON.parse(run.metadataJson || '{}');
-    const model = metadata.model || 'unknown';
-    const prompt_version = metadata.prompt_version || 'unknown';
+    // Fix 11: Wrap JSON.parse in try/catch to prevent crash on malformed JSON
+    let metadata: Record<string, unknown> = {};
+    try {
+      metadata = JSON.parse(run.metadataJson || '{}');
+    } catch {
+      // Malformed metadata JSON — treat as empty so the run is still counted
+      metadata = {};
+    }
+    const model = (metadata.model as string) || 'unknown';
+    const prompt_version = (metadata.prompt_version as string) || 'unknown';
     const key = `${model}::${prompt_version}`;
 
     if (!groups.has(key)) {

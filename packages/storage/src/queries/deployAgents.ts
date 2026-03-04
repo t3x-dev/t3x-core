@@ -115,15 +115,15 @@ export async function findDeployAgents(
 
 /**
  * Update a deploy agent
+ *
+ * Fix: Removed preliminary findDeployAgentById (TOCTOU). The UPDATE ... RETURNING
+ * itself tells us whether the row existed: 0 rows returned means not found.
  */
 export async function updateDeployAgent(
   db: AnyDB,
   deployAgentId: string,
   updates: UpdateDeployAgentInput
 ): Promise<DeployAgent | null> {
-  const existing = await findDeployAgentById(db, deployAgentId);
-  if (!existing) return null;
-
   const updateData: Partial<NewDeployAgent> = {
     updatedAt: new Date(),
   };

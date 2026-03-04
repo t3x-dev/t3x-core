@@ -214,10 +214,10 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       data: { createdAt: Date.now(), edgeType: 'evolve' },
     };
 
-    set({
-      nodes: [...state.nodes, newNode],
-      edges: [...state.edges, newEdge],
-    });
+    set((s) => ({
+      nodes: [...s.nodes, newNode],
+      edges: [...s.edges, newEdge],
+    }));
   },
 
   addConversationFromCommit: async (commitId) => {
@@ -267,10 +267,10 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       data: { createdAt: Date.now(), edgeType: 'evolve' },
     };
 
-    set({
-      nodes: [...get().nodes, newNode],
-      edges: [...get().edges, newEdge],
-    });
+    set((s) => ({
+      nodes: [...s.nodes, newNode],
+      edges: [...s.edges, newEdge],
+    }));
   },
 
   addPendingCommitFromCommit: (commitId) =>

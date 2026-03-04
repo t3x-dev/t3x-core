@@ -134,13 +134,22 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
           ) : (
             <div className="divide-y divide-[var(--stroke-divider)]">
               {notifications.slice(0, 20).map((n) => (
-                <div
+                <button
                   key={n.id}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={0}
                   className={cn(
-                    'p-3 text-xs cursor-pointer hover:bg-[var(--color-bg-subtle)] transition-colors',
+                    'w-full text-left p-3 text-xs hover:bg-[var(--color-bg-subtle)] transition-colors focus-visible:outline-none focus-visible:bg-[var(--color-bg-subtle)]',
                     !n.read && 'bg-blue-50 dark:bg-blue-950/25'
                   )}
                   onClick={() => !n.read && markRead(n.id)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !n.read) {
+                      e.preventDefault();
+                      markRead(n.id);
+                    }
+                  }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
@@ -154,7 +163,7 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
                   <div className="text-[var(--text-tertiary)] mt-1">
                     {new Date(n.created_at).toLocaleString()}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

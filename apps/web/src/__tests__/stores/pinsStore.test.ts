@@ -53,11 +53,29 @@ describe('pinsStore', () => {
     });
 
     it('skips fetch if already loading', async () => {
-      usePinsStore.setState({ loading: true });
+      // The store uses a module-level `fetchInProgress` flag (not just the Zustand
+      // `loading` field) to prevent concurrent fetches. We trigger it by starting a
+      // fetch that never resolves, then attempt a second fetch and verify only one
+      // call to listPins was made.
+      let resolveFirst!: () => void;
+      vi.mocked(api.listPins).mockReturnValueOnce(
+        new Promise<never>((resolve) => {
+          resolveFirst = resolve as () => void;
+        })
+      );
 
+      // Start the first fetch (sets fetchInProgress = true) but don't await it yet.
+      const firstFetch = usePinsStore.getState().fetchPins('proj_1');
+
+      // Attempt a second fetch while the first is in-flight — should be a no-op.
       await usePinsStore.getState().fetchPins('proj_1');
 
-      expect(api.listPins).not.toHaveBeenCalled();
+      // Only one call to the API should have been made.
+      expect(api.listPins).toHaveBeenCalledTimes(1);
+
+      // Clean up: resolve the pending promise so the first fetch can finish.
+      resolveFirst();
+      await firstFetch;
     });
 
     it('skips fetch if already initialized for same project', async () => {

@@ -68,7 +68,7 @@ export function generateDraftConstraintId(): string {
 // === Timestamps ===
 
 export function isoNow(): string {
-  return new Date().toISOString().replace('+00:00', 'Z');
+  return new Date().toISOString();
 }
 
 // === Hash Computation (JCS + SHA256) ===

@@ -24,20 +24,21 @@ interface DraftSplitPaneProps {
   bottom: ReactNode;
 }
 
-function loadPersistedHeight(): number {
-  if (typeof window === 'undefined') return DEFAULT_BOTTOM;
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const n = Number.parseInt(stored, 10);
-    if (!Number.isNaN(n) && n >= 0) return n;
-  }
-  return DEFAULT_BOTTOM;
-}
-
 export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
-  const [initialHeight] = useState(loadPersistedHeight);
-  const [bottomHeight, setBottomHeight] = useState(initialHeight);
-  const [collapsed, setCollapsed] = useState(initialHeight <= HEADER_HEIGHT);
+  const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Sync persisted height from localStorage after mount (avoids SSR hydration mismatch)
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const n = Number.parseInt(stored, 10);
+      if (!Number.isNaN(n) && n >= 0) {
+        setBottomHeight(n);
+        setCollapsed(n <= HEADER_HEIGHT);
+      }
+    }
+  }, []);
   const containerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);

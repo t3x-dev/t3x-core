@@ -35,6 +35,7 @@ import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CompareRunsRequest,
@@ -255,6 +256,28 @@ const ingestRunRoute = createRoute({
 });
 
 runsRoutes.openapi(ingestRunRoute, async (c) => {
+  // Authenticate runner callback: check shared secret if RUNNER_SECRET is configured.
+  // If RUNNER_SECRET is not set, allow the request for backward compatibility (local dev) but warn.
+  const runnerSecret = process.env.RUNNER_SECRET;
+  if (runnerSecret) {
+    const authHeader = c.req.header('Authorization');
+    const customHeader = c.req.header('X-Runner-Secret');
+    const providedSecret =
+      customHeader ?? (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
+    if (providedSecret !== runnerSecret) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'UNAUTHORIZED', message: 'Invalid or missing runner secret' },
+        },
+        401
+      );
+    }
+  } else {
+    // No secret configured — log a warning but allow for local dev
+    pinoLogger.warn('RUNNER_SECRET is not set. /v1/runs/ingest endpoint is unauthenticated.');
+  }
+
   try {
     const data = c.req.valid('json');
     const db = await getDB();
@@ -332,8 +355,12 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
             created_by: 'runner-ingest',
           });
         }
-      } catch (_err) {
+      } catch (writeBackErr) {
         // Non-fatal: log but don't fail the ingest
+        pinoLogger.warn(
+          { err: writeBackErr, run_id: data.run_id, leaf_id: leafId },
+          'Failed to write back assertions to leaf'
+        );
       }
     }
 

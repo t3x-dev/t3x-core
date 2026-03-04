@@ -187,6 +187,8 @@ export function usePendingCommitState({
   );
   const textBlocksRef = useRef(textBlocks);
   textBlocksRef.current = textBlocks;
+  const pendingSourceRef = useRef(data?.pendingSource);
+  pendingSourceRef.current = data?.pendingSource;
   const [pendingAnchors, setPendingAnchors] = useState<ConfirmedAnchor[]>(
     data.pendingSource?.confirmedAnchors || []
   );
@@ -211,25 +213,28 @@ export function usePendingCommitState({
   // Get main branch state from canvas store to show warning when selecting main branch
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const latestMainCommitId = useCanvasStore((state) => state.latestMainCommitId);
+  // Use a targeted selector that only extracts the upstream commit hash so this
+  // component does not re-render on every unrelated node/edge change.
+  const upstreamCommitHash = useCanvasStore(
+    useCallback(
+      (s) =>
+        node?.id ? findUpstreamCommitHash(node.id, s.nodes, s.edges) : null,
+      [node?.id]
+    )
+  );
 
   // Compute whether main branch selection is invalid
   const isMainBranchInvalid = useMemo(() => {
     if (data.pendingBranch === 'branch') return false; // Not selecting main
     if (!hasMainCommit) return false; // No main commit yet, can create root
 
-    // Try sourceCommitHash first, then fall back to graph walk
-    let effectiveSourceHash = data.sourceCommitHash;
-    if (!effectiveSourceHash && node?.id) {
-      // Read nodes/edges on-demand via getState() to avoid subscribing to
-      // the full arrays (which would cause re-renders on every canvas change)
-      const { nodes: currentNodes, edges: currentEdges } = useCanvasStore.getState();
-      effectiveSourceHash = findUpstreamCommitHash(node.id, currentNodes, currentEdges);
-    }
+    // Try sourceCommitHash first, then fall back to reactive graph walk result
+    const effectiveSourceHash = data.sourceCommitHash || upstreamCommitHash;
 
     if (!effectiveSourceHash) return true; // Truly no parent
     // Has parent commit: only valid if parent is HEAD of main
     return effectiveSourceHash !== latestMainCommitId;
-  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId, node?.id]);
+  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId, upstreamCommitHash]);
 
   // ========== Layout state ==========
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240);
@@ -242,6 +247,8 @@ export function usePendingCommitState({
   const prevSourceIdRef = useRef<string | null>(null);
   const nodeDataRef = useRef(node?.data);
   nodeDataRef.current = node?.data;
+  // Tracks active drag cleanup so listeners are removed if component unmounts mid-drag
+  const dragCleanupRef = useRef<(() => void) | null>(null);
 
   // ========== Derived values ==========
   const isMergeDraft = data?.bridgePrompt === '/merge' && !!data?.mergeConfig;
@@ -332,7 +339,7 @@ export function usePendingCommitState({
   const handleTextBlocksChange = useCallback(
     (updatedBlocks: SourceTextBlock[]) => {
       setTextBlocks(updatedBlocks);
-      const existingPendingSource = node?.data?.pendingSource;
+      const existingPendingSource = pendingSourceRef.current;
       onUpdate({
         pendingSource: {
           textBlocks: updatedBlocks,
@@ -342,7 +349,7 @@ export function usePendingCommitState({
         },
       });
     },
-    [onUpdate, node?.data?.pendingSource]
+    [onUpdate]
   );
 
   // Handle anchor change from user interaction (click to confirm/toggle/remove)
@@ -367,8 +374,8 @@ export function usePendingCommitState({
           default:
             newAnchors = prev;
         }
-        // Sync to pendingSource for persistence
-        const existingPendingSource = node?.data?.pendingSource;
+        // Sync to pendingSource for persistence (read from ref to avoid stale closure)
+        const existingPendingSource = pendingSourceRef.current;
         onUpdate({
           pendingSource: {
             textBlocks: textBlocksRef.current,
@@ -380,8 +387,15 @@ export function usePendingCommitState({
         return newAnchors;
       });
     },
-    [onUpdate, node?.data?.pendingSource]
+    [onUpdate]
   );
+
+  // Cleanup drag listeners on unmount to avoid orphaned document event handlers
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
 
   // Sidebar | SOURCE divider handler
   const handleSidebarSourceDivider = (e: React.MouseEvent) => {
@@ -397,13 +411,19 @@ export function usePendingCommitState({
       setSidebarSourceDividerPos(Math.max(220, Math.min(400, newWidth)));
     };
 
-    const handleMouseUp = () => {
+    const cleanup = () => {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      dragCleanupRef.current = null;
     };
 
+    const handleMouseUp = () => {
+      cleanup();
+    };
+
+    dragCleanupRef.current = cleanup;
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -469,7 +489,7 @@ export function usePendingCommitState({
       }))
     );
     setPendingAnchors([]);
-    const existingPendingSource = node?.data?.pendingSource;
+    const existingPendingSource = pendingSourceRef.current;
     onUpdate({
       pendingSource: {
         textBlocks: textBlocksRef.current,
@@ -478,7 +498,7 @@ export function usePendingCommitState({
         sentences: existingPendingSource?.sentences,
       },
     });
-  }, [keywordsThreshold, onUpdate, node?.data?.pendingSource]);
+  }, [keywordsThreshold, onUpdate]);
 
   // Handle Commit - create commit via API
   const handleCommit = useCallback(async () => {
@@ -749,9 +769,14 @@ export function usePendingCommitState({
         }
       }
 
-      // Update local node ID to match API commit_hash
-      if (node && commitHash) {
-        useCanvasStore.getState().updateNodeId(node.id, commitHash);
+      // Update local node ID to match API commit_hash.
+      // Re-read the current node ID from the store rather than using the stale
+      // closure value: by the time the async API call resolves, the canvas may
+      // have already reassigned the node's ID (e.g. a concurrent update).
+      if (commitHash) {
+        const freshNode = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
+        const liveNodeId = freshNode?.id ?? node.id;
+        useCanvasStore.getState().updateNodeId(liveNodeId, commitHash);
       }
 
       // Update local state with final values
@@ -863,7 +888,8 @@ export function usePendingCommitState({
       // Helper: build a textBlock from raw text
       const buildFromRawText = (fullText: string, title: string) => {
         const tokens = tokenizeText(fullText);
-        const existingBlock = textBlocks.find((b) => b.sourceNodeId === ownConversationId);
+        // Use ref to avoid capturing a stale textBlocks value in this async closure
+        const existingBlock = textBlocksRef.current.find((b) => b.sourceNodeId === ownConversationId);
         setTextBlocks([
           {
             id: `block-self-${ownConversationId}`,
@@ -920,7 +946,8 @@ export function usePendingCommitState({
           }
 
           // Try to preserve existing selections for this block
-          const existingBlock = textBlocks.find((b) => b.sourceNodeId === ownConversationId);
+          // Use ref to avoid stale closure over textBlocks from the effect's capture point
+          const existingBlock = textBlocksRef.current.find((b) => b.sourceNodeId === ownConversationId);
 
           setTextBlocks([
             {
