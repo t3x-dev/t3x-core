@@ -685,6 +685,33 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Migration: Add user_id to api_keys (nullable — null = legacy key)
     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
 
+    -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
+    CREATE TABLE IF NOT EXISTS leaf_output_edits (
+      id TEXT PRIMARY KEY,
+      leaf_id TEXT NOT NULL REFERENCES leaves(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL,
+      original_output TEXT NOT NULL,
+      modified_output TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_leaf_output_edits_leaf ON leaf_output_edits(leaf_id);
+    CREATE INDEX IF NOT EXISTS idx_leaf_output_edits_project ON leaf_output_edits(project_id);
+
+    -- Notifications (Item 16 — persistent alerts)
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      project_id TEXT,
+      ref_id TEXT,
+      read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

@@ -180,6 +180,15 @@ export {
   findLeafHistoryById,
   type ListLeafHistoryOptions,
 } from './leaf-history';
+// Leaf Output Edits (Item 17 — Constraint Reverse Learning)
+export {
+  type CreateLeafOutputEditInput,
+  deleteEditsByLeafId,
+  findEditsByLeafId,
+  findEditsByProject,
+  insertLeafOutputEdit,
+  type ListLeafOutputEditsOptions,
+} from './leaf-output-edits';
 // Leaves (V4 - owns constraints, output, validation)
 export {
   createLeaf,
@@ -196,6 +205,18 @@ export {
   updateLeafOutput,
   updateLeafRunnerAssertions,
 } from './leaves';
+// Notifications (persistent alerts, Item 16)
+export {
+  type CreateNotificationInput,
+  deleteOldNotifications,
+  getUnreadCount,
+  insertNotification,
+  listNotifications as listNotificationsFromDB,
+  type ListNotificationsOptions,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationType,
+} from './notifications';
 // Merge Drafts (Pending merge operations)
 export {
   type CreateMergeDraftInput,

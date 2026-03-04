@@ -37,6 +37,7 @@ import {
   PrepareMergeRequestSchema,
   PrepareMergeResponseSchema,
 } from '../schemas/merge';
+import { pushNotification } from './notifications.openapi';
 
 export const mergeRoutes = new OpenAPIHono();
 
@@ -300,6 +301,15 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       },
       projectId
     );
+
+    // Push notification (fire-and-forget)
+    pushNotification({
+      type: 'merge.completed',
+      title: 'Merge Completed',
+      message: `Merge completed on ${branch || 'main'}`,
+      project_id: projectId,
+      ref_id: mergeCommit.hash,
+    });
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },
@@ -718,6 +728,27 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
     // Mark draft as committed
     await commitMergeDraft(db, id);
+
+    // Fire webhook + notification (fire-and-forget)
+    webhookDispatcher.dispatch(
+      'merge.completed',
+      {
+        commit_hash: mergeCommit.hash,
+        project_id: draft.projectId,
+        branch: targetBranch,
+        source_hash: draft.sourceHash,
+        target_hash: draft.targetHash,
+        sentence_count: mergeCommit.content.sentences.length,
+      },
+      draft.projectId
+    );
+    pushNotification({
+      type: 'merge.completed',
+      title: 'Merge Completed',
+      message: `Merged into ${targetBranch} with ${mergeCommit.content.sentences.length} sentence${mergeCommit.content.sentences.length === 1 ? '' : 's'}`,
+      project_id: draft.projectId,
+      ref_id: mergeCommit.hash,
+    });
 
     return c.json(
       { success: true as const, data: { ...mergeCommit, merge_summary: draftMergeSummary } },

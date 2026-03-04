@@ -452,6 +452,44 @@ export const conversationContexts = pgTable('conversation_contexts', {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// leaf_output_edits: User Edit Tracking (Item 17 — Constraint Reverse Learning)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tracks when a user manually edits a Leaf's output.
+ * Each row stores the before/after text so the reverse-learning
+ * pipeline can discover implicit constraints from edit patterns.
+ */
+export const leafOutputEdits = pgTable(
+  'leaf_output_edits',
+  {
+    /** Unique ID: "ledit_" + uuid-slice */
+    id: text('id').primaryKey(),
+
+    /** The leaf whose output was edited */
+    leafId: text('leaf_id')
+      .notNull()
+      .references(() => leaves.id, { onDelete: 'cascade' }),
+
+    /** Project for easy querying */
+    projectId: text('project_id').notNull(),
+
+    /** The output text before the edit */
+    originalOutput: text('original_output').notNull(),
+
+    /** The output text after the user's edit */
+    modifiedOutput: text('modified_output').notNull(),
+
+    /** When the edit was made */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    leafIdx: index('idx_leaf_output_edits_leaf').on(table.leafId),
+    projectIdx: index('idx_leaf_output_edits_project').on(table.projectId),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Type Exports (for use in queries)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -469,6 +507,9 @@ export type PinInsert = typeof pins.$inferInsert;
 
 export type ConversationContextRecord = typeof conversationContexts.$inferSelect;
 export type ConversationContextInsert = typeof conversationContexts.$inferInsert;
+
+export type LeafOutputEditRecord = typeof leafOutputEdits.$inferSelect;
+export type LeafOutputEditInsert = typeof leafOutputEdits.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // api_keys: Authentication
@@ -840,3 +881,55 @@ export const recipes = pgTable('recipes', {
 
 export type RecipeRecord = typeof recipes.$inferSelect;
 export type RecipeInsert = typeof recipes.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// notifications: Persistent notification system (Item 16)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Persistent notifications for proactive alerts.
+ *
+ * Events:
+ * - commit.created: New knowledge committed
+ * - merge.completed: Merge finished
+ * - leaf.generated: Leaf output generated
+ * - leaf.stale: Leaf references outdated commit
+ * - conflict.detected: Conflicting knowledge found
+ * - info: General information
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    /** Unique ID: "notif_" + uuid-slice */
+    id: text('id').primaryKey(),
+
+    /** Notification type */
+    type: text('type').notNull(),
+
+    /** Short title */
+    title: text('title').notNull(),
+
+    /** Detailed message */
+    message: text('message').notNull(),
+
+    /** Associated project (nullable for system-wide notifications) */
+    projectId: text('project_id'),
+
+    /** Reference ID for linking to the source entity (commit hash, leaf id, etc.) */
+    refId: text('ref_id'),
+
+    /** Read status */
+    read: boolean('read').notNull().default(false),
+
+    /** When the notification was created */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_notifications_project').on(table.projectId),
+    readIdx: index('idx_notifications_read').on(table.read),
+    createdAtIdx: index('idx_notifications_created').on(table.createdAt),
+  })
+);
+
+export type NotificationRecord = typeof notifications.$inferSelect;
+export type NotificationInsert = typeof notifications.$inferInsert;
