@@ -4036,6 +4036,37 @@ export async function markAllNotificationsRead(projectId?: string): Promise<{ co
 }
 
 // ============================================================================
+// Learn from Edits (Constraint Suggestions from User Output Edits - Item 17)
+// ============================================================================
+
+export interface EditLearnedConstraint extends SuggestedConstraint {
+  dimension: 'style' | 'content' | 'format';
+}
+
+export interface LearnFromEditsResult {
+  suggestions: EditLearnedConstraint[];
+  edits_analyzed: number;
+  model: string;
+}
+
+export async function learnFromEdits(
+  leafId: string,
+  maxSuggestions = 5,
+  minConfidence = 0.8
+): Promise<LearnFromEditsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/learn-from-edits`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions, min_confidence: minConfidence }),
+    },
+    30_000
+  );
+  return handleResponse<LearnFromEditsResult>(res);
+}
+
+// ============================================================================
 // Reverse Learning (Constraint Suggestions from Failed Assertions)
 // ============================================================================
 

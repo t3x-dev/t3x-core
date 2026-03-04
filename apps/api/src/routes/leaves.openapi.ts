@@ -39,11 +39,13 @@ import {
   deleteLeafHistory,
   deletePinByRef,
   findCommitV4ByHash,
+  findEditsByLeafId,
   findHistoryByLeafId,
   findLeafById,
   findLeafHistoryById,
   findLeavesByCommit,
   findLeavesByProject,
+  insertLeafOutputEdit,
   updateLeaf,
   updateLeafAtomic,
   updateLeafOutput,
@@ -51,13 +53,13 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { pinoLogger } from '../middleware/logger';
 import {
   generateWithFallback,
   getLLMProvider,
   getProviderRegistry,
 } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { pinoLogger } from '../middleware/logger';
 import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -74,6 +76,7 @@ import {
   ValidateLeafOutputRequest,
   ValidateLeafOutputResponse,
 } from '../schemas/v4-contracts';
+import { pushNotification } from './notifications.openapi';
 
 export const leavesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -824,6 +827,22 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
+    // Track output edits for reverse learning (Item 17)
+    // If the user is changing the output, record the before/after
+    if (body.output !== undefined) {
+      const existing = await findLeafById(db, id);
+      if (existing?.output && existing.output !== body.output) {
+        insertLeafOutputEdit(db, {
+          leaf_id: id,
+          project_id: existing.project_id,
+          original_output: existing.output,
+          modified_output: body.output,
+        }).catch((err) => {
+          pinoLogger.warn({ err, leafId: id }, 'failed to track leaf output edit');
+        });
+      }
+    }
+
     // Use atomic update to wrap all changes in a transaction
     const leaf = await updateLeafAtomic(db, id, {
       title: body.title,
@@ -981,7 +1000,7 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       });
     } catch (historyErr) {
       // Log but don't fail - history is supplementary
-      pinoLogger.warn({ err: historyErr }, "failed to save generation history");
+      pinoLogger.warn({ err: historyErr }, 'failed to save generation history');
     }
 
     // Fire webhook event (fire-and-forget)
@@ -993,6 +1012,15 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       },
       leaf.project_id
     );
+
+    // Push notification (fire-and-forget)
+    pushNotification({
+      type: 'leaf.generated',
+      title: 'Output Generated',
+      message: `Leaf "${leaf.title || id}" output generated`,
+      project_id: leaf.project_id,
+      ref_id: id,
+    });
 
     // Return response according to contract (v4-contracts.ts)
     // Use the generated_at from the updated leaf for consistency
@@ -1739,6 +1767,232 @@ leavesRoutes.openapi(extractFromLeafRoute, async (c) => {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GENERATION_FAILED', message);
+  }
+});
+
+// ============================================================================
+// POST /v1/leaves/:id/learn-from-edits — Learn constraints from user output edits
+// ============================================================================
+
+const LearnFromEditsRequest = z
+  .object({
+    max_suggestions: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .default(5)
+      .openapi({ description: 'Max number of constraint suggestions' }),
+    min_confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .default(0.8)
+      .openapi({ description: 'Minimum confidence threshold for suggestions' }),
+  })
+  .openapi('LearnFromEditsRequest');
+
+const LearnFromEditsResponse = SuccessResponseSchema(
+  z.object({
+    suggestions: z.array(
+      z.object({
+        type: z.enum(['require', 'exclude']),
+        match_mode: z.enum(['exact', 'semantic']),
+        value: z.string(),
+        reason: z.string(),
+        confidence: z.number(),
+        dimension: z.enum(['style', 'content', 'format']),
+      })
+    ),
+    edits_analyzed: z.number(),
+    model: z.string(),
+  })
+);
+
+const learnFromEditsRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/learn-from-edits',
+  tags: ['Leaves'],
+  summary: 'Learn constraints from user output edits',
+  description:
+    "Analyzes patterns in user edits on this leaf's output and suggests constraints that capture the user's implicit preferences (style, content, format).",
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: LearnFromEditsRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Constraint suggestions from edit patterns',
+      content: { 'application/json': { schema: LearnFromEditsResponse } },
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Leaf not found',
+    },
+    422: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'No edits found to learn from',
+    },
+    503: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'LLM not configured',
+    },
+  },
+});
+
+leavesRoutes.openapi(learnFromEditsRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // Collect edit history for this leaf
+    const edits = await findEditsByLeafId(db, id, { limit: 20 });
+    if (edits.length === 0) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NO_EDITS',
+            message:
+              'No output edits found for this leaf. Edit the output manually to build edit history.',
+          },
+        },
+        422
+      );
+    }
+
+    const llm = await getLLMProvider();
+    if (!llm) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider configured.' },
+        },
+        503
+      );
+    }
+
+    // Build edit summaries for the LLM prompt.
+    // Each edit is truncated to 500 chars per side (before/after), max 20 edits.
+    // Worst case: ~20 * 1100 ≈ 22k chars of edit data + ~1k prompt = ~23k chars total.
+    const editSummaries = edits.map((e, i) => {
+      const origLines = e.originalOutput.split('\n').length;
+      const modLines = e.modifiedOutput.split('\n').length;
+      return `Edit ${i + 1}:
+BEFORE (${origLines} lines):
+${e.originalOutput.slice(0, 500)}${e.originalOutput.length > 500 ? '...' : ''}
+
+AFTER (${modLines} lines):
+${e.modifiedOutput.slice(0, 500)}${e.modifiedOutput.length > 500 ? '...' : ''}`;
+    });
+
+    const prompt = `You are an expert at analyzing user editing patterns to discover implicit quality constraints.
+
+The user has edited the output of a "${leaf.type}" leaf ${edits.length} time(s). Analyze the patterns in their edits and suggest constraints that capture their preferences.
+
+## User's Edits
+
+${editSummaries.join('\n\n---\n\n')}
+
+## Analysis Instructions
+
+Look for patterns across ALL edits in three dimensions:
+1. **Style preferences**: tone, formality, word choice, voice (active/passive), salutations
+2. **Content preferences**: information consistently added/removed, topics emphasized/de-emphasized
+3. **Format preferences**: structure (lists vs paragraphs), length, spacing, headers
+
+For each pattern you find, suggest a constraint:
+- type: "require" (something the output should always have) or "exclude" (something to avoid)
+- match_mode: "exact" (literal string match) or "semantic" (meaning-based)
+- value: the constraint text
+- reason: why you inferred this from the edits
+- confidence: 0.0-1.0 (how confident you are based on consistency across edits)
+- dimension: "style", "content", or "format"
+
+Only suggest constraints with confidence >= ${body.min_confidence}.
+Return at most ${body.max_suggestions} suggestions.
+
+Respond with ONLY a JSON array of constraint objects, no markdown or explanation:
+[{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "confidence": 0.95, "dimension": "style"}, ...]`;
+
+    const raw = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+
+    // Parse the LLM response
+    let suggestions: Array<{
+      type: 'require' | 'exclude';
+      match_mode: 'exact' | 'semantic';
+      value: string;
+      reason: string;
+      confidence: number;
+      dimension: 'style' | 'content' | 'format';
+    }> = [];
+
+    try {
+      const parsed = JSON.parse(
+        raw
+          .replace(/```json?\n?/g, '')
+          .replace(/```/g, '')
+          .trim()
+      );
+      if (Array.isArray(parsed)) {
+        suggestions = parsed
+          .filter(
+            (s: Record<string, unknown>) =>
+              ['require', 'exclude'].includes(s.type as string) &&
+              ['exact', 'semantic'].includes(s.match_mode as string) &&
+              s.value &&
+              typeof s.confidence === 'number' &&
+              s.confidence >= body.min_confidence
+          )
+          .slice(0, body.max_suggestions)
+          .map((s: Record<string, unknown>) => ({
+            type: s.type as 'require' | 'exclude',
+            match_mode: s.match_mode as 'exact' | 'semantic',
+            value: String(s.value),
+            reason: String(s.reason || ''),
+            confidence: Number(s.confidence),
+            dimension: (['style', 'content', 'format'].includes(s.dimension as string)
+              ? s.dimension
+              : 'content') as 'style' | 'content' | 'format',
+          }));
+      }
+    } catch (parseErr) {
+      pinoLogger.warn({ parseErr, leafId: id }, 'LLM returned non-JSON for learn-from-edits');
+    }
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          suggestions,
+          edits_analyzed: edits.length,
+          model: llm.id,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider is configured.' },
+        },
+        503
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'LEARN_FAILED', message);
   }
 });
 

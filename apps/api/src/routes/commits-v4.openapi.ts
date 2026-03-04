@@ -27,6 +27,7 @@ import {
   findCommitsV4ByProject,
   findCommitV4ByHash,
   findCommitV4History,
+  findLeavesByCommit,
   getCommitsV4ByHashes,
   MainBranchLinearityError,
   ParentNotFoundErrorV4,
@@ -38,8 +39,8 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { pinoLogger } from '../middleware/logger';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { pinoLogger } from '../middleware/logger';
 import {
   ErrorResponseSchema,
   HashParamSchema,
@@ -47,6 +48,7 @@ import {
   SuccessResponseSchema,
 } from '../schemas/common';
 import { CommitV4Response, CreateCommitV4Request } from '../schemas/v4-contracts';
+import { pushNotification } from './notifications.openapi';
 
 export const commitsV4Routes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -509,7 +511,10 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
 
       // Warn if non-main branch doesn't exist
       if (!updated && body.branch !== 'main') {
-        pinoLogger.warn({ branch: body.branch, project_id: body.project_id }, "branch not found, HEAD not updated");
+        pinoLogger.warn(
+          { branch: body.branch, project_id: body.project_id },
+          'branch not found, HEAD not updated'
+        );
       }
     }
 
@@ -525,6 +530,40 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       },
       body.project_id
     );
+
+    // Push notification (fire-and-forget)
+    pushNotification({
+      type: 'commit.created',
+      title: 'New Commit',
+      message: `Committed ${finalSentences.length} sentence${finalSentences.length === 1 ? '' : 's'} on ${body.branch}${body.message ? `: ${body.message}` : ''}`,
+      project_id: body.project_id,
+      ref_id: commit.hash,
+    });
+
+    // Leaf stale detection: notify if leaves reference any parent commit
+    // Batched: parallel queries + deduplicate by leaf ID to avoid notification flooding
+    if (body.parents && body.parents.length > 0) {
+      Promise.all(body.parents.map((parentHash) => findLeavesByCommit(db, parentHash)))
+        .then((results) => {
+          const seen = new Set<string>();
+          for (const staleLeaves of results) {
+            for (const leaf of staleLeaves) {
+              if (seen.has(leaf.id)) continue;
+              seen.add(leaf.id);
+              pushNotification({
+                type: 'leaf.stale',
+                title: 'Leaf May Be Outdated',
+                message: `Leaf "${leaf.title || leaf.id}" references a commit that now has a newer version`,
+                project_id: body.project_id,
+                ref_id: leaf.id,
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          pinoLogger.warn({ err }, 'failed to detect stale leaves for notification');
+        });
+    }
 
     return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
   } catch (err) {

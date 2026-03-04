@@ -27,6 +27,7 @@ import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
+import { LearnFromEditsPanel } from '@/components/leaf/LearnFromEditsPanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
@@ -728,6 +729,15 @@ export default function LeafDetailPage() {
               }}
             />
           )}
+
+          {/* Learn constraints from user output edits (Item 17) */}
+          <LearnFromEditsPanel
+            leafId={leafId}
+            hasOutput={!!leaf.output}
+            onAddConstraint={(constraint) => {
+              handleAddConstraint(constraint.type, constraint.value, constraint.match_mode);
+            }}
+          />
 
           {/* Extract leaf output back to a draft */}
           {leaf.output && (

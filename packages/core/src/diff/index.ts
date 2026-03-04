@@ -4,9 +4,9 @@
 
 // Four-level classification (Upgrade #5)
 export {
-  classifyDiff,
   type ClassifiedCommitDiff,
   type ClassifiedSentencePair,
+  classifyDiff,
   type DiffClassification,
   EQUIVALENT_THRESHOLD,
 } from './classify';
@@ -19,6 +19,8 @@ export {
 } from './engine';
 // Hungarian algorithm - optimal matching (Issue #76)
 export { buildSimilarityMatrix, hungarian, type MatchPair } from './hungarian';
+// Incremental diff with caching (Item 13)
+export { type DiffCache, incrementalDiffCommits } from './incrementalDiff';
 export { JACCARD_THRESHOLD, jaccard } from './jaccard';
 export { lcs, wordDiff } from './lcs';
 // Word-level diff (Issue #70)

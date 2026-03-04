@@ -256,3 +256,128 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
 
   return { identical, equivalent, similar: modified, onlyInSource, onlyInTarget };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Incremental Diff (Item 13: Real-Time Incremental Diff)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cache for incremental diff.
+ * Stores previous inputs/results so unchanged pairs can be reused.
+ */
+export interface DiffCache {
+  sourceTexts: Map<string, string>;
+  targetTexts: Map<string, string>;
+  result: CommitDiff;
+  /** All pairs (equivalent + similar) keyed by source id */
+  pairBySourceId: Map<string, SentencePair>;
+}
+
+function buildDiffCache(
+  source: DiffableSentence[],
+  target: DiffableSentence[],
+  result: CommitDiff
+): DiffCache {
+  const sourceTexts = new Map(source.map((s) => [s.id, s.text]));
+  const targetTexts = new Map(target.map((s) => [s.id, s.text]));
+  const pairBySourceId = new Map<string, SentencePair>();
+  for (const pair of [...result.equivalent, ...result.similar]) {
+    pairBySourceId.set(pair.source.id, pair);
+  }
+  return { sourceTexts, targetTexts, result, pairBySourceId };
+}
+
+/**
+ * Incremental diff: reuses cached pair results for unchanged sentences.
+ *
+ * On first call (no cache): runs full diffCommits.
+ * On subsequent calls: only re-diffs sentences that changed.
+ *
+ * @returns Tuple of [CommitDiff, DiffCache]
+ */
+export function incrementalDiffCommits(
+  source: DiffableSentence[],
+  target: DiffableSentence[],
+  cache?: DiffCache | null
+): [CommitDiff, DiffCache] {
+  if (!cache) {
+    const result = diffCommits(source, target);
+    return [result, buildDiffCache(source, target, result)];
+  }
+
+  // Fast path: nothing changed
+  if (
+    source.length === cache.sourceTexts.size &&
+    target.length === cache.targetTexts.size &&
+    source.every((s) => cache.sourceTexts.get(s.id) === s.text) &&
+    target.every((t) => cache.targetTexts.get(t.id) === t.text)
+  ) {
+    return [cache.result, cache];
+  }
+
+  // Step 1: Exact match (always O(N+M))
+  const targetTextSet = new Set(target.map((s) => s.text));
+  const sourceTextSet = new Set(source.map((s) => s.text));
+  const identical = source.filter((s) => targetTextSet.has(s.text));
+  const unmatchedSource = source.filter((s) => !targetTextSet.has(s.text));
+  const unmatchedTarget = target.filter((s) => !sourceTextSet.has(s.text));
+
+  // Step 2: Find stable pairs from cache
+  const unmatchedSourceMap = new Map(unmatchedSource.map((s) => [s.id, s]));
+  const unmatchedTargetMap = new Map(unmatchedTarget.map((s) => [s.id, s]));
+  const stablePairs: SentencePair[] = [];
+  const stableSourceIds = new Set<string>();
+  const stableTargetIds = new Set<string>();
+
+  for (const [sourceId, pair] of cache.pairBySourceId) {
+    const targetId = pair.target.id;
+    const curSource = unmatchedSourceMap.get(sourceId);
+    const curTarget = unmatchedTargetMap.get(targetId);
+    if (!curSource || !curTarget) continue;
+    if (cache.sourceTexts.get(sourceId) !== curSource.text) continue;
+    if (cache.targetTexts.get(targetId) !== curTarget.text) continue;
+
+    stablePairs.push({
+      source: curSource,
+      target: curTarget,
+      similarity: pair.similarity,
+      wordDiff: pair.wordDiff,
+    });
+    stableSourceIds.add(sourceId);
+    stableTargetIds.add(targetId);
+  }
+
+  // Step 3: Re-diff dirty sentences
+  const dirtySource = unmatchedSource.filter((s) => !stableSourceIds.has(s.id));
+  const dirtyTarget = unmatchedTarget.filter((s) => !stableTargetIds.has(s.id));
+
+  let newEquivalent: SentencePair[] = [];
+  let newSimilar: SentencePair[] = [];
+  let newOnlyInSource: DiffableSentence[] = dirtySource;
+  let newOnlyInTarget: DiffableSentence[] = dirtyTarget;
+
+  if (dirtySource.length > 0 && dirtyTarget.length > 0) {
+    const dirtyDiff = diffCommits(dirtySource, dirtyTarget);
+    newEquivalent = dirtyDiff.equivalent;
+    newSimilar = dirtyDiff.similar;
+    newOnlyInSource = dirtyDiff.onlyInSource;
+    newOnlyInTarget = dirtyDiff.onlyInTarget;
+    if (dirtyDiff.identical.length > 0) {
+      identical.push(...dirtyDiff.identical);
+    }
+  }
+
+  // Step 4: Split stable pairs into equivalent/similar
+  const stableEquivalent = stablePairs.filter((p) => p.similarity >= EQUIVALENT_THRESHOLD);
+  const stableSimilar = stablePairs.filter((p) => p.similarity < EQUIVALENT_THRESHOLD);
+
+  const result: CommitDiff = {
+    identical,
+    equivalent: [...stableEquivalent, ...newEquivalent],
+    similar: [...stableSimilar, ...newSimilar],
+    onlyInSource: newOnlyInSource,
+    onlyInTarget: newOnlyInTarget,
+  };
+
+  return [result, buildDiffCache(source, target, result)];
+}
