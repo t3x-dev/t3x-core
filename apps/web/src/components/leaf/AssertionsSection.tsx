@@ -123,9 +123,12 @@ function AssertionItem({ assertion, constraint, selected, onToggle }: AssertionI
       <div className="flex items-start gap-2">
         {onToggle && <Checkbox checked={selected} onCheckedChange={onToggle} className="mt-0.5" />}
         {assertion.passed ? (
-          <Check className="h-4 w-4 text-[var(--status-success)] shrink-0 mt-0.5" />
+          <Check
+            className="h-4 w-4 text-[var(--status-success)] shrink-0 mt-0.5"
+            aria-hidden="true"
+          />
         ) : (
-          <X className="h-4 w-4 text-[var(--status-error)] shrink-0 mt-0.5" />
+          <X className="h-4 w-4 text-[var(--status-error)] shrink-0 mt-0.5" aria-hidden="true" />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

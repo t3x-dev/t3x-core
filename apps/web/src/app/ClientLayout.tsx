@@ -1,7 +1,7 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
 import { useParams } from 'next/navigation';
+import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -82,8 +82,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ErrorBoundary>
           <div className="flex min-h-screen bg-background">
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
+            >
+              Skip to content
+            </a>
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             <main
+              id="main-content"
               aria-label="Main content"
               className={cn(
                 'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
