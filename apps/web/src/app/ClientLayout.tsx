@@ -81,7 +81,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     <SessionProvider>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ErrorBoundary>
-          <div className="flex min-h-screen bg-background">
+          <div className="flex h-screen bg-background">
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             <main
               aria-label="Main content"
@@ -94,7 +94,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
                 <NotificationBell />
               </div>
-              <div className="flex flex-1 flex-col">{children}</div>
+              <div className="flex flex-1 flex-col min-h-0">{children}</div>
             </main>
             <Toaster position="bottom-right" richColors closeButton />
             <CommandPalette />

@@ -669,14 +669,15 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Users table (OAuth providers)
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      provider TEXT NOT NULL,
-      provider_id TEXT NOT NULL,
+      provider TEXT,
+      provider_id TEXT,
       email TEXT,
       name TEXT,
       avatar_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
+    -- Note: idx_users_provider_unique removed — Phase 2 migration drops provider/provider_id columns
+    -- and moves them to accounts table. Index is no longer needed.
 
     -- Migration: Add owner_id to projects (nullable — null = public/legacy data)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT;

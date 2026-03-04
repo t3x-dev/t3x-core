@@ -12,6 +12,21 @@ export const DEFAULT_TIMEOUT = 10000;
 // API key for authenticated requests (optional, for production use)
 export const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
+/**
+ * Get API key from NextAuth session (client-side only).
+ * Used when NEXT_PUBLIC_T3X_API_KEY is not set but the user is logged in via OAuth.
+ */
+async function getSessionApiKey(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const { getSession } = await import('next-auth/react');
+    const session = await getSession();
+    return ((session as Record<string, unknown>)?.apiKey as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================================
 // JSON Parsing Helpers
 // ============================================================================
@@ -152,10 +167,17 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
-  // Inject Authorization header if API key is configured
+  // Inject Authorization header: static env var → NextAuth session → none
   const headers = new Headers(options?.headers);
-  if (API_KEY && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (!headers.has('Authorization')) {
+    if (API_KEY) {
+      headers.set('Authorization', `Bearer ${API_KEY}`);
+    } else {
+      const sessionKey = await getSessionApiKey();
+      if (sessionKey) {
+        headers.set('Authorization', `Bearer ${sessionKey}`);
+      }
+    }
   }
 
   try {
