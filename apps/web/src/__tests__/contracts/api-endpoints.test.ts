@@ -14,9 +14,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 
-// Read the API client source code
-const apiFilePath = path.join(__dirname, '../../lib/api.ts');
-const apiCode = fs.readFileSync(apiFilePath, 'utf8');
+// Read all API client source files (modular api/ directory + barrel shim)
+const apiDir = path.join(__dirname, '../../lib/api');
+const apiCode = fs.readdirSync(apiDir)
+  .filter((f) => f.endsWith('.ts'))
+  .map((f) => fs.readFileSync(path.join(apiDir, f), 'utf8'))
+  .join('\n');
 
 describe('Frontend API Endpoint References', () => {
   // Helper function to extract function body more reliably

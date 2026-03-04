@@ -105,6 +105,8 @@ export function ConversationView({
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
+  const [chatWarning, setChatWarning] = useState<string | null>(null);
+  const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ========== Refs ==========
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -116,6 +118,13 @@ export function ConversationView({
   const chatMessagesRef = useRef(chatMessages);
   const prevConversationIdRef = useRef<string | undefined>(undefined);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
+
+  // ========== Helpers ==========
+  const showWarning = useCallback((msg: string) => {
+    if (chatWarningTimerRef.current) clearTimeout(chatWarningTimerRef.current);
+    setChatWarning(msg);
+    chatWarningTimerRef.current = setTimeout(() => setChatWarning(null), 5000);
+  }, []);
 
   // ========== Sync refs ==========
   useEffect(() => {
@@ -301,6 +310,7 @@ export function ConversationView({
     const userMessage = chatInput.trim();
     setChatInput('');
     setChatError(null);
+    setChatWarning(null);
 
     // Add user message to chat
     const newUserMessage = {
@@ -401,26 +411,27 @@ export function ConversationView({
         setStreamingContent('');
       }
 
-      // Save turns to the conversation
+      // Save turns to the conversation (non-blocking, with retry)
       const currentConversationId = conversationIdRef.current;
       const currentKind = nodeKindRef.current;
       if (projectId && currentKind === 'unit' && currentConversationId) {
-        try {
-          await api.createTurn(projectId, currentConversationId, 'user', userMessage);
-          if (fullResponse) {
-            try {
+        const saveTurns = async (retriesLeft: number): Promise<void> => {
+          try {
+            await api.createTurn(projectId, currentConversationId, 'user', userMessage);
+            if (fullResponse) {
               await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse);
-            } catch (assistantErr) {
-              // Assistant turn save failed - warn user that history may be incomplete
-              console.warn('Failed to save assistant turn:', assistantErr);
-              setChatError('Warning: Assistant response may not be saved to history');
             }
+          } catch (err) {
+            if (retriesLeft > 0) {
+              await new Promise((r) => setTimeout(r, 1000));
+              return saveTurns(retriesLeft - 1);
+            }
+            console.warn('Failed to save turns after retries:', err);
+            showWarning('Turns not saved — API may be unavailable');
           }
-        } catch (userErr) {
-          // User turn save failed
-          console.warn('Failed to save user turn:', userErr);
-          setChatError('Warning: Message may not be saved to history');
-        }
+        };
+        // Fire-and-forget: don't block the UI
+        saveTurns(1);
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -429,7 +440,7 @@ export function ConversationView({
       setIsChatStreaming(false);
       setStreamingContent('');
     }
-  }, [chatInput, isChatStreaming, isChatLoading, projectId, data?.title, onUpdate, node?.id]);
+  }, [chatInput, isChatStreaming, isChatLoading, projectId, data?.title, onUpdate, node?.id, showWarning]);
 
   // ========== Chat key handler ==========
   const handleChatKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -509,7 +520,18 @@ export function ConversationView({
             {/* For staging units: show Commit button to enter commit config view */}
             {isStagingUnit && (
               <Button
-                onClick={onShowCommitConfig}
+                onClick={() => {
+                  // Save chat messages as baselineSummary so PendingCommitView has source data
+                  // even if turns weren't persisted to the backend
+                  const msgs = chatMessagesRef.current;
+                  if (msgs.length > 0) {
+                    const fullText = msgs
+                      .map((m) => `[${m.role}]: ${m.content}`)
+                      .join('\n\n');
+                    onUpdate({ baselineSummary: fullText });
+                  }
+                  onShowCommitConfig();
+                }}
                 title={t('configure_and_commit')}
                 className="gap-1.5"
               >
@@ -700,6 +722,13 @@ export function ConversationView({
                     <div className="flex items-center gap-2 py-3 px-4 mx-6 my-2 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-[0.85rem]">
                       <AlertCircle size={16} />
                       <span>{chatError}</span>
+                    </div>
+                  )}
+                  {/* Non-critical warning (auto-dismiss) */}
+                  {chatWarning && !chatError && (
+                    <div className="flex items-center gap-2 py-2 px-4 mx-6 my-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-[0.8rem]">
+                      <AlertCircle size={14} />
+                      <span>{chatWarning}</span>
                     </div>
                   )}
                 </>

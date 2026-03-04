@@ -1,0 +1,548 @@
+/**
+ * Leaves + Curate Preview API
+ */
+
+import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import type {
+  AnchorConstraint,
+  AnchorType,
+  ApiCommitAnchors,
+  ApiConfirmedAnchor,
+  ApiSentenceWithAnchors,
+  CommitAnchors,
+  ConfirmedAnchor,
+  RingAnchorCandidate,
+  SentenceWithAnchors,
+} from './types';
+
+// ============================================================================
+// Leaf Types
+// ============================================================================
+
+export type LeafType =
+  | 'tweet'
+  | 'weibo'
+  | 'wechat'
+  | 'email'
+  | 'article'
+  | 'slack'
+  | 'deploy_agent';
+
+export interface RequireConstraint {
+  id: string;
+  type: 'require';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  source_sentence_id?: string;
+}
+
+export interface ExcludeConstraint {
+  id: string;
+  type: 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  description?: string;
+  reason?: string;
+}
+
+export type Constraint = RequireConstraint | ExcludeConstraint;
+
+export interface Assertion {
+  id: string;
+  constraint_id: string;
+  passed: boolean;
+  details: string;
+  lesson?: string;
+}
+
+export interface LeafConfig {
+  prompt_template?: string;
+  model?: string;
+  max_tokens?: number;
+  [key: string]: unknown;
+}
+
+export interface Leaf {
+  id: string;
+  commit_hash: string;
+  type: LeafType;
+  title: string | null;
+  constraints: Constraint[];
+  config: LeafConfig;
+  output: string | null;
+  generated_at: string | null;
+  assertions: Assertion[] | null;
+  runner_assertions: Assertion[] | null;
+  project_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+// ============================================================================
+// Leaf CRUD
+// ============================================================================
+
+/**
+ * List leaves by commit hash
+ */
+export async function listLeavesByCommit(commitHash: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}/leaves`);
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
+ * List leaves by project
+ */
+export async function listLeavesByProject(projectId: string): Promise<Leaf[]> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}/leaves`);
+  return handleResponse<Leaf[]>(res);
+}
+
+/**
+ * Get leaf by ID
+ */
+export async function getLeaf(leafId: string): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`);
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Update leaf (title, constraints, config)
+ */
+export async function updateLeaf(
+  leafId: string,
+  updates: {
+    title?: string;
+    constraints?: Constraint[];
+    config?: LeafConfig;
+  }
+): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return handleResponse<Leaf>(res);
+}
+
+/**
+ * Create a new leaf
+ */
+export interface CreateLeafInput {
+  commit_hash: string;
+  type: LeafType;
+  title?: string;
+  project_id: string;
+  constraints?: Constraint[];
+  config?: LeafConfig;
+}
+
+export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<Leaf>(res);
+}
+
+export async function deleteLeaf(leafId: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse(res);
+}
+
+/**
+ * Generate output result
+ */
+export interface GenerateLeafOutputResult {
+  output: string;
+  generated_at: string;
+  validation?: {
+    all_passed: boolean;
+    passed_count: number;
+    failed_count: number;
+    attempts: number;
+  };
+}
+
+/**
+ * Generate output for a leaf
+ *
+ * @param leafId - Leaf ID
+ * @returns Generated output and timestamp
+ * @throws ApiError - GENERATION_NOT_CONFIGURED (API key not set)
+ * @throws ApiError - LEAF_NOT_FOUND
+ * @throws ApiError - GENERATION_FAILED
+ */
+export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOutputResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+    180000 // 180 seconds timeout for LLM generation with auto-retry
+  );
+  return handleResponse<GenerateLeafOutputResult>(res);
+}
+
+/**
+ * Compare models result
+ */
+export interface CompareModelsResult {
+  results: Array<{
+    model: string;
+    provider_id: string;
+    output: string | null;
+    latency_ms: number;
+    error?: string;
+  }>;
+}
+
+/**
+ * Compare multiple models for a leaf
+ */
+export async function compareLeafModels(
+  leafId: string,
+  models: string[]
+): Promise<CompareModelsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/compare`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ models }),
+    },
+    300000 // 5 minutes for parallel generation
+  );
+  return handleResponse<CompareModelsResult>(res);
+}
+
+/**
+ * Validate output result
+ */
+export interface ValidateLeafOutputResult {
+  leaf: Leaf;
+  validation: {
+    all_passed: boolean;
+    passed_count: number;
+    failed_count: number;
+  };
+}
+
+/**
+ * Validate output for a leaf
+ *
+ * @param leafId - Leaf ID
+ * @param useSemantic - Whether to use semantic matching (default false)
+ * @returns Validation result with updated leaf and statistics
+ * @throws ApiError - LEAF_NOT_FOUND
+ * @throws ApiError - NO_OUTPUT (output is null)
+ * @throws ApiError - NO_CONSTRAINTS (no constraints to validate)
+ */
+export async function validateLeafOutput(
+  leafId: string,
+  useSemantic = false
+): Promise<ValidateLeafOutputResult> {
+  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ use_semantic: useSemantic }),
+  });
+  return handleResponse<ValidateLeafOutputResult>(res);
+}
+
+// ============================================================================
+// AI Constraint Suggestions
+// ============================================================================
+
+/** AI-suggested constraint */
+export interface SuggestedConstraint {
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+  reason: string;
+  confidence: number;
+}
+
+/** Constraint suggestion response */
+export interface SuggestConstraintsResult {
+  suggestions: SuggestedConstraint[];
+  constraints: Array<{
+    id: string;
+    type: 'require' | 'exclude';
+    match_mode: 'exact' | 'semantic';
+    value: string;
+    description?: string;
+    reason?: string;
+  }>;
+  model: string;
+}
+
+/**
+ * Get AI-suggested constraints for a leaf.
+ */
+export async function suggestLeafConstraints(
+  leafId: string,
+  options?: { max_suggestions?: number; instructions?: string }
+): Promise<SuggestConstraintsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/suggest-constraints`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options ?? {}),
+    },
+    60_000
+  );
+  return handleResponse<SuggestConstraintsResult>(res);
+}
+
+// ============================================================================
+// Reverse Learning (Constraint Suggestions from Failed Assertions)
+// ============================================================================
+
+export interface ReverseLearnResult {
+  suggestions: SuggestedConstraint[];
+  lessons_used: string[];
+  model: string;
+}
+
+export async function reverseLearnConstraints(
+  leafId: string,
+  maxSuggestions = 5
+): Promise<ReverseLearnResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
+    },
+    30_000
+  );
+  return handleResponse<ReverseLearnResult>(res);
+}
+
+// ============================================================================
+// Learn From Edits (Constraint Reverse Learning from Output Edits — Item 17)
+// ============================================================================
+
+/** Learned constraint from output edit patterns */
+export interface EditLearnedConstraint extends SuggestedConstraint {
+  dimension: 'style' | 'content' | 'format';
+}
+
+export interface LearnFromEditsResult {
+  suggestions: EditLearnedConstraint[];
+  edits_analyzed: number;
+  model: string;
+}
+
+/**
+ * Analyze user output edits to discover implicit constraints.
+ */
+export async function learnFromEdits(
+  leafId: string,
+  maxSuggestions = 5,
+  minConfidence = 0.8
+): Promise<LearnFromEditsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/learn-from-edits`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions, min_confidence: minConfidence }),
+    },
+    30_000
+  );
+  return handleResponse<LearnFromEditsResult>(res);
+}
+
+// ============================================================================
+// Curate Preview API
+// ============================================================================
+
+export type BridgeTemplate =
+  | 'prose'
+  | 'plan'
+  | 'story'
+  | 'summary'
+  | 'refine'
+  | 'explain'
+  | 'clarify';
+
+export interface CurateChunk {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  score: number;
+  selected: boolean;
+  cos_intent?: number;
+  /** v1.3: Turn hash this chunk belongs to (for source context display) */
+  turn_hash?: string;
+  /** v1.3: Start position relative to turn.content (without [role]: prefix) */
+  turn_start?: number;
+  /** v1.3: End position relative to turn.content (without [role]: prefix) */
+  turn_end?: number;
+}
+
+/** Anchor candidate in API response (snake_case) */
+export interface ApiAnchorCandidate {
+  text: string;
+  type: 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
+  start_char: number;
+  end_char: number;
+  confidence: number;
+  source: 'token' | 'entity' | 'phrase';
+}
+
+/**
+ * Convert API anchor candidate (snake_case) to internal format (camelCase)
+ */
+export function parseApiAnchorCandidate(api: ApiAnchorCandidate): RingAnchorCandidate {
+  return {
+    text: api.text,
+    type: api.type,
+    startChar: api.start_char,
+    endChar: api.end_char,
+    confidence: api.confidence,
+    source: api.source,
+  };
+}
+
+/**
+ * Convert array of API anchor candidates to internal format
+ */
+export function parseApiAnchorCandidates(
+  apis: ApiAnchorCandidate[] | undefined
+): RingAnchorCandidate[] {
+  if (!apis) return [];
+  return apis.map(parseApiAnchorCandidate);
+}
+
+/**
+ * Convert API confirmed anchor (snake_case) to internal format (camelCase)
+ * Note: global_start/global_end are optional and typically computed in UI layer,
+ * not returned from API. See NodeModal.committedAnchors for the computation.
+ * Supports both snake_case (global_start) and legacy camelCase (globalStart) for backward compat.
+ */
+export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAnchor {
+  // Support both snake_case (new) and camelCase (legacy) for backward compatibility
+  const apiAny = api as ApiConfirmedAnchor & { globalStart?: number; globalEnd?: number };
+  return {
+    id: api.id,
+    text: api.text,
+    start: api.start,
+    end: api.end,
+    type: api.type as AnchorType,
+    constraint: api.constraint as AnchorConstraint,
+    globalStart: api.global_start ?? apiAny.globalStart,
+    globalEnd: api.global_end ?? apiAny.globalEnd,
+  };
+}
+
+/**
+ * Convert API sentence with anchors (snake_case) to internal format (camelCase)
+ * Computes globalStart/globalEnd for each anchor using sentence.start_char offset
+ * If start_char is missing/invalid, anchors will only have their original positions (no global computation)
+ */
+export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): SentenceWithAnchors {
+  const sentenceStartChar = api.start_char;
+  const hasValidStartChar =
+    typeof sentenceStartChar === 'number' && !Number.isNaN(sentenceStartChar);
+
+  return {
+    sentenceId: api.sentence_id,
+    text: api.text,
+    startChar: api.start_char,
+    endChar: api.end_char,
+    anchors:
+      api.anchors?.map((anchor) => {
+        const parsed = parseApiConfirmedAnchor(anchor);
+        // Compute global positions if not already present and start_char is valid
+        // If start_char is missing/corrupt, skip computation to avoid NaN positions
+        if (hasValidStartChar) {
+          return {
+            ...parsed,
+            globalStart: parsed.globalStart ?? sentenceStartChar + parsed.start,
+            globalEnd: parsed.globalEnd ?? sentenceStartChar + parsed.end,
+          };
+        }
+        return parsed;
+      }) ?? [],
+  };
+}
+
+/**
+ * Convert API commit anchors (snake_case) to internal format (camelCase)
+ * Use this when you need CommitAnchors type for CanvasNodeData.anchors
+ */
+export function parseApiCommitAnchors(api: ApiCommitAnchors | null): CommitAnchors | null {
+  if (!api) return null;
+  return {
+    inputTextHash: api.input_text_hash,
+    sentences: api.sentences?.map(parseApiSentenceWithAnchors) ?? [],
+  };
+}
+
+export interface CuratePreviewResponse {
+  algorithm_version: string;
+  keep_ratio: number;
+  chunks: CurateChunk[];
+  selected_spans: Array<{ start: number; end: number }>;
+  /** The source text used for chunking - frontend should use this for tokenization */
+  source_text: string;
+  /** v1.1: SHA-256 hash of source_text for CommitAnchors.input_text_hash */
+  input_text_hash: string;
+  /** v1.1: All anchor candidates from Ring1 (global positions, snake_case) */
+  anchor_candidates?: ApiAnchorCandidate[];
+  /** v1.2: Warnings about data quality issues (e.g., skipped anchors, hash mismatches, fallback mode) */
+  warnings?: string[];
+}
+
+export interface CuratePreviewRequest {
+  project_id: string;
+  /** Either source_conversation_id or source_text is required */
+  source_conversation_id?: string;
+  bridge_id: BridgeTemplate;
+  intent: string;
+  cosine: number;
+  unit_title?: string;
+  user_message?: string;
+  /** Fallback mode: if provided without source_conversation_id, uses regex splitting (no Ring3/anchors) */
+  source_text?: string;
+}
+
+/**
+ * Get curated preview based on cosine similarity
+ *
+ * This endpoint calculates which text chunks to select based on:
+ * - Bridge template queries (task/schema)
+ * - User intent
+ * - Cosine similarity threshold (controlled by slider)
+ *
+ * @param params - Curate preview parameters
+ * @param signal - Optional AbortSignal for cancellation (e.g., debounce)
+ */
+export async function curatePreview(
+  params: CuratePreviewRequest,
+  signal?: AbortSignal
+): Promise<CuratePreviewResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/curate/preview`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    },
+    30000, // 30s timeout for embedding computation
+    signal
+  );
+  return handleResponse<CuratePreviewResponse>(res);
+}

@@ -120,21 +120,23 @@ turnRoutes.post('/v1/turns', async (c) => {
       );
     }
 
-    // Extract rings if not provided
+    // Extract rings if not provided — graceful fallback if NLP unavailable
     let rings = body.rings as Record<string, unknown> | undefined;
     if (!rings && body.content) {
-      // Ring extraction is required - no fallback
-      const nlpProvider = getNLPProvider();
-      const extractor = createRingExtractor(nlpProvider);
-      // Use a temporary ID for extraction (will be replaced with actual turn hash)
-      const ringOutput = await extractor.extract('temp', body.content, body.language);
-      rings = {
-        rings: {
-          ring1: ringOutput.ring1,
-          ring2: ringOutput.ring2,
-          ring3: ringOutput.ring3,
-        },
-      };
+      try {
+        const nlpProvider = getNLPProvider();
+        const extractor = createRingExtractor(nlpProvider);
+        const ringOutput = await extractor.extract('temp', body.content, body.language);
+        rings = {
+          rings: {
+            ring1: ringOutput.ring1,
+            ring2: ringOutput.ring2,
+            ring3: ringOutput.ring3,
+          },
+        };
+      } catch (_nlpErr) {
+        // NLP unavailable — save turn without ring data (graceful degradation)
+      }
     }
 
     const turn = await insertTurn(db, {

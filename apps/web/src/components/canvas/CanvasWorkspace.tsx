@@ -1,4 +1,4 @@
-import type { ColorMode, Node } from '@xyflow/react';
+import type { ColorMode } from '@xyflow/react';
 import {
   Background,
   BackgroundVariant,
@@ -8,22 +8,19 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import {
-  Brain,
   FileOutput,
   GitCommit,
   GitCommitHorizontal,
   HelpCircle,
-  Import,
-  LayoutGrid,
   Loader2,
   MessageSquare,
   MessageSquarePlus,
-  Settings,
-  ShieldCheck,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useContextMenu } from '@/hooks/useContextMenu';
+import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
@@ -31,13 +28,8 @@ import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
 import { canvasNodeTypes } from './CanvasNodes';
 import { CanvasStatusBar } from './CanvasStatusBar';
-import {
-  buildBackgroundMenu,
-  buildLeafNodeMenu,
-  buildUnitNodeMenu,
-  type ContextMenuGroup,
-  NodeContextMenu,
-} from './NodeContextMenu';
+import { CanvasToolbar } from './CanvasToolbar';
+import { NodeContextMenu } from './NodeContextMenu';
 import { NodePalette } from './NodePalette';
 
 // Custom edge types for xyflow
@@ -48,16 +40,7 @@ const edgeTypes = {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
-import { createAutoDraft, verifyProjectHashChain } from '@/lib/api';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -73,12 +56,6 @@ import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
-
-type PathHighlight =
-  | { mode: 'main' }
-  | { mode: 'branch'; branch?: string }
-  | { mode: 'node'; nodeId: string }
-  | null;
 
 interface CanvasWorkspaceProps {
   projectName: string;
@@ -110,22 +87,16 @@ function CanvasWorkspaceInner({
   viewSwitcher,
 }: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
-  const [highlight, setHighlight] = useState<PathHighlight>(null);
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    groups: ContextMenuGroup[];
-  } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isLayouting, setIsLayouting] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const { t, isDeveloperMode } = useTerminology();
 
@@ -174,10 +145,12 @@ function CanvasWorkspaceInner({
         rankSpacing: 120,
       });
       setNodes(layoutedNodes);
-      // Fit view after layout with a small delay for the transition
-      setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300 });
-      }, 50);
+      // Fit view after layout — double rAF ensures DOM has updated after React render
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fitView({ padding: 0.2, duration: 300 });
+        });
+      });
     } catch (_err) {
       notify?.('Auto-layout failed', 'error');
     } finally {
@@ -185,166 +158,29 @@ function CanvasWorkspaceInner({
     }
   }, [getNodes, getEdges, setNodes, fitView, notify]);
 
-  // Hash chain verification handler
-  const handleVerify = useCallback(async () => {
-    if (!projectId || isVerifying) return;
-    setIsVerifying(true);
-    try {
-      const result = await verifyProjectHashChain(projectId);
-      if (result.valid) {
-        notify?.(
-          `Hash chain verified: ${result.total} commits, depth ${result.verified_depth}`,
-          'success'
-        );
-      } else {
-        const errorCount =
-          result.errors.hash_mismatch.length +
-          result.errors.parent_not_found.length +
-          result.errors.other.length;
-        notify?.(`Hash chain invalid: ${errorCount} error(s) in ${result.total} commits`, 'error');
-      }
-    } catch (err) {
-      notify?.(err instanceof Error ? err.message : 'Verification failed', 'error');
-    } finally {
-      setIsVerifying(false);
-    }
-  }, [projectId, isVerifying, notify]);
+  // Context menu (extracted hook)
+  const { contextMenu, closeContextMenu, handleNodeContextMenu, handlePaneContextMenu } =
+    useContextMenu({
+      openNodeModal,
+      addNode,
+      isDeveloperMode,
+      notify,
+      getNodes,
+      projectId,
+      fitView,
+      handleAutoLayout,
+    });
 
-  // Context menu handlers
-  const handleNodeContextMenu = useCallback(
-    (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
-      event.preventDefault();
-      const isDraft = node.data.commitStatus === 'draft';
-      const hasConversation = !!node.data.conversationId;
-      const groups = buildUnitNodeMenu({
-        onOpenDetail: () => openNodeModal(node.id, 'commit'),
-        onCreateBranch: () => {
-          const position = { x: node.position.x + 320, y: node.position.y };
-          startTransition(async () => {
-            try {
-              await addNode('unit', position);
-            } catch (err) {
-              notify?.(err instanceof Error ? err.message : 'Failed', 'error');
-            }
-          });
-        },
-        onConnectLeaf: () => useCanvasStore.getState().openLeafPanel(node.id),
-        onAutoExtract:
-          hasConversation && projectId
-            ? () => {
-                createAutoDraft({
-                  project_id: projectId,
-                  conversation_id: node.data.conversationId as string,
-                  parent_commit_hash: node.data.commitHash || undefined,
-                })
-                  .then((draft) => {
-                    notify?.(
-                      `Auto-extracted ${draft.sentences.length} sentences to draft`,
-                      'success'
-                    );
-                    useCanvasStore.getState().loadProjectData(projectId);
-                  })
-                  .catch((err) => {
-                    notify?.(err instanceof Error ? err.message : 'Auto-extract failed', 'error');
-                  });
-              }
-            : undefined,
-        onCopyHash: isDeveloperMode
-          ? () => {
-              const hash =
-                node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
-              navigator.clipboard.writeText(hash);
-            }
-          : undefined,
-        onDelete: isDraft
-          ? () => {
-              // Trigger removal via onNodesChange (same as pressing Delete key)
-              const change = { id: node.id, type: 'remove' as const };
-              useCanvasStore.getState().onNodesChange([change]);
-            }
-          : undefined,
-        isDraft,
-        isDeveloperMode,
-        hasConversation,
-      });
-      setContextMenu({ x: event.clientX, y: event.clientY, groups });
-    },
-    [openNodeModal, addNode, isDeveloperMode, notify]
-  );
-
-  // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode
-  const handlePaneContextMenu = useCallback(
-    (event: MouseEvent | React.MouseEvent) => {
-      event.preventDefault();
-      const addNodeInline = (kind: NodeKind) => {
-        startTransition(async () => {
-          try {
-            await addNode(kind);
-          } catch (err) {
-            notify?.(err instanceof Error ? err.message : 'Failed to create node', 'error');
-          }
-        });
-      };
-      const groups = buildBackgroundMenu({
-        onAddConversation: () => addNodeInline('unit'),
-        onAddLeaf: () => addNodeInline('leaf'),
-        onFitView: () => fitView({ padding: 0.2, duration: 300 }),
-        onAutoLayout: handleAutoLayout,
-      });
-      setContextMenu({ x: event.clientX, y: event.clientY, groups });
-    },
-    [addNode, notify, fitView, handleAutoLayout]
-  );
-
-  // Leaf context menu handler — called from CanvasNodes when right-clicking a leaf inside a unit node
-  const handleLeafContextMenu = useCallback(
-    (event: React.MouseEvent, leafId: string, nodeId: string) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const groups = buildLeafNodeMenu({
-        onOpenDetail: () => {
-          const node = getNodes().find((n) => n.id === nodeId);
-          const leaves = node?.data.leaves as Array<{ id: string }> | undefined;
-          const leaf = leaves?.find((l) => l.id === leafId);
-          if (leaf && projectId) {
-            window.location.href = `/project/${projectId}/leaf/${leafId}`;
-          }
-        },
-        onGenerate: () => {
-          useCanvasStore.getState().openLeafPanel(nodeId);
-        },
-        onShare: () => {
-          if (projectId) {
-            const url = `${window.location.origin}/project/${projectId}/leaf/${leafId}`;
-            navigator.clipboard.writeText(url);
-            notify?.('Link copied to clipboard', 'success');
-          }
-        },
-        onExport: () => {
-          if (projectId) {
-            window.open(`/project/${projectId}/leaf/${leafId}`, '_blank');
-          }
-        },
-        onDelete: () => {
-          useCanvasStore.getState().removeLeafFromNode(nodeId, leafId);
-        },
-      });
-      setContextMenu({ x: event.clientX, y: event.clientY, groups });
-    },
-    [getNodes, projectId, notify]
-  );
-
-  // Store leaf context menu handler ref for CanvasNodes to access
-  const leafContextMenuRef = useRef(handleLeafContextMenu);
-  leafContextMenuRef.current = handleLeafContextMenu;
-
-  // Expose leaf context menu handler via store for CanvasNodes
-  useEffect(() => {
-    useCanvasStore.setState({ leafContextMenuHandler: handleLeafContextMenu });
-    return () => {
-      useCanvasStore.setState({ leafContextMenuHandler: undefined });
-    };
-  }, [handleLeafContextMenu]);
+  // Path highlight (extracted hook)
+  const {
+    highlight,
+    setHighlight,
+    toggleHighlight,
+    nodesForRender,
+    edgesForRender,
+    hasMainCommits,
+    hasBranchCommits,
+  } = usePathHighlight({ nodes, edges });
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
@@ -430,10 +266,10 @@ function CanvasWorkspaceInner({
 
       // Find the nearest node in the given direction
       let bestNodeId: string | null = null;
-      let bestDistance = Infinity;
+      let bestDistance = Number.POSITIVE_INFINITY;
 
-      currentNodes.forEach((node) => {
-        if (node.id === anchorNode.id) return;
+      for (const node of currentNodes) {
+        if (node.id === anchorNode.id) continue;
 
         const dx = node.position.x - anchorNode.position.x;
         const dy = node.position.y - anchorNode.position.y;
@@ -445,7 +281,7 @@ function CanvasWorkspaceInner({
           (direction === 'left' && dx < -20) ||
           (direction === 'right' && dx > 20);
 
-        if (!isInDirection) return;
+        if (!isInDirection) continue;
 
         // Calculate distance with preference for the primary axis
         const primaryDistance =
@@ -460,7 +296,7 @@ function CanvasWorkspaceInner({
           bestDistance = distance;
           bestNodeId = node.id;
         }
-      });
+      }
 
       if (bestNodeId) {
         const targetNode = currentNodes.find((n) => n.id === bestNodeId);
@@ -540,13 +376,24 @@ function CanvasWorkspaceInner({
         return;
       }
 
-      // Enter: open selected node
+      // Enter: open selected node (committed → full page, others → modal)
       if (event.key === 'Enter') {
         const currentNodes = getNodes();
         const selectedNode = currentNodes.find((n) => n.selected);
         if (selectedNode) {
           event.preventDefault();
-          openNodeModal(selectedNode.id, 'commit');
+          const nodeData = selectedNode.data as import('@/types/nodes').CanvasNodeData;
+          if (
+            nodeData.commitStatus === 'committed' &&
+            nodeData.commitHash &&
+            projectId
+          ) {
+            router.push(
+              `/project/${projectId}/commit/${encodeURIComponent(nodeData.commitHash)}`
+            );
+          } else {
+            openNodeModal(selectedNode.id, 'commit');
+          }
         }
         return;
       }
@@ -598,6 +445,8 @@ function CanvasWorkspaceInner({
     openNodeModal,
     openNodeId,
     showShortcuts,
+    router,
+    projectId,
   ]);
 
   // Keyboard shortcut help dialog toggle (? key)
@@ -613,11 +462,11 @@ function CanvasWorkspaceInner({
 
   const branchNames = useMemo(() => {
     const names = new Set<string>();
-    nodes.forEach((node) => {
+    for (const node of nodes) {
       if (node.data.kind === 'unit' && node.data.branchType === 'branch' && node.data.branchName) {
         names.add(node.data.branchName);
       }
-    });
+    }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [nodes]);
 
@@ -633,13 +482,13 @@ function CanvasWorkspaceInner({
       !branchNames.includes(branchFilter) &&
       prevBranchNames.includes(branchFilter)
     ) {
-      // Use setTimeout to avoid synchronous setState in effect
-      setTimeout(() => {
+      // Use queueMicrotask to batch state updates after current render cycle
+      queueMicrotask(() => {
         setBranchFilter('all');
         setHighlight((current) => (current?.mode === 'branch' ? { mode: 'branch' } : current));
-      }, 0);
+      });
     }
-  }, [branchFilter, branchNames]);
+  }, [branchFilter, branchNames, setHighlight]);
 
   const getViewportCenter = useCallback(() => {
     if (!canvasRef.current) {
@@ -704,413 +553,30 @@ function CanvasWorkspaceInner({
     [screenToFlowPosition, addNode, addDraftNode, notify]
   );
 
-  const matchesHighlightCommit = (node: Node<CanvasNodeData>, mode: PathHighlight) => {
-    if (!mode || node.data.kind !== 'unit') {
-      return false;
-    }
-    if (mode.mode === 'main') {
-      return node.data.branchType === 'main';
-    }
-    if (mode.mode === 'branch') {
-      if (node.data.branchType !== 'branch') {
-        return false;
-      }
-      if (!mode.branch) {
-        return true;
-      }
-      return (node.data.branchName ?? '').toLowerCase() === mode.branch.toLowerCase();
-    }
-    return false;
-  };
-
-  const highlightSets = useMemo(() => {
-    if (!highlight) {
-      return {
-        nodes: new Set<string>(),
-        edges: new Set<string>(),
-      };
-    }
-
-    const adjacency = new Map<string, Set<string>>();
-    edges.forEach((edge) => {
-      const out = adjacency.get(edge.source) ?? new Set<string>();
-      out.add(edge.target);
-      adjacency.set(edge.source, out);
-
-      const inbound = adjacency.get(edge.target) ?? new Set<string>();
-      inbound.add(edge.source);
-      adjacency.set(edge.target, inbound);
-    });
-
-    // Node-click highlighting: 1-hop neighbors only
-    if (highlight.mode === 'node') {
-      const { nodeId } = highlight;
-      const connected = new Set<string>([nodeId]);
-      const neighbors = adjacency.get(nodeId);
-      if (neighbors) {
-        neighbors.forEach((id) => connected.add(id));
-      }
-
-      const connectedEdges = new Set<string>();
-      edges.forEach((edge) => {
-        if (edge.source === nodeId || edge.target === nodeId) {
-          connectedEdges.add(edge.id);
-        }
-      });
-
-      return { nodes: connected, edges: connectedEdges };
-    }
-
-    // Branch/main highlighting: BFS traversal
-    const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-
-    const startNodes = nodes
-      .filter((node) => matchesHighlightCommit(node, highlight))
-      .map((node) => node.id);
-
-    if (startNodes.length === 0) {
-      return {
-        nodes: new Set<string>(),
-        edges: new Set<string>(),
-      };
-    }
-
-    const visited = new Set<string>(startNodes);
-    const commitStarts = new Set(startNodes);
-    const queue = [...startNodes];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const neighbors = adjacency.get(current);
-      if (!neighbors) {
-        continue;
-      }
-      neighbors.forEach((neighborId) => {
-        if (visited.has(neighborId)) {
-          return;
-        }
-        const neighborNode = nodeMap.get(neighborId);
-        if (!neighborNode) {
-          return;
-        }
-        if (neighborNode.data.kind === 'unit' && !matchesHighlightCommit(neighborNode, highlight)) {
-          return;
-        }
-        visited.add(neighborId);
-        queue.push(neighborId);
-      });
-    }
-
-    const highlightedEdges = new Set<string>();
-    edges.forEach((edge) => {
-      const bothVisited = visited.has(edge.source) && visited.has(edge.target);
-      if (bothVisited) {
-        highlightedEdges.add(edge.id);
-        return;
-      }
-      if (
-        highlight.mode !== 'main' &&
-        (commitStarts.has(edge.source) || commitStarts.has(edge.target))
-      ) {
-        highlightedEdges.add(edge.id);
-      }
-    });
-
-    return {
-      nodes: visited,
-      edges: highlightedEdges,
-    };
-  }, [nodes, edges, highlight]);
-
-  // Semantic highlight colors - Blue for main/node (committed), Orange for branch (pending)
-  const highlightColor = !highlight
-    ? undefined
-    : highlight.mode === 'main' || highlight.mode === 'node'
-      ? '#2563eb'
-      : highlight.mode === 'branch'
-        ? '#f97316'
-        : undefined;
-
-  const nodesForRender = useMemo(() => {
-    if (!highlight) {
-      return nodes;
-    }
-
-    const hasHighlightedNodes = highlightSets.nodes.size > 0;
-
-    return nodes.map((node) => {
-      const isHighlighted = highlightSets.nodes.has(node.id);
-      if (isHighlighted) {
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            highlightMode: highlight.mode,
-            dimmed: false,
-          },
-        };
-      }
-      // Dim non-highlighted nodes when a highlight is active
-      if (hasHighlightedNodes) {
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            highlightMode: undefined,
-            dimmed: true,
-          },
-        };
-      }
-      return node;
-    });
-  }, [nodes, highlight, highlightSets.nodes]);
-
-  const edgesForRender = useMemo(() => {
-    if (!highlight || !highlightColor) {
-      return edges;
-    }
-    const hasHighlightedEdges = highlightSets.edges.size > 0;
-    return edges.map((edge) => {
-      if (highlightSets.edges.has(edge.id)) {
-        return {
-          ...edge,
-          style: {
-            ...edge.style,
-            stroke: highlightColor,
-            strokeWidth: 4.5,
-          },
-        };
-      }
-      // Dim non-highlighted edges when a highlight is active
-      if (hasHighlightedEdges) {
-        return {
-          ...edge,
-          style: {
-            ...edge.style,
-            opacity: 0.2,
-          },
-        };
-      }
-      return edge;
-    });
-  }, [edges, highlight, highlightSets.edges, highlightColor]);
-
-  const toggleHighlight = (mode: PathHighlight) => {
-    setHighlight((current) => {
-      if (!mode) {
-        return null;
-      }
-      if (!current) {
-        return mode;
-      }
-      if (current.mode === mode.mode) {
-        if (current.mode === 'branch' && mode.mode === 'branch') {
-          const prevBranch = current.branch ?? 'all';
-          const nextBranch = mode.branch ?? 'all';
-          if (prevBranch === nextBranch) {
-            return null;
-          }
-        } else {
-          return null;
-        }
-      }
-      return mode;
-    });
-  };
-
-  const hasMainCommits = nodes.some(
-    (node) => node.data.kind === 'unit' && node.data.branchType === 'main'
-  );
-  const hasBranchCommits = nodes.some(
-    (node) => node.data.kind === 'unit' && node.data.branchType === 'branch'
-  );
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Integrated Top Bar - Glass style */}
-      <header
-        className={cn(
-          'flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-5',
-          glass.panelBase,
-          glass.highlight
-        )}
-      >
-        <div className="flex items-center gap-5">
-          <h2 className="text-base font-semibold tracking-tight text-foreground">{projectName}</h2>
-          <div className="h-5 w-px bg-border/60" />
-          <div className="flex items-center gap-1">
-            <Button
-              variant={highlight?.mode === 'main' ? 'commit' : 'ghost'}
-              size="sm"
-              onClick={() => toggleHighlight({ mode: 'main' })}
-              disabled={!hasMainCommits}
-              className={cn(
-                'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode !== 'main' &&
-                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
-              )}
-            >
-              Main
-            </Button>
-            <Button
-              variant={highlight?.mode === 'branch' ? 'pending' : 'ghost'}
-              size="sm"
-              onClick={() =>
-                hasBranchCommits &&
-                toggleHighlight({
-                  mode: 'branch',
-                  branch: branchFilter === 'all' ? undefined : branchFilter,
-                })
-              }
-              disabled={!hasBranchCommits}
-              className={cn(
-                'h-7 px-3 text-xs font-medium rounded-full transition-all',
-                highlight?.mode !== 'branch' &&
-                  'text-[var(--text-secondary)] hover:text-foreground hover:bg-muted'
-              )}
-            >
-              Branch
-            </Button>
-            <Select
-              value={branchFilter}
-              onValueChange={(value) => {
-                setBranchFilter(value);
-                if (highlight?.mode === 'branch') {
-                  setHighlight({
-                    mode: 'branch',
-                    branch: value === 'all' ? undefined : value,
-                  });
-                }
-              }}
-              disabled={!hasBranchCommits}
-            >
-              <SelectTrigger className="h-7 w-[130px] text-xs rounded-full border-border/50 bg-muted/50 hover:bg-muted transition-colors">
-                <SelectValue placeholder={t('all_branches')} />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="all">{t('all_branches')}</SelectItem>
-                {branchNames.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {viewSwitcher}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowMemoryModal(true)}
-            title="Memory Context"
-            data-action="memory"
-            className={cn(
-              'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary'
-            )}
-          >
-            <Brain className="h-4 w-4" />
-            Memory
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowImportDialog(true)}
-            title="Import"
-            className={cn(
-              'h-9 w-9 rounded-xl transition-all',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary'
-            )}
-          >
-            <Import className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleAutoLayout}
-            title="Auto Layout"
-            className={cn(
-              'h-9 w-9 rounded-xl transition-all',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary',
-              isLayouting && 'pointer-events-none'
-            )}
-            disabled={isLayouting || nodes.length === 0}
-          >
-            {isLayouting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LayoutGrid className="h-4 w-4" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleVerify}
-            title="Verify Hash Chain"
-            className={cn(
-              'h-9 w-9 rounded-xl transition-all',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary',
-              isVerifying && 'pointer-events-none'
-            )}
-            disabled={isVerifying}
-          >
-            {isVerifying ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShieldCheck className="h-4 w-4" />
-            )}
-          </Button>
-          <Link
-            href={`/project/${projectId}/settings`}
-            title="Project Settings"
-            className={cn(
-              'inline-flex items-center justify-center h-9 w-9 rounded-xl transition-all',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary'
-            )}
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleAddNode('unit')}
-            title="Add Unit"
-            className={cn(
-              'h-9 w-9 rounded-xl transition-all',
-              'text-[var(--text-secondary)] hover:text-foreground',
-              'hover:bg-primary/10 hover:text-primary',
-              isPending && 'pointer-events-none'
-            )}
-            disabled={isPending}
-          >
-            {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <MessageSquarePlus className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </header>
-
-      {/* Mode Switch - using shadcn Tabs with pill variant */}
-      <div className="absolute left-1/2 top-14 z-10 -translate-x-1/2 -translate-y-1/2">
-        <Tabs value={mode} onValueChange={(v) => onModeChange(v as 'editor' | 'execution')}>
-          <TabsList variant="pill">
-            <TabsTrigger value="editor" variant="pill">
-              Editor
-            </TabsTrigger>
-            <TabsTrigger value="execution" variant="pill">
-              Execution
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <CanvasToolbar
+        projectName={projectName}
+        projectId={projectId}
+        mode={mode}
+        onModeChange={onModeChange}
+        viewSwitcher={viewSwitcher}
+        highlight={highlight}
+        toggleHighlight={toggleHighlight}
+        setHighlight={setHighlight}
+        branchFilter={branchFilter}
+        setBranchFilter={setBranchFilter}
+        branchNames={branchNames}
+        hasMainCommits={hasMainCommits}
+        hasBranchCommits={hasBranchCommits}
+        onShowMemoryModal={() => setShowMemoryModal(true)}
+        onShowImportDialog={() => setShowImportDialog(true)}
+        onAutoLayout={handleAutoLayout}
+        onAddNode={() => handleAddNode('unit')}
+        isLayouting={isLayouting}
+        isPending={isPending}
+        nodeCount={nodes.length}
+      />
 
       <div
         ref={canvasRef}
@@ -1145,6 +611,18 @@ function CanvasWorkspaceInner({
             });
           }}
           onNodeDoubleClick={(_, node) => {
+            const data = node.data as import('@/types/nodes').CanvasNodeData;
+            // Committed commits → navigate to full-page detail view
+            if (
+              data.commitStatus === 'committed' &&
+              data.commitHash &&
+              projectId
+            ) {
+              router.push(
+                `/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`
+              );
+              return;
+            }
             openNodeModal(node.id, 'commit');
           }}
           onNodeContextMenu={handleNodeContextMenu}
@@ -1154,7 +632,7 @@ function CanvasWorkspaceInner({
             if (highlight?.mode === 'node') {
               setHighlight(null);
             }
-            setContextMenu(null);
+            closeContextMenu();
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
@@ -1291,7 +769,7 @@ function CanvasWorkspaceInner({
           x={contextMenu.x}
           y={contextMenu.y}
           groups={contextMenu.groups}
-          onClose={() => setContextMenu(null)}
+          onClose={closeContextMenu}
         />
       )}
       <CanvasStatusBar />
@@ -1413,7 +891,7 @@ function CanvasWorkspaceInner({
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[var(--text-secondary)]">Command palette</span>
                   <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    ⌘K
+                    {'\u2318'}K
                   </kbd>
                 </div>
               </div>
@@ -1429,7 +907,7 @@ function CanvasWorkspaceInner({
                   <span className="text-xs text-[var(--text-secondary)]">Select all</span>
                   <div className="flex items-center gap-1">
                     <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      ⌘A
+                      {'\u2318'}A
                     </kbd>
                   </div>
                 </div>
@@ -1447,7 +925,7 @@ function CanvasWorkspaceInner({
                     </kbd>
                     <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
                     <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      ⇧Tab
+                      {'\u21E7'}Tab
                     </kbd>
                   </div>
                 </div>
@@ -1482,7 +960,7 @@ function CanvasWorkspaceInner({
                   <span className="text-xs text-[var(--text-secondary)]">Delete selected node</span>
                   <div className="flex items-center gap-1">
                     <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      ⌫
+                      {'\u232B'}
                     </kbd>
                     <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
                     <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
@@ -1493,7 +971,7 @@ function CanvasWorkspaceInner({
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[var(--text-secondary)]">Toggle sidebar</span>
                   <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    ⌘\
+                    {'\u2318'}\
                   </kbd>
                 </div>
               </div>

@@ -12,11 +12,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { E2ETestCard } from '@/components/optimiser/E2ETestCard';
 import { LeafSelector } from '@/components/optimiser/LeafSelector';
 import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
 import { RunsTable } from '@/components/optimiser/RunsTable';
+import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { showToast } from '@/components/Toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import {
   checkRunnerHealth,
   createDeployAgent,
@@ -300,10 +302,7 @@ function DeployPageContent() {
           ) : (
             <div className="divide-y">
               {deployAgents.map((agent) => (
-                <div
-                  key={agent.deploy_agent_id}
-                  className="flex items-center gap-3 py-2 text-sm"
-                >
+                <div key={agent.deploy_agent_id} className="flex items-center gap-3 py-2 text-sm">
                   <span className="min-w-0 shrink-0 font-medium">{agent.name}</span>
                   <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                     {agent.endpoint}
@@ -414,6 +413,22 @@ function RecentRunsSection({
   filterOptions: { models: string[]; prompt_versions: string[] };
   onFilterChange: (model: string | null) => void;
 }) {
+  const runIds = useMemo(() => runs.slice(0, 15).map((r) => r.run_id), [runs]);
+
+  const { activeId: activeRunId } = useKeyboardNavigation({
+    ids: runIds,
+    onSelect: (id) => {
+      if (id) {
+        const el = document.querySelector(`[data-run-id="${id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    },
+    onAction: (id) => {
+      router.push(`/deploy/eval/${id}`);
+    },
+    enabled: runs.length > 0,
+  });
+
   const handleModelChange = (value: string) => {
     const newModel = value === 'all' ? null : value;
     onFilterChange(newModel);
@@ -440,6 +455,14 @@ function RecentRunsSection({
           </Select>
         </div>
         <div className="flex items-center gap-2">
+          <KeyboardHintBar
+            hints={[
+              { key: 'j k', label: 'navigate' },
+              { key: 'o', label: 'open' },
+              { key: 'esc', label: 'deselect' },
+            ]}
+          />
+          <span className="h-4 w-px bg-[var(--stroke-divider)]" />
           <Button variant="outline" size="sm" onClick={() => router.push('/deploy/compare')}>
             <GitCompare className="h-4 w-4" />
             Compare
@@ -451,7 +474,7 @@ function RecentRunsSection({
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        <RunsTable runs={runs} agents={agents} maxRows={15} />
+        <RunsTable runs={runs} agents={agents} maxRows={15} activeRunId={activeRunId} />
       </CardContent>
     </Card>
   );

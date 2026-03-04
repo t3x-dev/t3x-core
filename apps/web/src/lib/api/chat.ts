@@ -1,0 +1,129 @@
+/**
+ * Chat/LLM integration API
+ */
+
+import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+}
+
+export interface ChatResponse {
+  content: string;
+  model: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  finish_reason?: string;
+}
+
+export interface ChatStreamEvent {
+  type: 'token' | 'done' | 'error';
+  content?: string;
+  model?: string;
+  message?: string;
+}
+
+export interface ChatProvidersResponse {
+  providers: string[];
+  default: string;
+}
+
+/**
+ * Get available chat providers
+ */
+export async function getChatProviders(): Promise<ChatProvidersResponse> {
+  const res = await fetchWithTimeout(`${API_V1}/chat/providers`);
+  return handleResponse<ChatProvidersResponse>(res);
+}
+
+/**
+ * Non-streaming chat
+ */
+export async function chat(request: ChatRequest): Promise<ChatResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    },
+    120000
+  ); // 2 minute timeout for LLM
+  return handleResponse<ChatResponse>(res);
+}
+
+/**
+ * Streaming chat - returns async generator for SSE events
+ */
+export async function* chatStream(
+  request: ChatRequest
+): AsyncGenerator<ChatStreamEvent, void, unknown> {
+  // Call API server directly
+  const res = await fetch(`${API_V1}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({
+      error: {
+        code: 'CHAT_ERROR',
+        message: `Server returned HTTP ${res.status} with non-JSON body`,
+      },
+    }));
+    throw new ApiError(
+      errorData.error?.code || 'CHAT_ERROR',
+      errorData.error?.message || `Chat failed: HTTP ${res.status}`
+    );
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new ApiError('CHAT_ERROR', 'No response body');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE events: data: {...}\n\n
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === '[DONE]') continue;
+
+        try {
+          const event = JSON.parse(dataStr) as ChatStreamEvent;
+          yield event;
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}

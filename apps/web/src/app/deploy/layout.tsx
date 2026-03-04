@@ -31,10 +31,12 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Shared Header */}
-      <header className="flex items-center justify-between border-b px-[var(--space-page)] py-[var(--space-group)]">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
         <div className="flex items-center gap-2">
-          <Rocket className="h-5 w-5" />
-          <h1 className="text-2xl font-bold tracking-tight">Deploy &amp; Monitor</h1>
+          <Rocket size={16} className="text-[var(--text-secondary)]" />
+          <h1 className="text-[14px] font-semibold text-[var(--text-primary)]">
+            Deploy &amp; Monitor
+          </h1>
         </div>
         <div>
           {loading ? (
@@ -66,7 +68,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
       </header>
 
       {/* Page Content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-hidden">{children}</main>
     </div>
   );
 }
