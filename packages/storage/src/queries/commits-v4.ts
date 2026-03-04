@@ -416,7 +416,6 @@ export async function findCommitV4History(
 
     const commit = commitMap.get(currentHash);
     if (!commit) {
-      console.warn(`[findCommitV4History] Commit not found: ${currentHash}, skipping`);
       continue;
     }
 

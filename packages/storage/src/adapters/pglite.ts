@@ -607,9 +607,11 @@ async function initializeSchema(client: PGlite): Promise<void> {
       draft_id TEXT NOT NULL,
       sp_id TEXT NOT NULL,
       action TEXT NOT NULL,
+      original_text TEXT,
       inference_type TEXT,
       confidence REAL,
       zone TEXT,
+      low_coverage BOOLEAN DEFAULT FALSE,
       edited_text TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );

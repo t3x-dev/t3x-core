@@ -17,7 +17,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CommitV4, Sentence } from '@t3x/core';
+import type { CommitV4, ConflictReport, Sentence } from '@t3x/core';
 import { detectConflicts } from '@t3x/core';
 import {
   createCommitV4,
@@ -29,11 +29,13 @@ import {
   findCommitV4History,
   findLeavesByCommit,
   getCommitsV4ByHashes,
+  insertConflict,
   MainBranchLinearityError,
   ParentNotFoundErrorV4,
   searchSimilarSentences,
   updateBranchHead,
   updateCommitV4Position,
+  upsertSentenceVectorsBatch,
   validateMainBranchLinearity,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
@@ -52,6 +54,37 @@ import { pushNotification } from './notifications.openapi';
 
 export const commitsV4Routes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+// ============================================================
+// Shared conflict schema (used by both create response and check-conflicts endpoint)
+// ============================================================
+
+const ConflictCandidateSchema = z.object({
+  new_sentence_id: z.string(),
+  new_sentence_text: z.string(),
+  existing_sentence_id: z.string(),
+  existing_sentence_text: z.string(),
+  existing_commit_hash: z.string(),
+  cosine: z.number(),
+  jaccard: z.number(),
+});
+
+// ============================================================
+// Create-commit response: commit data + optional conflict report
+// ============================================================
+
+const CreateCommitV4WithConflictsResponse = z.object({
+  commit: CommitV4Response,
+  conflicts: z
+    .object({
+      conflicts: z.array(ConflictCandidateSchema),
+      checked_count: z.number(),
+    })
+    .nullable()
+    .describe(
+      'Conflict report from auto-detection. null when embedder is not configured or detection is skipped.'
+    ),
 });
 
 // ============================================================
@@ -102,6 +135,11 @@ const createCommitV4Route = createRoute({
 - \`turn_window\`, \`facet_snapshot\`: V3 fields, not allowed
 - If \`schema\` is provided, must be 't3x/commit/v4'
 
+**Auto Conflict Detection:**
+- If an embedding provider is configured, conflict detection runs automatically after commit creation
+- Conflicts are returned in the \`conflicts\` field alongside the commit data
+- If no embedder is configured, \`conflicts\` is null
+
 **Error Codes:**
 - \`COMMIT_VERSION_UNSUPPORTED\`: V3 payload or non-V4 schema detected
 - \`INVALID_REQUEST\`: Missing required fields or constraints at commit level
@@ -121,7 +159,7 @@ const createCommitV4Route = createRoute({
       description: 'Commit created successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(CommitV4Response),
+          schema: SuccessResponseSchema(CreateCommitV4WithConflictsResponse),
         },
       },
     },
@@ -565,7 +603,117 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
         });
     }
 
-    return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
+    // ============================================================
+    // Auto conflict detection (best-effort, inline)
+    // ============================================================
+    // Populate sentence vectors and run conflict detection if embedder is available.
+    // Errors are swallowed — conflict detection is non-critical.
+    let conflictReport: ConflictReport | null = null;
+
+    const embedder = getEmbedder();
+    if (embedder && finalSentences.length > 0) {
+      try {
+        // 1. Embed new sentences
+        const sentenceTexts = finalSentences.map((s) => s.text);
+        const sentenceEmbeddings = await embedder.encode(sentenceTexts);
+
+        // 2. Persist sentence vectors for future conflict detection
+        await upsertSentenceVectorsBatch(
+          db,
+          finalSentences.map((s, i) => ({
+            id: s.id,
+            projectId: body.project_id,
+            commitHash: commit.hash,
+            text: s.text,
+            embedding: sentenceEmbeddings[i],
+            modelId: embedder.id,
+          }))
+        );
+
+        // 3. Search for similar existing sentences (excluding this commit)
+        const existingTextsToEmbed: Array<{
+          id: string;
+          text: string;
+          commit_hash: string;
+        }> = [];
+        const seen = new Set<string>();
+
+        for (let i = 0; i < finalSentences.length; i++) {
+          const results = await searchSimilarSentences(
+            db,
+            body.project_id,
+            sentenceEmbeddings[i],
+            10,
+            commit.hash
+          );
+          for (const r of results) {
+            if (!seen.has(r.id)) {
+              seen.add(r.id);
+              existingTextsToEmbed.push({
+                id: r.id,
+                text: r.text,
+                commit_hash: r.commit_hash,
+              });
+            }
+          }
+        }
+
+        // 4. Re-encode existing sentences and run conflict detection
+        if (existingTextsToEmbed.length > 0) {
+          const existingEmbeddings = await embedder.encode(existingTextsToEmbed.map((r) => r.text));
+          const existingSentences = existingTextsToEmbed.map((r, i) => ({
+            ...r,
+            embedding: existingEmbeddings[i],
+          }));
+
+          conflictReport = await detectConflicts(finalSentences, existingSentences, embedder);
+
+          // 5. Persist detected conflicts to knowledge_conflicts table (fire-and-forget)
+          if (conflictReport.conflicts.length > 0) {
+            Promise.all(
+              conflictReport.conflicts.map((conflict) =>
+                insertConflict(db, {
+                  project_id: body.project_id,
+                  new_sentence_id: conflict.new_sentence_id,
+                  new_commit_hash: commit.hash,
+                  existing_sentence_id: conflict.existing_sentence_id,
+                  existing_commit_hash: conflict.existing_commit_hash,
+                  cosine: conflict.cosine,
+                  jaccard: conflict.jaccard,
+                })
+              )
+            ).catch((conflictErr) => {
+              pinoLogger.warn({ err: conflictErr }, 'failed to persist detected conflicts');
+            });
+
+            // Notify about detected conflicts
+            pushNotification({
+              type: 'conflict.detected',
+              title: 'Knowledge Conflicts Detected',
+              message: `${conflictReport.conflicts.length} potential conflict${conflictReport.conflicts.length === 1 ? '' : 's'} found in commit`,
+              project_id: body.project_id,
+              ref_id: commit.hash,
+            });
+          }
+        } else {
+          conflictReport = { conflicts: [], checked_count: finalSentences.length };
+        }
+      } catch (conflictErr) {
+        // Non-fatal: log and continue with null conflict report
+        pinoLogger.warn({ err: conflictErr }, 'auto conflict detection failed');
+      }
+    }
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: toApiCommit(commit),
+          conflicts: conflictReport,
+        },
+      },
+      201
+    );
   } catch (err) {
     // Handle main branch linearity violation
     if (err instanceof MainBranchLinearityError) {
@@ -701,16 +849,6 @@ commitsV4Routes.openapi(deleteCommitV4Route, async (c) => {
 // ============================================================
 // POST /v1/commits-v4/:hash/check-conflicts — Detect cross-conversation conflicts
 // ============================================================
-
-const ConflictCandidateSchema = z.object({
-  new_sentence_id: z.string(),
-  new_sentence_text: z.string(),
-  existing_sentence_id: z.string(),
-  existing_sentence_text: z.string(),
-  existing_commit_hash: z.string(),
-  cosine: z.number(),
-  jaccard: z.number(),
-});
 
 const checkConflictsRoute = createRoute({
   method: 'post',

@@ -338,6 +338,7 @@ export interface SemanticPointAPI {
   inherited_from?: string;
   evidence: LocatedEvidenceAPI[];
   confidence?: number;
+  low_coverage?: boolean;
   position: number;
   staged: boolean;
 }

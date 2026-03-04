@@ -186,10 +186,8 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     merkleRoots[commit.hash] = tree.root;
   }
 
-  const allErrors = [...hashMismatch, ...parentNotFound, ...other];
-
   return {
-    valid: allErrors.length === 0,
+    valid: hashMismatch.length === 0 && parentNotFound.length === 0,
     total: commits.length,
     verified_depth: maxDepth,
     entry_points: entryPoints,

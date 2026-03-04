@@ -139,8 +139,6 @@ describe('getMergeChecks', () => {
               target: makeSentence('s2', 'Target version'),
               wordDiff: [],
               // no resolution set
-              sourceConstraints: [],
-              targetConstraints: [],
             },
           ],
         }),
@@ -163,8 +161,6 @@ describe('getMergeChecks', () => {
               target: makeSentence('s2', 'Target version'),
               wordDiff: [],
               resolution: 'source',
-              sourceConstraints: [],
-              targetConstraints: [],
             },
           ],
         }),
@@ -186,8 +182,6 @@ describe('getMergeChecks', () => {
               target: makeSentence('s2', 'Target version'),
               wordDiff: [],
               // no standard resolution
-              sourceConstraints: [],
-              targetConstraints: [],
             },
           ],
         }),
@@ -292,21 +286,17 @@ describe('getMergeChecks', () => {
               target: makeSentence('s4', 'Target alternative'),
               wordDiff: [],
               resolution: 'source',
-              sourceConstraints: [],
-              targetConstraints: [],
             },
           ],
           onlyInSource: [
             {
               sentence: makeSentence('s5', 'Source only'),
-              constraints: [],
               keep: true,
             },
           ],
           onlyInTarget: [
             {
               sentence: makeSentence('s6', 'Target only'),
-              constraints: [],
               keep: false,
             },
           ],
@@ -380,14 +370,11 @@ describe('getMergeChecks', () => {
               source: makeSentence('s2', 'src'),
               target: makeSentence('s3', 'tgt'),
               wordDiff: [],
-              sourceConstraints: [],
-              targetConstraints: [],
             },
           ],
           onlyInSource: [
             {
               sentence: makeSentence('s4', 'unique src'),
-              constraints: [],
               keep: true,
             },
           ],

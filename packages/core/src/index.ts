@@ -63,6 +63,7 @@ export {
   type DiffStats,
   DiffType,
   diffCommits,
+  diffCommitsWithEmbeddings,
   EQUIVALENT_THRESHOLD,
   hungarian,
   incrementalDiffCommits,
@@ -74,21 +75,26 @@ export {
   type SegmentMatch,
   type SentencePair,
   tokenize,
+  tokenizeForMatching,
   type WordDiffSegment,
   wordDiff,
 } from './diff';
 // Extractors (Ring 1/2/3)
 export {
+  type AdaptiveConfig,
+  type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
   // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
+  // Incremental Extraction (LLM pipeline)
+  buildAdaptiveSection,
   // LLM Extraction
   buildExtractionPrompt,
-  // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   buildStyleSeed,
+  computeAdaptiveConfig,
   computeAdaptiveThresholds,
   createEmptyRing1,
   createEmptyRing2,
@@ -158,6 +164,10 @@ export {
   buildCorrectivePrompt,
   // Generation (GEN-1)
   buildLeafPrompt,
+  // Constraint Suggestion
+  buildRound1Prompt,
+  buildRound2Prompt,
+  buildRound3Prompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
   type ConstraintSuggestionResult,
@@ -171,6 +181,7 @@ export {
   type GenerateOptions,
   type GenerateResult,
   GenerationError,
+  type GenerationMode,
   generateAssertionId,
   // Generation (GEN-2)
   generateLeafOutput,
@@ -179,15 +190,17 @@ export {
   getTypeInstructions,
   isGenerationConfigured,
   type LeafTemplate,
-  // Constraint Suggestion
+  type ModeGenerateOptions,
   type MultiRoundOptions,
   type MultiRoundResult,
+  modeGenerate,
   multiRoundGenerate,
   type RoundConfig,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
   type SemanticThreshold,
+  type StylePreferences,
   type SuggestConstraintsOptions,
   type SuggestedConstraint,
   suggestConstraints,
@@ -197,6 +210,7 @@ export {
   // Validation (VAL-1, VAL-2)
   validateConstraints,
   validateConstraintsExactOnly,
+  validateConstraintsSimple,
   validateTemplateSyntax,
 } from './leaf';
 // LLM Provider (interface)
@@ -205,16 +219,21 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
-// Merge (Two-way merge for combining two commits - Issue #71)
+// Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]
 export {
   executeMerge,
+  executeThreeWayMerge,
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
   type MergeSuggestion,
   prepareMerge,
+  prepareMergeWithEmbeddings,
+  prepareThreeWayMerge,
   suggestMerge,
+  type ThreeWayConflict,
+  type ThreeWayMergeResult,
 } from './merge';
 // Provider interfaces and implementations
 export {

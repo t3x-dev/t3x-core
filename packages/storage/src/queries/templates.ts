@@ -102,7 +102,8 @@ export async function listTemplates(db: AnyDB, opts: ListTemplatesOptions = {}) 
     conditions.push(eq(templates.leafType, opts.leaf_type));
   }
   if (opts.search) {
-    const pattern = `%${opts.search}%`;
+    const escaped = opts.search.replace(/[%_\\]/g, '\\$&');
+    const pattern = `%${escaped}%`;
     conditions.push(or(ilike(templates.title, pattern), ilike(templates.description, pattern)));
   }
 

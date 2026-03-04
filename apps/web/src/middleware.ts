@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /** Paths that are always public (even when auth is enabled) */
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 
 export function middleware(request: NextRequest) {
   // Auth is DISABLED by default (safe for local dev without .env).

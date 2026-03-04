@@ -134,6 +134,7 @@ export function DiffFullScreen({
         {/* Stats Bar */}
         <DiffStatsBar
           identical={diffData.stats.sameCount}
+          equivalent={diffData.stats.equivalentCount ?? 0}
           modified={diffData.stats.modifiedCount}
           added={diffData.stats.addedCount}
           removed={diffData.stats.removedCount}

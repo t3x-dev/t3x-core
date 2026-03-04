@@ -5,7 +5,7 @@
  * Fire-and-forget — errors are logged but don't propagate.
  */
 
-import { isInternalUrl } from './ssrf';
+import { isInternalUrlResolved } from './ssrf';
 
 interface RecipeStep {
   action: 'send_webhook' | 'run_eval' | 'export_report';
@@ -52,7 +52,7 @@ export async function executeRecipe(
       switch (step.action) {
         case 'send_webhook': {
           const url = step.config.url as string;
-          if (url && isInternalUrl(url)) {
+          if (url && (await isInternalUrlResolved(url))) {
             results.push({
               action: step.action,
               success: false,

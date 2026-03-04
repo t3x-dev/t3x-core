@@ -130,7 +130,6 @@ export {
 export {
   abandonDraftV3,
   ConflictError,
-  NotFoundError,
   commitDraftV3,
   deleteDraftV3,
   findAutoDraftsByConversation,
@@ -140,6 +139,7 @@ export {
   insertDraftV3,
   type ListDraftV3Options,
   listDraftV3ByProject,
+  NotFoundError,
   promoteDraftV3,
   type UpdateDraftV3Input,
   updateDraftV3,
@@ -147,8 +147,12 @@ export {
 } from './drafts-v3';
 // Extraction Feedback (Anchoring L4)
 export {
+  type AdaptiveFeedbackStats,
+  type CosineBucketRow,
   type ExtractionFeedbackStats,
+  getAdaptiveFeedbackStats,
   getExtractionFeedbackStats,
+  getFeedbackByCosineBucket,
   type InsertExtractionFeedbackInput,
   insertExtractionFeedback,
   listExtractionFeedback,
@@ -208,18 +212,6 @@ export {
   updateLeafOutput,
   updateLeafRunnerAssertions,
 } from './leaves';
-// Notifications (persistent alerts, Item 16)
-export {
-  type CreateNotificationInput,
-  deleteOldNotifications,
-  getUnreadCount,
-  insertNotification,
-  listNotifications as listNotificationsFromDB,
-  type ListNotificationsOptions,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type NotificationType,
-} from './notifications';
 // Merge Drafts (Pending merge operations)
 export {
   type CreateMergeDraftInput,
@@ -245,6 +237,18 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+// Notifications (persistent alerts, Item 16)
+export {
+  type CreateNotificationInput,
+  deleteOldNotifications,
+  getUnreadCount,
+  insertNotification,
+  type ListNotificationsOptions,
+  listNotifications as listNotificationsFromDB,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationType,
+} from './notifications';
 // Pins (V4 - source selection for commits and context)
 export {
   createPin,
@@ -353,14 +357,6 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
-// Users (OAuth authentication)
-export {
-  type CreateUserInput,
-  createUser,
-  findOrCreateUser,
-  findUserById,
-  findUserByProvider,
-} from './users';
 // Turns
 export {
   type CreateTurnInput,
@@ -375,6 +371,14 @@ export {
   type ListTurnsOptions,
   TurnWindowError,
 } from './turns';
+// Users (OAuth authentication)
+export {
+  type CreateUserInput,
+  createUser,
+  findOrCreateUser,
+  findUserById,
+  findUserByProvider,
+} from './users';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,

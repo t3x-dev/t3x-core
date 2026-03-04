@@ -57,8 +57,6 @@ function createPair(overrides?: Partial<MergeSimilarPair>): MergeSimilarPair {
       { type: 'added', text: '$3500' },
       { type: 'unchanged', text: 'per month.' },
     ],
-    sourceConstraints: [],
-    targetConstraints: [],
     resolution: undefined,
     ...overrides,
   };
@@ -115,39 +113,25 @@ describe('MergeSuggestion Display (S8)', () => {
     expect(suggestion.reasoning).toBe('');
   });
 
-  test('pair with source constraints shows constraint info', () => {
+  test('pair with suggestion shows suggestion info', () => {
     const pair = createPair({
-      sourceConstraints: [
-        {
-          id: 'c1',
-          source_sentence_id: 's1',
-          type: 'require',
-          match: 'exact',
-          value: '$3000',
-        },
-      ],
+      suggestion: {
+        suggestion: 'Budget is approximately $3250 per month.',
+        reasoning: 'Average of both values',
+      },
     });
 
-    expect(pair.sourceConstraints.length).toBe(1);
-    expect(pair.sourceConstraints[0].value).toBe('$3000');
-    expect(pair.sourceConstraints[0].type).toBe('require');
+    expect(pair.suggestion).toBeDefined();
+    expect(pair.suggestion?.suggestion).toContain('$3250');
+    expect(pair.suggestion?.reasoning).toContain('Average');
   });
 
-  test('pair with target constraints shows constraint info', () => {
+  test('pair with null suggestion is valid', () => {
     const pair = createPair({
-      targetConstraints: [
-        {
-          id: 'c2',
-          source_sentence_id: 's2',
-          type: 'require',
-          match: 'exact',
-          value: '$3500',
-        },
-      ],
+      suggestion: null,
     });
 
-    expect(pair.targetConstraints.length).toBe(1);
-    expect(pair.targetConstraints[0].value).toBe('$3500');
+    expect(pair.suggestion).toBeNull();
   });
 
   test('resolution states are source or target', () => {

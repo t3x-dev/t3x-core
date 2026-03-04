@@ -17,7 +17,7 @@ import { restoreFromCfpack } from '@t3x/storage/backup';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { jsonError } from '../lib/response';
-import { isInternalUrl } from '../lib/ssrf';
+import { isInternalUrlResolved } from '../lib/ssrf';
 import {
   checkDuplicate,
   computeContentHash,
@@ -854,7 +854,7 @@ importRoutes.post('/v1/import/url/stream', async (c) => {
   if (!url || typeof url !== 'string') {
     return jsonError(c, 'INVALID_REQUEST', 'url is required', 400);
   }
-  if (isInternalUrl(url)) {
+  if (await isInternalUrlResolved(url)) {
     return jsonError(c, 'INVALID_REQUEST', 'URL targets a blocked internal address', 400);
   }
 

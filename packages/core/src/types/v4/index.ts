@@ -363,6 +363,9 @@ export interface LeafConfig {
   /** Max tokens for generation */
   max_tokens?: number;
 
+  /** Semantic similarity threshold for constraint validation (0-1) */
+  semantic_threshold?: number;
+
   /** Allow extension */
   [key: string]: unknown;
 }
@@ -620,7 +623,7 @@ export interface CreatePinInput {
  * Word-level diff segment for UI display.
  */
 export interface WordDiffSegment {
-  type: 'equal' | 'insert' | 'delete';
+  type: 'unchanged' | 'added' | 'removed';
   text: string;
 }
 
@@ -968,6 +971,8 @@ export interface SemanticPoint {
   inherited_from?: string;
   evidence: LocatedEvidence[];
   confidence?: number;
+  /** True when evidence covers <60% of primary turn content */
+  low_coverage?: boolean;
   position: number;
   staged: boolean;
 }

@@ -265,17 +265,13 @@ function transformPrepared(apiPrepared: Record<string, unknown>): Merge2WayResul
       target: transformSentence(pair.target),
       wordDiff: pair.wordDiff as Merge2WayResult['similarPairs'][0]['wordDiff'],
       resolution: pair.resolution,
-      sourceConstraints: [],
-      targetConstraints: [],
     })),
     onlyInSource: prepared.onlyInSource.map((item) => ({
       sentence: transformSentence(item.sentence),
-      constraints: [],
       keep: item.keep,
     })),
     onlyInTarget: prepared.onlyInTarget.map((item) => ({
       sentence: transformSentence(item.sentence),
-      constraints: [],
       keep: item.keep,
     })),
   };

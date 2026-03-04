@@ -11,7 +11,7 @@ import { findRecipesByEvent, findWebhooksByEvent } from '@t3x/storage/pglite';
 import { pinoLogger } from '../middleware/logger';
 import { getDB } from './db';
 import { executeRecipe } from './recipe-executor';
-import { isInternalUrl } from './ssrf';
+import { isInternalUrlResolved } from './ssrf';
 
 export interface WebhookEvent {
   event: string;
@@ -53,7 +53,7 @@ class WebhookDispatcher {
 
       const promises = matchingWebhooks.map(async (wh) => {
         try {
-          if (isInternalUrl(wh.url)) {
+          if (await isInternalUrlResolved(wh.url)) {
             pinoLogger.warn(
               { webhook_id: wh.webhook_id, url: wh.url, event: evt.event },
               'Webhook delivery blocked: URL targets internal address'
@@ -126,7 +126,7 @@ class WebhookDispatcher {
       if (matchingRecipes.length === 0) return;
 
       const webhookDispatch = async (url: string, payload: unknown): Promise<void> => {
-        if (isInternalUrl(url)) {
+        if (await isInternalUrlResolved(url)) {
           pinoLogger.warn(
             { url, event: evt.event },
             'Recipe webhook dispatch blocked: URL targets internal address'

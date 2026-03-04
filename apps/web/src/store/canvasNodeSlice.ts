@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
 import type { CanvasState, NodeSlice } from './canvasStoreTypes';
 import {
+  backflowEdgeStyle,
   edgeStyle,
   edgeType,
   resolveLatestMainUnitId,
@@ -240,6 +241,27 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       }
 
       const edges: Edge[] = [];
+
+      // Build backflow edges: Leaf → parent Commit for leaves with assertion lessons.
+      // These represent feedback flowing back from output validation to the knowledge graph.
+      // Note: leaf nodes are currently embedded inside commit nodes; these edges will
+      // render once leaf nodes become standalone canvas nodes in a future iteration.
+      const nodeIdSet = new Set(nodes.map((n) => n.id));
+      for (const leaf of projectLeaves) {
+        const hasLessons = leaf.assertions?.some((a) => a.lesson && a.lesson.trim() !== '');
+        if (hasLessons && nodeIdSet.has(leaf.commit_hash)) {
+          edges.push({
+            id: `backflow-${leaf.id}-${leaf.commit_hash}`,
+            source: leaf.id,
+            target: leaf.commit_hash,
+            type: 'default',
+            animated: true,
+            style: backflowEdgeStyle,
+            data: { edgeType: 'backflow', leafId: leaf.id },
+          });
+        }
+      }
+
       const commitHashes = new Set(commits.map((c) => c.commit_hash));
 
       // Build unit→unit edges based on commit parent relationships

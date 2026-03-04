@@ -13,7 +13,7 @@ import type { CfpackData } from './backup';
  * Fix 10: Represent individual import errors instead of silently swallowing them.
  */
 export interface RestoreError {
-  type: 'conversation' | 'turn';
+  type: 'conversation' | 'turn' | 'warning';
   id: string;
   error: string;
 }
@@ -84,6 +84,20 @@ export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // Warn about skipped V4 data (commits, leaves, pins are exported but not yet restored)
+  const skippedTypes: string[] = [];
+  if (cfpack.commits_v3?.length) skippedTypes.push(`${cfpack.commits_v3.length} commits_v3`);
+  if (cfpack.commits_v4?.length) skippedTypes.push(`${cfpack.commits_v4.length} commits_v4`);
+  if (cfpack.leaves?.length) skippedTypes.push(`${cfpack.leaves.length} leaves`);
+  if (cfpack.pins?.length) skippedTypes.push(`${cfpack.pins.length} pins`);
+  if (skippedTypes.length > 0) {
+    errors.push({
+      type: 'warning',
+      id: newProjectId,
+      error: `Skipped data not yet supported by restore: ${skippedTypes.join(', ')}`,
+    });
   }
 
   return {

@@ -7,11 +7,40 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { diffCommits } from '../../diff/diffCommits';
+import { diffCommits, diffCommitsWithEmbeddings } from '../../diff/diffCommits';
+import type { EmbeddingProvider } from '../../providers/embedding/base';
 import type { DiffableSentence } from '../../diff/types';
 
 function sent(id: string, text: string): DiffableSentence {
   return { id, text };
+}
+
+/** Stub embedding provider that uses character overlap as a fake "embedding" */
+class StubEmbedder implements EmbeddingProvider {
+  readonly id = 'stub:test';
+  readonly dim = 3;
+
+  async encode(texts: string[]): Promise<number[][]> {
+    // Simple 3-dim "embedding" based on text properties
+    return texts.map((t) => {
+      const words = t.toLowerCase().split(/\s+/);
+      return [words.length, t.length / 100, words.filter((w) => w.length > 4).length];
+    });
+  }
+
+  similarity(a: number[], b: number[]): number {
+    // Cosine similarity
+    let dot = 0;
+    let na = 0;
+    let nb = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    const denom = Math.sqrt(na) * Math.sqrt(nb);
+    return denom === 0 ? 0 : dot / denom;
+  }
 }
 
 describe('diffCommits', () => {
@@ -237,6 +266,66 @@ describe('diffCommits', () => {
         result.onlyInSource.length +
         result.onlyInTarget.length;
       expect(total).toBe(1002);
+    });
+  });
+
+  // ===========================================================================
+  // diffCommitsWithEmbeddings
+  // ===========================================================================
+  describe('diffCommitsWithEmbeddings', () => {
+    it('falls back to Jaccard-only when no embedding provider', async () => {
+      const source = [sent('s1', 'The cat sat on the mat'), sent('s2', 'Dogs like bones')];
+      const target = [sent('t1', 'The cat sat on the mat'), sent('t2', 'Cats enjoy playing')];
+
+      const result = await diffCommitsWithEmbeddings(source, target);
+      // Should behave identically to sync diffCommits
+      const syncResult = diffCommits(source, target);
+      expect(result.identical.length).toBe(syncResult.identical.length);
+      expect(result.similar.length).toBe(syncResult.similar.length);
+      expect(result.onlyInSource.length).toBe(syncResult.onlyInSource.length);
+      expect(result.onlyInTarget.length).toBe(syncResult.onlyInTarget.length);
+    });
+
+    it('returns valid diff result with embedding provider', async () => {
+      const embedder = new StubEmbedder();
+      const source = [
+        sent('s1', 'The user prefers window seats'),
+        sent('s2', 'Budget is around two thousand dollars'),
+      ];
+      const target = [
+        sent('t1', 'The user wants window seats'),
+        sent('t2', 'Budget is around two thousand dollars'),
+      ];
+
+      const result = await diffCommitsWithEmbeddings(source, target, embedder);
+
+      // t2 is exact match
+      expect(result.identical.length).toBe(1);
+      expect(result.identical[0].text).toBe('Budget is around two thousand dollars');
+
+      // s1/t1 should be matched as a similar pair (shared words: "the user window seats")
+      expect(result.similar.length).toBe(1);
+
+      // No leftover sentences
+      expect(result.onlyInSource.length).toBe(0);
+      expect(result.onlyInTarget.length).toBe(0);
+    });
+
+    it('preserves position metadata through embedding path', async () => {
+      const embedder = new StubEmbedder();
+      const source = [
+        sent('s1', 'First sentence here'),
+        sent('s2', 'Second sentence there'),
+        sent('s3', 'Third unique sentence'),
+      ];
+      const target = [sent('t1', 'First sentence here'), sent('t2', 'Fourth new sentence')];
+
+      const result = await diffCommitsWithEmbeddings(source, target, embedder);
+
+      // Identical sentences should have position
+      for (const s of result.identical) {
+        expect(s.position).toBeDefined();
+      }
     });
   });
 });

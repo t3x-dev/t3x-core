@@ -6,12 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { lightStem, tokenize, tokenizeForMatching } from '../../diff/tokenize';
 
 describe('tokenize', () => {
-  it('splits on whitespace and lowercases', () => {
-    expect(tokenize('Budget is $3000')).toEqual(['budget', 'is', '$3000']);
+  it('splits on word boundaries preserving case', () => {
+    expect(tokenize('Budget is $3000')).toEqual(['Budget', 'is', '3000']);
   });
 
-  it('preserves punctuation attached to words', () => {
-    expect(tokenize('Hello, World!')).toEqual(['hello,', 'world!']);
+  it('strips punctuation (isWordLike filter)', () => {
+    expect(tokenize('Hello, World!')).toEqual(['Hello', 'World']);
   });
 
   it('returns empty array for empty string', () => {
@@ -30,16 +30,20 @@ describe('tokenize', () => {
     expect(tokenize('a\tb\nc')).toEqual(['a', 'b', 'c']);
   });
 
-  it('lowercases all tokens', () => {
-    expect(tokenize('ABC DEF')).toEqual(['abc', 'def']);
+  it('preserves original case', () => {
+    expect(tokenize('ABC DEF')).toEqual(['ABC', 'DEF']);
   });
 
   it('handles single word', () => {
-    expect(tokenize('Hello')).toEqual(['hello']);
+    expect(tokenize('Hello')).toEqual(['Hello']);
   });
 
-  it('preserves numbers and special chars', () => {
-    expect(tokenize('$3.14 100%')).toEqual(['$3.14', '100%']);
+  it('preserves numbers, strips currency/percent symbols', () => {
+    expect(tokenize('$3.14 100%')).toEqual(['3.14', '100']);
+  });
+
+  it('handles CJK text (Chinese word boundaries)', () => {
+    expect(tokenize('用户需要登录功能')).toEqual(['用户', '需要', '登录', '功能']);
   });
 });
 

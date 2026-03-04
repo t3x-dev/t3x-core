@@ -1358,9 +1358,11 @@ draftsRoutes.openapi(reviewActionRoute, async (c) => {
         draft_id: draftId,
         sp_id: sp_id,
         action: feedbackAction,
+        original_text: sp.text,
         inference_type: sp.inference_type,
         confidence: sp.confidence,
         zone: sp.zone,
+        low_coverage: sp.low_coverage,
         edited_text: edited_text,
       });
     } catch {

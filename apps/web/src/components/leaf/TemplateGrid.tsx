@@ -1,6 +1,8 @@
 'use client';
 
 import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { listTemplates, type Template } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export interface LeafTemplate {
@@ -12,11 +14,12 @@ export interface LeafTemplate {
   semantic_threshold?: { require: number; exclude: number };
 }
 
-const TEMPLATES: LeafTemplate[] = [
+/** Default/fallback templates used when API is unavailable or returns empty */
+const DEFAULT_TEMPLATES: LeafTemplate[] = [
   {
     type: 'tweet',
     label: 'Tweet',
-    description: '≤280 characters, concise',
+    description: '\u2264280 characters, concise',
     icon: <MessageCircle className="h-5 w-5" />,
     constraints: [
       { type: 'require', match_mode: 'exact', value: 'Must be 280 characters or fewer' },
@@ -58,31 +61,102 @@ const TEMPLATES: LeafTemplate[] = [
   },
 ];
 
+/** Map leaf_type to icon component */
+const ICON_MAP: Record<string, React.ReactNode> = {
+  tweet: <MessageCircle className="h-5 w-5" />,
+  email: <Mail className="h-5 w-5" />,
+  article: <FileText className="h-5 w-5" />,
+  slack: <MessageSquare className="h-5 w-5" />,
+  custom: <PenTool className="h-5 w-5" />,
+};
+
+/** Convert an API Template to a LeafTemplate for the grid */
+function apiTemplateToLeafTemplate(t: Template): LeafTemplate {
+  return {
+    type: t.leaf_type,
+    label: t.title,
+    description: t.description,
+    icon: ICON_MAP[t.leaf_type] ?? <PenTool className="h-5 w-5" />,
+    constraints: t.default_constraints,
+    semantic_threshold: t.semantic_threshold ?? undefined,
+  };
+}
+
 interface TemplateGridProps {
   selected: string | null;
   onSelect: (template: LeafTemplate) => void;
 }
 
 export function TemplateGrid({ selected, onSelect }: TemplateGridProps) {
+  const [templates, setTemplates] = useState<LeafTemplate[]>(DEFAULT_TEMPLATES);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTemplates() {
+      try {
+        const apiTemplates = await listTemplates();
+        if (cancelled) return;
+
+        if (apiTemplates.length > 0) {
+          // Convert API templates and always append "Custom" at the end
+          const converted = apiTemplates.map(apiTemplateToLeafTemplate);
+          // Ensure "custom" option is always present
+          const hasCustom = converted.some((t) => t.type === 'custom');
+          if (!hasCustom) {
+            converted.push(DEFAULT_TEMPLATES[DEFAULT_TEMPLATES.length - 1]);
+          }
+          setTemplates(converted);
+        }
+        // If API returns empty, keep DEFAULT_TEMPLATES (already set as initial state)
+      } catch {
+        // API unavailable — gracefully degrade to hardcoded defaults
+        // DEFAULT_TEMPLATES already set as initial state, nothing to do
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="grid grid-cols-3 gap-2">
-      {TEMPLATES.map((t) => (
-        <button
-          key={t.type}
-          type="button"
-          onClick={() => onSelect(t)}
-          className={cn(
-            'flex flex-col items-center gap-1.5 rounded-lg border p-3 text-center transition-colors hover:bg-accent/50',
-            selected === t.type
-              ? 'ring-2 ring-primary border-primary bg-primary/5'
-              : 'border-border'
-          )}
-        >
-          <div className="text-muted-foreground">{t.icon}</div>
-          <span className="text-sm font-medium">{t.label}</span>
-          <span className="text-[11px] text-muted-foreground leading-tight">{t.description}</span>
-        </button>
-      ))}
+      {isLoading &&
+        DEFAULT_TEMPLATES.map((t) => (
+          <div
+            key={t.type}
+            className="flex flex-col items-center gap-1.5 rounded-lg border border-border p-3 text-center animate-pulse"
+          >
+            <div className="h-5 w-5 rounded bg-muted" />
+            <div className="h-4 w-12 rounded bg-muted" />
+            <div className="h-3 w-16 rounded bg-muted" />
+          </div>
+        ))}
+      {!isLoading &&
+        templates.map((t) => (
+          <button
+            key={t.type}
+            type="button"
+            onClick={() => onSelect(t)}
+            className={cn(
+              'flex flex-col items-center gap-1.5 rounded-lg border p-3 text-center transition-colors hover:bg-accent/50',
+              selected === t.type
+                ? 'ring-2 ring-primary border-primary bg-primary/5'
+                : 'border-border'
+            )}
+          >
+            <div className="text-muted-foreground">{t.icon}</div>
+            <span className="text-sm font-medium">{t.label}</span>
+            <span className="text-[11px] text-muted-foreground leading-tight">{t.description}</span>
+          </button>
+        ))}
     </div>
   );
 }

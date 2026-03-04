@@ -273,7 +273,16 @@ export const DeleteLeafResponse = SuccessResponse(
 // POST /v1/leaves/:id/generate
 export const GenerateLeafOutputRequest = z
   .object({
-    // Future: additional generation options
+    /** Generation mode: 'fast' (1 round), 'standard' (2 rounds), 'thorough' (3 rounds) */
+    mode: z.enum(['fast', 'standard', 'thorough']).optional(),
+    /** Style preferences for thorough mode (Round 3) */
+    style_preferences: z
+      .object({
+        tone: z.string().optional(),
+        length: z.string().optional(),
+        formality: z.string().optional(),
+      })
+      .optional(),
   })
   .optional();
 
@@ -289,6 +298,21 @@ export const GenerateLeafOutputResponse = SuccessResponse(
         attempts: z.number(),
       })
       .optional(),
+    /** Multi-round generation details (present when mode is standard or thorough) */
+    rounds: z
+      .array(
+        z.object({
+          name: z.string(),
+          round_number: z.number(),
+          constraints_passed: z.boolean(),
+          failed_constraints: z.array(z.string()),
+        })
+      )
+      .optional(),
+    /** Total rounds executed */
+    total_rounds: z.number().optional(),
+    /** Generation mode used */
+    mode: z.enum(['fast', 'standard', 'thorough']).optional(),
   })
 );
 
@@ -514,7 +538,7 @@ export type MergeCheckType = z.infer<typeof MergeCheckSchema>;
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WordDiffSegmentSchema = z.object({
-  type: z.enum(['equal', 'insert', 'delete']),
+  type: z.enum(['unchanged', 'added', 'removed']),
   text: z.string(),
 });
 
@@ -750,6 +774,7 @@ export const SemanticPointSchema = z.object({
   inherited_from: z.string().optional(),
   evidence: z.array(LocatedEvidenceSchema),
   confidence: z.number().optional(),
+  low_coverage: z.boolean().optional(),
   position: z.number().int(),
   staged: z.boolean(),
 });

@@ -13,13 +13,13 @@
  */
 
 import { motion } from 'framer-motion';
-import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { promoteDraft as apiPromoteDraft } from '@/lib/api';
+
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
@@ -32,6 +32,7 @@ import { DraftDiffSection } from './DraftDiffSection';
 import { DraftSplitPane } from './DraftSplitPane';
 import { DraftWorkbenchLLM } from './DraftWorkbenchLLM';
 import { ExtractConversationDialog } from './ExtractConversationDialog';
+import { PromotePreviewDialog } from './PromotePreviewDialog';
 import { InstructionEditor } from './InstructionEditor';
 import { PreviewPanel } from './PreviewPanel';
 import { SentenceList } from './SentenceList';
@@ -59,7 +60,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   const readyCountRef = useRef(0);
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [showExtractDialog, setShowExtractDialog] = useState(false);
-  const [promoting, setPromoting] = useState(false);
+  const [showPromoteDialog, setShowPromoteDialog] = useState(false);
 
   // Auto-save when dirty (debounced 2s)
   useEffect(() => {
@@ -127,20 +128,6 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     onClose();
   }, [onClose]);
 
-  const handlePromote = useCallback(async () => {
-    if (!draftId) return;
-    setPromoting(true);
-    try {
-      await apiPromoteDraft(draftId);
-      toast.success('Draft promoted to editing');
-      loadDraft(draftId);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Promote failed');
-    } finally {
-      setPromoting(false);
-    }
-  }, [draftId, loadDraft]);
-
   const handleRefreshDraft = useCallback(() => {
     if (draftId) {
       loadDraft(draftId);
@@ -197,6 +184,16 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
         />
       )}
 
+      {/* Promote Preview Dialog */}
+      {draftId && (
+        <PromotePreviewDialog
+          open={showPromoteDialog}
+          onOpenChange={setShowPromoteDialog}
+          autoDraftId={draftId}
+          onPromoted={() => loadDraft(draftId)}
+        />
+      )}
+
       {/* Action Bar */}
       <DraftActionBar
         onClose={onClose}
@@ -216,8 +213,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
           <span className="flex-1 text-amber-800 dark:text-amber-200">
             Auto-extracted draft — read-only until promoted.
           </span>
-          <Button size="sm" variant="outline" onClick={handlePromote} disabled={promoting}>
-            {promoting ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
+          <Button size="sm" variant="outline" onClick={() => setShowPromoteDialog(true)}>
             Start Editing
           </Button>
         </div>
