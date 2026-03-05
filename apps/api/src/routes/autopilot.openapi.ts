@@ -381,7 +381,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       db,
       {
         parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
-        author: { type: 'system', name: 'autopilot' },
+        author: { type: 'agent', name: 'autopilot' },
         sentences,
         project_id: draft.project_id,
         message: `Auto-commit: ${sentences.length} sentence(s)`,

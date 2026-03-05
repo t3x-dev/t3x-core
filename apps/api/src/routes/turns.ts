@@ -43,6 +43,9 @@ function validateContentBlocks(blocks: unknown): string | null {
     if (b.type === 'file' && typeof b.filename !== 'string') {
       return 'file block must have a filename string';
     }
+    if (b.type === 'file' && typeof b.mime_type !== 'string') {
+      return 'file block must have a mime_type string';
+    }
   }
   return null;
 }

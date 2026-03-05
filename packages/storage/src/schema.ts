@@ -7,6 +7,7 @@
  * - Supabase (cloud)
  */
 
+import type { ContentBlock } from '@t3x/core';
 import {
   boolean,
   customType,
@@ -19,7 +20,6 @@ import {
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
-import type { ContentBlock } from '@t3x/core';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({

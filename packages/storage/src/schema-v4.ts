@@ -905,7 +905,7 @@ export const recipes = pgTable('recipes', {
   }>(),
   steps: jsonb('steps').notNull().$type<
     Array<{
-      action: 'send_webhook' | 'run_eval' | 'export_report';
+      action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
       config: Record<string, unknown>;
     }>
   >(),
@@ -978,7 +978,9 @@ export const sentenceRelations = pgTable(
   'sentence_relations',
   {
     id: text('id').primaryKey(),
-    projectId: text('project_id').notNull(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
     commitHash: text('commit_hash').notNull(),
     sourceId: text('source_id').notNull(),
     targetId: text('target_id').notNull(),

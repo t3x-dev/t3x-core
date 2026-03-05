@@ -482,7 +482,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 -- Sentence Relations (Ring 4 — Inter-sentence relationships)
 CREATE TABLE IF NOT EXISTS sentence_relations (
   id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   commit_hash TEXT NOT NULL,
   source_id TEXT NOT NULL,
   target_id TEXT NOT NULL,
