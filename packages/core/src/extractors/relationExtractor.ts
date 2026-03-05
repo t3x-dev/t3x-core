@@ -1,0 +1,76 @@
+/**
+ * Relation Extractor
+ *
+ * Extracts inter-sentence relations using a dedicated LLM call.
+ * Triggered at commit time when sentences are finalized.
+ *
+ * @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+ */
+
+import { nanoid } from 'nanoid';
+import type { LLMProvider } from '../llm/types';
+import type { RelationExtractionResult, SentenceRelation } from '../types/v4';
+import { parseRelationResponse } from './relationParser';
+import { buildRelationPrompt } from './relationPrompt';
+
+export class RelationExtractor {
+  constructor(private readonly provider: LLMProvider) {}
+
+  async extract(
+    sentences: Array<{ id: string; text: string }>,
+    options?: { temperature?: number }
+  ): Promise<RelationExtractionResult> {
+    const emptyResult: RelationExtractionResult = {
+      relations: [],
+      stats: {
+        total_sentences: sentences.length,
+        relations_found: 0,
+        avg_confidence: 0,
+        extraction_time_ms: 0,
+      },
+    };
+
+    if (sentences.length < 2) return emptyResult;
+
+    const { systemPrompt, userPrompt } = buildRelationPrompt(sentences);
+    const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+    const startTime = Date.now();
+    const raw = await this.provider.generate(combinedPrompt, {
+      temperature: options?.temperature ?? 0.1,
+      maxTokens: 4096,
+    });
+
+    const validIds = new Set(sentences.map((s) => s.id));
+    const items = parseRelationResponse(raw, validIds);
+
+    const relations: SentenceRelation[] = items.map((item) => ({
+      id: `rel_${nanoid(12)}`,
+      source_id: item.source_id,
+      target_id: item.target_id,
+      type: item.type,
+      confidence: item.confidence,
+      reasoning: item.reasoning,
+    }));
+
+    const extractionTimeMs = Date.now() - startTime;
+    const avgConfidence =
+      relations.length > 0
+        ? relations.reduce((sum, r) => sum + r.confidence, 0) / relations.length
+        : 0;
+
+    return {
+      relations,
+      stats: {
+        total_sentences: sentences.length,
+        relations_found: relations.length,
+        avg_confidence: avgConfidence,
+        extraction_time_ms: extractionTimeMs,
+      },
+    };
+  }
+}
+
+export function createRelationExtractor(provider: LLMProvider): RelationExtractor {
+  return new RelationExtractor(provider);
+}
