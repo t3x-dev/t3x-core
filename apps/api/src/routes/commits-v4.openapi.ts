@@ -18,7 +18,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { CommitV4, ConflictReport, Sentence } from '@t3x/core';
-import { detectConflicts } from '@t3x/core';
+import { createRelationExtractor, detectConflicts } from '@t3x/core';
 import {
   createCommitV4,
   deleteCommitV4,
@@ -35,12 +35,14 @@ import {
   searchSimilarSentences,
   updateBranchHead,
   updateCommitV4Position,
+  upsertRelations,
   upsertSentenceVectorsBatch,
   validateMainBranchLinearity,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -600,6 +602,43 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
         })
         .catch((err) => {
           pinoLogger.warn({ err }, 'failed to detect stale leaves for notification');
+        });
+    }
+
+    // ============================================================
+    // Auto relation extraction (best-effort, fire-and-forget)
+    // ============================================================
+    if (finalSentences.length >= 2) {
+      getLLMProvider()
+        .then(async (llmProvider) => {
+          if (!llmProvider) return;
+          const relExtractor = createRelationExtractor(llmProvider);
+          const relResult = await relExtractor.extract(
+            finalSentences.map((s) => ({ id: s.id, text: s.text }))
+          );
+          if (relResult.relations.length > 0) {
+            const relDb = await getDB();
+            await upsertRelations(
+              relDb,
+              relResult.relations.map((r) => ({
+                id: r.id,
+                project_id: body.project_id,
+                commit_hash: commit.hash,
+                source_id: r.source_id,
+                target_id: r.target_id,
+                type: r.type,
+                confidence: r.confidence,
+                reasoning: r.reasoning,
+              }))
+            );
+            pinoLogger.info(
+              { commit_hash: commit.hash, relations: relResult.relations.length },
+              'auto relation extraction complete'
+            );
+          }
+        })
+        .catch((err) => {
+          pinoLogger.warn({ err, commit_hash: commit.hash }, 'auto relation extraction failed');
         });
     }
 

@@ -36,6 +36,7 @@ import {
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
+  relationsRoutes,
   runnerRoutes,
   runsRoutes,
   statusRoutes,
@@ -142,6 +143,7 @@ api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
 api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
+api.route('/', relationsRoutes); // /v1/commits-v4/:hash/relations
 api.route('/', apiKeysRoutes); // /v1/api-keys
 api.route('/', shareRoutes); // /v1/share
 api.route('/', comparisonsRoutes); // /v1/comparisons
@@ -192,6 +194,10 @@ api.doc('/openapi.json', {
     { name: 'Templates', description: 'Reusable prompt templates for leaf generation' },
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
+    {
+      name: 'Relations',
+      description: 'Inter-sentence relation extraction (Ring 4)',
+    },
     {
       name: 'Commits V4',
       description: 'Commits v4 (pure knowledge, sentences only, no constraints)',

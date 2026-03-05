@@ -22,6 +22,7 @@ export { mergeRoutes } from './merge.openapi';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects';
 export { providersRoutes } from './providers.openapi';
+export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner';
 export { runsRoutes } from './runs.openapi';
 export { statusRoutes } from './status';
