@@ -42,6 +42,10 @@ export {
   PolarityRuleEngine,
   type PreferenceRelation,
 } from './polarityRules';
+export { createRelationExtractor, RelationExtractor } from './relationExtractor';
+export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
+// Relation Extraction (Ring 4)
+export { buildRelationPrompt } from './relationPrompt';
 // Ring Extractor
 export {
   createRingExtractor,

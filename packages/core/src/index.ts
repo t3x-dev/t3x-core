@@ -93,6 +93,8 @@ export {
   // LLM Extraction
   buildExtractionPrompt,
   buildIncrementalPrompt,
+  // Ring 4: Relations
+  buildRelationPrompt,
   buildStyleSeed,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
@@ -102,6 +104,7 @@ export {
   createEmptyRingOutput,
   createLLMExtractor,
   createPolarityRuleEngine,
+  createRelationExtractor,
   createRingExtractor,
   type ExtractedSentence,
   type ExtractionItem,
@@ -127,6 +130,10 @@ export {
   type PreferenceRelation,
   parseExtractionResponse,
   parseIncrementalResponse,
+  parseRelationResponse,
+  RelationExtractor,
+  type RelationItem,
+  RelationParseError,
   type Ring1Output,
   type Ring2Output,
   type Ring3Output,
@@ -383,10 +390,15 @@ export {
   type Pin,
   type PinType,
   type ProjectExtractionConfig,
+  RELATION_TYPES,
+  type RelationExtractionResult,
+  // Ring 4: Relations
+  type RelationType,
   type RequireConstraint as RequireConstraintV4,
   type SemanticPoint,
   // Sentence
   type Sentence as SentenceV4,
+  type SentenceRelation,
   type SentenceSourceRef,
   type SentenceV5,
   // Share Token
