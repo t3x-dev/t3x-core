@@ -182,24 +182,34 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
   const merkleRoots: Record<string, string> = {};
   const merkleMismatches: string[] = [];
   for (const commit of commits) {
-    const sentences = commit.content.sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-    }));
-    const tree = buildMerkleTree(sentences);
-    merkleRoots[commit.hash] = tree.root;
+    const sentences = commit.content.sentences ?? [];
 
-    // Compare stored merkle_root with recomputed root
-    if (sentences.length > 0 && !commit.merkle_root) {
-      // Non-empty commit with missing stored root — flag as mismatch
-      merkleMismatches.push(commit.hash);
-    } else if (commit.merkle_root && tree.root && commit.merkle_root !== tree.root) {
-      merkleMismatches.push(commit.hash);
+    // Skip empty-sentence commits — they store null merkle_root by design
+    if (sentences.length === 0) continue;
+
+    try {
+      const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
+      merkleRoots[commit.hash] = tree.root;
+
+      // Compare stored merkle_root with recomputed root
+      if (!commit.merkle_root) {
+        // Non-empty commit with missing stored root — flag as mismatch
+        merkleMismatches.push(commit.hash);
+      } else if (commit.merkle_root !== tree.root) {
+        merkleMismatches.push(commit.hash);
+      }
+    } catch (err) {
+      other.push(
+        `Commit ${commit.hash.slice(0, 16)}: merkle tree build failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
   return {
-    valid: hashMismatch.length === 0 && parentNotFound.length === 0,
+    valid:
+      hashMismatch.length === 0 &&
+      parentNotFound.length === 0 &&
+      merkleMismatches.length === 0,
     total: commits.length,
     verified_depth: maxDepth,
     entry_points: entryPoints,
