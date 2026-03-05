@@ -494,6 +494,14 @@ export async function validateMainBranchLinearity(
 // ============================================================
 
 /**
+ * Defensively parse a JSONB value that may arrive as a JSON string
+ * (e.g. from some PostgreSQL drivers or raw SQL results).
+ */
+function parseJsonb<T>(val: unknown): T {
+  return typeof val === 'string' ? JSON.parse(val) : (val as T);
+}
+
+/**
  * Convert raw SQL result row to CommitV4 type.
  * Used for recursive CTE results where Drizzle ORM types are not available.
  */
@@ -501,18 +509,18 @@ function rawRowToCommitV4(row: Record<string, unknown>): CommitV4 {
   return {
     hash: row.hash as string,
     schema: 't3x/commit/v4',
-    parents: row.parents as string[],
-    author: row.author as CommitAuthorV4,
+    parents: parseJsonb<string[]>(row.parents),
+    author: parseJsonb<CommitAuthorV4>(row.author),
     committed_at:
       row.committed_at instanceof Date
         ? (row.committed_at as Date).toISOString()
         : String(row.committed_at),
-    content: row.content as { sentences: SentenceV4[] },
+    content: parseJsonb<{ sentences: SentenceV4[] }>(row.content),
     project_id: (row.project_id as string) ?? undefined,
     message: (row.message as string) ?? undefined,
     branch: (row.branch as string) ?? undefined,
-    source_refs: (row.source_refs as CommitSourceRef[]) ?? undefined,
-    merge_summary: (row.merge_summary as MergeSummaryData) ?? undefined,
+    source_refs: row.source_refs ? parseJsonb<CommitSourceRef[]>(row.source_refs) : undefined,
+    merge_summary: row.merge_summary ? parseJsonb<MergeSummaryData>(row.merge_summary) : undefined,
     position_x: (row.position_x as number) ?? undefined,
     position_y: (row.position_y as number) ?? undefined,
     created_at:

@@ -192,6 +192,32 @@ export const CommitV4Response = z.object({
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
+  merge_summary: z
+    .object({
+      kept_identical: z.number(),
+      resolved_conflicts: z.number(),
+      kept_from_source: z.number(),
+      kept_from_target: z.number(),
+      discarded: z.number(),
+      total_sentences: z.number(),
+      release_note: z
+        .object({
+          title: z.string(),
+          timestamp: z.string(),
+          source_branch: z.string(),
+          target_branch: z.string(),
+          summary: z.string(),
+          sections: z.array(
+            z.object({
+              heading: z.string(),
+              items: z.array(z.string()),
+            })
+          ),
+        })
+        .optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const CreateCommitV4Response = SuccessResponse(CommitV4Response);

@@ -429,11 +429,13 @@ export async function findCommonAncestorV3(
            c.position_x, c.position_y, c.created_at, c.updated_at
     FROM commits_v3 c
     WHERE c.hash IN (
-      SELECT hash FROM ancestors1
-      INTERSECT
-      SELECT hash FROM ancestors2
+      SELECT a1.hash
+      FROM (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors1 GROUP BY hash) a1
+      JOIN (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors2 GROUP BY hash) a2
+        ON a1.hash = a2.hash
+      ORDER BY a1.min_depth + a2.min_depth
+      LIMIT 1
     )
-    ORDER BY c.committed_at DESC
     LIMIT 1
   `);
 
@@ -444,6 +446,30 @@ export async function findCommonAncestorV3(
 // ============================================================
 // Helpers
 // ============================================================
+
+/**
+ * Defensively parse a PostgreSQL text[] value that may arrive as a
+ * `{val1,val2}` string literal from some drivers, or as a JSON string.
+ */
+function parseArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    // PostgreSQL text[] literal: {val1,val2}
+    if (val.startsWith('{') && val.endsWith('}')) {
+      return val.slice(1, -1).split(',').filter(Boolean);
+    }
+    return JSON.parse(val);
+  }
+  return [];
+}
+
+/**
+ * Defensively parse a JSONB value that may arrive as a JSON string
+ * (e.g. from some PostgreSQL drivers or raw SQL results).
+ */
+function parseJsonb<T>(val: unknown): T {
+  return typeof val === 'string' ? JSON.parse(val) : (val as T);
+}
 
 /**
  * Convert raw SQL result row to CommitV3Output type.
@@ -462,10 +488,10 @@ function rawRowToCommitV3(row: Record<string, unknown>): CommitV3Output {
   return {
     hash: row.hash as string,
     schema: row.schema as string,
-    parents: row.parents as string[],
-    author: row.author as CommitV3Author,
+    parents: parseArray(row.parents),
+    author: parseJsonb<CommitV3Author>(row.author),
     committedAt: committedAt instanceof Date ? committedAt.toISOString() : String(committedAt),
-    content: row.content as CommitV3Content,
+    content: parseJsonb<CommitV3Content>(row.content),
     projectId: (row.project_id as string) ?? null,
     message: (row.message as string) ?? null,
     branch: (row.branch as string) ?? null,

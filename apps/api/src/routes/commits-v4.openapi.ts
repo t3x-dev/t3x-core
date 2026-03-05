@@ -112,6 +112,7 @@ function toApiCommit(commit: CommitV4) {
     position_x: commit.position_x ?? null,
     position_y: commit.position_y ?? null,
     created_at: commit.created_at ?? commit.committed_at,
+    merge_summary: commit.merge_summary ?? null,
   };
 }
 
@@ -342,7 +343,12 @@ const getCommitV4HistoryRoute = createRoute({
       description: 'Commit history',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(CommitV4Response)),
+          schema: SuccessResponseSchema(
+            z.object({
+              commits: z.array(CommitV4Response),
+              truncated: z.boolean(),
+            })
+          ),
         },
       },
     },
@@ -854,7 +860,16 @@ commitsV4Routes.openapi(getCommitV4HistoryRoute, async (c) => {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
-    return c.json({ success: true as const, data: result.commits.map(toApiCommit) }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commits: result.commits.map(toApiCommit),
+          truncated: result.truncated,
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'HISTORY_FAILED', message);
