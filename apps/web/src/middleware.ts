@@ -30,8 +30,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for NextAuth session token (cookie name varies by env)
+  // Check for local auth session cookie or NextAuth session token
   const hasSession =
+    request.cookies.has('t3x-session') ||
     request.cookies.has('authjs.session-token') ||
     request.cookies.has('__Secure-authjs.session-token');
 

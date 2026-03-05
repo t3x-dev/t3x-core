@@ -13,15 +13,29 @@ export const DEFAULT_TIMEOUT = 10000;
 export const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
 /**
- * Get API key from NextAuth session (client-side only).
- * Used when NEXT_PUBLIC_T3X_API_KEY is not set but the user is logged in via OAuth.
+ * Get API key from session (client-side only).
+ *
+ * Priority:
+ * 1. Local auth cookie (t3x-session) — for self-hosted username/password login
+ * 2. NextAuth session — for SaaS OAuth login (fallback)
  */
 async function getSessionApiKey(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+
+  // 1. Try local auth cookie first
+  try {
+    const { getSessionKey } = await import('@/lib/session');
+    const localKey = getSessionKey();
+    if (localKey) return localKey;
+  } catch {
+    // session module not available, continue to fallback
+  }
+
+  // 2. Fallback to NextAuth session (for OAuth/SaaS)
   try {
     const { getSession } = await import('next-auth/react');
     const session = await getSession();
-    return ((session as Record<string, unknown>)?.apiKey as string) ?? null;
+    return ((session as unknown as Record<string, unknown>)?.apiKey as string) ?? null;
   } catch {
     return null;
   }

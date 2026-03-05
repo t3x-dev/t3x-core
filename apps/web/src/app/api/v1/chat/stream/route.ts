@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Get API key from NextAuth session (server-side)
       const session = await auth();
-      const sessionKey = (session as Record<string, unknown>)?.apiKey as string | undefined;
+      const sessionKey = (session as unknown as Record<string, unknown>)?.apiKey as string | undefined;
       if (sessionKey) {
         headers.Authorization = `Bearer ${sessionKey}`;
       }
