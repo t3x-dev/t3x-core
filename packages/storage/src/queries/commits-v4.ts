@@ -389,17 +389,18 @@ export async function findCommitV4History(
     }
   ).execute(sql`
     WITH RECURSIVE history AS (
-      SELECT c.*, 0 AS depth
+      SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
       FROM commits_v4 c
       WHERE c.hash = ${hash}
 
       UNION ALL
 
-      SELECT c.*, h.depth + 1
+      SELECT c.*, h.depth + 1, h.visited || c.hash
       FROM history h,
            jsonb_array_elements_text(h.parents::jsonb) AS parent_hash
       JOIN commits_v4 c ON c.hash = parent_hash
       WHERE h.depth < ${MAX_DEPTH}
+        AND NOT (c.hash = ANY(h.visited))
     ),
     deduped AS (
       SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,

@@ -905,6 +905,68 @@ describe('Commits V4 Storage', () => {
       expect(result.commits).toHaveLength(1);
       expect(result.commits[0].hash).toBe(root.hash);
     });
+
+    it('maps all fields correctly from raw SQL', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Field Mapping Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Mapper', id: 'u_map' },
+        sentences: [
+          { id: 's_fm1', text: 'Field mapping test sentence' },
+          { id: 's_fm2', text: 'Second sentence' },
+        ],
+        project_id: proj.projectId,
+        message: 'test commit message',
+        branch: 'main',
+        position_x: 42,
+        position_y: 84,
+      });
+
+      const result = await findCommitV4History(db, commit.hash);
+      expect(result.commits).toHaveLength(1);
+
+      const c = result.commits[0];
+      expect(c.hash).toBe(commit.hash);
+      expect(c.schema).toBe('t3x/commit/v4');
+      expect(c.parents).toEqual([]);
+      expect(c.author).toEqual({ type: 'human', name: 'Mapper', id: 'u_map' });
+      expect(c.committed_at).toBeTruthy();
+      expect(c.content.sentences).toHaveLength(2);
+      expect(c.content.sentences[0].id).toBe('s_fm1');
+      expect(c.project_id).toBe(proj.projectId);
+      expect(c.message).toBe('test commit message');
+      expect(c.branch).toBe('main');
+      expect(c.position_x).toBe(42);
+      expect(c.position_y).toBe(84);
+      expect(c.created_at).toBeTruthy();
+    });
+
+    it('handles dangling parent references gracefully', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Dangling Parent Project' })
+      );
+
+      // Create a commit that references a non-existent parent (bypass strict mode)
+      const commit = await createCommitV4(
+        db,
+        {
+          parents: ['sha256:nonexistent-parent-hash'],
+          author: { type: 'human' as const, name: 'H' },
+          sentences: [{ id: 's_dp', text: 'Dangling parent test' }],
+          project_id: proj.projectId,
+        },
+        { strictParents: false }
+      );
+
+      const result = await findCommitV4History(db, commit.hash);
+
+      // Should return only the commit itself (dangling parent is silently skipped)
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].hash).toBe(commit.hash);
+      expect(result.truncated).toBe(false);
+    });
   });
 
   describe('output format', () => {

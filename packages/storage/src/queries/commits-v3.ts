@@ -348,17 +348,18 @@ export async function findCommitV3History(
     }
   ).execute(sql`
     WITH RECURSIVE history AS (
-      SELECT c.*, 0 AS depth
+      SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
       FROM commits_v3 c
       WHERE c.hash = ${commitHash}
 
       UNION ALL
 
-      SELECT c.*, h.depth + 1
+      SELECT c.*, h.depth + 1, h.visited || c.hash
       FROM history h,
            unnest(h.parents) AS parent_hash
       JOIN commits_v3 c ON c.hash = parent_hash
       WHERE h.depth < ${MAX_DEPTH}
+        AND NOT (c.hash = ANY(h.visited))
     ),
     deduped AS (
       SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
@@ -396,30 +397,32 @@ export async function findCommonAncestorV3(
   ).execute(sql`
     WITH RECURSIVE
       ancestors1 AS (
-        SELECT hash, parents, 0 AS depth
+        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
         FROM commits_v3
         WHERE hash = ${hash1}
 
         UNION ALL
 
-        SELECT c.hash, c.parents, a.depth + 1
+        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
         FROM ancestors1 a,
              unnest(a.parents) AS ph
         JOIN commits_v3 c ON c.hash = ph
         WHERE a.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(a.visited))
       ),
       ancestors2 AS (
-        SELECT hash, parents, 0 AS depth
+        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
         FROM commits_v3
         WHERE hash = ${hash2}
 
         UNION ALL
 
-        SELECT c.hash, c.parents, a.depth + 1
+        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
         FROM ancestors2 a,
              unnest(a.parents) AS ph
         JOIN commits_v3 c ON c.hash = ph
         WHERE a.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(a.visited))
       )
     SELECT c.hash, c.schema, c.parents, c.author, c.committed_at,
            c.content, c.project_id, c.message, c.branch,
