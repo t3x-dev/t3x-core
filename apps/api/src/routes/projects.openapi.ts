@@ -3,6 +3,7 @@
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  backfillMerkleRoots,
   branches,
   commitsV4,
   conversations,
@@ -12,6 +13,7 @@ import {
   insertProject,
   updateProject,
   verifyHashChain,
+  verifyMerkleRoots,
 } from '@t3x/storage/pglite';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
@@ -420,6 +422,7 @@ const VerifyChainResultSchema = z.object({
     parent_not_found: z.array(z.string()),
     other: z.array(z.string()),
   }),
+  merkle_mismatches: z.array(z.string()),
   verified_at: z.string(),
 });
 
@@ -483,5 +486,164 @@ projectRoutes.openapi(verifyProjectRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'VERIFY_FAILED', message } }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quick Merkle Verification
+// ═══════════════════════════════════════════════════════════════════════════
+
+const QuickVerifyResultSchema = z.object({
+  valid: z.boolean(),
+  checked: z.number(),
+  mismatches: z.array(z.string()),
+  verified_at: z.string(),
+});
+
+const quickVerifyRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{id}/verify/quick',
+  tags: ['Projects'],
+  summary: 'Quick Merkle root verification for recent commits',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Quick verification result',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(QuickVerifyResultSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(quickVerifyRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+
+    const result = await verifyMerkleRoots(db, id);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { ...result, verified_at: new Date().toISOString() },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json(
+      { success: false as const, error: { code: 'QUICK_VERIFY_FAILED', message } },
+      500
+    );
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Merkle Root Backfill
+// ═══════════════════════════════════════════════════════════════════════════
+
+const BackfillResultSchema = z.object({
+  updated: z.number(),
+  verified_at: z.string(),
+});
+
+const backfillMerkleRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{id}/backfill-merkle',
+  tags: ['Projects'],
+  summary: 'Backfill merkle roots for commits without one',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Backfill result',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(BackfillResultSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(backfillMerkleRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+
+    const updated = await backfillMerkleRoots(db, id);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { updated, verified_at: new Date().toISOString() },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'BACKFILL_FAILED', message } }, 500);
   }
 });

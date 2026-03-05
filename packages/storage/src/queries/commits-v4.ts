@@ -23,7 +23,7 @@ import { buildMerkleTree, computeCommitV4Hash } from '@t3x/core';
 
 export { computeCommitV4Hash } from '@t3x/core';
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
 
@@ -494,6 +494,83 @@ export async function validateMainBranchLinearity(
       }
     }
   }
+}
+
+// ============================================================
+// Merkle Verification & Backfill
+// ============================================================
+
+/**
+ * Quick Merkle verification: recompute merkle roots from sentences
+ * and compare with stored values for recent commits.
+ *
+ * Only checks commits that already have a stored merkle_root.
+ * Commits without a stored root are skipped (use backfillMerkleRoots first).
+ */
+export async function verifyMerkleRoots(
+  db: AnyDB,
+  projectId: string,
+  limit = 100
+): Promise<{ valid: boolean; checked: number; mismatches: string[] }> {
+  const rows = await db
+    .select({
+      hash: commitsV4.hash,
+      content: commitsV4.content,
+      merkleRoot: commitsV4.merkleRoot,
+    })
+    .from(commitsV4)
+    .where(eq(commitsV4.projectId, projectId))
+    .orderBy(desc(commitsV4.committedAt))
+    .limit(limit);
+
+  const mismatches: string[] = [];
+
+  for (const row of rows) {
+    const content = row.content as { sentences: Array<{ id: string; text: string }> };
+    const sentences = content.sentences ?? [];
+
+    if (sentences.length === 0) continue;
+
+    const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
+    const expectedRoot = tree.root || null;
+
+    if (row.merkleRoot && expectedRoot && row.merkleRoot !== expectedRoot) {
+      mismatches.push(row.hash);
+    }
+  }
+
+  return { valid: mismatches.length === 0, checked: rows.length, mismatches };
+}
+
+/**
+ * Backfill merkle_root for existing commits that don't have one.
+ *
+ * Returns the number of commits updated.
+ */
+export async function backfillMerkleRoots(db: AnyDB, projectId: string): Promise<number> {
+  const rows = await db
+    .select()
+    .from(commitsV4)
+    .where(and(eq(commitsV4.projectId, projectId), isNull(commitsV4.merkleRoot)))
+    .limit(10000);
+
+  let updated = 0;
+  for (const row of rows) {
+    const commit = rowToCommitV4(row);
+    const sentences = commit.content.sentences ?? [];
+
+    if (sentences.length === 0) continue;
+
+    const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
+    const root = tree.root || null;
+
+    if (root) {
+      await db.update(commitsV4).set({ merkleRoot: root }).where(eq(commitsV4.hash, row.hash));
+      updated++;
+    }
+  }
+
+  return updated;
 }
 
 // ============================================================

@@ -54,6 +54,7 @@ export {
 } from './commits-v3';
 // Commits V4 (pure knowledge - no constraints)
 export {
+  backfillMerkleRoots,
   type CreateCommitV4Options,
   computeCommitV4Hash,
   createCommitV4,
@@ -71,6 +72,7 @@ export {
   ParentNotFoundErrorV4,
   updateCommitV4Position,
   validateMainBranchLinearity,
+  verifyMerkleRoots,
 } from './commits-v4';
 // Comparisons (saved A/B comparison snapshots)
 export {

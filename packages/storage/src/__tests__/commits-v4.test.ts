@@ -13,6 +13,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
+  backfillMerkleRoots,
   computeCommitV4Hash,
   createCommitV4,
   deleteCommitV4,
@@ -24,6 +25,7 @@ import {
   getCommitV4Parents,
   ParentNotFoundErrorV4,
   updateCommitV4Position,
+  verifyMerkleRoots,
 } from '../queries/commits-v4';
 import { insertProject } from '../queries/projects';
 import { commitsV4 } from '../schema-v4';
@@ -1052,6 +1054,173 @@ describe('Commits V4 Storage', () => {
       expect(commit).not.toHaveProperty('projectId');
       expect(commit).not.toHaveProperty('positionX');
       expect(commit).not.toHaveProperty('positionY');
+    });
+  });
+
+  describe('verifyMerkleRoots', () => {
+    it('returns valid for untampered commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Verify Merkle Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_vm1', text: 'Sentence one' },
+          { id: 's_vm2', text: 'Sentence two' },
+        ],
+        project_id: proj.projectId,
+      });
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_vm3', text: 'Sentence three' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(true);
+      expect(result.checked).toBe(2);
+      expect(result.mismatches).toEqual([]);
+    });
+
+    it('detects tampered merkle_root', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Tampered Merkle Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_tm1', text: 'Original sentence' }],
+        project_id: proj.projectId,
+      });
+
+      // Tamper with the stored merkle_root
+      await db
+        .update(commitsV4)
+        .set({ merkleRoot: 'sha256:tampered_root_value' })
+        .where(eq(commitsV4.hash, commit.hash));
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(false);
+      expect(result.mismatches).toContain(commit.hash);
+    });
+
+    it('returns valid for empty project', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Empty Verify Merkle Project' })
+      );
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(true);
+      expect(result.checked).toBe(0);
+      expect(result.mismatches).toEqual([]);
+    });
+
+    it('respects limit parameter', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Limit Verify Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Test' },
+          sentences: [{ id: `s_lv${i}`, text: `Limit verify ${i}` }],
+          project_id: proj.projectId,
+        });
+      }
+
+      const result = await verifyMerkleRoots(db, proj.projectId, 3);
+
+      expect(result.checked).toBe(3);
+    });
+  });
+
+  describe('backfillMerkleRoots', () => {
+    it('fills in missing merkle roots', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Backfill Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_bf1', text: 'Backfill sentence one' },
+          { id: 's_bf2', text: 'Backfill sentence two' },
+        ],
+        project_id: proj.projectId,
+      });
+
+      // Remove the stored merkle_root to simulate a pre-existing commit
+      await db.update(commitsV4).set({ merkleRoot: null }).where(eq(commitsV4.hash, commit.hash));
+
+      // Verify it's null
+      const before = await findCommitV4ByHash(db, commit.hash);
+      expect(before!.merkle_root).toBeUndefined();
+
+      // Backfill
+      const updated = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(updated).toBe(1);
+
+      // Verify it's now set correctly
+      const after = await findCommitV4ByHash(db, commit.hash);
+      expect(after!.merkle_root).toBeTruthy();
+      expect(after!.merkle_root).toMatch(/^sha256:/);
+    });
+
+    it('returns 0 when all commits already have merkle roots', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'No Backfill Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_nbf', text: 'Already has root' }],
+        project_id: proj.projectId,
+      });
+
+      const updated = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(updated).toBe(0);
+    });
+
+    it('skips empty-sentence commits', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Backfill Empty Sentences Project' })
+      );
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [],
+        project_id: proj.projectId,
+      });
+
+      // merkle_root is already null for empty sentences
+      const updated = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(updated).toBe(0);
+    });
+
+    it('backfills multiple commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Multi Backfill Project' }));
+
+      for (let i = 0; i < 3; i++) {
+        const c = await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Test' },
+          sentences: [{ id: `s_mbf${i}`, text: `Multi backfill ${i}` }],
+          project_id: proj.projectId,
+        });
+        // Clear merkle_root
+        await db.update(commitsV4).set({ merkleRoot: null }).where(eq(commitsV4.hash, c.hash));
+      }
+
+      const updated = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(updated).toBe(3);
     });
   });
 });
