@@ -170,6 +170,9 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
+    if (!commit.project_id) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Commit has no project_id');
+    }
     const provider = await getLLMProvider();
     if (!provider) {
       return errorResponse(
@@ -181,10 +184,6 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     const sentences = commit.content.sentences.map((s) => ({ id: s.id, text: s.text }));
     const extractor = createRelationExtractor(provider);
     const result = await extractor.extract(sentences);
-
-    if (!commit.project_id) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Commit has no project_id');
-    }
 
     // Delete existing relations, then upsert new ones
     await deleteRelationsByCommit(db, decodedHash);

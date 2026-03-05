@@ -171,49 +171,52 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
       conflicts,
     });
 
-    // 5. Delete existing graph (cascade deletes members + edges)
-    await deleteKnowledgeGraphByProject(db, projectId);
+    // 5-8. Persist graph in a transaction (delete + insert atomically)
+    await db.transaction(async (tx) => {
+      // Delete existing graph (cascade deletes members + edges)
+      await deleteKnowledgeGraphByProject(tx, projectId);
 
-    // 6. Insert nodes
-    const insertedNodes = await insertKnowledgeNodes(
-      db,
-      result.nodes.map((n) => ({
-        project_id: projectId,
-        label: n.label,
-        type: n.type,
-        member_count: n.member_sentence_ids.length,
-      }))
-    );
-
-    // 7. Insert members
-    const allMembers: Array<{ node_id: string; sentence_id: string; commit_hash: string }> = [];
-    for (let i = 0; i < result.nodes.length; i++) {
-      for (const m of result.nodes[i].member_sentence_ids) {
-        allMembers.push({
-          node_id: insertedNodes[i].id,
-          sentence_id: m.sentence_id,
-          commit_hash: m.commit_hash,
-        });
-      }
-    }
-    if (allMembers.length > 0) {
-      await insertNodeMembers(db, allMembers);
-    }
-
-    // 8. Insert edges
-    if (result.edges.length > 0) {
-      await insertKnowledgeEdges(
-        db,
-        result.edges.map((e) => ({
+      // Insert nodes
+      const insertedNodes = await insertKnowledgeNodes(
+        tx,
+        result.nodes.map((n) => ({
           project_id: projectId,
-          source_node_id: insertedNodes[e.source_node_index].id,
-          target_node_id: insertedNodes[e.target_node_index].id,
-          type: e.type,
-          weight: e.weight,
-          evidence: e.evidence,
+          label: n.label,
+          type: n.type,
+          member_count: n.member_sentence_ids.length,
         }))
       );
-    }
+
+      // Insert members
+      const allMembers: Array<{ node_id: string; sentence_id: string; commit_hash: string }> = [];
+      for (let i = 0; i < result.nodes.length; i++) {
+        for (const m of result.nodes[i].member_sentence_ids) {
+          allMembers.push({
+            node_id: insertedNodes[i].id,
+            sentence_id: m.sentence_id,
+            commit_hash: m.commit_hash,
+          });
+        }
+      }
+      if (allMembers.length > 0) {
+        await insertNodeMembers(tx, allMembers);
+      }
+
+      // Insert edges
+      if (result.edges.length > 0) {
+        await insertKnowledgeEdges(
+          tx,
+          result.edges.map((e) => ({
+            project_id: projectId,
+            source_node_id: insertedNodes[e.source_node_index].id,
+            target_node_id: insertedNodes[e.target_node_index].id,
+            type: e.type,
+            weight: e.weight,
+            evidence: e.evidence,
+          }))
+        );
+      }
+    });
 
     // 9. Return stats
     return c.json({ success: true as const, data: result.stats }, 200);
@@ -307,12 +310,12 @@ const getNodeRoute = createRoute({
 });
 
 knowledgeGraphRoutes.openapi(getNodeRoute, async (c) => {
-  const { nodeId } = c.req.valid('param');
+  const { projectId, nodeId } = c.req.valid('param');
 
   try {
     const db = await getDB();
     const node = await findKnowledgeNodeById(db, nodeId);
-    if (!node) {
+    if (!node || node.project_id !== projectId) {
       return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
     }
 
@@ -358,12 +361,12 @@ const getNeighborsRoute = createRoute({
 });
 
 knowledgeGraphRoutes.openapi(getNeighborsRoute, async (c) => {
-  const { nodeId } = c.req.valid('param');
+  const { projectId, nodeId } = c.req.valid('param');
 
   try {
     const db = await getDB();
     const node = await findKnowledgeNodeById(db, nodeId);
-    if (!node) {
+    if (!node || node.project_id !== projectId) {
       return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
     }
 

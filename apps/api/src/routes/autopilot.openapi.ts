@@ -170,9 +170,9 @@ const AdaptiveResponseSchema = z.object({
   data: z.object({
     adaptive: z
       .object({
-        min_confidence: z.number(),
-        max_review_ratio: z.number(),
-        category: z.string(),
+        confidenceMultipliers: z.record(z.string(), z.number()),
+        suppressedTypes: z.array(z.string()),
+        cosineThresholdDelta: z.number(),
       })
       .nullable(),
     message: z.string().optional(),
@@ -376,7 +376,17 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
     const sentences = qualifyingSPs.map((sp) => spToSentence(sp));
 
-    // 8. Create commit
+    // 8. Re-check draft status to guard against concurrent auto-commit calls
+    const freshDraft = await findDraftV3ById(db, draftId);
+    if (!freshDraft || freshDraft.status !== 'editing') {
+      return errorResponse(
+        c,
+        'ALREADY_COMMITTED',
+        'Draft was already committed by another request'
+      );
+    }
+
+    // 9. Create commit
     const commit = await createCommitV4(
       db,
       {
@@ -390,10 +400,10 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       { strictParents: false }
     );
 
-    // 9. Mark draft as committed
+    // 10. Mark draft as committed
     await commitDraftV3(db, draftId, commit.hash);
 
-    // 10. Push notification (fire-and-forget)
+    // 11. Push notification (fire-and-forget)
     pushNotification({
       project_id: draft.project_id,
       type: 'commit_created',
@@ -406,7 +416,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       },
     });
 
-    // 11. Dispatch webhook (fire-and-forget)
+    // 12. Dispatch webhook (fire-and-forget)
     webhookDispatcher.dispatch(
       'commit.created',
       {
