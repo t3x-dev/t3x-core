@@ -19,7 +19,7 @@ import type {
   MergeSummaryData,
   SentenceV4,
 } from '@t3x/core';
-import { computeCommitV4Hash } from '@t3x/core';
+import { buildMerkleTree, computeCommitV4Hash } from '@t3x/core';
 
 export { computeCommitV4Hash } from '@t3x/core';
 
@@ -178,6 +178,12 @@ export async function createCommitV4(
     content: { sentences: input.sentences },
   });
 
+  // Compute Merkle root from sentences (null for empty commits)
+  const merkleRoot =
+    input.sentences.length > 0
+      ? buildMerkleTree(input.sentences.map((s) => ({ id: s.id, text: s.text }))).root
+      : null;
+
   const [row] = await db
     .insert(commitsV4)
     .values({
@@ -191,6 +197,7 @@ export async function createCommitV4(
       message: input.message ?? null,
       branch: input.branch ?? null,
       sourceRefs: input.source_refs ?? null,
+      merkleRoot,
       mergeSummary: input.merge_summary ?? null,
       positionX: input.position_x ?? null,
       positionY: input.position_y ?? null,
@@ -404,8 +411,8 @@ export async function findCommitV4History(
     ),
     deduped AS (
       SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
-             content, project_id, message, branch, source_refs, merge_summary,
-             position_x, position_y, created_at, depth
+             content, project_id, message, branch, source_refs, merkle_root,
+             merge_summary, position_x, position_y, created_at, depth
       FROM history
       ORDER BY hash, depth
     )
@@ -520,6 +527,7 @@ function rawRowToCommitV4(row: Record<string, unknown>): CommitV4 {
     message: (row.message as string) ?? undefined,
     branch: (row.branch as string) ?? undefined,
     source_refs: row.source_refs ? parseJsonb<CommitSourceRef[]>(row.source_refs) : undefined,
+    merkle_root: (row.merkle_root as string) ?? undefined,
     merge_summary: row.merge_summary ? parseJsonb<MergeSummaryData>(row.merge_summary) : undefined,
     position_x: (row.position_x as number) ?? undefined,
     position_y: (row.position_y as number) ?? undefined,
@@ -545,6 +553,7 @@ function rowToCommitV4(row: CommitV4Record): CommitV4 {
     message: row.message ?? undefined,
     branch: row.branch ?? undefined,
     source_refs: row.sourceRefs as CommitSourceRef[] | undefined,
+    merkle_root: row.merkleRoot ?? undefined,
     merge_summary: (row.mergeSummary as MergeSummaryData) ?? undefined,
     position_x: row.positionX ?? undefined,
     position_y: row.positionY ?? undefined,

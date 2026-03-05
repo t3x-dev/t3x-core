@@ -164,6 +164,9 @@ export const commitsV4 = pgTable(
         }>
       >(),
 
+    /** Merkle tree root hash of commit sentences */
+    merkleRoot: text('merkle_root'),
+
     /** Merge summary statistics (only present on merge commits) */
     mergeSummary: jsonb('merge_summary').$type<{
       kept_identical: number;

@@ -357,6 +357,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       message TEXT,
       branch TEXT,
       source_refs JSONB,
+      merkle_root TEXT,
       merge_summary JSONB,
       position_x REAL,
       position_y REAL,
@@ -370,6 +371,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add merge_summary column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
+    -- Migration: Add merkle_root column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (

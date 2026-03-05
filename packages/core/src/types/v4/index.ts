@@ -145,6 +145,9 @@ export interface CommitV4 {
   /** Canvas position Y */
   position_y?: number;
 
+  /** Merkle tree root hash of commit sentences */
+  merkle_root?: string;
+
   /** Database record creation timestamp, ISO8601 */
   created_at?: string;
 

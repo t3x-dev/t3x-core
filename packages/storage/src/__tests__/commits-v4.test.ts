@@ -943,10 +943,7 @@ describe('Commits V4 Storage', () => {
     });
 
     it('handles dangling parent references gracefully', async () => {
-      const proj = await insertProject(
-        db,
-        testData.project({ name: 'Dangling Parent Project' })
-      );
+      const proj = await insertProject(db, testData.project({ name: 'Dangling Parent Project' }));
 
       // Create a commit that references a non-existent parent (bypass strict mode)
       const commit = await createCommitV4(
@@ -966,6 +963,70 @@ describe('Commits V4 Storage', () => {
       expect(result.commits).toHaveLength(1);
       expect(result.commits[0].hash).toBe(commit.hash);
       expect(result.truncated).toBe(false);
+    });
+  });
+
+  describe('merkle_root', () => {
+    it('computes and stores merkle_root at creation time', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_mk1', text: 'First sentence' },
+          { id: 's_mk2', text: 'Second sentence' },
+        ],
+        project_id: testProjectId,
+      });
+
+      expect(commit.merkle_root).toBeTruthy();
+      expect(commit.merkle_root).toMatch(/^sha256:/);
+
+      // Verify determinism: same sentences should produce same root
+      const { buildMerkleTree } = await import('@t3x/core');
+      const tree = buildMerkleTree([
+        { id: 's_mk1', text: 'First sentence' },
+        { id: 's_mk2', text: 'Second sentence' },
+      ]);
+      expect(commit.merkle_root).toBe(tree.root);
+    });
+
+    it('stores null merkle_root for empty sentences', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [],
+        project_id: testProjectId,
+      });
+
+      expect(commit.merkle_root).toBeUndefined();
+    });
+
+    it('returns merkle_root via findCommitV4ByHash', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_mkfind', text: 'Merkle find test' }],
+        project_id: testProjectId,
+      });
+
+      const found = await findCommitV4ByHash(db, commit.hash);
+      expect(found).toBeDefined();
+      expect(found!.merkle_root).toBe(commit.merkle_root);
+    });
+
+    it('returns merkle_root via findCommitV4History', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Merkle History Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_mkhist', text: 'Merkle history test' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, commit.hash);
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].merkle_root).toBe(commit.merkle_root);
     });
   });
 
