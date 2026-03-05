@@ -283,7 +283,15 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     } finally {
       setRetuning(false);
     }
-  }, [projectId, leafId, leaf?.commit_hash, selectedAssertionIds, existingPin, fetchPins, invalidatePins]);
+  }, [
+    projectId,
+    leafId,
+    leaf?.commit_hash,
+    selectedAssertionIds,
+    existingPin,
+    fetchPins,
+    invalidatePins,
+  ]);
 
   // Generate progress phase messages
   const generateProgressMessages = useMemo(

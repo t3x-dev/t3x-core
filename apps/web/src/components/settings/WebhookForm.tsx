@@ -91,7 +91,12 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
   );
 
   const isValidUrl = (s: string) => {
-    try { new URL(s); return true; } catch { return false; }
+    try {
+      new URL(s);
+      return true;
+    } catch {
+      return false;
+    }
   };
   const urlTrimmed = url.trim();
   const urlFormatError = urlTrimmed !== '' && !isValidUrl(urlTrimmed);

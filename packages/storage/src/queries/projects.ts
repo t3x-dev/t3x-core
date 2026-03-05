@@ -5,7 +5,7 @@
  */
 
 import { generateProjectId } from '@t3x/core';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -18,6 +18,7 @@ import {
   turns,
 } from '../schema';
 import { commitsV4 } from '../schema-v4';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
   name: string;
@@ -27,6 +28,8 @@ export interface CreateProjectInput {
 export interface ListProjectsOptions {
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 export interface ProjectStats {
@@ -80,11 +83,49 @@ export async function findProjectById(db: AnyDB, projectId: string): Promise<Pro
  */
 export async function findProjects(
   db: AnyDB,
+  options: ListProjectsOptions & { cursor: string }
+): Promise<CursorPage<Project>>;
+export async function findProjects(
+  db: AnyDB,
+  options?: Omit<ListProjectsOptions, 'cursor'>
+): Promise<Project[]>;
+export async function findProjects(
+  db: AnyDB,
   options: ListProjectsOptions = {}
-): Promise<Project[]> {
+): Promise<Project[] | CursorPage<Project>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND project_id < k)
+      conditions.push(
+        or(
+          lt(projects.createdAt, cursorDate),
+          and(eq(projects.createdAt, cursorDate), lt(projects.projectId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(projects)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(projects.createdAt), desc(projects.projectId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (p) => ({
+      t: p.createdAt.toISOString(),
+      k: p.projectId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = options.offset ?? 0;
   return db.select().from(projects).orderBy(desc(projects.createdAt)).limit(limit).offset(offset);
 }
 

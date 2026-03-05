@@ -7,6 +7,7 @@
  * - Supabase (cloud)
  */
 
+import type { ContentBlock } from '@t3x/core';
 import {
   boolean,
   customType,
@@ -44,6 +45,13 @@ export const projects = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     metadataJson: text('metadata_json'),
     providerConfig: text('provider_config'), // JSON: project-level provider overrides
+    autopilotConfig: jsonb('autopilot_config').$type<{
+      enabled: boolean;
+      min_confidence: number;
+      min_sentences: number;
+      auto_create_leaf: boolean;
+      target_branch: string;
+    }>(),
   },
   (table) => [index('idx_projects_owner').on(table.ownerId)]
 );
@@ -96,6 +104,7 @@ export const turns = pgTable(
     content: text('content').notNull(),
     language: text('language'),
     ringsJson: text('rings_json'),
+    contentBlocks: jsonb('content_blocks').$type<ContentBlock[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [

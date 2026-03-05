@@ -24,10 +24,10 @@ export {
 } from './adapters/pglite';
 // Backup & verification
 export {
-  verifyCommitHash,
   type VerifyChainResult,
-  verifyHashChain,
   type VerifyResult,
+  verifyCommitHash,
+  verifyHashChain,
 } from './backup';
 // Query functions
 export * from './queries';

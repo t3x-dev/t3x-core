@@ -24,7 +24,8 @@ export function CopyButton({ text, size = 14 }: { text: string; size?: number })
     <button
       type="button"
       onClick={() => {
-        navigator.clipboard.writeText(text)
+        navigator.clipboard
+          .writeText(text)
           .then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);

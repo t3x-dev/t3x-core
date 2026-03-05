@@ -24,6 +24,7 @@ import {
   real,
   text,
   timestamp,
+  primaryKey,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
@@ -63,7 +64,10 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(
+      table.provider,
+      table.providerId
+    ),
   })
 );
 
@@ -160,6 +164,9 @@ export const commitsV4 = pgTable(
           assertion_lessons?: string[];
         }>
       >(),
+
+    /** Merkle tree root hash of commit sentences */
+    merkleRoot: text('merkle_root'),
 
     /** Merge summary statistics (only present on merge commits) */
     mergeSummary: jsonb('merge_summary').$type<{
@@ -898,7 +905,7 @@ export const recipes = pgTable('recipes', {
   }>(),
   steps: jsonb('steps').notNull().$type<
     Array<{
-      action: 'send_webhook' | 'run_eval' | 'export_report';
+      action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
       config: Record<string, unknown>;
     }>
   >(),
@@ -961,3 +968,118 @@ export const notifications = pgTable(
 
 export type NotificationRecord = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sentence Relations (Ring 4 — Inter-sentence relationships)
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const sentenceRelations = pgTable(
+  'sentence_relations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    commitHash: text('commit_hash').notNull(),
+    sourceId: text('source_id').notNull(),
+    targetId: text('target_id').notNull(),
+    type: text('type').notNull(),
+    confidence: real('confidence').notNull(),
+    reasoning: text('reasoning'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    commitIdx: index('idx_sr_commit').on(table.commitHash),
+    projectIdx: index('idx_sr_project').on(table.projectId),
+    pairUniq: uniqueIndex('idx_sr_pair').on(
+      table.commitHash,
+      table.sourceId,
+      table.targetId,
+      table.type
+    ),
+  })
+);
+
+export type SentenceRelationRecord = typeof sentenceRelations.$inferSelect;
+export type SentenceRelationInsert = typeof sentenceRelations.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Knowledge Graph (Cross-conversation entity/topic graph)
+// @see docs/plans/2026-03-05-knowledge-graph-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const knowledgeNodes = pgTable(
+  'knowledge_nodes',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    type: text('type').notNull().default('topic'),
+    summary: text('summary'),
+    memberCount: integer('member_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_kn_project').on(table.projectId),
+  })
+);
+
+export type KnowledgeNodeRecord = typeof knowledgeNodes.$inferSelect;
+export type KnowledgeNodeInsert = typeof knowledgeNodes.$inferInsert;
+
+export const knowledgeNodeMembers = pgTable(
+  'knowledge_node_members',
+  {
+    nodeId: text('node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    sentenceId: text('sentence_id').notNull(),
+    commitHash: text('commit_hash').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.nodeId, table.sentenceId] }),
+    sentenceIdx: index('idx_knm_sentence').on(table.sentenceId),
+  })
+);
+
+export type KnowledgeNodeMemberRecord = typeof knowledgeNodeMembers.$inferSelect;
+export type KnowledgeNodeMemberInsert = typeof knowledgeNodeMembers.$inferInsert;
+
+export const knowledgeEdges = pgTable(
+  'knowledge_edges',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    sourceNodeId: text('source_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    targetNodeId: text('target_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    weight: real('weight').notNull().default(0),
+    evidence: jsonb('evidence').$type<
+      Array<{
+        source_sentence_id: string;
+        target_sentence_id: string;
+        relation_type: string;
+        confidence: number;
+      }>
+    >(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_ke_project').on(table.projectId),
+    sourceIdx: index('idx_ke_source').on(table.sourceNodeId),
+    targetIdx: index('idx_ke_target').on(table.targetNodeId),
+  })
+);
+
+export type KnowledgeEdgeRecord = typeof knowledgeEdges.$inferSelect;
+export type KnowledgeEdgeInsert = typeof knowledgeEdges.$inferInsert;

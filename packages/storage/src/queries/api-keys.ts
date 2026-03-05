@@ -98,10 +98,7 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
  *
  * @returns The matching ApiKey, or null if no active key with that name exists
  */
-export async function findActiveApiKeyByName(
-  db: AnyDB,
-  name: string
-): Promise<ApiKey | null> {
+export async function findActiveApiKeyByName(db: AnyDB, name: string): Promise<ApiKey | null> {
   const [row] = await db
     .select()
     .from(apiKeys)

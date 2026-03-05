@@ -50,7 +50,8 @@ async function createCommit(
   });
   expect(res.status).toBe(201);
   const json: ApiResponse = await res.json();
-  return { hash: json.data.hash, data: json.data };
+  // Response wraps commit + conflicts; extract the commit data for tests
+  return { hash: json.data.commit.hash, data: json.data.commit };
 }
 
 /** Helper to attempt creating a commit (may fail) */

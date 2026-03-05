@@ -10,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
+import { decodeCursor } from '../queries/pagination';
 import { insertProject } from '../queries/projects';
 import {
   findLastTurnInConversation,
@@ -21,6 +22,7 @@ import {
   insertTurn,
   TurnWindowError,
 } from '../queries/turns';
+import type { Turn } from '../schema';
 import { turns } from '../schema';
 import { createTestDB, sleep, testData } from './setup';
 
@@ -539,6 +541,124 @@ describe('Turns Storage', () => {
       await expect(findTurnsInWindow(db, t2.turnHash, t1.turnHash)).rejects.toThrow(
         TurnWindowError
       );
+    });
+  });
+
+  describe('cursor pagination — findTurnsByConversation', () => {
+    let cursorConvId: string;
+
+    beforeAll(async () => {
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Cursor Turns Test' })
+      );
+      cursorConvId = conv.conversationId;
+
+      // Create 5 turns with distinct timestamps
+      for (let i = 0; i < 5; i++) {
+        await insertTurn(db, testData.turn(testProjectId, cursorConvId, { content: `Turn ${i}` }));
+        await sleep(10);
+      }
+    });
+
+    it('returns first page with cursor="" in ASC order', async () => {
+      const page = await findTurnsByConversation(db, {
+        conversationId: cursorConvId,
+        cursor: '',
+        limit: 2,
+        order: 'asc',
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+      // ASC order: oldest first
+      expect(page.items[0].content).toBe('Turn 0');
+      expect(page.items[1].content).toBe('Turn 1');
+    });
+
+    it('paginates through all items in ASC order', async () => {
+      const collected: Turn[] = [];
+      let cursor = '';
+
+      while (true) {
+        const page = await findTurnsByConversation(db, {
+          conversationId: cursorConvId,
+          cursor,
+          limit: 2,
+          order: 'asc',
+        });
+        collected.push(...page.items);
+        if (!page.has_more) break;
+        cursor = page.next_cursor!;
+      }
+
+      expect(collected).toHaveLength(5);
+      expect(collected[0].content).toBe('Turn 0');
+      expect(collected[4].content).toBe('Turn 4');
+    });
+
+    it('paginates through all items in DESC order', async () => {
+      const collected: Turn[] = [];
+      let cursor = '';
+
+      while (true) {
+        const page = await findTurnsByConversation(db, {
+          conversationId: cursorConvId,
+          cursor,
+          limit: 2,
+          order: 'desc',
+        });
+        collected.push(...page.items);
+        if (!page.has_more) break;
+        cursor = page.next_cursor!;
+      }
+
+      expect(collected).toHaveLength(5);
+      // DESC: newest first
+      expect(collected[0].content).toBe('Turn 4');
+      expect(collected[4].content).toBe('Turn 0');
+    });
+
+    it('cursor encodes created_at and turn_hash', async () => {
+      const page = await findTurnsByConversation(db, {
+        conversationId: cursorConvId,
+        cursor: '',
+        limit: 1,
+      });
+
+      expect(page.next_cursor).toBeTruthy();
+      const decoded = decodeCursor(page.next_cursor!);
+      expect(decoded.t).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(decoded.k).toMatch(/^sha256:/);
+    });
+
+    it('returns empty page when no turns exist', async () => {
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Empty Cursor Conv' })
+      );
+
+      const page = await findTurnsByConversation(db, {
+        conversationId: conv.conversationId,
+        cursor: '',
+        limit: 10,
+      });
+
+      expect(page.items).toHaveLength(0);
+      expect(page.has_more).toBe(false);
+      expect(page.next_cursor).toBeNull();
+    });
+
+    it('offset mode still works (backward compatible)', async () => {
+      const result = await findTurnsByConversation(db, {
+        conversationId: cursorConvId,
+        limit: 3,
+      });
+
+      // Should return plain array, not CursorPage
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(3);
     });
   });
 });

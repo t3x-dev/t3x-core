@@ -10,7 +10,7 @@ export {
   type DiffClassification,
   EQUIVALENT_THRESHOLD,
 } from './classify';
-export { diffCommits } from './diffCommits';
+export { diffCommits, diffCommitsWithEmbeddings } from './diffCommits';
 // Embedding-based diff engine
 export {
   createDiffEngine,

@@ -5,6 +5,12 @@
  * All functions take a database instance as first parameter.
  */
 
+// Autopilot
+export {
+  type AutopilotConfigOutput,
+  getAutopilotConfig,
+  updateAutopilotConfig,
+} from './autopilot';
 // API Keys
 export {
   type CreateApiKeyInput,
@@ -54,6 +60,7 @@ export {
 } from './commits-v3';
 // Commits V4 (pure knowledge - no constraints)
 export {
+  backfillMerkleRoots,
   type CreateCommitV4Options,
   computeCommitV4Hash,
   createCommitV4,
@@ -71,6 +78,7 @@ export {
   ParentNotFoundErrorV4,
   updateCommitV4Position,
   validateMainBranchLinearity,
+  verifyMerkleRoots,
 } from './commits-v4';
 // Comparisons (saved A/B comparison snapshots)
 export {
@@ -78,6 +86,7 @@ export {
   createComparison,
   deleteComparison,
   getComparison,
+  type ListComparisonsOptions,
   listComparisons,
 } from './comparisons';
 // Conversation Contexts (per-conversation context customization)
@@ -130,7 +139,6 @@ export {
 export {
   abandonDraftV3,
   ConflictError,
-  NotFoundError,
   commitDraftV3,
   deleteDraftV3,
   findAutoDraftsByConversation,
@@ -140,6 +148,7 @@ export {
   insertDraftV3,
   type ListDraftV3Options,
   listDraftV3ByProject,
+  NotFoundError,
   promoteDraftV3,
   type UpdateDraftV3Input,
   updateDraftV3,
@@ -147,8 +156,12 @@ export {
 } from './drafts-v3';
 // Extraction Feedback (Anchoring L4)
 export {
+  type AdaptiveFeedbackStats,
+  type CosineBucketRow,
   type ExtractionFeedbackStats,
+  getAdaptiveFeedbackStats,
   getExtractionFeedbackStats,
+  getFeedbackByCosineBucket,
   type InsertExtractionFeedbackInput,
   insertExtractionFeedback,
   listExtractionFeedback,
@@ -171,6 +184,26 @@ export {
   type KnowledgeConflictOutput,
   resolveConflict,
 } from './knowledge-conflicts';
+// Knowledge Graph (cross-conversation entity/topic graph)
+export {
+  deleteKnowledgeGraphByProject,
+  findEdgesByNode,
+  findKnowledgeNodeById,
+  findKnowledgeNodesByProject,
+  findMembersByNode,
+  findNeighborNodes,
+  findNodeBySentence,
+  insertKnowledgeEdge,
+  insertKnowledgeEdges,
+  insertKnowledgeNode,
+  insertKnowledgeNodes,
+  insertNodeMembers,
+  type KnowledgeEdgeOutput,
+  type KnowledgeNodeOutput,
+  type NeighborNodeOutput,
+  type NodeMemberOutput,
+  searchKnowledgeNodes,
+} from './knowledge-graph';
 // Leaf History (generation history for leaves)
 export {
   type CreateLeafHistoryInputExtended,
@@ -208,18 +241,6 @@ export {
   updateLeafOutput,
   updateLeafRunnerAssertions,
 } from './leaves';
-// Notifications (persistent alerts, Item 16)
-export {
-  type CreateNotificationInput,
-  deleteOldNotifications,
-  getUnreadCount,
-  insertNotification,
-  listNotifications as listNotificationsFromDB,
-  type ListNotificationsOptions,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type NotificationType,
-} from './notifications';
 // Merge Drafts (Pending merge operations)
 export {
   type CreateMergeDraftInput,
@@ -245,6 +266,20 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+// Notifications (persistent alerts, Item 16)
+export {
+  type CreateNotificationInput,
+  deleteOldNotifications,
+  getUnreadCount,
+  insertNotification,
+  type ListNotificationsOptions,
+  listNotifications as listNotificationsFromDB,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationType,
+} from './notifications';
+// Cursor Pagination
+export { type CursorPage, decodeCursor, encodeCursor, toCursorPage } from './pagination';
 // Pins (V4 - source selection for commits and context)
 export {
   createPin,
@@ -283,6 +318,13 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+// Relations (Ring 4 — inter-sentence relationships)
+export {
+  deleteRelationsByCommit,
+  findRelationsByCommit,
+  findRelationsByProject,
+  upsertRelations,
+} from './relations';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
@@ -324,12 +366,18 @@ export {
   type InsertSentenceModificationInput,
   insertSentenceModification,
 } from './sentence-modifications';
-// Sentence Vectors (pgvector similarity search)
+// Sentence Vectors (pgvector similarity search + keyword search + hybrid RRF)
 export {
   deleteSentenceVectorsByCommit,
   deleteSentenceVectorsByProject,
   findSentenceVectorsByProject,
+  findSentenceVectorsWithEmbeddingsByProject,
+  type HybridSearchResult,
+  type KeywordSearchResult,
+  rrfFusion,
   type SearchResult as SentenceVectorSearchResult,
+  searchByKeyword,
+  searchHybrid,
   searchSimilarSentences,
   type UpsertSentenceVectorInput,
   upsertSentenceVector,
@@ -353,14 +401,6 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
-// Users (OAuth authentication)
-export {
-  type CreateUserInput,
-  createUser,
-  findOrCreateUser,
-  findUserById,
-  findUserByProvider,
-} from './users';
 // Turns
 export {
   type CreateTurnInput,
@@ -375,6 +415,14 @@ export {
   type ListTurnsOptions,
   TurnWindowError,
 } from './turns';
+// Users (OAuth authentication)
+export {
+  type CreateUserInput,
+  createUser,
+  findOrCreateUser,
+  findUserById,
+  findUserByProvider,
+} from './users';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,

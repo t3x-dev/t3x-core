@@ -10,7 +10,7 @@
  */
 
 import { jaccard } from '../diff/jaccard';
-import { tokenize } from '../diff/tokenize';
+import { tokenizeForMatching } from '../diff/tokenize';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 
 export interface ConflictCandidate {
@@ -40,14 +40,14 @@ export interface DetectConflictsOptions {
   jaccardThreshold?: number;
 }
 
-const DEFAULT_COSINE_THRESHOLD = 0.80;
-const DEFAULT_JACCARD_THRESHOLD = 0.70;
+const DEFAULT_COSINE_THRESHOLD = 0.8;
+const DEFAULT_JACCARD_THRESHOLD = 0.7;
 
 export async function detectConflicts(
   newSentences: { id: string; text: string }[],
   existingSentences: ExistingSentenceWithEmbedding[],
   embedder: EmbeddingProvider,
-  options?: DetectConflictsOptions,
+  options?: DetectConflictsOptions
 ): Promise<ConflictReport> {
   const cosineThreshold = options?.cosineThreshold ?? DEFAULT_COSINE_THRESHOLD;
   const jaccardThreshold = options?.jaccardThreshold ?? DEFAULT_JACCARD_THRESHOLD;
@@ -65,13 +65,13 @@ export async function detectConflicts(
   for (let i = 0; i < newSentences.length; i++) {
     const newSentence = newSentences[i];
     const newVec = newEmbeddings[i];
-    const newTokens = tokenize(newSentence.text);
+    const newTokens = tokenizeForMatching(newSentence.text);
 
     for (const existing of existingSentences) {
       const cosine = embedder.similarity(newVec, existing.embedding);
       if (cosine < cosineThreshold) continue;
 
-      const existingTokens = tokenize(existing.text);
+      const existingTokens = tokenizeForMatching(existing.text);
       const jaccardScore = jaccard(newTokens, existingTokens);
 
       // High cosine + low jaccard = conflict

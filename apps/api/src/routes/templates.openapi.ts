@@ -18,7 +18,11 @@ import {
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  CursorPageResponseSchema,
+  ErrorResponseSchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
 
 // ============================================================
 // Schemas
@@ -84,6 +88,7 @@ const ListTemplatesQuery = z.object({
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().int().min(0).default(0).optional(),
+  cursor: z.string().optional(),
 });
 
 export const templatesRoutes = new OpenAPIHono({
@@ -141,6 +146,9 @@ const listTemplatesRoute = createRoute({
   path: '/v1/templates',
   tags: ['Templates'],
   summary: 'List templates with optional filtering',
+  description:
+    'Lists templates with optional filtering. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     query: ListTemplatesQuery,
   },
@@ -149,7 +157,9 @@ const listTemplatesRoute = createRoute({
       description: 'List of templates',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(TemplateSchema)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(TemplateSchema), z.array(TemplateSchema)])
+          ),
         },
       },
     },
@@ -161,10 +171,25 @@ const listTemplatesRoute = createRoute({
 });
 
 templatesRoutes.openapi(listTemplatesRoute, async (c) => {
-  const { category, leaf_type, search, limit, offset } = c.req.valid('query');
+  const { category, leaf_type, search, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await listTemplates(db, { category, leaf_type, search, cursor, limit });
+      return c.json({
+        success: true as const,
+        data: {
+          items: result.items.map(formatTemplate),
+          next_cursor: result.next_cursor,
+          has_more: result.has_more,
+        },
+      });
+    }
+
+    // Legacy offset/limit mode
     const rows = await listTemplates(db, { category, leaf_type, search, limit, offset });
     return c.json({
       success: true as const,

@@ -220,7 +220,8 @@ export async function updateDraftV3(
   if (input.target_branch !== undefined) updateData.targetBranch = input.target_branch;
   if (input.extraction_mode !== undefined) updateData.extractionMode = input.extraction_mode;
   if (input.semantic_points !== undefined) updateData.semanticPointsJson = input.semantic_points;
-  if (input.extraction_cursor !== undefined) updateData.extractionCursorJson = input.extraction_cursor;
+  if (input.extraction_cursor !== undefined)
+    updateData.extractionCursorJson = input.extraction_cursor;
 
   // Increment revision
   // Note: Drizzle doesn't support SQL expressions in set(), so we use ifRevision + 1
@@ -270,8 +271,8 @@ export async function commitDraftV3(
   draftId: string,
   commitHash: string,
   leafId?: string
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .update(draftsV3)
     .set({
       status: 'committed',
@@ -279,7 +280,9 @@ export async function commitDraftV3(
       committedLeafId: leafId ?? null,
       updatedAt: new Date(),
     })
-    .where(eq(draftsV3.id, draftId));
+    .where(and(eq(draftsV3.id, draftId), eq(draftsV3.status, 'editing')))
+    .returning();
+  return result.length > 0;
 }
 
 /**

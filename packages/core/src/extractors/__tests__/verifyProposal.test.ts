@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { verifyProposal } from '../verifyProposal';
+import type { EmbeddingProvider } from '../../providers/embedding/base';
 import type { ExtractionProposal, SemanticPoint } from '../../types/v4';
 import type { TurnInput } from '../extractionPrompt';
-import type { EmbeddingProvider } from '../../providers/embedding/base';
+import { verifyProposal } from '../verifyProposal';
 
 const turns: TurnInput[] = [
   {
@@ -28,13 +28,15 @@ function makeProposal(overrides: Partial<ExtractionProposal> = {}): ExtractionPr
     confidence: 0.9,
     inference_type: 'direct',
     reasoning: 'User explicitly stated preference',
-    evidence: [{
-      conversation_id: 'conv_1',
-      turn_hash: 'sha256:turn1',
-      quoted_text: 'love dark mode for coding',
-      role: 'primary',
-      relevance: 'directly stated',
-    }],
+    evidence: [
+      {
+        conversation_id: 'conv_1',
+        turn_hash: 'sha256:turn1',
+        quoted_text: 'love dark mode for coding',
+        role: 'primary',
+        relevance: 'directly stated',
+      },
+    ],
     ...overrides,
   };
 }
@@ -50,13 +52,15 @@ describe('verifyProposal', () => {
   it('rejects proposal with non-existent turn_hash', () => {
     const result = verifyProposal(
       makeProposal({
-        evidence: [{
-          conversation_id: 'conv_1',
-          turn_hash: 'sha256:nonexistent',
-          quoted_text: 'dark mode',
-          role: 'primary',
-          relevance: 'stated',
-        }],
+        evidence: [
+          {
+            conversation_id: 'conv_1',
+            turn_hash: 'sha256:nonexistent',
+            quoted_text: 'dark mode',
+            role: 'primary',
+            relevance: 'stated',
+          },
+        ],
       }),
       existingSPs,
       turns
@@ -67,13 +71,15 @@ describe('verifyProposal', () => {
   it('rejects proposal with unlocatable quote', () => {
     const result = verifyProposal(
       makeProposal({
-        evidence: [{
-          conversation_id: 'conv_1',
-          turn_hash: 'sha256:turn1',
-          quoted_text: 'this text does not exist anywhere in the conversation at all',
-          role: 'primary',
-          relevance: 'stated',
-        }],
+        evidence: [
+          {
+            conversation_id: 'conv_1',
+            turn_hash: 'sha256:turn1',
+            quoted_text: 'this text does not exist anywhere in the conversation at all',
+            role: 'primary',
+            relevance: 'stated',
+          },
+        ],
       }),
       existingSPs,
       turns
@@ -109,17 +115,19 @@ describe('verifyProposal', () => {
   });
 
   it('passes modify proposal with valid target', () => {
-    const sps: SemanticPoint[] = [{
-      id: 'sp_existing1',
-      text: 'User likes dark mode.',
-      extraction_mode: 'llm_extracted',
-      status: 'auto_landed',
-      zone: 'ready',
-      evidence: [],
-      confidence: 0.9,
-      position: 0,
-      staged: true,
-    }];
+    const sps: SemanticPoint[] = [
+      {
+        id: 'sp_existing1',
+        text: 'User likes dark mode.',
+        extraction_mode: 'llm_extracted',
+        status: 'auto_landed',
+        zone: 'ready',
+        evidence: [],
+        confidence: 0.9,
+        position: 0,
+        staged: true,
+      },
+    ];
 
     const result = verifyProposal(
       makeProposal({ type: 'modify', target_sp_id: 'sp_existing1' }),
@@ -152,7 +160,9 @@ describe('overlap detection (L2)', () => {
       dim: 3,
       encode: vi.fn().mockResolvedValue([returnVec]),
       similarity: (a, b) => {
-        let dot = 0, na = 0, nb = 0;
+        let dot = 0,
+          na = 0,
+          nb = 0;
         for (let i = 0; i < a.length; i++) {
           dot += a[i] * b[i];
           na += a[i] * a[i];
@@ -164,26 +174,26 @@ describe('overlap detection (L2)', () => {
     };
   }
 
-  const spsWithEmbedding: SemanticPoint[] = [{
-    id: 'sp_existing',
-    text: 'User likes dark mode.',
-    extraction_mode: 'llm_extracted',
-    status: 'auto_landed',
-    zone: 'ready',
-    evidence: [],
-    confidence: 0.9,
-    position: 0,
-    staged: true,
-  }];
+  const spsWithEmbedding: SemanticPoint[] = [
+    {
+      id: 'sp_existing',
+      text: 'User likes dark mode.',
+      extraction_mode: 'llm_extracted',
+      status: 'auto_landed',
+      zone: 'ready',
+      evidence: [],
+      confidence: 0.9,
+      position: 0,
+      staged: true,
+    },
+  ];
 
   it('returns duplicate when cosine >= 0.95', async () => {
     const embedder = makeMockEmbedder(vecA);
-    const result = await verifyProposal(
-      makeProposal(),
-      spsWithEmbedding,
-      turns,
-      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
-    );
+    const result = await verifyProposal(makeProposal(), spsWithEmbedding, turns, {
+      embedder,
+      existingEmbeddings: new Map([['sp_existing', vecA]]),
+    });
     expect(result).not.toBeNull();
     expect(result!.overlap).toBeDefined();
     expect(result!.overlap!.status).toBe('duplicate');
@@ -194,12 +204,10 @@ describe('overlap detection (L2)', () => {
     // vecForConflict embedded against vecA: cosine ~0.90
     const vecForConflict = [0.9, 0.4, 0.1];
     const embedder = makeMockEmbedder(vecForConflict);
-    const result = await verifyProposal(
-      makeProposal(),
-      spsWithEmbedding,
-      turns,
-      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
-    );
+    const result = await verifyProposal(makeProposal(), spsWithEmbedding, turns, {
+      embedder,
+      existingEmbeddings: new Map([['sp_existing', vecA]]),
+    });
     expect(result).not.toBeNull();
     expect(result!.overlap).toBeDefined();
     expect(result!.overlap!.status).toBe('potential_conflict');
@@ -209,12 +217,10 @@ describe('overlap detection (L2)', () => {
 
   it('returns unique for cosine < 0.85', async () => {
     const embedder = makeMockEmbedder(vecDifferent);
-    const result = await verifyProposal(
-      makeProposal(),
-      spsWithEmbedding,
-      turns,
-      { embedder, existingEmbeddings: new Map([['sp_existing', vecA]]) }
-    );
+    const result = await verifyProposal(makeProposal(), spsWithEmbedding, turns, {
+      embedder,
+      existingEmbeddings: new Map([['sp_existing', vecA]]),
+    });
     expect(result).not.toBeNull();
     expect(result!.overlap).toBeDefined();
     expect(result!.overlap!.status).toBe('unique');
@@ -228,12 +234,10 @@ describe('overlap detection (L2)', () => {
 
   it('skips overlap when existingEmbeddings is empty', async () => {
     const embedder = makeMockEmbedder(vecA);
-    const result = await verifyProposal(
-      makeProposal(),
-      existingSPs,
-      turns,
-      { embedder, existingEmbeddings: new Map() }
-    );
+    const result = await verifyProposal(makeProposal(), existingSPs, turns, {
+      embedder,
+      existingEmbeddings: new Map(),
+    });
     expect(result).not.toBeNull();
     expect(result!.overlap).toBeUndefined();
   });

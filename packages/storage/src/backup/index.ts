@@ -7,8 +7,8 @@
 export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup';
 export { type RestoreResult, restoreFromCfpack } from './restore';
 export {
-  verifyCommitHash,
   type VerifyChainResult,
-  verifyHashChain,
   type VerifyResult,
+  verifyCommitHash,
+  verifyHashChain,
 } from './verify';

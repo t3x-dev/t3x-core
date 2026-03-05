@@ -148,6 +148,7 @@ export class LLMExtractor {
         routing_reason: route.reason,
         evidence: verified.evidence,
         confidence: verified.confidence,
+        ...(verified.low_coverage ? { low_coverage: true } : {}),
         position: position++,
         staged: route.zone === 'ready',
       };

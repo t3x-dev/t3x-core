@@ -217,8 +217,7 @@ export function usePendingCommitState({
   // component does not re-render on every unrelated node/edge change.
   const upstreamCommitHash = useCanvasStore(
     useCallback(
-      (s) =>
-        node?.id ? findUpstreamCommitHash(node.id, s.nodes, s.edges) : null,
+      (s) => (node?.id ? findUpstreamCommitHash(node.id, s.nodes, s.edges) : null),
       [node?.id]
     )
   );
@@ -234,7 +233,13 @@ export function usePendingCommitState({
     if (!effectiveSourceHash) return true; // Truly no parent
     // Has parent commit: only valid if parent is HEAD of main
     return effectiveSourceHash !== latestMainCommitId;
-  }, [data.pendingBranch, data.sourceCommitHash, hasMainCommit, latestMainCommitId, upstreamCommitHash]);
+  }, [
+    data.pendingBranch,
+    data.sourceCommitHash,
+    hasMainCommit,
+    latestMainCommitId,
+    upstreamCommitHash,
+  ]);
 
   // ========== Layout state ==========
   const [sidebarSourceDividerPos, setSidebarSourceDividerPos] = useState(240);
@@ -732,7 +737,7 @@ export function usePendingCommitState({
           }
         }
 
-        const commitV4 = await api.createCommitV4(projectId, v4Sentences, {
+        const commitResult = await api.createCommitV4(projectId, v4Sentences, {
           branch,
           message: data.title,
           parents: parentCommits,
@@ -740,7 +745,7 @@ export function usePendingCommitState({
           source_refs: commitSourceRefs.length > 0 ? commitSourceRefs : undefined,
         });
 
-        commitHash = commitV4.hash;
+        commitHash = commitResult.commit.hash;
       } else {
         throw new Error(
           'Cannot create commit: no sentence data available. Ensure the source has been curated with NLP extraction enabled.'
@@ -889,7 +894,9 @@ export function usePendingCommitState({
       const buildFromRawText = (fullText: string, title: string) => {
         const tokens = tokenizeText(fullText);
         // Use ref to avoid capturing a stale textBlocks value in this async closure
-        const existingBlock = textBlocksRef.current.find((b) => b.sourceNodeId === ownConversationId);
+        const existingBlock = textBlocksRef.current.find(
+          (b) => b.sourceNodeId === ownConversationId
+        );
         setTextBlocks([
           {
             id: `block-self-${ownConversationId}`,
@@ -947,7 +954,9 @@ export function usePendingCommitState({
 
           // Try to preserve existing selections for this block
           // Use ref to avoid stale closure over textBlocks from the effect's capture point
-          const existingBlock = textBlocksRef.current.find((b) => b.sourceNodeId === ownConversationId);
+          const existingBlock = textBlocksRef.current.find(
+            (b) => b.sourceNodeId === ownConversationId
+          );
 
           setTextBlocks([
             {
@@ -980,7 +989,13 @@ export function usePendingCommitState({
 
     buildTextBlocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.id, projectId, data?.conversationId, data?.sourceConversationId, data?.baselineSummary]);
+  }, [
+    node?.id,
+    projectId,
+    data?.conversationId,
+    data?.sourceConversationId,
+    data?.baselineSummary,
+  ]);
 
   // Reinitialize state when node changes
   useEffect(() => {

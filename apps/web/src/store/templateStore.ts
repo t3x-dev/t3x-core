@@ -23,6 +23,8 @@ interface TemplateState {
 
 // Generation counter to discard stale fetch results when filters change rapidly
 let fetchGen = 0;
+// Debounce timer for search input
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useTemplateStore = create<TemplateState>((set, get) => ({
   templates: [],
@@ -66,7 +68,8 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
 
   setSearch: (search) => {
     set({ search });
-    get().fetchTemplates();
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => get().fetchTemplates(), 300);
   },
 
   deleteTemplate: async (id) => {

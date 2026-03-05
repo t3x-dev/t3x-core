@@ -113,7 +113,10 @@ describe('prepareMerge', () => {
     const result = prepareMerge([minimal], []);
 
     expect(result.onlyInSource).toHaveLength(1);
-    expect(result.onlyInSource[0].sentence).toEqual(minimal);
+    // position is auto-assigned by diffCommits for merge order preservation
+    expect(result.onlyInSource[0].sentence).toMatchObject(minimal);
+    expect(result.onlyInSource[0].sentence.id).toBe('s1');
+    expect(result.onlyInSource[0].sentence.text).toBe('Test');
   });
 
   test('MergeCandidate has no constraints field (V4)', () => {

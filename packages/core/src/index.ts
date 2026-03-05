@@ -12,6 +12,15 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 
+// Autopilot (auto-commit evaluator)
+export {
+  type AutoCommitCandidate,
+  type AutoCommitPlan,
+  type AutopilotConfig,
+  DEFAULT_AUTOPILOT_CONFIG,
+  evaluateAutoCommit,
+  mergeAutopilotConfig,
+} from './autopilot';
 // Commit Builders
 export {
   buildConstraints,
@@ -63,6 +72,7 @@ export {
   type DiffStats,
   DiffType,
   diffCommits,
+  diffCommitsWithEmbeddings,
   EQUIVALENT_THRESHOLD,
   hungarian,
   incrementalDiffCommits,
@@ -74,21 +84,28 @@ export {
   type SegmentMatch,
   type SentencePair,
   tokenize,
+  tokenizeForMatching,
   type WordDiffSegment,
   wordDiff,
 } from './diff';
 // Extractors (Ring 1/2/3)
 export {
+  type AdaptiveConfig,
+  type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
   // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
+  // Incremental Extraction (LLM pipeline)
+  buildAdaptiveSection,
   // LLM Extraction
   buildExtractionPrompt,
-  // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
+  // Ring 4: Relations
+  buildRelationPrompt,
   buildStyleSeed,
+  computeAdaptiveConfig,
   computeAdaptiveThresholds,
   createEmptyRing1,
   createEmptyRing2,
@@ -96,6 +113,7 @@ export {
   createEmptyRingOutput,
   createLLMExtractor,
   createPolarityRuleEngine,
+  createRelationExtractor,
   createRingExtractor,
   type ExtractedSentence,
   type ExtractionItem,
@@ -121,6 +139,10 @@ export {
   type PreferenceRelation,
   parseExtractionResponse,
   parseIncrementalResponse,
+  parseRelationResponse,
+  RelationExtractor,
+  type RelationItem,
+  RelationParseError,
   type Ring1Output,
   type Ring2Output,
   type Ring3Output,
@@ -147,6 +169,20 @@ export {
   type ProofStep,
   verifyMembership,
 } from './hash';
+// Knowledge Graph (cross-conversation entity/topic clustering + graph builder)
+export {
+  buildKnowledgeGraph,
+  type ClusterOptions,
+  type ClusterResult,
+  clusterSentences,
+  cosineSimilarity as knowledgeCosineSimilarity,
+  extractTopTerms,
+  type GraphBuildEdge,
+  type GraphBuildInput,
+  type GraphBuildNode,
+  type GraphBuildOutput,
+  type SentenceInput as KnowledgeSentenceInput,
+} from './knowledge';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // @see docs/plans/parallel-dev-guidelines.md
@@ -158,6 +194,10 @@ export {
   buildCorrectivePrompt,
   // Generation (GEN-1)
   buildLeafPrompt,
+  // Constraint Suggestion
+  buildRound1Prompt,
+  buildRound2Prompt,
+  buildRound3Prompt,
   buildSystemPrompt,
   type ConstraintCheckResult,
   type ConstraintSuggestionResult,
@@ -171,6 +211,7 @@ export {
   type GenerateOptions,
   type GenerateResult,
   GenerationError,
+  type GenerationMode,
   generateAssertionId,
   // Generation (GEN-2)
   generateLeafOutput,
@@ -179,15 +220,17 @@ export {
   getTypeInstructions,
   isGenerationConfigured,
   type LeafTemplate,
-  // Constraint Suggestion
+  type ModeGenerateOptions,
   type MultiRoundOptions,
   type MultiRoundResult,
+  modeGenerate,
   multiRoundGenerate,
   type RoundConfig,
   SEMANTIC_EXCLUDE_THRESHOLD,
   // Constants
   SEMANTIC_REQUIRE_THRESHOLD,
   type SemanticThreshold,
+  type StylePreferences,
   type SuggestConstraintsOptions,
   type SuggestedConstraint,
   suggestConstraints,
@@ -197,6 +240,7 @@ export {
   // Validation (VAL-1, VAL-2)
   validateConstraints,
   validateConstraintsExactOnly,
+  validateConstraintsSimple,
   validateTemplateSyntax,
 } from './leaf';
 // LLM Provider (interface)
@@ -205,16 +249,32 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
-// Merge (Two-way merge for combining two commits - Issue #71)
+// Multimodal content blocks for turns
+export {
+  type AudioBlock,
+  type ContentBlock,
+  type FileBlock,
+  type ImageBlock,
+  isTextOnly,
+  type TextBlock,
+  textFromBlocks,
+  textToBlocks,
+} from './multimodal';
+// Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]
 export {
   executeMerge,
+  executeThreeWayMerge,
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
   type MergeSuggestion,
   prepareMerge,
+  prepareMergeWithEmbeddings,
+  prepareThreeWayMerge,
   suggestMerge,
+  type ThreeWayConflict,
+  type ThreeWayMergeResult,
 } from './merge';
 // Provider interfaces and implementations
 export {
@@ -364,10 +424,15 @@ export {
   type Pin,
   type PinType,
   type ProjectExtractionConfig,
+  RELATION_TYPES,
+  type RelationExtractionResult,
+  // Ring 4: Relations
+  type RelationType,
   type RequireConstraint as RequireConstraintV4,
   type SemanticPoint,
   // Sentence
   type Sentence as SentenceV4,
+  type SentenceRelation,
   type SentenceSourceRef,
   type SentenceV5,
   // Share Token

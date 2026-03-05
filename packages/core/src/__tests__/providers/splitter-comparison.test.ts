@@ -527,7 +527,7 @@ const CASES: TestCase[] = [
     id: 'real-11',
     category: 'Real-world',
     input:
-      "The deployment process involves building the Docker image (see Dockerfile.prod), pushing to ECR, and updating the ECS task definition. The CI/CD pipeline in .github/workflows/deploy.yml handles this automatically.",
+      'The deployment process involves building the Docker image (see Dockerfile.prod), pushing to ECR, and updating the ECS task definition. The CI/CD pipeline in .github/workflows/deploy.yml handles this automatically.',
     expected: null,
     firstContains: 'Dockerfile.prod',
   },
@@ -547,8 +547,7 @@ const CASES: TestCase[] = [
   {
     id: 'code-01',
     category: 'Code-mixed',
-    input:
-      'Use console.log() for debugging. It prints to stdout. Remove it before committing.',
+    input: 'Use console.log() for debugging. It prints to stdout. Remove it before committing.',
     expected: null,
     firstContains: 'console.log()',
     count: 3,
@@ -633,7 +632,7 @@ const CASES: TestCase[] = [
 
 function evaluate(
   splitter: (text: string) => Array<{ text: string }>,
-  tc: TestCase,
+  tc: TestCase
 ): { pass: boolean; texts: string[]; reason?: string } {
   const results = splitter(tc.input);
   const texts = results.map((s) => s.text);
@@ -731,13 +730,27 @@ describe('Comprehensive Splitter Comparison (sentenceRules vs Intl.Segmenter)', 
     console.log('╔══════════════════════════════════════════════════════════════════════╗');
     console.log('║           COMPREHENSIVE SPLITTER COMPARISON REPORT                  ║');
     console.log('╠══════════════════════════════════════════════════════════════════════╣');
-    console.log(`║  Total test cases:     ${String(total).padStart(3)}                                        ║`);
-    console.log(`║  Rules pass:           ${String(rulePassCount).padStart(3)}/${total}  (${((rulePassCount / total) * 100).toFixed(1).padStart(5)}%)                          ║`);
-    console.log(`║  Intl.Segmenter pass:  ${String(icuPassCount).padStart(3)}/${total}  (${((icuPassCount / total) * 100).toFixed(1).padStart(5)}%)                          ║`);
-    console.log(`║  Divergences:          ${String(divergences.length).padStart(3)}                                        ║`);
-    console.log(`║  ICU wins (only ICU):  ${String(icuWins.length).padStart(3)}                                        ║`);
-    console.log(`║  Rules wins (only R):  ${String(ruleWins.length).padStart(3)}                                        ║`);
-    console.log(`║  Both fail:            ${String(bothFail.length).padStart(3)}                                        ║`);
+    console.log(
+      `║  Total test cases:     ${String(total).padStart(3)}                                        ║`
+    );
+    console.log(
+      `║  Rules pass:           ${String(rulePassCount).padStart(3)}/${total}  (${((rulePassCount / total) * 100).toFixed(1).padStart(5)}%)                          ║`
+    );
+    console.log(
+      `║  Intl.Segmenter pass:  ${String(icuPassCount).padStart(3)}/${total}  (${((icuPassCount / total) * 100).toFixed(1).padStart(5)}%)                          ║`
+    );
+    console.log(
+      `║  Divergences:          ${String(divergences.length).padStart(3)}                                        ║`
+    );
+    console.log(
+      `║  ICU wins (only ICU):  ${String(icuWins.length).padStart(3)}                                        ║`
+    );
+    console.log(
+      `║  Rules wins (only R):  ${String(ruleWins.length).padStart(3)}                                        ║`
+    );
+    console.log(
+      `║  Both fail:            ${String(bothFail.length).padStart(3)}                                        ║`
+    );
     console.log('╠══════════════════════════════════════════════════════════════════════╣');
     console.log('║  BY CATEGORY                                                        ║');
     console.log('╠══════════════════════════════════════════════════════════════════════╣');
@@ -747,7 +760,7 @@ describe('Comprehensive Splitter Comparison (sentenceRules vs Intl.Segmenter)', 
       const iPct = ((cs.icuPass / cs.total) * 100).toFixed(0).padStart(3);
       const cat = cs.category.padEnd(15);
       console.log(
-        `║  ${cat} ${String(cs.total).padStart(2)} cases │ Rules: ${cs.rulePass}/${cs.total} (${rPct}%) │ ICU: ${cs.icuPass}/${cs.total} (${iPct}%) ║`,
+        `║  ${cat} ${String(cs.total).padStart(2)} cases │ Rules: ${cs.rulePass}/${cs.total} (${rPct}%) │ ICU: ${cs.icuPass}/${cs.total} (${iPct}%) ║`
       );
     }
 

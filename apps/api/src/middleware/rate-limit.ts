@@ -23,12 +23,18 @@ const WINDOW_MS = 60_000; // 1 minute
 class RateLimiter {
   private store = new Map<string, RateLimitEntry>();
   private readonly limit: number;
+  private intervalId: ReturnType<typeof setInterval>;
 
   constructor(limit: number) {
     this.limit = limit;
 
     // Periodic cleanup every 5 minutes
-    setInterval(() => this.cleanup(), 5 * 60_000);
+    this.intervalId = setInterval(() => this.cleanup(), 5 * 60_000);
+  }
+
+  /** Stop the periodic cleanup timer (for graceful shutdown / test cleanup). */
+  destroy(): void {
+    clearInterval(this.intervalId);
   }
 
   /**

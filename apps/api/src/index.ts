@@ -31,24 +31,29 @@ import {
   diffRoutes,
   draftsRoutes,
   exportRoutes,
+  extractionFeedbackRoutes,
   extractRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
+  relationsRoutes,
   runnerRoutes,
   runsRoutes,
   statusRoutes,
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
+import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
 import { recipesRoutes } from './routes/recipes.openapi';
+import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
@@ -136,10 +141,12 @@ api.route('/', runnerRoutes); // /v1/runner/*
 api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', draftsRoutes); // /v1/drafts
 api.route('/', extractRoutes); // /v1/extract
+api.route('/', extractionFeedbackRoutes); // /v1/projects/:projectId/extraction-feedback/*
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
 api.route('/', commitsV4Routes); // /v1/commits-v4, /v1/projects/:projectId/commits-v4
+api.route('/', relationsRoutes); // /v1/commits-v4/:hash/relations
 api.route('/', apiKeysRoutes); // /v1/api-keys
 api.route('/', shareRoutes); // /v1/share
 api.route('/', comparisonsRoutes); // /v1/comparisons
@@ -150,6 +157,9 @@ api.route('/', importRoutes); // /v1/import
 api.route('/', ingestRoutes); // /v1/projects/:projectId/ingest/webhook
 api.route('/', notificationsRoutes); // /v1/notifications
 api.route('/', providersRoutes); // /v1/providers
+api.route('/', searchRoutes); // /v1/search
+api.route('/', knowledgeGraphRoutes); // /v1/projects/:projectId/knowledge-graph/*
+api.route('/', autopilotRoutes); // /v1/projects/:projectId/autopilot/*, /v1/drafts/:draftId/auto-commit
 api.route('/', authCallbackRoutes); // /v1/auth/callback
 
 // OpenAPI spec endpoint
@@ -175,6 +185,10 @@ api.doc('/openapi.json', {
     { name: 'Drafts', description: 'Draft management' },
     { name: 'Diff', description: 'Semantic diff operations' },
     { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
+    {
+      name: 'Extraction Feedback',
+      description: 'Adaptive learning loop: feedback stats and threshold calibration',
+    },
     { name: 'Merge', description: 'Merge operations' },
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
@@ -187,6 +201,10 @@ api.doc('/openapi.json', {
     { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
     { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
     {
+      name: 'Relations',
+      description: 'Inter-sentence relation extraction (Ring 4)',
+    },
+    {
       name: 'Commits V4',
       description: 'Commits v4 (pure knowledge, sentences only, no constraints)',
     },
@@ -196,6 +214,15 @@ api.doc('/openapi.json', {
       description: 'Workflow recipe automation (event-triggered action pipelines)',
     },
     { name: 'Import', description: 'Import project data from archives' },
+    { name: 'Search', description: 'Hybrid search (keyword + semantic + RRF fusion)' },
+    {
+      name: 'Knowledge Graph',
+      description: 'Cross-conversation knowledge graph (entity clustering, typed edges, traversal)',
+    },
+    {
+      name: 'Autopilot',
+      description: 'Knowledge autopilot configuration and auto-commit',
+    },
   ],
 });
 

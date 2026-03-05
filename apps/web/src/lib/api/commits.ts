@@ -242,6 +242,12 @@ export async function updateCommitV4Position(
   return handleResponse<CommitV4>(res);
 }
 
+/** Response from createCommitV4 — commit data + optional conflict report */
+export interface CreateCommitV4Result {
+  commit: CommitV4;
+  conflicts: ConflictReport | null;
+}
+
 /**
  * Create a V4 commit (pure knowledge - sentences only)
  *
@@ -250,6 +256,9 @@ export async function updateCommitV4Position(
  *
  * By default (inherit_parent_sentences=true), sentences from parent commits
  * are automatically inherited into the new commit. Set to false to disable.
+ *
+ * Returns the created commit plus an optional conflict report.
+ * If no embedding provider is configured on the server, conflicts will be null.
  */
 export async function createCommitV4(
   projectId: string,
@@ -268,7 +277,7 @@ export async function createCommitV4(
      */
     inherit_parent_sentences?: boolean;
   }
-): Promise<CommitV4> {
+): Promise<CreateCommitV4Result> {
   const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -285,7 +294,7 @@ export async function createCommitV4(
       inherit_parent_sentences: options?.inherit_parent_sentences,
     }),
   });
-  return handleResponse<CommitV4>(res);
+  return handleResponse<CreateCommitV4Result>(res);
 }
 
 // ============================================================================

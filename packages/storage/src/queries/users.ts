@@ -9,7 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { User } from '@t3x/core';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type UserRecord, users } from '../schema-v4';
 
@@ -112,37 +112,38 @@ export async function findUserById(db: AnyDB, id: string): Promise<User | null> 
 /**
  * Find or create a user by OAuth provider (upsert pattern).
  *
- * If a user with the given provider/provider_id exists, returns it
- * (and updates name/email/avatar if changed).
- * Otherwise, creates a new user.
+ * Uses INSERT ... ON CONFLICT DO UPDATE to avoid TOCTOU race conditions
+ * when concurrent OAuth login requests arrive for the same new user.
+ * Profile fields (name, email, avatar) are updated on conflict.
  *
  * @returns The User record
  */
 export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promise<User> {
-  const existing = await findUserByProvider(db, input.provider, input.provider_id);
+  const id = generateUserId();
+  const now = new Date();
 
-  if (existing) {
-    // Update profile fields if they changed
-    const updates: Partial<{ name: string | null; email: string | null; avatarUrl: string | null }> =
-      {};
-    if (input.name !== undefined && input.name !== existing.name) updates.name = input.name;
-    if (input.email !== undefined && input.email !== existing.email) updates.email = input.email;
-    if (input.avatar_url !== undefined && input.avatar_url !== existing.avatar_url)
-      updates.avatarUrl = input.avatar_url;
+  const [row] = await db
+    .insert(users)
+    .values({
+      id,
+      provider: input.provider,
+      providerId: input.provider_id,
+      email: input.email ?? null,
+      name: input.name ?? null,
+      avatarUrl: input.avatar_url ?? null,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [users.provider, users.providerId],
+      set: {
+        name: sql`COALESCE(${input.name ?? null}, ${users.name})`,
+        email: sql`COALESCE(${input.email ?? null}, ${users.email})`,
+        avatarUrl: sql`COALESCE(${input.avatar_url ?? null}, ${users.avatarUrl})`,
+      },
+    })
+    .returning();
 
-    if (Object.keys(updates).length > 0) {
-      const [updated] = await db
-        .update(users)
-        .set(updates)
-        .where(eq(users.id, existing.id))
-        .returning();
-      return rowToUser(updated);
-    }
-
-    return existing;
-  }
-
-  return createUser(db, input);
+  return rowToUser(row);
 }
 
 // ============================================================

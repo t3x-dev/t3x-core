@@ -104,6 +104,18 @@ describe('RingExtractor', () => {
       expect(lemmas).not.toContain('the');
     });
 
+    it('assigns 0.5 fallback confidence for non-entity keywords', async () => {
+      const result = await extractor.extract('turn-1', 'The hotel has a beautiful pool.');
+
+      // Non-entity nouns like "hotel" and "pool" have no entity salience,
+      // so they should get the 0.5 fallback (not 1.0).
+      for (const kw of result.ring1.keywords) {
+        if (kw.entityType === null) {
+          expect(kw.confidence).toBe(0.5);
+        }
+      }
+    });
+
     it('deduplicates keywords by lemma', async () => {
       const result = await extractor.extract('turn-1', 'The hotels are nice. I like these hotels.');
 

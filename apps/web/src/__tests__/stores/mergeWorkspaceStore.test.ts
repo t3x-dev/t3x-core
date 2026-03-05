@@ -44,8 +44,6 @@ const createMockPrepared = (): Merge2WayResult => ({
         { type: 'unchanged', text: 'per month.' },
       ],
       resolution: undefined,
-      sourceConstraints: [],
-      targetConstraints: [],
     },
     {
       source: createSentence('source-2', 'Meeting on Monday.'),
@@ -56,16 +54,10 @@ const createMockPrepared = (): Merge2WayResult => ({
         { type: 'added', text: 'Tuesday' },
       ],
       resolution: undefined,
-      sourceConstraints: [],
-      targetConstraints: [],
     },
   ],
-  onlyInSource: [
-    { sentence: createSentence('only-source-1', 'Only in source.'), constraints: [], keep: true },
-  ],
-  onlyInTarget: [
-    { sentence: createSentence('only-target-1', 'Only in target.'), constraints: [], keep: true },
-  ],
+  onlyInSource: [{ sentence: createSentence('only-source-1', 'Only in source.'), keep: true }],
+  onlyInTarget: [{ sentence: createSentence('only-target-1', 'Only in target.'), keep: true }],
 });
 
 describe('MergeWorkspaceStore - Extended Resolutions', () => {

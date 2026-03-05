@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { spToSentence } from '../spToSentence';
 import type { SemanticPoint } from '../../types/v4';
+import { spToSentence } from '../spToSentence';
 
 function makeSP(overrides: Partial<SemanticPoint> = {}): SemanticPoint {
   return {
@@ -28,7 +28,7 @@ function makeSP(overrides: Partial<SemanticPoint> = {}): SemanticPoint {
         quoted_text: 'dark mode helps',
         start_char: 5,
         end_char: 20,
-        match_score: 0.90,
+        match_score: 0.9,
         role: 'supporting',
         relevance: 'confirms preference',
         enabled: true,
@@ -91,10 +91,7 @@ describe('spToSentence', () => {
 
   it('skips disabled evidence', () => {
     const sp = makeSP({
-      evidence: [
-        { ...makeSP().evidence[0] },
-        { ...makeSP().evidence[1], enabled: false },
-      ],
+      evidence: [{ ...makeSP().evidence[0] }, { ...makeSP().evidence[1], enabled: false }],
     });
     const result = spToSentence(sp);
     expect(result.supporting_refs).toEqual([]);
