@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Loader2,
   MessageSquarePlus,
+  Network,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -152,6 +153,17 @@ export function CanvasToolbar({
 
         <div className="flex items-center gap-2">
           {viewSwitcher}
+          <Link
+            href={`/project/${projectId}/knowledge-graph`}
+            title="Knowledge Graph"
+            className={cn(
+              'inline-flex items-center justify-center h-9 w-9 rounded-xl transition-all',
+              'text-[var(--text-secondary)] hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary'
+            )}
+          >
+            <Network className="h-4 w-4" />
+          </Link>
           <Button
             variant="ghost"
             size="sm"

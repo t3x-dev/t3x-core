@@ -9,7 +9,7 @@
  */
 
 import { Bot, Settings, Terminal, User } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { mergeHighlightRanges } from '@/lib/highlightUtils';
 import type {
@@ -19,6 +19,8 @@ import type {
   TurnBubbleData,
   TurnBubbleProps,
 } from '@/types/sourceContext';
+import { type ContentBlock, ContentBlockRenderer } from './ContentBlockRenderer';
+import { ImageLightbox } from './ImageLightbox';
 
 // Re-export types for backward compatibility
 export type { ColoredHighlightRange, HighlightColor, TurnBubbleData, TurnBubbleProps };
@@ -54,6 +56,7 @@ export function TurnBubble({
   showTargetRing = true,
 }: TurnBubbleProps) {
   const isUser = turn.role === 'user';
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // Collect all highlights (from both single and multiple sources)
   const allHighlights: TurnHighlight[] = [];
@@ -66,6 +69,22 @@ export function TurnBubble({
 
   // Render content with highlights
   const renderContent = () => {
+    // Path 0: Multimodal content blocks
+    if (turn.content_blocks && turn.content_blocks.length > 0) {
+      return (
+        <div className="flex flex-col gap-2">
+          {turn.content_blocks.map((block: ContentBlock, i: number) => (
+            <ContentBlockRenderer
+              // biome-ignore lint/suspicious/noArrayIndexKey: content blocks have no unique ID
+              key={i}
+              block={block}
+              onImageClick={(url) => setLightboxUrl(url)}
+            />
+          ))}
+        </div>
+      );
+    }
+
     // Path A: Multi-color highlights (each range has its own color)
     if (turn.coloredHighlights && turn.coloredHighlights.length > 0) {
       const sorted = [...turn.coloredHighlights].sort((a, b) => a.start - b.start);
@@ -174,6 +193,13 @@ export function TurnBubble({
         <p className="text-sm whitespace-pre-wrap break-words text-[var(--text-primary)]">
           {renderContent()}
         </p>
+        {lightboxUrl && (
+          <ImageLightbox
+            url={lightboxUrl}
+            open={!!lightboxUrl}
+            onClose={() => setLightboxUrl(null)}
+          />
+        )}
       </div>
     </div>
   );
