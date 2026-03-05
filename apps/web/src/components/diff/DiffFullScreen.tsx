@@ -28,10 +28,7 @@ import { DiffStatsBar } from './DiffStatsBar';
 // ============================================================================
 
 /** Format column label: "branch @ shortHash" or just shortHash */
-function formatCommitLabel(
-  branch: string | null | undefined,
-  hash: string
-): string {
+function formatCommitLabel(branch: string | null | undefined, hash: string): string {
   const shortHash = hash.replace('sha256:', '').slice(0, 7);
   return branch ? `${branch} @ ${shortHash}` : shortHash;
 }

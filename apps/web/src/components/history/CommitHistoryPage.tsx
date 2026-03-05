@@ -118,7 +118,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, selectedBranch]);
 
   // Keyboard navigation

@@ -20,7 +20,9 @@ import type {
   SentenceV4,
 } from '@t3x/core';
 import { computeCommitV4Hash } from '@t3x/core';
+
 export { computeCommitV4Hash } from '@t3x/core';
+
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
@@ -216,7 +218,12 @@ export async function createCommitV4Atomic(
   return db.transaction(async (tx) => {
     if (input.branch && input.project_id) {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.project_id || ''}))`);
-      await validateMainBranchLinearity(tx as AnyDB, input.project_id, input.branch, input.parents ?? []);
+      await validateMainBranchLinearity(
+        tx as AnyDB,
+        input.project_id,
+        input.branch,
+        input.parents ?? []
+      );
     }
     return createCommitV4(tx as AnyDB, input, options);
   });

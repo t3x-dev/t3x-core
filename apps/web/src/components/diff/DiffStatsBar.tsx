@@ -61,8 +61,7 @@ export function DiffStatsBar({
       key: 'equivalent',
       label: t('equivalent_sentences'),
       count: aEquivalent,
-      color:
-        'border border-teal-500/40 text-teal-500 bg-transparent',
+      color: 'border border-teal-500/40 text-teal-500 bg-transparent',
       icon: Equal,
     },
     {

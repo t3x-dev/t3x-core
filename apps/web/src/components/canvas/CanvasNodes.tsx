@@ -657,9 +657,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
     let cancelled = false;
     getConversationContext(data.conversationId)
-      .then((ctx) => { if (!cancelled) setContextConfig(ctx); })
+      .then((ctx) => {
+        if (!cancelled) setContextConfig(ctx);
+      })
       .catch(() => {}); // Silent fail - context indicator just won't show
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [data.conversationId]);
 
   // Context label helper
@@ -748,7 +752,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
     e.stopPropagation();
     const hash =
       data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
-    navigator.clipboard.writeText(hash)
+    navigator.clipboard
+      .writeText(hash)
       .then(() => {
         setCopiedHash(true);
         setTimeout(() => setCopiedHash(false), 2000);

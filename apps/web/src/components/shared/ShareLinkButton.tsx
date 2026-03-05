@@ -105,9 +105,7 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
           )}
           {copied ? 'Copied!' : 'Share'}
         </Button>
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     );
   }

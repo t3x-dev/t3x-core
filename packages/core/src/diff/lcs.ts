@@ -91,8 +91,10 @@ export function wordDiff(from: string, to: string): WordDiffSegment[] {
   const fullWordsB = tokenize(to);
 
   // Truncate to same limit as LCS to ensure consistent diff output
-  const wordsA = fullWordsA.length > MAX_LCS_WORDS ? fullWordsA.slice(0, MAX_LCS_WORDS) : fullWordsA;
-  const wordsB = fullWordsB.length > MAX_LCS_WORDS ? fullWordsB.slice(0, MAX_LCS_WORDS) : fullWordsB;
+  const wordsA =
+    fullWordsA.length > MAX_LCS_WORDS ? fullWordsA.slice(0, MAX_LCS_WORDS) : fullWordsA;
+  const wordsB =
+    fullWordsB.length > MAX_LCS_WORDS ? fullWordsB.slice(0, MAX_LCS_WORDS) : fullWordsB;
   const common = lcs(wordsA, wordsB);
 
   const segments: WordDiffSegment[] = [];
@@ -103,10 +105,7 @@ export function wordDiff(from: string, to: string): WordDiffSegment[] {
   while (ai < wordsA.length || bi < wordsB.length) {
     // Collect removed words (in A but not in common)
     const removed: string[] = [];
-    while (
-      ai < wordsA.length &&
-      (ci >= common.length || !tokensEqual(wordsA[ai], common[ci]))
-    ) {
+    while (ai < wordsA.length && (ci >= common.length || !tokensEqual(wordsA[ai], common[ci]))) {
       removed.push(wordsA[ai++]);
     }
     if (removed.length > 0) {
@@ -115,10 +114,7 @@ export function wordDiff(from: string, to: string): WordDiffSegment[] {
 
     // Collect added words (in B but not in common)
     const added: string[] = [];
-    while (
-      bi < wordsB.length &&
-      (ci >= common.length || !tokensEqual(wordsB[bi], common[ci]))
-    ) {
+    while (bi < wordsB.length && (ci >= common.length || !tokensEqual(wordsB[bi], common[ci]))) {
       added.push(wordsB[bi++]);
     }
     if (added.length > 0) {

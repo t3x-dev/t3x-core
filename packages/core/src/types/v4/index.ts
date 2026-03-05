@@ -1076,12 +1076,12 @@ export const RELATION_TYPES = [
 export type RelationType = (typeof RELATION_TYPES)[number];
 
 export interface SentenceRelation {
-  id: string;                    // rel_abc123
-  source_id: string;             // s_xxx (from sentence)
-  target_id: string;             // s_yyy (to sentence)
+  id: string; // rel_abc123
+  source_id: string; // s_xxx (from sentence)
+  target_id: string; // s_yyy (to sentence)
   type: RelationType;
-  confidence: number;            // 0.0 - 1.0
-  reasoning: string;             // LLM explanation
+  confidence: number; // 0.0 - 1.0
+  reasoning: string; // LLM explanation
 }
 
 export interface RelationExtractionResult {

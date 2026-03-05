@@ -28,9 +28,7 @@ function getWordSegmenter(): Intl.Segmenter {
  */
 export function tokenize(text: string): string[] {
   const segmenter = getWordSegmenter();
-  return [...segmenter.segment(text)]
-    .filter((s) => s.isWordLike)
-    .map((s) => s.segment);
+  return [...segmenter.segment(text)].filter((s) => s.isWordLike).map((s) => s.segment);
 }
 
 /**

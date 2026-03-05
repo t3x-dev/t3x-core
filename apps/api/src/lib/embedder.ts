@@ -64,10 +64,10 @@ export function getEmbedder(): EmbeddingProvider | null {
       ...(proxyFetch && { fetch: proxyFetch }),
     });
     initialized = true;
-    pinoLogger.info({ embedder_id: embedderInstance.id }, "initialized Google AI embedder");
+    pinoLogger.info({ embedder_id: embedderInstance.id }, 'initialized Google AI embedder');
     return embedderInstance;
   } catch (err) {
-    pinoLogger.error({ err }, "failed to initialize embedder");
+    pinoLogger.error({ err }, 'failed to initialize embedder');
     initialized = true;
     return null;
   }

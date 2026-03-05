@@ -11,10 +11,7 @@ interface CollectOptions {
   maxLessons?: number;
 }
 
-export function collectLessons(
-  leaves: LeafLike[],
-  options?: CollectOptions,
-): string[] {
+export function collectLessons(leaves: LeafLike[], options?: CollectOptions): string[] {
   const max = options?.maxLessons ?? 10;
   const seen = new Set<string>();
   const lessons: string[] = [];

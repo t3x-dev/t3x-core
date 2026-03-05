@@ -29,9 +29,7 @@ function maskAuth(authJson: string | null): unknown {
     const auth = JSON.parse(authJson);
     if (auth?.token) {
       auth.token =
-        auth.token.length > 8
-          ? `${auth.token.slice(0, 4)}****${auth.token.slice(-4)}`
-          : '********';
+        auth.token.length > 8 ? `${auth.token.slice(0, 4)}****${auth.token.slice(-4)}` : '********';
     }
     return auth;
   } catch {

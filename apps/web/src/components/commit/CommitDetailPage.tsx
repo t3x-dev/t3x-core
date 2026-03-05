@@ -185,7 +185,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     // Derive confidence: prefer sentence.confidence > diff.similarity > nothing.
     // Never fabricate 100% — only show real data.
     function derivedConfidence(
-      diff: { diffType: string; similarity?: number } | undefined,
+      diff: { diffType: string; similarity?: number } | undefined
     ): number | undefined {
       if (diff?.similarity != null) return diff.similarity;
       return undefined;

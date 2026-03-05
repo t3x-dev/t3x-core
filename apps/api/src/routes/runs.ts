@@ -171,7 +171,10 @@ runsRoutes.post('/v1/runs', async (c) => {
         rules_ref: input.leaf?.rules_ref,
         title: leaf.title,
       };
-      pinoLogger.info({ leaf_id: input.leaf_id, output_length: leaf.output.length }, "resolved leaf_id to output");
+      pinoLogger.info(
+        { leaf_id: input.leaf_id, output_length: leaf.output.length },
+        'resolved leaf_id to output'
+      );
     }
 
     await insertRun(db, {
@@ -189,7 +192,7 @@ runsRoutes.post('/v1/runs', async (c) => {
       metadata_json: input.metadata ? JSON.stringify(input.metadata) : null,
     });
 
-    pinoLogger.info({ run_id }, "created run, forwarding to Runner");
+    pinoLogger.info({ run_id }, 'created run, forwarding to Runner');
 
     // Forward to Runner
     const runnerPayload = {
@@ -228,15 +231,15 @@ runsRoutes.post('/v1/runs', async (c) => {
           });
         }
 
-        pinoLogger.info({ run_id, runner_run_id }, "Runner accepted run");
+        pinoLogger.info({ run_id, runner_run_id }, 'Runner accepted run');
       } else {
         const errorText = await runnerResponse.text();
         warning = `Runner returned ${runnerResponse.status}: ${errorText}`;
-        pinoLogger.warn({ run_id, warning }, "Runner returned error");
+        pinoLogger.warn({ run_id, warning }, 'Runner returned error');
       }
     } catch (err) {
       warning = `Failed to reach Runner: ${err instanceof Error ? err.message : String(err)}`;
-      pinoLogger.warn({ run_id, warning }, "failed to reach Runner");
+      pinoLogger.warn({ run_id, warning }, 'failed to reach Runner');
     }
 
     return c.json({
@@ -249,7 +252,7 @@ runsRoutes.post('/v1/runs', async (c) => {
       },
     });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error creating run");
+    pinoLogger.error({ err: error }, 'error creating run');
     return c.json(
       {
         success: false,
@@ -273,7 +276,7 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
     const body = await c.req.json();
     const data = IngestSchema.parse(body);
 
-    pinoLogger.info({ run_id: data.run_id, status: data.status }, "received ingest");
+    pinoLogger.info({ run_id: data.run_id, status: data.status }, 'received ingest');
 
     // Update run in database
     const db = await getDB();
@@ -305,7 +308,16 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
       ...(mergedMetadataJson && { metadata_json: mergedMetadataJson }),
     });
 
-    pinoLogger.info({ run_id: data.run_id, status: data.status, has_trace_summary: !!data.trace_summary, has_full_trace: !!data.full_trace, has_metadata: !!data.metadata }, "updated run");
+    pinoLogger.info(
+      {
+        run_id: data.run_id,
+        status: data.status,
+        has_trace_summary: !!data.trace_summary,
+        has_full_trace: !!data.full_trace,
+        has_metadata: !!data.metadata,
+      },
+      'updated run'
+    );
 
     // Phase 3: Write back assertions to Leaf + create history snapshot
     const run = await getRun(db, data.run_id);
@@ -340,16 +352,19 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
           });
         }
 
-        pinoLogger.info({ leaf_id: leafId, assertion_count: mappedAssertions.length }, "wrote back assertions to leaf");
+        pinoLogger.info(
+          { leaf_id: leafId, assertion_count: mappedAssertions.length },
+          'wrote back assertions to leaf'
+        );
       } catch (err) {
         // Non-fatal: log warning but don't fail the ingest
-        pinoLogger.warn({ err, leaf_id: leafId }, "failed to write back assertions to leaf");
+        pinoLogger.warn({ err, leaf_id: leafId }, 'failed to write back assertions to leaf');
       }
     }
 
     return c.json({ success: true, data: { ok: true } });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error ingesting run");
+    pinoLogger.error({ err: error }, 'error ingesting run');
     return c.json(
       {
         success: false,
@@ -395,7 +410,7 @@ runsRoutes.get('/v1/runs', async (c) => {
       },
     });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error listing runs");
+    pinoLogger.error({ err: error }, 'error listing runs');
     return c.json(
       {
         success: false,
@@ -433,7 +448,7 @@ runsRoutes.get('/v1/runs/by-runner-id/:runnerRunId', async (c) => {
 
     return c.json({ success: true, data: run });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error getting run by runner_run_id");
+    pinoLogger.error({ err: error }, 'error getting run by runner_run_id');
     return c.json(
       {
         success: false,
@@ -462,7 +477,7 @@ runsRoutes.get('/v1/runs/filters', async (c) => {
       data: options,
     });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error getting filter options");
+    pinoLogger.error({ err: error }, 'error getting filter options');
     return c.json(
       {
         success: false,
@@ -493,7 +508,7 @@ runsRoutes.get('/v1/runs/configurations', async (c) => {
       data: { configurations },
     });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error getting configurations");
+    pinoLogger.error({ err: error }, 'error getting configurations');
     return c.json(
       {
         success: false,
@@ -531,7 +546,7 @@ runsRoutes.get('/v1/runs/:id', async (c) => {
 
     return c.json({ success: true, data: run });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error getting run");
+    pinoLogger.error({ err: error }, 'error getting run');
     return c.json(
       {
         success: false,
@@ -569,7 +584,7 @@ runsRoutes.delete('/v1/runs/:id', async (c) => {
 
     return c.json({ success: true, data: { deleted: true } });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error deleting run");
+    pinoLogger.error({ err: error }, 'error deleting run');
     return c.json(
       {
         success: false,
@@ -653,7 +668,7 @@ runsRoutes.patch('/v1/runs/:id', async (c) => {
 
     return c.json({ success: true, data: updated });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error updating run");
+    pinoLogger.error({ err: error }, 'error updating run');
     return c.json(
       {
         success: false,
@@ -790,7 +805,7 @@ runsRoutes.post('/v1/runs/compare', async (c) => {
       },
     });
   } catch (error) {
-    pinoLogger.error({ err: error }, "error comparing runs");
+    pinoLogger.error({ err: error }, 'error comparing runs');
     return c.json(
       {
         success: false,

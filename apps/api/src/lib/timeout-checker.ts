@@ -7,8 +7,8 @@
  */
 
 import { getTimedOutRuns, markRunAsTimeout } from '@t3x/storage';
-import { getDB } from './db';
 import { pinoLogger } from '../middleware/logger';
+import { getDB } from './db';
 
 // Default timeout: 5 minutes
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -29,19 +29,19 @@ async function checkTimeouts(): Promise<void> {
     const timedOutRuns = await getTimedOutRuns(db, timeoutMs);
 
     if (timedOutRuns.length > 0) {
-      pinoLogger.info({ count: timedOutRuns.length }, "found timed-out runs");
+      pinoLogger.info({ count: timedOutRuns.length }, 'found timed-out runs');
 
       for (const run of timedOutRuns) {
         try {
           await markRunAsTimeout(db, run.runId);
-          pinoLogger.info({ run_id: run.runId }, "marked run as timeout");
+          pinoLogger.info({ run_id: run.runId }, 'marked run as timeout');
         } catch (err) {
-          pinoLogger.error({ err, run_id: run.runId }, "failed to mark run as timeout");
+          pinoLogger.error({ err, run_id: run.runId }, 'failed to mark run as timeout');
         }
       }
     }
   } catch (err) {
-    pinoLogger.error({ err }, "error checking timeouts");
+    pinoLogger.error({ err }, 'error checking timeouts');
   }
 }
 
@@ -52,13 +52,13 @@ async function checkTimeouts(): Promise<void> {
  */
 export function startTimeoutChecker(): void {
   if (intervalId) {
-    pinoLogger.warn("timeout-checker already running");
+    pinoLogger.warn('timeout-checker already running');
     return;
   }
 
   const intervalMs = parseInt(process.env.TIMEOUT_CHECK_INTERVAL_MS || '', 10) || CHECK_INTERVAL_MS;
 
-  pinoLogger.info({ interval_ms: intervalMs }, "timeout-checker starting");
+  pinoLogger.info({ interval_ms: intervalMs }, 'timeout-checker starting');
 
   // Run immediately on start
   checkTimeouts();
@@ -76,6 +76,6 @@ export function stopTimeoutChecker(): void {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
-    pinoLogger.info("timeout-checker stopped");
+    pinoLogger.info('timeout-checker stopped');
   }
 }

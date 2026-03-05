@@ -229,7 +229,10 @@ export function CommittedCommitView({
         {/* Top Bar */}
         <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 id="node-modal-title" className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2
+              id="node-modal-title"
+              className="text-[0.95rem] font-semibold text-[var(--text-primary)]"
+            >
               {t('commit')}: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>

@@ -40,14 +40,14 @@ export interface DetectConflictsOptions {
   jaccardThreshold?: number;
 }
 
-const DEFAULT_COSINE_THRESHOLD = 0.80;
-const DEFAULT_JACCARD_THRESHOLD = 0.70;
+const DEFAULT_COSINE_THRESHOLD = 0.8;
+const DEFAULT_JACCARD_THRESHOLD = 0.7;
 
 export async function detectConflicts(
   newSentences: { id: string; text: string }[],
   existingSentences: ExistingSentenceWithEmbedding[],
   embedder: EmbeddingProvider,
-  options?: DetectConflictsOptions,
+  options?: DetectConflictsOptions
 ): Promise<ConflictReport> {
   const cosineThreshold = options?.cosineThreshold ?? DEFAULT_COSINE_THRESHOLD;
   const jaccardThreshold = options?.jaccardThreshold ?? DEFAULT_JACCARD_THRESHOLD;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { suggestMerge } from '../suggestMerge';
 import type { LLMProvider } from '../../llm/types';
+import { suggestMerge } from '../suggestMerge';
 import type { MergeSimilarPair } from '../types';
 
 function makeMockLLM(response: string): LLMProvider {
@@ -23,10 +23,12 @@ const pair: MergeSimilarPair = {
 
 describe('suggestMerge', () => {
   it('returns suggestion from LLM', async () => {
-    const llm = makeMockLLM(JSON.stringify({
-      suggestion: 'The user requires OAuth 2.0 with JWT tokens for authentication.',
-      reasoning: 'Combined both authentication approaches.',
-    }));
+    const llm = makeMockLLM(
+      JSON.stringify({
+        suggestion: 'The user requires OAuth 2.0 with JWT tokens for authentication.',
+        reasoning: 'Combined both authentication approaches.',
+      })
+    );
 
     const result = await suggestMerge(pair, llm);
     expect(result).not.toBeNull();

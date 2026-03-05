@@ -32,9 +32,9 @@ import { DraftDiffSection } from './DraftDiffSection';
 import { DraftSplitPane } from './DraftSplitPane';
 import { DraftWorkbenchLLM } from './DraftWorkbenchLLM';
 import { ExtractConversationDialog } from './ExtractConversationDialog';
-import { PromotePreviewDialog } from './PromotePreviewDialog';
 import { InstructionEditor } from './InstructionEditor';
 import { PreviewPanel } from './PreviewPanel';
+import { PromotePreviewDialog } from './PromotePreviewDialog';
 import { SentenceList } from './SentenceList';
 
 interface DraftWorkspaceProps {

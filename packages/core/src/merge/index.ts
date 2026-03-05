@@ -14,10 +14,10 @@ export { executeMerge } from './executeMerge';
 export { prepareMerge, prepareMergeWithEmbeddings } from './prepareMerge';
 // Smart merge suggestion (#10)
 export { suggestMerge } from './suggestMerge';
-
+// Three-way merge types
+export type { ThreeWayConflict, ThreeWayMergeResult } from './threeWayMerge';
 // Three-way merge functions
 export { executeThreeWayMerge, prepareThreeWayMerge } from './threeWayMerge';
-
 // Two-way merge types
 export type {
   Merge2WayResult,
@@ -25,6 +25,3 @@ export type {
   MergeSimilarPair,
   MergeSuggestion,
 } from './types';
-
-// Three-way merge types
-export type { ThreeWayConflict, ThreeWayMergeResult } from './threeWayMerge';

@@ -220,7 +220,8 @@ export async function updateDraftV3(
   if (input.target_branch !== undefined) updateData.targetBranch = input.target_branch;
   if (input.extraction_mode !== undefined) updateData.extractionMode = input.extraction_mode;
   if (input.semantic_points !== undefined) updateData.semanticPointsJson = input.semantic_points;
-  if (input.extraction_cursor !== undefined) updateData.extractionCursorJson = input.extraction_cursor;
+  if (input.extraction_cursor !== undefined)
+    updateData.extractionCursorJson = input.extraction_cursor;
 
   // Increment revision
   // Note: Drizzle doesn't support SQL expressions in set(), so we use ifRevision + 1

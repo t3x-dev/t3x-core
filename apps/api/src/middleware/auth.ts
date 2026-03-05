@@ -107,7 +107,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return next();
   } catch (err) {
-    pinoLogger.error({ err }, "error validating API key");
+    pinoLogger.error({ err }, 'error validating API key');
     return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
   }
 }

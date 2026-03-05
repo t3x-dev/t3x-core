@@ -21,7 +21,10 @@ export async function suggestMerge(
     return parseSuggestion(response);
   } catch (error) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('[suggestMerge] LLM suggestion failed:', error instanceof Error ? error.message : String(error));
+      console.warn(
+        '[suggestMerge] LLM suggestion failed:',
+        error instanceof Error ? error.message : String(error)
+      );
     }
     return null;
   }

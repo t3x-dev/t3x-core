@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { diffCommits, diffCommitsWithEmbeddings } from '../../diff/diffCommits';
-import type { EmbeddingProvider } from '../../providers/embedding/base';
 import type { DiffableSentence } from '../../diff/types';
+import type { EmbeddingProvider } from '../../providers/embedding/base';
 
 function sent(id: string, text: string): DiffableSentence {
   return { id, text };

@@ -37,10 +37,8 @@ export const resetCounters = () => {};
 // Returns a value that is unique enough for display-only entryId labels.
 export const getNodeCounter = () => Date.now();
 
-export const nextNodeId = () =>
-  `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-export const nextEdgeId = () =>
-  `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+export const nextNodeId = () => `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+export const nextEdgeId = () => `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 };
 export const edgeType: Edge['type'] = 'animated';
 /** Backflow edge: Leaf → Commit feedback (dashed violet) */

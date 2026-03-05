@@ -414,8 +414,14 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           const newLeaves = leavesByCommit.get(commitHash) || [];
           const oldLeaves = node.data.leaves || [];
           // Only update if the set of leaf IDs actually changed
-          const oldIds = oldLeaves.map((l) => l.id).sort().join(',');
-          const newIds = newLeaves.map((l) => l.id).sort().join(',');
+          const oldIds = oldLeaves
+            .map((l) => l.id)
+            .sort()
+            .join(',');
+          const newIds = newLeaves
+            .map((l) => l.id)
+            .sort()
+            .join(',');
           if (oldIds === newIds) return node;
           return { ...node, data: { ...node.data, leaves: newLeaves } };
         }),
