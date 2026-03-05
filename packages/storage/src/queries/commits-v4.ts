@@ -363,10 +363,12 @@ export async function getCommitV4Parents(db: AnyDB, hash: string): Promise<Commi
 }
 
 /**
- * Walk the parent chain from a given commit (BFS traversal).
+ * Walk the parent chain from a given commit using a recursive CTE.
  *
- * Fix 5: Pre-fetches all commits for the project in a single query and
- * performs the BFS in memory to eliminate N+1 database round-trips.
+ * Replaces the former in-memory BFS with a single PostgreSQL
+ * `WITH RECURSIVE` query that traverses the parents JSONB array
+ * directly in SQL, eliminating the need to pre-fetch all project commits.
+ *
  * Returns { commits, truncated } — truncated=true signals that `limit` was
  * hit before the full DAG was explored.
  *
@@ -379,63 +381,39 @@ export async function findCommitV4History(
   hash: string,
   limit = 50
 ): Promise<CommitV4HistoryResult> {
-  // Look up start commit to determine its project
-  const startCommit = await findCommitV4ByHash(db, hash);
-  if (!startCommit) {
-    return { commits: [], truncated: false };
-  }
+  const MAX_DEPTH = 1000;
 
-  // Pre-fetch all commits for the project in one query (up to a reasonable ceiling)
-  const PREFETCH_LIMIT = 5000;
-  const allRows = startCommit.project_id
-    ? await db
-        .select()
-        .from(commitsV4)
-        .where(eq(commitsV4.projectId, startCommit.project_id))
-        .limit(PREFETCH_LIMIT)
-    : [];
-
-  // Build in-memory map — also include the start commit itself
-  const commitMap = new Map<string, CommitV4>();
-  for (const row of allRows) {
-    commitMap.set(row.hash, rowToCommitV4(row));
-  }
-  // Ensure start commit is reachable even when project_id is absent
-  if (!commitMap.has(hash)) {
-    commitMap.set(hash, startCommit);
-  }
-
-  // BFS in memory
-  const history: CommitV4[] = [];
-  const visited = new Set<string>();
-  const queue: string[] = [hash];
-  let truncated = false;
-
-  while (queue.length > 0) {
-    if (history.length >= limit) {
-      truncated = true;
-      break;
+  const result = await (
+    db as unknown as {
+      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
     }
+  ).execute(sql`
+    WITH RECURSIVE history AS (
+      SELECT c.*, 0 AS depth
+      FROM commits_v4 c
+      WHERE c.hash = ${hash}
 
-    const currentHash = queue.shift()!;
-    if (visited.has(currentHash)) continue;
-    visited.add(currentHash);
+      UNION ALL
 
-    const commit = commitMap.get(currentHash);
-    if (!commit) {
-      continue;
-    }
+      SELECT c.*, h.depth + 1
+      FROM history h,
+           jsonb_array_elements_text(h.parents::jsonb) AS parent_hash
+      JOIN commits_v4 c ON c.hash = parent_hash
+      WHERE h.depth < ${MAX_DEPTH}
+    )
+    SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
+           content, project_id, message, branch, source_refs, merge_summary,
+           position_x, position_y, created_at, depth
+    FROM history
+    ORDER BY hash, depth
+    LIMIT ${limit + 1}
+  `);
 
-    history.push(commit);
+  const rows = result.rows;
+  const truncated = rows.length > limit;
+  const commits = rows.slice(0, limit).map(rawRowToCommitV4);
 
-    for (const parentHash of commit.parents) {
-      if (!visited.has(parentHash)) {
-        queue.push(parentHash);
-      }
-    }
-  }
-
-  return { commits: history, truncated };
+  return { commits, truncated };
 }
 
 // ============================================================
@@ -509,6 +487,35 @@ export async function validateMainBranchLinearity(
 // ============================================================
 // Helpers
 // ============================================================
+
+/**
+ * Convert raw SQL result row to CommitV4 type.
+ * Used for recursive CTE results where Drizzle ORM types are not available.
+ */
+function rawRowToCommitV4(row: Record<string, unknown>): CommitV4 {
+  return {
+    hash: row.hash as string,
+    schema: 't3x/commit/v4',
+    parents: row.parents as string[],
+    author: row.author as CommitAuthorV4,
+    committed_at:
+      row.committed_at instanceof Date
+        ? (row.committed_at as Date).toISOString()
+        : String(row.committed_at),
+    content: row.content as { sentences: SentenceV4[] },
+    project_id: (row.project_id as string) ?? undefined,
+    message: (row.message as string) ?? undefined,
+    branch: (row.branch as string) ?? undefined,
+    source_refs: (row.source_refs as CommitSourceRef[]) ?? undefined,
+    merge_summary: (row.merge_summary as MergeSummaryData) ?? undefined,
+    position_x: (row.position_x as number) ?? undefined,
+    position_y: (row.position_y as number) ?? undefined,
+    created_at:
+      row.created_at instanceof Date
+        ? (row.created_at as Date).toISOString()
+        : String(row.created_at),
+  };
+}
 
 /**
  * Convert database row to CommitV4 type

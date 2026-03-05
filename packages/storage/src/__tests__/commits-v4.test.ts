@@ -19,6 +19,7 @@ import {
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
   findCommitV4ByHash,
+  findCommitV4History,
   getCommitsV4ByHashes,
   getCommitV4Parents,
   ParentNotFoundErrorV4,
@@ -755,6 +756,154 @@ describe('Commits V4 Storage', () => {
       expect(results[0].hash).toBe(commit3.hash);
       expect(results[1].hash).toBe(commit1.hash);
       expect(results[2].hash).toBe(commit2.hash);
+    });
+  });
+
+  describe('findCommitV4History', () => {
+    it('returns linear chain in traversal order', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Linear Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_hr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const a = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_ha', text: 'A' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const b = await createCommitV4(db, {
+        parents: [a.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_hb', text: 'B' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, b.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(3);
+
+      const hashes = result.commits.map((c) => c.hash);
+      expect(hashes).toContain(root.hash);
+      expect(hashes).toContain(a.hash);
+      expect(hashes).toContain(b.hash);
+    });
+
+    it('traverses merge diamond (all 4 commits)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Diamond Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_dr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const branchA = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_da', text: 'Branch A' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const branchB = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_db', text: 'Branch B' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const merge = await createCommitV4(db, {
+        parents: [branchA.hash, branchB.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_dm', text: 'Merge' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, merge.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(4);
+
+      const hashes = result.commits.map((c) => c.hash);
+      expect(hashes).toContain(root.hash);
+      expect(hashes).toContain(branchA.hash);
+      expect(hashes).toContain(branchB.hash);
+      expect(hashes).toContain(merge.hash);
+    });
+
+    it('respects limit and sets truncated=true', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Limit Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const mid = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lm', text: 'Mid' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const tip = await createCommitV4(db, {
+        parents: [mid.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lt', text: 'Tip' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, tip.hash, 2);
+
+      expect(result.truncated).toBe(true);
+      expect(result.commits).toHaveLength(2);
+    });
+
+    it('returns empty for non-existent hash', async () => {
+      const result = await findCommitV4History(db, 'sha256:does-not-exist');
+
+      expect(result.commits).toHaveLength(0);
+      expect(result.truncated).toBe(false);
+    });
+
+    it('returns single root commit', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Root Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_rr', text: 'Only root' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, root.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].hash).toBe(root.hash);
     });
   });
 
