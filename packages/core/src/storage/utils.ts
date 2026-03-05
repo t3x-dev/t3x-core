@@ -4,6 +4,7 @@
 
 import { createHash, randomUUID } from 'crypto';
 import { canonicalize } from 'json-canonicalize';
+import type { ContentBlock } from '../multimodal/contentBlock';
 
 // === ID Generation ===
 
@@ -95,7 +96,7 @@ export function computeTurnHash(data: {
   language: string | null;
   rings_json: string | null;
   created_at: string;
-  content_blocks?: unknown[] | null;
+  content_blocks?: ContentBlock[] | null;
 }): string {
   if (data.content_blocks && data.content_blocks.length > 0) {
     return computeJCSHash({

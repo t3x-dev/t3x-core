@@ -7,6 +7,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { textFromBlocks, type ContentBlock } from '@t3x/core';
 import {
   findConversationById,
   findProjectById,
@@ -53,7 +54,12 @@ const ContentBlockSchema = z
 
 const IngestTurnSchema = z.object({
   role: z.enum(['user', 'assistant', 'system', 'tool']).openapi({ description: 'Message role' }),
-  content: z.string().min(1).max(100_000).openapi({ description: 'Message content' }),
+  content: z
+    .string()
+    .min(1)
+    .max(100_000)
+    .optional()
+    .openapi({ description: 'Message content (auto-computed from content_blocks if omitted)' }),
   created_at: z.string().optional().openapi({ description: 'ISO8601 timestamp (optional)' }),
   content_blocks: z
     .array(ContentBlockSchema)
@@ -172,12 +178,19 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
   // Insert turns sequentially (hash chain requires ordering)
   let turnsCreated = 0;
   for (const turn of body.turns) {
+    // Auto-compute content from content_blocks when content is empty/missing
+    const content =
+      turn.content || (turn.content_blocks?.length
+        ? textFromBlocks(turn.content_blocks as ContentBlock[])
+        : '');
+    if (!content) continue; // Skip turns with no content at all
+
     await insertTurn(db, {
       projectId,
       conversationId,
       role: turn.role,
-      content: turn.content,
-      content_blocks: turn.content_blocks,
+      content,
+      content_blocks: turn.content_blocks as ContentBlock[] | undefined,
     });
     turnsCreated++;
   }

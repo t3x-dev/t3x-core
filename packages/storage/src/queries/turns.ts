@@ -4,7 +4,7 @@
  * CRUD operations for turns using Drizzle ORM.
  */
 
-import { computeTurnHash } from '@t3x/core';
+import { computeTurnHash, type ContentBlock } from '@t3x/core';
 import { and, asc, desc, eq, gt, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Turn, turns } from '../schema';
@@ -17,7 +17,7 @@ export interface CreateTurnInput {
   content: string;
   language?: string;
   rings?: unknown;
-  content_blocks?: unknown[];
+  content_blocks?: ContentBlock[];
 }
 
 export interface ListTurnsOptions {

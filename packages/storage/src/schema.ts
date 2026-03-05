@@ -19,6 +19,7 @@ import {
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
+import type { ContentBlock } from '@t3x/core';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -103,7 +104,7 @@ export const turns = pgTable(
     content: text('content').notNull(),
     language: text('language'),
     ringsJson: text('rings_json'),
-    contentBlocks: jsonb('content_blocks').$type<unknown[]>(),
+    contentBlocks: jsonb('content_blocks').$type<ContentBlock[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [

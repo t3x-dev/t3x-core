@@ -25,6 +25,28 @@ import { jsonError, jsonSuccess } from '../lib/response';
 
 export const turnRoutes = new Hono();
 
+const VALID_BLOCK_TYPES = new Set(['text', 'image', 'audio', 'file']);
+
+/** Validate content_blocks array at runtime. Returns null if valid, error string if not. */
+function validateContentBlocks(blocks: unknown): string | null {
+  if (!Array.isArray(blocks)) return 'content_blocks must be an array';
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') return 'each content block must be an object';
+    const b = block as Record<string, unknown>;
+    if (!VALID_BLOCK_TYPES.has(b.type as string)) {
+      return `invalid block type: ${String(b.type)}`;
+    }
+    if (b.type === 'text' && typeof b.text !== 'string') return 'text block must have a text string';
+    if ((b.type === 'image' || b.type === 'audio' || b.type === 'file') && typeof b.url !== 'string') {
+      return `${b.type} block must have a url string`;
+    }
+    if (b.type === 'file' && typeof b.filename !== 'string') {
+      return 'file block must have a filename string';
+    }
+  }
+  return null;
+}
+
 /**
  * GET /v1/turns - List turns
  *
@@ -116,6 +138,14 @@ turnRoutes.post('/v1/turns', async (c) => {
     body = await c.req.json();
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  // Validate content_blocks if provided
+  if (body?.content_blocks) {
+    const blockError = validateContentBlocks(body.content_blocks);
+    if (blockError) {
+      return jsonError(c, 'INVALID_REQUEST', blockError, 400);
+    }
   }
 
   // Auto-compute content from content_blocks when content is empty/missing
