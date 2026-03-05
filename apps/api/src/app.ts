@@ -19,6 +19,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
+import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
@@ -56,8 +57,11 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
+import { authLocalRoutes } from './routes/auth-local.openapi';
 
 export interface CreateAppOptions {
+  /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
+  skipLocalAuth?: boolean;
   /** Additional middleware inserted between rateLimitL1 and rateLimitL2 (e.g., auth) */
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
@@ -73,7 +77,10 @@ export function createApp(options?: CreateAppOptions): Hono {
   app.use('*', loggerMiddleware);
   app.use('*', rateLimitL1);
 
-  // Extension point: additional middleware (e.g., auth middleware from cloud repo)
+  // Auth middleware: validates Bearer API key (built-in, used by both OSS and SaaS)
+  app.use('*', authMiddleware);
+
+  // Extension point: additional middleware (e.g., extra SaaS middleware from cloud repo)
   if (options?.middleware) {
     for (const mw of options.middleware) {
       app.use('*', mw);
@@ -135,7 +142,13 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', notificationsRoutes);
   api.route('/', providersRoutes);
 
-  // Extension point: additional routes from cloud repo (e.g., auth callback)
+  // Local auth routes (username/password register + login)
+  // Skipped when SaaS provides its own OAuth auth
+  if (!options?.skipLocalAuth) {
+    api.route('/', authLocalRoutes);
+  }
+
+  // Extension point: additional routes from cloud repo (e.g., OAuth auth callback)
   if (options?.routes) {
     options.routes(api);
   }

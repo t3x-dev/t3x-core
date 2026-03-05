@@ -48,7 +48,7 @@ function loadEnvLocal(): void {
 
 loadEnvLocal();
 
-// Open-source: no auth middleware, no auth callback route
+// Open-source: built-in local auth (username/password)
 const app = createApp();
 
 // Server startup
