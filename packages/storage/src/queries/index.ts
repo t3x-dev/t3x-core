@@ -316,6 +316,7 @@ export {
 export {
   deleteRelationsByCommit,
   findRelationsByCommit,
+  findRelationsByProject,
   upsertRelations,
 } from './relations';
 // Runs (Engine → Runner → n8n flow)
@@ -364,6 +365,7 @@ export {
   deleteSentenceVectorsByCommit,
   deleteSentenceVectorsByProject,
   findSentenceVectorsByProject,
+  findSentenceVectorsWithEmbeddingsByProject,
   type HybridSearchResult,
   type KeywordSearchResult,
   rrfFusion,

@@ -99,3 +99,19 @@ export async function deleteRelationsByCommit(db: AnyDB, commitHash: string): Pr
 
   return result.length;
 }
+
+/**
+ * Find all relations for a project (across all commits).
+ * Used by the knowledge graph builder to promote relations to inter-node edges.
+ */
+export async function findRelationsByProject(
+  db: AnyDB,
+  projectId: string
+): Promise<SentenceRelation[]> {
+  const rows = await db
+    .select()
+    .from(sentenceRelations)
+    .where(eq(sentenceRelations.projectId, projectId));
+
+  return rows.map(rowToRelation);
+}

@@ -160,6 +160,20 @@ export {
   type ProofStep,
   verifyMembership,
 } from './hash';
+// Knowledge Graph (cross-conversation entity/topic clustering + graph builder)
+export {
+  buildKnowledgeGraph,
+  type ClusterOptions,
+  type ClusterResult,
+  clusterSentences,
+  cosineSimilarity as knowledgeCosineSimilarity,
+  extractTopTerms,
+  type GraphBuildEdge,
+  type GraphBuildInput,
+  type GraphBuildNode,
+  type GraphBuildOutput,
+  type SentenceInput as KnowledgeSentenceInput,
+} from './knowledge';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // @see docs/plans/parallel-dev-guidelines.md

@@ -114,6 +114,12 @@ export const ErrorCodes = {
   INVALID_STATUS: 'INVALID_STATUS',
   UNRESOLVED_PAIRS: 'UNRESOLVED_PAIRS',
   LLM_NOT_CONFIGURED: 'LLM_NOT_CONFIGURED',
+
+  // Knowledge Graph errors
+  GRAPH_BUILD_FAILED: 'GRAPH_BUILD_FAILED',
+  GRAPH_NODE_NOT_FOUND: 'GRAPH_NODE_NOT_FOUND',
+  GRAPH_NOT_BUILT: 'GRAPH_NOT_BUILT',
+  EMBEDDINGS_REQUIRED: 'EMBEDDINGS_REQUIRED',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -217,6 +223,12 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   INVALID_STATUS: 400,
   UNRESOLVED_PAIRS: 400,
   LLM_NOT_CONFIGURED: 400,
+
+  // Knowledge Graph errors
+  GRAPH_BUILD_FAILED: 500,
+  GRAPH_NODE_NOT_FOUND: 404,
+  GRAPH_NOT_BUILT: 400,
+  EMBEDDINGS_REQUIRED: 400,
 };
 
 /**

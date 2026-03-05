@@ -46,6 +46,7 @@ import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
+import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
@@ -156,6 +157,7 @@ api.route('/', ingestRoutes); // /v1/projects/:projectId/ingest/webhook
 api.route('/', notificationsRoutes); // /v1/notifications
 api.route('/', providersRoutes); // /v1/providers
 api.route('/', searchRoutes); // /v1/search
+api.route('/', knowledgeGraphRoutes); // /v1/projects/:projectId/knowledge-graph/*
 api.route('/', authCallbackRoutes); // /v1/auth/callback
 
 // OpenAPI spec endpoint
@@ -211,6 +213,10 @@ api.doc('/openapi.json', {
     },
     { name: 'Import', description: 'Import project data from archives' },
     { name: 'Search', description: 'Hybrid search (keyword + semantic + RRF fusion)' },
+    {
+      name: 'Knowledge Graph',
+      description: 'Cross-conversation knowledge graph (entity clustering, typed edges, traversal)',
+    },
   ],
 });
 

@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 56 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(56);
+  it('has 60 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(60);
   });
 
   it('key equals value for every code', () => {
@@ -36,11 +36,15 @@ describe('ErrorCodes', () => {
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
         "EMBEDDER_NOT_CONFIGURED": "EMBEDDER_NOT_CONFIGURED",
+        "EMBEDDINGS_REQUIRED": "EMBEDDINGS_REQUIRED",
         "EXTRACTION_FAILED": "EXTRACTION_FAILED",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
+        "GRAPH_BUILD_FAILED": "GRAPH_BUILD_FAILED",
+        "GRAPH_NODE_NOT_FOUND": "GRAPH_NODE_NOT_FOUND",
+        "GRAPH_NOT_BUILT": "GRAPH_NOT_BUILT",
         "HASH_CONFLICT": "HASH_CONFLICT",
         "HISTORY_FAILED": "HISTORY_FAILED",
         "HISTORY_MISMATCH": "HISTORY_MISMATCH",
@@ -99,6 +103,7 @@ describe('ErrorStatusCodes', () => {
       'PIN_NOT_FOUND',
       'CONVERSATION_NOT_FOUND',
       'HISTORY_NOT_FOUND',
+      'GRAPH_NODE_NOT_FOUND',
     ];
     for (const code of notFoundCodes) {
       expect(ErrorStatusCodes[code]).toBe(404);
@@ -129,6 +134,7 @@ describe('ErrorStatusCodes', () => {
       'RESTORE_FAILED',
       'COMPARE_FAILED',
       'MERGE_FAILED',
+      'GRAPH_BUILD_FAILED',
     ];
     for (const code of serverCodes) {
       expect(ErrorStatusCodes[code]).toBe(500);

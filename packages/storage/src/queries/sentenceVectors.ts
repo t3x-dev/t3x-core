@@ -314,6 +314,43 @@ export async function findSentenceVectorsByProject(
 }
 
 // ============================================================
+// Bulk Retrieval with Embeddings (for knowledge graph clustering)
+// ============================================================
+
+/**
+ * Retrieve all sentence vectors for a project INCLUDING embedding vectors.
+ * Used by the knowledge graph builder for centroid clustering.
+ *
+ * WARNING: Returns full 768-dim vectors. Can be large for projects with many sentences.
+ * Use findSentenceVectorsByProject (without embeddings) for lighter reads.
+ */
+export async function findSentenceVectorsWithEmbeddingsByProject(
+  db: AnyDB,
+  projectId: string,
+  options?: { limit?: number }
+): Promise<Array<{ id: string; text: string; embedding: number[]; commit_hash: string }>> {
+  const limitVal = options?.limit ?? 10000;
+
+  const rows = await db
+    .select({
+      id: sentenceVectors.id,
+      text: sentenceVectors.sentenceText,
+      embedding: sentenceVectors.embedding,
+      commitHash: sentenceVectors.commitHash,
+    })
+    .from(sentenceVectors)
+    .where(eq(sentenceVectors.projectId, projectId))
+    .limit(limitVal);
+
+  return rows.map((row) => ({
+    id: row.id,
+    text: row.text,
+    embedding: row.embedding,
+    commit_hash: row.commitHash,
+  }));
+}
+
+// ============================================================
 // Delete
 // ============================================================
 

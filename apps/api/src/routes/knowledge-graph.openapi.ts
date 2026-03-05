@@ -1,0 +1,475 @@
+/**
+ * Knowledge Graph Routes
+ *
+ * Cross-conversation knowledge graph endpoints.
+ *
+ * - POST   /v1/projects/:projectId/knowledge-graph/build           — Build/rebuild graph
+ * - GET    /v1/projects/:projectId/knowledge-graph/nodes           — List nodes
+ * - GET    /v1/projects/:projectId/knowledge-graph/nodes/:nodeId   — Node detail
+ * - GET    /v1/projects/:projectId/knowledge-graph/nodes/:nodeId/neighbors — 1-hop neighbors
+ * - GET    /v1/projects/:projectId/knowledge-graph/search          — Search nodes by label
+ * - DELETE /v1/projects/:projectId/knowledge-graph                 — Delete graph
+ */
+
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { buildKnowledgeGraph } from '@t3x/core';
+import {
+  deleteKnowledgeGraphByProject,
+  findConflictsByProject,
+  findKnowledgeNodeById,
+  findKnowledgeNodesByProject,
+  findMembersByNode,
+  findNeighborNodes,
+  findRelationsByProject,
+  findSentenceVectorsWithEmbeddingsByProject,
+  insertKnowledgeEdges,
+  insertKnowledgeNodes,
+  insertNodeMembers,
+  searchKnowledgeNodes,
+} from '@t3x/storage/pglite';
+import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
+
+export const knowledgeGraphRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+// ── Shared Schemas ──────────────────────────────────────────
+
+const ProjectIdParam = z.object({
+  projectId: z.string().openapi({ description: 'Project ID' }),
+});
+
+const NodeIdParam = z.object({
+  projectId: z.string().openapi({ description: 'Project ID' }),
+  nodeId: z.string().openapi({ description: 'Knowledge node ID' }),
+});
+
+const ErrorResponseSchema = z.object({
+  success: z.literal(false),
+  error: z.object({ code: z.string(), message: z.string() }),
+});
+
+const KnowledgeNodeSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  label: z.string(),
+  type: z.string(),
+  summary: z.string().nullable(),
+  member_count: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const NodeMemberSchema = z.object({
+  node_id: z.string(),
+  sentence_id: z.string(),
+  commit_hash: z.string(),
+});
+
+const EdgeEvidenceSchema = z.object({
+  source_sentence_id: z.string(),
+  target_sentence_id: z.string(),
+  relation_type: z.string(),
+  confidence: z.number(),
+});
+
+const KnowledgeEdgeSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  source_node_id: z.string(),
+  target_node_id: z.string(),
+  type: z.string(),
+  weight: z.number(),
+  evidence: z.array(EdgeEvidenceSchema).nullable(),
+  created_at: z.string(),
+});
+
+const NeighborNodeSchema = z.object({
+  node: KnowledgeNodeSchema,
+  edge: KnowledgeEdgeSchema,
+  direction: z.enum(['outgoing', 'incoming']),
+});
+
+// ── POST /v1/projects/:projectId/knowledge-graph/build ──────
+
+const BuildResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    total_sentences: z.number(),
+    nodes_created: z.number(),
+    edges_created: z.number(),
+    build_time_ms: z.number(),
+  }),
+});
+
+const buildRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/knowledge-graph/build',
+  tags: ['Knowledge Graph'],
+  summary: 'Build or rebuild knowledge graph for a project',
+  description:
+    'Clusters sentence embeddings into topic nodes, promotes Ring 4 relations ' +
+    'and knowledge conflicts to typed edges. Replaces any existing graph.',
+  request: { params: ProjectIdParam },
+  responses: {
+    200: {
+      description: 'Graph built successfully',
+      content: { 'application/json': { schema: BuildResponseSchema } },
+    },
+    400: {
+      description: 'Missing requirements (no embeddings)',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Build failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    // 1. Fetch sentence vectors WITH embeddings for clustering
+    const vectors = await findSentenceVectorsWithEmbeddingsByProject(db, projectId);
+    if (vectors.length === 0) {
+      return errorResponse(
+        c,
+        'EMBEDDINGS_REQUIRED',
+        'No sentence embeddings found. Commit sentences with an embedding provider configured.'
+      );
+    }
+
+    // 2. Fetch all relations for the project (across all commits)
+    const relRows = await findRelationsByProject(db, projectId);
+    const relations = relRows.map((r) => ({
+      source_id: r.source_id,
+      target_id: r.target_id,
+      type: r.type,
+      confidence: r.confidence,
+    }));
+
+    // 3. Fetch open knowledge conflicts
+    const conflictRows = await findConflictsByProject(db, projectId, { status: 'open' });
+    const conflicts = conflictRows.map((cf) => ({
+      new_sentence_id: cf.new_sentence_id,
+      existing_sentence_id: cf.existing_sentence_id,
+      cosine: cf.cosine,
+    }));
+
+    // 4. Build graph (pure function)
+    const result = buildKnowledgeGraph({
+      sentences: vectors.map((v) => ({
+        id: v.id,
+        text: v.text,
+        embedding: v.embedding,
+        commit_hash: v.commit_hash,
+      })),
+      relations,
+      conflicts,
+    });
+
+    // 5. Delete existing graph (cascade deletes members + edges)
+    await deleteKnowledgeGraphByProject(db, projectId);
+
+    // 6. Insert nodes
+    const insertedNodes = await insertKnowledgeNodes(
+      db,
+      result.nodes.map((n) => ({
+        project_id: projectId,
+        label: n.label,
+        type: n.type,
+        member_count: n.member_sentence_ids.length,
+      }))
+    );
+
+    // 7. Insert members
+    const allMembers: Array<{ node_id: string; sentence_id: string; commit_hash: string }> = [];
+    for (let i = 0; i < result.nodes.length; i++) {
+      for (const m of result.nodes[i].member_sentence_ids) {
+        allMembers.push({
+          node_id: insertedNodes[i].id,
+          sentence_id: m.sentence_id,
+          commit_hash: m.commit_hash,
+        });
+      }
+    }
+    if (allMembers.length > 0) {
+      await insertNodeMembers(db, allMembers);
+    }
+
+    // 8. Insert edges
+    if (result.edges.length > 0) {
+      await insertKnowledgeEdges(
+        db,
+        result.edges.map((e) => ({
+          project_id: projectId,
+          source_node_id: insertedNodes[e.source_node_index].id,
+          target_node_id: insertedNodes[e.target_node_index].id,
+          type: e.type,
+          weight: e.weight,
+          evidence: e.evidence,
+        }))
+      );
+    }
+
+    // 9. Return stats
+    return c.json({ success: true as const, data: result.stats }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GRAPH_BUILD_FAILED', message);
+  }
+});
+
+// ── GET /v1/projects/:projectId/knowledge-graph/nodes ───────
+
+const ListNodesResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    nodes: z.array(KnowledgeNodeSchema),
+    total: z.number(),
+  }),
+});
+
+const listNodesRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/knowledge-graph/nodes',
+  tags: ['Knowledge Graph'],
+  summary: 'List knowledge graph nodes for a project',
+  description: 'Returns nodes sorted by member_count descending.',
+  request: {
+    params: ProjectIdParam,
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50).openapi({
+        description: 'Maximum number of nodes to return',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Nodes found',
+      content: { 'application/json': { schema: ListNodesResponseSchema } },
+    },
+    500: {
+      description: 'Fetch failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(listNodesRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const { limit } = c.req.valid('query');
+
+  try {
+    const db = await getDB();
+    const nodes = await findKnowledgeNodesByProject(db, projectId, { limit });
+
+    return c.json({ success: true as const, data: { nodes, total: nodes.length } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'LIST_FAILED', message);
+  }
+});
+
+// ── GET /v1/projects/:projectId/knowledge-graph/nodes/:nodeId ──
+
+const NodeDetailResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    node: KnowledgeNodeSchema,
+    members: z.array(NodeMemberSchema),
+  }),
+});
+
+const getNodeRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}',
+  tags: ['Knowledge Graph'],
+  summary: 'Get knowledge node detail with members',
+  request: { params: NodeIdParam },
+  responses: {
+    200: {
+      description: 'Node found',
+      content: { 'application/json': { schema: NodeDetailResponseSchema } },
+    },
+    404: {
+      description: 'Node not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Fetch failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(getNodeRoute, async (c) => {
+  const { nodeId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const node = await findKnowledgeNodeById(db, nodeId);
+    if (!node) {
+      return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
+    }
+
+    const members = await findMembersByNode(db, nodeId);
+
+    return c.json({ success: true as const, data: { node, members } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GET_FAILED', message);
+  }
+});
+
+// ── GET /v1/projects/:projectId/knowledge-graph/nodes/:nodeId/neighbors ──
+
+const NeighborsResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    neighbors: z.array(NeighborNodeSchema),
+    total: z.number(),
+  }),
+});
+
+const getNeighborsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}/neighbors',
+  tags: ['Knowledge Graph'],
+  summary: 'Get 1-hop neighbor nodes with edge information',
+  request: { params: NodeIdParam },
+  responses: {
+    200: {
+      description: 'Neighbors found',
+      content: { 'application/json': { schema: NeighborsResponseSchema } },
+    },
+    404: {
+      description: 'Node not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Fetch failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(getNeighborsRoute, async (c) => {
+  const { nodeId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const node = await findKnowledgeNodeById(db, nodeId);
+    if (!node) {
+      return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
+    }
+
+    const neighbors = await findNeighborNodes(db, nodeId);
+
+    return c.json({ success: true as const, data: { neighbors, total: neighbors.length } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GET_FAILED', message);
+  }
+});
+
+// ── GET /v1/projects/:projectId/knowledge-graph/search ──────
+
+const SearchNodesResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    nodes: z.array(KnowledgeNodeSchema),
+    total: z.number(),
+  }),
+});
+
+const searchNodesRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/knowledge-graph/search',
+  tags: ['Knowledge Graph'],
+  summary: 'Search knowledge graph nodes by label',
+  description: 'Case-insensitive substring search on node labels.',
+  request: {
+    params: ProjectIdParam,
+    query: z.object({
+      q: z.string().min(1).openapi({ description: 'Search query (substring match on label)' }),
+      limit: z.coerce.number().int().min(1).max(100).default(20).openapi({
+        description: 'Maximum number of results',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Search results',
+      content: { 'application/json': { schema: SearchNodesResponseSchema } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Search failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(searchNodesRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const { q, limit } = c.req.valid('query');
+
+  try {
+    const db = await getDB();
+    const nodes = await searchKnowledgeNodes(db, projectId, q, { limit });
+
+    return c.json({ success: true as const, data: { nodes, total: nodes.length } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'SEARCH_FAILED', message);
+  }
+});
+
+// ── DELETE /v1/projects/:projectId/knowledge-graph ──────────
+
+const DeleteGraphResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    nodes_deleted: z.number(),
+  }),
+});
+
+const deleteGraphRoute = createRoute({
+  method: 'delete',
+  path: '/v1/projects/{projectId}/knowledge-graph',
+  tags: ['Knowledge Graph'],
+  summary: 'Delete the knowledge graph for a project',
+  description: 'Removes all nodes, members, and edges. Cascade delete via FK constraints.',
+  request: { params: ProjectIdParam },
+  responses: {
+    200: {
+      description: 'Graph deleted',
+      content: { 'application/json': { schema: DeleteGraphResponseSchema } },
+    },
+    500: {
+      description: 'Delete failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+knowledgeGraphRoutes.openapi(deleteGraphRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const result = await deleteKnowledgeGraphByProject(db, projectId);
+
+    return c.json({ success: true as const, data: result }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'DELETE_FAILED', message);
+  }
+});
