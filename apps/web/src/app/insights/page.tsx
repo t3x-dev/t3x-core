@@ -2,6 +2,7 @@
 
 import { Clock3, GitCommit, Lightbulb, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { FeedbackTab } from '@/components/feedback/FeedbackTab';
 import { GraphIllustration } from '@/components/illustrations/GraphIllustration';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
@@ -170,6 +171,7 @@ export default function InsightsPage() {
         <TabsList>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>
           <TabsTrigger value="latest">Latest Commits</TabsTrigger>
+          <TabsTrigger value="feedback">Feedback</TabsTrigger>
         </TabsList>
 
         <TabsContent value="ledger" className="mt-6 space-y-[var(--space-group)]">
@@ -249,6 +251,10 @@ export default function InsightsPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="feedback" className="mt-6">
+          <FeedbackTab />
         </TabsContent>
       </Tabs>
     </div>
