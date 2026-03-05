@@ -1160,9 +1160,10 @@ describe('Commits V4 Storage', () => {
       expect(before!.merkle_root).toBeUndefined();
 
       // Backfill
-      const updated = await backfillMerkleRoots(db, proj.projectId);
+      const result = await backfillMerkleRoots(db, proj.projectId);
 
-      expect(updated).toBe(1);
+      expect(result.updated).toBe(1);
+      expect(result.remaining).toBe(false);
 
       // Verify it's now set correctly
       const after = await findCommitV4ByHash(db, commit.hash);
@@ -1180,9 +1181,10 @@ describe('Commits V4 Storage', () => {
         project_id: proj.projectId,
       });
 
-      const updated = await backfillMerkleRoots(db, proj.projectId);
+      const result = await backfillMerkleRoots(db, proj.projectId);
 
-      expect(updated).toBe(0);
+      expect(result.updated).toBe(0);
+      expect(result.remaining).toBe(false);
     });
 
     it('skips empty-sentence commits', async () => {
@@ -1199,9 +1201,10 @@ describe('Commits V4 Storage', () => {
       });
 
       // merkle_root is already null for empty sentences
-      const updated = await backfillMerkleRoots(db, proj.projectId);
+      const result = await backfillMerkleRoots(db, proj.projectId);
 
-      expect(updated).toBe(0);
+      expect(result.updated).toBe(0);
+      expect(result.remaining).toBe(false);
     });
 
     it('backfills multiple commits', async () => {
@@ -1218,9 +1221,10 @@ describe('Commits V4 Storage', () => {
         await db.update(commitsV4).set({ merkleRoot: null }).where(eq(commitsV4.hash, c.hash));
       }
 
-      const updated = await backfillMerkleRoots(db, proj.projectId);
+      const result = await backfillMerkleRoots(db, proj.projectId);
 
-      expect(updated).toBe(3);
+      expect(result.updated).toBe(3);
+      expect(result.remaining).toBe(false);
     });
   });
 });

@@ -190,7 +190,10 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     merkleRoots[commit.hash] = tree.root;
 
     // Compare stored merkle_root with recomputed root
-    if (commit.merkle_root && tree.root && commit.merkle_root !== tree.root) {
+    if (sentences.length > 0 && !commit.merkle_root) {
+      // Non-empty commit with missing stored root — flag as mismatch
+      merkleMismatches.push(commit.hash);
+    } else if (commit.merkle_root && tree.root && commit.merkle_root !== tree.root) {
       merkleMismatches.push(commit.hash);
     }
   }

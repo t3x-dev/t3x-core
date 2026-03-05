@@ -511,7 +511,7 @@ export async function verifyMerkleRoots(
   db: AnyDB,
   projectId: string,
   limit = 100
-): Promise<{ valid: boolean; checked: number; mismatches: string[] }> {
+): Promise<{ valid: boolean; checked: number; mismatches: string[]; missing_roots: string[] }> {
   const rows = await db
     .select({
       hash: commitsV4.hash,
@@ -524,22 +524,33 @@ export async function verifyMerkleRoots(
     .limit(limit);
 
   const mismatches: string[] = [];
+  const missing_roots: string[] = [];
+  let checked = 0;
 
   for (const row of rows) {
     const content = row.content as { sentences: Array<{ id: string; text: string }> };
     const sentences = content.sentences ?? [];
 
     if (sentences.length === 0) continue;
+    checked++;
 
     const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
     const expectedRoot = tree.root || null;
 
-    if (row.merkleRoot && expectedRoot && row.merkleRoot !== expectedRoot) {
+    if (!row.merkleRoot && expectedRoot) {
+      // Non-empty commit with no stored root — flag as missing
+      missing_roots.push(row.hash);
+    } else if (row.merkleRoot && expectedRoot && row.merkleRoot !== expectedRoot) {
       mismatches.push(row.hash);
     }
   }
 
-  return { valid: mismatches.length === 0, checked: rows.length, mismatches };
+  return {
+    valid: mismatches.length === 0 && missing_roots.length === 0,
+    checked,
+    mismatches,
+    missing_roots,
+  };
 }
 
 /**
@@ -547,15 +558,22 @@ export async function verifyMerkleRoots(
  *
  * Returns the number of commits updated.
  */
-export async function backfillMerkleRoots(db: AnyDB, projectId: string): Promise<number> {
+export async function backfillMerkleRoots(
+  db: AnyDB,
+  projectId: string
+): Promise<{ updated: number; remaining: boolean }> {
+  const BATCH_LIMIT = 10000;
   const rows = await db
     .select()
     .from(commitsV4)
     .where(and(eq(commitsV4.projectId, projectId), isNull(commitsV4.merkleRoot)))
-    .limit(10000);
+    .limit(BATCH_LIMIT + 1);
+
+  const hasMore = rows.length > BATCH_LIMIT;
+  const batch = hasMore ? rows.slice(0, BATCH_LIMIT) : rows;
 
   let updated = 0;
-  for (const row of rows) {
+  for (const row of batch) {
     const commit = rowToCommitV4(row);
     const sentences = commit.content.sentences ?? [];
 
@@ -570,7 +588,7 @@ export async function backfillMerkleRoots(db: AnyDB, projectId: string): Promise
     }
   }
 
-  return updated;
+  return { updated, remaining: hasMore };
 }
 
 // ============================================================

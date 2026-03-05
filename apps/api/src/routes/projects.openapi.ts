@@ -422,7 +422,9 @@ const VerifyChainResultSchema = z.object({
     parent_not_found: z.array(z.string()),
     other: z.array(z.string()),
   }),
+  merkle_roots: z.record(z.string()),
   merkle_mismatches: z.array(z.string()),
+  truncated: z.boolean(),
   verified_at: z.string(),
 });
 
@@ -497,6 +499,7 @@ const QuickVerifyResultSchema = z.object({
   valid: z.boolean(),
   checked: z.number(),
   mismatches: z.array(z.string()),
+  missing_roots: z.array(z.string()),
   verified_at: z.string(),
 });
 
@@ -577,6 +580,7 @@ projectRoutes.openapi(quickVerifyRoute, async (c) => {
 
 const BackfillResultSchema = z.object({
   updated: z.number(),
+  remaining: z.boolean(),
   verified_at: z.string(),
 });
 
@@ -633,12 +637,12 @@ projectRoutes.openapi(backfillMerkleRoute, async (c) => {
       );
     }
 
-    const updated = await backfillMerkleRoots(db, id);
+    const result = await backfillMerkleRoots(db, id);
 
     return c.json(
       {
         success: true as const,
-        data: { updated, verified_at: new Date().toISOString() },
+        data: { ...result, verified_at: new Date().toISOString() },
       },
       200
     );
