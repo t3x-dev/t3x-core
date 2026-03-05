@@ -210,6 +210,7 @@ api.doc('/openapi.json', {
       description: 'Workflow recipe automation (event-triggered action pipelines)',
     },
     { name: 'Import', description: 'Import project data from archives' },
+    { name: 'Search', description: 'Hybrid search (keyword + semantic + RRF fusion)' },
   ],
 });
 

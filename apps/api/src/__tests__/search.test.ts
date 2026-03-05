@@ -217,7 +217,7 @@ describe('Search Routes', () => {
       if (!vectorAvailable) return;
       mockGetEmbedder.mockReturnValue({
         id: 'test-embedder',
-        embed: vi.fn().mockResolvedValue([makeVec(0)]),
+        encode: vi.fn().mockResolvedValue([makeVec(0)]),
       });
 
       const res = await app.request('/v1/search', {
@@ -268,7 +268,7 @@ describe('Search Routes', () => {
       if (!vectorAvailable) return;
       mockGetEmbedder.mockReturnValue({
         id: 'test-embedder',
-        embed: vi.fn().mockResolvedValue([makeVec(0)]),
+        encode: vi.fn().mockResolvedValue([makeVec(0)]),
       });
 
       const res = await app.request('/v1/search', {

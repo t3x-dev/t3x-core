@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 54 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(54);
+  it('has 56 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(56);
   });
 
   it('key equals value for every code', () => {
@@ -35,6 +35,7 @@ describe('ErrorCodes', () => {
         "DELETE_FAILED": "DELETE_FAILED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
+        "EMBEDDER_NOT_CONFIGURED": "EMBEDDER_NOT_CONFIGURED",
         "EXTRACTION_FAILED": "EXTRACTION_FAILED",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
@@ -64,6 +65,7 @@ describe('ErrorCodes', () => {
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",

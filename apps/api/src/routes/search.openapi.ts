@@ -139,7 +139,7 @@ searchRoutes.openapi(searchRoute, async (c) => {
         vector_rank: null,
       }));
     } else if (effectiveMode === 'semantic') {
-      const queryEmbedding = await embedder!.embed([query]);
+      const queryEmbedding = await embedder!.encode([query]);
       const vecResults = await searchSimilarSentences(db, project_id, queryEmbedding[0], limit);
       results = vecResults.map((r, idx) => ({
         sentence_id: r.id,
@@ -151,7 +151,7 @@ searchRoutes.openapi(searchRoute, async (c) => {
       }));
     } else {
       // hybrid
-      const queryEmbedding = await embedder!.embed([query]);
+      const queryEmbedding = await embedder!.encode([query]);
       const hybridResults = await searchHybrid(db, project_id, query, queryEmbedding[0], limit);
       results = hybridResults.map((r) => ({
         sentence_id: r.id,
