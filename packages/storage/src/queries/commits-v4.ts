@@ -400,12 +400,16 @@ export async function findCommitV4History(
            jsonb_array_elements_text(h.parents::jsonb) AS parent_hash
       JOIN commits_v4 c ON c.hash = parent_hash
       WHERE h.depth < ${MAX_DEPTH}
+    ),
+    deduped AS (
+      SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
+             content, project_id, message, branch, source_refs, merge_summary,
+             position_x, position_y, created_at, depth
+      FROM history
+      ORDER BY hash, depth
     )
-    SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
-           content, project_id, message, branch, source_refs, merge_summary,
-           position_x, position_y, created_at, depth
-    FROM history
-    ORDER BY hash, depth
+    SELECT * FROM deduped
+    ORDER BY depth, committed_at DESC
     LIMIT ${limit + 1}
   `);
 

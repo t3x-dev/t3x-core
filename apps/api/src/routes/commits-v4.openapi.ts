@@ -848,13 +848,13 @@ commitsV4Routes.openapi(getCommitV4HistoryRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const history = await findCommitV4History(db, decodedHash, limit);
+    const result = await findCommitV4History(db, decodedHash, limit);
 
-    if (history.length === 0) {
+    if (result.commits.length === 0) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
-    return c.json({ success: true as const, data: history.map(toApiCommit) }, 200);
+    return c.json({ success: true as const, data: result.commits.map(toApiCommit) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'HISTORY_FAILED', message);
