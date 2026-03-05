@@ -30,6 +30,7 @@ export const ID_PREFIXES = {
   draft_sentence: 'ds_',
   draft_constraint: 'dc_',
   semantic_point: 'sp_',
+  relation: 'rel_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
@@ -1054,5 +1055,41 @@ export interface ProjectExtractionConfig {
     direct?: number;
     paraphrase?: number;
     cross_turn?: number;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ring 4: Inter-Sentence Relations
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const RELATION_TYPES = [
+  'supports',
+  'contrasts',
+  'causes',
+  'elaborates',
+  'temporal_follows',
+  'conditions',
+  'summarizes',
+] as const;
+
+export type RelationType = (typeof RELATION_TYPES)[number];
+
+export interface SentenceRelation {
+  id: string;                    // rel_abc123
+  source_id: string;             // s_xxx (from sentence)
+  target_id: string;             // s_yyy (to sentence)
+  type: RelationType;
+  confidence: number;            // 0.0 - 1.0
+  reasoning: string;             // LLM explanation
+}
+
+export interface RelationExtractionResult {
+  relations: SentenceRelation[];
+  stats: {
+    total_sentences: number;
+    relations_found: number;
+    avg_confidence: number;
+    extraction_time_ms: number;
   };
 }
