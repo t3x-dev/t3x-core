@@ -134,7 +134,7 @@ searchRoutes.openapi(searchRoute, async (c) => {
         sentence_id: r.id,
         commit_hash: r.commit_hash,
         text: r.text,
-        score: r.bm25_score,
+        score: r.keyword_score,
         keyword_rank: idx + 1,
         vector_rank: null,
       }));

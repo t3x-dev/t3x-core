@@ -207,7 +207,7 @@ describe('Search Routes', () => {
         }),
       });
 
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(400);
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(false);
       expect(json.error.code).toBe('EMBEDDER_NOT_CONFIGURED');

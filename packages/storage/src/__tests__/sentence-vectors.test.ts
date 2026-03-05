@@ -201,7 +201,7 @@ describe('sentenceVectors', () => {
   });
 });
 
-describe('searchByKeyword (BM25)', () => {
+describe('searchByKeyword (keyword)', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
   let vectorAvailable = false;
@@ -265,11 +265,11 @@ describe('searchByKeyword (BM25)', () => {
     expect(ids).not.toContain('s_kw004');
   });
 
-  it('should return results ordered by bm25_score descending', async () => {
+  it('should return results ordered by keyword_score descending', async () => {
     if (!vectorAvailable) return;
     const results = await searchByKeyword(db, PROJECT_ID, 'pricing', 10);
     for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].bm25_score).toBeGreaterThanOrEqual(results[i].bm25_score);
+      expect(results[i - 1].keyword_score).toBeGreaterThanOrEqual(results[i].keyword_score);
     }
   });
 
@@ -306,8 +306,8 @@ describe('searchByKeyword (BM25)', () => {
     expect(row.project_id).toBe(PROJECT_ID);
     expect(row.commit_hash).toBe(COMMIT_HASH);
     expect(row.text).toBe('Customer support handles billing inquiries');
-    expect(typeof row.bm25_score).toBe('number');
-    expect(row.bm25_score).toBeGreaterThan(0);
+    expect(typeof row.keyword_score).toBe('number');
+    expect(row.keyword_score).toBeGreaterThan(0);
   });
 
   it('should find sentences with word "includes"', async () => {

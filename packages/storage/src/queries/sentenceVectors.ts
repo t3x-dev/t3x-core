@@ -137,7 +137,7 @@ export async function searchSimilarSentences(
 }
 
 // ============================================================
-// Keyword Search (BM25)
+// Keyword Search (ts_rank)
 // ============================================================
 
 export interface KeywordSearchResult {
@@ -145,11 +145,11 @@ export interface KeywordSearchResult {
   project_id: string;
   commit_hash: string;
   text: string;
-  bm25_score: number;
+  keyword_score: number;
 }
 
 /**
- * Search sentences by keyword using PostgreSQL full-text search (BM25 ranking).
+ * Search sentences by keyword using PostgreSQL full-text search (ts_rank ranking).
  * Uses tsvector column with GIN index for fast keyword matching.
  * Works without embedding provider — pure keyword search.
  */
@@ -165,11 +165,11 @@ export async function searchByKeyword(
     db as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> }
   ).execute(
     sql`SELECT id, project_id, commit_hash, text,
-               ts_rank(tsv, plainto_tsquery('simple', ${query})) AS bm25_score
+               ts_rank(tsv, plainto_tsquery('simple', ${query})) AS keyword_score
         FROM sentence_vectors
         WHERE project_id = ${projectId}
           AND tsv @@ plainto_tsquery('simple', ${query})
-        ORDER BY bm25_score DESC
+        ORDER BY keyword_score DESC
         LIMIT ${limit}`
   );
 
@@ -178,7 +178,7 @@ export async function searchByKeyword(
     project_id: row.project_id as string,
     commit_hash: row.commit_hash as string,
     text: row.text as string,
-    bm25_score: Number(row.bm25_score),
+    keyword_score: Number(row.keyword_score),
   }));
 }
 
