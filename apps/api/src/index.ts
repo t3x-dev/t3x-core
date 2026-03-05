@@ -43,6 +43,7 @@ import {
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
@@ -158,6 +159,7 @@ api.route('/', notificationsRoutes); // /v1/notifications
 api.route('/', providersRoutes); // /v1/providers
 api.route('/', searchRoutes); // /v1/search
 api.route('/', knowledgeGraphRoutes); // /v1/projects/:projectId/knowledge-graph/*
+api.route('/', autopilotRoutes); // /v1/projects/:projectId/autopilot/*, /v1/drafts/:draftId/auto-commit
 api.route('/', authCallbackRoutes); // /v1/auth/callback
 
 // OpenAPI spec endpoint
@@ -216,6 +218,10 @@ api.doc('/openapi.json', {
     {
       name: 'Knowledge Graph',
       description: 'Cross-conversation knowledge graph (entity clustering, typed edges, traversal)',
+    },
+    {
+      name: 'Autopilot',
+      description: 'Knowledge autopilot configuration and auto-commit',
     },
   ],
 });

@@ -5,6 +5,12 @@
  * All functions take a database instance as first parameter.
  */
 
+// Autopilot
+export {
+  type AutopilotConfigOutput,
+  getAutopilotConfig,
+  updateAutopilotConfig,
+} from './autopilot';
 // API Keys
 export {
   type CreateApiKeyInput,

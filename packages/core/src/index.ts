@@ -12,6 +12,15 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 
+// Autopilot (auto-commit evaluator)
+export {
+  type AutoCommitCandidate,
+  type AutoCommitPlan,
+  type AutopilotConfig,
+  DEFAULT_AUTOPILOT_CONFIG,
+  evaluateAutoCommit,
+  mergeAutopilotConfig,
+} from './autopilot';
 // Commit Builders
 export {
   buildConstraints,

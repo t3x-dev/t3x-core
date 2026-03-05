@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS projects (
   owner_id TEXT,
   metadata_json TEXT,
   provider_config TEXT,
+  autopilot_config JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);

@@ -8,7 +8,7 @@
 import { isInternalUrlResolved } from './ssrf';
 
 interface RecipeStep {
-  action: 'send_webhook' | 'run_eval' | 'export_report';
+  action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
   config: Record<string, unknown>;
 }
 
@@ -162,6 +162,34 @@ export async function executeRecipe(
             }),
           });
           results.push({ action: step.action, success: true, data: { report } });
+          break;
+        }
+        case 'auto_commit_draft': {
+          const draftId = step.config.draft_id as string;
+          if (!draftId) {
+            results.push({
+              action: step.action,
+              success: false,
+              error: 'missing draft_id in step config',
+            });
+            break;
+          }
+          const baseUrlCommit = deps.apiBaseUrl || 'http://localhost:8000';
+          const commitHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKeyCommit = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKeyCommit) {
+            commitHeaders.Authorization = `Bearer ${internalKeyCommit}`;
+          }
+          const commitRes = await fetch(`${baseUrlCommit}/v1/drafts/${draftId}/auto-commit`, {
+            method: 'POST',
+            headers: commitHeaders,
+          });
+          const commitBody = await commitRes.json();
+          results.push({
+            action: step.action,
+            success: commitRes.ok && commitBody.success,
+            data: commitBody.data,
+          });
           break;
         }
         default:

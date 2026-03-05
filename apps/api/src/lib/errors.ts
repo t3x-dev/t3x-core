@@ -120,6 +120,9 @@ export const ErrorCodes = {
   GRAPH_NODE_NOT_FOUND: 'GRAPH_NODE_NOT_FOUND',
   GRAPH_NOT_BUILT: 'GRAPH_NOT_BUILT',
   EMBEDDINGS_REQUIRED: 'EMBEDDINGS_REQUIRED',
+
+  // Autopilot errors
+  AUTOPILOT_CONFIG_INVALID: 'AUTOPILOT_CONFIG_INVALID',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -229,6 +232,9 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   GRAPH_NODE_NOT_FOUND: 404,
   GRAPH_NOT_BUILT: 400,
   EMBEDDINGS_REQUIRED: 400,
+
+  // Autopilot errors
+  AUTOPILOT_CONFIG_INVALID: 400,
 };
 
 /**

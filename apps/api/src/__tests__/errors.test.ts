@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 60 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(60);
+  it('has 61 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(61);
   });
 
   it('key equals value for every code', () => {
@@ -25,6 +25,7 @@ describe('ErrorCodes', () => {
         "API_KEY_NOT_FOUND": "API_KEY_NOT_FOUND",
         "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",
+        "AUTOPILOT_CONFIG_INVALID": "AUTOPILOT_CONFIG_INVALID",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
         "COMPARE_FAILED": "COMPARE_FAILED",

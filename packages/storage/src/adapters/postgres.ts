@@ -745,6 +745,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
     CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
     CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
+
+    -- Migration: Add autopilot_config column to projects (Knowledge Autopilot)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS autopilot_config JSONB;
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
