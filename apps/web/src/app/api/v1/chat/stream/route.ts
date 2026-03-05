@@ -7,7 +7,6 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
@@ -23,9 +22,8 @@ export async function POST(request: NextRequest) {
     if (API_KEY) {
       headers.Authorization = `Bearer ${API_KEY}`;
     } else {
-      // Get API key from NextAuth session (server-side)
-      const session = await auth();
-      const sessionKey = (session as unknown as Record<string, unknown>)?.apiKey as string | undefined;
+      // Get API key from local auth session cookie
+      const sessionKey = request.cookies.get('t3x-session')?.value;
       if (sessionKey) {
         headers.Authorization = `Bearer ${sessionKey}`;
       }

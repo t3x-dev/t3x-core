@@ -1,6 +1,5 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
 import { useParams } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
@@ -78,8 +77,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
   return (
-    <SessionProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ErrorBoundary>
           <div className="flex h-screen bg-background">
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
@@ -104,6 +102,5 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         </ErrorBoundary>
       </ThemeProvider>
-    </SessionProvider>
   );
 }

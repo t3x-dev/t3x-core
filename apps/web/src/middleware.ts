@@ -30,11 +30,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for local auth session cookie or NextAuth session token
-  const hasSession =
-    request.cookies.has('t3x-session') ||
-    request.cookies.has('authjs.session-token') ||
-    request.cookies.has('__Secure-authjs.session-token');
+  // Check for local auth session cookie
+  const hasSession = request.cookies.has('t3x-session');
 
   if (!hasSession) {
     const loginUrl = new URL('/login', request.url);
