@@ -23,9 +23,10 @@ import { buildMerkleTree, computeCommitV4Hash } from '@t3x/core';
 
 export { computeCommitV4Hash } from '@t3x/core';
 
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
 // Types
@@ -36,6 +37,8 @@ export interface ListCommitsV4Options {
   branch?: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 export interface CreateCommitV4Options {
@@ -249,19 +252,71 @@ export async function findCommitV4ByHash(db: AnyDB, hash: string): Promise<Commi
  * Find all CommitsV4 for a project
  *
  * Returns commits ordered by committedAt descending.
+ *
+ * Supports two pagination modes:
+ * - **Offset mode** (default): pass limit/offset, returns CommitV4[]
+ * - **Cursor mode**: pass cursor (empty string for first page), returns CursorPage<CommitV4>
  */
 export async function findCommitsV4ByProject(
   db: AnyDB,
   projectId: string,
+  options: Omit<ListCommitsV4Options, 'projectId'> & { cursor: string }
+): Promise<CursorPage<CommitV4>>;
+export async function findCommitsV4ByProject(
+  db: AnyDB,
+  projectId: string,
+  options?: Omit<ListCommitsV4Options, 'projectId' | 'cursor'>
+): Promise<CommitV4[]>;
+export async function findCommitsV4ByProject(
+  db: AnyDB,
+  projectId: string,
   options: Omit<ListCommitsV4Options, 'projectId'> = {}
-): Promise<CommitV4[]> {
+): Promise<CommitV4[] | CursorPage<CommitV4>> {
   const limit = options.limit ?? 100;
+
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [eq(commitsV4.projectId, projectId)];
+    if (options.branch) {
+      conditions.push(eq(commitsV4.branch, options.branch));
+    }
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (committed_at < t) OR (committed_at = t AND hash < k)
+      conditions.push(
+        or(
+          lt(commitsV4.committedAt, cursorDate),
+          and(eq(commitsV4.committedAt, cursorDate), lt(commitsV4.hash, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(commitsV4)
+      .where(and(...conditions))
+      .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+      .limit(limit + 1);
+
+    return toCursorPage(rows.map(rowToCommitV4), limit, (c) => ({
+      t: c.committed_at,
+      k: c.hash,
+    }));
+  }
+
+  // Legacy offset/limit mode
   const offset = options.offset ?? 0;
+  const conditions = [eq(commitsV4.projectId, projectId)];
+  if (options.branch) {
+    conditions.push(eq(commitsV4.branch, options.branch));
+  }
 
   const rows = await db
     .select()
     .from(commitsV4)
-    .where(eq(commitsV4.projectId, projectId))
+    .where(and(...conditions))
     .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
     .limit(limit)
     .offset(offset);
@@ -273,14 +328,60 @@ export async function findCommitsV4ByProject(
  * Find CommitsV4 by project and branch
  *
  * Returns commits ordered by committedAt descending.
+ *
+ * Supports two pagination modes:
+ * - **Offset mode** (default): pass limit/offset, returns CommitV4[]
+ * - **Cursor mode**: pass cursor (empty string for first page), returns CursorPage<CommitV4>
  */
 export async function findCommitsV4ByBranch(
   db: AnyDB,
   projectId: string,
   branch: string,
+  options: Omit<ListCommitsV4Options, 'projectId' | 'branch'> & { cursor: string }
+): Promise<CursorPage<CommitV4>>;
+export async function findCommitsV4ByBranch(
+  db: AnyDB,
+  projectId: string,
+  branch: string,
+  options?: Omit<ListCommitsV4Options, 'projectId' | 'branch' | 'cursor'>
+): Promise<CommitV4[]>;
+export async function findCommitsV4ByBranch(
+  db: AnyDB,
+  projectId: string,
+  branch: string,
   options: Omit<ListCommitsV4Options, 'projectId' | 'branch'> = {}
-): Promise<CommitV4[]> {
+): Promise<CommitV4[] | CursorPage<CommitV4>> {
   const limit = options.limit ?? 100;
+
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [eq(commitsV4.projectId, projectId), eq(commitsV4.branch, branch)];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      conditions.push(
+        or(
+          lt(commitsV4.committedAt, cursorDate),
+          and(eq(commitsV4.committedAt, cursorDate), lt(commitsV4.hash, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(commitsV4)
+      .where(and(...conditions))
+      .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+      .limit(limit + 1);
+
+    return toCursorPage(rows.map(rowToCommitV4), limit, (c) => ({
+      t: c.committed_at,
+      k: c.hash,
+    }));
+  }
+
+  // Legacy offset/limit mode
   const offset = options.offset ?? 0;
 
   const rows = await db

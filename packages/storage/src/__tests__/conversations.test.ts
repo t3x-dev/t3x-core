@@ -18,7 +18,7 @@ import {
 } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
 import { insertTurn } from '../queries/turns';
-import { conversations } from '../schema';
+import { type Conversation, conversations } from '../schema';
 import { createTestDB, testData } from './setup';
 
 describe('Conversations Storage', () => {
@@ -216,6 +216,106 @@ describe('Conversations Storage', () => {
       const count = await getConversationTurnCount(db, conv.conversationId);
 
       expect(count).toBe(3);
+    });
+  });
+
+  describe('cursor pagination — findConversationsByProject', () => {
+    it('returns CursorPage for first page with cursor=""', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Conv Cursor First Page' }));
+
+      for (let i = 0; i < 5; i++) {
+        await insertConversation(db, {
+          projectId: proj.projectId,
+          title: `Cursor Conv ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+    });
+
+    it('follows cursor through all pages', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Conv Cursor Follow' }));
+
+      for (let i = 0; i < 5; i++) {
+        await insertConversation(db, {
+          projectId: proj.projectId,
+          title: `Follow Conv ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Page 1
+      const page1 = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+        cursor: '',
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      // Page 2
+      const page2 = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+        cursor: page1.next_cursor!,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(2);
+      expect(page2.has_more).toBe(true);
+
+      // Page 3 (last page, 1 remaining)
+      const page3 = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+        cursor: page2.next_cursor!,
+        limit: 2,
+      });
+      expect(page3.items).toHaveLength(1);
+      expect(page3.has_more).toBe(false);
+      expect(page3.next_cursor).toBeNull();
+
+      // All items are unique
+      const allItems = [...page1.items, ...page2.items, ...page3.items];
+      expect(allItems).toHaveLength(5);
+      const ids = new Set(allItems.map((c) => c.conversationId));
+      expect(ids.size).toBe(5);
+    });
+
+    it('returns empty page for project with no conversations', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Conv Cursor Empty' }));
+
+      const page = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+        cursor: '',
+        limit: 10,
+      });
+
+      expect(page.items).toHaveLength(0);
+      expect(page.has_more).toBe(false);
+      expect(page.next_cursor).toBeNull();
+    });
+
+    it('still returns plain array without cursor (backward compat)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Conv Cursor Compat' }));
+
+      await insertConversation(db, {
+        projectId: proj.projectId,
+        title: 'Compat Conv',
+      });
+
+      const result = await findConversationsByProject(db, {
+        projectId: proj.projectId,
+      });
+
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as Conversation[]).length).toBeGreaterThanOrEqual(1);
     });
   });
 });

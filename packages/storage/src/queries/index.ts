@@ -5,8 +5,6 @@
  * All functions take a database instance as first parameter.
  */
 
-// Cursor Pagination
-export { type CursorPage, decodeCursor, encodeCursor, toCursorPage } from './pagination';
 // API Keys
 export {
   type CreateApiKeyInput,
@@ -82,6 +80,7 @@ export {
   createComparison,
   deleteComparison,
   getComparison,
+  type ListComparisonsOptions,
   listComparisons,
 } from './comparisons';
 // Conversation Contexts (per-conversation context customization)
@@ -253,6 +252,8 @@ export {
   markNotificationRead,
   type NotificationType,
 } from './notifications';
+// Cursor Pagination
+export { type CursorPage, decodeCursor, encodeCursor, toCursorPage } from './pagination';
 // Pins (V4 - source selection for commits and context)
 export {
   createPin,

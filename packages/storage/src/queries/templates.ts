@@ -3,9 +3,10 @@
  *
  * CRUD operations for reusable prompt templates.
  */
-import { and, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { templates } from '../schema';
+import { type Template, templates } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
 // Types
@@ -41,6 +42,8 @@ export interface ListTemplatesOptions {
   search?: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 // ============================================================
@@ -89,9 +92,19 @@ export async function findTemplateById(db: AnyDB, templateId: string) {
 /**
  * List templates with optional filtering.
  */
-export async function listTemplates(db: AnyDB, opts: ListTemplatesOptions = {}) {
+export async function listTemplates(
+  db: AnyDB,
+  opts: ListTemplatesOptions & { cursor: string }
+): Promise<CursorPage<Template>>;
+export async function listTemplates(
+  db: AnyDB,
+  opts?: Omit<ListTemplatesOptions, 'cursor'>
+): Promise<Template[]>;
+export async function listTemplates(
+  db: AnyDB,
+  opts: ListTemplatesOptions = {}
+): Promise<Template[] | CursorPage<Template>> {
   const limit = opts.limit ?? 100;
-  const offset = opts.offset ?? 0;
 
   const conditions = [];
 
@@ -107,6 +120,35 @@ export async function listTemplates(db: AnyDB, opts: ListTemplatesOptions = {}) 
     conditions.push(or(ilike(templates.title, pattern), ilike(templates.description, pattern)));
   }
 
+  if (opts.cursor !== undefined) {
+    // Cursor pagination mode
+    if (opts.cursor !== '') {
+      const { t, k } = decodeCursor(opts.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND template_id < k)
+      conditions.push(
+        or(
+          lt(templates.createdAt, cursorDate),
+          and(eq(templates.createdAt, cursorDate), lt(templates.templateId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(templates)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(templates.createdAt), desc(templates.templateId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (t) => ({
+      t: t.createdAt.toISOString(),
+      k: t.templateId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = opts.offset ?? 0;
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   return db

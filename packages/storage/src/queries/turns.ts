@@ -5,9 +5,10 @@
  */
 
 import { computeTurnHash } from '@t3x/core';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Turn, turns } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateTurnInput {
   projectId: string;
@@ -23,6 +24,8 @@ export interface ListTurnsOptions {
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 export interface ListTurnsByProjectOptions {
@@ -89,15 +92,69 @@ export async function findTurnByHash(db: AnyDB, turnHash: string): Promise<Turn 
 }
 
 /**
- * Find turns by conversation
+ * Find turns by conversation (cursor mode)
+ *
+ * Returns a CursorPage when `cursor` is provided (empty string = first page).
  */
 export async function findTurnsByConversation(
   db: AnyDB,
+  options: ListTurnsOptions & { cursor: string }
+): Promise<CursorPage<Turn>>;
+/**
+ * Find turns by conversation (offset mode)
+ */
+export async function findTurnsByConversation(
+  db: AnyDB,
+  options: Omit<ListTurnsOptions, 'cursor'>
+): Promise<Turn[]>;
+export async function findTurnsByConversation(
+  db: AnyDB,
   options: ListTurnsOptions
-): Promise<Turn[]> {
+): Promise<Turn[] | CursorPage<Turn>> {
   const limit = options.limit ?? 100;
+  const orderDir = options.order ?? 'asc';
+  const orderFn = orderDir === 'desc' ? desc : asc;
+
+  // Cursor mode: keyset pagination
+  if (options.cursor !== undefined) {
+    const conditions = [eq(turns.conversationId, options.conversationId)];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      if (orderDir === 'asc') {
+        // ORDER BY createdAt ASC, turnHash ASC → keyset: (created_at > t) OR (created_at = t AND turn_hash > k)
+        conditions.push(
+          or(
+            gt(turns.createdAt, new Date(t)),
+            and(eq(turns.createdAt, new Date(t)), gt(turns.turnHash, k))
+          )!
+        );
+      } else {
+        // ORDER BY createdAt DESC, turnHash DESC → keyset: (created_at < t) OR (created_at = t AND turn_hash < k)
+        conditions.push(
+          or(
+            lt(turns.createdAt, new Date(t)),
+            and(eq(turns.createdAt, new Date(t)), lt(turns.turnHash, k))
+          )!
+        );
+      }
+    }
+
+    const rows = await db
+      .select()
+      .from(turns)
+      .where(and(...conditions))
+      .orderBy(orderFn(turns.createdAt), orderFn(turns.turnHash))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (turn) => ({
+      t: turn.createdAt.toISOString(),
+      k: turn.turnHash,
+    }));
+  }
+
+  // Offset mode (existing behavior)
   const offset = options.offset ?? 0;
-  const orderFn = options.order === 'desc' ? desc : asc;
 
   return db
     .select()

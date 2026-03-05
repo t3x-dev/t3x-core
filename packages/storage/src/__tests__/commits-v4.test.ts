@@ -8,7 +8,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CommitAuthorV4, SentenceV4 } from '@t3x/core';
+import type { CommitAuthorV4, CommitV4, SentenceV4 } from '@t3x/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -1225,6 +1225,214 @@ describe('Commits V4 Storage', () => {
 
       expect(result.updated).toBe(3);
       expect(result.remaining).toBe(false);
+    });
+  });
+
+  describe('cursor pagination — findCommitsV4ByProject', () => {
+    it('returns CursorPage for first page with cursor=""', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor First Page Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Cursor Author' },
+          sentences: [{ id: `s_cfp${i}`, text: `Cursor first page ${i}` }],
+          project_id: proj.projectId,
+          message: `Commit ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+    });
+
+    it('follows cursor through all pages', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Follow Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Follow Author' },
+          sentences: [{ id: `s_cfl${i}`, text: `Follow ${i}` }],
+          project_id: proj.projectId,
+          message: `Follow ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Page 1
+      const page1 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      // Page 2
+      const page2 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: page1.next_cursor!,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(2);
+      expect(page2.has_more).toBe(true);
+
+      // Page 3 (last page, 1 remaining)
+      const page3 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: page2.next_cursor!,
+        limit: 2,
+      });
+      expect(page3.items).toHaveLength(1);
+      expect(page3.has_more).toBe(false);
+      expect(page3.next_cursor).toBeNull();
+
+      // All items are unique and in descending order
+      const allItems = [...page1.items, ...page2.items, ...page3.items];
+      expect(allItems).toHaveLength(5);
+      const hashes = new Set(allItems.map((c) => c.hash));
+      expect(hashes.size).toBe(5);
+    });
+
+    it('returns empty page for project with no commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Empty Project' }));
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 10,
+      });
+
+      expect(page.items).toHaveLength(0);
+      expect(page.has_more).toBe(false);
+      expect(page.next_cursor).toBeNull();
+    });
+
+    it('still returns plain array without cursor (backward compat)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Compat Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Compat Author' },
+        sentences: [{ id: 's_ccompat', text: 'Compat' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitsV4ByProject(db, proj.projectId);
+
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as CommitV4[]).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('respects branch filter in cursor mode', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Cursor Branch Filter Project' })
+      );
+
+      for (let i = 0; i < 3; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'BF Author' },
+          sentences: [{ id: `s_cbfm${i}`, text: `Main ${i}` }],
+          project_id: proj.projectId,
+          branch: 'main',
+        });
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'BF Author' },
+          sentences: [{ id: `s_cbff${i}`, text: `Feature ${i}` }],
+          project_id: proj.projectId,
+          branch: 'feature',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 10,
+        branch: 'main',
+      });
+
+      expect(page.items).toHaveLength(3);
+      expect(page.items.every((c) => c.branch === 'main')).toBe(true);
+    });
+  });
+
+  describe('cursor pagination — findCommitsV4ByBranch', () => {
+    it('returns CursorPage for first page with cursor=""', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch First Page' }));
+
+      for (let i = 0; i < 4; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'CB Author' },
+          sentences: [{ id: `s_cbr${i}`, text: `Branch cursor ${i}` }],
+          project_id: proj.projectId,
+          branch: 'main',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByBranch(db, proj.projectId, 'main', {
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+    });
+
+    it('follows cursor through all pages', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch Follow' }));
+
+      for (let i = 0; i < 3; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'CBF Author' },
+          sentences: [{ id: `s_cbf${i}`, text: `Branch follow ${i}` }],
+          project_id: proj.projectId,
+          branch: 'dev',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page1 = await findCommitsV4ByBranch(db, proj.projectId, 'dev', {
+        cursor: '',
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      const page2 = await findCommitsV4ByBranch(db, proj.projectId, 'dev', {
+        cursor: page1.next_cursor!,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(1);
+      expect(page2.has_more).toBe(false);
+      expect(page2.next_cursor).toBeNull();
+    });
+
+    it('still returns plain array without cursor (backward compat)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch Compat' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'CBC Author' },
+        sentences: [{ id: 's_cbcompat', text: 'Branch compat' }],
+        project_id: proj.projectId,
+        branch: 'main',
+      });
+
+      const result = await findCommitsV4ByBranch(db, proj.projectId, 'main');
+
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as CommitV4[]).length).toBeGreaterThanOrEqual(1);
     });
   });
 });

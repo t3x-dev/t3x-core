@@ -5,9 +5,10 @@
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
 
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type DeployAgent, deployAgents, type NewDeployAgent } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateDeployAgentInput {
   id: string;
@@ -40,6 +41,8 @@ export interface ListDeployAgentsOptions {
   projectId?: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 /**
@@ -90,11 +93,52 @@ export async function findDeployAgentById(
  */
 export async function findDeployAgents(
   db: AnyDB,
+  options: ListDeployAgentsOptions & { cursor: string }
+): Promise<CursorPage<DeployAgent>>;
+export async function findDeployAgents(
+  db: AnyDB,
+  options?: Omit<ListDeployAgentsOptions, 'cursor'>
+): Promise<DeployAgent[]>;
+export async function findDeployAgents(
+  db: AnyDB,
   options: ListDeployAgentsOptions = {}
-): Promise<DeployAgent[]> {
+): Promise<DeployAgent[] | CursorPage<DeployAgent>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [];
+    if (options.projectId) {
+      conditions.push(eq(deployAgents.projectId, options.projectId));
+    }
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND deploy_agent_id < k)
+      conditions.push(
+        or(
+          lt(deployAgents.createdAt, cursorDate),
+          and(eq(deployAgents.createdAt, cursorDate), lt(deployAgents.deployAgentId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(deployAgents)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(deployAgents.createdAt), desc(deployAgents.deployAgentId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (a) => ({
+      t: a.createdAt.toISOString(),
+      k: a.deployAgentId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = options.offset ?? 0;
   if (options.projectId) {
     return db
       .select()

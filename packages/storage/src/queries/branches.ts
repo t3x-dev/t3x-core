@@ -5,9 +5,10 @@
  */
 
 import { generateBranchId } from '@t3x/core';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Branch, branches } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateBranchInput {
   projectId: string;
@@ -20,6 +21,8 @@ export interface ListBranchesOptions {
   projectId: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 /**
@@ -99,11 +102,49 @@ export async function findBranchById(db: AnyDB, branchId: string): Promise<Branc
  */
 export async function findBranchesByProject(
   db: AnyDB,
+  options: ListBranchesOptions & { cursor: string }
+): Promise<CursorPage<Branch>>;
+export async function findBranchesByProject(
+  db: AnyDB,
+  options: Omit<ListBranchesOptions, 'cursor'>
+): Promise<Branch[]>;
+export async function findBranchesByProject(
+  db: AnyDB,
   options: ListBranchesOptions
-): Promise<Branch[]> {
+): Promise<Branch[] | CursorPage<Branch>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode (uses updatedAt DESC, branchId DESC for stable keyset)
+    const conditions = [eq(branches.projectId, options.projectId)];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (updated_at < t) OR (updated_at = t AND branch_id < k)
+      conditions.push(
+        or(
+          lt(branches.updatedAt, cursorDate),
+          and(eq(branches.updatedAt, cursorDate), lt(branches.branchId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(branches)
+      .where(and(...conditions))
+      .orderBy(desc(branches.updatedAt), desc(branches.branchId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (b) => ({
+      t: b.updatedAt.toISOString(),
+      k: b.branchId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = options.offset ?? 0;
   return db
     .select()
     .from(branches)
