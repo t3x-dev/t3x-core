@@ -51,6 +51,7 @@ import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
 import { recipesRoutes } from './routes/recipes.openapi';
+import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
@@ -154,6 +155,7 @@ api.route('/', importRoutes); // /v1/import
 api.route('/', ingestRoutes); // /v1/projects/:projectId/ingest/webhook
 api.route('/', notificationsRoutes); // /v1/notifications
 api.route('/', providersRoutes); // /v1/providers
+api.route('/', searchRoutes); // /v1/search
 api.route('/', authCallbackRoutes); // /v1/auth/callback
 
 // OpenAPI spec endpoint

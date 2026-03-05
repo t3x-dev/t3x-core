@@ -504,10 +504,13 @@ CREATE TABLE IF NOT EXISTS sentence_vectors (
   text TEXT NOT NULL,
   embedding vector(768) NOT NULL,
   model_id TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  tsv tsvector
 );
 CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
 CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
+UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;
 `;
 
 /**
