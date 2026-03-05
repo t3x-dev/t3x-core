@@ -728,6 +728,13 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Drop old provider unique index (may not exist on fresh installs)
     DROP INDEX IF EXISTS idx_users_provider_unique;
 
+    -- ═══════════════════════════════════════════════════════════════
+    -- Auth Migration Phase 3: Local auth (username + password)
+    -- ═══════════════════════════════════════════════════════════════
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
