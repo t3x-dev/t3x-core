@@ -339,12 +339,17 @@ export {
   type InsertSentenceModificationInput,
   insertSentenceModification,
 } from './sentence-modifications';
-// Sentence Vectors (pgvector similarity search)
+// Sentence Vectors (pgvector similarity search + keyword search + hybrid RRF)
 export {
   deleteSentenceVectorsByCommit,
   deleteSentenceVectorsByProject,
   findSentenceVectorsByProject,
+  type HybridSearchResult,
+  type KeywordSearchResult,
+  rrfFusion,
   type SearchResult as SentenceVectorSearchResult,
+  searchByKeyword,
+  searchHybrid,
   searchSimilarSentences,
   type UpsertSentenceVectorInput,
   upsertSentenceVector,
