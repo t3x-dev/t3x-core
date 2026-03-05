@@ -10,7 +10,7 @@ import {
 
 describe('ErrorCodes', () => {
   it('has 61 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(61);
+    expect(Object.keys(ErrorCodes)).toHaveLength(62);
   });
 
   it('key equals value for every code', () => {
@@ -22,6 +22,7 @@ describe('ErrorCodes', () => {
   it('matches snapshot to prevent accidental changes', () => {
     expect(ErrorCodes).toMatchInlineSnapshot(`
       {
+        "ALREADY_COMMITTED": "ALREADY_COMMITTED",
         "API_KEY_NOT_FOUND": "API_KEY_NOT_FOUND",
         "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",

@@ -63,8 +63,10 @@ export function textFromBlocks(blocks: ContentBlock[]): string {
             : `[Audio: ${block.duration_ms ?? 0}ms]`;
         case 'file':
           return `[File: ${block.filename}]`;
-        default:
+        default: {
+          const _exhaustive: never = block;
           return '';
+        }
       }
     })
     .filter(Boolean)

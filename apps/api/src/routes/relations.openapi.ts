@@ -173,6 +173,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     if (!commit.project_id) {
       return errorResponse(c, 'INVALID_REQUEST', 'Commit has no project_id');
     }
+    const projectId = commit.project_id;
     const provider = await getLLMProvider();
     if (!provider) {
       return errorResponse(
@@ -192,7 +193,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         db,
         result.relations.map((r) => ({
           id: r.id,
-          project_id: commit.project_id,
+          project_id: projectId,
           commit_hash: decodedHash,
           source_id: r.source_id,
           target_id: r.target_id,

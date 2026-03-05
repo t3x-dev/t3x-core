@@ -406,14 +406,10 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     // 11. Push notification (fire-and-forget)
     pushNotification({
       project_id: draft.project_id,
-      type: 'commit_created',
+      type: 'commit.created',
       title: 'Auto-commit completed',
-      body: `Autopilot committed ${sentences.length} sentence(s) from draft "${draft.title}"`,
-      metadata: {
-        commit_hash: commit.hash,
-        draft_id: draftId,
-        source: 'autopilot',
-      },
+      message: `Autopilot committed ${sentences.length} sentence(s) from draft "${draft.title}"`,
+      ref_id: commit.hash,
     });
 
     // 12. Dispatch webhook (fire-and-forget)
