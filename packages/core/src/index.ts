@@ -249,6 +249,17 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
+// Multimodal content blocks for turns
+export {
+  type AudioBlock,
+  type ContentBlock,
+  type FileBlock,
+  type ImageBlock,
+  isTextOnly,
+  type TextBlock,
+  textFromBlocks,
+  textToBlocks,
+} from './multimodal';
 // Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]
 export {

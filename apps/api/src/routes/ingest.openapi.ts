@@ -25,10 +25,40 @@ export const ingestRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================================
 
+const ContentBlockSchema = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('text'), text: z.string() }),
+    z.object({
+      type: z.literal('image'),
+      url: z.string(),
+      alt: z.string().optional(),
+      ocr_text: z.string().optional(),
+      mime_type: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal('audio'),
+      url: z.string(),
+      transcript: z.string().optional(),
+      duration_ms: z.number().optional(),
+      mime_type: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal('file'),
+      url: z.string(),
+      filename: z.string(),
+      mime_type: z.string(),
+    }),
+  ])
+  .openapi('ContentBlock');
+
 const IngestTurnSchema = z.object({
   role: z.enum(['user', 'assistant', 'system', 'tool']).openapi({ description: 'Message role' }),
   content: z.string().min(1).max(100_000).openapi({ description: 'Message content' }),
   created_at: z.string().optional().openapi({ description: 'ISO8601 timestamp (optional)' }),
+  content_blocks: z
+    .array(ContentBlockSchema)
+    .optional()
+    .openapi({ description: 'Multimodal content blocks (optional)' }),
 });
 
 const IngestWebhookRequest = z
@@ -147,6 +177,7 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
       conversationId,
       role: turn.role,
       content: turn.content,
+      content_blocks: turn.content_blocks,
     });
     turnsCreated++;
   }

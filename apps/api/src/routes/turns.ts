@@ -8,7 +8,8 @@
  * GET  /v1/turns/:hash/context - Get turn with surrounding context (for source tracing)
  */
 
-import { createRingExtractor } from '@t3x/core';
+import type { ContentBlock } from '@t3x/core';
+import { createRingExtractor, textFromBlocks } from '@t3x/core';
 import {
   findConversationById,
   findTurnByHash,
@@ -53,6 +54,7 @@ turnRoutes.get('/v1/turns', async (c) => {
     content: string;
     language: string | null;
     ringsJson: string | null;
+    contentBlocks: unknown[] | null;
     createdAt: Date;
   }) => ({
     turn_hash: t.turnHash,
@@ -63,6 +65,7 @@ turnRoutes.get('/v1/turns', async (c) => {
     content: t.content,
     language: t.language,
     rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+    content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
     created_at: t.createdAt.toISOString(),
   });
 
@@ -106,12 +109,18 @@ turnRoutes.post('/v1/turns', async (c) => {
     content?: string;
     language?: string;
     rings?: unknown;
+    content_blocks?: ContentBlock[];
   } | null = null;
 
   try {
     body = await c.req.json();
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  // Auto-compute content from content_blocks when content is empty/missing
+  if (body?.content_blocks?.length && !body.content) {
+    body.content = textFromBlocks(body.content_blocks);
   }
 
   if (!body?.project_id || !body?.conversation_id || !body?.role || !body?.content) {
@@ -173,6 +182,7 @@ turnRoutes.post('/v1/turns', async (c) => {
       content: body.content,
       language: body.language,
       rings,
+      content_blocks: body.content_blocks,
     });
 
     const apiTurn = {
@@ -184,6 +194,7 @@ turnRoutes.post('/v1/turns', async (c) => {
       content: turn.content,
       language: turn.language,
       rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      content_blocks: (turn.contentBlocks as ContentBlock[]) ?? null,
       created_at: turn.createdAt.toISOString(),
     };
 
@@ -217,6 +228,7 @@ turnRoutes.get('/v1/turns/:hash', async (c) => {
       content: turn.content,
       language: turn.language,
       rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      content_blocks: (turn.contentBlocks as ContentBlock[]) ?? null,
       created_at: turn.createdAt.toISOString(),
     };
 
@@ -247,6 +259,7 @@ turnRoutes.get('/v1/turns/:hash/chain', async (c) => {
       content: t.content,
       language: t.language,
       rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
       created_at: t.createdAt.toISOString(),
     }));
 
@@ -316,6 +329,7 @@ turnRoutes.get('/v1/turns/:hash/context', async (c) => {
       content: t.content,
       language: t.language,
       rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
       created_at: t.createdAt.toISOString(),
       is_target: isTarget,
       highlight:

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS turns_v2 (
   content TEXT NOT NULL,
   language TEXT,
   rings_json TEXT,
+  content_blocks JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -103,6 +103,7 @@ export const turns = pgTable(
     content: text('content').notNull(),
     language: text('language'),
     ringsJson: text('rings_json'),
+    contentBlocks: jsonb('content_blocks').$type<unknown[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [

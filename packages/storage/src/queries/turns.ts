@@ -17,6 +17,7 @@ export interface CreateTurnInput {
   content: string;
   language?: string;
   rings?: unknown;
+  content_blocks?: unknown[];
 }
 
 export interface ListTurnsOptions {
@@ -61,6 +62,7 @@ export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Tur
       language: input.language ?? null,
       rings_json: ringsJson,
       created_at: createdAt.toISOString(),
+      content_blocks: input.content_blocks ?? null,
     });
 
     const [turn] = await tx
@@ -74,6 +76,7 @@ export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Tur
         content: input.content,
         language: input.language ?? null,
         ringsJson,
+        contentBlocks: input.content_blocks ?? null,
         createdAt,
       })
       .returning();

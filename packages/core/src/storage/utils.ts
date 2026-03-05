@@ -81,6 +81,10 @@ export function computeJCSHash(data: unknown): string {
 
 /**
  * Compute turn hash from turn data (excludes turn_hash itself)
+ *
+ * When content_blocks is provided and non-empty, uses turn_v2 schema
+ * which includes content_blocks in the hash. Otherwise falls back to
+ * turn_v1 for backward compatibility.
  */
 export function computeTurnHash(data: {
   parent_turn_hash: string | null;
@@ -91,7 +95,22 @@ export function computeTurnHash(data: {
   language: string | null;
   rings_json: string | null;
   created_at: string;
+  content_blocks?: unknown[] | null;
 }): string {
+  if (data.content_blocks && data.content_blocks.length > 0) {
+    return computeJCSHash({
+      parent_turn_hash: data.parent_turn_hash,
+      project_id: data.project_id,
+      conversation_id: data.conversation_id,
+      role: data.role,
+      content: data.content,
+      content_blocks: data.content_blocks,
+      language: data.language,
+      rings_json: data.rings_json,
+      created_at: data.created_at,
+      schema_version: 'turn_v2',
+    });
+  }
   return computeJCSHash({
     parent_turn_hash: data.parent_turn_hash,
     project_id: data.project_id,
