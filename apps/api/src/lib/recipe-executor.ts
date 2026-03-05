@@ -5,8 +5,10 @@
  * Fire-and-forget — errors are logged but don't propagate.
  */
 
+import { isInternalUrlResolved } from './ssrf';
+
 interface RecipeStep {
-  action: 'send_webhook' | 'run_eval' | 'export_report';
+  action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
   config: Record<string, unknown>;
 }
 
@@ -50,7 +52,19 @@ export async function executeRecipe(
       switch (step.action) {
         case 'send_webhook': {
           const url = step.config.url as string;
-          if (url && deps.webhookDispatch) {
+          if (!url) {
+            results.push({ action: step.action, success: false, error: 'Missing webhook URL' });
+            break;
+          }
+          if (await isInternalUrlResolved(url)) {
+            results.push({
+              action: step.action,
+              success: false,
+              error: 'Webhook URL targets a blocked internal address',
+            });
+            break;
+          }
+          if (deps.webhookDispatch) {
             await deps.webhookDispatch(url, {
               recipe_id: recipe.id,
               recipe_name: recipe.name,
@@ -73,9 +87,14 @@ export async function executeRecipe(
             break;
           }
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
+          const runEvalHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKey = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKey) {
+            runEvalHeaders['Authorization'] = `Bearer ${internalKey}`;
+          }
           const res = await fetch(`${baseUrl}/v1/runs`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: runEvalHeaders,
             body: JSON.stringify({
               leaf_id: leafId,
               project_id: context.projectId,
@@ -111,7 +130,12 @@ export async function executeRecipe(
             break;
           }
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
-          const res = await fetch(`${baseUrl}/v1/runs/${runId}`);
+          const exportHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKeyExport = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKeyExport) {
+            exportHeaders['Authorization'] = `Bearer ${internalKeyExport}`;
+          }
+          const res = await fetch(`${baseUrl}/v1/runs/${runId}`, { headers: exportHeaders });
           if (!res.ok) {
             results.push({
               action: step.action,
@@ -135,13 +159,41 @@ export async function executeRecipe(
           // Mark run as exported via PATCH (title/description/tags)
           await fetch(`${baseUrl}/v1/runs/${runId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: exportHeaders,
             body: JSON.stringify({
               description: `Exported by recipe "${recipe.name}" at ${report.exported_at}`,
               tags: [`recipe:${recipe.id}`, 'exported'],
             }),
           });
           results.push({ action: step.action, success: true, data: { report } });
+          break;
+        }
+        case 'auto_commit_draft': {
+          const draftId = step.config.draft_id as string;
+          if (!draftId) {
+            results.push({
+              action: step.action,
+              success: false,
+              error: 'missing draft_id in step config',
+            });
+            break;
+          }
+          const baseUrlCommit = deps.apiBaseUrl || 'http://localhost:8000';
+          const commitHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKeyCommit = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKeyCommit) {
+            commitHeaders.Authorization = `Bearer ${internalKeyCommit}`;
+          }
+          const commitRes = await fetch(`${baseUrlCommit}/v1/drafts/${draftId}/auto-commit`, {
+            method: 'POST',
+            headers: commitHeaders,
+          });
+          const commitBody = await commitRes.json();
+          results.push({
+            action: step.action,
+            success: commitRes.ok && commitBody.success,
+            data: commitBody.data,
+          });
           break;
         }
         default:

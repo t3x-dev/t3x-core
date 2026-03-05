@@ -112,15 +112,17 @@ export async function listMergeDraftsByProject(
 
 /**
  * Update merge draft
+ *
+ * Fix 3: Eliminate TOCTOU race. The preliminary read is removed — the UPDATE
+ * itself is the authority. If 0 rows are returned the draft did not exist (or
+ * was already deleted) and we return null, eliminating the window between read
+ * and write that existed with the old read-then-write pattern.
  */
 export async function updateMergeDraft(
   db: AnyDB,
   draftId: string,
   input: UpdateMergeDraftInput
 ): Promise<MergeDraft | null> {
-  const existing = await getMergeDraft(db, draftId);
-  if (!existing) return null;
-
   const updates: Partial<NewMergeDraft> = {
     updatedAt: new Date(),
   };

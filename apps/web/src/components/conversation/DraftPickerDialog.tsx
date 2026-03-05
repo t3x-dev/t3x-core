@@ -10,6 +10,7 @@
  */
 
 import { FileEdit, Loader2, Plus, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -73,6 +74,7 @@ export function DraftPickerDialog({
   endChar,
 }: DraftPickerDialogProps) {
   const { t } = useTerminology();
+  const router = useRouter();
   const [drafts, setDrafts] = useState<DraftV3[]>([]);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
@@ -111,7 +113,7 @@ export function DraftPickerDialog({
         action: {
           label: 'Open',
           onClick: () => {
-            window.location.href = `/project/${projectId}/draft/${newDraft.id}`;
+            router.push(`/project/${projectId}/draft/${newDraft.id}`);
           },
         },
       });
@@ -143,7 +145,7 @@ export function DraftPickerDialog({
         action: {
           label: 'Open',
           onClick: () => {
-            window.location.href = `/project/${projectId}/draft/${draft.id}`;
+            router.push(`/project/${projectId}/draft/${draft.id}`);
           },
         },
       });

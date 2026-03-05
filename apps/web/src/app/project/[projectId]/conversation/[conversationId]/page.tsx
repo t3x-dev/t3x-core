@@ -2,7 +2,7 @@
 
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { AddToDraftButton } from '@/components/conversation/AddToDraftButton';
 import { ContextPanelWrapper } from '@/components/conversation/ContextPanelWrapper';
@@ -17,6 +17,14 @@ import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function ConversationPage() {
+  return (
+    <Suspense>
+      <ConversationPageContent />
+    </Suspense>
+  );
+}
+
+function ConversationPageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();

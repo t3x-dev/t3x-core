@@ -10,6 +10,7 @@
  */
 
 import { Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ export function AddToDraftButton({
   onDone,
 }: AddToDraftButtonProps) {
   const { t } = useTerminology();
+  const router = useRouter();
   const [showPicker, setShowPicker] = useState(false);
   const [acting, setActing] = useState(false);
 
@@ -87,7 +89,7 @@ export function AddToDraftButton({
       action: {
         label: 'Open',
         onClick: () => {
-          window.location.href = `/project/${projectId}/draft/${newDraft.id}`;
+          router.push(`/project/${projectId}/draft/${newDraft.id}`);
         },
       },
     });
@@ -109,7 +111,7 @@ export function AddToDraftButton({
       action: {
         label: 'Open',
         onClick: () => {
-          window.location.href = `/project/${projectId}/draft/${draft.id}`;
+          router.push(`/project/${projectId}/draft/${draft.id}`);
         },
       },
     });

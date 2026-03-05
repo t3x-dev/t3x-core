@@ -19,6 +19,7 @@
  * For >500 sentences, bucketing by top content words avoids the full N×M scan.
  */
 
+import type { EmbeddingProvider } from '../providers/embedding/base';
 import { buildSimilarityMatrix, hungarian } from './hungarian';
 import { JACCARD_THRESHOLD, jaccard } from './jaccard';
 import { wordDiff } from './lcs';
@@ -51,18 +52,50 @@ interface TokenizedSentence {
 /**
  * Stage 1: Find sentences with identical text
  *
- * O(N+M) using hash sets for fast lookup.
+ * O(N+M) using frequency maps to correctly handle duplicate texts.
  */
 function findExactMatches(
   sentencesA: DiffableSentence[],
   sentencesB: DiffableSentence[]
 ): ExactMatchResult {
-  const textsB = new Set(sentencesB.map((s) => s.text));
-  const textsA = new Set(sentencesA.map((s) => s.text));
+  // Build frequency map for B texts
+  const freqB = new Map<string, number>();
+  for (const s of sentencesB) {
+    freqB.set(s.text, (freqB.get(s.text) ?? 0) + 1);
+  }
 
-  const identical = sentencesA.filter((s) => textsB.has(s.text));
-  const unmatchedA = sentencesA.filter((s) => !textsB.has(s.text));
-  const unmatchedB = sentencesB.filter((s) => !textsA.has(s.text));
+  // Build frequency map for A texts
+  const freqA = new Map<string, number>();
+  for (const s of sentencesA) {
+    freqA.set(s.text, (freqA.get(s.text) ?? 0) + 1);
+  }
+
+  // Match up to min(countA, countB) copies per text
+  const remainingB = new Map(freqB);
+  const identical: DiffableSentence[] = [];
+  const unmatchedA: DiffableSentence[] = [];
+
+  for (const s of sentencesA) {
+    const count = remainingB.get(s.text) ?? 0;
+    if (count > 0) {
+      identical.push(s);
+      remainingB.set(s.text, count - 1);
+    } else {
+      unmatchedA.push(s);
+    }
+  }
+
+  const remainingA = new Map(freqA);
+  const unmatchedB: DiffableSentence[] = [];
+
+  for (const s of sentencesB) {
+    const count = remainingA.get(s.text) ?? 0;
+    if (count > 0) {
+      remainingA.set(s.text, count - 1);
+    } else {
+      unmatchedB.push(s);
+    }
+  }
 
   return { identical, unmatchedA, unmatchedB };
 }
@@ -198,6 +231,7 @@ function greedyMatch(
  *
  * V4 Change: Accepts DiffableSentence[] (only id + text needed).
  * Upgrade #5: Adaptive matching (Hungarian for ≤200, Greedy for >200).
+ * Upgrade #6: Position tagging for merge order preservation.
  *
  * @param source - Sentences from source commit (old/base version)
  * @param target - Sentences from target commit (new version)
@@ -211,8 +245,12 @@ function greedyMatch(
  * // result.similar[0].wordDiff shows the $3000 → $3500 change
  */
 export function diffCommits(source: DiffableSentence[], target: DiffableSentence[]): CommitDiff {
+  // Tag positions from original array indices (for merge order preservation)
+  const taggedSource = source.map((s, i) => ({ ...s, position: s.position ?? i }));
+  const taggedTarget = target.map((s, i) => ({ ...s, position: s.position ?? i }));
+
   // Stage 1: Exact match - find identical sentences
-  const { identical, unmatchedA, unmatchedB } = findExactMatches(source, target);
+  const { identical, unmatchedA, unmatchedB } = findExactMatches(taggedSource, taggedTarget);
 
   // Stage 2: Pre-tokenize all unmatched sentences
   const tokenizedA = unmatchedA.map((s) => ({ sentence: s, tokens: tokenizeForMatching(s.text) }));
@@ -268,4 +306,150 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
     onlyInSource,
     onlyInTarget,
   };
+}
+
+/**
+ * Async version of diffCommits that leverages an embedding provider
+ * for improved similarity matching (combined Jaccard + cosine scoring).
+ *
+ * When an embedding provider is given, unmatched sentences are batch-encoded
+ * and cosine similarity is used as a secondary signal:
+ *   combinedScore = 0.6 * jaccard + 0.4 * cosine
+ *
+ * Falls back to pure Jaccard matching when no provider is given.
+ *
+ * @param source - Sentences from source commit
+ * @param target - Sentences from target commit
+ * @param embeddingProvider - Optional embedding provider for semantic matching
+ * @returns CommitDiff with position-tagged sentences
+ */
+export async function diffCommitsWithEmbeddings(
+  source: DiffableSentence[],
+  target: DiffableSentence[],
+  embeddingProvider?: EmbeddingProvider
+): Promise<CommitDiff> {
+  // Tag positions from original array indices
+  const taggedSource = source.map((s, i) => ({ ...s, position: s.position ?? i }));
+  const taggedTarget = target.map((s, i) => ({ ...s, position: s.position ?? i }));
+
+  // Stage 1: Exact match
+  const { identical, unmatchedA, unmatchedB } = findExactMatches(taggedSource, taggedTarget);
+
+  // Stage 2: Pre-tokenize
+  const tokenizedA = unmatchedA.map((s) => ({ sentence: s, tokens: tokenizeForMatching(s.text) }));
+  const tokenizedB = unmatchedB.map((s) => ({ sentence: s, tokens: tokenizeForMatching(s.text) }));
+
+  // Stage 2b: Compute embeddings if provider available
+  let embeddingsA: number[][] | undefined;
+  let embeddingsB: number[][] | undefined;
+
+  if (embeddingProvider && tokenizedA.length > 0 && tokenizedB.length > 0) {
+    const textsA = tokenizedA.map((t) => t.sentence.text);
+    const textsB = tokenizedB.map((t) => t.sentence.text);
+    [embeddingsA, embeddingsB] = await Promise.all([
+      embeddingProvider.encode(textsA),
+      embeddingProvider.encode(textsB),
+    ]);
+  }
+
+  // Stage 3: Matching with optional embedding-enhanced scoring
+  const maxUnmatched = Math.max(tokenizedA.length, tokenizedB.length);
+  let optimalPairs: Array<{ sourceIndex: number; targetIndex: number; similarity: number }>;
+
+  // Scoring function: combined or pure Jaccard
+  const scoreFn = (aIdx: number, bIdx: number, jaccardScore: number): number => {
+    if (embeddingsA && embeddingsB) {
+      const cosine = embeddingProvider!.similarity(embeddingsA[aIdx], embeddingsB[bIdx]);
+      return 0.6 * jaccardScore + 0.4 * cosine;
+    }
+    return jaccardScore;
+  };
+
+  if (maxUnmatched > GREEDY_THRESHOLD) {
+    optimalPairs = greedyMatchWithScoring(tokenizedA, tokenizedB, scoreFn);
+  } else {
+    // Build similarity matrix with combined scoring (using index-based loop)
+    const matrix: number[][] = [];
+    for (let i = 0; i < tokenizedA.length; i++) {
+      const row: number[] = [];
+      for (let j = 0; j < tokenizedB.length; j++) {
+        const jaccardScore = jaccard(tokenizedA[i].tokens, tokenizedB[j].tokens);
+        row.push(scoreFn(i, j, jaccardScore));
+      }
+      matrix.push(row);
+    }
+    optimalPairs = hungarian(matrix);
+  }
+
+  // Process matched pairs
+  const similar: SentencePair[] = [];
+  const matchedSourceIds = new Set<string>();
+  const matchedTargetIds = new Set<string>();
+
+  for (const { sourceIndex, targetIndex, similarity } of optimalPairs) {
+    if (similarity >= JACCARD_THRESHOLD) {
+      const sentA = tokenizedA[sourceIndex].sentence;
+      const sentB = tokenizedB[targetIndex].sentence;
+      const diff = wordDiff(sentA.text, sentB.text);
+
+      similar.push({
+        source: sentA,
+        target: sentB,
+        similarity,
+        wordDiff: diff,
+      });
+
+      matchedSourceIds.add(sentA.id);
+      matchedTargetIds.add(sentB.id);
+    }
+  }
+
+  // Stage 4: Classify remainder
+  const onlyInSource = unmatchedA.filter((s) => !matchedSourceIds.has(s.id));
+  const onlyInTarget = unmatchedB.filter((s) => !matchedTargetIds.has(s.id));
+
+  return {
+    identical,
+    similar,
+    onlyInSource,
+    onlyInTarget,
+  };
+}
+
+/**
+ * Greedy matching with custom scoring function.
+ * Used by diffCommitsWithEmbeddings for combined Jaccard + cosine scoring.
+ */
+function greedyMatchWithScoring(
+  tokenizedA: TokenizedSentence[],
+  tokenizedB: TokenizedSentence[],
+  scoreFn: (aIdx: number, bIdx: number, jaccardScore: number) => number
+): Array<{ sourceIndex: number; targetIndex: number; similarity: number }> {
+  const candidates: Array<{ i: number; j: number; sim: number }> = [];
+
+  for (let i = 0; i < tokenizedA.length; i++) {
+    for (let j = 0; j < tokenizedB.length; j++) {
+      const jaccardScore = jaccard(tokenizedA[i].tokens, tokenizedB[j].tokens);
+      const combinedScore = scoreFn(i, j, jaccardScore);
+      if (combinedScore >= JACCARD_THRESHOLD) {
+        candidates.push({ i, j, sim: combinedScore });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.sim - a.sim);
+
+  const usedA = new Set<number>();
+  const usedB = new Set<number>();
+  const pairs: Array<{ sourceIndex: number; targetIndex: number; similarity: number }> = [];
+
+  for (const { i, j, sim } of candidates) {
+    if (!usedA.has(i) && !usedB.has(j)) {
+      pairs.push({ sourceIndex: i, targetIndex: j, similarity: sim });
+      usedA.add(i);
+      usedB.add(j);
+    }
+  }
+
+  return pairs;
 }

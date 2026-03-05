@@ -3,18 +3,22 @@
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  backfillMerkleRoots,
+  branches,
+  commitsV4,
+  conversations,
   deleteProject,
-  findBranchesByProject,
-  findCommitsV4ByProject,
-  findConversationsByProject,
   findProjects,
   findProjectWithStats,
   insertProject,
   updateProject,
   verifyHashChain,
+  verifyMerkleRoots,
 } from '@t3x/storage/pglite';
+import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {
+  CursorPageResponseSchema,
   ErrorResponseSchema,
   IdParamSchema,
   PaginationQuerySchema,
@@ -36,15 +40,21 @@ const listProjectsRoute = createRoute({
   path: '/v1/projects',
   tags: ['Projects'],
   summary: 'List all projects',
+  description:
+    'Lists all projects. Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
-    query: PaginationQuerySchema,
+    query: PaginationQuerySchema.extend({
+      cursor: z.string().optional(),
+    }),
   },
   responses: {
     200: {
       description: 'List of projects',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(ListProjectsResponseSchema),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(ProjectSchema), ListProjectsResponseSchema])
+          ),
         },
       },
     },
@@ -60,31 +70,66 @@ const listProjectsRoute = createRoute({
 });
 
 projectRoutes.openapi(listProjectsRoute, async (c) => {
-  const { limit, offset } = c.req.valid('query');
+  const { limit, offset, cursor } = c.req.valid('query');
+
+  // Shared helper: enrich a project row with counts
+  const enrichProject = async (
+    db: Awaited<ReturnType<typeof getDB>>,
+    p: { projectId: string; name: string; createdAt: Date; metadataJson: string | null }
+  ) => {
+    const [convCountRow, commitCountRow, branchCountRow] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversations)
+        .where(eq(conversations.projectId, p.projectId))
+        .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(commitsV4)
+        .where(eq(commitsV4.projectId, p.projectId))
+        .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(branches)
+        .where(eq(branches.projectId, p.projectId))
+        .then((rows) => rows[0]),
+    ]);
+    return {
+      project_id: p.projectId,
+      name: p.name,
+      created_at: p.createdAt.toISOString(),
+      metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
+      conversations_count: Number(convCountRow?.count ?? 0),
+      commits_count: Number(commitCountRow?.count ?? 0),
+      branches_count: Number(branchCountRow?.count ?? 0),
+    };
+  };
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findProjects(db, { cursor, limit });
+      const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: apiProjects,
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const projects = await findProjects(db, { limit, offset });
 
-    // Enrich each project with counts (conversations, V4 commits, branches)
-    const apiProjects = await Promise.all(
-      projects.map(async (p) => {
-        const [convs, commits, branchesList] = await Promise.all([
-          findConversationsByProject(db, { projectId: p.projectId, limit: 10000 }),
-          findCommitsV4ByProject(db, p.projectId, { limit: 10000 }),
-          findBranchesByProject(db, { projectId: p.projectId, limit: 10000 }),
-        ]);
-        return {
-          project_id: p.projectId,
-          name: p.name,
-          created_at: p.createdAt.toISOString(),
-          metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
-          conversations_count: convs.length,
-          commits_count: commits.length,
-          branches_count: branchesList.length,
-        };
-      })
-    );
+    // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
+    const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
 
     return c.json({ success: true as const, data: { projects: apiProjects, limit, offset } }, 200);
   } catch (err) {
@@ -202,10 +247,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const [project, v4Commits] = await Promise.all([
-      findProjectWithStats(db, id),
-      findCommitsV4ByProject(db, id, { limit: 10000 }),
-    ]);
+    const project = await findProjectWithStats(db, id);
 
     if (!project) {
       return c.json(
@@ -217,6 +259,13 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
+    // Use COUNT(*) query for v4 commits — same pattern as list endpoint
+    const [v4CommitCountRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(commitsV4)
+      .where(eq(commitsV4.projectId, id));
+    const v4CommitsCount = Number(v4CommitCountRow?.count ?? 0);
+
     const apiProject = {
       project_id: project.projectId,
       name: project.name,
@@ -225,7 +274,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
-      commits_count: v4Commits.length || project.stats.commitsCount,
+      commits_count: v4CommitsCount || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
     };
@@ -403,6 +452,9 @@ const VerifyChainResultSchema = z.object({
     parent_not_found: z.array(z.string()),
     other: z.array(z.string()),
   }),
+  merkle_roots: z.record(z.string()),
+  merkle_mismatches: z.array(z.string()),
+  truncated: z.boolean(),
   verified_at: z.string(),
 });
 
@@ -466,5 +518,166 @@ projectRoutes.openapi(verifyProjectRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'VERIFY_FAILED', message } }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quick Merkle Verification
+// ═══════════════════════════════════════════════════════════════════════════
+
+const QuickVerifyResultSchema = z.object({
+  valid: z.boolean(),
+  checked: z.number(),
+  mismatches: z.array(z.string()),
+  missing_roots: z.array(z.string()),
+  verified_at: z.string(),
+});
+
+const quickVerifyRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{id}/verify/quick',
+  tags: ['Projects'],
+  summary: 'Quick Merkle root verification for recent commits',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Quick verification result',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(QuickVerifyResultSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(quickVerifyRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+
+    const result = await verifyMerkleRoots(db, id);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { ...result, verified_at: new Date().toISOString() },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json(
+      { success: false as const, error: { code: 'QUICK_VERIFY_FAILED', message } },
+      500
+    );
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Merkle Root Backfill
+// ═══════════════════════════════════════════════════════════════════════════
+
+const BackfillResultSchema = z.object({
+  updated: z.number(),
+  remaining: z.boolean(),
+  verified_at: z.string(),
+});
+
+const backfillMerkleRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{id}/backfill-merkle',
+  tags: ['Projects'],
+  summary: 'Backfill merkle roots for commits without one',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Backfill result',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(BackfillResultSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(backfillMerkleRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+
+    const result = await backfillMerkleRoots(db, id);
+
+    return c.json(
+      {
+        success: true as const,
+        data: { ...result, verified_at: new Date().toISOString() },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'BACKFILL_FAILED', message } }, 500);
   }
 });

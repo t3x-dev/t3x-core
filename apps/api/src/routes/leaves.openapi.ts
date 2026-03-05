@@ -24,8 +24,10 @@ import {
   AllProvidersFailedError,
   collectLessons,
   GenerationError,
+  type GenerationMode,
   generateLeafOutput,
   isGenerationConfigured,
+  modeGenerate,
   suggestConstraints,
   suggestionsToConstraints,
   validateConstraints,
@@ -39,11 +41,13 @@ import {
   deleteLeafHistory,
   deletePinByRef,
   findCommitV4ByHash,
+  findEditsByLeafId,
   findHistoryByLeafId,
   findLeafById,
   findLeafHistoryById,
   findLeavesByCommit,
   findLeavesByProject,
+  insertLeafOutputEdit,
   updateLeaf,
   updateLeafAtomic,
   updateLeafOutput,
@@ -51,15 +55,20 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { pinoLogger } from '../middleware/logger';
 import {
   generateWithFallback,
   getLLMProvider,
   getProviderRegistry,
 } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { pinoLogger } from '../middleware/logger';
 import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
-import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  CursorPageResponseSchema,
+  ErrorResponseSchema,
+  IdParamSchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
 import {
   BatchGenerateRequest,
   BatchGenerateResponse,
@@ -74,6 +83,7 @@ import {
   ValidateLeafOutputRequest,
   ValidateLeafOutputResponse,
 } from '../schemas/v4-contracts';
+import { pushNotification } from './notifications.openapi';
 
 export const leavesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -220,7 +230,9 @@ const listLeavesByCommitRoute = createRoute({
   path: '/v1/commits/{hash}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by commit',
-  description: 'Lists all leaf nodes associated with a specific commit.',
+  description:
+    'Lists all leaf nodes associated with a specific commit. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       hash: z.string().min(1),
@@ -229,6 +241,7 @@ const listLeavesByCommitRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -236,7 +249,9 @@ const listLeavesByCommitRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -313,7 +328,9 @@ const listLeavesByProjectRoute = createRoute({
   path: '/v1/projects/{projectId}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by project',
-  description: 'Lists all leaf nodes in a project.',
+  description:
+    'Lists all leaf nodes in a project. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
@@ -322,6 +339,7 @@ const listLeavesByProjectRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -329,7 +347,9 @@ const listLeavesByProjectRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -643,11 +663,29 @@ leavesRoutes.openapi(getLeafRoute, async (c) => {
 // GET /v1/commits/:hash/leaves - List leaves by commit
 leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByCommit(db, decodedHash, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByCommit(db, decodedHash, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
@@ -803,10 +841,28 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 // GET /v1/projects/:projectId/leaves - List leaves by project
 leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByProject(db, projectId, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
@@ -823,6 +879,22 @@ leavesRoutes.openapi(updateLeafRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Track output edits for reverse learning (Item 17)
+    // If the user is changing the output, record the before/after
+    if (body.output !== undefined) {
+      const existing = await findLeafById(db, id);
+      if (existing?.output && existing.output !== body.output) {
+        insertLeafOutputEdit(db, {
+          leaf_id: id,
+          project_id: existing.project_id,
+          original_output: existing.output,
+          modified_output: body.output,
+        }).catch((err) => {
+          pinoLogger.warn({ err, leafId: id }, 'failed to track leaf output edit');
+        });
+      }
+    }
 
     // Use atomic update to wrap all changes in a transaction
     const leaf = await updateLeafAtomic(db, id, {
@@ -914,9 +986,11 @@ const generateLeafRoute = createRoute({
 // POST /v1/leaves/:id/generate - Generate output handler
 leavesRoutes.openapi(generateLeafRoute, async (c) => {
   const { id } = c.req.valid('param');
-  // Note: Request body per contract is empty object (future: additional options)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _body = c.req.valid('json');
+  const body = c.req.valid('json');
+
+  // Extract mode from request body (default: 'fast' for backward compatibility)
+  const mode: GenerationMode = body?.mode ?? 'fast';
+  const stylePreferences = body?.style_preferences;
 
   try {
     // Check if any generation provider is configured
@@ -946,42 +1020,116 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
     const lessons = collectLessons(historicalLeaves);
 
-    // Generate with automatic provider fallback
-    const result = await generateWithFallback({
-      commit,
-      leaf,
-      lessons: lessons.length > 0 ? lessons : undefined,
-      additionalInstructions:
-        typeof leaf.config?.user_instruction === 'string'
-          ? leaf.config.user_instruction
-          : undefined,
-    });
+    // Multi-round generation when mode is 'standard' or 'thorough'
+    let multiRoundResult:
+      | {
+          output: string;
+          rounds: Array<{
+            name: string;
+            round_number: number;
+            constraints_passed: boolean;
+            failed_constraints: string[];
+          }>;
+          total_rounds: number;
+          mode: GenerationMode;
+        }
+      | undefined;
+
+    if (mode !== 'fast') {
+      // Use multi-round pipeline via provider fallback
+      const reg = await getProviderRegistry();
+      multiRoundResult = await reg.tryWithFallback('generation', async (provider) => {
+        const mrResult = await modeGenerate({
+          commit,
+          leaf,
+          provider,
+          mode,
+          stylePreferences: stylePreferences
+            ? {
+                tone: stylePreferences.tone,
+                length: stylePreferences.length,
+                formality: stylePreferences.formality,
+              }
+            : undefined,
+        });
+        return { ...mrResult, mode };
+      });
+    }
+
+    // For 'fast' mode or when multi-round is not used, use existing generation path
+    let finalOutput: string;
+    let validationData:
+      | {
+          allPassed: boolean;
+          passedCount: number;
+          failedCount: number;
+          attempts: number;
+          assertions?: Array<{
+            id: string;
+            constraint_id: string;
+            passed: boolean;
+            details: string;
+            lesson?: string;
+          }>;
+        }
+      | undefined;
+    let generationModel = 'unknown';
+
+    if (multiRoundResult) {
+      finalOutput = multiRoundResult.output;
+      generationModel = 'multi-round';
+    } else {
+      // Generate with automatic provider fallback (existing single-round path)
+      const result = await generateWithFallback({
+        commit,
+        leaf,
+        lessons: lessons.length > 0 ? lessons : undefined,
+        additionalInstructions:
+          typeof leaf.config?.user_instruction === 'string'
+            ? leaf.config.user_instruction
+            : undefined,
+      });
+      finalOutput = result.output;
+      generationModel = result.model;
+      if (result.validation) {
+        validationData = {
+          allPassed: result.validation.allPassed,
+          passedCount: result.validation.passedCount,
+          failedCount: result.validation.failedCount,
+          attempts: result.attempts,
+          assertions: result.validation.assertions,
+        };
+      }
+    }
 
     // Update leaf with output (storage sets generated_at automatically)
-    const updatedLeaf = await updateLeafOutput(db, id, result.output);
+    const updatedLeaf = await updateLeafOutput(db, id, finalOutput);
 
     if (!updatedLeaf) {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
     }
 
-    // If auto-validation produced assertions, store them on the leaf
-    if (result.validation) {
-      await updateLeaf(db, id, {
-        assertions: result.validation.assertions,
+    // If auto-validation produced assertions (fast mode), store them on the leaf
+    if (validationData?.assertions) {
+      const leafWithAssertions = await updateLeaf(db, id, {
+        assertions: validationData.assertions,
       });
+      if (leafWithAssertions) {
+        Object.assign(updatedLeaf, leafWithAssertions);
+      }
     }
 
     // Save to generation history (non-blocking - don't fail if history save fails)
     try {
       await createLeafHistory(db, {
         leaf_id: id,
-        output: result.output,
-        config: leaf.config ?? {},
-        model: result.model,
+        output: finalOutput,
+        config: { ...(leaf.config ?? {}), generation_mode: mode },
+        model: generationModel,
       });
     } catch (historyErr) {
       // Log but don't fail - history is supplementary
-      pinoLogger.warn({ err: historyErr }, "failed to save generation history");
+      pinoLogger.warn({ err: historyErr }, 'failed to save generation history');
     }
 
     // Fire webhook event (fire-and-forget)
@@ -994,22 +1142,42 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       leaf.project_id
     );
 
+    // Push notification (fire-and-forget)
+    pushNotification({
+      type: 'leaf.generated',
+      title: 'Output Generated',
+      message: `Leaf "${leaf.title || id}" output generated (${mode} mode)`,
+      project_id: leaf.project_id,
+      ref_id: id,
+    });
+
     // Return response according to contract (v4-contracts.ts)
-    // Use the generated_at from the updated leaf for consistency
     return c.json(
       {
         success: true as const,
         data: {
-          output: result.output,
-          generated_at: updatedLeaf.generated_at!,
-          ...(result.validation
+          output: finalOutput,
+          generated_at: updatedLeaf.generated_at ?? new Date().toISOString(),
+          ...(validationData
             ? {
                 validation: {
-                  all_passed: result.validation.allPassed,
-                  passed_count: result.validation.passedCount,
-                  failed_count: result.validation.failedCount,
-                  attempts: result.attempts,
+                  all_passed: validationData.allPassed,
+                  passed_count: validationData.passedCount,
+                  failed_count: validationData.failedCount,
+                  attempts: 1,
                 },
+              }
+            : {}),
+          ...(multiRoundResult
+            ? {
+                rounds: multiRoundResult.rounds.map((r) => ({
+                  name: r.name,
+                  round_number: r.round_number,
+                  constraints_passed: r.constraints_passed,
+                  failed_constraints: r.failed_constraints,
+                })),
+                total_rounds: multiRoundResult.total_rounds,
+                mode: multiRoundResult.mode,
               }
             : {}),
         },
@@ -1196,21 +1364,22 @@ leavesRoutes.openapi(deleteLeafRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // First, get the leaf to find its project_id for pin cleanup
+    // Fetch leaf first to obtain project_id needed for pin cleanup.
+    // Then immediately attempt delete — if it returns false (concurrent delete),
+    // return 404. Pin cleanup only runs when delete actually succeeds.
     const leaf = await findLeafById(db, id);
-    if (!leaf) {
-      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
-    }
 
-    // Delete the leaf
     const deleted = await deleteLeaf(db, id);
 
     if (!deleted) {
+      // Leaf was not found (either never existed or concurrently deleted)
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    // Clean up associated pins (leaf pins that reference this leaf)
-    await deletePinByRef(db, leaf.project_id, 'leaf', id);
+    // Clean up associated pins only when delete succeeded
+    if (leaf) {
+      await deletePinByRef(db, leaf.project_id, 'leaf', id);
+    }
 
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {
@@ -1739,6 +1908,232 @@ leavesRoutes.openapi(extractFromLeafRoute, async (c) => {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GENERATION_FAILED', message);
+  }
+});
+
+// ============================================================================
+// POST /v1/leaves/:id/learn-from-edits — Learn constraints from user output edits
+// ============================================================================
+
+const LearnFromEditsRequest = z
+  .object({
+    max_suggestions: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .default(5)
+      .openapi({ description: 'Max number of constraint suggestions' }),
+    min_confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .default(0.8)
+      .openapi({ description: 'Minimum confidence threshold for suggestions' }),
+  })
+  .openapi('LearnFromEditsRequest');
+
+const LearnFromEditsResponse = SuccessResponseSchema(
+  z.object({
+    suggestions: z.array(
+      z.object({
+        type: z.enum(['require', 'exclude']),
+        match_mode: z.enum(['exact', 'semantic']),
+        value: z.string(),
+        reason: z.string(),
+        confidence: z.number(),
+        dimension: z.enum(['style', 'content', 'format']),
+      })
+    ),
+    edits_analyzed: z.number(),
+    model: z.string(),
+  })
+);
+
+const learnFromEditsRoute = createRoute({
+  method: 'post',
+  path: '/v1/leaves/{id}/learn-from-edits',
+  tags: ['Leaves'],
+  summary: 'Learn constraints from user output edits',
+  description:
+    "Analyzes patterns in user edits on this leaf's output and suggests constraints that capture the user's implicit preferences (style, content, format).",
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: LearnFromEditsRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Constraint suggestions from edit patterns',
+      content: { 'application/json': { schema: LearnFromEditsResponse } },
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Leaf not found',
+    },
+    422: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'No edits found to learn from',
+    },
+    503: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'LLM not configured',
+    },
+  },
+});
+
+leavesRoutes.openapi(learnFromEditsRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const leaf = await findLeafById(db, id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+
+    // Collect edit history for this leaf
+    const edits = await findEditsByLeafId(db, id, { limit: 20 });
+    if (edits.length === 0) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'NO_EDITS',
+            message:
+              'No output edits found for this leaf. Edit the output manually to build edit history.',
+          },
+        },
+        422
+      );
+    }
+
+    const llm = await getLLMProvider();
+    if (!llm) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider configured.' },
+        },
+        503
+      );
+    }
+
+    // Build edit summaries for the LLM prompt.
+    // Each edit is truncated to 500 chars per side (before/after), max 20 edits.
+    // Worst case: ~20 * 1100 ≈ 22k chars of edit data + ~1k prompt = ~23k chars total.
+    const editSummaries = edits.map((e, i) => {
+      const origLines = e.originalOutput.split('\n').length;
+      const modLines = e.modifiedOutput.split('\n').length;
+      return `Edit ${i + 1}:
+BEFORE (${origLines} lines):
+${e.originalOutput.slice(0, 500)}${e.originalOutput.length > 500 ? '...' : ''}
+
+AFTER (${modLines} lines):
+${e.modifiedOutput.slice(0, 500)}${e.modifiedOutput.length > 500 ? '...' : ''}`;
+    });
+
+    const prompt = `You are an expert at analyzing user editing patterns to discover implicit quality constraints.
+
+The user has edited the output of a "${leaf.type}" leaf ${edits.length} time(s). Analyze the patterns in their edits and suggest constraints that capture their preferences.
+
+## User's Edits
+
+${editSummaries.join('\n\n---\n\n')}
+
+## Analysis Instructions
+
+Look for patterns across ALL edits in three dimensions:
+1. **Style preferences**: tone, formality, word choice, voice (active/passive), salutations
+2. **Content preferences**: information consistently added/removed, topics emphasized/de-emphasized
+3. **Format preferences**: structure (lists vs paragraphs), length, spacing, headers
+
+For each pattern you find, suggest a constraint:
+- type: "require" (something the output should always have) or "exclude" (something to avoid)
+- match_mode: "exact" (literal string match) or "semantic" (meaning-based)
+- value: the constraint text
+- reason: why you inferred this from the edits
+- confidence: 0.0-1.0 (how confident you are based on consistency across edits)
+- dimension: "style", "content", or "format"
+
+Only suggest constraints with confidence >= ${body.min_confidence}.
+Return at most ${body.max_suggestions} suggestions.
+
+Respond with ONLY a JSON array of constraint objects, no markdown or explanation:
+[{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "confidence": 0.95, "dimension": "style"}, ...]`;
+
+    const raw = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+
+    // Parse the LLM response
+    let suggestions: Array<{
+      type: 'require' | 'exclude';
+      match_mode: 'exact' | 'semantic';
+      value: string;
+      reason: string;
+      confidence: number;
+      dimension: 'style' | 'content' | 'format';
+    }> = [];
+
+    try {
+      const parsed = JSON.parse(
+        raw
+          .replace(/```json?\n?/g, '')
+          .replace(/```/g, '')
+          .trim()
+      );
+      if (Array.isArray(parsed)) {
+        suggestions = parsed
+          .filter(
+            (s: Record<string, unknown>) =>
+              ['require', 'exclude'].includes(s.type as string) &&
+              ['exact', 'semantic'].includes(s.match_mode as string) &&
+              s.value &&
+              typeof s.confidence === 'number' &&
+              s.confidence >= body.min_confidence
+          )
+          .slice(0, body.max_suggestions)
+          .map((s: Record<string, unknown>) => ({
+            type: s.type as 'require' | 'exclude',
+            match_mode: s.match_mode as 'exact' | 'semantic',
+            value: String(s.value),
+            reason: String(s.reason || ''),
+            confidence: Number(s.confidence),
+            dimension: (['style', 'content', 'format'].includes(s.dimension as string)
+              ? s.dimension
+              : 'content') as 'style' | 'content' | 'format',
+          }));
+      }
+    } catch (parseErr) {
+      pinoLogger.warn({ parseErr, leafId: id }, 'LLM returned non-JSON for learn-from-edits');
+    }
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          suggestions,
+          edits_analyzed: edits.length,
+          model: llm.id,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider is configured.' },
+        },
+        503
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'LEARN_FAILED', message);
   }
 });
 

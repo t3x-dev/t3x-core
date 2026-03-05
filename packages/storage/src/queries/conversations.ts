@@ -5,9 +5,10 @@
  */
 
 import { generateConversationId } from '@t3x/core';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateConversationInput {
   projectId: string;
@@ -22,6 +23,8 @@ export interface ListConversationsOptions {
   projectId: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 export interface UpdateConversationInput {
@@ -77,12 +80,55 @@ export async function findConversationById(
 
 /**
  * Find conversations by project
+ *
+ * Supports two pagination modes:
+ * - **Offset mode** (default): pass limit/offset, returns Conversation[]
+ * - **Cursor mode**: pass cursor (empty string for first page), returns CursorPage<Conversation>
  */
 export async function findConversationsByProject(
   db: AnyDB,
+  options: ListConversationsOptions & { cursor: string }
+): Promise<CursorPage<Conversation>>;
+export async function findConversationsByProject(
+  db: AnyDB,
+  options: Omit<ListConversationsOptions, 'cursor'>
+): Promise<Conversation[]>;
+export async function findConversationsByProject(
+  db: AnyDB,
   options: ListConversationsOptions
-): Promise<Conversation[]> {
+): Promise<Conversation[] | CursorPage<Conversation>> {
   const limit = options.limit ?? 100;
+
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [eq(conversations.projectId, options.projectId)];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND conversation_id < k)
+      conditions.push(
+        or(
+          lt(conversations.createdAt, cursorDate),
+          and(eq(conversations.createdAt, cursorDate), lt(conversations.conversationId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(conversations)
+      .where(and(...conditions))
+      .orderBy(desc(conversations.createdAt), desc(conversations.conversationId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (c) => ({
+      t: c.createdAt.toISOString(),
+      k: c.conversationId,
+    }));
+  }
+
+  // Legacy offset/limit mode
   const offset = options.offset ?? 0;
 
   return db
@@ -96,15 +142,15 @@ export async function findConversationsByProject(
 
 /**
  * Update a conversation
+ *
+ * Fix 8: Removed the preliminary read (TOCTOU). The UPDATE itself returns the
+ * updated row; if 0 rows are returned the conversation does not exist.
  */
 export async function updateConversation(
   db: AnyDB,
   conversationId: string,
   updates: UpdateConversationInput
 ): Promise<Conversation | null> {
-  const existing = await findConversationById(db, conversationId);
-  if (!existing) return null;
-
   const updateData: Partial<NewConversation> = {};
   if (updates.title !== undefined) {
     updateData.title = updates.title;
@@ -145,7 +191,7 @@ export async function deleteConversation(db: AnyDB, conversationId: string): Pro
  */
 export async function getConversationTurnCount(db: AnyDB, conversationId: string): Promise<number> {
   const [result] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)::int` })
     .from(turns)
     .where(eq(turns.conversationId, conversationId));
 

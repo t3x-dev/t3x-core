@@ -8,7 +8,6 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import {
   FileOutput,
   GitCommit,
@@ -18,7 +17,8 @@ import {
   MessageSquare,
   MessageSquarePlus,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
+import * as api from '@/lib/api';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -95,7 +96,7 @@ function CanvasWorkspaceInner({
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isAdding, setIsAdding] = useState(false);
   const [isLayouting, setIsLayouting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const { t, isDeveloperMode } = useTerminology();
@@ -124,10 +125,14 @@ function CanvasWorkspaceInner({
     openNodeModal,
     closeNodeModal,
   } = useCanvasStore();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('t3x_onboarded') === 'true';
-  });
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  // Sync from localStorage after mount (avoids SSR hydration mismatch)
+  useEffect(() => {
+    if (localStorage.getItem('t3x_onboarded') === 'true') {
+      setOnboardingDismissed(true);
+    }
+  }, []);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Auto-layout handler
@@ -158,6 +163,32 @@ function CanvasWorkspaceInner({
     }
   }, [getNodes, getEdges, setNodes, fitView, notify]);
 
+  // Auto-extract: create a draft from a conversation node via LLM extraction
+  const handleAutoExtract = useCallback(
+    async (nodeId: string) => {
+      const node = getNodes().find((n) => n.id === nodeId);
+      const conversationId = node?.data.conversationId as string | undefined;
+      if (!conversationId || !projectId) {
+        notify?.('No conversation found on this node', 'warning');
+        return;
+      }
+      try {
+        notify?.('Creating auto-draft...', 'success');
+        const draft = await api.createAutoDraft({
+          project_id: projectId,
+          conversation_id: conversationId,
+        });
+        // Reload canvas to pick up the new draft node, then navigate
+        await useCanvasStore.getState().loadProjectData(projectId);
+        router.push(`/project/${projectId}/draft/${draft.id}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Auto-extract failed';
+        notify?.(message, 'error');
+      }
+    },
+    [getNodes, projectId, notify, router]
+  );
+
   // Context menu (extracted hook)
   const { contextMenu, closeContextMenu, handleNodeContextMenu, handlePaneContextMenu } =
     useContextMenu({
@@ -169,6 +200,7 @@ function CanvasWorkspaceInner({
       projectId,
       fitView,
       handleAutoLayout,
+      onAutoExtract: handleAutoExtract,
     });
 
   // Path highlight (extracted hook)
@@ -383,14 +415,8 @@ function CanvasWorkspaceInner({
         if (selectedNode) {
           event.preventDefault();
           const nodeData = selectedNode.data as import('@/types/nodes').CanvasNodeData;
-          if (
-            nodeData.commitStatus === 'committed' &&
-            nodeData.commitHash &&
-            projectId
-          ) {
-            router.push(
-              `/project/${projectId}/commit/${encodeURIComponent(nodeData.commitHash)}`
-            );
+          if (nodeData.commitStatus === 'committed' && nodeData.commitHash && projectId) {
+            router.push(`/project/${projectId}/commit/${encodeURIComponent(nodeData.commitHash)}`);
           } else {
             openNodeModal(selectedNode.id, 'commit');
           }
@@ -485,7 +511,7 @@ function CanvasWorkspaceInner({
       // Use queueMicrotask to batch state updates after current render cycle
       queueMicrotask(() => {
         setBranchFilter('all');
-        setHighlight((current) => (current?.mode === 'branch' ? { mode: 'branch' } : current));
+        setHighlight((current) => (current?.mode === 'branch' ? null : current));
       });
     }
   }, [branchFilter, branchNames, setHighlight]);
@@ -504,14 +530,15 @@ function CanvasWorkspaceInner({
   const handleAddNode = useCallback(
     async (kind: NodeKind) => {
       const position = getViewportCenter();
-      startTransition(async () => {
-        try {
-          await addNode(kind, position);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to create node';
-          notify?.(message, 'error');
-        }
-      });
+      setIsAdding(true);
+      try {
+        await addNode(kind, position);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create node';
+        notify?.(message, 'error');
+      } finally {
+        setIsAdding(false);
+      }
     },
     [getViewportCenter, addNode, notify]
   );
@@ -523,7 +550,7 @@ function CanvasWorkspaceInner({
   }, []);
 
   const onDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
+    async (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
 
       const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
@@ -537,18 +564,19 @@ function CanvasWorkspaceInner({
         y: event.clientY,
       });
 
-      startTransition(async () => {
-        try {
-          if (isDraft) {
-            await addDraftNode(position);
-          } else {
-            await addNode(kind, position);
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to create node';
-          notify?.(message, 'error');
+      setIsAdding(true);
+      try {
+        if (isDraft) {
+          await addDraftNode(position);
+        } else {
+          await addNode(kind, position);
         }
-      });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create node';
+        notify?.(message, 'error');
+      } finally {
+        setIsAdding(false);
+      }
     },
     [screenToFlowPosition, addNode, addDraftNode, notify]
   );
@@ -574,7 +602,7 @@ function CanvasWorkspaceInner({
         onAutoLayout={handleAutoLayout}
         onAddNode={() => handleAddNode('unit')}
         isLayouting={isLayouting}
-        isPending={isPending}
+        isPending={isAdding}
         nodeCount={nodes.length}
       />
 
@@ -613,14 +641,8 @@ function CanvasWorkspaceInner({
           onNodeDoubleClick={(_, node) => {
             const data = node.data as import('@/types/nodes').CanvasNodeData;
             // Committed commits → navigate to full-page detail view
-            if (
-              data.commitStatus === 'committed' &&
-              data.commitHash &&
-              projectId
-            ) {
-              router.push(
-                `/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`
-              );
+            if (data.commitStatus === 'committed' && data.commitHash && projectId) {
+              router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
               return;
             }
             openNodeModal(node.id, 'commit');
@@ -738,10 +760,10 @@ function CanvasWorkspaceInner({
                   variant="default"
                   size="sm"
                   onClick={() => handleAddNode('unit')}
-                  disabled={isPending}
+                  disabled={isAdding}
                   className="gap-1.5"
                 >
-                  {isPending ? (
+                  {isAdding ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <MessageSquarePlus className="h-4 w-4" />
@@ -801,7 +823,6 @@ function CanvasWorkspaceInner({
                 }
               : undefined
           }
-          draftBranchMode={pendingCommitBranchMode}
           onBranchChange={
             modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
               ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })

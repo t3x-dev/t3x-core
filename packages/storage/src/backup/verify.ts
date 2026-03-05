@@ -37,8 +37,19 @@ export interface VerifyChainResult {
   };
   /** Merkle root per commit: commit_hash → merkle_root */
   merkle_roots: Record<string, string>;
+  /** Commit hashes where stored merkle_root differs from recomputed root */
+  merkle_mismatches: string[];
   verified_at: string;
+  /**
+   * Fix 17: True when the fetch limit was hit and only a subset of commits was
+   * verified. Results may be incomplete — the warning is also emitted in
+   * errors.other.
+   */
+  truncated: boolean;
 }
+
+/** Hard ceiling for the number of commits fetched in a single verification run. */
+const VERIFY_LIMIT = 100_000;
 
 /**
  * Verify the hash chain integrity for all V4 commits in a project.
@@ -48,12 +59,24 @@ export interface VerifyChainResult {
  * 2. Verify all parents[] entries exist in the commit set
  * 3. BFS traversal from leaf commits (no children) to roots
  * 4. Report unreachable commits (exist but not traversed from any leaf)
+ *
+ * Fix 17: Detects when the VERIFY_LIMIT is hit and sets truncated=true,
+ * also appending a warning to errors.other so callers know results are partial.
  */
 export async function verifyHashChain(db: AnyDB, projectId: string): Promise<VerifyChainResult> {
-  const commits = await findCommitsV4ByProject(db, projectId, { limit: 100000 });
+  const commits = await findCommitsV4ByProject(db, projectId, { limit: VERIFY_LIMIT });
   const hashMismatch: string[] = [];
   const parentNotFound: string[] = [];
   const other: string[] = [];
+
+  const truncated = commits.length >= VERIFY_LIMIT;
+  if (truncated) {
+    other.push(
+      `WARNING: Verification limit of ${VERIFY_LIMIT.toLocaleString()} commits reached. ` +
+        `Only the first ${VERIFY_LIMIT.toLocaleString()} commits (ordered by committed_at) ` +
+        `were checked. Results may be incomplete.`
+    );
+  }
 
   if (commits.length === 0) {
     return {
@@ -63,7 +86,9 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       entry_points: 0,
       errors: { hash_mismatch: [], parent_not_found: [], other: [] },
       merkle_roots: {},
+      merkle_mismatches: [],
       verified_at: new Date().toISOString(),
+      truncated: false,
     };
   }
 
@@ -153,21 +178,38 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
-  // Step 4: Build Merkle tree for each commit's sentences
+  // Step 4: Build Merkle tree for each commit's sentences and compare with stored
   const merkleRoots: Record<string, string> = {};
+  const merkleMismatches: string[] = [];
   for (const commit of commits) {
-    const sentences = commit.content.sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-    }));
-    const tree = buildMerkleTree(sentences);
-    merkleRoots[commit.hash] = tree.root;
+    const sentences = commit.content.sentences ?? [];
+
+    // Skip empty-sentence commits — they store null merkle_root by design
+    if (sentences.length === 0) continue;
+
+    try {
+      const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
+      merkleRoots[commit.hash] = tree.root;
+
+      // Compare stored merkle_root with recomputed root
+      if (!commit.merkle_root) {
+        // Non-empty commit with missing stored root — flag as mismatch
+        merkleMismatches.push(commit.hash);
+      } else if (commit.merkle_root !== tree.root) {
+        merkleMismatches.push(commit.hash);
+      }
+    } catch (err) {
+      other.push(
+        `Commit ${commit.hash.slice(0, 16)}: merkle tree build failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
-  const allErrors = [...hashMismatch, ...parentNotFound, ...other];
-
   return {
-    valid: allErrors.length === 0,
+    valid:
+      hashMismatch.length === 0 &&
+      parentNotFound.length === 0 &&
+      merkleMismatches.length === 0,
     total: commits.length,
     verified_depth: maxDepth,
     entry_points: entryPoints,
@@ -177,7 +219,9 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       other,
     },
     merkle_roots: merkleRoots,
+    merkle_mismatches: merkleMismatches,
     verified_at: new Date().toISOString(),
+    truncated,
   };
 }
 

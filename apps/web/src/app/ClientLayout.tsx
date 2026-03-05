@@ -79,9 +79,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ErrorBoundary>
-          <div className="flex h-screen bg-background">
+          <div className="flex min-h-screen bg-background">
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
+            >
+              Skip to content
+            </a>
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             <main
+              id="main-content"
               aria-label="Main content"
               className={cn(
                 'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',

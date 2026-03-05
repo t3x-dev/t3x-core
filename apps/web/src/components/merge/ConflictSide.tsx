@@ -8,7 +8,8 @@ import { useEffect } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { Sentence } from '@/types/merge';
+import type { Sentence, WordDiffSegment } from '@/types/merge';
+import { WordDiffDisplay } from './WordDiffDisplay';
 
 type SideType = 'source' | 'target';
 
@@ -17,6 +18,8 @@ interface ConflictSideProps {
   sentence: Sentence;
   label: string;
   isSelected: boolean;
+  /** Word-level diff segments for highlighting changes within the sentence */
+  wordDiff?: WordDiffSegment[];
   /** Callback when "Jump to conversation" is clicked */
   onJumpToConversation?: (conversationId: string) => void;
 }
@@ -39,6 +42,7 @@ export function ConflictSide({
   sentence,
   label,
   isSelected,
+  wordDiff,
   onJumpToConversation,
 }: ConflictSideProps) {
   const styles = sideStyles[side];
@@ -95,8 +99,18 @@ export function ConflictSide({
         )}
       </div>
 
-      {/* Sentence text */}
-      <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{sentence.text}</p>
+      {/* Sentence text — with word-diff highlighting when available */}
+      {wordDiff && wordDiff.length > 0 ? (
+        <div className="text-sm leading-relaxed text-[var(--text-secondary)]">
+          <WordDiffDisplay
+            segments={wordDiff.filter((seg) =>
+              side === 'source' ? seg.type !== 'added' : seg.type !== 'removed'
+            )}
+          />
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{sentence.text}</p>
+      )}
 
       {/* Inline source context via SourceContextView */}
       {turnHash && (

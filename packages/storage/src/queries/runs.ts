@@ -3,9 +3,10 @@
  *
  * CRUD operations for Engine run records.
  */
-import { and, desc, eq, lt, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Run, runs } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
 // Types
@@ -55,6 +56,8 @@ export interface ListRunsOptions {
   prompt_version?: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 // v2.2: Configuration stats for A/B test comparison
@@ -85,21 +88,21 @@ export async function insertRun(db: AnyDB, input: CreateRunInput): Promise<Run> 
     .insert(runs)
     .values({
       runId: input.run_id,
-      projectId: input.project_id || null,
-      runnerRunId: input.runner_run_id || null,
-      commitRef: input.commit_ref || null,
-      leafId: input.leaf_id || null,
-      leafJson: input.leaf_json || null,
-      inputsJson: input.inputs_json || null,
-      workflowJson: input.workflow_json || null,
-      status: input.status || 'queued',
-      resultJson: input.result_json || null,
+      projectId: input.project_id ?? null,
+      runnerRunId: input.runner_run_id ?? null,
+      commitRef: input.commit_ref ?? null,
+      leafId: input.leaf_id ?? null,
+      leafJson: input.leaf_json ?? null,
+      inputsJson: input.inputs_json ?? null,
+      workflowJson: input.workflow_json ?? null,
+      status: input.status ?? 'queued',
+      resultJson: input.result_json ?? null,
       // v2.0: Trace storage fields
-      traceSummaryJson: input.trace_summary_json || null,
-      tracePolicy: input.trace_policy || null,
-      fullTraceJson: input.full_trace_json || null,
+      traceSummaryJson: input.trace_summary_json ?? null,
+      tracePolicy: input.trace_policy ?? null,
+      fullTraceJson: input.full_trace_json ?? null,
       // v2.1: Metadata for A/B test filtering
-      metadataJson: input.metadata_json || null,
+      metadataJson: input.metadata_json ?? null,
       createdAt: new Date(now),
       updatedAt: new Date(now),
     })
@@ -122,8 +125,19 @@ export async function getRun(db: AnyDB, runId: string): Promise<Run | undefined>
  *
  * v2.1: Added model and prompt_version filters for A/B test comparison
  */
-export async function listRuns(db: AnyDB, options: ListRunsOptions = {}): Promise<Run[]> {
-  const { projectId, status, model, prompt_version, limit = 50, offset = 0 } = options;
+export async function listRuns(
+  db: AnyDB,
+  options: ListRunsOptions & { cursor: string }
+): Promise<CursorPage<Run>>;
+export async function listRuns(
+  db: AnyDB,
+  options?: Omit<ListRunsOptions, 'cursor'>
+): Promise<Run[]>;
+export async function listRuns(
+  db: AnyDB,
+  options: ListRunsOptions = {}
+): Promise<Run[] | CursorPage<Run>> {
+  const { projectId, status, model, prompt_version, limit = 50 } = options;
 
   const conditions: SQL[] = [];
   if (projectId) {
@@ -140,6 +154,32 @@ export async function listRuns(db: AnyDB, options: ListRunsOptions = {}): Promis
     conditions.push(sql`${runs.metadataJson}::jsonb->>'prompt_version' = ${prompt_version}`);
   }
 
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND run_id < k)
+      conditions.push(
+        or(lt(runs.createdAt, cursorDate), and(eq(runs.createdAt, cursorDate), lt(runs.runId, k)))!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(runs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(runs.createdAt), desc(runs.runId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (r) => ({
+      t: r.createdAt.toISOString(),
+      k: r.runId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = options.offset ?? 0;
   const query = db.select().from(runs).orderBy(desc(runs.createdAt)).limit(limit).offset(offset);
 
   if (conditions.length > 0) {
@@ -344,9 +384,16 @@ export async function getConfigurationStats(
   >();
 
   for (const run of allRuns) {
-    const metadata = JSON.parse(run.metadataJson || '{}');
-    const model = metadata.model || 'unknown';
-    const prompt_version = metadata.prompt_version || 'unknown';
+    // Fix 11: Wrap JSON.parse in try/catch to prevent crash on malformed JSON
+    let metadata: Record<string, unknown> = {};
+    try {
+      metadata = JSON.parse(run.metadataJson || '{}');
+    } catch {
+      // Malformed metadata JSON — treat as empty so the run is still counted
+      metadata = {};
+    }
+    const model = (metadata.model as string) || 'unknown';
+    const prompt_version = (metadata.prompt_version as string) || 'unknown';
     const key = `${model}::${prompt_version}`;
 
     if (!groups.has(key)) {

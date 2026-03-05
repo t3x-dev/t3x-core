@@ -260,10 +260,7 @@ export function ProvenanceGraph({
                 role="presentation"
               >
                 {leaves.map((_, i) => {
-                  const targetY =
-                    leaves.length === 1
-                      ? 12
-                      : (i / (leaves.length - 1)) * 16 + 4;
+                  const targetY = leaves.length === 1 ? 12 : (i / (leaves.length - 1)) * 16 + 4;
                   return (
                     <g key={`edge-${i}`}>
                       <path

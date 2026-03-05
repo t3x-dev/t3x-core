@@ -7,7 +7,7 @@
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { ShareToken } from '@t3x/core';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type ShareTokenRecord, shareTokens } from '../schema-v4';
 
@@ -112,12 +112,18 @@ export async function findShareTokenByToken(db: AnyDB, token: string): Promise<S
 
 /**
  * Find share tokens for a specific entity.
+ *
+ * Fix 16: Only returns tokens that are active (not revoked) and not yet
+ * expired. The expiration check is pushed into the WHERE clause so the
+ * database filters expired tokens rather than returning them to JS.
  */
 export async function findShareTokensByEntity(
   db: AnyDB,
   entityType: string,
   entityId: string
 ): Promise<ShareToken[]> {
+  const now = new Date();
+
   const rows = await db
     .select()
     .from(shareTokens)
@@ -125,7 +131,9 @@ export async function findShareTokensByEntity(
       and(
         eq(shareTokens.entityType, entityType),
         eq(shareTokens.entityId, entityId),
-        isNull(shareTokens.revokedAt)
+        isNull(shareTokens.revokedAt),
+        // Keep rows where expiresAt is null (never expires) OR still in the future
+        or(isNull(shareTokens.expiresAt), gt(shareTokens.expiresAt, now))
       )
     );
 

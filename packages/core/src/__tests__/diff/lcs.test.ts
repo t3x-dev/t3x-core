@@ -48,10 +48,10 @@ describe('wordDiff', () => {
   it('shows added and removed words', () => {
     const result = wordDiff('Budget is $3000', 'Budget is $3500');
     expect(result).toEqual([
-      { type: 'unchanged', text: 'budget' },
+      { type: 'unchanged', text: 'Budget' },
       { type: 'unchanged', text: 'is' },
-      { type: 'removed', text: '$3000' },
-      { type: 'added', text: '$3500' },
+      { type: 'removed', text: '3000' },
+      { type: 'added', text: '3500' },
     ]);
   });
 
@@ -98,7 +98,7 @@ describe('wordDiff', () => {
     expect(texts).toContain('unchanged:c');
   });
 
-  it('lowercases tokens for comparison', () => {
+  it('case-insensitive comparison preserving original case', () => {
     const result = wordDiff('Hello World', 'hello world');
     expect(result.every((s) => s.type === 'unchanged')).toBe(true);
   });

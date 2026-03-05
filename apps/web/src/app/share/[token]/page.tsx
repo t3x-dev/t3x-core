@@ -213,9 +213,24 @@ function SharedLeafView({ leaf }: { leaf: LeafData }) {
 }
 
 function SharedRunView({ run }: { run: RunData }) {
-  const result = run.resultJson ? JSON.parse(run.resultJson) : null;
-  const traceSummary = run.traceSummaryJson ? JSON.parse(run.traceSummaryJson) : null;
-  const metadata = run.metadataJson ? JSON.parse(run.metadataJson) : null;
+  let result: ReturnType<typeof JSON.parse> = null;
+  let traceSummary: ReturnType<typeof JSON.parse> = null;
+  let metadata: ReturnType<typeof JSON.parse> = null;
+  try {
+    if (run.resultJson) result = JSON.parse(run.resultJson);
+  } catch {
+    /* corrupt JSON */
+  }
+  try {
+    if (run.traceSummaryJson) traceSummary = JSON.parse(run.traceSummaryJson);
+  } catch {
+    /* corrupt JSON */
+  }
+  try {
+    if (run.metadataJson) metadata = JSON.parse(run.metadataJson);
+  } catch {
+    /* corrupt JSON */
+  }
   const evalResult = result?.run_report?.eval_result;
   const passed = evalResult?.passed ?? run.status === 'completed';
   const score = evalResult?.score;

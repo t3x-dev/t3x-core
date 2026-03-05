@@ -22,6 +22,7 @@
     "@t3x/runner": "workspace:*",
     "@t3x/storage": "workspace:*",
     "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.38.3",
     "fflate": "^0.8.2",
     "hono": "^4.7.10",
     "jsdom": "^28.0.0",

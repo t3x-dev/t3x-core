@@ -82,9 +82,16 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           });
         }
 
+        // If a deletion confirmation dialog is already open, suppress new delete requests
+        // to prevent silently replacing the pending confirmation
+        let mutableChanges = changes;
+        if (state.deletionConfirmation) {
+          mutableChanges = changes.filter((c) => c.type !== 'remove');
+        }
+
         // Separate remove changes from other changes
-        const removeChanges = changes.filter((c) => c.type === 'remove');
-        const otherChanges = changes.filter((c) => c.type !== 'remove');
+        const removeChanges = mutableChanges.filter((c) => c.type === 'remove');
+        const otherChanges = mutableChanges.filter((c) => c.type !== 'remove');
 
         // Filter out locked nodes from removal
         const allowedRemoves = removeChanges.filter((c) => !lockedNodes.has(c.id));
@@ -206,8 +213,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
               onConfirm: () => {
                 // This will be called when user confirms
                 const currentState = get();
-                const nodesToDelete = new Set(needsConfirmation);
-                const edgesToDelete = new Set(edgesToRemove);
+                const nodesToDeleteSet = new Set(needsConfirmation);
 
                 // Delete conversations from database for unit nodes
                 // Note: Commit deletion is local only - backend deleteCommit API not available
@@ -221,12 +227,9 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                 });
 
                 set((s) => ({
-                  nodes: s.nodes.filter((n) => !nodesToDelete.has(n.id)),
+                  nodes: s.nodes.filter((n) => !nodesToDeleteSet.has(n.id)),
                   edges: s.edges.filter(
-                    (e) =>
-                      !edgesToDelete.has(e.id) &&
-                      !nodesToDelete.has(e.source) &&
-                      !nodesToDelete.has(e.target)
+                    (e) => !nodesToDeleteSet.has(e.source) && !nodesToDeleteSet.has(e.target)
                   ),
                   deletionConfirmation: null,
                 }));

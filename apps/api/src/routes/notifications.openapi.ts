@@ -1,17 +1,25 @@
 /**
  * Notifications Routes (OpenAPI)
  *
- * In-memory notification system for real-time alerts.
- * Notifications are ephemeral (reset on server restart).
- * Future: persist via storage schema-notifications.ts.
+ * Persistent notification system (Item 16).
+ * Notifications are stored in the database and survive server restarts.
  *
- * GET  /v1/notifications              - List notifications for current session
+ * GET  /v1/notifications              - List notifications
  * POST /v1/notifications/:id/read     - Mark notification as read
  * POST /v1/notifications/read-all     - Mark all as read
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import {
+  type CreateNotificationInput,
+  insertNotification,
+  listNotificationsFromDB,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '@t3x/storage';
+import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const notificationsRoutes = new OpenAPIHono({
@@ -19,62 +27,38 @@ export const notificationsRoutes = new OpenAPIHono({
 });
 
 // ============================================================================
-// In-memory notification store (ephemeral)
+// Push notification helper (called by other routes)
 // ============================================================================
 
-interface Notification {
-  id: string;
-  type: 'conflict_detected' | 'merge_ready' | 'extraction_complete' | 'generation_done' | 'info';
-  title: string;
-  message: string;
-  project_id?: string;
-  ref_id?: string;
-  read: boolean;
-  created_at: string;
-}
-
-const notifications: Notification[] = [];
-let nextId = 1;
-
-/** Push a notification (called by other routes/services) */
-export function pushNotification(opts: {
-  type: Notification['type'];
-  title: string;
-  message: string;
-  project_id?: string;
-  ref_id?: string;
-}) {
-  const n: Notification = {
-    id: `notif_${nextId++}`,
-    type: opts.type,
-    title: opts.title,
-    message: opts.message,
-    project_id: opts.project_id,
-    ref_id: opts.ref_id,
-    read: false,
-    created_at: new Date().toISOString(),
-  };
-  notifications.unshift(n);
-  // Keep at most 100 notifications
-  if (notifications.length > 100) {
-    notifications.length = 100;
-  }
-  return n;
+/**
+ * Push a notification to the database.
+ * Fire-and-forget: errors are silently ignored to not block the caller.
+ */
+export function pushNotification(opts: CreateNotificationInput) {
+  // Fire-and-forget: push to DB asynchronously
+  getDB()
+    .then((db) => insertNotification(db, opts))
+    .catch((err) => {
+      pinoLogger.warn({ err, notification: opts.type }, 'failed to push notification');
+    });
 }
 
 // ============================================================================
 // Schemas
 // ============================================================================
 
+const NOTIFICATION_TYPES = [
+  'commit.created',
+  'merge.completed',
+  'leaf.generated',
+  'leaf.stale',
+  'conflict.detected',
+  'info',
+] as const;
+
 const NotificationSchema = z.object({
   id: z.string(),
-  type: z.enum([
-    'conflict_detected',
-    'merge_ready',
-    'extraction_complete',
-    'generation_done',
-    'info',
-  ]),
+  type: z.enum(NOTIFICATION_TYPES),
   title: z.string(),
   message: z.string(),
   project_id: z.string().nullable(),
@@ -112,22 +96,26 @@ const listNotificationsRoute = createRoute({
 
 notificationsRoutes.openapi(listNotificationsRoute, async (c) => {
   const { project_id, unread_only } = c.req.valid('query');
-  let result = notifications;
+  const db = await getDB();
 
-  if (project_id) {
-    result = result.filter((n) => n.project_id === project_id);
-  }
-  if (unread_only === 'true') {
-    result = result.filter((n) => !n.read);
-  }
+  const rows = await listNotificationsFromDB(db, {
+    project_id,
+    unread_only: ['true', '1', 'yes'].includes(unread_only?.toLowerCase() ?? ''),
+    limit: 100,
+  });
 
   return c.json(
     {
       success: true as const,
-      data: result.map((n) => ({
-        ...n,
-        project_id: n.project_id ?? null,
-        ref_id: n.ref_id ?? null,
+      data: rows.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        project_id: n.projectId ?? null,
+        ref_id: n.refId ?? null,
+        read: n.read,
+        created_at: n.createdAt?.toISOString() ?? new Date().toISOString(),
       })),
     },
     200
@@ -166,8 +154,10 @@ const markReadRoute = createRoute({
 
 notificationsRoutes.openapi(markReadRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const n = notifications.find((n) => n.id === id);
-  if (!n) {
+  const db = await getDB();
+
+  const updated = await markNotificationRead(db, id);
+  if (!updated) {
     return c.json(
       {
         success: false as const,
@@ -176,7 +166,6 @@ notificationsRoutes.openapi(markReadRoute, async (c) => {
       404
     );
   }
-  n.read = true;
   return c.json({ success: true as const, data: { read: true } }, 200);
 });
 
@@ -208,13 +197,8 @@ const markAllReadRoute = createRoute({
 
 notificationsRoutes.openapi(markAllReadRoute, async (c) => {
   const { project_id } = c.req.valid('query');
-  let count = 0;
-  for (const n of notifications) {
-    if (project_id && n.project_id !== project_id) continue;
-    if (!n.read) {
-      n.read = true;
-      count++;
-    }
-  }
+  const db = await getDB();
+
+  const count = await markAllNotificationsRead(db, project_id);
   return c.json({ success: true as const, data: { count } }, 200);
 });

@@ -6,6 +6,7 @@
  */
 
 import { sha256 } from '@t3x/core';
+import { isInternalUrlResolved } from '../ssrf';
 import { extractArticle } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';
@@ -36,8 +37,9 @@ const PRIVATE_IP_PATTERNS = [
 
 /**
  * Validate URL is safe to fetch (SSRF prevention).
+ * Async to support DNS resolution check against internal IP ranges.
  */
-function validateUrl(url: string): void {
+async function validateUrl(url: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -59,6 +61,12 @@ function validateUrl(url: string): void {
     if (pattern.test(hostname)) {
       throw new Error('Private/reserved IP addresses are not allowed');
     }
+  }
+
+  // Additional check using shared SSRF utility with DNS resolution
+  // (covers ::ffff: mapped addresses, metadata.google.internal, DNS rebinding, etc.)
+  if (await isInternalUrlResolved(url)) {
+    throw new Error('URL targets a blocked internal address');
   }
 }
 
@@ -98,7 +106,7 @@ export async function parseUrl(url: string): Promise<ParseResult> {
   if (cached) return cached;
 
   // Validate URL (SSRF prevention)
-  validateUrl(url);
+  await validateUrl(url);
 
   // Try specialized URL handlers first (GitHub, Reddit, etc.)
   const specialResult = await trySpecialUrlParse(url);
@@ -139,7 +147,7 @@ export async function parseUrl(url: string): Promise<ParseResult> {
         // Resolve relative redirects
         currentUrl = new URL(location, currentUrl).href;
         // Validate redirect target (SSRF prevention)
-        validateUrl(currentUrl);
+        await validateUrl(currentUrl);
         continue;
       }
       break;

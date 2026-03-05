@@ -320,13 +320,13 @@ export function MergePanel() {
                 </div>
                 <div className="rounded-lg bg-muted/50 p-2 text-center">
                   <div className="text-lg font-semibold text-foreground">
-                    {counts.keptSource}/{counts.keptSourceCandidates}
+                    {counts.keptSource}/{counts.similar}
                   </div>
                   <div className="text-xs text-muted-foreground">Kept from source</div>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-2 text-center">
                   <div className="text-lg font-semibold text-foreground">
-                    {counts.keptTarget}/{counts.keptTargetCandidates}
+                    {counts.keptTarget}/{counts.similar}
                   </div>
                   <div className="text-xs text-muted-foreground">Kept from target</div>
                 </div>

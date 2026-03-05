@@ -5,9 +5,10 @@
  */
 
 import { generateBranchId } from '@t3x/core';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Branch, branches } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateBranchInput {
   projectId: string;
@@ -20,46 +21,54 @@ export interface ListBranchesOptions {
   projectId: string;
   limit?: number;
   offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 /**
  * Insert a new branch
+ *
+ * Fix 5: Wrap the count + insert inside a transaction to prevent a TOCTOU race
+ * where two concurrent insertBranch calls both observe count=0 and both try to
+ * set isCurrent=1.
  */
 export async function insertBranch(db: AnyDB, input: CreateBranchInput): Promise<Branch> {
   const branchId = generateBranchId();
   const now = new Date();
 
-  // Check if this is the first branch for the project
-  const [countResult] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(branches)
-    .where(eq(branches.projectId, input.projectId));
+  return db.transaction(async (tx) => {
+    // Check if this is the first branch for the project (inside transaction)
+    const [countResult] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(branches)
+      .where(eq(branches.projectId, input.projectId));
 
-  const isCurrent = Number(countResult?.count ?? 0) === 0 ? 1 : 0;
+    const isCurrent = Number(countResult?.count ?? 0) === 0 ? 1 : 0;
 
-  // If parent branch specified, get its head commit
-  let headCommitHash: string | null = null;
-  if (input.parentBranch) {
-    const parent = await findBranchByName(db, input.projectId, input.parentBranch);
-    headCommitHash = parent?.headCommitHash ?? null;
-  }
+    // If parent branch specified, get its head commit
+    let headCommitHash: string | null = null;
+    if (input.parentBranch) {
+      const parent = await findBranchByName(tx as AnyDB, input.projectId, input.parentBranch);
+      headCommitHash = parent?.headCommitHash ?? null;
+    }
 
-  const [branch] = await db
-    .insert(branches)
-    .values({
-      branchId,
-      projectId: input.projectId,
-      name: input.name,
-      parentBranch: input.parentBranch ?? null,
-      headCommitHash,
-      description: input.description ?? null,
-      isCurrent,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
+    const [branch] = await tx
+      .insert(branches)
+      .values({
+        branchId,
+        projectId: input.projectId,
+        name: input.name,
+        parentBranch: input.parentBranch ?? null,
+        headCommitHash,
+        description: input.description ?? null,
+        isCurrent,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
 
-  return branch;
+    return branch;
+  });
 }
 
 /**
@@ -93,11 +102,49 @@ export async function findBranchById(db: AnyDB, branchId: string): Promise<Branc
  */
 export async function findBranchesByProject(
   db: AnyDB,
+  options: ListBranchesOptions & { cursor: string }
+): Promise<CursorPage<Branch>>;
+export async function findBranchesByProject(
+  db: AnyDB,
+  options: Omit<ListBranchesOptions, 'cursor'>
+): Promise<Branch[]>;
+export async function findBranchesByProject(
+  db: AnyDB,
   options: ListBranchesOptions
-): Promise<Branch[]> {
+): Promise<Branch[] | CursorPage<Branch>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
+  if (options.cursor !== undefined) {
+    // Cursor pagination mode (uses updatedAt DESC, branchId DESC for stable keyset)
+    const conditions = [eq(branches.projectId, options.projectId)];
+
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (updated_at < t) OR (updated_at = t AND branch_id < k)
+      conditions.push(
+        or(
+          lt(branches.updatedAt, cursorDate),
+          and(eq(branches.updatedAt, cursorDate), lt(branches.branchId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(branches)
+      .where(and(...conditions))
+      .orderBy(desc(branches.updatedAt), desc(branches.branchId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (b) => ({
+      t: b.updatedAt.toISOString(),
+      k: b.branchId,
+    }));
+  }
+
+  // Legacy offset/limit mode
+  const offset = options.offset ?? 0;
   return db
     .select()
     .from(branches)
@@ -122,6 +169,10 @@ export async function findCurrentBranch(db: AnyDB, projectId: string): Promise<B
 
 /**
  * Switch to a different branch
+ *
+ * Fix 2: Make atomic. Both UPDATE statements (unset all current, set target
+ * current) are wrapped in a single transaction so no window exists where zero
+ * or two branches are simultaneously marked as current.
  */
 export async function switchBranch(
   db: AnyDB,
@@ -131,22 +182,24 @@ export async function switchBranch(
   const branch = await findBranchByName(db, projectId, branchName);
   if (!branch) return null;
 
-  const now = new Date();
+  return db.transaction(async (tx) => {
+    const now = new Date();
 
-  // Unset current on all branches
-  await db
-    .update(branches)
-    .set({ isCurrent: 0, updatedAt: now })
-    .where(eq(branches.projectId, projectId));
+    // Unset current on all branches
+    await tx
+      .update(branches)
+      .set({ isCurrent: 0, updatedAt: now })
+      .where(eq(branches.projectId, projectId));
 
-  // Set current on target branch
-  const [updated] = await db
-    .update(branches)
-    .set({ isCurrent: 1, updatedAt: now })
-    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
-    .returning();
+    // Set current on target branch
+    const [updated] = await tx
+      .update(branches)
+      .set({ isCurrent: 1, updatedAt: now })
+      .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
+      .returning();
 
-  return updated ?? null;
+    return updated ?? null;
+  });
 }
 
 /**
@@ -171,22 +224,28 @@ export async function updateBranchHead(
 
 /**
  * Delete a branch
+ *
+ * Fix 8: Wrap in transaction. The existence/currency check and the DELETE are
+ * wrapped in a transaction so a concurrent switchBranch call cannot make this
+ * branch current between the read and the delete.
  */
 export async function deleteBranch(
   db: AnyDB,
   projectId: string,
   branchName: string
 ): Promise<boolean> {
-  // Don't delete current branch
-  const branch = await findBranchByName(db, projectId, branchName);
-  if (!branch || branch.isCurrent === 1) return false;
+  return db.transaction(async (tx) => {
+    // Don't delete current branch — re-read inside the transaction
+    const branch = await findBranchByName(tx as AnyDB, projectId, branchName);
+    if (!branch || branch.isCurrent === 1) return false;
 
-  const result = await db
-    .delete(branches)
-    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
-    .returning();
+    const result = await tx
+      .delete(branches)
+      .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
+      .returning();
 
-  return result.length > 0;
+    return result.length > 0;
+  });
 }
 
 /**

@@ -329,6 +329,41 @@ export async function reverseLearnConstraints(
 }
 
 // ============================================================================
+// Learn From Edits (Constraint Reverse Learning from Output Edits — Item 17)
+// ============================================================================
+
+/** Learned constraint from output edit patterns */
+export interface EditLearnedConstraint extends SuggestedConstraint {
+  dimension: 'style' | 'content' | 'format';
+}
+
+export interface LearnFromEditsResult {
+  suggestions: EditLearnedConstraint[];
+  edits_analyzed: number;
+  model: string;
+}
+
+/**
+ * Analyze user output edits to discover implicit constraints.
+ */
+export async function learnFromEdits(
+  leafId: string,
+  maxSuggestions = 5,
+  minConfidence = 0.8
+): Promise<LearnFromEditsResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/learn-from-edits`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_suggestions: maxSuggestions, min_confidence: minConfidence }),
+    },
+    30_000
+  );
+  return handleResponse<LearnFromEditsResult>(res);
+}
+
+// ============================================================================
 // Curate Preview API
 // ============================================================================
 

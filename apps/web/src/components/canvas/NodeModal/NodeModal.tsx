@@ -30,7 +30,6 @@ interface NodeModalProps {
   onClose: () => void;
   onUpdate: (patch: Partial<CanvasNodeData>) => void;
   onConvertDraft?: () => void;
-  draftBranchMode?: 'force-main' | 'select' | 'branch-only' | 'blocked';
   onBranchChange?: (branch: 'main' | 'branch') => void;
   onBranchNameChange?: (name: string) => void;
   quickActions?: NodeQuickAction[];
@@ -109,8 +108,6 @@ export function NodeModal({
         onConvertDraft={onConvertDraft}
         onBranchChange={onBranchChange}
         onBranchNameChange={onBranchNameChange}
-        quickActions={quickActions}
-        onHideCommitConfig={() => setShowCommitConfig(false)}
       />
     );
   }
@@ -134,6 +131,7 @@ export function NodeModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="node-modal-title"
     >
       <div
         className={cn(
@@ -144,7 +142,10 @@ export function NodeModal({
       >
         <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2
+              id="node-modal-title"
+              className="text-[0.95rem] font-semibold text-[var(--text-primary)]"
+            >
               {data?.title || 'Node'}
             </h2>
           </div>

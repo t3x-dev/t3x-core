@@ -12,8 +12,8 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
+import { z } from '@hono/zod-openapi';
 import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x/core';
-import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Common Schemas
@@ -24,14 +24,6 @@ const SuccessResponse = <T extends z.ZodType>(dataSchema: T) =>
     success: z.literal(true),
     data: dataSchema,
   });
-
-const _ErrorResponse = z.object({
-  success: z.literal(false),
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-  }),
-});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence Schema
@@ -192,6 +184,32 @@ export const CommitV4Response = z.object({
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
+  merge_summary: z
+    .object({
+      kept_identical: z.number(),
+      resolved_conflicts: z.number(),
+      kept_from_source: z.number(),
+      kept_from_target: z.number(),
+      discarded: z.number(),
+      total_sentences: z.number(),
+      release_note: z
+        .object({
+          title: z.string(),
+          timestamp: z.string(),
+          source_branch: z.string(),
+          target_branch: z.string(),
+          summary: z.string(),
+          sections: z.array(
+            z.object({
+              heading: z.string(),
+              items: z.array(z.string()),
+            })
+          ),
+        })
+        .optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const CreateCommitV4Response = SuccessResponse(CommitV4Response);
@@ -273,7 +291,16 @@ export const DeleteLeafResponse = SuccessResponse(
 // POST /v1/leaves/:id/generate
 export const GenerateLeafOutputRequest = z
   .object({
-    // Future: additional generation options
+    /** Generation mode: 'fast' (1 round), 'standard' (2 rounds), 'thorough' (3 rounds) */
+    mode: z.enum(['fast', 'standard', 'thorough']).optional(),
+    /** Style preferences for thorough mode (Round 3) */
+    style_preferences: z
+      .object({
+        tone: z.string().optional(),
+        length: z.string().optional(),
+        formality: z.string().optional(),
+      })
+      .optional(),
   })
   .optional();
 
@@ -289,6 +316,21 @@ export const GenerateLeafOutputResponse = SuccessResponse(
         attempts: z.number(),
       })
       .optional(),
+    /** Multi-round generation details (present when mode is standard or thorough) */
+    rounds: z
+      .array(
+        z.object({
+          name: z.string(),
+          round_number: z.number(),
+          constraints_passed: z.boolean(),
+          failed_constraints: z.array(z.string()),
+        })
+      )
+      .optional(),
+    /** Total rounds executed */
+    total_rounds: z.number().optional(),
+    /** Generation mode used */
+    mode: z.enum(['fast', 'standard', 'thorough']).optional(),
   })
 );
 
@@ -514,7 +556,7 @@ export type MergeCheckType = z.infer<typeof MergeCheckSchema>;
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WordDiffSegmentSchema = z.object({
-  type: z.enum(['equal', 'insert', 'delete']),
+  type: z.enum(['unchanged', 'added', 'removed']),
   text: z.string(),
 });
 
@@ -750,6 +792,7 @@ export const SemanticPointSchema = z.object({
   inherited_from: z.string().optional(),
   evidence: z.array(LocatedEvidenceSchema),
   confidence: z.number().optional(),
+  low_coverage: z.boolean().optional(),
   position: z.number().int(),
   staged: z.boolean(),
 });

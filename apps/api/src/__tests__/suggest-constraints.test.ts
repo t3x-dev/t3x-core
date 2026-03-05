@@ -75,7 +75,10 @@ describe('Suggest Constraints', () => {
     mockDB = setup.db;
     cleanup = setup.cleanup;
 
-    const project = await insertProject(mockDB, testData.project({ name: 'Suggest Constraints Test' }));
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Suggest Constraints Test' })
+    );
     testProjectId = project.projectId;
 
     // Create a commit with sentences

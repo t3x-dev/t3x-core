@@ -53,6 +53,7 @@ import {
 import type { LeafType } from '@/lib/api/leaves';
 import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
+import { useProjectStore } from '@/store/projectStore';
 import { CommitContextPanel } from './CommitContextPanel';
 import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
 import { ConnectionLines, ProvenanceGraph } from './CommitProvenanceGraph';
@@ -92,6 +93,7 @@ interface EnrichedSentence {
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
+  const notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Data state ────────────────────────────────────
   const [commit, setCommit] = useState<CommitV4 | null>(null);
@@ -183,7 +185,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     // Derive confidence: prefer sentence.confidence > diff.similarity > nothing.
     // Never fabricate 100% — only show real data.
     function derivedConfidence(
-      diff: { diffType: string; similarity?: number } | undefined,
+      diff: { diffType: string; similarity?: number } | undefined
     ): number | undefined {
       if (diff?.similarity != null) return diff.similarity;
       return undefined;
@@ -320,7 +322,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         setLeaves((prev) => [...prev, leaf]);
         router.push(`/project/${projectId}/leaf/${leaf.id}`);
       } catch (err) {
-        console.error('Failed to create leaf:', err);
+        const message = err instanceof Error ? err.message : 'Failed to create leaf';
+        notify?.(message, 'error');
       } finally {
         setLeafCreating(false);
       }
@@ -423,7 +426,9 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
               const a = document.createElement('a');
               a.href = url;
               a.download = `commit-${shortHash(commitHash)}.json`;
+              document.body.appendChild(a);
               a.click();
+              document.body.removeChild(a);
               URL.revokeObjectURL(url);
             }}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"

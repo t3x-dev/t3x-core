@@ -7,6 +7,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { type ContentBlock, textFromBlocks } from '@t3x/core';
 import {
   findConversationById,
   findProjectById,
@@ -25,10 +26,45 @@ export const ingestRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================================
 
+const ContentBlockSchema = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('text'), text: z.string() }),
+    z.object({
+      type: z.literal('image'),
+      url: z.string(),
+      alt: z.string().optional(),
+      ocr_text: z.string().optional(),
+      mime_type: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal('audio'),
+      url: z.string(),
+      transcript: z.string().optional(),
+      duration_ms: z.number().optional(),
+      mime_type: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal('file'),
+      url: z.string(),
+      filename: z.string(),
+      mime_type: z.string(),
+    }),
+  ])
+  .openapi('ContentBlock');
+
 const IngestTurnSchema = z.object({
   role: z.enum(['user', 'assistant', 'system', 'tool']).openapi({ description: 'Message role' }),
-  content: z.string().min(1).max(100_000).openapi({ description: 'Message content' }),
+  content: z
+    .string()
+    .min(1)
+    .max(100_000)
+    .optional()
+    .openapi({ description: 'Message content (auto-computed from content_blocks if omitted)' }),
   created_at: z.string().optional().openapi({ description: 'ISO8601 timestamp (optional)' }),
+  content_blocks: z
+    .array(ContentBlockSchema)
+    .optional()
+    .openapi({ description: 'Multimodal content blocks (optional)' }),
 });
 
 const IngestWebhookRequest = z
@@ -38,10 +74,10 @@ const IngestWebhookRequest = z
       description:
         'Existing conversation ID to append to. If omitted, a new conversation is created.',
     }),
-    title: z.string().optional().openapi({
+    title: z.string().max(1000).optional().openapi({
       description: 'Title for new conversation. Ignored if conversation_id is provided.',
     }),
-    source: z.string().optional().openapi({
+    source: z.string().max(500).optional().openapi({
       description: 'Source identifier (e.g., "slack", "discord", "custom")',
     }),
   })
@@ -94,6 +130,10 @@ Otherwise, a new conversation is created.
       description: 'Project or conversation not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -101,67 +141,84 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
 
-  const db = await getDB();
+  try {
+    const db = await getDB();
 
-  // Verify project exists
-  const project = await findProjectById(db, projectId);
-  if (!project) {
-    return errorResponse(c, 'PROJECT_NOT_FOUND', `Project not found: ${projectId}`);
-  }
-
-  let conversationId: string;
-
-  if (body.conversation_id) {
-    // Append to existing conversation — verify it exists and belongs to this project
-    const existing = await findConversationById(db, body.conversation_id);
-    if (!existing) {
-      return errorResponse(
-        c,
-        'CONVERSATION_NOT_FOUND',
-        `Conversation not found: ${body.conversation_id}`
-      );
+    // Verify project exists
+    const project = await findProjectById(db, projectId);
+    if (!project) {
+      return errorResponse(c, 'PROJECT_NOT_FOUND', `Project not found: ${projectId}`);
     }
-    if (existing.projectId !== projectId) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Conversation ${body.conversation_id} does not belong to project ${projectId}`
-      );
+
+    let conversationId: string;
+
+    if (body.conversation_id) {
+      // Append to existing conversation — verify it exists and belongs to this project
+      const existing = await findConversationById(db, body.conversation_id);
+      if (!existing) {
+        return errorResponse(
+          c,
+          'CONVERSATION_NOT_FOUND',
+          `Conversation not found: ${body.conversation_id}`
+        );
+      }
+      if (existing.projectId !== projectId) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          `Conversation ${body.conversation_id} does not belong to project ${projectId}`
+        );
+      }
+      conversationId = body.conversation_id;
+    } else {
+      // Create new conversation
+      const conv = await insertConversation(db, {
+        projectId,
+        title: body.title ?? `Webhook ingest${body.source ? ` (${body.source})` : ''}`,
+        metadata: body.source ? { source: body.source } : undefined,
+      });
+      conversationId = conv.conversationId;
     }
-    conversationId = body.conversation_id;
-  } else {
-    // Create new conversation
-    const conv = await insertConversation(db, {
-      projectId,
-      title: body.title ?? `Webhook ingest${body.source ? ` (${body.source})` : ''}`,
-      metadata: body.source ? { source: body.source } : undefined,
-    });
-    conversationId = conv.conversationId;
-  }
 
-  // Insert turns sequentially (hash chain requires ordering)
-  let turnsCreated = 0;
-  for (const turn of body.turns) {
-    await insertTurn(db, {
-      projectId,
-      conversationId,
-      role: turn.role,
-      content: turn.content,
-    });
-    turnsCreated++;
-  }
+    // Insert turns sequentially in a transaction (hash chain requires ordering;
+    // transaction ensures all-or-nothing on partial failure)
+    let turnsCreated = 0;
+    await db.transaction(async (tx) => {
+      for (const turn of body.turns) {
+        // Auto-compute content from content_blocks when content is empty/missing
+        const content =
+          turn.content ||
+          (turn.content_blocks?.length
+            ? textFromBlocks(turn.content_blocks as ContentBlock[])
+            : '');
+        if (!content) continue; // Skip turns with no content at all
 
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        conversation_id: conversationId,
-        turns_created: turnsCreated,
-        source: body.source ?? null,
+        await insertTurn(tx, {
+          projectId,
+          conversationId,
+          role: turn.role,
+          content,
+          content_blocks: turn.content_blocks as ContentBlock[] | undefined,
+        });
+        turnsCreated++;
+      }
+    });
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          conversation_id: conversationId,
+          turns_created: turnsCreated,
+          source: body.source ?? null,
+        },
       },
-    },
-    201
-  );
+      201
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'CREATE_FAILED', message);
+  }
 });
 
 export default ingestRoutes;

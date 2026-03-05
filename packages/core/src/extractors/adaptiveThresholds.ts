@@ -2,16 +2,24 @@
  * Adaptive Extraction Thresholds (#11)
  *
  * Auto-calibrates confidence thresholds based on user feedback data.
- * - undo_rate > 15% → raise threshold by 0.05 (too many false positives)
- * - undo_rate < 5%  → lower threshold by 0.02 (can be more aggressive)
- * - between 5-15%   → keep current threshold
  *
- * Requires minimum 10 samples per inference_type to adjust.
+ * Two APIs:
+ * 1. computeAdaptiveThresholds (legacy): undo-rate based threshold adjustment
+ *    - undo_rate > 15% → raise threshold by 0.05 (too many false positives)
+ *    - undo_rate < 5%  → lower threshold by 0.02 (can be more aggressive)
+ *    - between 5-15%   → keep current threshold
+ *
+ * 2. computeAdaptiveConfig (new): accept-rate based extraction configuration
+ *    - accept_rate < 50% with >= 20 samples → suppress the inference type
+ *    - accept_rate < 70% → reduce confidence multiplier to 0.7
+ *    - overall edit_rate > 30% → suggest lowering cosine threshold by 0.02
+ *
+ * Requires minimum samples per inference_type to adjust.
  */
 
 const DEFAULT_THRESHOLDS = {
   direct: 0.85,
-  paraphrase: 0.80,
+  paraphrase: 0.8,
   cross_turn: 0.75,
 } as const;
 
@@ -20,8 +28,21 @@ const RAISE_RATE = 0.15;
 const LOWER_RATE = 0.05;
 const RAISE_STEP = 0.05;
 const LOWER_STEP = 0.02;
-const MIN_THRESHOLD = 0.50;
+const MIN_THRESHOLD = 0.5;
 const MAX_THRESHOLD = 0.99;
+
+/** Minimum samples for adaptive config rules */
+const ADAPTIVE_MIN_SAMPLES = 20;
+/** Below this accept rate with enough samples → suppress the type */
+const SUPPRESS_ACCEPT_RATE = 0.5;
+/** Below this accept rate → reduce confidence multiplier */
+const REDUCE_ACCEPT_RATE = 0.7;
+/** Above this overall edit rate → suggest lowering cosine threshold */
+const HIGH_EDIT_RATE = 0.3;
+/** How much to lower cosine threshold when edit rate is high */
+const COSINE_THRESHOLD_ADJUSTMENT = -0.02;
+/** Reduced confidence multiplier for underperforming inference types */
+const REDUCED_MULTIPLIER = 0.7;
 
 type InferenceType = keyof typeof DEFAULT_THRESHOLDS;
 
@@ -43,7 +64,7 @@ export interface AdaptiveThresholds {
 
 export function computeAdaptiveThresholds(
   stats: FeedbackStats,
-  options?: AdaptiveThresholdOptions,
+  options?: AdaptiveThresholdOptions
 ): AdaptiveThresholds {
   const defaults = options?.defaults ?? DEFAULT_THRESHOLDS;
 
@@ -70,4 +91,68 @@ export function computeAdaptiveThresholds(
   }
 
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Adaptive Config (accept-rate based extraction configuration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Input format for computeAdaptiveConfig — uses the AdaptiveFeedbackStats
+ * shape returned by the storage layer.
+ */
+export interface AdaptiveFeedbackStats {
+  byInferenceType: Record<
+    string,
+    { total: number; accepted: number; edited: number; rejected: number }
+  >;
+  overall: { total: number; acceptRate: number; editRate: number; rejectRate: number };
+}
+
+export interface AdaptiveConfig {
+  /** Confidence multiplier by inference type (default: all 1.0) */
+  confidenceMultipliers: Record<string, number>;
+  /** Whether to suppress a specific inference type in prompts */
+  suppressedTypes: string[];
+  /** Recommended cosine threshold adjustment */
+  cosineThresholdDelta: number;
+}
+
+/**
+ * Compute adaptive extraction configuration from feedback stats.
+ *
+ * Rules:
+ * - If an inference_type has <50% accept rate with >= 20 samples → suppress it
+ * - If an inference_type has <70% accept rate → reduce confidence multiplier to 0.7
+ * - If overall edit rate >30% → suggest lowering cosine threshold by 0.02
+ */
+export function computeAdaptiveConfig(stats: AdaptiveFeedbackStats): AdaptiveConfig {
+  const confidenceMultipliers: Record<string, number> = {};
+  const suppressedTypes: string[] = [];
+  let cosineThresholdDelta = 0;
+
+  for (const [inferenceType, typeStats] of Object.entries(stats.byInferenceType)) {
+    // Default multiplier is 1.0
+    confidenceMultipliers[inferenceType] = 1.0;
+
+    if (typeStats.total < ADAPTIVE_MIN_SAMPLES) continue;
+
+    const acceptRate = typeStats.accepted / typeStats.total;
+
+    if (acceptRate < SUPPRESS_ACCEPT_RATE) {
+      // Very low accept rate → suppress this inference type entirely
+      suppressedTypes.push(inferenceType);
+      confidenceMultipliers[inferenceType] = 0;
+    } else if (acceptRate < REDUCE_ACCEPT_RATE) {
+      // Moderate accept rate → reduce confidence multiplier
+      confidenceMultipliers[inferenceType] = REDUCED_MULTIPLIER;
+    }
+  }
+
+  // If overall edit rate is high, suggest lowering cosine threshold
+  if (stats.overall.total >= ADAPTIVE_MIN_SAMPLES && stats.overall.editRate > HIGH_EDIT_RATE) {
+    cosineThresholdDelta = COSINE_THRESHOLD_ADJUSTMENT;
+  }
+
+  return { confidenceMultipliers, suppressedTypes, cosineThresholdDelta };
 }

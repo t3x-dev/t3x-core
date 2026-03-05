@@ -65,6 +65,24 @@ export function NodeContextMenu({ x, y, groups, onClose }: NodeContextMenuProps)
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+        if (items) {
+          const currentIndex = Array.from(items).indexOf(document.activeElement as Element);
+          const next = items[currentIndex + 1] || items[0];
+          (next as HTMLElement).focus();
+        }
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+        if (items) {
+          const currentIndex = Array.from(items).indexOf(document.activeElement as Element);
+          const prev = items[currentIndex - 1] || items[items.length - 1];
+          (prev as HTMLElement).focus();
+        }
+      }
     };
     const handleScroll = () => onClose();
 

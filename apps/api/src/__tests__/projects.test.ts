@@ -211,5 +211,27 @@ describe('Projects Routes', () => {
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('NOT_FOUND');
     });
+
+    it('includes merkle_mismatches in response', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Merkle Mismatch Verify' })
+      );
+
+      await createCommitV4(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', name: 'Tester' },
+        sentences: [{ id: 's_mm1', text: 'Merkle mismatch test' }],
+        branch: 'main',
+      });
+
+      const res = await app.request(`/v1/projects/${project.projectId}/verify`);
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.merkle_mismatches).toBeDefined();
+      expect(data.data.merkle_mismatches).toEqual([]);
+    });
   });
 });

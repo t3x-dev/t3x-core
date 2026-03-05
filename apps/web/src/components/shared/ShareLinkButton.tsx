@@ -31,6 +31,7 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load existing share links on mount
   useEffect(() => {
@@ -57,6 +58,8 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to create share link:', err);
+      setError('Failed to create share link');
+      setTimeout(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -85,22 +88,25 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
   if (activeLinks.length === 0) {
     // No existing link — show simple create button
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleCreate}
-        disabled={loading}
-        className={cn('gap-1.5', className)}
-      >
-        {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : copied ? (
-          <Check className="h-3.5 w-3.5 text-[var(--diff-added-accent)]" />
-        ) : (
-          <Link2 className="h-3.5 w-3.5" />
-        )}
-        {copied ? 'Copied!' : 'Share'}
-      </Button>
+      <div className="flex flex-col items-start gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCreate}
+          disabled={loading}
+          className={cn('gap-1.5', className)}
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : copied ? (
+            <Check className="h-3.5 w-3.5 text-[var(--diff-added-accent)]" />
+          ) : (
+            <Link2 className="h-3.5 w-3.5" />
+          )}
+          {copied ? 'Copied!' : 'Share'}
+        </Button>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
     );
   }
 

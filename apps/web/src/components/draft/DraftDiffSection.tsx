@@ -12,8 +12,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
 import { getCommitV4 } from '@/lib/api';
-import type { DiffableSentence } from '@/lib/diffUtils';
-import { type CommitDiff, diffCommits, type WordDiffSegment } from '@/lib/diffUtils';
+import type { DiffableSentence, DiffCache } from '@/lib/diffUtils';
+import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
@@ -70,10 +70,27 @@ export function DraftDiffSection() {
     };
   }, [parentHash]);
 
-  // Compute diff locally (no network) when parent sentences or draft sentences change
+  // Incremental diff cache — persists across renders for fast re-diff
+  const diffCacheRef = useRef<DiffCache | null>(null);
+
+  // Reset cache when parent changes (different base commit = new diff context)
+  useEffect(() => {
+    diffCacheRef.current = null;
+  }, [parentHash]);
+
+  // Compute diff incrementally (reuses cached pair results for unchanged sentences)
   const diff = useMemo<CommitDiff | null>(() => {
-    if (!parentSentences || draftSentences.length === 0) return null;
-    return diffCommits(parentSentences, draftSentences);
+    if (!parentSentences || draftSentences.length === 0) {
+      diffCacheRef.current = null;
+      return null;
+    }
+    const [result, newCache] = incrementalDiffCommits(
+      parentSentences,
+      draftSentences,
+      diffCacheRef.current
+    );
+    diffCacheRef.current = newCache;
+    return result;
   }, [parentSentences, draftSentences]);
 
   // Don't render if no parent

@@ -18,7 +18,11 @@ import {
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  CursorPageResponseSchema,
+  ErrorResponseSchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
 
 // ============================================================
 // Schemas
@@ -59,6 +63,7 @@ const ListComparisonsQuery = z.object({
   project_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().int().min(0).default(0).optional(),
+  cursor: z.string().optional(),
 });
 
 export const comparisonsRoutes = new OpenAPIHono({
@@ -160,6 +165,8 @@ const listComparisonsRoute = createRoute({
   path: '/v1/comparisons',
   tags: ['Comparisons'],
   summary: 'List saved comparisons for a project',
+  description:
+    'Lists saved comparisons. Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     query: ListComparisonsQuery,
   },
@@ -168,7 +175,12 @@ const listComparisonsRoute = createRoute({
       description: 'List of comparisons',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(SavedComparisonSchema)),
+          schema: SuccessResponseSchema(
+            z.union([
+              CursorPageResponseSchema(SavedComparisonSchema),
+              z.array(SavedComparisonSchema),
+            ])
+          ),
         },
       },
     },
@@ -180,10 +192,25 @@ const listComparisonsRoute = createRoute({
 });
 
 comparisonsRoutes.openapi(listComparisonsRoute, async (c) => {
-  const { project_id, limit, offset } = c.req.valid('query');
+  const { project_id, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await listComparisons(db, project_id || null, { cursor, limit });
+      return c.json({
+        success: true as const,
+        data: {
+          items: result.items.map(formatComparison),
+          next_cursor: result.next_cursor,
+          has_more: result.has_more,
+        },
+      });
+    }
+
+    // Legacy offset/limit mode
     const rows = await listComparisons(db, project_id || null, { limit, offset });
     return c.json({
       success: true as const,

@@ -43,6 +43,18 @@ export class ConflictError extends Error {
   }
 }
 
+/**
+ * Thrown when the target draft does not exist (e.g. deleted before update).
+ *
+ * Fix 9: Distinguish "deleted" from "concurrent write conflict".
+ */
+export class NotFoundError extends Error {
+  constructor(public readonly draftId: string) {
+    super(`Draft not found: ${draftId}`);
+    this.name = 'NotFoundError';
+  }
+}
+
 // ============================================================
 // Types
 // ============================================================
@@ -151,7 +163,9 @@ export async function findDraftV3ById(db: AnyDB, draftId: string): Promise<Draft
 /**
  * List Drafts by project
  *
- * Default: only 'editing' status, sorted by updated_at DESC
+ * Fix 10: No default status filter. When status is provided it is applied;
+ * when omitted all statuses are returned so callers can request committed,
+ * abandoned, auto, etc. without having to know the 'editing' default.
  */
 export async function listDraftV3ByProject(
   db: AnyDB,
@@ -160,7 +174,7 @@ export async function listDraftV3ByProject(
 ): Promise<Draft[]> {
   const limit = options.limit ?? 50;
   const offset = options.offset ?? 0;
-  const status = options.status ?? 'editing';
+  const status = options.status; // no default
 
   const conditions = [eq(draftsV3.projectId, projectId)];
   if (status) {
@@ -181,7 +195,12 @@ export async function listDraftV3ByProject(
 /**
  * Update a Draft with optimistic locking
  *
- * @throws ConflictError if revision doesn't match (409)
+ * Fix 9: After 0-row update, SELECT to distinguish "deleted" from "concurrent
+ * write conflict". If row no longer exists → NotFoundError. If it exists with
+ * a different revision → ConflictError (concurrent write).
+ *
+ * @throws NotFoundError if the draft no longer exists
+ * @throws ConflictError if revision doesn't match (concurrent modification, 409)
  */
 export async function updateDraftV3(
   db: AnyDB,
@@ -201,7 +220,8 @@ export async function updateDraftV3(
   if (input.target_branch !== undefined) updateData.targetBranch = input.target_branch;
   if (input.extraction_mode !== undefined) updateData.extractionMode = input.extraction_mode;
   if (input.semantic_points !== undefined) updateData.semanticPointsJson = input.semantic_points;
-  if (input.extraction_cursor !== undefined) updateData.extractionCursorJson = input.extraction_cursor;
+  if (input.extraction_cursor !== undefined)
+    updateData.extractionCursorJson = input.extraction_cursor;
 
   // Increment revision
   // Note: Drizzle doesn't support SQL expressions in set(), so we use ifRevision + 1
@@ -214,6 +234,11 @@ export async function updateDraftV3(
     .returning();
 
   if (rows.length === 0) {
+    // Distinguish "deleted" from "concurrent write with revision mismatch"
+    const existing = await findDraftV3ById(db, draftId);
+    if (!existing) {
+      throw new NotFoundError(draftId);
+    }
     throw new ConflictError(draftId, ifRevision);
   }
 
@@ -246,8 +271,8 @@ export async function commitDraftV3(
   draftId: string,
   commitHash: string,
   leafId?: string
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .update(draftsV3)
     .set({
       status: 'committed',
@@ -255,7 +280,9 @@ export async function commitDraftV3(
       committedLeafId: leafId ?? null,
       updatedAt: new Date(),
     })
-    .where(eq(draftsV3.id, draftId));
+    .where(and(eq(draftsV3.id, draftId), eq(draftsV3.status, 'editing')))
+    .returning();
+  return result.length > 0;
 }
 
 /**
@@ -379,6 +406,13 @@ export async function insertAutoDraftV3(
  * Find auto-drafts for a conversation.
  *
  * Uses the `goal` field pattern `auto:<conversation_id>` for lookup.
+ *
+ * Fix 18 (index note): The equality filter `eq(draftsV3.goal, 'auto:<id>')` performs a
+ * full scan of drafts_v3 filtered to the project. For workloads with many
+ * drafts per project, consider adding a partial index on (project_id, goal)
+ * WHERE status = 'auto'. Example migration:
+ *   CREATE INDEX IF NOT EXISTS idx_drafts_v3_auto_goal
+ *   ON drafts_v3 (project_id, goal) WHERE status = 'auto';
  */
 export async function findAutoDraftsByConversation(
   db: AnyDB,

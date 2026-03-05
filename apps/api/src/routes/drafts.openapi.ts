@@ -31,6 +31,7 @@ import {
   createCommitV4,
   createLeaf,
   deleteDraftV3,
+  findConversationById,
   findDraftV3ById,
   forkDraftV3,
   insertAutoDraftV3,
@@ -288,8 +289,8 @@ const commitDraftRoute = createRoute({
     },
   },
   responses: {
-    200: {
-      description: 'Draft committed',
+    201: {
+      description: 'Draft committed and new commit created',
       content: { 'application/json': { schema: CommitDraftResponse } },
     },
     400: {
@@ -524,6 +525,10 @@ draftsRoutes.openapi(deleteDraftRoute, async (c) => {
     }
 
     await deleteDraftV3(db, id);
+
+    // Clean up in-memory preview cache and debounce state for this draft
+    previewCache.delete(id);
+    previewDebounce.delete(id);
 
     return c.json({ success: true as const, data: { deleted: true as const, id } }, 200);
   } catch (err) {
@@ -895,7 +900,7 @@ draftsRoutes.openapi(commitDraftRoute, async (c) => {
           draft_status: 'committed' as const,
         },
       },
-      200
+      201
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -1144,6 +1149,23 @@ draftsRoutes.openapi(createAutoDraftRoute, async (c) => {
   try {
     const db = await getDB();
 
+    // 0. Validate that conversation_id belongs to the given project_id
+    const conversation = await findConversationById(db, body.conversation_id);
+    if (!conversation) {
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${body.conversation_id}`
+      );
+    }
+    if (conversation.projectId !== body.project_id) {
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        `Conversation ${body.conversation_id} does not belong to project ${body.project_id}`
+      );
+    }
+
     // 1. Extract sentences from conversation
     const result = await extractSentencesFromConversation(body.conversation_id, body.options);
 
@@ -1336,9 +1358,11 @@ draftsRoutes.openapi(reviewActionRoute, async (c) => {
         draft_id: draftId,
         sp_id: sp_id,
         action: feedbackAction,
+        original_text: sp.text,
         inference_type: sp.inference_type,
         confidence: sp.confidence,
         zone: sp.zone,
+        low_coverage: sp.low_coverage,
         edited_text: edited_text,
       });
     } catch {

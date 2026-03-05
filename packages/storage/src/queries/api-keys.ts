@@ -91,6 +91,24 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
 }
 
 /**
+ * Find an active (non-revoked) API key by name.
+ *
+ * Useful for checking if a session key already exists for a user
+ * before creating a new one.
+ *
+ * @returns The matching ApiKey, or null if no active key with that name exists
+ */
+export async function findActiveApiKeyByName(db: AnyDB, name: string): Promise<ApiKey | null> {
+  const [row] = await db
+    .select()
+    .from(apiKeys)
+    .where(and(eq(apiKeys.name, name), isNull(apiKeys.revokedAt)))
+    .limit(1);
+
+  return row ? rowToApiKey(row) : null;
+}
+
+/**
  * Find an active (non-revoked) API key by its raw value.
  *
  * Hashes the provided value and looks up by key_hash.

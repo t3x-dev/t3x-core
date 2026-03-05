@@ -8,21 +8,24 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CommitAuthorV4, SentenceV4 } from '@t3x/core';
+import type { CommitAuthorV4, CommitV4, SentenceV4 } from '@t3x/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
+  backfillMerkleRoots,
   computeCommitV4Hash,
   createCommitV4,
   deleteCommitV4,
   findCommitsV4ByBranch,
   findCommitsV4ByProject,
   findCommitV4ByHash,
+  findCommitV4History,
   getCommitsV4ByHashes,
   getCommitV4Parents,
   ParentNotFoundErrorV4,
   updateCommitV4Position,
+  verifyMerkleRoots,
 } from '../queries/commits-v4';
 import { insertProject } from '../queries/projects';
 import { commitsV4 } from '../schema-v4';
@@ -758,6 +761,277 @@ describe('Commits V4 Storage', () => {
     });
   });
 
+  describe('findCommitV4History', () => {
+    it('returns linear chain in traversal order', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Linear Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_hr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const a = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_ha', text: 'A' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const b = await createCommitV4(db, {
+        parents: [a.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_hb', text: 'B' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, b.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(3);
+
+      const hashes = result.commits.map((c) => c.hash);
+      expect(hashes).toContain(root.hash);
+      expect(hashes).toContain(a.hash);
+      expect(hashes).toContain(b.hash);
+    });
+
+    it('traverses merge diamond (all 4 commits)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Diamond Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_dr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const branchA = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_da', text: 'Branch A' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const branchB = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_db', text: 'Branch B' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const merge = await createCommitV4(db, {
+        parents: [branchA.hash, branchB.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_dm', text: 'Merge' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, merge.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(4);
+
+      const hashes = result.commits.map((c) => c.hash);
+      expect(hashes).toContain(root.hash);
+      expect(hashes).toContain(branchA.hash);
+      expect(hashes).toContain(branchB.hash);
+      expect(hashes).toContain(merge.hash);
+    });
+
+    it('respects limit and sets truncated=true', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Limit Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lr', text: 'Root' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const mid = await createCommitV4(db, {
+        parents: [root.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lm', text: 'Mid' }],
+        project_id: proj.projectId,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+
+      const tip = await createCommitV4(db, {
+        parents: [mid.hash],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_lt', text: 'Tip' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, tip.hash, 2);
+
+      expect(result.truncated).toBe(true);
+      expect(result.commits).toHaveLength(2);
+    });
+
+    it('returns empty for non-existent hash', async () => {
+      const result = await findCommitV4History(db, 'sha256:does-not-exist');
+
+      expect(result.commits).toHaveLength(0);
+      expect(result.truncated).toBe(false);
+    });
+
+    it('returns single root commit', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'History Root Project' }));
+
+      const root = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'H' },
+        sentences: [{ id: 's_rr', text: 'Only root' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, root.hash);
+
+      expect(result.truncated).toBe(false);
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].hash).toBe(root.hash);
+    });
+
+    it('maps all fields correctly from raw SQL', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Field Mapping Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Mapper', id: 'u_map' },
+        sentences: [
+          { id: 's_fm1', text: 'Field mapping test sentence' },
+          { id: 's_fm2', text: 'Second sentence' },
+        ],
+        project_id: proj.projectId,
+        message: 'test commit message',
+        branch: 'main',
+        position_x: 42,
+        position_y: 84,
+      });
+
+      const result = await findCommitV4History(db, commit.hash);
+      expect(result.commits).toHaveLength(1);
+
+      const c = result.commits[0];
+      expect(c.hash).toBe(commit.hash);
+      expect(c.schema).toBe('t3x/commit/v4');
+      expect(c.parents).toEqual([]);
+      expect(c.author).toEqual({ type: 'human', name: 'Mapper', id: 'u_map' });
+      expect(c.committed_at).toBeTruthy();
+      expect(c.content.sentences).toHaveLength(2);
+      expect(c.content.sentences[0].id).toBe('s_fm1');
+      expect(c.project_id).toBe(proj.projectId);
+      expect(c.message).toBe('test commit message');
+      expect(c.branch).toBe('main');
+      expect(c.position_x).toBe(42);
+      expect(c.position_y).toBe(84);
+      expect(c.created_at).toBeTruthy();
+    });
+
+    it('handles dangling parent references gracefully', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Dangling Parent Project' }));
+
+      // Create a commit that references a non-existent parent (bypass strict mode)
+      const commit = await createCommitV4(
+        db,
+        {
+          parents: ['sha256:nonexistent-parent-hash'],
+          author: { type: 'human' as const, name: 'H' },
+          sentences: [{ id: 's_dp', text: 'Dangling parent test' }],
+          project_id: proj.projectId,
+        },
+        { strictParents: false }
+      );
+
+      const result = await findCommitV4History(db, commit.hash);
+
+      // Should return only the commit itself (dangling parent is silently skipped)
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].hash).toBe(commit.hash);
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  describe('merkle_root', () => {
+    it('computes and stores merkle_root at creation time', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_mk1', text: 'First sentence' },
+          { id: 's_mk2', text: 'Second sentence' },
+        ],
+        project_id: testProjectId,
+      });
+
+      expect(commit.merkle_root).toBeTruthy();
+      expect(commit.merkle_root).toMatch(/^sha256:/);
+
+      // Verify determinism: same sentences should produce same root
+      const { buildMerkleTree } = await import('@t3x/core');
+      const tree = buildMerkleTree([
+        { id: 's_mk1', text: 'First sentence' },
+        { id: 's_mk2', text: 'Second sentence' },
+      ]);
+      expect(commit.merkle_root).toBe(tree.root);
+    });
+
+    it('stores null merkle_root for empty sentences', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [],
+        project_id: testProjectId,
+      });
+
+      expect(commit.merkle_root).toBeUndefined();
+    });
+
+    it('returns merkle_root via findCommitV4ByHash', async () => {
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_mkfind', text: 'Merkle find test' }],
+        project_id: testProjectId,
+      });
+
+      const found = await findCommitV4ByHash(db, commit.hash);
+      expect(found).toBeDefined();
+      expect(found!.merkle_root).toBe(commit.merkle_root);
+    });
+
+    it('returns merkle_root via findCommitV4History', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Merkle History Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_mkhist', text: 'Merkle history test' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitV4History(db, commit.hash);
+      expect(result.commits).toHaveLength(1);
+      expect(result.commits[0].merkle_root).toBe(commit.merkle_root);
+    });
+  });
+
   describe('output format', () => {
     it('uses snake_case for all fields (matches V4 type contract)', async () => {
       const commit = await createCommitV4(db, {
@@ -780,6 +1054,385 @@ describe('Commits V4 Storage', () => {
       expect(commit).not.toHaveProperty('projectId');
       expect(commit).not.toHaveProperty('positionX');
       expect(commit).not.toHaveProperty('positionY');
+    });
+  });
+
+  describe('verifyMerkleRoots', () => {
+    it('returns valid for untampered commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Verify Merkle Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_vm1', text: 'Sentence one' },
+          { id: 's_vm2', text: 'Sentence two' },
+        ],
+        project_id: proj.projectId,
+      });
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_vm3', text: 'Sentence three' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(true);
+      expect(result.checked).toBe(2);
+      expect(result.mismatches).toEqual([]);
+    });
+
+    it('detects tampered merkle_root', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Tampered Merkle Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_tm1', text: 'Original sentence' }],
+        project_id: proj.projectId,
+      });
+
+      // Tamper with the stored merkle_root
+      await db
+        .update(commitsV4)
+        .set({ merkleRoot: 'sha256:tampered_root_value' })
+        .where(eq(commitsV4.hash, commit.hash));
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(false);
+      expect(result.mismatches).toContain(commit.hash);
+    });
+
+    it('returns valid for empty project', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Empty Verify Merkle Project' })
+      );
+
+      const result = await verifyMerkleRoots(db, proj.projectId);
+
+      expect(result.valid).toBe(true);
+      expect(result.checked).toBe(0);
+      expect(result.mismatches).toEqual([]);
+    });
+
+    it('respects limit parameter', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Limit Verify Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Test' },
+          sentences: [{ id: `s_lv${i}`, text: `Limit verify ${i}` }],
+          project_id: proj.projectId,
+        });
+      }
+
+      const result = await verifyMerkleRoots(db, proj.projectId, 3);
+
+      expect(result.checked).toBe(3);
+    });
+  });
+
+  describe('backfillMerkleRoots', () => {
+    it('fills in missing merkle roots', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Backfill Project' }));
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [
+          { id: 's_bf1', text: 'Backfill sentence one' },
+          { id: 's_bf2', text: 'Backfill sentence two' },
+        ],
+        project_id: proj.projectId,
+      });
+
+      // Remove the stored merkle_root to simulate a pre-existing commit
+      await db.update(commitsV4).set({ merkleRoot: null }).where(eq(commitsV4.hash, commit.hash));
+
+      // Verify it's null
+      const before = await findCommitV4ByHash(db, commit.hash);
+      expect(before!.merkle_root).toBeUndefined();
+
+      // Backfill
+      const result = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(result.updated).toBe(1);
+      expect(result.remaining).toBe(false);
+
+      // Verify it's now set correctly
+      const after = await findCommitV4ByHash(db, commit.hash);
+      expect(after!.merkle_root).toBeTruthy();
+      expect(after!.merkle_root).toMatch(/^sha256:/);
+    });
+
+    it('returns 0 when all commits already have merkle roots', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'No Backfill Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [{ id: 's_nbf', text: 'Already has root' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(result.updated).toBe(0);
+      expect(result.remaining).toBe(false);
+    });
+
+    it('skips empty-sentence commits', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Backfill Empty Sentences Project' })
+      );
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Test' },
+        sentences: [],
+        project_id: proj.projectId,
+      });
+
+      // merkle_root is already null for empty sentences
+      const result = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(result.updated).toBe(0);
+      expect(result.remaining).toBe(false);
+    });
+
+    it('backfills multiple commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Multi Backfill Project' }));
+
+      for (let i = 0; i < 3; i++) {
+        const c = await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Test' },
+          sentences: [{ id: `s_mbf${i}`, text: `Multi backfill ${i}` }],
+          project_id: proj.projectId,
+        });
+        // Clear merkle_root
+        await db.update(commitsV4).set({ merkleRoot: null }).where(eq(commitsV4.hash, c.hash));
+      }
+
+      const result = await backfillMerkleRoots(db, proj.projectId);
+
+      expect(result.updated).toBe(3);
+      expect(result.remaining).toBe(false);
+    });
+  });
+
+  describe('cursor pagination — findCommitsV4ByProject', () => {
+    it('returns CursorPage for first page with cursor=""', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor First Page Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Cursor Author' },
+          sentences: [{ id: `s_cfp${i}`, text: `Cursor first page ${i}` }],
+          project_id: proj.projectId,
+          message: `Commit ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+    });
+
+    it('follows cursor through all pages', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Follow Project' }));
+
+      for (let i = 0; i < 5; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'Follow Author' },
+          sentences: [{ id: `s_cfl${i}`, text: `Follow ${i}` }],
+          project_id: proj.projectId,
+          message: `Follow ${i}`,
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Page 1
+      const page1 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      // Page 2
+      const page2 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: page1.next_cursor!,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(2);
+      expect(page2.has_more).toBe(true);
+
+      // Page 3 (last page, 1 remaining)
+      const page3 = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: page2.next_cursor!,
+        limit: 2,
+      });
+      expect(page3.items).toHaveLength(1);
+      expect(page3.has_more).toBe(false);
+      expect(page3.next_cursor).toBeNull();
+
+      // All items are unique and in descending order
+      const allItems = [...page1.items, ...page2.items, ...page3.items];
+      expect(allItems).toHaveLength(5);
+      const hashes = new Set(allItems.map((c) => c.hash));
+      expect(hashes.size).toBe(5);
+    });
+
+    it('returns empty page for project with no commits', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Empty Project' }));
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 10,
+      });
+
+      expect(page.items).toHaveLength(0);
+      expect(page.has_more).toBe(false);
+      expect(page.next_cursor).toBeNull();
+    });
+
+    it('still returns plain array without cursor (backward compat)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Compat Project' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'Compat Author' },
+        sentences: [{ id: 's_ccompat', text: 'Compat' }],
+        project_id: proj.projectId,
+      });
+
+      const result = await findCommitsV4ByProject(db, proj.projectId);
+
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as CommitV4[]).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('respects branch filter in cursor mode', async () => {
+      const proj = await insertProject(
+        db,
+        testData.project({ name: 'Cursor Branch Filter Project' })
+      );
+
+      for (let i = 0; i < 3; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'BF Author' },
+          sentences: [{ id: `s_cbfm${i}`, text: `Main ${i}` }],
+          project_id: proj.projectId,
+          branch: 'main',
+        });
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'BF Author' },
+          sentences: [{ id: `s_cbff${i}`, text: `Feature ${i}` }],
+          project_id: proj.projectId,
+          branch: 'feature',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByProject(db, proj.projectId, {
+        cursor: '',
+        limit: 10,
+        branch: 'main',
+      });
+
+      expect(page.items).toHaveLength(3);
+      expect(page.items.every((c) => c.branch === 'main')).toBe(true);
+    });
+  });
+
+  describe('cursor pagination — findCommitsV4ByBranch', () => {
+    it('returns CursorPage for first page with cursor=""', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch First Page' }));
+
+      for (let i = 0; i < 4; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'CB Author' },
+          sentences: [{ id: `s_cbr${i}`, text: `Branch cursor ${i}` }],
+          project_id: proj.projectId,
+          branch: 'main',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page = await findCommitsV4ByBranch(db, proj.projectId, 'main', {
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+    });
+
+    it('follows cursor through all pages', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch Follow' }));
+
+      for (let i = 0; i < 3; i++) {
+        await createCommitV4(db, {
+          parents: [],
+          author: { type: 'human' as const, name: 'CBF Author' },
+          sentences: [{ id: `s_cbf${i}`, text: `Branch follow ${i}` }],
+          project_id: proj.projectId,
+          branch: 'dev',
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      const page1 = await findCommitsV4ByBranch(db, proj.projectId, 'dev', {
+        cursor: '',
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      const page2 = await findCommitsV4ByBranch(db, proj.projectId, 'dev', {
+        cursor: page1.next_cursor!,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(1);
+      expect(page2.has_more).toBe(false);
+      expect(page2.next_cursor).toBeNull();
+    });
+
+    it('still returns plain array without cursor (backward compat)', async () => {
+      const proj = await insertProject(db, testData.project({ name: 'Cursor Branch Compat' }));
+
+      await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human' as const, name: 'CBC Author' },
+        sentences: [{ id: 's_cbcompat', text: 'Branch compat' }],
+        project_id: proj.projectId,
+        branch: 'main',
+      });
+
+      const result = await findCommitsV4ByBranch(db, proj.projectId, 'main');
+
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as CommitV4[]).length).toBeGreaterThanOrEqual(1);
     });
   });
 });

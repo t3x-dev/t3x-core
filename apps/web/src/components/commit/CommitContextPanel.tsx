@@ -11,6 +11,7 @@
 
 import { ChevronDown, Eye, GitCommit, MessageSquare, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import type { CommitV4 } from '@/lib/api';
@@ -59,9 +60,16 @@ function CollapsibleSection({
   const [height, setHeight] = useState<number | 'auto'>('auto');
 
   useEffect(() => {
-    if (contentRef.current) {
-      setHeight(open ? contentRef.current.scrollHeight : 0);
+    if (!open || !contentRef.current) {
+      setHeight(0);
+      return;
     }
+    setHeight(contentRef.current.scrollHeight);
+    const observer = new ResizeObserver(() => {
+      if (contentRef.current) setHeight(contentRef.current.scrollHeight);
+    });
+    observer.observe(contentRef.current);
+    return () => observer.disconnect();
   }, [open]);
 
   return (
@@ -108,6 +116,7 @@ export function CommitContextPanel({
   projectId,
   panelRef,
 }: CommitContextPanelProps) {
+  const router = useRouter();
   const sentence = useMemo(
     () => commit.content.sentences.find((s) => s.id === activeSentenceId),
     [commit, activeSentenceId]
@@ -180,7 +189,7 @@ export function CommitContextPanel({
                 showHeader
                 showJumpLink
                 onJumpClick={(convId) => {
-                  window.location.href = `/project/${projectId}/conversation/${convId}`;
+                  router.push(`/project/${projectId}/conversation/${convId}`);
                 }}
               />
             ) : (

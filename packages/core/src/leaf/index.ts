@@ -21,34 +21,6 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Corrective Prompt Exports (Upgrade #3: Intelligent Feedback Retry)
-// ═══════════════════════════════════════════════════════════════════════════
-export type { CorrectivePromptOptions } from './corrective-prompt';
-export { buildCorrectivePrompt } from './corrective-prompt';
-// ═══════════════════════════════════════════════════════════════════════════
-// Lesson Collector (Upgrade #4: Feedback Loop)
-// ═══════════════════════════════════════════════════════════════════════════
-export { collectLessons } from './lesson-collector';
-// ═══════════════════════════════════════════════════════════════════════════
-// Multi-Round Generation (#12)
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  multiRoundGenerate,
-  type MultiRoundOptions,
-  type MultiRoundResult,
-  type RoundConfig,
-  type RoundResult,
-} from './multi-round-generate';
-// ═══════════════════════════════════════════════════════════════════════════
-// Constraint Suggestion Exports
-// ═══════════════════════════════════════════════════════════════════════════
-export type {
-  ConstraintSuggestionResult,
-  SuggestedConstraint,
-  SuggestConstraintsOptions,
-} from './constraintSuggester';
-export { suggestConstraints, suggestionsToConstraints } from './constraintSuggester';
-// ═══════════════════════════════════════════════════════════════════════════
 // Generation Exports (GEN-* adds here)
 // ═══════════════════════════════════════════════════════════════════════════
 export type { BuildPromptWithTemplateOptions } from './build-prompt';
@@ -60,11 +32,47 @@ export {
   formatConstraints,
   getTypeInstructions,
 } from './build-prompt';
+// ═══════════════════════════════════════════════════════════════════════════
+// Constraint Suggestion Exports
+// ═══════════════════════════════════════════════════════════════════════════
+export type {
+  ConstraintSuggestionResult,
+  SuggestConstraintsOptions,
+  SuggestedConstraint,
+} from './constraintSuggester';
+export { suggestConstraints, suggestionsToConstraints } from './constraintSuggester';
+// ═══════════════════════════════════════════════════════════════════════════
+// Corrective Prompt Exports (Upgrade #3: Intelligent Feedback Retry)
+// ═══════════════════════════════════════════════════════════════════════════
+export type { CorrectivePromptOptions } from './corrective-prompt';
+export { buildCorrectivePrompt } from './corrective-prompt';
 export {
   GenerationError,
   generateLeafOutput,
   isGenerationConfigured,
 } from './generate';
+// ═══════════════════════════════════════════════════════════════════════════
+// Lesson Collector (Upgrade #4: Feedback Loop)
+// ═══════════════════════════════════════════════════════════════════════════
+export { collectLessons } from './lesson-collector';
+// ═══════════════════════════════════════════════════════════════════════════
+// Multi-Round Generation (#12)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  buildRound1Prompt,
+  buildRound2Prompt,
+  buildRound3Prompt,
+  type GenerationMode,
+  type ModeGenerateOptions,
+  type MultiRoundOptions,
+  type MultiRoundResult,
+  modeGenerate,
+  multiRoundGenerate,
+  type RoundConfig,
+  type RoundResult,
+  type StylePreferences,
+  validateConstraintsSimple,
+} from './multi-round-generate';
 export type { RenderTemplateOptions } from './template';
 export {
   buildTemplateContext,

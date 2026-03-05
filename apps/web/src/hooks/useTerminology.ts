@@ -46,6 +46,7 @@ const TERMINOLOGY: Record<string, TermEntry> = {
 
   // Merge sentence categories
   identical_sentences: { default: '未变化', developer: 'Identical' },
+  equivalent_sentences: { default: '等价', developer: 'Equivalent' },
   modified_sentences: { default: '已修改', developer: 'Modified' },
   added_sentences: { default: '新增', developer: 'Added' },
   removed_sentences: { default: '已移除', developer: 'Removed' },

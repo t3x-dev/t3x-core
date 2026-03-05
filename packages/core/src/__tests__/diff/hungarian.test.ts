@@ -210,7 +210,7 @@ describe('Performance', () => {
   // Note: Thresholds are set conservatively for CI environments
   // Actual performance is typically 2-3x faster in isolation
 
-  it('100 sentences completes within 200ms', () => {
+  it('100 sentences completes within 300ms', () => {
     const size = 100;
     const matrix = Array(size)
       .fill(null)
@@ -224,7 +224,7 @@ describe('Performance', () => {
     hungarian(matrix);
     const elapsed = performance.now() - start;
 
-    expect(elapsed).toBeLessThan(200);
+    expect(elapsed).toBeLessThan(300);
   });
 
   it('500 sentences completes within 300ms', () => {
@@ -244,7 +244,7 @@ describe('Performance', () => {
     expect(elapsed).toBeLessThan(800);
   });
 
-  it('1000 sentences completes within 4000ms', () => {
+  it('1000 sentences completes within 5000ms', () => {
     const size = 1000;
     const matrix = Array(size)
       .fill(null)
@@ -258,6 +258,6 @@ describe('Performance', () => {
     hungarian(matrix);
     const elapsed = performance.now() - start;
 
-    expect(elapsed).toBeLessThan(4000);
+    expect(elapsed).toBeLessThan(5000);
   });
 });

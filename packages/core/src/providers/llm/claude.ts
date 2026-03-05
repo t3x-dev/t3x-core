@@ -23,18 +23,15 @@ function getProxyUrl(): string | undefined {
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
-  console.log('[Claude] fetchWithProxy - proxyUrl:', proxyUrl);
   if (proxyUrl) {
     // Dynamic import to avoid build-time issues with undici
     const { ProxyAgent, fetch: undiciFetch } = await import('undici');
-    console.log('[Claude] Using undici with proxy:', proxyUrl);
     const response = await undiciFetch(url, {
       ...options,
       dispatcher: new ProxyAgent(proxyUrl),
     } as Parameters<typeof undiciFetch>[1]);
     return response as unknown as Response;
   }
-  console.log('[Claude] Using native fetch (no proxy)');
   return fetch(url, options);
 }
 
@@ -72,6 +69,9 @@ export class ClaudeProvider implements LLMProvider {
 
     const url = `${this.baseUrl}/v1/messages`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetchWithProxy(url, {
         method: 'POST',
@@ -92,8 +92,10 @@ export class ClaudeProvider implements LLMProvider {
           ],
           ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const responseText = await response.text();
 
       if (!response.ok) {
@@ -116,8 +118,12 @@ export class ClaudeProvider implements LLMProvider {
 
       return textContent.text;
     } catch (error) {
+      clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) {
         throw error;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
       }
       throw new LLMProviderError(
         this.id,

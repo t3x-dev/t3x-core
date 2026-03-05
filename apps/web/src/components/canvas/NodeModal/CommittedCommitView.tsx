@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -83,6 +83,10 @@ export function CommittedCommitView({
 
   // Refs
   const commitContainerRef = useRef<HTMLDivElement>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  // Clean up any pending drag handlers on unmount
+  useEffect(() => () => dragCleanupRef.current?.(), []);
 
   // ========== Computed Values ==========
 
@@ -133,10 +137,13 @@ export function CommittedCommitView({
       setDiffError(null);
 
       const pid = routeProjectId || projectId;
-      router.push(
-        `/project/${pid}/diff?base=${encodeURIComponent(data.commitHash)}&target=${encodeURIComponent(targetHash)}`
-      );
-      // Loading will clear when the page navigates away
+      try {
+        router.push(
+          `/project/${pid}/diff?base=${encodeURIComponent(data.commitHash)}&target=${encodeURIComponent(targetHash)}`
+        );
+      } finally {
+        setIsDiffLoading(false);
+      }
     },
     [data?.commitHash, routeProjectId, projectId, router]
   );
@@ -159,10 +166,17 @@ export function CommittedCommitView({
       document.body.style.userSelect = '';
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      dragCleanupRef.current = null;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    dragCleanupRef.current = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
   };
 
   // Commit right divider handler
@@ -183,10 +197,17 @@ export function CommittedCommitView({
       document.body.style.userSelect = '';
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      dragCleanupRef.current = null;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    dragCleanupRef.current = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
   };
 
   // ========== Render ==========
@@ -196,6 +217,7 @@ export function CommittedCommitView({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="node-modal-title"
     >
       <div
         className={cn(
@@ -207,7 +229,10 @@ export function CommittedCommitView({
         {/* Top Bar */}
         <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2
+              id="node-modal-title"
+              className="text-[0.95rem] font-semibold text-[var(--text-primary)]"
+            >
               {t('commit')}: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>

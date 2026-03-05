@@ -10,6 +10,7 @@ import { LeafOutputDisplay } from '@/components/leaf/LeafOutputDisplay';
 import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
 import { LeafWorkspaceHeader } from '@/components/leaf/LeafWorkspaceHeader';
 import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
+import { LearnFromEditsPanel } from '@/components/leaf/LearnFromEditsPanel';
 import { SentenceSourcePanel } from '@/components/leaf/SentenceSourcePanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
@@ -155,12 +156,7 @@ export default function LeafDetailPage() {
         <ErrorMessage
           error={error}
           onRetry={() => {
-            setError(null);
-            setLoading(true);
-            getLeaf(leafId)
-              .then(setLeaf)
-              .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
-              .finally(() => setLoading(false));
+            window.location.reload();
           }}
         />
       </div>
@@ -404,6 +400,15 @@ export default function LeafDetailPage() {
               onSuggestOpen={() => setSuggestOpen(true)}
             />
           )}
+
+          {/* Learn constraints from user output edits (Item 17) */}
+          <LearnFromEditsPanel
+            leafId={leafId}
+            hasOutput={!!leaf.output}
+            onAddConstraint={(constraint) => {
+              handleAddConstraint(constraint.type, constraint.value, constraint.match_mode);
+            }}
+          />
         </div>
 
         {/* Right: Inspector Rail */}

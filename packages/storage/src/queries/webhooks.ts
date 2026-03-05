@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type WebhookRecord, webhooks } from '../schema-v4';
 
@@ -56,6 +56,10 @@ function generateWebhookId(): string {
   return `${ID_PREFIX}${randomUUID().replace(/-/g, '').slice(0, ID_RANDOM_LENGTH)}`;
 }
 
+/**
+ * Fix 13: active is now stored as INTEGER (1/0) to match the project-wide
+ * integer-boolean convention. rowToWebhook converts 1 → true, 0 → false.
+ */
 function rowToWebhook(row: WebhookRecord): WebhookOutput {
   return {
     webhook_id: row.webhookId,
@@ -63,7 +67,7 @@ function rowToWebhook(row: WebhookRecord): WebhookOutput {
     url: row.url,
     events: row.events as string[],
     secret: row.secret ?? null,
-    active: row.active === 'true',
+    active: row.active === 1,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -88,7 +92,7 @@ export async function createWebhook(db: AnyDB, input: CreateWebhookInput): Promi
       url: input.url,
       events: input.events,
       secret: input.secret ?? null,
-      active: 'true',
+      active: 1,
       createdAt: now,
       updatedAt: now,
     })
@@ -144,7 +148,8 @@ export async function updateWebhook(
   if (input.url !== undefined) updates.url = input.url;
   if (input.events !== undefined) updates.events = input.events;
   if (input.secret !== undefined) updates.secret = input.secret;
-  if (input.active !== undefined) updates.active = input.active ? 'true' : 'false';
+  // Fix 13: active stored as integer 1/0
+  if (input.active !== undefined) updates.active = input.active ? 1 : 0;
 
   const [row] = await db
     .update(webhooks)
@@ -165,20 +170,33 @@ export async function deleteWebhook(db: AnyDB, id: string): Promise<boolean> {
 
 /**
  * Find active webhooks matching a specific event, optionally filtered by project.
+ *
+ * Fix 12: Added limit(1000) to prevent unbounded scans when there are many
+ * webhooks. Also pushes an OR filter (project_id IS NULL OR project_id = ?)
+ * into the WHERE clause as an optimisation hint when a projectId is provided.
+ *
+ * Fix 13: Filters on active = 1 (integer) instead of active = 'true' (text).
  */
 export async function findWebhooksByEvent(
   db: AnyDB,
   event: string,
   projectId?: string
 ): Promise<WebhookOutput[]> {
-  // Get all active webhooks first, then filter by event in JS
-  // (JSONB containment is simpler this way for PGLite compatibility)
-  const conditions = [eq(webhooks.active, 'true')];
+  // Fix 13: active stored as integer 1
+  const conditions = [eq(webhooks.active, 1)];
+
+  // Narrow to project-scoped + global (null project_id) webhooks when a
+  // projectId is provided. This is an optimisation hint — the JS filter below
+  // still enforces exact project matching for correctness.
+  if (projectId) {
+    conditions.push(or(isNull(webhooks.projectId), eq(webhooks.projectId, projectId))!);
+  }
 
   const rows = await db
     .select()
     .from(webhooks)
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .limit(1000); // Fix 12: cap result set
 
   return rows
     .filter((row) => {

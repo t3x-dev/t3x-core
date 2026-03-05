@@ -30,6 +30,8 @@ export interface DiffableSentence {
     start_char: number;
     end_char: number;
   };
+  /** Optional: Original position index in source array (used for order preservation in merge) */
+  position?: number;
 }
 
 /**
@@ -204,7 +206,7 @@ export interface SentencePair {
 export interface CommitDiff {
   /** Sentences with identical text in both commits (两边完全相同的句子) */
   identical: DiffableSentence[];
-  /** Sentences that are similar (Jaccard >= 0.3) with word diffs (相似句子对) */
+  /** Sentences that are similar (Jaccard >= 0.4) with word diffs (相似句子对) */
   similar: SentencePair[];
   /** Sentences only in source commit (removed/old) (仅在源 commit 中) */
   onlyInSource: DiffableSentence[];

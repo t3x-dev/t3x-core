@@ -125,7 +125,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
       body: JSON.stringify({ message: 'Test LLM commit' }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(true);
     expect(data.data.commit).toBeDefined();
@@ -166,7 +166,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
       body: JSON.stringify({ message: 'Skip undone' }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(true);
 

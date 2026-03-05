@@ -1,7 +1,7 @@
 'use client';
 
 import type { Node } from '@xyflow/react';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import {
   buildBackgroundMenu,
   buildLeafNodeMenu,
@@ -10,6 +10,15 @@ import {
 } from '@/components/canvas/NodeContextMenu';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+
+/**
+ * Module-level ref for the leaf context menu handler.
+ * Storing a React callback in Zustand state causes setState on every re-render.
+ * Consumers (CanvasNodes) read from this ref instead of from the Zustand store.
+ */
+export const leafContextMenuHandlerRef: {
+  current: ((event: React.MouseEvent, leafId: string, nodeId: string) => void) | null;
+} = { current: null };
 
 export interface ContextMenuState {
   x: number;
@@ -151,15 +160,12 @@ export function useContextMenu({
     [getNodes, projectId, notify]
   );
 
-  // Store leaf context menu handler ref for CanvasNodes to access
-  const leafContextMenuRef = useRef(handleLeafContextMenu);
-  leafContextMenuRef.current = handleLeafContextMenu;
-
-  // Expose leaf context menu handler via store for CanvasNodes
+  // Keep the module-level ref up to date so CanvasNodes can call the handler
+  // without triggering Zustand setState on every render of the parent component
   useEffect(() => {
-    useCanvasStore.setState({ leafContextMenuHandler: handleLeafContextMenu });
+    leafContextMenuHandlerRef.current = handleLeafContextMenu;
     return () => {
-      useCanvasStore.setState({ leafContextMenuHandler: undefined });
+      leafContextMenuHandlerRef.current = null;
     };
   }, [handleLeafContextMenu]);
 

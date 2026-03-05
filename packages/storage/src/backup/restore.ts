@@ -9,10 +9,21 @@ import type { AnyDB } from '../adapters';
 import { insertConversation, insertProject, insertTurn } from '../queries';
 import type { CfpackData } from './backup';
 
+/**
+ * Fix 10: Represent individual import errors instead of silently swallowing them.
+ */
+export interface RestoreError {
+  type: 'conversation' | 'turn' | 'warning';
+  id: string;
+  error: string;
+}
+
 export interface RestoreResult {
   project_id: string;
   conversations_imported: number;
   turns_imported: number;
+  /** Non-fatal import errors collected during restore. Empty array = no errors. */
+  errors: RestoreError[];
 }
 
 /**
@@ -20,6 +31,9 @@ export interface RestoreResult {
  *
  * Creates a new project and imports conversations and turns.
  * Name conflicts are handled by appending "_imported".
+ *
+ * Fix 10: Import errors are now collected in `result.errors` instead of being
+ * silently swallowed. All items are still attempted (best-effort restore).
  */
 export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<RestoreResult> {
   // Create new project (generates new project ID)
@@ -32,6 +46,7 @@ export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<
   // Import conversations — map old IDs to new ones
   let conversationsImported = 0;
   const convIdMap = new Map<string, string>();
+  const errors: RestoreError[] = [];
 
   for (const conv of cfpack.conversations) {
     try {
@@ -41,8 +56,12 @@ export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<
       });
       convIdMap.set(conv.conversation_id, newConv.conversationId);
       conversationsImported++;
-    } catch (_err) {
-      // Skip on error
+    } catch (err) {
+      errors.push({
+        type: 'conversation',
+        id: conv.conversation_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -58,14 +77,33 @@ export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<
         content: turn.content,
       });
       turnsImported++;
-    } catch (_err) {
-      // Skip on error (hash conflicts, etc.)
+    } catch (err) {
+      errors.push({
+        type: 'turn',
+        id: turn.conversation_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
+  }
+
+  // Warn about skipped V4 data (commits, leaves, pins are exported but not yet restored)
+  const skippedTypes: string[] = [];
+  if (cfpack.commits_v3?.length) skippedTypes.push(`${cfpack.commits_v3.length} commits_v3`);
+  if (cfpack.commits_v4?.length) skippedTypes.push(`${cfpack.commits_v4.length} commits_v4`);
+  if (cfpack.leaves?.length) skippedTypes.push(`${cfpack.leaves.length} leaves`);
+  if (cfpack.pins?.length) skippedTypes.push(`${cfpack.pins.length} pins`);
+  if (skippedTypes.length > 0) {
+    errors.push({
+      type: 'warning',
+      id: newProjectId,
+      error: `Skipped data not yet supported by restore: ${skippedTypes.join(', ')}`,
+    });
   }
 
   return {
     project_id: newProjectId,
     conversations_imported: conversationsImported,
     turns_imported: turnsImported,
+    errors,
   };
 }

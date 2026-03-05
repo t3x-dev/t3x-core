@@ -316,6 +316,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       branch TEXT,
       source_refs JSONB,
       merge_summary JSONB,
+      merkle_root TEXT,
       position_x REAL,
       position_y REAL,
 
@@ -325,6 +326,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
     CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
     CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
+
+    -- Migration: Add merkle_root column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
@@ -383,10 +387,18 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       config JSONB NOT NULL,
       model TEXT NOT NULL,
       generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      created_by TEXT
+      created_by TEXT,
+      attempt_number INTEGER NOT NULL DEFAULT 1,
+      corrective_feedback TEXT,
+      prompt_used TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
     CREATE INDEX IF NOT EXISTS idx_leaf_history_generated_at ON leaf_history(generated_at);
+
+    -- Migration: Add S16 columns to existing leaf_history tables
+    ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS corrective_feedback TEXT;
+    ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS prompt_used TEXT;
 
     -- Migration: Add merge_summary column to existing commits_v4 tables (v4.1)
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
@@ -421,11 +433,17 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       variables JSONB NOT NULL,
       tags JSONB NOT NULL DEFAULT '[]',
       is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+      default_constraints JSONB DEFAULT '[]'::jsonb,
+      semantic_threshold JSONB,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
     CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
+
+    -- Migration: Add new columns to existing templates tables
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS default_constraints JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS semantic_threshold JSONB;
 
     -- Drafts V3 table (Workbench / pre-commit working area)
     CREATE TABLE IF NOT EXISTS drafts_v3 (
@@ -451,6 +469,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
     CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+
+    -- Migration: Add LLM extraction columns to drafts_v3 (incremental extraction pipeline)
+    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
+    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
+    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
@@ -514,12 +537,23 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       url TEXT NOT NULL,
       events JSONB NOT NULL,
       secret TEXT,
-      active TEXT NOT NULL DEFAULT 'true',
+      active INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+
+    -- Migration: Fix webhooks.active column type (TEXT → INTEGER)
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'webhooks' AND column_name = 'active' AND data_type = 'text'
+      ) THEN
+        ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER USING CASE WHEN active = 'true' THEN 1 ELSE 0 END;
+      END IF;
+    END $$;
 
     -- ═══════════════════════════════════════════════════════════════════════════
     -- Auth Migration (Phase 1.2)
@@ -544,6 +578,184 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add user_id to api_keys (nullable — null = legacy key)
     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+    -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
+    CREATE TABLE IF NOT EXISTS leaf_output_edits (
+      id TEXT PRIMARY KEY,
+      leaf_id TEXT NOT NULL REFERENCES leaves(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL,
+      original_output TEXT NOT NULL,
+      modified_output TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_leaf_output_edits_leaf ON leaf_output_edits(leaf_id);
+    CREATE INDEX IF NOT EXISTS idx_leaf_output_edits_project ON leaf_output_edits(project_id);
+
+    -- Notifications (Item 16 — persistent alerts)
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      project_id TEXT,
+      ref_id TEXT,
+      read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
+    -- Extraction Feedback table (anchoring L4)
+    CREATE TABLE IF NOT EXISTS extraction_feedback (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      draft_id TEXT NOT NULL,
+      sp_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      original_text TEXT,
+      inference_type TEXT,
+      confidence REAL,
+      zone TEXT,
+      low_coverage BOOLEAN DEFAULT FALSE,
+      edited_text TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_extraction_feedback_project ON extraction_feedback(project_id);
+    CREATE INDEX IF NOT EXISTS idx_extraction_feedback_draft ON extraction_feedback(draft_id);
+
+    -- Knowledge Conflicts (S15 conflict detection persistence)
+    CREATE TABLE IF NOT EXISTS knowledge_conflicts (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      new_sentence_id TEXT NOT NULL,
+      new_commit_hash TEXT NOT NULL,
+      existing_sentence_id TEXT NOT NULL,
+      existing_commit_hash TEXT NOT NULL,
+      cosine REAL NOT NULL,
+      jaccard REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      resolution TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_knowledge_conflicts_project ON knowledge_conflicts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_conflicts_status ON knowledge_conflicts(status);
+
+    -- Metrics Events (S17 Observable Metrics)
+    CREATE TABLE IF NOT EXISTS metrics_events (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      value REAL NOT NULL,
+      metadata JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_metrics_events_project ON metrics_events(project_id);
+    CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
+
+    -- Sentence Modifications (audit trail)
+    CREATE TABLE IF NOT EXISTS sentence_modifications (
+      id TEXT PRIMARY KEY,
+      draft_id TEXT NOT NULL,
+      sp_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      previous_text TEXT,
+      new_text TEXT,
+      actor TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
+    CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
+
+    -- Recipes table (automation workflows)
+    CREATE TABLE IF NOT EXISTS recipes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      trigger JSONB NOT NULL,
+      steps JSONB NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Share Tokens table (share links for read-only access)
+    CREATE TABLE IF NOT EXISTS share_tokens (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+    -- Sentence Relations (Ring 4)
+    CREATE TABLE IF NOT EXISTS sentence_relations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      commit_hash TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      reasoning TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Knowledge Graph (Cross-conversation entity/topic graph)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS knowledge_nodes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'topic',
+      summary TEXT,
+      member_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_node_members (
+      node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      sentence_id TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      PRIMARY KEY (node_id, sentence_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_edges (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      target_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      weight REAL NOT NULL DEFAULT 0,
+      evidence JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
+
+    -- Migration: Add autopilot_config column to projects (Knowledge Autopilot)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS autopilot_config JSONB;
+
+    -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
+    ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;
 
     -- ═══════════════════════════════════════════════════════════════
     -- Auth Migration Phase 2: Multi-provider (users + accounts split)
@@ -606,11 +818,17 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         text TEXT NOT NULL,
         embedding vector(768) NOT NULL,
         model_id TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        tsv tsvector
       );
       CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
       CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+      CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
     `);
+    // Backfill tsvector for existing rows (idempotent)
+    await sql.unsafe(
+      `UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;`
+    );
   } catch {
     // pgvector not available — sentence similarity search disabled
   }

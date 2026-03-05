@@ -24,6 +24,7 @@ import {
   real,
   text,
   timestamp,
+  primaryKey,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
@@ -199,6 +200,9 @@ export const commitsV4 = pgTable(
         }>
       >(),
 
+    /** Merkle tree root hash of commit sentences */
+    merkleRoot: text('merkle_root'),
+
     /** Merge summary statistics (only present on merge commits) */
     mergeSummary: jsonb('merge_summary').$type<{
       kept_identical: number;
@@ -251,7 +255,15 @@ export const leaves = pgTable(
     /** Unique ID: "leaf_" + nanoid(12) */
     id: text('id').primaryKey(),
 
-    /** The commit this leaf uses for knowledge */
+    /**
+     * The commit this leaf uses for knowledge.
+     *
+     * Fix 14 (no-fk note): No foreign key is declared here intentionally.
+     * Leaves can reference commits from both commits_v4 AND commits_v3 (legacy),
+     * so a single FK to one table would be incorrect. Application-level
+     * validation (in the leaves query layer) is responsible for confirming that
+     * the referenced commit exists before creating or updating a leaf.
+     */
     commitHash: text('commit_hash').notNull(),
 
     /** Output type: 'deploy_agent' | 'tweet' | 'weibo' | etc. */
@@ -490,6 +502,52 @@ export const conversationContexts = pgTable('conversation_contexts', {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// leaf_output_edits: User Edit Tracking (Item 17 — Constraint Reverse Learning)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tracks when a user manually edits a Leaf's output.
+ * Each row stores the before/after text so the reverse-learning
+ * pipeline can discover implicit constraints from edit patterns.
+ */
+export const leafOutputEdits = pgTable(
+  'leaf_output_edits',
+  {
+    /** Unique ID: "ledit_" + uuid-slice */
+    id: text('id').primaryKey(),
+
+    /** The leaf whose output was edited */
+    leafId: text('leaf_id')
+      .notNull()
+      .references(() => leaves.id, { onDelete: 'cascade' }),
+
+    /**
+     * Project for easy querying (denormalized from leafId's leaf row).
+     *
+     * Fix 19 (no-fk note): The FK to projects is intentionally omitted here.
+     * Cascade integrity flows through leafId → leaves.id ON DELETE CASCADE,
+     * which in turn cascades from projects. Adding a redundant FK to projects
+     * would require explicit ordering during deletion and provides no additional
+     * safety beyond what the leafId FK already guarantees.
+     */
+    projectId: text('project_id').notNull(),
+
+    /** The output text before the edit */
+    originalOutput: text('original_output').notNull(),
+
+    /** The output text after the user's edit */
+    modifiedOutput: text('modified_output').notNull(),
+
+    /** When the edit was made */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    leafIdx: index('idx_leaf_output_edits_leaf').on(table.leafId),
+    projectIdx: index('idx_leaf_output_edits_project').on(table.projectId),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Type Exports (for use in queries)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -507,6 +565,9 @@ export type PinInsert = typeof pins.$inferInsert;
 
 export type ConversationContextRecord = typeof conversationContexts.$inferSelect;
 export type ConversationContextInsert = typeof conversationContexts.$inferInsert;
+
+export type LeafOutputEditRecord = typeof leafOutputEdits.$inferSelect;
+export type LeafOutputEditInsert = typeof leafOutputEdits.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // api_keys: Authentication
@@ -638,8 +699,20 @@ export const webhooks = pgTable(
     /** Secret for HMAC-SHA256 signature (null = no signing) */
     secret: text('secret'),
 
-    /** Whether the webhook is active */
-    active: text('active').notNull().default('true'),
+    /**
+     * Whether the webhook is active.
+     *
+     * Fix 13: Stored as INTEGER (1 = active, 0 = inactive) to match the
+     * project-wide integer-boolean convention (see branches.isCurrent).
+     *
+     * NOTE: Databases created before this fix used TEXT DEFAULT 'true'. A
+     * migration is required for existing deployments:
+     *   -- For PostgreSQL:
+     *   ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER
+     *     USING (CASE WHEN active = 'true' THEN 1 ELSE 0 END);
+     *   ALTER TABLE webhooks ALTER COLUMN active SET DEFAULT 1;
+     */
+    active: integer('active').notNull().default(1),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -858,7 +931,7 @@ export const recipes = pgTable('recipes', {
   id: text('id').primaryKey(), // recipe_{nanoid}
   project_id: text('project_id')
     .notNull()
-    .references(() => projects.projectId),
+    .references(() => projects.projectId, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   trigger: jsonb('trigger').notNull().$type<{
@@ -867,7 +940,7 @@ export const recipes = pgTable('recipes', {
   }>(),
   steps: jsonb('steps').notNull().$type<
     Array<{
-      action: 'send_webhook' | 'run_eval' | 'export_report';
+      action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
       config: Record<string, unknown>;
     }>
   >(),
@@ -878,3 +951,170 @@ export const recipes = pgTable('recipes', {
 
 export type RecipeRecord = typeof recipes.$inferSelect;
 export type RecipeInsert = typeof recipes.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// notifications: Persistent notification system (Item 16)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Persistent notifications for proactive alerts.
+ *
+ * Events:
+ * - commit.created: New knowledge committed
+ * - merge.completed: Merge finished
+ * - leaf.generated: Leaf output generated
+ * - leaf.stale: Leaf references outdated commit
+ * - conflict.detected: Conflicting knowledge found
+ * - info: General information
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    /** Unique ID: "notif_" + uuid-slice */
+    id: text('id').primaryKey(),
+
+    /** Notification type */
+    type: text('type').notNull(),
+
+    /** Short title */
+    title: text('title').notNull(),
+
+    /** Detailed message */
+    message: text('message').notNull(),
+
+    /** Associated project (nullable for system-wide notifications) */
+    projectId: text('project_id'),
+
+    /** Reference ID for linking to the source entity (commit hash, leaf id, etc.) */
+    refId: text('ref_id'),
+
+    /** Read status */
+    read: boolean('read').notNull().default(false),
+
+    /** When the notification was created */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_notifications_project').on(table.projectId),
+    readIdx: index('idx_notifications_read').on(table.read),
+    createdAtIdx: index('idx_notifications_created').on(table.createdAt),
+  })
+);
+
+export type NotificationRecord = typeof notifications.$inferSelect;
+export type NotificationInsert = typeof notifications.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sentence Relations (Ring 4 — Inter-sentence relationships)
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const sentenceRelations = pgTable(
+  'sentence_relations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    commitHash: text('commit_hash').notNull(),
+    sourceId: text('source_id').notNull(),
+    targetId: text('target_id').notNull(),
+    type: text('type').notNull(),
+    confidence: real('confidence').notNull(),
+    reasoning: text('reasoning'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    commitIdx: index('idx_sr_commit').on(table.commitHash),
+    projectIdx: index('idx_sr_project').on(table.projectId),
+    pairUniq: uniqueIndex('idx_sr_pair').on(
+      table.commitHash,
+      table.sourceId,
+      table.targetId,
+      table.type
+    ),
+  })
+);
+
+export type SentenceRelationRecord = typeof sentenceRelations.$inferSelect;
+export type SentenceRelationInsert = typeof sentenceRelations.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Knowledge Graph (Cross-conversation entity/topic graph)
+// @see docs/plans/2026-03-05-knowledge-graph-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const knowledgeNodes = pgTable(
+  'knowledge_nodes',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    type: text('type').notNull().default('topic'),
+    summary: text('summary'),
+    memberCount: integer('member_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_kn_project').on(table.projectId),
+  })
+);
+
+export type KnowledgeNodeRecord = typeof knowledgeNodes.$inferSelect;
+export type KnowledgeNodeInsert = typeof knowledgeNodes.$inferInsert;
+
+export const knowledgeNodeMembers = pgTable(
+  'knowledge_node_members',
+  {
+    nodeId: text('node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    sentenceId: text('sentence_id').notNull(),
+    commitHash: text('commit_hash').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.nodeId, table.sentenceId] }),
+    sentenceIdx: index('idx_knm_sentence').on(table.sentenceId),
+  })
+);
+
+export type KnowledgeNodeMemberRecord = typeof knowledgeNodeMembers.$inferSelect;
+export type KnowledgeNodeMemberInsert = typeof knowledgeNodeMembers.$inferInsert;
+
+export const knowledgeEdges = pgTable(
+  'knowledge_edges',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    sourceNodeId: text('source_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    targetNodeId: text('target_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    weight: real('weight').notNull().default(0),
+    evidence: jsonb('evidence').$type<
+      Array<{
+        source_sentence_id: string;
+        target_sentence_id: string;
+        relation_type: string;
+        confidence: number;
+      }>
+    >(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_ke_project').on(table.projectId),
+    sourceIdx: index('idx_ke_source').on(table.sourceNodeId),
+    targetIdx: index('idx_ke_target').on(table.targetNodeId),
+  })
+);
+
+export type KnowledgeEdgeRecord = typeof knowledgeEdges.$inferSelect;
+export type KnowledgeEdgeInsert = typeof knowledgeEdges.$inferInsert;

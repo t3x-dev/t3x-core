@@ -24,9 +24,13 @@ export function CopyButton({ text, size = 14 }: { text: string; size?: number })
     <button
       type="button"
       onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {}); // Silently fail on clipboard permission denial
       }}
       className="inline-flex items-center justify-center rounded p-1 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
       title="Copy"
@@ -268,49 +272,69 @@ export function WordDiffInline({
     );
   }
 
-  // Fallback: naive set-based comparison
+  // Fallback: sequential word diff (index-based, respects position and multiplicity)
   const oldWords = oldText.split(/\s+/);
   const newWords = newText.split(/\s+/);
-  const oldSet = new Set(oldWords);
-  const newSet = new Set(newWords);
+
+  const result: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+  let i = 0;
+  let j = 0;
+  while (i < oldWords.length && j < newWords.length) {
+    if (oldWords[i] === newWords[j]) {
+      result.push({ text: oldWords[i], type: 'same' });
+      i++;
+      j++;
+    } else if (newWords.indexOf(oldWords[i], j) === -1) {
+      result.push({ text: oldWords[i], type: 'removed' });
+      i++;
+    } else {
+      result.push({ text: newWords[j], type: 'added' });
+      j++;
+    }
+  }
+  while (i < oldWords.length) {
+    result.push({ text: oldWords[i++], type: 'removed' });
+  }
+  while (j < newWords.length) {
+    result.push({ text: newWords[j++], type: 'added' });
+  }
+
   return (
     <div className="mt-2 rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-3 font-mono text-[12px] leading-relaxed">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
         Word diff
       </div>
       <div className="flex flex-wrap gap-x-1 gap-y-0.5">
-        {newWords.map((word, i) => {
-          const isNew = !oldSet.has(word);
-          return (
+        {result
+          .filter((w) => w.type !== 'removed')
+          .map((w, i) => (
             <span
               key={`n-${i}`}
               className={
-                isNew
+                w.type === 'added'
                   ? 'rounded bg-[var(--diff-added-bg)] px-0.5 text-[var(--diff-added-text)]'
                   : 'text-[var(--text-secondary)]'
               }
             >
-              {word}
+              {w.text}
             </span>
-          );
-        })}
+          ))}
       </div>
       <div className="mt-1 flex flex-wrap gap-x-1 gap-y-0.5 opacity-60">
-        {oldWords.map((word, i) => {
-          const wasRemoved = !newSet.has(word);
-          return (
+        {result
+          .filter((w) => w.type !== 'added')
+          .map((w, i) => (
             <span
               key={`o-${i}`}
               className={
-                wasRemoved
+                w.type === 'removed'
                   ? 'rounded bg-[var(--diff-removed-bg)] px-0.5 text-[var(--diff-removed-text)] line-through'
                   : 'text-[var(--text-tertiary)]'
               }
             >
-              {word}
+              {w.text}
             </span>
-          );
-        })}
+          ))}
       </div>
     </div>
   );
