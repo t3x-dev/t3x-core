@@ -17,6 +17,7 @@ import { searchByKeyword, searchHybrid, searchSimilarSentences } from '@t3x/stor
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema } from '../schemas/common';
 
 export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -55,11 +56,6 @@ const SearchResponseSchema = z.object({
     mode: z.enum(['hybrid', 'keyword', 'semantic']),
     query_time_ms: z.number(),
   }),
-});
-
-const ErrorResponseSchema = z.object({
-  success: z.literal(false),
-  error: z.object({ code: z.string(), message: z.string() }),
 });
 
 // ── POST /v1/search ──────────────────────────────────────────

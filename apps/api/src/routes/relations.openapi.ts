@@ -186,23 +186,25 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     const extractor = createRelationExtractor(provider);
     const result = await extractor.extract(sentences);
 
-    // Delete existing relations, then upsert new ones
-    await deleteRelationsByCommit(db, decodedHash);
-    if (result.relations.length > 0) {
-      await upsertRelations(
-        db,
-        result.relations.map((r) => ({
-          id: r.id,
-          project_id: projectId,
-          commit_hash: decodedHash,
-          source_id: r.source_id,
-          target_id: r.target_id,
-          type: r.type,
-          confidence: r.confidence,
-          reasoning: r.reasoning,
-        }))
-      );
-    }
+    // Delete existing relations, then upsert new ones (atomic)
+    await db.transaction(async (tx) => {
+      await deleteRelationsByCommit(tx, decodedHash);
+      if (result.relations.length > 0) {
+        await upsertRelations(
+          tx,
+          result.relations.map((r) => ({
+            id: r.id,
+            project_id: projectId,
+            commit_hash: decodedHash,
+            source_id: r.source_id,
+            target_id: r.target_id,
+            type: r.type,
+            confidence: r.confidence,
+            reasoning: r.reasoning,
+          }))
+        );
+      }
+    });
     return c.json(
       {
         success: true as const,

@@ -7,7 +7,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { textFromBlocks, type ContentBlock } from '@t3x/core';
+import { type ContentBlock, textFromBlocks } from '@t3x/core';
 import {
   findConversationById,
   findProjectById,
@@ -130,6 +130,10 @@ Otherwise, a new conversation is created.
       description: 'Project or conversation not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -137,78 +141,84 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
 
-  const db = await getDB();
+  try {
+    const db = await getDB();
 
-  // Verify project exists
-  const project = await findProjectById(db, projectId);
-  if (!project) {
-    return errorResponse(c, 'PROJECT_NOT_FOUND', `Project not found: ${projectId}`);
-  }
-
-  let conversationId: string;
-
-  if (body.conversation_id) {
-    // Append to existing conversation — verify it exists and belongs to this project
-    const existing = await findConversationById(db, body.conversation_id);
-    if (!existing) {
-      return errorResponse(
-        c,
-        'CONVERSATION_NOT_FOUND',
-        `Conversation not found: ${body.conversation_id}`
-      );
+    // Verify project exists
+    const project = await findProjectById(db, projectId);
+    if (!project) {
+      return errorResponse(c, 'PROJECT_NOT_FOUND', `Project not found: ${projectId}`);
     }
-    if (existing.projectId !== projectId) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Conversation ${body.conversation_id} does not belong to project ${projectId}`
-      );
-    }
-    conversationId = body.conversation_id;
-  } else {
-    // Create new conversation
-    const conv = await insertConversation(db, {
-      projectId,
-      title: body.title ?? `Webhook ingest${body.source ? ` (${body.source})` : ''}`,
-      metadata: body.source ? { source: body.source } : undefined,
-    });
-    conversationId = conv.conversationId;
-  }
 
-  // Insert turns sequentially in a transaction (hash chain requires ordering;
-  // transaction ensures all-or-nothing on partial failure)
-  let turnsCreated = 0;
-  await db.transaction(async (tx) => {
-    for (const turn of body.turns) {
-      // Auto-compute content from content_blocks when content is empty/missing
-      const content =
-        turn.content || (turn.content_blocks?.length
-          ? textFromBlocks(turn.content_blocks as ContentBlock[])
-          : '');
-      if (!content) continue; // Skip turns with no content at all
+    let conversationId: string;
 
-      await insertTurn(tx, {
+    if (body.conversation_id) {
+      // Append to existing conversation — verify it exists and belongs to this project
+      const existing = await findConversationById(db, body.conversation_id);
+      if (!existing) {
+        return errorResponse(
+          c,
+          'CONVERSATION_NOT_FOUND',
+          `Conversation not found: ${body.conversation_id}`
+        );
+      }
+      if (existing.projectId !== projectId) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          `Conversation ${body.conversation_id} does not belong to project ${projectId}`
+        );
+      }
+      conversationId = body.conversation_id;
+    } else {
+      // Create new conversation
+      const conv = await insertConversation(db, {
         projectId,
-        conversationId,
-        role: turn.role,
-        content,
-        content_blocks: turn.content_blocks as ContentBlock[] | undefined,
+        title: body.title ?? `Webhook ingest${body.source ? ` (${body.source})` : ''}`,
+        metadata: body.source ? { source: body.source } : undefined,
       });
-      turnsCreated++;
+      conversationId = conv.conversationId;
     }
-  });
 
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        conversation_id: conversationId,
-        turns_created: turnsCreated,
-        source: body.source ?? null,
+    // Insert turns sequentially in a transaction (hash chain requires ordering;
+    // transaction ensures all-or-nothing on partial failure)
+    let turnsCreated = 0;
+    await db.transaction(async (tx) => {
+      for (const turn of body.turns) {
+        // Auto-compute content from content_blocks when content is empty/missing
+        const content =
+          turn.content ||
+          (turn.content_blocks?.length
+            ? textFromBlocks(turn.content_blocks as ContentBlock[])
+            : '');
+        if (!content) continue; // Skip turns with no content at all
+
+        await insertTurn(tx, {
+          projectId,
+          conversationId,
+          role: turn.role,
+          content,
+          content_blocks: turn.content_blocks as ContentBlock[] | undefined,
+        });
+        turnsCreated++;
+      }
+    });
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          conversation_id: conversationId,
+          turns_created: turnsCreated,
+          source: body.source ?? null,
+        },
       },
-    },
-    201
-  );
+      201
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'CREATE_FAILED', message);
+  }
 });
 
 export default ingestRoutes;

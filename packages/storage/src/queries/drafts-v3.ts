@@ -271,8 +271,8 @@ export async function commitDraftV3(
   draftId: string,
   commitHash: string,
   leafId?: string
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .update(draftsV3)
     .set({
       status: 'committed',
@@ -280,7 +280,9 @@ export async function commitDraftV3(
       committedLeafId: leafId ?? null,
       updatedAt: new Date(),
     })
-    .where(eq(draftsV3.id, draftId));
+    .where(and(eq(draftsV3.id, draftId), eq(draftsV3.status, 'editing')))
+    .returning();
+  return result.length > 0;
 }
 
 /**

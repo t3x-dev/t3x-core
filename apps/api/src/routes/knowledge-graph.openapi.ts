@@ -29,6 +29,7 @@ import {
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema } from '../schemas/common';
 
 export const knowledgeGraphRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -41,11 +42,6 @@ const ProjectIdParam = z.object({
 const NodeIdParam = z.object({
   projectId: z.string().openapi({ description: 'Project ID' }),
   nodeId: z.string().openapi({ description: 'Knowledge node ID' }),
-});
-
-const ErrorResponseSchema = z.object({
-  success: z.literal(false),
-  error: z.object({ code: z.string(), message: z.string() }),
 });
 
 const KnowledgeNodeSchema = z.object({

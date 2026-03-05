@@ -382,10 +382,12 @@ export async function findNeighborNodes(db: AnyDB, nodeId: string): Promise<Neig
     .from(knowledgeEdges)
     .where(eq(knowledgeEdges.targetNodeId, nodeId));
 
-  // Batch-load all neighbor node IDs in a single query
+  // Batch-load all neighbor node IDs in a single query (deduplicated)
   const neighborIds = [
-    ...outgoingEdges.map((e) => e.targetNodeId),
-    ...incomingEdges.map((e) => e.sourceNodeId),
+    ...new Set([
+      ...outgoingEdges.map((e) => e.targetNodeId),
+      ...incomingEdges.map((e) => e.sourceNodeId),
+    ]),
   ];
 
   if (neighborIds.length === 0) return [];

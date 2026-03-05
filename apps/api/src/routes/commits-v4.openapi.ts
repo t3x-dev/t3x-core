@@ -969,6 +969,10 @@ const checkConflictsRoute = createRoute({
       description: 'Embedder not configured or invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 

@@ -12,8 +12,8 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
+import { z } from '@hono/zod-openapi';
 import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x/core';
-import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Common Schemas
@@ -24,14 +24,6 @@ const SuccessResponse = <T extends z.ZodType>(dataSchema: T) =>
     success: z.literal(true),
     data: dataSchema,
   });
-
-const _ErrorResponse = z.object({
-  success: z.literal(false),
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-  }),
-});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence Schema

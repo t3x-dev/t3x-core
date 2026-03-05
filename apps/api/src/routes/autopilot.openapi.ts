@@ -240,7 +240,10 @@ autopilotRoutes.openapi(getAdaptiveRoute, async (c) => {
             total: stats.overall.total,
             accepted: Math.round(stats.overall.acceptRate * stats.overall.total),
             rejected: Math.round(stats.overall.rejectRate * stats.overall.total),
-            edited: Math.round(stats.overall.editRate * stats.overall.total),
+            edited:
+              stats.overall.total -
+              Math.round(stats.overall.acceptRate * stats.overall.total) -
+              Math.round(stats.overall.rejectRate * stats.overall.total),
             accept_rate: stats.overall.acceptRate,
           },
         },
@@ -400,8 +403,15 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       { strictParents: false }
     );
 
-    // 10. Mark draft as committed
-    await commitDraftV3(db, draftId, commit.hash);
+    // 10. Mark draft as committed (status guard prevents double-commit)
+    const committed = await commitDraftV3(db, draftId, commit.hash);
+    if (!committed) {
+      return errorResponse(
+        c,
+        'ALREADY_COMMITTED',
+        'Draft was already committed by another request'
+      );
+    }
 
     // 11. Push notification (fire-and-forget)
     pushNotification({
