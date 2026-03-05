@@ -41,6 +41,10 @@ describe('cosineSimilarity', () => {
     const b = [4, 5, 6];
     expect(cosineSimilarity(a, b)).toBeCloseTo(cosineSimilarity(b, a));
   });
+
+  it('throws on vector length mismatch', () => {
+    expect(() => cosineSimilarity([1, 0], [1, 0, 0])).toThrow('Vector length mismatch');
+  });
 });
 
 describe('extractTopTerms', () => {

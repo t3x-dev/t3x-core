@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { and, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type KnowledgeEdgeRecord,
@@ -371,21 +371,36 @@ export async function findEdgesByNode(db: AnyDB, nodeId: string): Promise<Knowle
  * 3. Combine with direction labels
  */
 export async function findNeighborNodes(db: AnyDB, nodeId: string): Promise<NeighborNodeOutput[]> {
-  const results: NeighborNodeOutput[] = [];
-
-  // Outgoing edges: this node is the source
+  // Fetch all edges in both directions (2 queries)
   const outgoingEdges = await db
     .select()
     .from(knowledgeEdges)
     .where(eq(knowledgeEdges.sourceNodeId, nodeId));
 
-  for (const edge of outgoingEdges) {
-    const [targetNode] = await db
-      .select()
-      .from(knowledgeNodes)
-      .where(eq(knowledgeNodes.id, edge.targetNodeId))
-      .limit(1);
+  const incomingEdges = await db
+    .select()
+    .from(knowledgeEdges)
+    .where(eq(knowledgeEdges.targetNodeId, nodeId));
 
+  // Batch-load all neighbor node IDs in a single query
+  const neighborIds = [
+    ...outgoingEdges.map((e) => e.targetNodeId),
+    ...incomingEdges.map((e) => e.sourceNodeId),
+  ];
+
+  if (neighborIds.length === 0) return [];
+
+  const neighborRows = await db
+    .select()
+    .from(knowledgeNodes)
+    .where(inArray(knowledgeNodes.id, neighborIds));
+
+  const nodeMap = new Map(neighborRows.map((n) => [n.id, n]));
+
+  const results: NeighborNodeOutput[] = [];
+
+  for (const edge of outgoingEdges) {
+    const targetNode = nodeMap.get(edge.targetNodeId);
     if (targetNode) {
       results.push({
         node: nodeRowToOutput(targetNode),
@@ -395,19 +410,8 @@ export async function findNeighborNodes(db: AnyDB, nodeId: string): Promise<Neig
     }
   }
 
-  // Incoming edges: this node is the target
-  const incomingEdges = await db
-    .select()
-    .from(knowledgeEdges)
-    .where(eq(knowledgeEdges.targetNodeId, nodeId));
-
   for (const edge of incomingEdges) {
-    const [sourceNode] = await db
-      .select()
-      .from(knowledgeNodes)
-      .where(eq(knowledgeNodes.id, edge.sourceNodeId))
-      .limit(1);
-
+    const sourceNode = nodeMap.get(edge.sourceNodeId);
     if (sourceNode) {
       results.push({
         node: nodeRowToOutput(sourceNode),
@@ -438,7 +442,12 @@ export async function searchKnowledgeNodes(
   const rows = await db
     .select()
     .from(knowledgeNodes)
-    .where(and(eq(knowledgeNodes.projectId, projectId), ilike(knowledgeNodes.label, `%${query}%`)))
+    .where(
+      and(
+        eq(knowledgeNodes.projectId, projectId),
+        ilike(knowledgeNodes.label, `%${query.replace(/[%_\\]/g, '\\$&')}%`)
+      )
+    )
     .orderBy(desc(knowledgeNodes.memberCount))
     .limit(limit);
 

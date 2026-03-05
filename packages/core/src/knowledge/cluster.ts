@@ -151,6 +151,10 @@ const STOP_WORDS = new Set([
  * Returns 0 when either vector has zero magnitude.
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) {
+    throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`);
+  }
+
   let dot = 0;
   let magA = 0;
   let magB = 0;
@@ -180,7 +184,7 @@ export function extractTopTerms(texts: string[], n = 3): string {
   for (const text of texts) {
     const words = text
       .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
       .split(/\s+/)
       .filter((w) => w.length > 0 && !STOP_WORDS.has(w));
 
