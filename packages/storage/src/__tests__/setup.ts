@@ -476,6 +476,22 @@ CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 
+-- Sentence Relations (Ring 4 — Inter-sentence relationships)
+CREATE TABLE IF NOT EXISTS sentence_relations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  commit_hash TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  reasoning TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (commit_hash, source_id, target_id, type)
+);
+CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations (commit_hash);
+CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations (project_id);
+
 `;
 
 /** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */

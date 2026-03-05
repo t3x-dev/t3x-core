@@ -63,7 +63,10 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(
+      table.provider,
+      table.providerId
+    ),
   })
 );
 
@@ -961,3 +964,36 @@ export const notifications = pgTable(
 
 export type NotificationRecord = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sentence Relations (Ring 4 — Inter-sentence relationships)
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const sentenceRelations = pgTable(
+  'sentence_relations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    commitHash: text('commit_hash').notNull(),
+    sourceId: text('source_id').notNull(),
+    targetId: text('target_id').notNull(),
+    type: text('type').notNull(),
+    confidence: real('confidence').notNull(),
+    reasoning: text('reasoning'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    commitIdx: index('idx_sr_commit').on(table.commitHash),
+    projectIdx: index('idx_sr_project').on(table.projectId),
+    pairUniq: uniqueIndex('idx_sr_pair').on(
+      table.commitHash,
+      table.sourceId,
+      table.targetId,
+      table.type
+    ),
+  })
+);
+
+export type SentenceRelationRecord = typeof sentenceRelations.$inferSelect;
+export type SentenceRelationInsert = typeof sentenceRelations.$inferInsert;
