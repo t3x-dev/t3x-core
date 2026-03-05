@@ -287,6 +287,12 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+// Relations (Ring 4 — inter-sentence relationships)
+export {
+  deleteRelationsByCommit,
+  findRelationsByCommit,
+  upsertRelations,
+} from './relations';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
