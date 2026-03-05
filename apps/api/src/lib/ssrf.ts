@@ -16,8 +16,8 @@ import { promises as dns } from 'node:dns';
  * Used by both the hostname check and the DNS resolution check.
  */
 function isInternalIP(ip: string): boolean {
-  // Localhost
-  if (ip === '127.0.0.1' || ip === '::1') return true;
+  // Localhost (full 127.0.0.0/8 loopback range per RFC 5735)
+  if (ip.startsWith('127.') || ip === '::1') return true;
   // 0.0.0.0
   if (ip === '0.0.0.0') return true;
   // IPv6 unspecified
@@ -47,7 +47,7 @@ export function isInternalUrl(urlStr: string): boolean {
     const hostname = url.hostname.replace(/^\[|\]$/g, ''); // Strip IPv6 brackets
 
     // Block localhost variants
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+    if (hostname === 'localhost' || hostname.startsWith('127.') || hostname === '::1') return true;
 
     // Block 0.0.0.0
     if (hostname === '0.0.0.0') return true;

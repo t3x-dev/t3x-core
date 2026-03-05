@@ -52,7 +52,11 @@ export async function executeRecipe(
       switch (step.action) {
         case 'send_webhook': {
           const url = step.config.url as string;
-          if (url && (await isInternalUrlResolved(url))) {
+          if (!url) {
+            results.push({ action: step.action, success: false, error: 'Missing webhook URL' });
+            break;
+          }
+          if (await isInternalUrlResolved(url)) {
             results.push({
               action: step.action,
               success: false,
@@ -60,7 +64,7 @@ export async function executeRecipe(
             });
             break;
           }
-          if (url && deps.webhookDispatch) {
+          if (deps.webhookDispatch) {
             await deps.webhookDispatch(url, {
               recipe_id: recipe.id,
               recipe_name: recipe.name,

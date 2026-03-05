@@ -17,6 +17,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
 import { pinoLogger } from '../middleware/logger';
+import { ErrorResponseSchema } from '../schemas/common';
 
 export const relationsRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -65,14 +66,7 @@ const getRelationsRoute = createRoute({
     },
     404: {
       description: 'Commit not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -127,36 +121,15 @@ const extractRelationsRoute = createRoute({
     },
     404: {
       description: 'Commit not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     400: {
       description: 'LLM provider not available',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Extraction failed',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });

@@ -9,7 +9,7 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 61 error codes', () => {
+  it('has 62 error codes', () => {
     expect(Object.keys(ErrorCodes)).toHaveLength(62);
   });
 

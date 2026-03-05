@@ -29,6 +29,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { ErrorResponseSchema } from '../schemas/common';
 import { pushNotification } from './notifications.openapi';
 
 export const autopilotRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -41,11 +42,6 @@ const ProjectIdParam = z.object({
 
 const DraftIdParam = z.object({
   draftId: z.string().openapi({ description: 'Draft ID' }),
-});
-
-const ErrorResponseSchema = z.object({
-  success: z.literal(false),
-  error: z.object({ code: z.string(), message: z.string() }),
 });
 
 const AutopilotConfigSchema = z.object({

@@ -44,22 +44,6 @@ vi.mock('../middleware/logger', () => ({
 
 import { searchRoutes } from '../routes/search.openapi';
 
-/** Check if pgvector/sentence_vectors table is available */
-async function hasSentenceVectors(db: PGLiteDB): Promise<boolean> {
-  try {
-    const result = await (
-      db as unknown as { execute: (q: unknown) => Promise<{ rows: unknown[] }> }
-    ).execute({
-      sql: "SELECT 1 FROM information_schema.tables WHERE table_name = 'sentence_vectors'",
-      params: [],
-    });
-    // Drizzle execute returns different shapes — try raw exec approach
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 describe('Search Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
