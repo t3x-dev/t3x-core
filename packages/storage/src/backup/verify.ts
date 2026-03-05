@@ -37,6 +37,8 @@ export interface VerifyChainResult {
   };
   /** Merkle root per commit: commit_hash → merkle_root */
   merkle_roots: Record<string, string>;
+  /** Commit hashes where stored merkle_root differs from recomputed root */
+  merkle_mismatches: string[];
   verified_at: string;
   /**
    * Fix 17: True when the fetch limit was hit and only a subset of commits was
@@ -84,6 +86,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       entry_points: 0,
       errors: { hash_mismatch: [], parent_not_found: [], other: [] },
       merkle_roots: {},
+      merkle_mismatches: [],
       verified_at: new Date().toISOString(),
       truncated: false,
     };
@@ -175,8 +178,9 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
-  // Step 4: Build Merkle tree for each commit's sentences
+  // Step 4: Build Merkle tree for each commit's sentences and compare with stored
   const merkleRoots: Record<string, string> = {};
+  const merkleMismatches: string[] = [];
   for (const commit of commits) {
     const sentences = commit.content.sentences.map((s) => ({
       id: s.id,
@@ -184,6 +188,11 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     }));
     const tree = buildMerkleTree(sentences);
     merkleRoots[commit.hash] = tree.root;
+
+    // Compare stored merkle_root with recomputed root
+    if (commit.merkle_root && tree.root && commit.merkle_root !== tree.root) {
+      merkleMismatches.push(commit.hash);
+    }
   }
 
   return {
@@ -197,6 +206,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       other,
     },
     merkle_roots: merkleRoots,
+    merkle_mismatches: merkleMismatches,
     verified_at: new Date().toISOString(),
     truncated,
   };
