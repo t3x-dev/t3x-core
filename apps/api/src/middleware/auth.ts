@@ -21,7 +21,7 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = ['/api/v1/share/', '/api/v1/auth/callback'];
+const PUBLIC_PREFIXES = ['/api/v1/share/', '/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
 
 function isPublicPath(path: string): boolean {
   if (PUBLIC_PATHS.includes(path)) return true;
