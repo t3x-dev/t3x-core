@@ -316,6 +316,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       branch TEXT,
       source_refs JSONB,
       merge_summary JSONB,
+      merkle_root TEXT,
       position_x REAL,
       position_y REAL,
 
@@ -325,6 +326,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
     CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
     CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
+
+    -- Migration: Add merkle_root column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
