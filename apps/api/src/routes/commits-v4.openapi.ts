@@ -46,6 +46,7 @@ import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
+  CursorPageResponseSchema,
   ErrorResponseSchema,
   HashParamSchema,
   PaginationQuerySchema,
@@ -246,13 +247,17 @@ const listCommitsV4ByProjectRoute = createRoute({
   path: '/v1/projects/{projectId}/commits-v4',
   tags: ['Commits V4'],
   summary: 'List commits by project',
-  description: 'Lists all commits v4 in a project, ordered by committed_at descending.',
+  description:
+    'Lists all commits v4 in a project, ordered by committed_at descending. ' +
+    'Supports cursor-based pagination: pass `cursor` query parameter (empty string for first page) ' +
+    'to receive `{ items, next_cursor, has_more }` response. Omit `cursor` for legacy offset/limit mode.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
     }),
     query: PaginationQuerySchema.extend({
       branch: z.string().optional(),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -260,7 +265,9 @@ const listCommitsV4ByProjectRoute = createRoute({
       description: 'List of commits',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(CommitV4Response)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(CommitV4Response), z.array(CommitV4Response)])
+          ),
         },
       },
     },
@@ -806,11 +813,42 @@ commitsV4Routes.openapi(getCommitV4Route, async (c) => {
 // GET /v1/projects/:projectId/commits-v4 - List commits by project
 commitsV4Routes.openapi(listCommitsV4ByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { branch, limit, offset } = c.req.valid('query');
+  const { branch, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
 
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      if (branch) {
+        const result = await findCommitsV4ByBranch(db, projectId, branch, { cursor, limit });
+        return c.json(
+          {
+            success: true as const,
+            data: {
+              items: result.items.map(toApiCommit),
+              next_cursor: result.next_cursor,
+              has_more: result.has_more,
+            },
+          },
+          200
+        );
+      }
+      const result = await findCommitsV4ByProject(db, projectId, { cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiCommit),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     let commits: CommitV4[];
     if (branch) {
       commits = await findCommitsV4ByBranch(db, projectId, branch, { limit, offset });

@@ -18,6 +18,7 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {
+  CursorPageResponseSchema,
   ErrorResponseSchema,
   IdParamSchema,
   PaginationQuerySchema,
@@ -39,15 +40,21 @@ const listProjectsRoute = createRoute({
   path: '/v1/projects',
   tags: ['Projects'],
   summary: 'List all projects',
+  description:
+    'Lists all projects. Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
-    query: PaginationQuerySchema,
+    query: PaginationQuerySchema.extend({
+      cursor: z.string().optional(),
+    }),
   },
   responses: {
     200: {
       description: 'List of projects',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(ListProjectsResponseSchema),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(ProjectSchema), ListProjectsResponseSchema])
+          ),
         },
       },
     },
@@ -63,43 +70,66 @@ const listProjectsRoute = createRoute({
 });
 
 projectRoutes.openapi(listProjectsRoute, async (c) => {
-  const { limit, offset } = c.req.valid('query');
+  const { limit, offset, cursor } = c.req.valid('query');
+
+  // Shared helper: enrich a project row with counts
+  const enrichProject = async (
+    db: Awaited<ReturnType<typeof getDB>>,
+    p: { projectId: string; name: string; createdAt: Date; metadataJson: string | null }
+  ) => {
+    const [convCountRow, commitCountRow, branchCountRow] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversations)
+        .where(eq(conversations.projectId, p.projectId))
+        .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(commitsV4)
+        .where(eq(commitsV4.projectId, p.projectId))
+        .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(branches)
+        .where(eq(branches.projectId, p.projectId))
+        .then((rows) => rows[0]),
+    ]);
+    return {
+      project_id: p.projectId,
+      name: p.name,
+      created_at: p.createdAt.toISOString(),
+      metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
+      conversations_count: Number(convCountRow?.count ?? 0),
+      commits_count: Number(commitCountRow?.count ?? 0),
+      branches_count: Number(branchCountRow?.count ?? 0),
+    };
+  };
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findProjects(db, { cursor, limit });
+      const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: apiProjects,
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const projects = await findProjects(db, { limit, offset });
 
     // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
-    const apiProjects = await Promise.all(
-      projects.map(async (p) => {
-        const [convCountRow, commitCountRow, branchCountRow] = await Promise.all([
-          db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(conversations)
-            .where(eq(conversations.projectId, p.projectId))
-            .then((rows) => rows[0]),
-          db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(commitsV4)
-            .where(eq(commitsV4.projectId, p.projectId))
-            .then((rows) => rows[0]),
-          db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(branches)
-            .where(eq(branches.projectId, p.projectId))
-            .then((rows) => rows[0]),
-        ]);
-        return {
-          project_id: p.projectId,
-          name: p.name,
-          created_at: p.createdAt.toISOString(),
-          metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
-          conversations_count: Number(convCountRow?.count ?? 0),
-          commits_count: Number(commitCountRow?.count ?? 0),
-          branches_count: Number(branchCountRow?.count ?? 0),
-        };
-      })
-    );
+    const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
 
     return c.json({ success: true as const, data: { projects: apiProjects, limit, offset } }, 200);
   } catch (err) {

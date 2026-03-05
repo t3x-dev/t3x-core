@@ -63,7 +63,12 @@ import {
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
-import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  CursorPageResponseSchema,
+  ErrorResponseSchema,
+  IdParamSchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
 import {
   BatchGenerateRequest,
   BatchGenerateResponse,
@@ -225,7 +230,9 @@ const listLeavesByCommitRoute = createRoute({
   path: '/v1/commits/{hash}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by commit',
-  description: 'Lists all leaf nodes associated with a specific commit.',
+  description:
+    'Lists all leaf nodes associated with a specific commit. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       hash: z.string().min(1),
@@ -234,6 +241,7 @@ const listLeavesByCommitRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -241,7 +249,9 @@ const listLeavesByCommitRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -318,7 +328,9 @@ const listLeavesByProjectRoute = createRoute({
   path: '/v1/projects/{projectId}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by project',
-  description: 'Lists all leaf nodes in a project.',
+  description:
+    'Lists all leaf nodes in a project. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
@@ -327,6 +339,7 @@ const listLeavesByProjectRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -334,7 +347,9 @@ const listLeavesByProjectRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -648,11 +663,29 @@ leavesRoutes.openapi(getLeafRoute, async (c) => {
 // GET /v1/commits/:hash/leaves - List leaves by commit
 leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByCommit(db, decodedHash, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByCommit(db, decodedHash, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
@@ -808,10 +841,28 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 // GET /v1/projects/:projectId/leaves - List leaves by project
 leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByProject(db, projectId, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);

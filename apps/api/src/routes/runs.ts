@@ -382,6 +382,10 @@ runsRoutes.post('/v1/runs/ingest', async (c) => {
  * GET /runs - List runs
  *
  * v2.1: Added model and prompt_version filters for A/B test comparison
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 runsRoutes.get('/v1/runs', async (c) => {
   try {
@@ -397,8 +401,31 @@ runsRoutes.get('/v1/runs', async (c) => {
     const prompt_version = c.req.query('prompt_version');
     const limit = parseInt(c.req.query('limit') || '50', 10);
     const offset = parseInt(c.req.query('offset') || '0', 10);
+    const cursor = c.req.query('cursor');
 
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await listRuns(db, {
+        projectId,
+        status,
+        model,
+        prompt_version,
+        cursor,
+        limit,
+      });
+      return c.json({
+        success: true,
+        data: {
+          items: result.items,
+          next_cursor: result.next_cursor,
+          has_more: result.has_more,
+        },
+      });
+    }
+
+    // Legacy offset/limit mode
     const result = await listRuns(db, { projectId, status, model, prompt_version, limit, offset });
 
     return c.json({

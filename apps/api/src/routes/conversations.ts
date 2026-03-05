@@ -38,6 +38,10 @@ export const conversationRoutes = new Hono();
 
 /**
  * GET /v1/conversations - List conversations
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 conversationRoutes.get('/v1/conversations', async (c) => {
   const projectId = c.req.query('project_id');
@@ -48,24 +52,46 @@ conversationRoutes.get('/v1/conversations', async (c) => {
 
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
+  const cursor = c.req.query('cursor');
+
+  const toApiConversation = (conv: {
+    conversationId: string;
+    projectId: string;
+    title: string | null;
+    parentCommitHash: string | null;
+    positionX: number | null;
+    positionY: number | null;
+    createdAt: Date;
+    metadataJson: string | null;
+  }) => ({
+    conversation_id: conv.conversationId,
+    project_id: conv.projectId,
+    title: conv.title,
+    parent_commit_hash: conv.parentCommitHash,
+    position_x: conv.positionX,
+    position_y: conv.positionY,
+    created_at: conv.createdAt.toISOString(),
+    metadata: conv.metadataJson ? JSON.parse(conv.metadataJson) : null,
+  });
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findConversationsByProject(db, { projectId, cursor, limit });
+      return jsonSuccess(c, {
+        items: result.items.map(toApiConversation),
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+      });
+    }
+
+    // Legacy offset/limit mode
     const conversations = await findConversationsByProject(db, { projectId, limit, offset });
 
-    const apiConversations = conversations.map((conv) => ({
-      conversation_id: conv.conversationId,
-      project_id: conv.projectId,
-      title: conv.title,
-      parent_commit_hash: conv.parentCommitHash,
-      position_x: conv.positionX,
-      position_y: conv.positionY,
-      created_at: conv.createdAt.toISOString(),
-      metadata: conv.metadataJson ? JSON.parse(conv.metadataJson) : null,
-    }));
-
     return jsonSuccess(c, {
-      conversations: apiConversations,
+      conversations: conversations.map(toApiConversation),
       project_id: projectId,
       limit,
       offset,

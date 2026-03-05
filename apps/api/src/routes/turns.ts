@@ -26,6 +26,10 @@ export const turnRoutes = new Hono();
 
 /**
  * GET /v1/turns - List turns
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 turnRoutes.get('/v1/turns', async (c) => {
   const conversationId = c.req.query('conversation_id');
@@ -38,25 +42,48 @@ turnRoutes.get('/v1/turns', async (c) => {
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
   const orderParam = c.req.query('order');
   const order = orderParam === 'desc' ? 'desc' : 'asc';
+  const cursor = c.req.query('cursor');
+
+  const toApiTurn = (t: {
+    turnHash: string;
+    parentTurnHash: string | null;
+    projectId: string;
+    conversationId: string;
+    role: string;
+    content: string;
+    language: string | null;
+    ringsJson: string | null;
+    createdAt: Date;
+  }) => ({
+    turn_hash: t.turnHash,
+    parent_turn_hash: t.parentTurnHash,
+    project_id: t.projectId,
+    conversation_id: t.conversationId,
+    role: t.role,
+    content: t.content,
+    language: t.language,
+    rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+    created_at: t.createdAt.toISOString(),
+  });
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findTurnsByConversation(db, { conversationId, cursor, limit, order });
+      return jsonSuccess(c, {
+        items: result.items.map(toApiTurn),
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+      });
+    }
+
+    // Legacy offset/limit mode
     const turns = await findTurnsByConversation(db, { conversationId, limit, offset, order });
 
-    const apiTurns = turns.map((t) => ({
-      turn_hash: t.turnHash,
-      parent_turn_hash: t.parentTurnHash,
-      project_id: t.projectId,
-      conversation_id: t.conversationId,
-      role: t.role,
-      content: t.content,
-      language: t.language,
-      rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
-      created_at: t.createdAt.toISOString(),
-    }));
-
     return jsonSuccess(c, {
-      turns: apiTurns,
+      turns: turns.map(toApiTurn),
       conversation_id: conversationId,
       limit,
       offset,

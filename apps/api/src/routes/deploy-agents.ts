@@ -41,31 +41,60 @@ export const deployAgentRoutes = new Hono();
 
 /**
  * GET /v1/deploy-agents - List deploy agents
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 deployAgentRoutes.get('/v1/deploy-agents', async (c) => {
   const projectId = c.req.query('project_id') ?? undefined;
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
+  const cursor = c.req.query('cursor');
+
+  const toApiAgent = (a: {
+    deployAgentId: string;
+    projectId: string | null;
+    name: string;
+    endpoint: string;
+    type: string;
+    authJson: string | null;
+    status: string;
+    lastRunId: string | null;
+    lastRunAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) => ({
+    deploy_agent_id: a.deployAgentId,
+    project_id: a.projectId,
+    name: a.name,
+    endpoint: a.endpoint,
+    type: a.type,
+    auth: maskAuth(a.authJson),
+    status: a.status,
+    last_run_id: a.lastRunId,
+    last_run_at: a.lastRunAt?.toISOString() ?? null,
+    created_at: a.createdAt.toISOString(),
+    updated_at: a.updatedAt.toISOString(),
+  });
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findDeployAgents(db, { projectId, cursor, limit });
+      return jsonSuccess(c, {
+        items: result.items.map(toApiAgent),
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+      });
+    }
+
+    // Legacy offset/limit mode
     const agentsList = await findDeployAgents(db, { projectId, limit, offset });
 
-    const apiAgents = agentsList.map((a) => ({
-      deploy_agent_id: a.deployAgentId,
-      project_id: a.projectId,
-      name: a.name,
-      endpoint: a.endpoint,
-      type: a.type,
-      auth: maskAuth(a.authJson),
-      status: a.status,
-      last_run_id: a.lastRunId,
-      last_run_at: a.lastRunAt?.toISOString() ?? null,
-      created_at: a.createdAt.toISOString(),
-      updated_at: a.updatedAt.toISOString(),
-    }));
-
-    return jsonSuccess(c, { deploy_agents: apiAgents, limit, offset });
+    return jsonSuccess(c, { deploy_agents: agentsList.map(toApiAgent), limit, offset });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'LIST_FAILED', message, 500);
