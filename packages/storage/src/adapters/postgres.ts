@@ -691,6 +691,60 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+    -- Sentence Relations (Ring 4)
+    CREATE TABLE IF NOT EXISTS sentence_relations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      reasoning TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Knowledge Graph (Cross-conversation entity/topic graph)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS knowledge_nodes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'topic',
+      summary TEXT,
+      member_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_node_members (
+      node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      sentence_id TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      PRIMARY KEY (node_id, sentence_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_edges (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      target_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      weight REAL NOT NULL DEFAULT 0,
+      evidence JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

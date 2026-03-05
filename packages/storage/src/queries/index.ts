@@ -178,6 +178,26 @@ export {
   type KnowledgeConflictOutput,
   resolveConflict,
 } from './knowledge-conflicts';
+// Knowledge Graph (cross-conversation entity/topic graph)
+export {
+  deleteKnowledgeGraphByProject,
+  findEdgesByNode,
+  findKnowledgeNodeById,
+  findKnowledgeNodesByProject,
+  findMembersByNode,
+  findNeighborNodes,
+  findNodeBySentence,
+  insertKnowledgeEdge,
+  insertKnowledgeEdges,
+  insertKnowledgeNode,
+  insertKnowledgeNodes,
+  insertNodeMembers,
+  type KnowledgeEdgeOutput,
+  type KnowledgeNodeOutput,
+  type NeighborNodeOutput,
+  type NodeMemberOutput,
+  searchKnowledgeNodes,
+} from './knowledge-graph';
 // Leaf History (generation history for leaves)
 export {
   type CreateLeafHistoryInputExtended,
