@@ -331,14 +331,17 @@ export {
 } from './templates';
 // Users & Accounts (multi-provider authentication)
 export {
+  type CreateLocalUserInput,
   type CreateUserInput,
   createAccount,
+  createLocalUser,
   createUser,
   findAccountByProvider,
   findAccountsByUser,
   findOrCreateUser,
   findUserByEmail,
   findUserById,
+  findUserByUsername,
 } from './users';
 // Turns
 export {

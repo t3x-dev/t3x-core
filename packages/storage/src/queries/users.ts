@@ -42,6 +42,15 @@ export interface CreateUserInput {
   avatar_url?: string | null;
 }
 
+export interface CreateLocalUserInput {
+  /** Username for local auth */
+  username: string;
+  /** Bcrypt hash of the password */
+  passwordHash: string;
+  /** Display name (optional, defaults to username) */
+  name?: string;
+}
+
 // ============================================================
 // Internal Helpers
 // ============================================================
@@ -249,6 +258,44 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
   });
 
   return newUser;
+}
+
+// ============================================================
+// Local Auth Query Functions
+// ============================================================
+
+/**
+ * Find a user by username (for local auth login).
+ *
+ * Returns the raw UserRecord (includes passwordHash) so the API layer
+ * can verify the password. Returns null if no user with that username.
+ */
+export async function findUserByUsername(db: AnyDB, username: string): Promise<UserRecord | null> {
+  const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * Create a new local user (username + password, no OAuth).
+ *
+ * Used by the open-source register endpoint.
+ * Returns the User type (no passwordHash exposed).
+ */
+export async function createLocalUser(db: AnyDB, input: CreateLocalUserInput): Promise<User> {
+  const id = generateUserId();
+
+  const [row] = await db
+    .insert(users)
+    .values({
+      id,
+      username: input.username,
+      passwordHash: input.passwordHash,
+      name: input.name ?? input.username,
+    })
+    .returning();
+
+  return rowToUser(row);
 }
 
 // ============================================================

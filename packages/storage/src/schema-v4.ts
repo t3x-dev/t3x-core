@@ -55,6 +55,12 @@ export const users = pgTable('users', {
   /** Avatar URL */
   avatarUrl: text('avatar_url'),
 
+  /** Username for local auth (null for OAuth-only users) */
+  username: text('username').unique(),
+
+  /** Bcrypt password hash for local auth (null for OAuth-only users) */
+  passwordHash: text('password_hash'),
+
   /** Creation time */
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
