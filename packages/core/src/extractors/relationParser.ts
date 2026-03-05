@@ -2,8 +2,9 @@
  * Relation Response Parser
  *
  * Parses LLM output for inter-sentence relation extraction.
- * Follows the same lenient pattern as extractionParser.ts:
- * returns valid items, skips malformed ones, throws only on total failure.
+ * More lenient than extractionParser.ts: returns empty array even when all items
+ * are invalid, since relation extraction is non-blocking and should never throw
+ * on valid JSON.
  */
 
 import { RELATION_TYPES, type RelationType } from '../types/v4';
@@ -41,8 +42,8 @@ function validateItem(item: unknown, validIds: Set<string>): RelationItem | null
   if (typeof obj.source_id !== 'string' || obj.source_id.length === 0) return null;
   if (typeof obj.target_id !== 'string' || obj.target_id.length === 0) return null;
   if (typeof obj.type !== 'string' || !VALID_TYPES.has(obj.type)) return null;
-  if (typeof obj.confidence !== 'number') return null;
-  if (typeof obj.reasoning !== 'string') return null;
+  if (typeof obj.confidence !== 'number' || !Number.isFinite(obj.confidence)) return null;
+  if (typeof obj.reasoning !== 'string' || obj.reasoning.length === 0) return null;
   if (obj.source_id === obj.target_id) return null;
   if (!validIds.has(obj.source_id) || !validIds.has(obj.target_id)) return null;
   return {
@@ -50,7 +51,7 @@ function validateItem(item: unknown, validIds: Set<string>): RelationItem | null
     target_id: obj.target_id,
     type: obj.type as RelationType,
     confidence: Math.max(0, Math.min(1, obj.confidence)),
-    reasoning: obj.reasoning,
+    reasoning: (obj.reasoning as string).slice(0, 500),
   };
 }
 

@@ -39,7 +39,9 @@ function rowToRelation(row: SentenceRelationRecord): SentenceRelation {
 export async function upsertRelations(db: AnyDB, relations: RelationInput[]): Promise<number> {
   if (relations.length === 0) return 0;
 
-  let count = 0;
+  // Drizzle doesn't support batch onConflictDoUpdate with multiple values well,
+  // so we use individual upserts. Performance is acceptable since this runs
+  // asynchronously in fire-and-forget mode.
   for (const rel of relations) {
     await db
       .insert(sentenceRelations)
@@ -66,10 +68,9 @@ export async function upsertRelations(db: AnyDB, relations: RelationInput[]): Pr
           reasoning: rel.reasoning,
         },
       });
-    count++;
   }
 
-  return count;
+  return relations.length;
 }
 
 /**

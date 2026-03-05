@@ -105,6 +105,16 @@ describe('RelationExtractor', () => {
     expect(result.relations[0].id).toMatch(/^rel_/);
   });
 
+  it('propagates provider errors', async () => {
+    const provider: LLMProvider = {
+      id: 'mock',
+      generate: vi.fn().mockRejectedValue(new Error('rate limited')),
+      resolveConflict: vi.fn(),
+    };
+    const extractor = new RelationExtractor(provider);
+    await expect(extractor.extract(sentences)).rejects.toThrow('rate limited');
+  });
+
   it('uses custom temperature when provided', async () => {
     const provider = createMockProvider('[]');
     const extractor = new RelationExtractor(provider);

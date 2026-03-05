@@ -147,6 +147,17 @@ const extractRelationsRoute = createRoute({
         },
       },
     },
+    500: {
+      description: 'Extraction failed',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
   },
 });
 
@@ -171,6 +182,10 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     const extractor = createRelationExtractor(provider);
     const result = await extractor.extract(sentences);
 
+    if (!commit.project_id) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Commit has no project_id');
+    }
+
     // Delete existing relations, then upsert new ones
     await deleteRelationsByCommit(db, decodedHash);
     if (result.relations.length > 0) {
@@ -178,7 +193,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         db,
         result.relations.map((r) => ({
           id: r.id,
-          project_id: commit.project_id ?? '',
+          project_id: commit.project_id,
           commit_hash: decodedHash,
           source_id: r.source_id,
           target_id: r.target_id,

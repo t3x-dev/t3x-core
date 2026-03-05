@@ -486,11 +486,11 @@ CREATE TABLE IF NOT EXISTS sentence_relations (
   type TEXT NOT NULL,
   confidence REAL NOT NULL,
   reasoning TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (commit_hash, source_id, target_id, type)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations (commit_hash);
 CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations (project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
 
 `;
 

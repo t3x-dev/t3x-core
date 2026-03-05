@@ -617,9 +617,8 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
             finalSentences.map((s) => ({ id: s.id, text: s.text }))
           );
           if (relResult.relations.length > 0) {
-            const relDb = await getDB();
             await upsertRelations(
-              relDb,
+              db,
               relResult.relations.map((r) => ({
                 id: r.id,
                 project_id: body.project_id,

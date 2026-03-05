@@ -115,6 +115,17 @@ describe('parseRelationResponse', () => {
     expect(() => parseRelationResponse('{"a":1}', VALID_IDS)).toThrow(RelationParseError);
   });
 
+  it('preserves raw text in RelationParseError', () => {
+    const bad = 'not valid json at all';
+    try {
+      parseRelationResponse(bad, VALID_IDS);
+      expect.fail('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(RelationParseError);
+      expect((e as RelationParseError).raw).toBe(bad);
+    }
+  });
+
   it('returns valid items even if some are malformed (lenient)', () => {
     const raw = JSON.stringify([
       {
@@ -135,6 +146,20 @@ describe('parseRelationResponse', () => {
     ]);
     const items = parseRelationResponse(raw, VALID_IDS);
     expect(items).toHaveLength(1);
+  });
+
+  it('filters out items with empty reasoning', () => {
+    const raw = JSON.stringify([
+      {
+        source_id: 's_aaa',
+        target_id: 's_bbb',
+        type: 'supports',
+        confidence: 0.8,
+        reasoning: '',
+      },
+    ]);
+    const items = parseRelationResponse(raw, VALID_IDS);
+    expect(items).toHaveLength(0);
   });
 
   it('deduplicates by (source_id, target_id, type) triple', () => {
