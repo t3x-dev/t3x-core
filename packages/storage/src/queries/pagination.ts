@@ -35,8 +35,13 @@ export function decodeCursor(cursor: string): { t: string; k: string } {
     if (typeof parsed.t !== 'string' || typeof parsed.k !== 'string') {
       throw new Error('Invalid cursor structure');
     }
+    // Validate timestamp is a parseable date
+    if (Number.isNaN(new Date(parsed.t).getTime())) {
+      throw new Error('Invalid cursor: timestamp is not a valid date');
+    }
     return { t: parsed.t, k: parsed.k };
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Invalid cursor:')) throw err;
     throw new Error(`Invalid cursor: ${cursor.slice(0, 20)}...`);
   }
 }

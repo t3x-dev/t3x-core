@@ -297,7 +297,7 @@ export async function findCommitsV4ByProject(
       .select()
       .from(commitsV4)
       .where(and(...conditions))
-      .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+      .orderBy(desc(commitsV4.committedAt), desc(commitsV4.hash))
       .limit(limit + 1);
 
     return toCursorPage(rows.map(rowToCommitV4), limit, (c) => ({
@@ -317,7 +317,7 @@ export async function findCommitsV4ByProject(
     .select()
     .from(commitsV4)
     .where(and(...conditions))
-    .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+    .orderBy(desc(commitsV4.committedAt), desc(commitsV4.hash))
     .limit(limit)
     .offset(offset);
 
@@ -372,7 +372,7 @@ export async function findCommitsV4ByBranch(
       .select()
       .from(commitsV4)
       .where(and(...conditions))
-      .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+      .orderBy(desc(commitsV4.committedAt), desc(commitsV4.hash))
       .limit(limit + 1);
 
     return toCursorPage(rows.map(rowToCommitV4), limit, (c) => ({
@@ -388,7 +388,7 @@ export async function findCommitsV4ByBranch(
     .select()
     .from(commitsV4)
     .where(and(eq(commitsV4.projectId, projectId), eq(commitsV4.branch, branch)))
-    .orderBy(desc(commitsV4.committedAt), commitsV4.hash)
+    .orderBy(desc(commitsV4.committedAt), desc(commitsV4.hash))
     .limit(limit)
     .offset(offset);
 
