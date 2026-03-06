@@ -37,23 +37,28 @@ import {
   draftsRoutes,
   exportRoutes,
   extractRoutes,
+  extractionFeedbackRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
+  relationsRoutes,
   runnerRoutes,
   runsRoutes,
   statusRoutes,
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
+import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
 import { notificationsRoutes } from './routes/notifications.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
 import { recipesRoutes } from './routes/recipes.openapi';
+import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
@@ -141,6 +146,11 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', ingestRoutes);
   api.route('/', notificationsRoutes);
   api.route('/', providersRoutes);
+  api.route('/', searchRoutes);
+  api.route('/', knowledgeGraphRoutes);
+  api.route('/', autopilotRoutes);
+  api.route('/', relationsRoutes);
+  api.route('/', extractionFeedbackRoutes);
 
   // Local auth routes (username/password register + login)
   // Skipped when SaaS provides its own OAuth auth

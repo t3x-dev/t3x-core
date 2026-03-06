@@ -21,12 +21,28 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = ['/api/v1/share/', '/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
+const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
 
-function isPublicPath(path: string): boolean {
+/**
+ * Match the share resolve endpoint: GET /api/v1/share/:token
+ * Only a single path segment after /share/ (no further slashes).
+ * This excludes DELETE /api/v1/share/:id (different method) and
+ * GET /api/v1/share/entity/:type/:id (has sub-path).
+ */
+const SHARE_RESOLVE_PATTERN = /^\/api\/v1\/share\/[^/]+$/;
+
+function isPublicPath(path: string, method?: string): boolean {
   if (PUBLIC_PATHS.includes(path)) return true;
   for (const prefix of PUBLIC_PREFIXES) {
     if (path.startsWith(prefix)) return true;
+  }
+  // Share resolve: only GET /api/v1/share/:token (single segment, not /entity/)
+  if (
+    method === 'GET' &&
+    SHARE_RESOLVE_PATTERN.test(path) &&
+    !path.startsWith('/api/v1/share/entity')
+  ) {
+    return true;
   }
   return false;
 }
@@ -34,17 +50,17 @@ function isPublicPath(path: string): boolean {
 /**
  * Authentication middleware for Hono.
  *
- * Auth is DISABLED by default (safe for local dev without .env).
- * Only enabled when AUTH_DISABLED is explicitly set to 'false'.
+ * Auth is ENABLED by default.
+ * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // Skip auth unless explicitly enabled (AUTH_DISABLED=false)
-  if (process.env.AUTH_DISABLED !== 'false') {
+  // Skip auth only when explicitly disabled (AUTH_DISABLED=true)
+  if (process.env.AUTH_DISABLED === 'true') {
     return next();
   }
 
   // Skip auth for public paths
-  if (isPublicPath(c.req.path)) {
+  if (isPublicPath(c.req.path, c.req.method)) {
     return next();
   }
 
@@ -91,7 +107,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return next();
   } catch (err) {
-    pinoLogger.error({ err }, "error validating API key");
+    pinoLogger.error({ err }, 'error validating API key');
     return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
   }
 }
