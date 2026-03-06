@@ -112,6 +112,9 @@ export async function closePGLiteStorage(): Promise<void> {
 async function initializeSchema(client: PGlite): Promise<void> {
   // Create tables if they don't exist
   await client.exec(`
+    -- Ensure plpgsql is available (required for DO $$ blocks in migrations)
+    CREATE EXTENSION IF NOT EXISTS plpgsql;
+
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
       project_id TEXT PRIMARY KEY,
