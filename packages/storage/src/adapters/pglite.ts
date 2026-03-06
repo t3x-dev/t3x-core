@@ -59,15 +59,45 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
   }
 
   // Create PGLite client (with pgvector if available)
-  client = new PGlite(dataDir, {
-    ...(extensions ? { extensions } : {}),
-  });
+  // If WASM aborts (corrupted data from unclean shutdown), wipe and retry once.
+  try {
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+  } catch (err) {
+    const isWasmAbort =
+      err instanceof Error && (err.message.includes('Aborted()') || err.name === 'RuntimeError');
 
-  // Create Drizzle instance
-  db = drizzle(client, { schema });
+    if (!isWasmAbort || !dataDir) throw err;
 
-  // Run migrations/schema creation
-  await initializeSchema(client);
+    console.warn(
+      '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
+    );
+
+    // Clean up failed client
+    try {
+      if (client) await client.close();
+    } catch {
+      // ignore close errors on corrupted instance
+    }
+    client = null;
+    db = null;
+
+    // Wipe corrupted data directory and recreate
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Retry once
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+
+    console.warn('[PGLite] Database recreated successfully. Previous local data was lost.');
+  }
 
   // Seed builtin templates
   await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
