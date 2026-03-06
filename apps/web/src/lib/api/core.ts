@@ -12,6 +12,20 @@ export const DEFAULT_TIMEOUT = 10000;
 // API key for authenticated requests (optional, for production use)
 export const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 
+/**
+ * Get API key from session cookie (client-side only).
+ * Reads the t3x-session cookie set by the login page.
+ */
+async function getSessionApiKey(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const { getSessionKey } = await import('@/lib/session');
+    return getSessionKey();
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================================
 // JSON Parsing Helpers
 // ============================================================================
@@ -152,10 +166,17 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
-  // Inject Authorization header if API key is configured
+  // Inject Authorization header: static env var → session cookie → none
   const headers = new Headers(options?.headers);
-  if (API_KEY && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (!headers.has('Authorization')) {
+    if (API_KEY) {
+      headers.set('Authorization', `Bearer ${API_KEY}`);
+    } else {
+      const sessionKey = await getSessionApiKey();
+      if (sessionKey) {
+        headers.set('Authorization', `Bearer ${sessionKey}`);
+      }
+    }
   }
 
   try {

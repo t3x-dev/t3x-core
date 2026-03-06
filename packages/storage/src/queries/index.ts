@@ -401,6 +401,20 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
+// Users & Accounts (multi-provider authentication)
+export {
+  type CreateLocalUserInput,
+  type CreateUserInput,
+  createAccount,
+  createLocalUser,
+  createUser,
+  findAccountByProvider,
+  findAccountsByUser,
+  findOrCreateUser,
+  findUserByEmail,
+  findUserById,
+  findUserByUsername,
+} from './users';
 // Turns
 export {
   type CreateTurnInput,
@@ -415,14 +429,6 @@ export {
   type ListTurnsOptions,
   TurnWindowError,
 } from './turns';
-// Users (OAuth authentication)
-export {
-  type CreateUserInput,
-  createUser,
-  findOrCreateUser,
-  findUserById,
-  findUserByProvider,
-} from './users';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,
