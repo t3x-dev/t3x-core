@@ -129,6 +129,12 @@ export function FeedbackTab() {
           No feedback data available for this project.
         </p>
       )}
+
+      {!loading && !error && !selectedProjectId && (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Select a project above to view extraction feedback statistics.
+        </p>
+      )}
     </div>
   );
 }

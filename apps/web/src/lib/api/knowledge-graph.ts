@@ -83,7 +83,8 @@ export async function listKnowledgeNodes(projectId: string, limit = 50): Promise
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/knowledge-graph/nodes?${qs}`
   );
-  return handleResponse<KnowledgeNode[]>(res);
+  const data = await handleResponse<{ nodes: KnowledgeNode[]; total: number }>(res);
+  return data.nodes;
 }
 
 /**
@@ -118,7 +119,8 @@ export async function searchKnowledgeNodes(
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/knowledge-graph/search?${qs}`
   );
-  return handleResponse<KnowledgeNode[]>(res);
+  const data = await handleResponse<{ nodes: KnowledgeNode[]; total: number }>(res);
+  return data.nodes;
 }
 
 /**
