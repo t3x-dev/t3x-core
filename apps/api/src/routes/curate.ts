@@ -254,11 +254,11 @@ function extractChunksFromTurns(
           chunks.push({
             id: `chunk-${chunkIdx++}`,
             start: globalOffset + prefix.length + match.index,
-            end: globalOffset + prefix.length + match.index + match[0].length,
+            end: globalOffset + prefix.length + match.index + sentence.length,
             text: sentence,
             turn_hash: turn.turn_hash,
             turn_start: match.index,
-            turn_end: match.index + match[0].length,
+            turn_end: match.index + sentence.length,
           });
           lastEnd = match.index + match[0].length;
         }
