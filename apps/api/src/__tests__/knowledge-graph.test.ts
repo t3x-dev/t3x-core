@@ -90,7 +90,7 @@ describe('Knowledge Graph Routes', () => {
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.nodes).toEqual([]);
-      expect(json.data.total).toBe(0);
+      expect(json.data.count).toBe(0);
     });
 
     it('returns nodes sorted by member count', async () => {
@@ -121,7 +121,7 @@ describe('Knowledge Graph Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.nodes.length).toBe(1);
-      expect(json.data.total).toBe(1);
+      expect(json.data.count).toBe(1);
     });
   });
 
@@ -235,7 +235,7 @@ describe('Knowledge Graph Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.neighbors).toEqual([]);
-      expect(json.data.total).toBe(0);
+      expect(json.data.count).toBe(0);
     });
 
     it('returns 404 for non-existent node', async () => {
@@ -279,7 +279,7 @@ describe('Knowledge Graph Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.nodes.length).toBe(0);
-      expect(json.data.total).toBe(0);
+      expect(json.data.count).toBe(0);
     });
 
     it('respects limit parameter', async () => {

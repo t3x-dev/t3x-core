@@ -8,7 +8,7 @@
 let _wordSegmenter: Intl.Segmenter | undefined;
 function getWordSegmenter(): Intl.Segmenter {
   if (!_wordSegmenter) {
-    _wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+    _wordSegmenter = new Intl.Segmenter('en', { granularity: 'word' });
   }
   return _wordSegmenter;
 }

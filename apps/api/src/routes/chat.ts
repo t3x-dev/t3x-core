@@ -289,6 +289,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         let buffer = '';
         let resolvedModel = model;
         const usage: { input_tokens?: number; output_tokens?: number } = {};
+        let receivedMessageStop = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -346,6 +347,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
               }
             } else if (eventType === 'message_stop') {
               // Stream complete — emit done
+              receivedMessageStop = true;
               controller.enqueue(
                 encodeSseEvent(
                   JSON.stringify({
@@ -363,6 +365,18 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
         // If Anthropic stream ended without message_stop, emit done anyway
         // (safety net for abnormal stream termination)
+        if (!receivedMessageStop) {
+          controller.enqueue(
+            encodeSseEvent(
+              JSON.stringify({
+                type: 'done',
+                model: resolvedModel,
+                usage,
+              })
+            )
+          );
+          controller.enqueue(encodeSseEvent('[DONE]'));
+        }
         reader.releaseLock();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';

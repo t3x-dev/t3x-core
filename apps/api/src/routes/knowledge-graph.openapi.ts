@@ -228,7 +228,7 @@ const ListNodesResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     nodes: z.array(KnowledgeNodeSchema),
-    total: z.number(),
+    count: z.number(),
   }),
 });
 
@@ -266,7 +266,7 @@ knowledgeGraphRoutes.openapi(listNodesRoute, async (c) => {
     const db = await getDB();
     const nodes = await findKnowledgeNodesByProject(db, projectId, { limit });
 
-    return c.json({ success: true as const, data: { nodes, total: nodes.length } }, 200);
+    return c.json({ success: true as const, data: { nodes, count: nodes.length } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'LIST_FAILED', message);
@@ -330,7 +330,7 @@ const NeighborsResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     neighbors: z.array(NeighborNodeSchema),
-    total: z.number(),
+    count: z.number(),
   }),
 });
 
@@ -368,7 +368,7 @@ knowledgeGraphRoutes.openapi(getNeighborsRoute, async (c) => {
 
     const neighbors = await findNeighborNodes(db, nodeId);
 
-    return c.json({ success: true as const, data: { neighbors, total: neighbors.length } }, 200);
+    return c.json({ success: true as const, data: { neighbors, count: neighbors.length } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GET_FAILED', message);
@@ -381,7 +381,7 @@ const SearchNodesResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
     nodes: z.array(KnowledgeNodeSchema),
-    total: z.number(),
+    count: z.number(),
   }),
 });
 
@@ -424,7 +424,7 @@ knowledgeGraphRoutes.openapi(searchNodesRoute, async (c) => {
     const db = await getDB();
     const nodes = await searchKnowledgeNodes(db, projectId, q, { limit });
 
-    return c.json({ success: true as const, data: { nodes, total: nodes.length } }, 200);
+    return c.json({ success: true as const, data: { nodes, count: nodes.length } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'SEARCH_FAILED', message);

@@ -38,14 +38,15 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         if (cancelled) return;
         setConfig(cfg);
         setAdaptiveResult(adaptive);
-      } catch (err) {
-        console.error('Failed to load autopilot config:', err);
+      } catch (_err) {
+        // UI shows fallback message when config is null
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [projectId]);
 
@@ -59,8 +60,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           const saved = await updateAutopilotConfig(projectId, updated);
           setConfig(saved);
           toast.success('Autopilot settings saved');
-        } catch (err) {
-          console.error('Failed to save autopilot config:', err);
+        } catch (_err) {
           toast.error('Failed to save settings');
         } finally {
           setSaving(false);

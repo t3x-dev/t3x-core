@@ -1,7 +1,6 @@
 'use client';
 
 import { Loader2, Search, X } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -225,12 +224,14 @@ export function SearchPage() {
                   <HighlightedText text={hit.text} query={query} />
                 </p>
                 <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
-                  <Link
-                    href={`/project/???/commit/${hit.commit_hash}`}
-                    className="font-mono hover:text-[var(--text-secondary)] transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(hit.commit_hash)}
+                    title="Copy commit hash"
+                    className="font-mono hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
                   >
                     {hit.commit_hash.slice(0, 8)}
-                  </Link>
+                  </button>
                   <span className="inline-flex items-center rounded-full bg-[var(--hover-bg)] px-2 py-0.5 font-mono">
                     {hit.score.toFixed(3)}
                   </span>
