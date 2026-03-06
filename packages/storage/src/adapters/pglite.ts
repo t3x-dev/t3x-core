@@ -76,12 +76,8 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
       '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
     );
 
-    // Clean up failed client
-    try {
-      if (client) await client.close();
-    } catch {
-      // ignore close errors on corrupted instance
-    }
+    // Skip client.close() on corrupted instance — calling close() on an
+    // aborted WASM runtime can trigger a second abort that crashes the process.
     client = null;
     db = null;
 
