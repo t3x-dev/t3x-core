@@ -7,6 +7,15 @@
 
 import { isInternalUrlResolved } from './ssrf';
 
+/** Reject path segments that contain traversal or delimiter characters. */
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_\-]+$/;
+
+function assertSafePathSegment(value: string, label: string): void {
+  if (!SAFE_PATH_SEGMENT.test(value)) {
+    throw new Error(`${label} contains invalid characters: ${value}`);
+  }
+}
+
 interface RecipeStep {
   action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
   config: Record<string, unknown>;
@@ -129,6 +138,7 @@ export async function executeRecipe(
             });
             break;
           }
+          assertSafePathSegment(runId, 'run_id');
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
           const exportHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           const internalKeyExport = process.env.INTERNAL_API_KEY || process.env.API_KEY;
@@ -178,6 +188,7 @@ export async function executeRecipe(
             });
             break;
           }
+          assertSafePathSegment(draftId, 'draft_id');
           const baseUrlCommit = deps.apiBaseUrl || 'http://localhost:8000';
           const commitHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           const internalKeyCommit = process.env.INTERNAL_API_KEY || process.env.API_KEY;

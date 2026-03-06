@@ -18,7 +18,7 @@ import type {
   LeafType,
 } from '@t3x/core';
 import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x/core';
-import { and, desc, eq, gt, inArray, lt, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type LeafRecord, leaves } from '../schema-v4';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
@@ -131,11 +131,11 @@ export async function findLeavesByCommit(
   if (options.cursor !== undefined) {
     if (options.cursor !== '') {
       const { t, k } = decodeCursor(options.cursor);
-      // ORDER BY createdAt DESC, id ASC → keyset: (created_at < t) OR (created_at = t AND id > k)
+      // ORDER BY createdAt DESC, id DESC → keyset: (created_at < t) OR (created_at = t AND id < k)
       conditions.push(
         or(
           lt(leaves.createdAt, new Date(t)),
-          and(eq(leaves.createdAt, new Date(t)), gt(leaves.id, k))
+          and(eq(leaves.createdAt, new Date(t)), lt(leaves.id, k))
         )!
       );
     }
@@ -144,7 +144,7 @@ export async function findLeavesByCommit(
       .select()
       .from(leaves)
       .where(and(...conditions))
-      .orderBy(desc(leaves.createdAt), leaves.id)
+      .orderBy(desc(leaves.createdAt), desc(leaves.id))
       .limit(limit + 1);
 
     return toCursorPage(rows.map(rowToLeaf), limit, (leaf) => ({
@@ -160,7 +160,7 @@ export async function findLeavesByCommit(
     .select()
     .from(leaves)
     .where(and(...conditions))
-    .orderBy(desc(leaves.createdAt), leaves.id)
+    .orderBy(desc(leaves.createdAt), desc(leaves.id))
     .limit(limit)
     .offset(offset);
 
@@ -204,11 +204,11 @@ export async function findLeavesByProject(
   if (options.cursor !== undefined) {
     if (options.cursor !== '') {
       const { t, k } = decodeCursor(options.cursor);
-      // ORDER BY createdAt DESC, id ASC → keyset: (created_at < t) OR (created_at = t AND id > k)
+      // ORDER BY createdAt DESC, id DESC → keyset: (created_at < t) OR (created_at = t AND id < k)
       conditions.push(
         or(
           lt(leaves.createdAt, new Date(t)),
-          and(eq(leaves.createdAt, new Date(t)), gt(leaves.id, k))
+          and(eq(leaves.createdAt, new Date(t)), lt(leaves.id, k))
         )!
       );
     }
@@ -217,7 +217,7 @@ export async function findLeavesByProject(
       .select()
       .from(leaves)
       .where(and(...conditions))
-      .orderBy(desc(leaves.createdAt), leaves.id)
+      .orderBy(desc(leaves.createdAt), desc(leaves.id))
       .limit(limit + 1);
 
     return toCursorPage(rows.map(rowToLeaf), limit, (leaf) => ({
@@ -233,7 +233,7 @@ export async function findLeavesByProject(
     .select()
     .from(leaves)
     .where(and(...conditions))
-    .orderBy(desc(leaves.createdAt), leaves.id)
+    .orderBy(desc(leaves.createdAt), desc(leaves.id))
     .limit(limit)
     .offset(offset);
 

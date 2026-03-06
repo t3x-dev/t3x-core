@@ -86,6 +86,7 @@ const IngestWebhookRequest = z
 const IngestResultSchema = z.object({
   conversation_id: z.string(),
   turns_created: z.number(),
+  turns_skipped: z.number(),
   source: z.string().nullable(),
 });
 
@@ -183,6 +184,7 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
     // Insert turns sequentially in a transaction (hash chain requires ordering;
     // transaction ensures all-or-nothing on partial failure)
     let turnsCreated = 0;
+    let turnsSkipped = 0;
     await db.transaction(async (tx) => {
       for (const turn of body.turns) {
         // Auto-compute content from content_blocks when content is empty/missing
@@ -191,7 +193,10 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
           (turn.content_blocks?.length
             ? textFromBlocks(turn.content_blocks as ContentBlock[])
             : '');
-        if (!content) continue; // Skip turns with no content at all
+        if (!content) {
+          turnsSkipped++;
+          continue; // Skip turns with no content at all
+        }
 
         await insertTurn(tx, {
           projectId,
@@ -210,6 +215,7 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
         data: {
           conversation_id: conversationId,
           turns_created: turnsCreated,
+          turns_skipped: turnsSkipped,
           source: body.source ?? null,
         },
       },

@@ -102,6 +102,11 @@ export async function parseWeiboUrl(url: string): Promise<ParseResult> {
     throw new Error('Could not extract post ID from Weibo URL');
   }
 
+  // Validate postId is strictly alphanumeric/underscore to prevent URL injection
+  if (!/^\w+$/.test(postId)) {
+    throw new Error('Invalid Weibo post ID');
+  }
+
   // Use the mobile API endpoint to get post data as JSON
   const apiUrl = `${MOBILE_API}?id=${postId}`;
 

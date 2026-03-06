@@ -50,7 +50,8 @@ export async function getAutopilotConfig(projectId: string): Promise<AutopilotCo
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/autopilot/config`
   );
-  return handleResponse<AutopilotConfig>(res);
+  const data = await handleResponse<{ config: AutopilotConfig }>(res);
+  return data.config;
 }
 
 /**

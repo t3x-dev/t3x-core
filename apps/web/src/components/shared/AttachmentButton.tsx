@@ -1,7 +1,7 @@
 'use client';
 
 import { Paperclip, X } from 'lucide-react';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { ContentBlock } from './ContentBlockRenderer';
@@ -20,15 +20,38 @@ function getBlockType(mimeType: string): ContentBlock['type'] {
 
 export function AttachmentButton({ attachments, onAdd, onRemove }: AttachmentButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+
+  // Revoke all tracked object URLs on unmount
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      for (const url of urls) {
+        URL.revokeObjectURL(url);
+      }
+      urls.clear();
+    };
+  }, []);
+
+  const handleRemove = (index: number) => {
+    const attachment = attachments[index];
+    if (attachment?.url && objectUrlsRef.current.has(attachment.url)) {
+      URL.revokeObjectURL(attachment.url);
+      objectUrlsRef.current.delete(attachment.url);
+    }
+    onRemove(index);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
     for (const file of Array.from(files)) {
+      const objectUrl = URL.createObjectURL(file);
+      objectUrlsRef.current.add(objectUrl);
       const block: ContentBlock = {
         type: getBlockType(file.type),
-        url: URL.createObjectURL(file),
+        url: objectUrl,
         filename: file.name,
         mime_type: file.type || 'application/octet-stream',
       };
@@ -54,7 +77,7 @@ export function AttachmentButton({ attachments, onAdd, onRemove }: AttachmentBut
               <span className="max-w-[120px] truncate">{attachment.filename || 'file'}</span>
               <button
                 type="button"
-                onClick={() => onRemove(index)}
+                onClick={() => handleRemove(index)}
                 className="ml-0.5 rounded-sm hover:bg-muted-foreground/20 p-0.5"
               >
                 <X className="h-3 w-3" />

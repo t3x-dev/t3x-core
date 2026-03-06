@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,14 +38,15 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         if (cancelled) return;
         setConfig(cfg);
         setAdaptiveResult(adaptive);
-      } catch (err) {
-        console.error('Failed to load autopilot config:', err);
+      } catch (_err) {
+        // UI shows fallback message when config is null
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [projectId]);
 
@@ -57,8 +59,9 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           setSaving(true);
           const saved = await updateAutopilotConfig(projectId, updated);
           setConfig(saved);
-        } catch (err) {
-          console.error('Failed to save autopilot config:', err);
+          toast.success('Autopilot settings saved');
+        } catch (_err) {
+          toast.error('Failed to save settings');
         } finally {
           setSaving(false);
         }
