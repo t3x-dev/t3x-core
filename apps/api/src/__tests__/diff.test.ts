@@ -115,61 +115,70 @@ describe('Diff Routes', () => {
     });
 
     it('falls back to sentence splitting when rings_json is empty (turn hash mode)', async () => {
-      const { findTurnByHash } = await import('@t3x/storage/pglite');
+      const origGoogleKey = process.env.GOOGLE_AI_STUDIO_KEY;
+      try {
+        const { findTurnByHash } = await import('@t3x/storage/pglite');
 
-      (findTurnByHash as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({
-          turnHash: 'sha256:base_turn',
-          content: 'I want a window seat. Budget is 3000 dollars.',
-          ringsJson: null,
-        })
-        .mockResolvedValueOnce({
-          turnHash: 'sha256:target_turn',
-          content: 'Prefer aisle seat. Budget is flexible.',
-          ringsJson: null,
+        (findTurnByHash as ReturnType<typeof vi.fn>)
+          .mockResolvedValueOnce({
+            turnHash: 'sha256:base_turn',
+            content: 'I want a window seat. Budget is 3000 dollars.',
+            ringsJson: null,
+          })
+          .mockResolvedValueOnce({
+            turnHash: 'sha256:target_turn',
+            content: 'Prefer aisle seat. Budget is flexible.',
+            ringsJson: null,
+          });
+
+        // Turn hash mode needs embedding API — mock it
+        process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
+        const { createDiffEngine, createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
+          await import('@t3x/core');
+
+        (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
+        (createCachedEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({
+          setCacheFromRecords: vi.fn().mockReturnValue(0),
+          getCacheStats: vi.fn().mockReturnValue({ hits: 0, misses: 0 }),
+        });
+        const mockDiffEngine = {
+          diffTwoWay: vi.fn().mockResolvedValue({
+            baseId: 'sha256:base_turn',
+            targetId: 'sha256:target_turn',
+            segmentDiffs: [],
+            stats: { same: 0, modified: 0, added: 2, removed: 2 },
+          }),
+        };
+        (createDiffEngine as ReturnType<typeof vi.fn>).mockReturnValue(mockDiffEngine);
+
+        const res = await app.request('/v1/diff/two-way', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            baseTurnHash: 'sha256:base_turn',
+            targetTurnHash: 'sha256:target_turn',
+          }),
         });
 
-      // Turn hash mode needs embedding API — mock it
-      process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
-      const { createDiffEngine, createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
-        await import('@t3x/core');
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.success).toBe(true);
 
-      (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
-      (createCachedEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({
-        setCacheFromRecords: vi.fn().mockReturnValue(0),
-        getCacheStats: vi.fn().mockReturnValue({ hits: 0, misses: 0 }),
-      });
-      const mockDiffEngine = {
-        diffTwoWay: vi.fn().mockResolvedValue({
-          baseId: 'sha256:base_turn',
-          targetId: 'sha256:target_turn',
-          segmentDiffs: [],
-          stats: { same: 0, modified: 0, added: 2, removed: 2 },
-        }),
-      };
-      (createDiffEngine as ReturnType<typeof vi.fn>).mockReturnValue(mockDiffEngine);
-
-      const res = await app.request('/v1/diff/two-way', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseTurnHash: 'sha256:base_turn',
-          targetTurnHash: 'sha256:target_turn',
-        }),
-      });
-
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.success).toBe(true);
-
-      // Verify diff engine was called with fallback segments
-      expect(mockDiffEngine.diffTwoWay).toHaveBeenCalled();
-      const callArgs = mockDiffEngine.diffTwoWay.mock.calls[0];
-      // base segments should be split from content
-      expect(callArgs[1]).toEqual([
-        { segmentId: 's_fallback_0', text: 'I want a window seat.' },
-        { segmentId: 's_fallback_1', text: 'Budget is 3000 dollars.' },
-      ]);
+        // Verify diff engine was called with fallback segments
+        expect(mockDiffEngine.diffTwoWay).toHaveBeenCalled();
+        const callArgs = mockDiffEngine.diffTwoWay.mock.calls[0];
+        // base segments should be split from content
+        expect(callArgs[1]).toEqual([
+          { segmentId: 's_fallback_0', text: 'I want a window seat.' },
+          { segmentId: 's_fallback_1', text: 'Budget is 3000 dollars.' },
+        ]);
+      } finally {
+        if (origGoogleKey === undefined) {
+          delete process.env.GOOGLE_AI_STUDIO_KEY;
+        } else {
+          process.env.GOOGLE_AI_STUDIO_KEY = origGoogleKey;
+        }
+      }
     });
 
     it('returns 404 for non-existent V3 commit', async () => {
