@@ -7,10 +7,14 @@
  * @see docs/plans/core-engine/00-index.md
  */
 
+// Business Gate (Gate 3)
+export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
 // Delta
 export { applyDelta, buildDraft } from './delta';
 // Diff
 export { frameDiff } from './diff';
+// Gate (Gate 2 — Semantic)
+export { buildSemanticGatePrompt, parseSemanticGateResponse, SemanticGate } from './gate';
 // Merge
 export { prepareFrameMerge } from './merge';
 // Zod Schemas

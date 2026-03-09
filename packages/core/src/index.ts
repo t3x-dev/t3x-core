@@ -327,16 +327,22 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   applyDelta,
+  BusinessGate,
   buildDraft,
+  buildSemanticGatePrompt,
   checkRelationSanity,
   DeltaSchema,
+  evaluateRule,
   FRAME_RELATION_TYPES,
   FrameRelationTypeSchema,
   FrameSchema,
   frameDiff,
+  parseGatesConfig,
+  parseSemanticGateResponse,
   prepareFrameMerge,
   RelationSchema,
   SemanticContentSchema,
+  SemanticGate,
   SlotValueSchema,
   validateIntegrity,
 } from './semantic';
