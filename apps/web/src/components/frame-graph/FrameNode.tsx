@@ -256,6 +256,15 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
     state === 'conflict' && 'border-2 border-red-500'
   );
 
+  // Inline style for the origin-pulse glow on newly added nodes
+  const addedGlowStyle: React.CSSProperties | undefined =
+    state === 'added'
+      ? {
+          boxShadow: '0 0 12px 2px rgba(34, 197, 94, 0.5)',
+          animation: 'frameOriginPulse 2s ease-out forwards',
+        }
+      : undefined;
+
   const handleTypeCommit = useCallback(
     (newTitle: string) => {
       const newType = toSnakeCase(newTitle);
@@ -267,7 +276,17 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
   );
 
   return (
-    <div className={stateClasses}>
+    <div className={stateClasses} style={addedGlowStyle}>
+      {/* Keyframe for origin pulse glow */}
+      {state === 'added' && (
+        <style>{`
+          @keyframes frameOriginPulse {
+            0% { box-shadow: 0 0 12px 2px rgba(34, 197, 94, 0.5); }
+            50% { box-shadow: 0 0 18px 4px rgba(34, 197, 94, 0.35); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+          }
+        `}</style>
+      )}
       {/* Connection handles */}
       <Handle
         type="target"

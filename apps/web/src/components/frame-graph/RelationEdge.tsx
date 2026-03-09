@@ -42,7 +42,9 @@ export function RelationEdge({
 }: EdgeProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const relationType = (data as RelationEdgeData | undefined)?.relationType ?? 'elaborates';
+  const edgeData = data as RelationEdgeData | undefined;
+  const relationType = edgeData?.relationType ?? 'elaborates';
+  const isNew = edgeData?.isNew ?? false;
   const relStyle = RELATION_STYLES[relationType];
   const strokeWidth = STROKE_WIDTHS[relationType];
 
@@ -62,12 +64,31 @@ export function RelationEdge({
       ? strokeWidth + 0.5
       : strokeWidth;
 
+  // Edge draw animation styles for new edges
+  const newEdgeStyle: React.CSSProperties = isNew
+    ? {
+        strokeDasharray: '1000',
+        strokeDashoffset: '1000',
+        animation: 'edgeDraw 500ms ease-out forwards',
+      }
+    : {};
+
   return (
     <g
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ cursor: 'pointer' }}
     >
+      {/* Keyframe definition for edge draw animation */}
+      {isNew && (
+        <style>{`
+          @keyframes edgeDraw {
+            from { stroke-dashoffset: 1000; }
+            to { stroke-dashoffset: 0; }
+          }
+        `}</style>
+      )}
+
       {/* Hover/select glow */}
       {(isHovered || selected) && (
         <path
@@ -88,8 +109,11 @@ export function RelationEdge({
           ...style,
           stroke: relStyle.color,
           strokeWidth: activeStrokeWidth,
-          ...(relStyle.strokeDasharray ? { strokeDasharray: relStyle.strokeDasharray } : {}),
+          ...(relStyle.strokeDasharray && !isNew
+            ? { strokeDasharray: relStyle.strokeDasharray }
+            : {}),
           transition: 'stroke-width 150ms ease',
+          ...newEdgeStyle,
         }}
         markerEnd={`url(#${markerIdFor(relationType)})`}
       />

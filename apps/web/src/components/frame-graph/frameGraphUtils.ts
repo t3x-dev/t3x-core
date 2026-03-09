@@ -15,6 +15,8 @@ export interface FrameNodeData {
 
 export interface RelationEdgeData {
   relationType: FrameRelationType;
+  /** When true, the edge plays a stroke-dashoffset draw animation */
+  isNew?: boolean;
   [key: string]: unknown;
 }
 

@@ -1,4 +1,5 @@
 export { FrameDiffOverlay } from './FrameDiffOverlay';
+export { FrameDiffSplit } from './FrameDiffSplit';
 export { FrameGraphToolbar } from './FrameGraphToolbar';
 export { FrameGraphView } from './FrameGraphView';
 export { FrameMergeView } from './FrameMergeView';

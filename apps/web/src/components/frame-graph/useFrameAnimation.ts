@@ -17,6 +17,8 @@ export interface FrameAnimationState {
   updatedSlots: Record<string, string[]>;
   /** List of newly added relation keys (formatted as "from->type->to") */
   newRelations: string[];
+  /** Set of edge IDs (formatted as "from-to-type") that should animate as new */
+  newEdgeIds: Set<string>;
   /** Whether any animation is currently active */
   isAnimating: boolean;
 }
@@ -25,6 +27,7 @@ const IDLE_STATE: FrameAnimationState = {
   frameStates: {},
   updatedSlots: {},
   newRelations: [],
+  newEdgeIds: new Set(),
   isAnimating: false,
 };
 
@@ -62,11 +65,13 @@ export function useFrameAnimation(
           frameStates[f.id] = 'added';
         }
         const newRelations = curr.relations.map((r) => relationKey(r));
+        const newEdgeIds = new Set(curr.relations.map((r) => `${r.from}-${r.to}-${r.type}`));
         const hasChanges = curr.frames.length > 0 || newRelations.length > 0;
         return {
           frameStates,
           updatedSlots: {},
           newRelations,
+          newEdgeIds,
           isAnimating: hasChanges,
         };
       }
@@ -127,12 +132,22 @@ export function useFrameAnimation(
       });
       const newRelations = curr.relations.map((r) => relationKey(r)).filter((k) => !prevRelKeys[k]);
 
+      // Build edge IDs for new relations so RelationEdge can animate them
+      const newEdgeIds = new Set<string>();
+      for (const r of curr.relations) {
+        const key = relationKey(r);
+        if (!prevRelKeys[key]) {
+          newEdgeIds.add(`${r.from}-${r.to}-${r.type}`);
+        }
+      }
+
       const hasChanges = Object.keys(frameStates).length > 0 || newRelations.length > 0;
 
       return {
         frameStates,
         updatedSlots,
         newRelations,
+        newEdgeIds,
         isAnimating: hasChanges,
       };
     },
