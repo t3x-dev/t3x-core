@@ -27,7 +27,10 @@ export const FrameSchema = z.object({
     .regex(/^[a-z][a-z0-9_]*$/),
   slots: z
     .record(SlotValueSchema)
-    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' }),
+    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' })
+    .refine((s) => Object.keys(s).length <= 100, {
+      message: 'Frame cannot have more than 100 slots',
+    }),
   source: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
@@ -58,8 +61,8 @@ export const RelationSchema = z.object({
  * (e.g. buildDraft result), use the SemanticContent TypeScript type directly.
  */
 export const SemanticContentSchema = z.object({
-  frames: z.array(FrameSchema).min(1),
-  relations: z.array(RelationSchema),
+  frames: z.array(FrameSchema).min(1).max(1000),
+  relations: z.array(RelationSchema).max(5000),
 });
 
 // ── Delta ──

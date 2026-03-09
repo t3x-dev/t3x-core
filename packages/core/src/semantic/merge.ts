@@ -60,7 +60,12 @@ export function prepareFrameMerge(
       autoKept.push(tgtFrame);
     } else {
       const slotConflicts = findSlotConflicts(baseFrame, srcFrame, tgtFrame);
-      if (slotConflicts.length === 0) {
+      // If both sides changed the type differently, treat as a conflict
+      const typeConflict =
+        srcFrame.type !== tgtFrame.type &&
+        srcFrame.type !== baseFrame.type &&
+        tgtFrame.type !== baseFrame.type;
+      if (slotConflicts.length === 0 && !typeConflict) {
         const merged = mergeNonConflicting(baseFrame, srcFrame, tgtFrame);
         autoKept.push(merged);
       } else {
@@ -153,5 +158,7 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
       }
     }
   }
-  return { ...src, slots };
+  // Use the changed side's type; if only target changed type, take target's
+  const mergedType = tgt.type !== base.type && src.type === base.type ? tgt.type : src.type;
+  return { ...src, type: mergedType, slots };
 }

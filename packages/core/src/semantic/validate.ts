@@ -29,7 +29,7 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   // 2. Broken refs in slots
   for (const frame of content.frames) {
     for (const [key, value] of Object.entries(frame.slots)) {
-      checkSlotRefs(value, `${frame.id}.${key}`, frameIds, errors);
+      checkSlotRefs(value, `${frame.id}.${key}`, frameIds, errors, 0);
     }
   }
 
@@ -115,17 +115,28 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+const MAX_SLOT_DEPTH = 10;
+
 function checkSlotRefs(
   value: SlotValue,
   path: string,
   frameIds: Set<string>,
-  errors: ValidationError[]
+  errors: ValidationError[],
+  depth: number
 ): void {
+  if (depth > MAX_SLOT_DEPTH) {
+    errors.push({
+      type: 'broken_ref',
+      message: `"${path}" exceeds maximum nesting depth (${MAX_SLOT_DEPTH})`,
+      location: path,
+    });
+    return;
+  }
   if (value === null || value === undefined) return;
   if (typeof value === 'string' || typeof value === 'number') return;
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
-      checkSlotRefs(value[i], `${path}[${i}]`, frameIds, errors);
+      checkSlotRefs(value[i], `${path}[${i}]`, frameIds, errors, depth + 1);
     }
     return;
   }
@@ -143,7 +154,7 @@ function checkSlotRefs(
     if ('slots' in value && typeof (value as { slots: unknown }).slots === 'object') {
       const slots = (value as { slots: Record<string, SlotValue> }).slots;
       for (const [key, val] of Object.entries(slots)) {
-        checkSlotRefs(val, `${path}.${key}`, frameIds, errors);
+        checkSlotRefs(val, `${path}.${key}`, frameIds, errors, depth + 1);
       }
     }
   }

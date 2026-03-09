@@ -78,6 +78,33 @@ describe('prepareFrameMerge', () => {
     expect(result.relationsOnlyInTarget).toHaveLength(1);
   });
 
+  it('auto-merges non-conflicting slot changes with one-side type change', () => {
+    const base: SemanticContent = { frames: [f('f_001', 'plan', { a: 1, b: 2 })], relations: [] };
+    const source: SemanticContent = {
+      frames: [f('f_001', 'plan', { a: 10, b: 2 })],
+      relations: [],
+    };
+    const target: SemanticContent = {
+      frames: [f('f_001', 'refined_plan', { a: 1, b: 20 })],
+      relations: [],
+    };
+    const result = prepareFrameMerge(base, source, target);
+    expect(result.autoKept).toHaveLength(1);
+    expect(result.autoKept[0].type).toBe('refined_plan');
+    expect(result.autoKept[0].slots.a).toBe(10);
+    expect(result.autoKept[0].slots.b).toBe(20);
+  });
+
+  it('conflicts when both sides change type differently', () => {
+    const base: SemanticContent = { frames: [f('f_001', 'plan', { a: 1 })], relations: [] };
+    const source: SemanticContent = { frames: [f('f_001', 'budget', { a: 1 })], relations: [] };
+    const target: SemanticContent = { frames: [f('f_001', 'travel', { a: 1 })], relations: [] };
+    const result = prepareFrameMerge(base, source, target);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0].sourceFrame.type).toBe('budget');
+    expect(result.conflicts[0].targetFrame.type).toBe('travel');
+  });
+
   it('no conflict when both make same change', () => {
     const base: SemanticContent = { frames: [f('f_001', 'x', { a: 1 })], relations: [] };
     const source: SemanticContent = { frames: [f('f_001', 'x', { a: 99 })], relations: [] };

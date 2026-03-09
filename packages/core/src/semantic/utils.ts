@@ -1,10 +1,14 @@
 import type { Relation, SlotValue } from './types';
 
+const MAX_DEPTH = 10;
+
 /**
  * Deep equality comparison for SlotValue types.
  * Handles string, number, boolean (defensive), SlotRef, InlineFrame, and arrays.
+ * Returns false if nesting exceeds MAX_DEPTH to prevent stack overflow.
  */
-export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined): boolean {
+export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined, depth = 0): boolean {
+  if (depth > MAX_DEPTH) return false;
   if (a === b) return true;
   if (a === undefined || b === undefined) return false;
   if (typeof a !== typeof b) return false;
@@ -13,7 +17,7 @@ export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined): b
   if (a === null || b === null) return a === b;
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
-    return a.every((v, i) => deepEqual(v, b[i]));
+    return a.every((v, i) => deepEqual(v, b[i], depth + 1));
   }
   if (Array.isArray(a) || Array.isArray(b)) return false;
   const aObj = a as unknown as Record<string, unknown>;
@@ -21,7 +25,9 @@ export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined): b
   const aKeys = Object.keys(aObj);
   const bKeys = Object.keys(bObj);
   if (aKeys.length !== bKeys.length) return false;
-  return aKeys.every((k) => k in bObj && deepEqual(aObj[k] as SlotValue, bObj[k] as SlotValue));
+  return aKeys.every(
+    (k) => k in bObj && deepEqual(aObj[k] as SlotValue, bObj[k] as SlotValue, depth + 1)
+  );
 }
 
 /**

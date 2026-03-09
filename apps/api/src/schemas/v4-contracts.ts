@@ -12,7 +12,7 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES, SemanticContentSchema } from '@t3x/core';
 import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -137,13 +137,9 @@ export const CreateCommitV4Request = z
       .describe('References to source conversations or leaves'),
     position_x: z.number().optional().describe('Canvas X position'),
     position_y: z.number().optional().describe('Canvas Y position'),
-    semantic: z
-      .any()
-      .nullable()
+    semantic: SemanticContentSchema.nullable()
       .optional()
-      .describe(
-        'Semantic frame content (frames + relations). JSON passthrough, validated in core.'
-      ),
+      .describe('Semantic frame content (frames + relations)'),
 
     // Inheritance control
     inherit_parent_sentences: z
@@ -196,7 +192,7 @@ export const CommitV4Response = z.object({
       })
     )
     .nullable(),
-  semantic: z.any().nullable().optional(),
+  semantic: SemanticContentSchema.nullable().optional(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
