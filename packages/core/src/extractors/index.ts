@@ -2,7 +2,11 @@
  * Extractors exports
  */
 
-export { type AdaptiveThresholds, computeAdaptiveThresholds, type FeedbackStats } from './adaptiveThresholds';
+export {
+  type AdaptiveThresholds,
+  computeAdaptiveThresholds,
+  type FeedbackStats,
+} from './adaptiveThresholds';
 export {
   type ExtractionItem,
   ExtractionParseError,
@@ -18,6 +22,18 @@ export {
   type ValidationResult,
   validateExtractedSentences,
 } from './extractionValidator';
+export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
+export {
+  buildFrameExtractionPrompt,
+  type FrameExtractionPromptResult,
+} from './frameExtractionPrompt';
+// Frame Extraction (Phase 2)
+export {
+  type FrameExtractionInput,
+  type FrameExtractionResult,
+  type FrameExtractionTurn,
+  FrameExtractor,
+} from './frameExtractor';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
@@ -65,4 +81,10 @@ export {
   type RingOutput,
   type Segment,
 } from './types';
-export { type OverlapResult, type OverlapStatus, type VerifiedProposal, type VerifyOptions, verifyProposal } from './verifyProposal';
+export {
+  type OverlapResult,
+  type OverlapStatus,
+  type VerifiedProposal,
+  type VerifyOptions,
+  verifyProposal,
+} from './verifyProposal';
