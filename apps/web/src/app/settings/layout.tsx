@@ -39,7 +39,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
           <Settings className="h-5 w-5 text-[var(--text-primary)]" />
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h2>
         </div>
-        <nav className="flex flex-col gap-1 flex-1">
+        <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -63,7 +63,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
 
         {/* Sign Out — only shown when user is authenticated */}
         {isAuthEnabled && (
-          <div className="border-t border-[var(--stroke-divider)] pt-3 mt-3">
+          <div className="border-t border-[var(--stroke-divider)] pt-3 mt-4">
             <button
               type="button"
               onClick={() => clearSession()}

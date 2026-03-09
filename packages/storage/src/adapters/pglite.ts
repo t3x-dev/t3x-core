@@ -522,17 +522,6 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_webhooks_project ON webhooks(project_id);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
 
-    -- Migration: Fix webhooks.active column type (TEXT → INTEGER)
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'webhooks' AND column_name = 'active' AND data_type = 'text'
-      ) THEN
-        ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER USING CASE WHEN active = 'true' THEN 1 ELSE 0 END;
-      END IF;
-    END $$;
-
     -- Drafts V3 table (Workbench / pre-commit working area)
     CREATE TABLE IF NOT EXISTS drafts_v3 (
       id TEXT PRIMARY KEY,
