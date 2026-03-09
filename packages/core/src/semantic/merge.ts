@@ -1,11 +1,5 @@
-import type {
-  Frame,
-  FrameMergeResult,
-  Relation,
-  SemanticContent,
-  SlotConflict,
-  SlotValue,
-} from './types';
+import type { Frame, FrameMergeResult, SemanticContent, SlotConflict, SlotValue } from './types';
+import { deepEqual, relKey } from './utils';
 
 export function prepareFrameMerge(
   base: SemanticContent,
@@ -98,10 +92,6 @@ export function prepareFrameMerge(
   };
 }
 
-function relKey(r: Relation): string {
-  return `${r.from}|${r.to}|${r.type}`;
-}
-
 function framesEqual(a: Frame, b: Frame): boolean {
   if (a.type !== b.type) return false;
   const aKeys = Object.keys(a.slots);
@@ -115,13 +105,13 @@ function findSlotConflicts(base: Frame | undefined, src: Frame, tgt: Frame): Slo
   const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots)]);
 
   for (const key of allKeys) {
-    const baseVal = base?.slots[key];
-    const srcVal = src.slots[key];
-    const tgtVal = tgt.slots[key];
+    const baseVal: SlotValue | undefined = base?.slots[key];
+    const srcVal: SlotValue | undefined = src.slots[key];
+    const tgtVal: SlotValue | undefined = tgt.slots[key];
 
-    if (deepEqual(srcVal as SlotValue, tgtVal as SlotValue)) continue;
-    if (base && deepEqual(srcVal as SlotValue, baseVal as SlotValue)) continue;
-    if (base && deepEqual(tgtVal as SlotValue, baseVal as SlotValue)) continue;
+    if (deepEqual(srcVal, tgtVal)) continue;
+    if (base && deepEqual(srcVal, baseVal)) continue;
+    if (base && deepEqual(tgtVal, baseVal)) continue;
 
     conflicts.push({
       key,
@@ -142,12 +132,12 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
   ]);
 
   for (const key of allKeys) {
-    const baseVal = base.slots[key];
-    const srcVal = src.slots[key];
-    const tgtVal = tgt.slots[key];
+    const baseVal: SlotValue | undefined = base.slots[key];
+    const srcVal: SlotValue | undefined = src.slots[key];
+    const tgtVal: SlotValue | undefined = tgt.slots[key];
 
-    const srcChanged = !deepEqual(srcVal as SlotValue, baseVal as SlotValue);
-    const tgtChanged = !deepEqual(tgtVal as SlotValue, baseVal as SlotValue);
+    const srcChanged = !deepEqual(srcVal, baseVal);
+    const tgtChanged = !deepEqual(tgtVal, baseVal);
 
     if (srcChanged) {
       if (srcVal === undefined) {
@@ -164,23 +154,4 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
     }
   }
   return { ...src, slots };
-}
-
-function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined): boolean {
-  if (a === b) return true;
-  if (a === undefined || b === undefined) return false;
-  if (typeof a !== typeof b) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((v, i) => deepEqual(v, b[i]));
-  }
-  if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
-    const aObj = a as unknown as Record<string, unknown>;
-    const bObj = b as unknown as Record<string, unknown>;
-    const aKeys = Object.keys(aObj);
-    const bKeys = Object.keys(bObj);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every((k) => k in bObj && deepEqual(aObj[k] as SlotValue, bObj[k] as SlotValue));
-  }
-  return false;
 }

@@ -101,6 +101,36 @@ describe('validateIntegrity', () => {
     expect(result.warnings.filter((w) => w.type === 'orphan_frame')).toHaveLength(0);
   });
 
+  it('does not flag depends cycle (only causes/follows trigger cycle detection)', () => {
+    const content: SemanticContent = {
+      frames: [frame('f_001'), frame('f_002')],
+      relations: [
+        { from: 'f_001', to: 'f_002', type: 'depends' },
+        { from: 'f_002', to: 'f_001', type: 'depends' },
+      ],
+    };
+    const result = validateIntegrity(content);
+    expect(result.errors.filter((e) => e.type === 'cycle')).toHaveLength(0);
+  });
+
+  it('reports full cycle path in error message', () => {
+    const content: SemanticContent = {
+      frames: [frame('f_001'), frame('f_002'), frame('f_003')],
+      relations: [
+        { from: 'f_001', to: 'f_002', type: 'causes' },
+        { from: 'f_002', to: 'f_003', type: 'causes' },
+        { from: 'f_003', to: 'f_001', type: 'causes' },
+      ],
+    };
+    const result = validateIntegrity(content);
+    const cycleErr = result.errors.find((e) => e.type === 'cycle');
+    expect(cycleErr).toBeDefined();
+    expect(cycleErr!.message).toContain('→');
+    expect(cycleErr!.message).toContain('f_001');
+    expect(cycleErr!.message).toContain('f_002');
+    expect(cycleErr!.message).toContain('f_003');
+  });
+
   it('detects follows cycle', () => {
     const content: SemanticContent = {
       frames: [frame('f_001'), frame('f_002')],

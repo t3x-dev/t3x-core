@@ -94,6 +94,24 @@ describe('frameDiff', () => {
     expect(result.relationsRemoved).toHaveLength(1);
   });
 
+  it('detects frame type change as modification', () => {
+    const a: SemanticContent = {
+      frames: [f('f_001', 'travel_plan', { dest: 'Paris' })],
+      relations: [],
+    };
+    const b: SemanticContent = {
+      frames: [f('f_001', 'budget_plan', { dest: 'Paris' })],
+      relations: [],
+    };
+    const result = frameDiff(a, b);
+    expect(result.identical).toHaveLength(0);
+    expect(result.modified).toHaveLength(1);
+    expect(result.modified[0].sourceFrame.type).toBe('travel_plan');
+    expect(result.modified[0].targetFrame.type).toBe('budget_plan');
+    // Slots unchanged, only type differs → slotDiffs empty
+    expect(result.modified[0].slotDiffs).toHaveLength(0);
+  });
+
   it('injects word diff for long string slots', () => {
     const a: SemanticContent = {
       frames: [f('f_001', 'x', { text: 'The quick brown fox jumps over the lazy dog' })],

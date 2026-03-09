@@ -768,8 +768,13 @@ describe('Commits V4 Storage', () => {
             slots: { item: 'dark mode', sentiment: 'positive' },
             confidence: 0.9,
           },
+          {
+            id: 'f_002',
+            type: 'ui_setting',
+            slots: { theme: 'dark' },
+          },
         ],
-        relations: [{ from: 'f_001', to: 'f_001', type: 'elaborates' as const, confidence: 0.8 }],
+        relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' as const, confidence: 0.8 }],
       };
 
       const result = await createCommitV4(db, {
@@ -781,7 +786,7 @@ describe('Commits V4 Storage', () => {
       });
 
       expect(result.semantic).toBeDefined();
-      expect(result.semantic!.frames).toHaveLength(1);
+      expect(result.semantic!.frames).toHaveLength(2);
       expect(result.semantic!.frames[0].id).toBe('f_001');
       expect(result.semantic!.frames[0].type).toBe('user_preference');
       expect(result.semantic!.frames[0].slots).toEqual({

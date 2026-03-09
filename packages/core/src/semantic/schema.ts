@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 const SlotRefSchema = z.object({ ref: z.string() });
 
+// Note: typed as Record<string, unknown> instead of Record<string, SlotValue> because
+// Zod's z.lazy() cannot express recursive generic types — runtime validation is correct.
 const InlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown> }> = z.lazy(() =>
   z.object({
     type: z.string().min(1),

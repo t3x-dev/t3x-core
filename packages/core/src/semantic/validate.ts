@@ -68,12 +68,18 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   const visited = new Set<string>();
   const inStack = new Set<string>();
   for (const node of graph.keys()) {
-    if (!visited.has(node) && hasCycle(node, graph, visited, inStack)) {
-      errors.push({
-        type: 'cycle',
-        message: `Causal/temporal cycle detected involving "${node}"`,
-        location: node,
-      });
+    if (!visited.has(node)) {
+      const path: string[] = [];
+      if (hasCycle(node, graph, visited, inStack, path)) {
+        const cycleStart = path[path.length - 1];
+        const cycleIdx = path.indexOf(cycleStart);
+        const cyclePath = path.slice(cycleIdx).join(' → ');
+        errors.push({
+          type: 'cycle',
+          message: `Causal/temporal cycle detected: ${cyclePath}`,
+          location: node,
+        });
+      }
     }
   }
 
@@ -147,14 +153,20 @@ function hasCycle(
   node: string,
   graph: Map<string, string[]>,
   visited: Set<string>,
-  inStack: Set<string>
+  inStack: Set<string>,
+  path: string[]
 ): boolean {
   visited.add(node);
   inStack.add(node);
+  path.push(node);
   for (const neighbor of graph.get(node) ?? []) {
-    if (inStack.has(neighbor)) return true;
-    if (!visited.has(neighbor) && hasCycle(neighbor, graph, visited, inStack)) return true;
+    if (inStack.has(neighbor)) {
+      path.push(neighbor);
+      return true;
+    }
+    if (!visited.has(neighbor) && hasCycle(neighbor, graph, visited, inStack, path)) return true;
   }
   inStack.delete(node);
+  path.pop();
   return false;
 }
