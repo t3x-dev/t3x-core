@@ -24,8 +24,10 @@ import {
   AllProvidersFailedError,
   collectLessons,
   GenerationError,
+  type GenerationMode,
   generateLeafOutput,
   isGenerationConfigured,
+  modeGenerate,
   suggestConstraints,
   suggestionsToConstraints,
   validateConstraints,
@@ -61,7 +63,12 @@ import {
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
-import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  CursorPageResponseSchema,
+  ErrorResponseSchema,
+  IdParamSchema,
+  SuccessResponseSchema,
+} from '../schemas/common';
 import {
   BatchGenerateRequest,
   BatchGenerateResponse,
@@ -223,7 +230,9 @@ const listLeavesByCommitRoute = createRoute({
   path: '/v1/commits/{hash}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by commit',
-  description: 'Lists all leaf nodes associated with a specific commit.',
+  description:
+    'Lists all leaf nodes associated with a specific commit. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       hash: z.string().min(1),
@@ -232,6 +241,7 @@ const listLeavesByCommitRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -239,7 +249,9 @@ const listLeavesByCommitRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -316,7 +328,9 @@ const listLeavesByProjectRoute = createRoute({
   path: '/v1/projects/{projectId}/leaves',
   tags: ['Leaves'],
   summary: 'List leaves by project',
-  description: 'Lists all leaf nodes in a project.',
+  description:
+    'Lists all leaf nodes in a project. ' +
+    'Supports cursor-based pagination via optional `cursor` query parameter.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
@@ -325,6 +339,7 @@ const listLeavesByProjectRoute = createRoute({
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -332,7 +347,9 @@ const listLeavesByProjectRoute = createRoute({
       description: 'List of leaves',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(LeafResponse)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(LeafResponse), z.array(LeafResponse)])
+          ),
         },
       },
     },
@@ -646,11 +663,29 @@ leavesRoutes.openapi(getLeafRoute, async (c) => {
 // GET /v1/commits/:hash/leaves - List leaves by commit
 leavesRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByCommit(db, decodedHash, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByCommit(db, decodedHash, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
@@ -806,10 +841,28 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
 // GET /v1/projects/:projectId/leaves - List leaves by project
 leavesRoutes.openapi(listLeavesByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { type, limit, offset } = c.req.valid('query');
+  const { type, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findLeavesByProject(db, projectId, { type, cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiLeaf),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
@@ -933,9 +986,11 @@ const generateLeafRoute = createRoute({
 // POST /v1/leaves/:id/generate - Generate output handler
 leavesRoutes.openapi(generateLeafRoute, async (c) => {
   const { id } = c.req.valid('param');
-  // Note: Request body per contract is empty object (future: additional options)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _body = c.req.valid('json');
+  const body = c.req.valid('json');
+
+  // Extract mode from request body (default: 'fast' for backward compatibility)
+  const mode: GenerationMode = body?.mode ?? 'fast';
+  const stylePreferences = body?.style_preferences;
 
   try {
     // Check if any generation provider is configured
@@ -965,29 +1020,99 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
     const lessons = collectLessons(historicalLeaves);
 
-    // Generate with automatic provider fallback
-    const result = await generateWithFallback({
-      commit,
-      leaf,
-      lessons: lessons.length > 0 ? lessons : undefined,
-      additionalInstructions:
-        typeof leaf.config?.user_instruction === 'string'
-          ? leaf.config.user_instruction
-          : undefined,
-    });
+    // Multi-round generation when mode is 'standard' or 'thorough'
+    let multiRoundResult:
+      | {
+          output: string;
+          rounds: Array<{
+            name: string;
+            round_number: number;
+            constraints_passed: boolean;
+            failed_constraints: string[];
+          }>;
+          total_rounds: number;
+          mode: GenerationMode;
+        }
+      | undefined;
+
+    if (mode !== 'fast') {
+      // Use multi-round pipeline via provider fallback
+      const reg = await getProviderRegistry();
+      multiRoundResult = await reg.tryWithFallback('generation', async (provider) => {
+        const mrResult = await modeGenerate({
+          commit,
+          leaf,
+          provider,
+          mode,
+          stylePreferences: stylePreferences
+            ? {
+                tone: stylePreferences.tone,
+                length: stylePreferences.length,
+                formality: stylePreferences.formality,
+              }
+            : undefined,
+        });
+        return { ...mrResult, mode };
+      });
+    }
+
+    // For 'fast' mode or when multi-round is not used, use existing generation path
+    let finalOutput: string;
+    let validationData:
+      | {
+          allPassed: boolean;
+          passedCount: number;
+          failedCount: number;
+          attempts: number;
+          assertions?: Array<{
+            id: string;
+            constraint_id: string;
+            passed: boolean;
+            details: string;
+            lesson?: string;
+          }>;
+        }
+      | undefined;
+    let generationModel = 'unknown';
+
+    if (multiRoundResult) {
+      finalOutput = multiRoundResult.output;
+      generationModel = 'multi-round';
+    } else {
+      // Generate with automatic provider fallback (existing single-round path)
+      const result = await generateWithFallback({
+        commit,
+        leaf,
+        lessons: lessons.length > 0 ? lessons : undefined,
+        additionalInstructions:
+          typeof leaf.config?.user_instruction === 'string'
+            ? leaf.config.user_instruction
+            : undefined,
+      });
+      finalOutput = result.output;
+      generationModel = result.model;
+      if (result.validation) {
+        validationData = {
+          allPassed: result.validation.allPassed,
+          passedCount: result.validation.passedCount,
+          failedCount: result.validation.failedCount,
+          attempts: result.attempts,
+          assertions: result.validation.assertions,
+        };
+      }
+    }
 
     // Update leaf with output (storage sets generated_at automatically)
-    const updatedLeaf = await updateLeafOutput(db, id, result.output);
+    const updatedLeaf = await updateLeafOutput(db, id, finalOutput);
 
     if (!updatedLeaf) {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
     }
 
-    // If auto-validation produced assertions, store them on the leaf
-    // Capture the return value so the final response reflects the updated assertions
-    if (result.validation) {
+    // If auto-validation produced assertions (fast mode), store them on the leaf
+    if (validationData?.assertions) {
       const leafWithAssertions = await updateLeaf(db, id, {
-        assertions: result.validation.assertions,
+        assertions: validationData.assertions,
       });
       if (leafWithAssertions) {
         Object.assign(updatedLeaf, leafWithAssertions);
@@ -998,9 +1123,9 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     try {
       await createLeafHistory(db, {
         leaf_id: id,
-        output: result.output,
-        config: leaf.config ?? {},
-        model: result.model,
+        output: finalOutput,
+        config: { ...(leaf.config ?? {}), generation_mode: mode },
+        model: generationModel,
       });
     } catch (historyErr) {
       // Log but don't fail - history is supplementary
@@ -1021,27 +1146,38 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     pushNotification({
       type: 'leaf.generated',
       title: 'Output Generated',
-      message: `Leaf "${leaf.title || id}" output generated`,
+      message: `Leaf "${leaf.title || id}" output generated (${mode} mode)`,
       project_id: leaf.project_id,
       ref_id: id,
     });
 
     // Return response according to contract (v4-contracts.ts)
-    // Use the generated_at from the updated leaf for consistency
     return c.json(
       {
         success: true as const,
         data: {
-          output: result.output,
+          output: finalOutput,
           generated_at: updatedLeaf.generated_at ?? new Date().toISOString(),
-          ...(result.validation
+          ...(validationData
             ? {
                 validation: {
-                  all_passed: result.validation.allPassed,
-                  passed_count: result.validation.passedCount,
-                  failed_count: result.validation.failedCount,
-                  attempts: result.attempts,
+                  all_passed: validationData.allPassed,
+                  passed_count: validationData.passedCount,
+                  failed_count: validationData.failedCount,
+                  attempts: 1,
                 },
+              }
+            : {}),
+          ...(multiRoundResult
+            ? {
+                rounds: multiRoundResult.rounds.map((r) => ({
+                  name: r.name,
+                  round_number: r.round_number,
+                  constraints_passed: r.constraints_passed,
+                  failed_constraints: r.failed_constraints,
+                })),
+                total_rounds: multiRoundResult.total_rounds,
+                mode: multiRoundResult.mode,
               }
             : {}),
         },

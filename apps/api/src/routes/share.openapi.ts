@@ -119,7 +119,7 @@ shareRoutes.openapi(createShareRoute, async (c) => {
       201
     );
   } catch (err) {
-    pinoLogger.error({ err }, "error creating share link");
+    pinoLogger.error({ err }, 'error creating share link');
     return errorResponse(c, 'CREATE_FAILED', 'Failed to create share link');
   }
 });
@@ -192,7 +192,7 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
       },
     });
   } catch (err) {
-    pinoLogger.error({ err }, "error resolving share link");
+    pinoLogger.error({ err }, 'error resolving share link');
     return errorResponse(c, 'GET_FAILED', 'Failed to resolve share link');
   }
 });
@@ -249,7 +249,7 @@ shareRoutes.openapi(revokeShareRoute, async (c) => {
       data: revoked,
     });
   } catch (err) {
-    pinoLogger.error({ err }, "error revoking share link");
+    pinoLogger.error({ err }, 'error revoking share link');
     return errorResponse(c, 'DELETE_FAILED', 'Failed to revoke share link');
   }
 });
@@ -296,7 +296,7 @@ shareRoutes.openapi(listShareRoute, async (c) => {
       data: tokens,
     });
   } catch (err) {
-    pinoLogger.error({ err }, "error listing share links");
+    pinoLogger.error({ err }, 'error listing share links');
     return errorResponse(c, 'LIST_FAILED', 'Failed to list share links');
   }
 });

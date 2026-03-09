@@ -12,14 +12,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { suggestConstraints, suggestionsToConstraints } from '../../leaf/constraintSuggester';
 import type { ValidateOptions } from '../../leaf/types';
-import {
-  SEMANTIC_EXCLUDE_THRESHOLD,
-  SEMANTIC_REQUIRE_THRESHOLD,
-} from '../../leaf/types';
+import { SEMANTIC_EXCLUDE_THRESHOLD, SEMANTIC_REQUIRE_THRESHOLD } from '../../leaf/types';
 import {
   validateConstraints,
-  validateRequireSemantic,
   validateExcludeSemantic,
+  validateRequireSemantic,
 } from '../../leaf/validate-constraints';
 import type { LLMProvider } from '../../llm/types';
 import type { EmbeddingProvider } from '../../providers/embedding/base';
@@ -106,7 +103,8 @@ describe('suggestConstraints', () => {
   });
 
   it('handles markdown code fences in response', async () => {
-    const mockResponse = '```json\n[{"type":"require","match_mode":"exact","value":"Japan","reason":"dest","confidence":0.9}]\n```';
+    const mockResponse =
+      '```json\n[{"type":"require","match_mode":"exact","value":"Japan","reason":"dest","confidence":0.9}]\n```';
     const provider = createMockProvider(mockResponse);
     const result = await suggestConstraints(provider, sampleSentences, 'article');
 
@@ -161,8 +159,20 @@ describe('suggestConstraints', () => {
 describe('suggestionsToConstraints', () => {
   it('converts suggestions to Constraint objects with IDs', async () => {
     const suggestions = [
-      { type: 'require' as const, match_mode: 'exact' as const, value: 'Japan', reason: 'dest', confidence: 0.9 },
-      { type: 'exclude' as const, match_mode: 'semantic' as const, value: 'seafood', reason: 'allergy', confidence: 0.85 },
+      {
+        type: 'require' as const,
+        match_mode: 'exact' as const,
+        value: 'Japan',
+        reason: 'dest',
+        confidence: 0.9,
+      },
+      {
+        type: 'exclude' as const,
+        match_mode: 'semantic' as const,
+        value: 'seafood',
+        reason: 'allergy',
+        confidence: 0.85,
+      },
     ];
 
     const constraints = await suggestionsToConstraints(suggestions);
@@ -218,7 +228,7 @@ describe('Configurable Semantic Thresholds', () => {
     it('uses custom threshold when provided', async () => {
       const embedder = createMockEmbedder(0.83);
       // 0.83 >= 0.80 custom → should pass
-      const result = await validateRequireSemantic('output', 'value', embedder, 0.80);
+      const result = await validateRequireSemantic('output', 'value', embedder, 0.8);
       expect(result.passed).toBe(true);
       expect(result.message).toContain('0.8');
     });
@@ -226,7 +236,7 @@ describe('Configurable Semantic Thresholds', () => {
     it('stricter custom threshold', async () => {
       const embedder = createMockEmbedder(0.88);
       // 0.88 < 0.90 custom → should fail
-      const result = await validateRequireSemantic('output', 'value', embedder, 0.90);
+      const result = await validateRequireSemantic('output', 'value', embedder, 0.9);
       expect(result.passed).toBe(false);
     });
   });
@@ -243,7 +253,7 @@ describe('Configurable Semantic Thresholds', () => {
     it('uses custom threshold when provided', async () => {
       const embedder = createMockEmbedder(0.65);
       // 0.65 >= 0.60 custom → should fail (excluded content IS present)
-      const result = await validateExcludeSemantic('output', 'value', embedder, 0.60);
+      const result = await validateExcludeSemantic('output', 'value', embedder, 0.6);
       expect(result.passed).toBe(false);
     });
   });
@@ -255,12 +265,14 @@ describe('Configurable Semantic Thresholds', () => {
       // With default threshold (0.85), 0.82 would fail for require
       const defaultResult = await validateConstraints({
         output: 'test output',
-        constraints: [{
-          id: 'cst_test1',
-          type: 'require',
-          match_mode: 'semantic',
-          value: 'test value',
-        }],
+        constraints: [
+          {
+            id: 'cst_test1',
+            type: 'require',
+            match_mode: 'semantic',
+            value: 'test value',
+          },
+        ],
         embedder,
       });
       expect(defaultResult.allPassed).toBe(false);
@@ -268,14 +280,16 @@ describe('Configurable Semantic Thresholds', () => {
       // With custom lower threshold (0.80), 0.82 should pass
       const customResult = await validateConstraints({
         output: 'test output',
-        constraints: [{
-          id: 'cst_test1',
-          type: 'require',
-          match_mode: 'semantic',
-          value: 'test value',
-        }],
+        constraints: [
+          {
+            id: 'cst_test1',
+            type: 'require',
+            match_mode: 'semantic',
+            value: 'test value',
+          },
+        ],
         embedder,
-        semanticThreshold: { require: 0.80 },
+        semanticThreshold: { require: 0.8 },
       });
       expect(customResult.allPassed).toBe(true);
     });

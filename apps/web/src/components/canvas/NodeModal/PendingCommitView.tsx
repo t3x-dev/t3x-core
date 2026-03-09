@@ -5,28 +5,20 @@
  *
  * State management is delegated to `usePendingCommitState` hook.
  * Left sidebar config UI is delegated to `CommitConfigStep` component.
+ * Right panel renders DraftWorkbenchLLM for semantic point review.
  * Success page is delegated to `PendingSuccessPage` component.
  */
 
 import type { Node } from '@xyflow/react';
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  GitCompare,
-  Loader2,
-  MessageSquarePlus,
-  X,
-} from 'lucide-react';
+import { AlertCircle, ExternalLink, GitCompare, Loader2, X } from 'lucide-react';
+import { DraftWorkbenchLLM } from '@/components/draft/DraftWorkbenchLLM';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePendingCommitState } from '@/hooks/usePendingCommitState';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { CanvasNodeData } from '@/types/nodes';
-import { PendingSourceEditor } from '../SelectableTextBlock';
 import { CommitConfigStep } from './CommitConfigStep';
-import { renderPhraseWithKeywords } from './helpers';
 import { PendingSuccessPage } from './PendingSuccessPage';
 
 interface PendingCommitViewProps {
@@ -96,7 +88,10 @@ export function PendingCommitView({
             <div className="text-[0.85rem] font-bold text-[var(--accent-conversation)] bg-[var(--hover-bg)] px-2.5 py-1 rounded-md">
               t3x
             </div>
-            <h2 id="node-modal-title" className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2
+              id="node-modal-title"
+              className="text-[0.95rem] font-semibold text-[var(--text-primary)]"
+            >
               Commit: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
@@ -144,42 +139,20 @@ export function PendingCommitView({
               data={data}
               template={state.template}
               setTemplate={state.setTemplate}
-              cosineThreshold={state.cosineThreshold}
-              setCosineThreshold={state.setCosineThreshold}
-              extractIntent={state.extractIntent}
-              setExtractIntent={state.setExtractIntent}
               configLocked={state.configLocked}
-              isCurateLoading={state.isCurateLoading}
-              curateError={state.curateError}
-              curatePreview={state.curatePreview}
-              sourceBoxes={state.sourceBoxes}
-              textBlocks={state.textBlocks}
-              isCommitting={state.isCommitting}
+              extractionLoading={state.extractionLoading}
+              extractionError={state.extractionError}
+              semanticPointsCount={state.semanticPoints.length}
               commitError={state.commitError}
               branches={state.branches}
               branchesLoading={state.branchesLoading}
               isMainBranchInvalid={state.isMainBranchInvalid}
-              hoveredKeywordText={state.hoveredKeywordText}
               isMergeDraft={state.isMergeDraft}
               shouldShowBranchSelect={state.shouldShowBranchSelect}
               requireBranchName={state.requireBranchName}
-              includedPhrasesCount={state.includedPhrasesCount}
-              mustHaveKeywordsLegacy={state.mustHaveKeywordsLegacy}
-              mustntHaveKeywordsLegacy={state.mustntHaveKeywordsLegacy}
-              hasNewSourceData={state.hasNewSourceData}
-              mustHaveKeywordsNew={state.mustHaveKeywordsNew}
-              mustntHaveKeywordsNew={state.mustntHaveKeywordsNew}
-              selectionsCount={state.selectionsCount}
-              selectedChunksCount={state.selectedChunksCount}
               hasSourceConversation={state.hasSourceConversation}
-              hasSourceTurnWindow={state.hasSourceTurnWindow}
-              handleKeywordHover={state.handleKeywordHover}
-              toggleSourceBoxExpand={state.toggleSourceBoxExpand}
-              togglePhraseInclude={state.togglePhraseInclude}
-              toggleKeywordMustnt={state.toggleKeywordMustnt}
               handleProceed={state.handleProceed}
               handleReset={state.handleReset}
-              handleCommit={state.handleCommit}
               onBranchChange={onBranchChange}
               onBranchNameChange={onBranchNameChange}
             />
@@ -193,20 +166,19 @@ export function PendingCommitView({
             <div className="draft-svtz__divider-handle" />
           </div>
 
-          {/* ========== MAIN CONTENT: SOURCE ========== */}
+          {/* ========== MAIN CONTENT: LLM Extraction Review ========== */}
           <div
             className="flex-1 min-w-0 flex flex-col bg-[var(--surface-card)] overflow-hidden"
             ref={state.mainContentRef}
           >
-            {/* SOURCE Column - Full Width */}
             <div className="flex-1 flex flex-col min-h-0">
               <div className="px-4 py-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] shrink-0">
                 <h3 className="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-                  {state.isMergeDraft ? 'MERGE CONTENT' : 'SOURCE'}
+                  {state.isMergeDraft ? 'MERGE CONTENT' : 'SEMANTIC POINTS'}
                 </h3>
               </div>
               <div className="flex-1 overflow-y-auto p-[var(--space-group)]">
-                {/* Merge draft - legacy three-way merge UI removed */}
+                {/* Merge draft */}
                 {state.isMergeDraft ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-[var(--text-tertiary)]">
                     <GitCompare
@@ -240,121 +212,52 @@ export function PendingCommitView({
                       </div>
                     </div>
                   </div>
-                ) : state.hasNewSourceData ? (
-                  /* New free-form text selection UI */
-                  <PendingSourceEditor
-                    blocks={state.textBlocks}
-                    onChange={state.handleTextBlocksChange}
-                    readOnly={!state.configLocked}
-                    anchorCandidates={state.anchorCandidates}
-                    confirmedAnchors={state.confirmedAnchors}
-                    anchorThreshold={state.keywordsThreshold}
-                    onAnchorChange={state.handleAnchorChange}
-                  />
-                ) : state.sourceBoxes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-[var(--text-tertiary)]">
-                    <MessageSquarePlus
-                      size={32}
-                      strokeWidth={1}
-                      className="mb-[var(--space-item)]"
-                    />
-                    <p className="font-medium text-[var(--text-tertiary)]">No source content</p>
-                    <span className="text-sm">Connect upstream conversation or commit</span>
+                ) : !state.configLocked ? (
+                  /* Before config locked: show placeholder */
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 text-[var(--text-tertiary)]">
+                    <span className="text-sm">Complete Step 1 to start extraction</span>
                   </div>
-                ) : (
-                  /* Legacy phrase-based UI */
-                  state.sourceBoxes.map((box) => (
-                    <div
-                      key={box.id}
-                      className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-lg mb-3 overflow-hidden"
-                    >
-                      {/* Source Box Header */}
-                      <div
-                        className="flex items-center gap-2 px-3 py-2.5 bg-[var(--surface-app)] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
-                        onClick={() => state.toggleSourceBoxExpand(box.id)}
-                      >
-                        <span className="text-[var(--text-tertiary)]">
-                          {box.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </span>
-                        <span className="flex-1 text-[0.85rem] font-medium text-[var(--text-secondary)]">
-                          {box.title}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="text-[0.65rem] text-[var(--status-info)] border-[var(--status-info)]/20 bg-[var(--status-info-muted)]"
-                        >
-                          {box.type}
-                        </Badge>
-                      </div>
-                      {/* Source Box Body with Phrases and Keyword Highlighting */}
-                      {box.expanded && (
-                        <div className="p-3 text-[0.9rem] leading-[1.8] text-[var(--text-secondary)]">
-                          {box.phrases.map((phrase) => {
-                            const canToggle = state.configLocked;
-                            return (
-                              <div
-                                key={phrase.id}
-                                className={cn(
-                                  'inline-block py-1.5 px-2.5 m-1 rounded-md transition-colors cursor-pointer leading-[1.6] max-w-full',
-                                  phrase.included
-                                    ? 'bg-[var(--status-success-muted)] border border-[var(--status-success)]/20 hover:bg-green-200 dark:hover:bg-green-700'
-                                    : 'bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 hover:bg-red-200 dark:hover:bg-red-700',
-                                  !canToggle && 'opacity-70 cursor-default'
-                                )}
-                                onClick={(e) => {
-                                  if (canToggle && e.target === e.currentTarget) {
-                                    state.togglePhraseInclude(phrase.id);
-                                  }
-                                }}
-                                title={
-                                  !canToggle
-                                    ? 'Complete Step 1 to edit'
-                                    : phrase.included
-                                      ? 'Click to exclude phrase'
-                                      : 'Click to include phrase'
-                                }
-                              >
-                                {/* Render phrase text with clickable keywords */}
-                                {renderPhraseWithKeywords(
-                                  phrase,
-                                  canToggle,
-                                  () => state.togglePhraseInclude(phrase.id),
-                                  (kwId) => state.toggleKeywordMustnt(phrase.id, kwId),
-                                  state.hoveredKeywordText,
-                                  state.handleKeywordHover
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                ) : state.extractionLoading ? (
+                  /* Extraction in progress */
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 text-[var(--text-tertiary)]">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    <span className="text-sm">Extracting semantic points...</span>
+                  </div>
+                ) : state.extractionError && !state.extractionLoading ? (
+                  /* Extraction error */
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 p-8 text-center">
+                    <AlertCircle className="h-8 w-8 text-[var(--status-error)]" />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-[var(--status-error)]">
+                        LLM Extraction Failed
+                      </span>
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        {state.extractionError}
+                      </span>
                     </div>
-                  ))
-                )}
+                  </div>
+                ) : state.draftId && state.semanticPoints.length > 0 ? (
+                  /* DraftWorkbenchLLM: Ready/Review zones + commit button */
+                  <DraftWorkbenchLLM
+                    draftId={state.draftId}
+                    projectId={projectId}
+                    conversationId={data.sourceConversationId || data.conversationId || ''}
+                    semanticPoints={state.semanticPoints}
+                    onUpdate={(points) => state.setSemanticPoints(points)}
+                    onCommit={state.handleCommit}
+                    onRefresh={state.handleReExtract}
+                  />
+                ) : state.draftId && state.semanticPoints.length === 0 ? (
+                  /* No points extracted */
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 p-8 text-center text-[var(--text-tertiary)]">
+                    <span className="text-sm">No semantic points extracted.</span>
+                    <span className="text-xs">Try adding more conversation content first.</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
         </div>
-
-        {/* Bottom Legend */}
-        <footer className="flex items-center justify-center gap-6 px-6 py-3 bg-[var(--surface-app)] border-t border-[var(--stroke-divider)] text-xs text-[var(--text-tertiary)] shrink-0">
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-[var(--status-success-muted)] border border-[var(--status-success)]/20" />
-            green bg = included phrase
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-[var(--status-error-muted)] border border-[var(--status-error)]/20" />
-            red bg = excluded phrase
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-green-600 dark:bg-green-500" />
-            green text = must-have keyword
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-red-600 dark:bg-red-500" />
-            red text = mustnt-have keyword
-          </span>
-        </footer>
       </div>
     </div>
   );

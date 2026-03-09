@@ -338,6 +338,7 @@ export interface DiffResultRaw {
   stats: {
     totalSegments: number;
     sameCount: number;
+    equivalentCount?: number;
     addedCount: number;
     removedCount: number;
     modifiedCount: number;

@@ -23,6 +23,10 @@ export const branchRoutes = new Hono();
 
 /**
  * GET /v1/branches - List branches
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 branchRoutes.get('/v1/branches', async (c) => {
   const projectId = c.req.query('project_id');
@@ -33,24 +37,52 @@ branchRoutes.get('/v1/branches', async (c) => {
 
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
+  const cursor = c.req.query('cursor');
+
+  const toApiBranch = (b: {
+    branchId: string;
+    projectId: string;
+    name: string;
+    parentBranch: string | null;
+    headCommitHash: string | null;
+    description: string | null;
+    isCurrent: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }) => ({
+    branch_id: b.branchId,
+    project_id: b.projectId,
+    name: b.name,
+    parent_branch: b.parentBranch,
+    head_commit_hash: b.headCommitHash,
+    description: b.description,
+    is_current: b.isCurrent === 1,
+    created_at: b.createdAt.toISOString(),
+    updated_at: b.updatedAt.toISOString(),
+  });
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findBranchesByProject(db, { projectId, cursor, limit });
+      return jsonSuccess(c, {
+        items: result.items.map(toApiBranch),
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+      });
+    }
+
+    // Legacy offset/limit mode
     const branchList = await findBranchesByProject(db, { projectId, limit, offset });
 
-    const apiBranches = branchList.map((b) => ({
-      branch_id: b.branchId,
-      project_id: b.projectId,
-      name: b.name,
-      parent_branch: b.parentBranch,
-      head_commit_hash: b.headCommitHash,
-      description: b.description,
-      is_current: b.isCurrent === 1,
-      created_at: b.createdAt.toISOString(),
-      updated_at: b.updatedAt.toISOString(),
-    }));
-
-    return jsonSuccess(c, { branches: apiBranches, project_id: projectId, limit, offset });
+    return jsonSuccess(c, {
+      branches: branchList.map(toApiBranch),
+      project_id: projectId,
+      limit,
+      offset,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return jsonError(c, 'LIST_FAILED', message, 500);

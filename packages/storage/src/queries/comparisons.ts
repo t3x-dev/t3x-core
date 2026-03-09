@@ -3,9 +3,10 @@
  *
  * CRUD operations for saved A/B comparison snapshots.
  */
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { savedComparisons } from '../schema';
+import { type SavedComparison, savedComparisons } from '../schema';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
 // Types
@@ -47,15 +48,66 @@ export async function createComparison(db: AnyDB, input: CreateComparisonInput) 
   return row;
 }
 
+export interface ListComparisonsOptions {
+  limit?: number;
+  offset?: number;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
+}
+
 /**
  * List saved comparisons for a project (most recent first).
  */
 export async function listComparisons(
   db: AnyDB,
+  projectId: string | null | undefined,
+  opts: ListComparisonsOptions & { cursor: string }
+): Promise<CursorPage<SavedComparison>>;
+export async function listComparisons(
+  db: AnyDB,
   projectId?: string | null,
-  opts?: { limit?: number; offset?: number }
-) {
+  opts?: Omit<ListComparisonsOptions, 'cursor'>
+): Promise<SavedComparison[]>;
+export async function listComparisons(
+  db: AnyDB,
+  projectId?: string | null,
+  opts?: ListComparisonsOptions
+): Promise<SavedComparison[] | CursorPage<SavedComparison>> {
   const limit = opts?.limit ?? 100;
+
+  if (opts?.cursor !== undefined) {
+    // Cursor pagination mode
+    const conditions = [];
+    if (projectId) {
+      conditions.push(eq(savedComparisons.projectId, projectId));
+    }
+
+    if (opts.cursor !== '') {
+      const { t, k } = decodeCursor(opts.cursor);
+      const cursorDate = new Date(t);
+      // Keyset: (created_at < t) OR (created_at = t AND comparison_id < k)
+      conditions.push(
+        or(
+          lt(savedComparisons.createdAt, cursorDate),
+          and(eq(savedComparisons.createdAt, cursorDate), lt(savedComparisons.comparisonId, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(savedComparisons)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(savedComparisons.createdAt), desc(savedComparisons.comparisonId))
+      .limit(limit + 1);
+
+    return toCursorPage(rows, limit, (c) => ({
+      t: c.createdAt.toISOString(),
+      k: c.comparisonId,
+    }));
+  }
+
+  // Legacy offset/limit mode
   const offset = opts?.offset ?? 0;
   const query = db
     .select()

@@ -21,7 +21,7 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = ['/api/v1/auth/callback'];
+const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
 
 /**
  * Match the share resolve endpoint: GET /api/v1/share/:token
@@ -107,7 +107,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return next();
   } catch (err) {
-    pinoLogger.error({ err }, "error validating API key");
+    pinoLogger.error({ err }, 'error validating API key');
     return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
   }
 }

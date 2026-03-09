@@ -59,15 +59,41 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
   }
 
   // Create PGLite client (with pgvector if available)
-  client = new PGlite(dataDir, {
-    ...(extensions ? { extensions } : {}),
-  });
+  // If WASM aborts (corrupted data from unclean shutdown), wipe and retry once.
+  try {
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+  } catch (err) {
+    const isWasmAbort =
+      err instanceof Error && (err.message.includes('Aborted()') || err.name === 'RuntimeError');
 
-  // Create Drizzle instance
-  db = drizzle(client, { schema });
+    if (!isWasmAbort || !dataDir) throw err;
 
-  // Run migrations/schema creation
-  await initializeSchema(client);
+    console.warn(
+      '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
+    );
+
+    // Skip client.close() on corrupted instance — calling close() on an
+    // aborted WASM runtime can trigger a second abort that crashes the process.
+    client = null;
+    db = null;
+
+    // Wipe corrupted data directory and recreate
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Retry once
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+
+    console.warn('[PGLite] Database recreated successfully. Previous local data was lost.');
+  }
 
   // Seed builtin templates
   await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
@@ -112,6 +138,9 @@ export async function closePGLiteStorage(): Promise<void> {
 async function initializeSchema(client: PGlite): Promise<void> {
   // Create tables if they don't exist
   await client.exec(`
+    -- Ensure plpgsql is available (required for DO $$ blocks in migrations)
+    CREATE EXTENSION IF NOT EXISTS plpgsql;
+
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
       project_id TEXT PRIMARY KEY,
@@ -357,6 +386,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       message TEXT,
       branch TEXT,
       source_refs JSONB,
+      merkle_root TEXT,
       merge_summary JSONB,
       semantic JSONB,
       position_x REAL,
@@ -374,6 +404,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add semantic column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
+
+    -- Migration: Add merkle_root column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
@@ -611,9 +644,11 @@ async function initializeSchema(client: PGlite): Promise<void> {
       draft_id TEXT NOT NULL,
       sp_id TEXT NOT NULL,
       action TEXT NOT NULL,
+      original_text TEXT,
       inference_type TEXT,
       confidence REAL,
       zone TEXT,
+      low_coverage BOOLEAN DEFAULT FALSE,
       edited_text TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -684,14 +719,15 @@ async function initializeSchema(client: PGlite): Promise<void> {
     -- Users table (OAuth providers)
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      provider TEXT NOT NULL,
-      provider_id TEXT NOT NULL,
+      provider TEXT,
+      provider_id TEXT,
       email TEXT,
       name TEXT,
       avatar_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
+    -- Note: idx_users_provider_unique removed — Phase 2 migration drops provider/provider_id columns
+    -- and moves them to accounts table. Index is no longer needed.
 
     -- Migration: Add owner_id to projects (nullable — null = public/legacy data)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT;
@@ -740,6 +776,114 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
+    CREATE TABLE IF NOT EXISTS sentence_relations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      commit_hash TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      reasoning TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Knowledge Graph (Cross-conversation entity/topic graph)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS knowledge_nodes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'topic',
+      summary TEXT,
+      member_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_node_members (
+      node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      sentence_id TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      PRIMARY KEY (node_id, sentence_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_edges (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      target_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      weight REAL NOT NULL DEFAULT 0,
+      evidence JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
+    CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
+
+    -- Migration: Add autopilot_config column to projects (Knowledge Autopilot)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS autopilot_config JSONB;
+
+    -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
+    ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;
+
+    -- ═══════════════════════════════════════════════════════════════
+    -- Auth Migration Phase 2: Multi-provider (users + accounts split)
+    -- ═══════════════════════════════════════════════════════════════
+
+    -- Accounts table (one row per OAuth provider per user)
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
+    CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
+
+    -- Migrate existing users.provider/provider_id → accounts table
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'provider'
+      ) THEN
+        INSERT INTO accounts (id, user_id, provider, provider_account_id, created_at)
+        SELECT 'acct_' || substr(md5(id || provider), 1, 12), id, provider, provider_id, created_at
+        FROM users
+        ON CONFLICT DO NOTHING;
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE users DROP COLUMN IF EXISTS provider;
+        ALTER TABLE users DROP COLUMN IF EXISTS provider_id;
+      END IF;
+    END $$;
+
+    -- Ensure email_verified column exists (for fresh installs that skip the IF block)
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+    -- Unique index on email (partial — only non-null emails)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+
+    -- Drop old provider unique index (may not exist on fresh installs)
+    DROP INDEX IF EXISTS idx_users_provider_unique;
+
+    -- ═══════════════════════════════════════════════════════════════
+    -- Auth Migration Phase 3: Local auth (username + password)
+    -- ═══════════════════════════════════════════════════════════════
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
@@ -753,11 +897,17 @@ async function initializeSchema(client: PGlite): Promise<void> {
         text TEXT NOT NULL,
         embedding vector(768) NOT NULL,
         model_id TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        tsv tsvector
       );
       CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
       CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+      CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
     `);
+    // Backfill tsvector for existing rows (idempotent)
+    await client.exec(
+      `UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;`
+    );
   } catch {
     // pgvector not available — sentence similarity search disabled
   }

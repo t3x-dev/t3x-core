@@ -16,7 +16,8 @@ import { describe, expect, it } from 'vitest';
 
 // Read all API client source files (modular api/ directory + barrel shim)
 const apiDir = path.join(__dirname, '../../lib/api');
-const apiCode = fs.readdirSync(apiDir)
+const apiCode = fs
+  .readdirSync(apiDir)
   .filter((f) => f.endsWith('.ts'))
   .map((f) => fs.readFileSync(path.join(apiDir, f), 'utf8'))
   .join('\n');

@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { RelationsTab } from '@/components/relations/RelationsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -229,7 +230,10 @@ export function CommittedCommitView({
         {/* Top Bar */}
         <header className="flex items-center justify-between h-14 px-5 border-b border-[var(--stroke-divider)] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 id="node-modal-title" className="text-[0.95rem] font-semibold text-[var(--text-primary)]">
+            <h2
+              id="node-modal-title"
+              className="text-[0.95rem] font-semibold text-[var(--text-primary)]"
+            >
               {t('commit')}: {data.title || 'Untitled'}
             </h2>
             <span className="text-xs text-[var(--text-tertiary)] font-mono">{data.entryId}</span>
@@ -405,6 +409,12 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
+                        <TabsTrigger
+                          value="relations"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                        >
+                          Relations
+                        </TabsTrigger>
                       </TabsList>
 
                       <TabsContent
@@ -445,6 +455,20 @@ export function CommittedCommitView({
                         <pre className="p-[var(--space-group)] bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md text-xs font-mono text-[var(--text-secondary)] overflow-x-auto max-h-[500px] overflow-y-auto whitespace-pre-wrap">
                           {JSON.stringify(commit, null, 2)}
                         </pre>
+                      </TabsContent>
+
+                      <TabsContent value="relations">
+                        <RelationsTab
+                          commitHash={data.commitHash || ''}
+                          sentences={
+                            isV4 && commit.content?.sentences
+                              ? commit.content.sentences.map((s: { id: string; text: string }) => ({
+                                  id: s.id,
+                                  text: s.text,
+                                }))
+                              : []
+                          }
+                        />
                       </TabsContent>
                     </Tabs>
 

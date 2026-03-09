@@ -45,7 +45,11 @@ export function TurnBubble({
   turn,
   targetRef,
   wordDiff,
-}: { turn: TurnWithContext; targetRef?: React.RefObject<HTMLDivElement | null>; wordDiff?: WordDiffSegment[] }) {
+}: {
+  turn: TurnWithContext;
+  targetRef?: React.RefObject<HTMLDivElement | null>;
+  wordDiff?: WordDiffSegment[];
+}) {
   const isUser = turn.role === 'user';
 
   const renderContent = () => {
@@ -66,10 +70,21 @@ export function TurnBubble({
               return <span key={i}>{seg.text}</span>;
             }
             if (seg.type === 'added') {
-              return <mark key={i} className="bg-green-500 text-white font-medium px-0.5 rounded-sm">{seg.text}</mark>;
+              return (
+                <mark key={i} className="bg-green-500 text-white font-medium px-0.5 rounded-sm">
+                  {seg.text}
+                </mark>
+              );
             }
             if (seg.type === 'removed') {
-              return <mark key={i} className="bg-red-500 text-white font-medium px-0.5 rounded-sm line-through">{seg.text}</mark>;
+              return (
+                <mark
+                  key={i}
+                  className="bg-red-500 text-white font-medium px-0.5 rounded-sm line-through"
+                >
+                  {seg.text}
+                </mark>
+              );
             }
             return <span key={i}>{seg.text}</span>;
           })}
@@ -226,11 +241,7 @@ export function DiffSourceContextModal({
                 className="h-8 w-8 p-0"
                 title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               >
-                {fullscreen ? (
-                  <Minimize2 className="h-4 w-4" />
-                ) : (
-                  <Maximize2 className="h-4 w-4" />
-                )}
+                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
               {effectiveConversationId && projectId && (
                 <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>

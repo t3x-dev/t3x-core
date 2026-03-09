@@ -5,11 +5,11 @@
  * When AUTH_DISABLED=true (default for self-hosted), all routes are public.
  */
 
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /** Paths that are always public (even when auth is enabled) */
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 
 export function middleware(request: NextRequest) {
   // Auth is DISABLED by default (safe for local dev without .env).
@@ -26,14 +26,16 @@ export function middleware(request: NextRequest) {
   }
 
   // Allow static assets and Next.js internals
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname === '/robots.txt') {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname === '/robots.txt'
+  ) {
     return NextResponse.next();
   }
 
-  // Check for NextAuth session token (cookie name varies by env)
-  const hasSession =
-    request.cookies.has('authjs.session-token') ||
-    request.cookies.has('__Secure-authjs.session-token');
+  // Check for local auth session cookie
+  const hasSession = request.cookies.has('t3x-session');
 
   if (!hasSession) {
     const loginUrl = new URL('/login', request.url);

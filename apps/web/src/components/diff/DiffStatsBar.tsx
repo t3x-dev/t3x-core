@@ -4,6 +4,7 @@ import {
   AlignJustify,
   Check,
   Columns2,
+  Equal,
   FileText,
   Minus,
   Paperclip,
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 
 interface DiffStatsBarProps {
   identical: number;
+  equivalent?: number;
   modified: number;
   added: number;
   removed: number;
@@ -30,6 +32,7 @@ interface DiffStatsBarProps {
 
 export function DiffStatsBar({
   identical,
+  equivalent = 0,
   modified,
   added,
   removed,
@@ -41,6 +44,7 @@ export function DiffStatsBar({
 }: DiffStatsBarProps) {
   const { t } = useTerminology();
   const aIdentical = useCountUp(identical);
+  const aEquivalent = useCountUp(equivalent);
   const aModified = useCountUp(modified);
   const aAdded = useCountUp(added);
   const aRemoved = useCountUp(removed);
@@ -52,6 +56,13 @@ export function DiffStatsBar({
       count: aIdentical,
       color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
       icon: Check,
+    },
+    {
+      key: 'equivalent',
+      label: t('equivalent_sentences'),
+      count: aEquivalent,
+      color: 'border border-teal-500/40 text-teal-500 bg-transparent',
+      icon: Equal,
     },
     {
       key: 'modified',

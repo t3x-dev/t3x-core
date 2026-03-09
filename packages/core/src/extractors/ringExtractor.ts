@@ -460,7 +460,7 @@ export class RingExtractor {
       // Check if token is an entity
       const entity = entityMap.get(token.text.toLowerCase());
       const entityType = entity?.type ?? null;
-      const confidence = entity?.salience ?? 1.0;
+      const confidence = entity?.salience ?? 0.5;
 
       // Extract topic (first NOUN/PROPN that is not a stop word)
       if (topic === null && (token.pos === 'NOUN' || token.pos === 'PROPN')) {

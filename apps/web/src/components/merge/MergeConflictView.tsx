@@ -14,8 +14,8 @@
 import { useCallback, useState } from 'react';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { useTerminology } from '@/hooks/useTerminology';
-import { fetchTurnContextCached } from '@/lib/api';
 import type { TurnContextData } from '@/lib/api';
+import { fetchTurnContextCached } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeSimilarPair, Sentence } from '@/types/merge';
@@ -61,7 +61,13 @@ export function MergeConflictView({
 
   const openContextModal = useCallback(
     (conversationId: string, turnHash: string, hStart?: number, hEnd?: number) => {
-      setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd });
+      setContextModal({
+        open: true,
+        conversationId,
+        turnHash,
+        highlightStart: hStart,
+        highlightEnd: hEnd,
+      });
       setModalLoading(true);
       setModalContextData(null);
 
@@ -86,14 +92,11 @@ export function MergeConflictView({
   /** Create a jump handler that opens the context modal with source info */
   const makeJumpHandler = useCallback(
     (sentence: Sentence) => {
-      if (!projectId || !sentence.source?.conversation_id) return undefined;
+      if (!projectId || !sentence.source?.conversation_id || !sentence.source?.turn_hash)
+        return undefined;
+      const { turn_hash, start_char, end_char } = sentence.source;
       return (conversationId: string) => {
-        openContextModal(
-          conversationId,
-          sentence.source?.turn_hash || '',
-          sentence.source?.start_char,
-          sentence.source?.end_char
-        );
+        openContextModal(conversationId, turn_hash, start_char, end_char);
       };
     },
     [projectId, openContextModal]
@@ -133,6 +136,7 @@ export function MergeConflictView({
           sentence={pair.source}
           label={`${t('branch')} ${sourceBranch}`}
           isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
+          wordDiff={pair.wordDiff}
           onJumpToConversation={makeJumpHandler(pair.source)}
         />
         <ConflictSide
@@ -140,6 +144,7 @@ export function MergeConflictView({
           sentence={pair.target}
           label={`${t('branch')} ${targetBranch}`}
           isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
+          wordDiff={pair.wordDiff}
           onJumpToConversation={makeJumpHandler(pair.target)}
         />
       </div>

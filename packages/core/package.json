@@ -45,5 +45,8 @@
     "type": "git",
     "url": "https://github.com/anthropics/t3x.git",
     "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

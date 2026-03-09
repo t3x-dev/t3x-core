@@ -1,15 +1,24 @@
 'use client';
 
-import { Blocks, HelpCircle, LogOut, Settings, SlidersHorizontal, Webhook } from 'lucide-react';
+import {
+  Blocks,
+  HelpCircle,
+  LogOut,
+  Settings,
+  SlidersHorizontal,
+  Webhook,
+  Workflow,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
+import { clearSession, getSessionKey } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
   { href: '/settings/providers', label: 'Providers', icon: Blocks },
   { href: '/settings/webhooks', label: 'Webhooks', icon: Webhook },
+  { href: '/settings/recipes', label: 'Recipes', icon: Workflow },
   { href: '/settings/help', label: 'Help & Resources', icon: HelpCircle },
 ] as const;
 
@@ -19,8 +28,8 @@ interface SettingsLayoutProps {
 
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const isAuthEnabled = session?.user;
+  const hasLocalSession = typeof document !== 'undefined' && !!getSessionKey();
+  const isAuthEnabled = hasLocalSession;
 
   return (
     <div className="flex h-full">
@@ -57,7 +66,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
           <div className="border-t border-[var(--stroke-divider)] pt-3 mt-3">
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => clearSession()}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors duration-150"
             >
               <LogOut className="h-4 w-4" />

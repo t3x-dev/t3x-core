@@ -5,6 +5,7 @@
  * The original api.ts file is a shim that re-exports from this index.
  */
 
+export * from './autopilot';
 export * from './branches';
 export * from './chat';
 export * from './commits';
@@ -14,11 +15,16 @@ export * from './deploy';
 export * from './diff';
 export * from './drafts';
 export * from './export';
+export * from './extraction-feedback';
 export * from './health';
+export * from './knowledge-graph';
 export * from './leaves';
 export * from './misc';
 export * from './pins';
 export * from './projects';
+export * from './recipes';
+export * from './relations';
 export * from './runner';
+export * from './search';
 export * from './turns';
 export * from './types';

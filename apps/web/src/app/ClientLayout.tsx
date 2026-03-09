@@ -1,7 +1,6 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -78,8 +77,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
   return (
-    <SessionProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ErrorBoundary>
           <div className="flex min-h-screen bg-background">
             <a
@@ -101,7 +99,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
                 <NotificationBell />
               </div>
-              <div className="flex flex-1 flex-col">{children}</div>
+              <div className="flex flex-1 flex-col min-h-0">{children}</div>
             </main>
             <Toaster position="bottom-right" richColors closeButton />
             <CommandPalette />
@@ -111,6 +109,5 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         </ErrorBoundary>
       </ThemeProvider>
-    </SessionProvider>
   );
 }

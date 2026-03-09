@@ -8,7 +8,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { Assertion, ConstraintV4 as Constraint, CreateLeafInput } from '@t3x/core';
+import type { Assertion, ConstraintV4 as Constraint, CreateLeafInput, Leaf } from '@t3x/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -24,9 +24,10 @@ import {
   updateLeafAssertions,
   updateLeafOutput,
 } from '../queries/leaves';
+import { decodeCursor } from '../queries/pagination';
 import { insertProject } from '../queries/projects';
 import { leaves } from '../schema-v4';
-import { createTestDB, testData } from './setup';
+import { createTestDB, sleep, testData } from './setup';
 
 describe('Leaves Storage', () => {
   let db: AnyDB;
@@ -768,6 +769,160 @@ describe('Leaves Storage', () => {
 
       const found = await findLeafById(db, created.id);
       expect(found!.type).toBe(type);
+    });
+  });
+
+  describe('cursor pagination — findLeavesByProject', () => {
+    let cursorProjectId: string;
+    let allLeaves: Leaf[];
+
+    beforeAll(async () => {
+      const project = await insertProject(db, testData.project({ name: 'Cursor Pagination Test' }));
+      cursorProjectId = project.projectId;
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Cursor Author' },
+        sentences: [{ id: 's_cursor', text: 'Cursor sentence' }],
+        project_id: cursorProjectId,
+      });
+
+      // Create 5 leaves with distinct timestamps
+      allLeaves = [];
+      for (let i = 0; i < 5; i++) {
+        const leaf = await createLeaf(db, {
+          commit_hash: commit.hash,
+          type: 'tweet',
+          title: `Cursor Leaf ${i}`,
+          project_id: cursorProjectId,
+        });
+        allLeaves.push(leaf);
+        await sleep(10); // Ensure distinct timestamps
+      }
+    });
+
+    it('returns first page with cursor=""', async () => {
+      const page = await findLeavesByProject(db, cursorProjectId, {
+        cursor: '',
+        limit: 2,
+      });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.has_more).toBe(true);
+      expect(page.next_cursor).toBeTruthy();
+      // DESC order: newest first
+      expect(page.items[0].title).toBe('Cursor Leaf 4');
+      expect(page.items[1].title).toBe('Cursor Leaf 3');
+    });
+
+    it('paginates through all items', async () => {
+      const collected: Leaf[] = [];
+      let cursor = '';
+
+      // Walk all pages
+      while (true) {
+        const page = await findLeavesByProject(db, cursorProjectId, {
+          cursor,
+          limit: 2,
+        });
+        collected.push(...page.items);
+        if (!page.has_more) break;
+        cursor = page.next_cursor!;
+      }
+
+      expect(collected).toHaveLength(5);
+      // Should be in DESC order (newest first)
+      expect(collected[0].title).toBe('Cursor Leaf 4');
+      expect(collected[4].title).toBe('Cursor Leaf 0');
+    });
+
+    it('returns empty page when no items match', async () => {
+      const page = await findLeavesByProject(db, 'proj_nonexistent', {
+        cursor: '',
+        limit: 10,
+      });
+
+      expect(page.items).toHaveLength(0);
+      expect(page.has_more).toBe(false);
+      expect(page.next_cursor).toBeNull();
+    });
+
+    it('cursor encodes created_at and id', async () => {
+      const page = await findLeavesByProject(db, cursorProjectId, {
+        cursor: '',
+        limit: 1,
+      });
+
+      expect(page.next_cursor).toBeTruthy();
+      const decoded = decodeCursor(page.next_cursor!);
+      expect(decoded.t).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(decoded.k).toMatch(/^leaf_/);
+    });
+
+    it('offset mode still works (backward compatible)', async () => {
+      const result = await findLeavesByProject(db, cursorProjectId, { limit: 3 });
+
+      // Should return plain array, not CursorPage
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(3);
+    });
+  });
+
+  describe('cursor pagination — findLeavesByCommit', () => {
+    let cursorCommitHash: string;
+    let cursorProjId: string;
+
+    beforeAll(async () => {
+      const project = await insertProject(
+        db,
+        testData.project({ name: 'Cursor Commit Pagination Test' })
+      );
+      cursorProjId = project.projectId;
+
+      const commit = await createCommitV4(db, {
+        parents: [],
+        author: { type: 'human', name: 'Cursor Commit Author' },
+        sentences: [{ id: 's_cc', text: 'Cursor commit sentence' }],
+        project_id: cursorProjId,
+      });
+      cursorCommitHash = commit.hash;
+
+      for (let i = 0; i < 4; i++) {
+        await createLeaf(db, {
+          commit_hash: cursorCommitHash,
+          type: 'email',
+          title: `Commit Leaf ${i}`,
+          project_id: cursorProjId,
+        });
+        await sleep(10);
+      }
+    });
+
+    it('paginates through all items for a commit', async () => {
+      const collected: Leaf[] = [];
+      let cursor = '';
+
+      while (true) {
+        const page = await findLeavesByCommit(db, cursorCommitHash, {
+          cursor,
+          limit: 2,
+        });
+        collected.push(...page.items);
+        if (!page.has_more) break;
+        cursor = page.next_cursor!;
+      }
+
+      expect(collected).toHaveLength(4);
+      // DESC order
+      expect(collected[0].title).toBe('Commit Leaf 3');
+      expect(collected[3].title).toBe('Commit Leaf 0');
+    });
+
+    it('offset mode still works for findLeavesByCommit', async () => {
+      const result = await findLeavesByCommit(db, cursorCommitHash, { limit: 2 });
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(2);
     });
   });
 });

@@ -24,15 +24,16 @@ export {
 } from './adapters/pglite';
 // Backup & verification
 export {
-  verifyCommitHash,
   type VerifyChainResult,
-  verifyHashChain,
   type VerifyResult,
+  verifyCommitHash,
+  verifyHashChain,
 } from './backup';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
+export * from './schema-v4';
 
 // Type alias for PGLite database
 import type { PGLiteDB } from './adapters/pglite';

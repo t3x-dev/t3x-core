@@ -32,6 +32,7 @@ export const ID_PREFIXES = {
   draft_sentence: 'ds_',
   draft_constraint: 'dc_',
   semantic_point: 'sp_',
+  relation: 'rel_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
@@ -152,6 +153,9 @@ export interface CommitV4 {
 
   /** Canvas position Y */
   position_y?: number;
+
+  /** Merkle tree root hash of commit sentences */
+  merkle_root?: string;
 
   /** Database record creation timestamp, ISO8601 */
   created_at?: string;
@@ -371,6 +375,9 @@ export interface LeafConfig {
 
   /** Max tokens for generation */
   max_tokens?: number;
+
+  /** Semantic similarity threshold for constraint validation (0-1) */
+  semantic_threshold?: number;
 
   /** Allow extension */
   [key: string]: unknown;
@@ -631,7 +638,7 @@ export interface CreatePinInput {
  * Word-level diff segment for UI display.
  */
 export interface WordDiffSegment {
-  type: 'equal' | 'insert' | 'delete';
+  type: 'unchanged' | 'added' | 'removed';
   text: string;
 }
 
@@ -688,23 +695,22 @@ export interface MergeV4Result {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * A registered user (via OAuth provider).
+ * A registered user (identity, keyed by email).
  *
  * Users own projects via projects.owner_id.
  * In AUTH_DISABLED mode, no users exist and owner_id is null.
+ *
+ * Provider-specific info lives in Account records (many-to-one).
  */
 export interface User {
   /** Unique ID, format: "user_" + nanoid(12) */
   id: string;
 
-  /** OAuth provider name (e.g., 'github') */
-  provider: string;
-
-  /** User ID from the OAuth provider */
-  provider_id: string;
-
   /** Email address (may be null if provider doesn't expose it) */
   email: string | null;
+
+  /** True when at least one provider has confirmed the email */
+  email_verified: boolean;
 
   /** Display name */
   name: string | null;
@@ -713,6 +719,29 @@ export interface User {
   avatar_url: string | null;
 
   /** When the user was created, ISO8601 */
+  created_at: string;
+}
+
+/**
+ * An OAuth provider account linked to a User.
+ *
+ * Multiple accounts can map to the same user (e.g., GitHub + Google
+ * with the same email are auto-linked).
+ */
+export interface Account {
+  /** Unique ID, format: "acct_" + nanoid(12) */
+  id: string;
+
+  /** The user this account belongs to */
+  user_id: string;
+
+  /** OAuth provider name (e.g., 'github', 'google') */
+  provider: string;
+
+  /** User ID from the OAuth provider */
+  provider_account_id: string;
+
+  /** When the account was linked, ISO8601 */
   created_at: string;
 }
 
@@ -979,6 +1008,8 @@ export interface SemanticPoint {
   inherited_from?: string;
   evidence: LocatedEvidence[];
   confidence?: number;
+  /** True when evidence covers <60% of primary turn content */
+  low_coverage?: boolean;
   position: number;
   staged: boolean;
 }
@@ -1060,5 +1091,41 @@ export interface ProjectExtractionConfig {
     direct?: number;
     paraphrase?: number;
     cross_turn?: number;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ring 4: Inter-Sentence Relations
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const RELATION_TYPES = [
+  'supports',
+  'contrasts',
+  'causes',
+  'elaborates',
+  'temporal_follows',
+  'conditions',
+  'summarizes',
+] as const;
+
+export type RelationType = (typeof RELATION_TYPES)[number];
+
+export interface SentenceRelation {
+  id: string; // rel_abc123
+  source_id: string; // s_xxx (from sentence)
+  target_id: string; // s_yyy (to sentence)
+  type: RelationType;
+  confidence: number; // 0.0 - 1.0
+  reasoning: string; // LLM explanation
+}
+
+export interface RelationExtractionResult {
+  relations: SentenceRelation[];
+  stats: {
+    total_sentences: number;
+    relations_found: number;
+    avg_confidence: number;
+    extraction_time_ms: number;
   };
 }

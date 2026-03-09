@@ -5,10 +5,19 @@
  * Fire-and-forget — errors are logged but don't propagate.
  */
 
-import { isInternalUrl } from './ssrf';
+import { isInternalUrlResolved } from './ssrf';
+
+/** Reject path segments that contain traversal or delimiter characters. */
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_\-]+$/;
+
+function assertSafePathSegment(value: string, label: string): void {
+  if (!SAFE_PATH_SEGMENT.test(value)) {
+    throw new Error(`${label} contains invalid characters: ${value}`);
+  }
+}
 
 interface RecipeStep {
-  action: 'send_webhook' | 'run_eval' | 'export_report';
+  action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
   config: Record<string, unknown>;
 }
 
@@ -52,7 +61,11 @@ export async function executeRecipe(
       switch (step.action) {
         case 'send_webhook': {
           const url = step.config.url as string;
-          if (url && isInternalUrl(url)) {
+          if (!url) {
+            results.push({ action: step.action, success: false, error: 'Missing webhook URL' });
+            break;
+          }
+          if (await isInternalUrlResolved(url)) {
             results.push({
               action: step.action,
               success: false,
@@ -60,7 +73,7 @@ export async function executeRecipe(
             });
             break;
           }
-          if (url && deps.webhookDispatch) {
+          if (deps.webhookDispatch) {
             await deps.webhookDispatch(url, {
               recipe_id: recipe.id,
               recipe_name: recipe.name,
@@ -125,6 +138,7 @@ export async function executeRecipe(
             });
             break;
           }
+          assertSafePathSegment(runId, 'run_id');
           const baseUrl = deps.apiBaseUrl || 'http://localhost:8000';
           const exportHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           const internalKeyExport = process.env.INTERNAL_API_KEY || process.env.API_KEY;
@@ -162,6 +176,35 @@ export async function executeRecipe(
             }),
           });
           results.push({ action: step.action, success: true, data: { report } });
+          break;
+        }
+        case 'auto_commit_draft': {
+          const draftId = step.config.draft_id as string;
+          if (!draftId) {
+            results.push({
+              action: step.action,
+              success: false,
+              error: 'missing draft_id in step config',
+            });
+            break;
+          }
+          assertSafePathSegment(draftId, 'draft_id');
+          const baseUrlCommit = deps.apiBaseUrl || 'http://localhost:8000';
+          const commitHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          const internalKeyCommit = process.env.INTERNAL_API_KEY || process.env.API_KEY;
+          if (internalKeyCommit) {
+            commitHeaders.Authorization = `Bearer ${internalKeyCommit}`;
+          }
+          const commitRes = await fetch(`${baseUrlCommit}/v1/drafts/${draftId}/auto-commit`, {
+            method: 'POST',
+            headers: commitHeaders,
+          });
+          const commitBody = await commitRes.json();
+          results.push({
+            action: step.action,
+            success: commitRes.ok && commitBody.success,
+            data: commitBody.data,
+          });
           break;
         }
         default:

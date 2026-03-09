@@ -17,8 +17,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CommitV4, Sentence } from '@t3x/core';
-import { detectConflicts } from '@t3x/core';
+import type { CommitV4, ConflictReport, Sentence } from '@t3x/core';
+import { createRelationExtractor, detectConflicts } from '@t3x/core';
 import {
   createCommitV4,
   deleteCommitV4,
@@ -29,19 +29,24 @@ import {
   findCommitV4History,
   findLeavesByCommit,
   getCommitsV4ByHashes,
+  insertConflict,
   MainBranchLinearityError,
   ParentNotFoundErrorV4,
   searchSimilarSentences,
   updateBranchHead,
   updateCommitV4Position,
+  upsertRelations,
+  upsertSentenceVectorsBatch,
   validateMainBranchLinearity,
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
+  CursorPageResponseSchema,
   ErrorResponseSchema,
   HashParamSchema,
   PaginationQuerySchema,
@@ -52,6 +57,37 @@ import { pushNotification } from './notifications.openapi';
 
 export const commitsV4Routes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+// ============================================================
+// Shared conflict schema (used by both create response and check-conflicts endpoint)
+// ============================================================
+
+const ConflictCandidateSchema = z.object({
+  new_sentence_id: z.string(),
+  new_sentence_text: z.string(),
+  existing_sentence_id: z.string(),
+  existing_sentence_text: z.string(),
+  existing_commit_hash: z.string(),
+  cosine: z.number(),
+  jaccard: z.number(),
+});
+
+// ============================================================
+// Create-commit response: commit data + optional conflict report
+// ============================================================
+
+const CreateCommitV4WithConflictsResponse = z.object({
+  commit: CommitV4Response,
+  conflicts: z
+    .object({
+      conflicts: z.array(ConflictCandidateSchema),
+      checked_count: z.number(),
+    })
+    .nullable()
+    .describe(
+      'Conflict report from auto-detection. null when embedder is not configured or detection is skipped.'
+    ),
 });
 
 // ============================================================
@@ -78,6 +114,7 @@ function toApiCommit(commit: CommitV4) {
     position_x: commit.position_x ?? null,
     position_y: commit.position_y ?? null,
     created_at: commit.created_at ?? commit.committed_at,
+    merge_summary: commit.merge_summary ?? null,
   };
 }
 
@@ -103,6 +140,11 @@ const createCommitV4Route = createRoute({
 - \`turn_window\`, \`facet_snapshot\`: V3 fields, not allowed
 - If \`schema\` is provided, must be 't3x/commit/v4'
 
+**Auto Conflict Detection:**
+- If an embedding provider is configured, conflict detection runs automatically after commit creation
+- Conflicts are returned in the \`conflicts\` field alongside the commit data
+- If no embedder is configured, \`conflicts\` is null
+
 **Error Codes:**
 - \`COMMIT_VERSION_UNSUPPORTED\`: V3 payload or non-V4 schema detected
 - \`INVALID_REQUEST\`: Missing required fields or constraints at commit level
@@ -122,7 +164,7 @@ const createCommitV4Route = createRoute({
       description: 'Commit created successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(CommitV4Response),
+          schema: SuccessResponseSchema(CreateCommitV4WithConflictsResponse),
         },
       },
     },
@@ -206,13 +248,17 @@ const listCommitsV4ByProjectRoute = createRoute({
   path: '/v1/projects/{projectId}/commits-v4',
   tags: ['Commits V4'],
   summary: 'List commits by project',
-  description: 'Lists all commits v4 in a project, ordered by committed_at descending.',
+  description:
+    'Lists all commits v4 in a project, ordered by committed_at descending. ' +
+    'Supports cursor-based pagination: pass `cursor` query parameter (empty string for first page) ' +
+    'to receive `{ items, next_cursor, has_more }` response. Omit `cursor` for legacy offset/limit mode.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
     }),
     query: PaginationQuerySchema.extend({
       branch: z.string().optional(),
+      cursor: z.string().optional(),
     }),
   },
   responses: {
@@ -220,7 +266,9 @@ const listCommitsV4ByProjectRoute = createRoute({
       description: 'List of commits',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(CommitV4Response)),
+          schema: SuccessResponseSchema(
+            z.union([CursorPageResponseSchema(CommitV4Response), z.array(CommitV4Response)])
+          ),
         },
       },
     },
@@ -303,7 +351,12 @@ const getCommitV4HistoryRoute = createRoute({
       description: 'Commit history',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(CommitV4Response)),
+          schema: SuccessResponseSchema(
+            z.object({
+              commits: z.array(CommitV4Response),
+              truncated: z.boolean(),
+            })
+          ),
         },
       },
     },
@@ -567,7 +620,153 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
         });
     }
 
-    return c.json({ success: true as const, data: toApiCommit(commit) }, 201);
+    // ============================================================
+    // Auto relation extraction (best-effort, fire-and-forget)
+    // ============================================================
+    if (finalSentences.length >= 2) {
+      getLLMProvider()
+        .then(async (llmProvider) => {
+          if (!llmProvider) return;
+          const relExtractor = createRelationExtractor(llmProvider);
+          const relResult = await relExtractor.extract(
+            finalSentences.map((s) => ({ id: s.id, text: s.text }))
+          );
+          if (relResult.relations.length > 0) {
+            await upsertRelations(
+              db,
+              relResult.relations.map((r) => ({
+                id: r.id,
+                project_id: body.project_id,
+                commit_hash: commit.hash,
+                source_id: r.source_id,
+                target_id: r.target_id,
+                type: r.type,
+                confidence: r.confidence,
+                reasoning: r.reasoning,
+              }))
+            );
+            pinoLogger.info(
+              { commit_hash: commit.hash, relations: relResult.relations.length },
+              'auto relation extraction complete'
+            );
+          }
+        })
+        .catch((err) => {
+          pinoLogger.warn({ err, commit_hash: commit.hash }, 'auto relation extraction failed');
+        });
+    }
+
+    // ============================================================
+    // Auto conflict detection (best-effort, inline)
+    // ============================================================
+    // Populate sentence vectors and run conflict detection if embedder is available.
+    // Errors are swallowed — conflict detection is non-critical.
+    let conflictReport: ConflictReport | null = null;
+
+    const embedder = getEmbedder();
+    if (embedder && finalSentences.length > 0) {
+      try {
+        // 1. Embed new sentences
+        const sentenceTexts = finalSentences.map((s) => s.text);
+        const sentenceEmbeddings = await embedder.encode(sentenceTexts);
+
+        // 2. Persist sentence vectors for future conflict detection
+        await upsertSentenceVectorsBatch(
+          db,
+          finalSentences.map((s, i) => ({
+            id: s.id,
+            projectId: body.project_id,
+            commitHash: commit.hash,
+            text: s.text,
+            embedding: sentenceEmbeddings[i],
+            modelId: embedder.id,
+          }))
+        );
+
+        // 3. Search for similar existing sentences (excluding this commit)
+        const existingTextsToEmbed: Array<{
+          id: string;
+          text: string;
+          commit_hash: string;
+        }> = [];
+        const seen = new Set<string>();
+
+        for (let i = 0; i < finalSentences.length; i++) {
+          const results = await searchSimilarSentences(
+            db,
+            body.project_id,
+            sentenceEmbeddings[i],
+            10,
+            commit.hash
+          );
+          for (const r of results) {
+            if (!seen.has(r.id)) {
+              seen.add(r.id);
+              existingTextsToEmbed.push({
+                id: r.id,
+                text: r.text,
+                commit_hash: r.commit_hash,
+              });
+            }
+          }
+        }
+
+        // 4. Re-encode existing sentences and run conflict detection
+        if (existingTextsToEmbed.length > 0) {
+          const existingEmbeddings = await embedder.encode(existingTextsToEmbed.map((r) => r.text));
+          const existingSentences = existingTextsToEmbed.map((r, i) => ({
+            ...r,
+            embedding: existingEmbeddings[i],
+          }));
+
+          conflictReport = await detectConflicts(finalSentences, existingSentences, embedder);
+
+          // 5. Persist detected conflicts to knowledge_conflicts table (fire-and-forget)
+          if (conflictReport.conflicts.length > 0) {
+            Promise.all(
+              conflictReport.conflicts.map((conflict) =>
+                insertConflict(db, {
+                  project_id: body.project_id,
+                  new_sentence_id: conflict.new_sentence_id,
+                  new_commit_hash: commit.hash,
+                  existing_sentence_id: conflict.existing_sentence_id,
+                  existing_commit_hash: conflict.existing_commit_hash,
+                  cosine: conflict.cosine,
+                  jaccard: conflict.jaccard,
+                })
+              )
+            ).catch((conflictErr) => {
+              pinoLogger.warn({ err: conflictErr }, 'failed to persist detected conflicts');
+            });
+
+            // Notify about detected conflicts
+            pushNotification({
+              type: 'conflict.detected',
+              title: 'Knowledge Conflicts Detected',
+              message: `${conflictReport.conflicts.length} potential conflict${conflictReport.conflicts.length === 1 ? '' : 's'} found in commit`,
+              project_id: body.project_id,
+              ref_id: commit.hash,
+            });
+          }
+        } else {
+          conflictReport = { conflicts: [], checked_count: finalSentences.length };
+        }
+      } catch (conflictErr) {
+        // Non-fatal: log and continue with null conflict report
+        pinoLogger.warn({ err: conflictErr }, 'auto conflict detection failed');
+      }
+    }
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: toApiCommit(commit),
+          conflicts: conflictReport,
+        },
+      },
+      201
+    );
   } catch (err) {
     // Handle main branch linearity violation
     if (err instanceof MainBranchLinearityError) {
@@ -616,11 +815,42 @@ commitsV4Routes.openapi(getCommitV4Route, async (c) => {
 // GET /v1/projects/:projectId/commits-v4 - List commits by project
 commitsV4Routes.openapi(listCommitsV4ByProjectRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { branch, limit, offset } = c.req.valid('query');
+  const { branch, limit, offset, cursor } = c.req.valid('query');
 
   try {
     const db = await getDB();
 
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      if (branch) {
+        const result = await findCommitsV4ByBranch(db, projectId, branch, { cursor, limit });
+        return c.json(
+          {
+            success: true as const,
+            data: {
+              items: result.items.map(toApiCommit),
+              next_cursor: result.next_cursor,
+              has_more: result.has_more,
+            },
+          },
+          200
+        );
+      }
+      const result = await findCommitsV4ByProject(db, projectId, { cursor, limit });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            items: result.items.map(toApiCommit),
+            next_cursor: result.next_cursor,
+            has_more: result.has_more,
+          },
+        },
+        200
+      );
+    }
+
+    // Legacy offset/limit mode
     let commits: CommitV4[];
     if (branch) {
       commits = await findCommitsV4ByBranch(db, projectId, branch, { limit, offset });
@@ -664,13 +894,22 @@ commitsV4Routes.openapi(getCommitV4HistoryRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const history = await findCommitV4History(db, decodedHash, limit);
+    const result = await findCommitV4History(db, decodedHash, limit);
 
-    if (history.length === 0) {
+    if (result.commits.length === 0) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
-    return c.json({ success: true as const, data: history.map(toApiCommit) }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commits: result.commits.map(toApiCommit),
+          truncated: result.truncated,
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'HISTORY_FAILED', message);
@@ -704,16 +943,6 @@ commitsV4Routes.openapi(deleteCommitV4Route, async (c) => {
 // POST /v1/commits-v4/:hash/check-conflicts — Detect cross-conversation conflicts
 // ============================================================
 
-const ConflictCandidateSchema = z.object({
-  new_sentence_id: z.string(),
-  new_sentence_text: z.string(),
-  existing_sentence_id: z.string(),
-  existing_sentence_text: z.string(),
-  existing_commit_hash: z.string(),
-  cosine: z.number(),
-  jaccard: z.number(),
-});
-
 const checkConflictsRoute = createRoute({
   method: 'post',
   path: '/v1/commits-v4/{hash}/check-conflicts',
@@ -740,6 +969,10 @@ const checkConflictsRoute = createRoute({
     },
     400: {
       description: 'Embedder not configured or invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },

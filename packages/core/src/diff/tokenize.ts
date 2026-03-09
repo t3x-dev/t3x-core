@@ -1,20 +1,34 @@
 /**
+ * Lazy singleton for Intl.Segmenter (word granularity).
+ *
+ * Intl.Segmenter correctly handles CJK text where whitespace-based splitting
+ * would treat an entire Chinese/Japanese/Korean sentence as a single token.
+ * The `isWordLike` filter automatically strips punctuation-only segments.
+ */
+let _wordSegmenter: Intl.Segmenter | undefined;
+function getWordSegmenter(): Intl.Segmenter {
+  if (!_wordSegmenter) {
+    _wordSegmenter = new Intl.Segmenter('en', { granularity: 'word' });
+  }
+  return _wordSegmenter;
+}
+
+/**
  * Tokenizer for word-level diff
  *
- * Split text into lowercase word tokens.
- * Preserves punctuation attached to words (e.g., "$3000" stays as one token,
- * "Hello," includes the comma). This is intentional - we want to detect
- * punctuation changes.
+ * Split text into original-case word tokens using Intl.Segmenter.
+ * - Handles CJK word boundaries (Chinese, Japanese, Korean)
+ * - Preserves original case (comparison should be case-insensitive)
+ * - Filters punctuation-only segments via `isWordLike`
  *
  * @example
- * tokenize("Budget is $3000") → ["budget", "is", "$3000"]
- * tokenize("Hello, World!") → ["hello,", "world!"]
+ * tokenize("Budget is $3000") → ["Budget", "is", "3000"]
+ * tokenize("Hello, World!") → ["Hello", "World"]
+ * tokenize("用户需要登录功能") → ["用户", "需要", "登录", "功能"]
  */
 export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 0);
+  const segmenter = getWordSegmenter();
+  return [...segmenter.segment(text)].filter((s) => s.isWordLike).map((s) => s.segment);
 }
 
 /**
@@ -42,20 +56,21 @@ export function lightStem(word: string): string {
  * Tokenizer for Jaccard similarity matching (Stage 2).
  *
  * Differences from `tokenize`:
- * - Strips leading/trailing punctuation from each token
+ * - Lowercases all tokens for case-insensitive matching
  * - Applies light stemming for better recall
  *
- * NOT used for LCS word diff (Stage 4) — that needs original punctuation for UI display.
+ * Uses Intl.Segmenter to correctly handle CJK text.
+ * `isWordLike` filter removes punctuation-only segments.
  *
  * @example
  * tokenizeForMatching('"Hello," world!') → ["hello", "world"]
- * tokenizeForMatching("running quickly") → ["run", "quick"]
+ * tokenizeForMatching("running quickly") → ["runn", "quick"]
  */
 export function tokenizeForMatching(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.replace(/^[^\w]+|[^\w]+$/g, ''))
+  const segmenter = getWordSegmenter();
+  return [...segmenter.segment(text)]
+    .filter((s) => s.isWordLike)
+    .map((s) => s.segment.toLowerCase())
     .filter((t) => t.length > 0)
     .map(lightStem);
 }

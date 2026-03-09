@@ -111,6 +111,8 @@ services:
       - AUTH_DISABLED=${AUTH_DISABLED:-true}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)

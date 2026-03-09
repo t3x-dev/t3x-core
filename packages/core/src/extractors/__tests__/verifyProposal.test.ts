@@ -49,7 +49,7 @@ describe('verifyProposal', () => {
     expect(result!.evidence[0].start_char).toBeGreaterThanOrEqual(0);
   });
 
-  it('rejects proposal with non-existent turn_hash', () => {
+  it('recovers via cross-turn fallback when turn_hash is wrong but quote exists', () => {
     const result = verifyProposal(
       makeProposal({
         evidence: [
@@ -57,6 +57,27 @@ describe('verifyProposal', () => {
             conversation_id: 'conv_1',
             turn_hash: 'sha256:nonexistent',
             quoted_text: 'dark mode',
+            role: 'primary',
+            relevance: 'stated',
+          },
+        ],
+      }),
+      existingSPs,
+      turns
+    );
+    // Cross-turn fallback finds "dark mode" in turn1
+    expect(result).not.toBeNull();
+    expect(result!.evidence[0].turn_hash).toBe('sha256:turn1');
+  });
+
+  it('rejects proposal when turn_hash wrong AND quote not in any turn', () => {
+    const result = verifyProposal(
+      makeProposal({
+        evidence: [
+          {
+            conversation_id: 'conv_1',
+            turn_hash: 'sha256:nonexistent',
+            quoted_text: 'this text does not exist in any turn content at all',
             role: 'primary',
             relevance: 'stated',
           },
@@ -144,6 +165,79 @@ describe('verifyProposal', () => {
       turns
     );
     expect(result).toBeNull();
+  });
+
+  describe('cross-turn fallback', () => {
+    it('finds quote in another turn when turn_hash is wrong', () => {
+      const result = verifyProposal(
+        makeProposal({
+          evidence: [
+            {
+              conversation_id: 'conv_1',
+              turn_hash: 'sha256:hallucinated_hash',
+              quoted_text: 'love dark mode for coding',
+              role: 'primary',
+              relevance: 'stated',
+            },
+          ],
+        }),
+        existingSPs,
+        turns
+      );
+      expect(result).not.toBeNull();
+      // Should have resolved to the actual turn
+      expect(result!.evidence[0].turn_hash).toBe('sha256:turn1');
+      expect(result!.evidence[0].conversation_id).toBe('conv_1');
+    });
+
+    it('still rejects when quote is not in any turn', () => {
+      const result = verifyProposal(
+        makeProposal({
+          evidence: [
+            {
+              conversation_id: 'conv_1',
+              turn_hash: 'sha256:hallucinated_hash',
+              quoted_text: 'this text is nowhere to be found in any turn content',
+              role: 'primary',
+              relevance: 'stated',
+            },
+          ],
+        }),
+        existingSPs,
+        turns
+      );
+      expect(result).toBeNull();
+    });
+
+    it('uses correct conversation_id from fallback turn', () => {
+      const multiConvTurns: TurnInput[] = [
+        ...turns,
+        {
+          conversation_id: 'conv_2',
+          turn_hash: 'sha256:turn3',
+          role: 'user',
+          content: 'I need a REST API endpoint for authentication.',
+        },
+      ];
+      const result = verifyProposal(
+        makeProposal({
+          evidence: [
+            {
+              conversation_id: 'conv_1',
+              turn_hash: 'sha256:wrong_hash',
+              quoted_text: 'REST API endpoint for authentication',
+              role: 'primary',
+              relevance: 'stated',
+            },
+          ],
+        }),
+        existingSPs,
+        multiConvTurns
+      );
+      expect(result).not.toBeNull();
+      expect(result!.evidence[0].turn_hash).toBe('sha256:turn3');
+      expect(result!.evidence[0].conversation_id).toBe('conv_2');
+    });
   });
 });
 

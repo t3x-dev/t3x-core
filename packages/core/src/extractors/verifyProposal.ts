@@ -77,11 +77,23 @@ export function verifyProposal(
   let hasPrimary = false;
 
   for (const anchor of proposal.evidence) {
-    const turn = turnMap.get(anchor.turn_hash);
+    let turn = turnMap.get(anchor.turn_hash);
     if (!turn) {
-      // Turn not found — if primary, reject entire proposal
-      if (anchor.role === 'primary') return null;
-      continue; // Skip missing supporting evidence
+      // Cross-turn fallback: LLM may have hallucinated the turn_hash,
+      // so search all turns for the quoted text before rejecting.
+      // Pick the turn with the highest match score.
+      let bestScore = 0;
+      for (const candidateTurn of turns) {
+        const loc = fuzzyLocate(candidateTurn.content, anchor.quoted_text);
+        if (loc && loc.score > bestScore) {
+          bestScore = loc.score;
+          turn = candidateTurn;
+        }
+      }
+      if (!turn) {
+        if (anchor.role === 'primary') return null;
+        continue;
+      }
     }
 
     // Locate quote in turn content
@@ -93,8 +105,8 @@ export function verifyProposal(
     }
 
     verifiedEvidence.push({
-      conversation_id: anchor.conversation_id,
-      turn_hash: anchor.turn_hash,
+      conversation_id: turn.conversation_id,
+      turn_hash: turn.turn_hash,
       quoted_text: anchor.quoted_text,
       start_char: location.start,
       end_char: location.end,

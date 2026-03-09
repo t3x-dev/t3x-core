@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 54 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(54);
+  it('has 62 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(62);
   });
 
   it('key equals value for every code', () => {
@@ -22,9 +22,11 @@ describe('ErrorCodes', () => {
   it('matches snapshot to prevent accidental changes', () => {
     expect(ErrorCodes).toMatchInlineSnapshot(`
       {
+        "ALREADY_COMMITTED": "ALREADY_COMMITTED",
         "API_KEY_NOT_FOUND": "API_KEY_NOT_FOUND",
         "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",
+        "AUTOPILOT_CONFIG_INVALID": "AUTOPILOT_CONFIG_INVALID",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
         "COMPARE_FAILED": "COMPARE_FAILED",
@@ -35,11 +37,16 @@ describe('ErrorCodes', () => {
         "DELETE_FAILED": "DELETE_FAILED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
+        "EMBEDDER_NOT_CONFIGURED": "EMBEDDER_NOT_CONFIGURED",
+        "EMBEDDINGS_REQUIRED": "EMBEDDINGS_REQUIRED",
         "EXTRACTION_FAILED": "EXTRACTION_FAILED",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
+        "GRAPH_BUILD_FAILED": "GRAPH_BUILD_FAILED",
+        "GRAPH_NODE_NOT_FOUND": "GRAPH_NODE_NOT_FOUND",
+        "GRAPH_NOT_BUILT": "GRAPH_NOT_BUILT",
         "HASH_CONFLICT": "HASH_CONFLICT",
         "HISTORY_FAILED": "HISTORY_FAILED",
         "HISTORY_MISMATCH": "HISTORY_MISMATCH",
@@ -64,6 +71,7 @@ describe('ErrorCodes', () => {
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
@@ -97,6 +105,7 @@ describe('ErrorStatusCodes', () => {
       'PIN_NOT_FOUND',
       'CONVERSATION_NOT_FOUND',
       'HISTORY_NOT_FOUND',
+      'GRAPH_NODE_NOT_FOUND',
     ];
     for (const code of notFoundCodes) {
       expect(ErrorStatusCodes[code]).toBe(404);
@@ -127,6 +136,7 @@ describe('ErrorStatusCodes', () => {
       'RESTORE_FAILED',
       'COMPARE_FAILED',
       'MERGE_FAILED',
+      'GRAPH_BUILD_FAILED',
     ];
     for (const code of serverCodes) {
       expect(ErrorStatusCodes[code]).toBe(500);

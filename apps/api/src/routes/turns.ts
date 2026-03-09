@@ -8,7 +8,8 @@
  * GET  /v1/turns/:hash/context - Get turn with surrounding context (for source tracing)
  */
 
-import { createRingExtractor } from '@t3x/core';
+import type { ContentBlock } from '@t3x/core';
+import { createRingExtractor, textFromBlocks } from '@t3x/core';
 import {
   findConversationById,
   findTurnByHash,
@@ -24,8 +25,37 @@ import { jsonError, jsonSuccess } from '../lib/response';
 
 export const turnRoutes = new Hono();
 
+const VALID_BLOCK_TYPES = new Set(['text', 'image', 'audio', 'file']);
+
+/** Validate content_blocks array at runtime. Returns null if valid, error string if not. */
+function validateContentBlocks(blocks: unknown): string | null {
+  if (!Array.isArray(blocks)) return 'content_blocks must be an array';
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') return 'each content block must be an object';
+    const b = block as Record<string, unknown>;
+    if (!VALID_BLOCK_TYPES.has(b.type as string)) {
+      return `invalid block type: ${String(b.type)}`;
+    }
+    if (b.type === 'text' && typeof b.text !== 'string') return 'text block must have a text string';
+    if ((b.type === 'image' || b.type === 'audio' || b.type === 'file') && typeof b.url !== 'string') {
+      return `${b.type} block must have a url string`;
+    }
+    if (b.type === 'file' && typeof b.filename !== 'string') {
+      return 'file block must have a filename string';
+    }
+    if (b.type === 'file' && typeof b.mime_type !== 'string') {
+      return 'file block must have a mime_type string';
+    }
+  }
+  return null;
+}
+
 /**
  * GET /v1/turns - List turns
+ *
+ * Supports cursor-based pagination: pass `cursor` query parameter
+ * (empty string for first page) to receive `{ items, next_cursor, has_more }` response.
+ * Omit `cursor` for legacy offset/limit mode.
  */
 turnRoutes.get('/v1/turns', async (c) => {
   const conversationId = c.req.query('conversation_id');
@@ -38,25 +68,50 @@ turnRoutes.get('/v1/turns', async (c) => {
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
   const orderParam = c.req.query('order');
   const order = orderParam === 'desc' ? 'desc' : 'asc';
+  const cursor = c.req.query('cursor');
+
+  const toApiTurn = (t: {
+    turnHash: string;
+    parentTurnHash: string | null;
+    projectId: string;
+    conversationId: string;
+    role: string;
+    content: string;
+    language: string | null;
+    ringsJson: string | null;
+    contentBlocks: unknown[] | null;
+    createdAt: Date;
+  }) => ({
+    turn_hash: t.turnHash,
+    parent_turn_hash: t.parentTurnHash,
+    project_id: t.projectId,
+    conversation_id: t.conversationId,
+    role: t.role,
+    content: t.content,
+    language: t.language,
+    rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+    content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
+    created_at: t.createdAt.toISOString(),
+  });
 
   try {
     const db = await getDB();
+
+    // Cursor-based pagination mode
+    if (cursor !== undefined) {
+      const result = await findTurnsByConversation(db, { conversationId, cursor, limit, order });
+      return jsonSuccess(c, {
+        items: result.items.map(toApiTurn),
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+      });
+    }
+
+    // Legacy offset/limit mode
     const turns = await findTurnsByConversation(db, { conversationId, limit, offset, order });
 
-    const apiTurns = turns.map((t) => ({
-      turn_hash: t.turnHash,
-      parent_turn_hash: t.parentTurnHash,
-      project_id: t.projectId,
-      conversation_id: t.conversationId,
-      role: t.role,
-      content: t.content,
-      language: t.language,
-      rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
-      created_at: t.createdAt.toISOString(),
-    }));
-
     return jsonSuccess(c, {
-      turns: apiTurns,
+      turns: turns.map(toApiTurn),
       conversation_id: conversationId,
       limit,
       offset,
@@ -79,12 +134,26 @@ turnRoutes.post('/v1/turns', async (c) => {
     content?: string;
     language?: string;
     rings?: unknown;
+    content_blocks?: ContentBlock[];
   } | null = null;
 
   try {
     body = await c.req.json();
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  // Validate content_blocks if provided
+  if (body?.content_blocks) {
+    const blockError = validateContentBlocks(body.content_blocks);
+    if (blockError) {
+      return jsonError(c, 'INVALID_REQUEST', blockError, 400);
+    }
+  }
+
+  // Auto-compute content from content_blocks when content is empty/missing
+  if (body?.content_blocks?.length && !body.content) {
+    body.content = textFromBlocks(body.content_blocks);
   }
 
   if (!body?.project_id || !body?.conversation_id || !body?.role || !body?.content) {
@@ -148,6 +217,7 @@ turnRoutes.post('/v1/turns', async (c) => {
       content: body.content,
       language: body.language,
       rings,
+      content_blocks: body.content_blocks,
     });
 
     const apiTurn = {
@@ -159,6 +229,7 @@ turnRoutes.post('/v1/turns', async (c) => {
       content: turn.content,
       language: turn.language,
       rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      content_blocks: (turn.contentBlocks as ContentBlock[]) ?? null,
       created_at: turn.createdAt.toISOString(),
     };
 
@@ -192,6 +263,7 @@ turnRoutes.get('/v1/turns/:hash', async (c) => {
       content: turn.content,
       language: turn.language,
       rings: turn.ringsJson ? JSON.parse(turn.ringsJson) : null,
+      content_blocks: (turn.contentBlocks as ContentBlock[]) ?? null,
       created_at: turn.createdAt.toISOString(),
     };
 
@@ -222,6 +294,7 @@ turnRoutes.get('/v1/turns/:hash/chain', async (c) => {
       content: t.content,
       language: t.language,
       rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
       created_at: t.createdAt.toISOString(),
     }));
 
@@ -291,6 +364,7 @@ turnRoutes.get('/v1/turns/:hash/context', async (c) => {
       content: t.content,
       language: t.language,
       rings: t.ringsJson ? JSON.parse(t.ringsJson) : null,
+      content_blocks: (t.contentBlocks as ContentBlock[]) ?? null,
       created_at: t.createdAt.toISOString(),
       is_target: isTarget,
       highlight:

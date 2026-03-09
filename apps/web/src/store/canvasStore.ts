@@ -229,8 +229,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                 set((s) => ({
                   nodes: s.nodes.filter((n) => !nodesToDeleteSet.has(n.id)),
                   edges: s.edges.filter(
-                    (e) =>
-                      !nodesToDeleteSet.has(e.source) && !nodesToDeleteSet.has(e.target)
+                    (e) => !nodesToDeleteSet.has(e.source) && !nodesToDeleteSet.has(e.target)
                   ),
                   deletionConfirmation: null,
                 }));

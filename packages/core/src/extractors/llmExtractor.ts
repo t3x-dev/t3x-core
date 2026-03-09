@@ -104,6 +104,7 @@ export class LLMExtractor {
     options?: {
       config?: ProjectExtractionConfig;
       temperature?: number;
+      logger?: (msg: string, data?: unknown) => void;
     }
   ): Promise<IncrementalExtractionResult> {
     const reviewZoneItems = existingSPs.filter((sp) => sp.zone === 'review');
@@ -129,12 +130,36 @@ export class LLMExtractor {
     let rejected = 0;
     let position = existingSPs.length;
 
+    const log = options?.logger;
+    const turnHashSet = log ? new Set(turns.map((t) => t.turn_hash)) : undefined;
+
     for (const proposal of proposals) {
+      if (log && turnHashSet) {
+        log('verifying proposal', {
+          type: proposal.type,
+          text: proposal.text.slice(0, 80),
+          evidenceCount: proposal.evidence.length,
+          evidenceAnchors: proposal.evidence.map((e) => ({
+            turn_hash: e.turn_hash,
+            turn_exists: turnHashSet.has(e.turn_hash),
+            role: e.role,
+            quoted_text: e.quoted_text.slice(0, 60),
+          })),
+        });
+      }
+
       const verified = verifyProposal(proposal, existingSPs, turns);
       if (!verified) {
+        log?.('REJECTED proposal', proposal.text.slice(0, 80));
         rejected++;
         continue;
       }
+
+      log?.('ACCEPTED proposal', {
+        text: verified.text.slice(0, 80),
+        evidenceCount: verified.evidence.length,
+        scores: verified.evidence.map((e) => e.match_score),
+      });
 
       const route = routeProposal(proposal, options?.config);
 
@@ -148,6 +173,7 @@ export class LLMExtractor {
         routing_reason: route.reason,
         evidence: verified.evidence,
         confidence: verified.confidence,
+        ...(verified.low_coverage ? { low_coverage: true } : {}),
         position: position++,
         staged: route.zone === 'ready',
       };

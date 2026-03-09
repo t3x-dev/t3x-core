@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, Lock, Undo2 } from 'lucide-react';
+import { AlertTriangle, Info, Lock, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,6 +41,17 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
             <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
               {point.confidence.toFixed(2)}
             </Badge>
+          )}
+          {point.low_coverage && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertTriangle
+                  className="h-3 w-3 text-amber-500 cursor-help"
+                  aria-label="Low evidence coverage"
+                />
+              </TooltipTrigger>
+              <TooltipContent>Evidence covers &lt;60% of source turn</TooltipContent>
+            </Tooltip>
           )}
           {point.routing_reason && (
             <Tooltip>

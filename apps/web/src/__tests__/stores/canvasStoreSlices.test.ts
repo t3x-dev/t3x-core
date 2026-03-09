@@ -79,8 +79,6 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
           source: { type: 'conversation', id: 'c2' },
         },
         wordDiff: [],
-        sourceConstraints: [],
-        targetConstraints: [],
       },
       {
         source: {
@@ -97,8 +95,6 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
         },
         wordDiff: [],
         resolution: 'source',
-        sourceConstraints: [],
-        targetConstraints: [],
       },
     ],
     onlyInSource: [
@@ -109,7 +105,6 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
           confidence: 1,
           source: { type: 'conversation', id: 'c1' },
         },
-        constraints: [],
         keep: true,
       },
     ],
@@ -121,7 +116,6 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
           confidence: 1,
           source: { type: 'conversation', id: 'c2' },
         },
-        constraints: [],
         keep: false,
       },
       {
@@ -131,7 +125,6 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
           confidence: 1,
           source: { type: 'conversation', id: 'c2' },
         },
-        constraints: [],
         keep: true,
       },
     ],

@@ -215,16 +215,20 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.hash).toMatch(/^sha256:/);
-      expect(data.data.schema).toBe('t3x/commit/v4');
-      expect(data.data.parents).toEqual([]);
-      expect(data.data.author).toEqual({ type: 'human', id: 'user_123', name: 'Test User' });
-      expect(data.data.committed_at).toBeDefined();
-      expect(data.data.content.sentences).toHaveLength(2);
-      expect(data.data.project_id).toBe(testProjectId);
-      expect(data.data.message).toBe('Initial travel plan');
-      expect(data.data.branch).toBe('main');
-      expect(data.data.created_at).toBeDefined();
+      // Response wraps commit + conflicts
+      const commit = data.data.commit;
+      expect(commit.hash).toMatch(/^sha256:/);
+      expect(commit.schema).toBe('t3x/commit/v4');
+      expect(commit.parents).toEqual([]);
+      expect(commit.author).toEqual({ type: 'human', id: 'user_123', name: 'Test User' });
+      expect(commit.committed_at).toBeDefined();
+      expect(commit.content.sentences).toHaveLength(2);
+      expect(commit.project_id).toBe(testProjectId);
+      expect(commit.message).toBe('Initial travel plan');
+      expect(commit.branch).toBe('main');
+      expect(commit.created_at).toBeDefined();
+      // conflicts is null when no embedder is configured
+      expect(data.data.conflicts).toBeNull();
     });
 
     it('creates a commit with minimal input', async () => {
@@ -242,13 +246,14 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.hash).toMatch(/^sha256:/);
-      expect(data.data.parents).toEqual([]);
-      expect(data.data.message).toBeNull();
-      expect(data.data.branch).toBeNull();
-      expect(data.data.source_refs).toBeNull();
-      expect(data.data.position_x).toBeNull();
-      expect(data.data.position_y).toBeNull();
+      const commit = data.data.commit;
+      expect(commit.hash).toMatch(/^sha256:/);
+      expect(commit.parents).toEqual([]);
+      expect(commit.message).toBeNull();
+      expect(commit.branch).toBeNull();
+      expect(commit.source_refs).toBeNull();
+      expect(commit.position_x).toBeNull();
+      expect(commit.position_y).toBeNull();
     });
 
     it('creates a commit with parent reference', async () => {
@@ -263,7 +268,7 @@ describe('Commits V4 Routes', () => {
         }),
       });
       const parentData: ApiResponse = await parentRes.json();
-      const parentHash = parentData.data.hash;
+      const parentHash = parentData.data.commit.hash;
 
       // Create child commit with parent reference
       const res = await app.request('/v1/commits-v4', {
@@ -282,7 +287,7 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.parents).toEqual([parentHash]);
+      expect(data.data.commit.parents).toEqual([parentHash]);
     });
 
     it('creates a commit with source_refs', async () => {
@@ -304,9 +309,10 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.source_refs).toHaveLength(2);
-      expect(data.data.source_refs[0].type).toBe('conversation');
-      expect(data.data.source_refs[1].assertion_lessons).toEqual(['Learned X']);
+      const commit = data.data.commit;
+      expect(commit.source_refs).toHaveLength(2);
+      expect(commit.source_refs[0].type).toBe('conversation');
+      expect(commit.source_refs[1].assertion_lessons).toEqual(['Learned X']);
     });
 
     it('creates a commit with position', async () => {
@@ -326,8 +332,8 @@ describe('Commits V4 Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.position_x).toBe(100);
-      expect(data.data.position_y).toBe(200);
+      expect(data.data.commit.position_x).toBe(100);
+      expect(data.data.commit.position_y).toBe(200);
     });
 
     it('returns 400 for missing required fields', async () => {
@@ -418,7 +424,7 @@ describe('Commits V4 Routes', () => {
         }),
       });
       const data: ApiResponse = await res.json();
-      createdCommitHash = data.data.hash;
+      createdCommitHash = data.data.commit.hash;
     });
 
     it('returns commit by hash', async () => {
@@ -465,8 +471,8 @@ describe('Commits V4 Routes', () => {
           branch: 'main',
         }),
       });
-      const firstData = (await firstRes.json()) as { data: { hash: string } };
-      const firstHash = firstData.data.hash;
+      const firstData = (await firstRes.json()) as { data: { commit: { hash: string } } };
+      const firstHash = firstData.data.commit.hash;
 
       // Second commit on main (must have parent to satisfy main branch linear chain)
       await app.request('/v1/commits-v4', {
@@ -550,7 +556,7 @@ describe('Commits V4 Routes', () => {
         }),
       });
       const data: ApiResponse = await res.json();
-      createdCommitHash = data.data.hash;
+      createdCommitHash = data.data.commit.hash;
     });
 
     it('updates commit position', async () => {
@@ -626,7 +632,7 @@ describe('Commits V4 Routes', () => {
         }),
       });
       const data: ApiResponse = await res.json();
-      createdCommitHash = data.data.hash;
+      createdCommitHash = data.data.commit.hash;
     });
 
     it('deletes commit successfully', async () => {
@@ -690,7 +696,7 @@ describe('Commits V4 Routes', () => {
       // Verify main branch was created and HEAD is updated
       const branchAfter = await findBranchByName(mockDB, project.projectId, 'main');
       expect(branchAfter).not.toBeNull();
-      expect(branchAfter!.headCommitHash).toBe(data.data.hash);
+      expect(branchAfter!.headCommitHash).toBe(data.data.commit.hash);
     });
 
     it('updates branch HEAD when creating subsequent commits', async () => {
@@ -722,14 +728,14 @@ describe('Commits V4 Routes', () => {
           sentences: [{ id: 's_1', text: 'Second commit.' }],
           project_id: project.projectId,
           branch: 'main',
-          parents: [data1.data.hash],
+          parents: [data1.data.commit.hash],
         }),
       });
       const data2: ApiResponse = await res2.json();
 
       // Verify HEAD points to second commit
       const branch = await findBranchByName(mockDB, project.projectId, 'main');
-      expect(branch!.headCommitHash).toBe(data2.data.hash);
+      expect(branch!.headCommitHash).toBe(data2.data.commit.hash);
     });
 
     it('sets main branch as current branch', async () => {

@@ -3,7 +3,10 @@
  */
 
 export {
+  type AdaptiveConfig,
+  type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
+  computeAdaptiveConfig,
   computeAdaptiveThresholds,
   type FeedbackStats,
 } from './adaptiveThresholds';
@@ -37,7 +40,7 @@ export {
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
-export { buildIncrementalPrompt, buildStyleSeed } from './incrementalPrompt';
+export { buildAdaptiveSection, buildIncrementalPrompt, buildStyleSeed } from './incrementalPrompt';
 export {
   createLLMExtractor,
   type ExtractedSentence,
@@ -51,6 +54,10 @@ export {
   PolarityRuleEngine,
   type PreferenceRelation,
 } from './polarityRules';
+// Relation Extraction (Ring 4)
+export { createRelationExtractor, RelationExtractor } from './relationExtractor';
+export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
+export { buildRelationPrompt } from './relationPrompt';
 // Ring Extractor
 /** @deprecated Use Frame semantic engine instead of Ring extraction. */
 export {
