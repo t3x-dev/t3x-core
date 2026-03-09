@@ -4,17 +4,22 @@
  * Feeds realistic conversation data through both engines and compares
  * extraction quality side-by-side.
  *
+ * Ring uses local NLP provider (Intl.Segmenter), or Google Cloud NLP when
+ * GOOGLE_CLOUD_NLP_KEY is set and reachable. Frame uses Claude via Anthropic API.
+ *
  * Run:
- *   source ../../.env && cd packages/core && npx vitest run src/__tests__/compare-engines.test.ts
+ *   export $(grep -v '^#' ../../.env | xargs) && npx vitest run src/__tests__/compare-engines.test.ts
  */
 
 import { describe, it } from 'vitest';
 import {
   createRingExtractor,
+  createLocalNLPProvider,
   createGoogleCloudNLPProvider,
   createClaudeProvider,
   FrameExtractor,
 } from '../index';
+import type { NLPProvider } from '../providers/nlp';
 import type { SemanticContent, SlotValue } from '../semantic/types';
 
 // ── Realistic Conversation ──
@@ -132,15 +137,56 @@ function slotDisplay(slots: Record<string, SlotValue>): string {
     .join(', ');
 }
 
+/**
+ * Create the best available NLP provider:
+ * 1. Try Google Cloud NLP with proxy (if key set and reachable)
+ * 2. Fall back to local Intl.Segmenter provider
+ */
+async function createBestNLPProvider(): Promise<{ provider: NLPProvider; name: string }> {
+  const key = process.env.GOOGLE_CLOUD_NLP_KEY;
+  if (key) {
+    // Try Google NLP with proxy support (same as apps/api/src/lib/nlp.ts)
+    const proxyUrl =
+      process.env.HTTPS_PROXY || process.env.HTTP_PROXY ||
+      process.env.https_proxy || process.env.http_proxy;
+
+    let customFetch: typeof fetch | undefined;
+    if (proxyUrl) {
+      try {
+        const undici = await import('undici');
+        const dispatcher = new undici.ProxyAgent(proxyUrl);
+        customFetch = ((url: string, options?: RequestInit) =>
+          undici.fetch(url, { ...options, dispatcher } as Parameters<
+            typeof undici.fetch
+          >[1]) as Promise<Response>) as typeof fetch;
+      } catch {
+        // undici not available, skip proxy
+      }
+    }
+
+    // Test if the API is reachable
+    const provider = createGoogleCloudNLPProvider(key, {
+      fetch: customFetch,
+    });
+    try {
+      await provider.analyze('test', 'en');
+      return { provider, name: 'Google Cloud NLP' };
+    } catch {
+      console.log('  ⚠ Google Cloud NLP not reachable, falling back to local provider');
+    }
+  }
+
+  return { provider: createLocalNLPProvider(), name: 'Local (Intl.Segmenter)' };
+}
+
 // ── Test ──
 
 describe('Ring vs Frame Engine Comparison', () => {
   it('compares extraction quality on a travel planning conversation', async () => {
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    const GOOGLE_CLOUD_NLP_KEY = process.env.GOOGLE_CLOUD_NLP_KEY;
 
-    if (!ANTHROPIC_API_KEY || !GOOGLE_CLOUD_NLP_KEY) {
-      console.log('⏭ Skipping: ANTHROPIC_API_KEY and GOOGLE_CLOUD_NLP_KEY required');
+    if (!ANTHROPIC_API_KEY) {
+      console.log('⏭ Skipping: ANTHROPIC_API_KEY required');
       return;
     }
 
@@ -151,11 +197,12 @@ describe('Ring vs Frame Engine Comparison', () => {
     // ═══════════════════════════════════════════════════════════
     // RING ENGINE
     // ═══════════════════════════════════════════════════════════
+    const { provider: nlpProvider, name: nlpName } = await createBestNLPProvider();
+
     console.log('═'.repeat(70));
-    console.log('  RING ENGINE (Old — NLP-based, deterministic)');
+    console.log(`  RING ENGINE (Old — NLP provider: ${nlpName})`);
     console.log('═'.repeat(70));
 
-    const nlpProvider = createGoogleCloudNLPProvider(GOOGLE_CLOUD_NLP_KEY);
     const ringExtractor = createRingExtractor(nlpProvider);
 
     const allRingKeywords: string[] = [];
@@ -169,6 +216,7 @@ describe('Ring vs Frame Engine Comparison', () => {
       try {
         const ringOutput = await ringExtractor.extract(`turn_${i}`, turn.content, 'en');
         const r1 = ringOutput.ring1;
+        const r2 = ringOutput.ring2;
         const r3 = ringOutput.ring3;
 
         const keywords = (r1.keywords ?? []).map((k) =>
@@ -180,10 +228,12 @@ describe('Ring vs Frame Engine Comparison', () => {
         const prefKws = r1.preference_keywords ?? [];
         const positive = prefKws.filter((pk) => pk.polarity !== 'negative' && pk.polarity !== -1).map((pk) => pk.keyword);
         const negative = prefKws.filter((pk) => pk.polarity === 'negative' || pk.polarity === -1).map((pk) => pk.keyword);
+        const facets = r2.facets ?? [];
 
-        console.log(`    Keywords: [${keywords.join(', ')}]`);
-        console.log(`    Entities: [${entities.join(', ')}]`);
+        console.log(`    Keywords (${keywords.length}): [${keywords.join(', ')}]`);
+        console.log(`    Entities (${entities.length}): [${entities.join(', ')}]`);
         console.log(`    Pref+: [${positive.join(', ')}]  Pref-: [${negative.join(', ')}]`);
+        console.log(`    Facets: [${facets.map((f) => f.label).join(', ')}]`);
         console.log(`    Segments: ${(r3.segments ?? []).length} sentences`);
 
         for (const kw of keywords) {
@@ -191,6 +241,14 @@ describe('Ring vs Frame Engine Comparison', () => {
           if (!seenRing.has(kwL) && isValueableKeyword(kw)) {
             seenRing.add(kwL);
             allRingKeywords.push(kw);
+          }
+        }
+        // Also add entity text as keywords for comparison
+        for (const e of r1.entities ?? []) {
+          const eL = e.text.toLowerCase();
+          if (!seenRing.has(eL) && isValueableKeyword(e.text)) {
+            seenRing.add(eL);
+            allRingKeywords.push(e.text);
           }
         }
         for (const neg of negative) {
@@ -202,7 +260,7 @@ describe('Ring vs Frame Engine Comparison', () => {
     }
 
     console.log('\n  ── Ring Aggregated Preferences ──');
-    console.log(`  must_have (${allRingKeywords.length}): [${allRingKeywords.slice(0, 20).join(', ')}]`);
+    console.log(`  must_have (${allRingKeywords.length}): [${allRingKeywords.slice(0, 25).join(', ')}]`);
     console.log(`  must_not_have (${ringNegatives.length}): [${ringNegatives.join(', ')}]`);
 
     // ═══════════════════════════════════════════════════════════
@@ -269,9 +327,9 @@ describe('Ring vs Frame Engine Comparison', () => {
       console.log(`    ${rel.from} --${rel.type}--> ${rel.to}`);
     }
 
-    console.log('\n  ── Frame Aggregated Preferences (fixed extractPreferencesFromFrames) ──');
+    console.log('\n  ── Frame Aggregated Preferences (extractPreferencesFromFrames) ──');
     const framePrefs = extractPreferencesFromFrames(currentSnapshot);
-    console.log(`  must_have (${framePrefs.mustHave.length}): [${framePrefs.mustHave.slice(0, 20).join(', ')}]`);
+    console.log(`  must_have (${framePrefs.mustHave.length}): [${framePrefs.mustHave.slice(0, 25).join(', ')}]`);
     console.log(`  must_not_have (${framePrefs.mustNotHave.length}): [${framePrefs.mustNotHave.join(', ')}]`);
 
     // ═══════════════════════════════════════════════════════════
@@ -309,8 +367,8 @@ describe('Ring vs Frame Engine Comparison', () => {
     }
 
     console.log('\n  📊 Summary:');
-    console.log(`    Ring:  ${ringScore}/${keyConcepts.length} positive, ${ringNegScore}/${negConcepts.length} negative`);
-    console.log(`    Frame: ${frameScore}/${keyConcepts.length} positive, ${frameNegScore}/${negConcepts.length} negative`);
+    console.log(`    Ring (${nlpName}):  ${ringScore}/${keyConcepts.length} positive, ${ringNegScore}/${negConcepts.length} negative`);
+    console.log(`    Frame (Claude):    ${frameScore}/${keyConcepts.length} positive, ${frameNegScore}/${negConcepts.length} negative`);
     console.log(`    Ring total keywords: ${allRingKeywords.length} (flat bag)`);
     console.log(`    Frame total frames: ${currentSnapshot.frames.length} with ${currentSnapshot.relations.length} relations (semantic graph)`);
 
@@ -327,11 +385,11 @@ describe('Ring vs Frame Engine Comparison', () => {
     if (totalFrame > totalRing) {
       console.log(`    Frame engine captures MORE relevant concepts (${totalFrame} vs ${totalRing}).`);
     } else if (totalFrame === totalRing) {
-      console.log(`    Both engines capture equal concepts (${totalFrame}).`);
+      console.log(`    Both engines capture EQUAL concepts (${totalFrame}).`);
     } else {
       console.log(`    Ring engine captures MORE concepts (${totalRing} vs ${totalFrame}).`);
     }
     console.log(`    Frame provides structured semantic graph; Ring provides flat keyword bags.`);
     console.log('');
-  }, 120_000);
+  }, 180_000);
 });
