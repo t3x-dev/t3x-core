@@ -337,6 +337,8 @@ export {
   FrameRelationTypeSchema,
   FrameSchema,
   frameDiff,
+  GateRunner,
+  type GateRunnerOptions,
   parseGatesConfig,
   parseSemanticGateResponse,
   prepareFrameMerge,

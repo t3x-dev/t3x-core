@@ -15,6 +15,8 @@ export { applyDelta, buildDraft } from './delta';
 export { frameDiff } from './diff';
 // Gate (Gate 2 — Semantic)
 export { buildSemanticGatePrompt, parseSemanticGateResponse, SemanticGate } from './gate';
+// Gate Runner (Orchestrator)
+export { GateRunner, type GateRunnerOptions } from './gateRunner';
 // Merge
 export { prepareFrameMerge } from './merge';
 // Zod Schemas
