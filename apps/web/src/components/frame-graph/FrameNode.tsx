@@ -1,17 +1,20 @@
 'use client';
 
+import type { SlotValue } from '@t3x/core';
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Link as LinkIcon, Paperclip, Shield } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { FrameNodeData } from './frameGraphUtils';
 
-// ── Extended node data with delta state markers ──
+// ── Extended node data with delta state markers + edit callbacks ──
 
 interface FrameNodeDataWithState extends FrameNodeData {
   state?: 'added' | 'updated' | 'removed' | 'conflict';
   updatedSlots?: string[];
+  onSlotEdit?: (frameId: string, key: string, value: SlotValue) => void;
+  onTypeEdit?: (frameId: string, newType: string) => void;
 }
 
 type FrameNodeProps = NodeProps & { data: FrameNodeDataWithState };
@@ -26,6 +29,11 @@ function toTitleCase(s: string): string {
     .join(' ');
 }
 
+/** Convert a user-entered string back to snake_case */
+function toSnakeCase(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
 /** Format a number with locale separators */
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -34,6 +42,92 @@ function formatNumber(n: number): string {
 /** Truncate string to maxLen, appending ellipsis */
 function truncate(s: string, maxLen: number): string {
   return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+}
+
+/** Parse a string as a number if it looks numeric, otherwise return as string */
+function parseSlotValue(raw: string): SlotValue {
+  const trimmed = raw.trim();
+  if (trimmed === '') return trimmed;
+  const num = Number(trimmed);
+  if (!Number.isNaN(num) && trimmed !== '') return num;
+  return trimmed;
+}
+
+// ── Inline Editable Text ──
+
+function InlineEdit({
+  value,
+  onCommit,
+  className,
+  inputClassName,
+}: {
+  value: string;
+  onCommit: (newValue: string) => void;
+  className?: string;
+  inputClassName?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = useCallback(() => {
+    setDraft(value);
+    setEditing(true);
+    // Focus after React renders the input
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [value]);
+
+  const commitEdit = useCallback(() => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) {
+      onCommit(trimmed);
+    }
+  }, [draft, value, onCommit]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEdit();
+      } else if (e.key === 'Escape') {
+        setEditing(false);
+        setDraft(value);
+      }
+    },
+    [commitEdit, value]
+  );
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commitEdit}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          'bg-white dark:bg-zinc-800 border border-blue-400 rounded px-1 py-0 text-xs outline-none w-full min-w-[60px]',
+          inputClassName
+        )}
+        // Prevent ReactFlow from capturing key events
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded px-0.5',
+        className
+      )}
+      onDoubleClick={startEdit}
+      title="Double-click to edit"
+    >
+      {value}
+    </span>
+  );
 }
 
 // ── Slot value renderer ──
@@ -109,10 +203,42 @@ function SlotValueDisplay({ value }: { value: unknown }) {
   return <span className="text-muted-foreground">{String(value)}</span>;
 }
 
+// ── Editable slot value ──
+
+function EditableSlotValue({
+  frameId,
+  slotKey,
+  value,
+  onSlotEdit,
+}: {
+  frameId: string;
+  slotKey: string;
+  value: unknown;
+  onSlotEdit?: (frameId: string, key: string, value: SlotValue) => void;
+}) {
+  // Only string and number values are inline-editable
+  const editable = onSlotEdit && (typeof value === 'string' || typeof value === 'number');
+
+  if (!editable) {
+    return <SlotValueDisplay value={value} />;
+  }
+
+  const displayStr = typeof value === 'string' ? value : String(value);
+
+  return (
+    <InlineEdit
+      value={displayStr}
+      onCommit={(newVal) => onSlotEdit(frameId, slotKey, parseSlotValue(newVal))}
+      className="text-foreground"
+    />
+  );
+}
+
 // ── FrameNode Component ──
 
-function FrameNodeComponent({ data, selected }: FrameNodeProps) {
-  const { frameType, slots, source, confidence, state, updatedSlots } = data;
+function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
+  const { frameType, slots, source, confidence, state, updatedSlots, onSlotEdit, onTypeEdit } =
+    data;
   const updatedSet = new Set(updatedSlots ?? []);
 
   // State-based container classes
@@ -128,6 +254,16 @@ function FrameNodeComponent({ data, selected }: FrameNodeProps) {
     state === 'updated' && 'border-l-4 border-l-orange-500',
     state === 'removed' && 'opacity-40 line-through',
     state === 'conflict' && 'border-2 border-red-500'
+  );
+
+  const handleTypeCommit = useCallback(
+    (newTitle: string) => {
+      const newType = toSnakeCase(newTitle);
+      if (newType && newType !== frameType) {
+        onTypeEdit?.(id, newType);
+      }
+    },
+    [id, frameType, onTypeEdit]
   );
 
   return (
@@ -147,9 +283,18 @@ function FrameNodeComponent({ data, selected }: FrameNodeProps) {
       {/* Title bar */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 rounded-t-lg border-b border-zinc-200 dark:border-zinc-700">
         <Box className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
-        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
-          {toTitleCase(frameType)}
-        </span>
+        {onTypeEdit ? (
+          <InlineEdit
+            value={toTitleCase(frameType)}
+            onCommit={handleTypeCommit}
+            className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate"
+            inputClassName="text-sm font-medium"
+          />
+        ) : (
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
+            {toTitleCase(frameType)}
+          </span>
+        )}
       </div>
 
       {/* Slots area */}
@@ -164,7 +309,7 @@ function FrameNodeComponent({ data, selected }: FrameNodeProps) {
               )}
             >
               <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{key}:</span>
-              <SlotValueDisplay value={value} />
+              <EditableSlotValue frameId={id} slotKey={key} value={value} onSlotEdit={onSlotEdit} />
             </div>
           ))}
         </div>
