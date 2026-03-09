@@ -74,6 +74,7 @@ function toApiCommit(commit: CommitV4) {
     message: commit.message ?? null,
     branch: commit.branch ?? null,
     source_refs: commit.source_refs ?? null,
+    semantic: commit.semantic ?? null,
     position_x: commit.position_x ?? null,
     position_y: commit.position_y ?? null,
     created_at: commit.created_at ?? commit.committed_at,
@@ -498,6 +499,7 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       source_refs: body.source_refs,
       position_x: body.position_x,
       position_y: body.position_y,
+      semantic: body.semantic ?? undefined,
     });
 
     // Update branch HEAD to point to the new commit

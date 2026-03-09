@@ -137,6 +137,13 @@ export const CreateCommitV4Request = z
       .describe('References to source conversations or leaves'),
     position_x: z.number().optional().describe('Canvas X position'),
     position_y: z.number().optional().describe('Canvas Y position'),
+    semantic: z
+      .any()
+      .nullable()
+      .optional()
+      .describe(
+        'Semantic frame content (frames + relations). JSON passthrough, validated in core.'
+      ),
 
     // Inheritance control
     inherit_parent_sentences: z
@@ -189,6 +196,7 @@ export const CommitV4Response = z.object({
       })
     )
     .nullable(),
+  semantic: z.any().nullable().optional(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
