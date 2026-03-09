@@ -27,11 +27,13 @@ import {
   commitsV4Routes,
   conversationRoutes,
   curateRoutes,
+  deltaLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
   exportRoutes,
   extractRoutes,
+  frameExtractRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
@@ -129,6 +131,7 @@ api.route('/', branchRoutes); // /v1/branches
 api.route('/', agentDraftRoutes); // /v1/agent/drafts
 api.route('/', chatRoutes); // /v1/chat
 api.route('/', curateRoutes); // /v1/curate
+api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas, /draft
 api.route('/', diffRoutes); // /v1/diff
 api.route('/', exportRoutes); // /v1/export
 api.route('/', mergeRoutes); // /v1/merge
@@ -136,6 +139,7 @@ api.route('/', runnerRoutes); // /v1/runner/*
 api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', draftsRoutes); // /v1/drafts
 api.route('/', extractRoutes); // /v1/extract
+api.route('/', frameExtractRoutes); // /v1/extract/frames
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
@@ -173,6 +177,7 @@ api.doc('/openapi.json', {
     { name: 'Commits', description: 'Version control commits' },
     { name: 'Branches', description: 'Branch management' },
     { name: 'Drafts', description: 'Draft management' },
+    { name: 'Delta Log', description: 'Semantic delta log (incremental frame changes)' },
     { name: 'Diff', description: 'Semantic diff operations' },
     { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
     { name: 'Merge', description: 'Merge operations' },
