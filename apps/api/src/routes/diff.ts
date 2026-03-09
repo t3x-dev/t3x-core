@@ -43,41 +43,52 @@ type ExtractResult =
 // ============================================================================
 
 /**
- * Extract segments from turn's Ring 3
+ * Extract segments from turn — tries Ring 3 first, falls back to sentence splitting.
+ *
+ * Strategy 1: Ring 3 segments (legacy path, when rings_json exists)
+ * Strategy 2: Punctuation-based sentence splitting (when Ring data unavailable)
  */
 async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<ExtractResult> {
   const turn = await findTurnByHash(db, turnHash);
   if (!turn) {
     return { ok: false, error: 'not_found', message: `Turn ${turnHash} not found` };
   }
-  if (!turn.ringsJson) {
-    return { ok: false, error: 'no_rings', message: `Turn ${turnHash} has no rings_json` };
+
+  // Strategy 1: Ring 3 segments (legacy)
+  if (turn.ringsJson) {
+    try {
+      const rings = JSON.parse(turn.ringsJson) as RingOutput;
+      if (rings.ring3 && Array.isArray(rings.ring3.segments) && rings.ring3.segments.length > 0) {
+        const segments: DiffSegment[] = rings.ring3.segments.map((seg) => ({
+          segmentId: seg.segmentId,
+          text: seg.text,
+        }));
+        return { ok: true, id: turnHash, segments };
+      }
+    } catch {
+      // Fall through to sentence splitting
+    }
   }
 
-  try {
-    const rings = JSON.parse(turn.ringsJson) as RingOutput;
-    if (!rings.ring3 || !Array.isArray(rings.ring3.segments)) {
+  // Strategy 2: Punctuation-based sentence splitting
+  if (turn.content) {
+    const sentences = turn.content
+      .split(/(?<=[.!?。！？])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (sentences.length > 0) {
       return {
-        ok: false,
-        error: 'corrupted',
-        message: `Turn ${turnHash} has corrupted rings_json: missing ring3.segments`,
+        ok: true,
+        id: turnHash,
+        segments: sentences.map((text, i) => ({
+          segmentId: `s_fallback_${i}`,
+          text,
+        })),
       };
     }
-    const segments: DiffSegment[] = rings.ring3.segments.map((seg) => ({
-      segmentId: seg.segmentId,
-      text: seg.text,
-    }));
-    return { ok: true, id: turnHash, segments };
-  } catch (err) {
-    if (err instanceof SyntaxError) {
-      return {
-        ok: false,
-        error: 'corrupted',
-        message: `Turn ${turnHash} has invalid rings_json: ${err.message}`,
-      };
-    }
-    throw err;
   }
+
+  return { ok: false, error: 'no_rings', message: `Turn ${turnHash} has no extractable content` };
 }
 
 function getErrorStatus(error: 'not_found' | 'no_rings' | 'corrupted'): 400 | 404 | 500 {

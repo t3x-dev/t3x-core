@@ -4,11 +4,17 @@
  * TypeScript interfaces that STRICTLY match docs/specification/ring-schema.md
  * DO NOT add fields not defined in the specification.
  *
+ * @deprecated Ring extraction is being retired in favor of Frame semantic engine.
+ * New code should use Frame types from `@t3x/core/types/frame`.
+ * Existing consumers should migrate to Frame-first with Ring fallback.
+ *
  * @see docs/specification/ring-schema.md
+ * @see docs/plans/2026-03-09-ring-retirement-migration.md
  */
 
 /**
  * Part-of-speech tags (Universal Dependencies)
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export type PosTag =
   | 'NOUN'
@@ -28,11 +34,13 @@ export type PosTag =
 
 /**
  * Polarity values
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export type Polarity = -1 | 0 | 1;
 
 /**
  * Facet types for Ring 2
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export type FacetType = 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
 
@@ -47,7 +55,11 @@ export type AnchorType =
   | 'percent' // Percentage: 15%, 3.5%
   | 'date' // Date expression: January 2025
   | 'entity' // Named entity from NLP: Bangkok, Party A
-  | 'term'; // Domain-specific term: indemnify, terminate
+  | 'term' // Domain-specific term: indemnify, terminate
+  // CommitV4 / Frame extraction anchor types
+  | 'verbatim' // Exact quote from source
+  | 'paraphrase' // Reworded from source
+  | 'inference'; // Inferred from context (cross-turn)
 
 /**
  * Anchor source for Ring 1 v1.1
@@ -81,7 +93,7 @@ export interface AnchorCandidate {
 
 /**
  * Keyword extracted in Ring 1
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#keyword
  */
 export interface Keyword {
@@ -101,7 +113,7 @@ export interface Keyword {
 
 /**
  * Ring 1 Output - Keyword Axis
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#ring1output---keyword-axis
  */
 export interface Ring1Output {
@@ -121,7 +133,7 @@ export interface Ring1Output {
 
 /**
  * Facet in Ring 2
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#facet
  */
 export interface Facet {
@@ -137,7 +149,7 @@ export interface Facet {
 
 /**
  * Ring 2 Output - Facets
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#ring2output---facets
  */
 export interface Ring2Output {
@@ -147,7 +159,7 @@ export interface Ring2Output {
 
 /**
  * Segment in Ring 3
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#segment
  */
 export interface Segment {
@@ -163,7 +175,7 @@ export interface Segment {
 
 /**
  * Ring 3 Output - Sentence Structure
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#ring3output---sentence-structure
  */
 export interface Ring3Output {
@@ -173,7 +185,7 @@ export interface Ring3Output {
 
 /**
  * Complete Ring Output
- *
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  * @see docs/specification/ring-schema.md#ringoutput-root
  */
 export interface RingOutput {
@@ -189,6 +201,7 @@ export interface RingOutput {
 
 /**
  * Create an empty Ring 1 output
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export function createEmptyRing1(): Ring1Output {
   return {
@@ -201,6 +214,7 @@ export function createEmptyRing1(): Ring1Output {
 
 /**
  * Create an empty Ring 2 output
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export function createEmptyRing2(): Ring2Output {
   return {
@@ -210,6 +224,7 @@ export function createEmptyRing2(): Ring2Output {
 
 /**
  * Create an empty Ring 3 output
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export function createEmptyRing3(): Ring3Output {
   return {
@@ -219,6 +234,7 @@ export function createEmptyRing3(): Ring3Output {
 
 /**
  * Create an empty Ring output
+ * @deprecated Use Frame semantic engine instead of Ring extraction.
  */
 export function createEmptyRingOutput(turnId: string): RingOutput {
   return {

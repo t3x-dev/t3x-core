@@ -121,8 +121,10 @@ turnRoutes.post('/v1/turns', async (c) => {
     }
 
     // Extract rings if not provided — graceful fallback if NLP unavailable
+    // Feature flag: DISABLE_RING_EXTRACTION=true skips ring extraction (ring retirement)
+    const disableRings = process.env.DISABLE_RING_EXTRACTION === 'true';
     let rings = body.rings as Record<string, unknown> | undefined;
-    if (!rings && body.content) {
+    if (!disableRings && !rings && body.content) {
       try {
         const nlpProvider = getNLPProvider();
         const extractor = createRingExtractor(nlpProvider);

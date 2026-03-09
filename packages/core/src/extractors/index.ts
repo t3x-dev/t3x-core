@@ -52,6 +52,7 @@ export {
   type PreferenceRelation,
 } from './polarityRules';
 // Ring Extractor
+/** @deprecated Use Frame semantic engine instead of Ring extraction. */
 export {
   createRingExtractor,
   type ExtractorConfig,
