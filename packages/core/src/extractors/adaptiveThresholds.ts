@@ -11,7 +11,7 @@
 
 const DEFAULT_THRESHOLDS = {
   direct: 0.85,
-  paraphrase: 0.80,
+  paraphrase: 0.8,
   cross_turn: 0.75,
 } as const;
 
@@ -20,7 +20,7 @@ const RAISE_RATE = 0.15;
 const LOWER_RATE = 0.05;
 const RAISE_STEP = 0.05;
 const LOWER_STEP = 0.02;
-const MIN_THRESHOLD = 0.50;
+const MIN_THRESHOLD = 0.5;
 const MAX_THRESHOLD = 0.99;
 
 type InferenceType = keyof typeof DEFAULT_THRESHOLDS;
@@ -43,7 +43,7 @@ export interface AdaptiveThresholds {
 
 export function computeAdaptiveThresholds(
   stats: FeedbackStats,
-  options?: AdaptiveThresholdOptions,
+  options?: AdaptiveThresholdOptions
 ): AdaptiveThresholds {
   const defaults = options?.defaults ?? DEFAULT_THRESHOLDS;
 

@@ -1,0 +1,321 @@
+/**
+ * Delta Log Routes with OpenAPI
+ *
+ * REST API endpoints for semantic delta log CRUD and draft computation.
+ * Deltas track incremental changes to semantic frames within a conversation.
+ *
+ * Endpoints:
+ * - POST   /v1/conversations/:conversationId/deltas        - Append a delta
+ * - GET    /v1/conversations/:conversationId/deltas        - List deltas
+ * - GET    /v1/conversations/:conversationId/draft         - Compute current draft
+ * - DELETE /v1/conversations/:conversationId/deltas/:deltaId - Delete a delta (undo)
+ */
+
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { buildDraft, type DeltaLogEntry } from '@t3x/core';
+import {
+  deleteDeltaLogEntry,
+  findConversationById,
+  getDeltaLogEntry,
+  insertDeltaLogEntry,
+  listDeltaLogByConversation,
+} from '@t3x/storage/pglite';
+import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+
+export const deltaLogRoutes = new OpenAPIHono({
+  defaultHook: zodErrorHook,
+});
+
+// ============================================================
+// Shared Schemas
+// ============================================================
+
+const ConversationIdParam = z.object({
+  conversationId: z.string().min(1),
+});
+
+const DeltaIdParam = z.object({
+  conversationId: z.string().min(1),
+  deltaId: z.string().min(1),
+});
+
+const DeltaSourceSchema = z.enum(['llm_extraction', 'user_graph_edit', 'user_yaml_edit']);
+
+const DeltaSchema = z.object({
+  changes: z.array(z.any()),
+  new_relations: z.array(z.any()).optional(),
+  remove_relations: z.array(z.any()).optional(),
+});
+
+const CreateDeltaRequest = z.object({
+  source: DeltaSourceSchema,
+  turn_hash: z.string().optional(),
+  delta: DeltaSchema,
+});
+
+const DeltaLogEntryResponse = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  project_id: z.string(),
+  source: z.string(),
+  turn_hash: z.string().nullable(),
+  delta: z.any(),
+  created_at: z.string(),
+});
+
+const DraftResponse = z.object({
+  frames: z.array(z.any()),
+  relations: z.array(z.any()),
+});
+
+// ============================================================
+// Response Helpers
+// ============================================================
+
+function toApiDeltaEntry(record: {
+  id: string;
+  conversationId: string;
+  projectId: string;
+  source: string;
+  turnHash: string | null;
+  delta: unknown;
+  createdAt: Date;
+}) {
+  return {
+    id: record.id,
+    conversation_id: record.conversationId,
+    project_id: record.projectId,
+    source: record.source,
+    turn_hash: record.turnHash ?? null,
+    delta: record.delta,
+    created_at: record.createdAt.toISOString(),
+  };
+}
+
+// ============================================================
+// Route Definitions
+// ============================================================
+
+// POST /v1/conversations/:conversationId/deltas
+const createDeltaRoute = createRoute({
+  method: 'post',
+  path: '/v1/conversations/{conversationId}/deltas',
+  tags: ['Delta Log'],
+  summary: 'Append a delta to the log',
+  description: 'Appends a new delta entry to the conversation delta log.',
+  request: {
+    params: ConversationIdParam,
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateDeltaRequest,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Delta created successfully',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(DeltaLogEntryResponse),
+        },
+      },
+    },
+    404: {
+      description: 'Conversation not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// GET /v1/conversations/:conversationId/deltas
+const listDeltasRoute = createRoute({
+  method: 'get',
+  path: '/v1/conversations/{conversationId}/deltas',
+  tags: ['Delta Log'],
+  summary: 'List deltas for a conversation',
+  description: 'Returns all delta log entries for a conversation, ordered by created_at ASC.',
+  request: {
+    params: ConversationIdParam,
+  },
+  responses: {
+    200: {
+      description: 'List of delta log entries',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.array(DeltaLogEntryResponse)),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// GET /v1/conversations/:conversationId/draft
+const getDraftRoute = createRoute({
+  method: 'get',
+  path: '/v1/conversations/{conversationId}/draft',
+  tags: ['Delta Log'],
+  summary: 'Compute current draft from delta log',
+  description:
+    'Computes the current semantic draft by replaying all deltas. Not stored — computed on the fly.',
+  request: {
+    params: ConversationIdParam,
+  },
+  responses: {
+    200: {
+      description: 'Computed draft',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(DraftResponse),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// DELETE /v1/conversations/:conversationId/deltas/:deltaId
+const deleteDeltaRoute = createRoute({
+  method: 'delete',
+  path: '/v1/conversations/{conversationId}/deltas/{deltaId}',
+  tags: ['Delta Log'],
+  summary: 'Delete a delta entry (undo)',
+  description: 'Deletes a delta log entry by ID. Used for undo operations.',
+  request: {
+    params: DeltaIdParam,
+  },
+  responses: {
+    200: {
+      description: 'Delta deleted successfully',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.null()),
+        },
+      },
+    },
+    404: {
+      description: 'Delta not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// ============================================================
+// Route Handlers
+// ============================================================
+
+// POST /v1/conversations/:conversationId/deltas
+deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
+  const { conversationId } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    // Look up conversation to get projectId
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${conversationId}`
+      );
+    }
+
+    const record = await insertDeltaLogEntry(db, {
+      conversationId,
+      projectId: conversation.projectId,
+      source: body.source,
+      turnHash: body.turn_hash,
+      delta: body.delta,
+    });
+
+    return c.json({ success: true as const, data: toApiDeltaEntry(record) }, 201);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'CREATE_FAILED', message);
+  }
+});
+
+// GET /v1/conversations/:conversationId/deltas
+deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
+  const { conversationId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const records = await listDeltaLogByConversation(db, conversationId);
+
+    return c.json({ success: true as const, data: records.map(toApiDeltaEntry) }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'LIST_FAILED', message);
+  }
+});
+
+// GET /v1/conversations/:conversationId/draft
+deltaLogRoutes.openapi(getDraftRoute, async (c) => {
+  const { conversationId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const records = await listDeltaLogByConversation(db, conversationId);
+
+    // Convert storage records to DeltaLogEntry format for buildDraft
+    const entries: DeltaLogEntry[] = records.map((r) => ({
+      id: r.id,
+      source: r.source as DeltaLogEntry['source'],
+      turn_hash: r.turnHash ?? undefined,
+      delta: r.delta as DeltaLogEntry['delta'],
+      created_at: r.createdAt.toISOString(),
+    }));
+
+    const draft = buildDraft(entries);
+
+    return c.json({ success: true as const, data: draft }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'GET_FAILED', message);
+  }
+});
+
+// DELETE /v1/conversations/:conversationId/deltas/:deltaId
+deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
+  const { deltaId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    // Verify the entry exists before deleting
+    const existing = await getDeltaLogEntry(db, deltaId);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Delta log entry not found: ${deltaId}`);
+    }
+
+    await deleteDeltaLogEntry(db, deltaId);
+
+    return c.json({ success: true as const, data: null }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'DELETE_FAILED', message);
+  }
+});
+
+export default deltaLogRoutes;

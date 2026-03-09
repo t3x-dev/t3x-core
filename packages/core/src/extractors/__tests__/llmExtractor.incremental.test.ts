@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LLMExtractor } from '../llmExtractor';
 import type { LLMProvider } from '../../llm/types';
 import type { TurnInput } from '../extractionPrompt';
+import { LLMExtractor } from '../llmExtractor';
 
 function createMockProvider(response: string): LLMProvider {
   return {
@@ -12,24 +12,38 @@ function createMockProvider(response: string): LLMProvider {
 }
 
 const turns: TurnInput[] = [
-  { conversation_id: 'conv_1', turn_hash: 'sha256:turn1', role: 'user', content: 'I prefer dark mode for all my IDEs.' },
-  { conversation_id: 'conv_1', turn_hash: 'sha256:turn2', role: 'assistant', content: 'Dark mode is a popular choice.' },
-];
-
-const llmResponse = JSON.stringify([{
-  type: 'new',
-  text: 'The user prefers dark mode for all IDEs.',
-  confidence: 0.92,
-  inference_type: 'direct',
-  reasoning: 'User explicitly stated preference',
-  evidence: [{
+  {
     conversation_id: 'conv_1',
     turn_hash: 'sha256:turn1',
-    quoted_text: 'prefer dark mode for all my IDEs',
-    role: 'primary',
-    relevance: 'directly stated preference',
-  }],
-}]);
+    role: 'user',
+    content: 'I prefer dark mode for all my IDEs.',
+  },
+  {
+    conversation_id: 'conv_1',
+    turn_hash: 'sha256:turn2',
+    role: 'assistant',
+    content: 'Dark mode is a popular choice.',
+  },
+];
+
+const llmResponse = JSON.stringify([
+  {
+    type: 'new',
+    text: 'The user prefers dark mode for all IDEs.',
+    confidence: 0.92,
+    inference_type: 'direct',
+    reasoning: 'User explicitly stated preference',
+    evidence: [
+      {
+        conversation_id: 'conv_1',
+        turn_hash: 'sha256:turn1',
+        quoted_text: 'prefer dark mode for all my IDEs',
+        role: 'primary',
+        relevance: 'directly stated preference',
+      },
+    ],
+  },
+]);
 
 describe('LLMExtractor.extractIncremental', () => {
   it('returns ready and review points with cursor', async () => {
@@ -69,20 +83,24 @@ describe('LLMExtractor.extractIncremental', () => {
   });
 
   it('rejects proposals that fail verification', async () => {
-    const badResponse = JSON.stringify([{
-      type: 'new',
-      text: 'Hallucinated fact',
-      confidence: 0.9,
-      inference_type: 'direct',
-      reasoning: 'made up',
-      evidence: [{
-        conversation_id: 'conv_1',
-        turn_hash: 'sha256:nonexistent',
-        quoted_text: 'does not exist',
-        role: 'primary',
-        relevance: 'fake',
-      }],
-    }]);
+    const badResponse = JSON.stringify([
+      {
+        type: 'new',
+        text: 'Hallucinated fact',
+        confidence: 0.9,
+        inference_type: 'direct',
+        reasoning: 'made up',
+        evidence: [
+          {
+            conversation_id: 'conv_1',
+            turn_hash: 'sha256:nonexistent',
+            quoted_text: 'does not exist',
+            role: 'primary',
+            relevance: 'fake',
+          },
+        ],
+      },
+    ]);
 
     const provider = createMockProvider(badResponse);
     const extractor = new LLMExtractor(provider);

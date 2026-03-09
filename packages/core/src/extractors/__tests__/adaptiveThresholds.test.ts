@@ -13,7 +13,7 @@ describe('computeAdaptiveThresholds', () => {
 
     const result = computeAdaptiveThresholds(stats);
     // direct default is 0.85, undo_rate = 20% > 15% → raise by 0.05
-    expect(result.direct).toBeCloseTo(0.90);
+    expect(result.direct).toBeCloseTo(0.9);
   });
 
   it('lowers threshold when undo rate < 5%', () => {
@@ -48,16 +48,16 @@ describe('computeAdaptiveThresholds', () => {
       total: 200,
       by_action: { accept: 160, undo: 40 },
       by_inference_type: {
-        direct: { accept: 95, undo: 5 },      // 5% undo → keep
-        paraphrase: { accept: 40, undo: 20 },  // 33% undo → raise
-        cross_turn: { accept: 25, undo: 15 },  // 37.5% undo → raise
+        direct: { accept: 95, undo: 5 }, // 5% undo → keep
+        paraphrase: { accept: 40, undo: 20 }, // 33% undo → raise
+        cross_turn: { accept: 25, undo: 15 }, // 37.5% undo → raise
       },
     };
 
     const result = computeAdaptiveThresholds(stats);
-    expect(result.direct).toBeCloseTo(0.85);       // unchanged
-    expect(result.paraphrase).toBeCloseTo(0.85);    // 0.80 + 0.05
-    expect(result.cross_turn).toBeCloseTo(0.80);    // 0.75 + 0.05
+    expect(result.direct).toBeCloseTo(0.85); // unchanged
+    expect(result.paraphrase).toBeCloseTo(0.85); // 0.80 + 0.05
+    expect(result.cross_turn).toBeCloseTo(0.8); // 0.75 + 0.05
   });
 
   it('clamps thresholds to [0.50, 0.99]', () => {
@@ -71,10 +71,10 @@ describe('computeAdaptiveThresholds', () => {
     };
 
     const result = computeAdaptiveThresholds(stats, {
-      defaults: { direct: 0.85, paraphrase: 0.80, cross_turn: 0.51 },
+      defaults: { direct: 0.85, paraphrase: 0.8, cross_turn: 0.51 },
     });
     // cross_turn: 0.51 - 0.02 = 0.49, clamped to 0.50
-    expect(result.cross_turn).toBeGreaterThanOrEqual(0.50);
+    expect(result.cross_turn).toBeGreaterThanOrEqual(0.5);
   });
 
   it('returns defaults when no feedback data', () => {
@@ -86,7 +86,7 @@ describe('computeAdaptiveThresholds', () => {
 
     const result = computeAdaptiveThresholds(stats);
     expect(result.direct).toBeCloseTo(0.85);
-    expect(result.paraphrase).toBeCloseTo(0.80);
+    expect(result.paraphrase).toBeCloseTo(0.8);
     expect(result.cross_turn).toBeCloseTo(0.75);
   });
 

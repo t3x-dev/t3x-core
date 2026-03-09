@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildIncrementalPrompt, buildStyleSeed } from '../incrementalPrompt';
 import type { SemanticPoint } from '../../types/v4';
 import type { TurnInput } from '../extractionPrompt';
+import { buildIncrementalPrompt, buildStyleSeed } from '../incrementalPrompt';
 
 function makeSP(id: string, text: string, status: string = 'auto_landed'): SemanticPoint {
   return {
@@ -18,8 +18,18 @@ function makeSP(id: string, text: string, status: string = 'auto_landed'): Seman
 }
 
 const turns: TurnInput[] = [
-  { conversation_id: 'conv_1', turn_hash: 'sha256:t1', role: 'user', content: 'I like TypeScript.' },
-  { conversation_id: 'conv_1', turn_hash: 'sha256:t2', role: 'assistant', content: 'TypeScript is great.' },
+  {
+    conversation_id: 'conv_1',
+    turn_hash: 'sha256:t1',
+    role: 'user',
+    content: 'I like TypeScript.',
+  },
+  {
+    conversation_id: 'conv_1',
+    turn_hash: 'sha256:t2',
+    role: 'assistant',
+    content: 'TypeScript is great.',
+  },
 ];
 
 describe('buildStyleSeed', () => {
