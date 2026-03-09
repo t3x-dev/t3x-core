@@ -1,4 +1,5 @@
 import type {
+  Frame,
   SemanticContent,
   SlotValue,
   ValidationError,
@@ -158,6 +159,49 @@ function checkSlotRefs(
       }
     }
   }
+}
+
+export function checkRelationSanity(content: SemanticContent): ValidationWarning[] {
+  const warnings: ValidationWarning[] = [];
+  const frameMap = new Map<string, Frame>();
+  for (const frame of content.frames) {
+    frameMap.set(frame.id, frame);
+  }
+
+  for (const rel of content.relations) {
+    // 1. Contrasts between frames of the same type
+    if (rel.type === 'contrasts') {
+      const fromFrame = frameMap.get(rel.from);
+      const toFrame = frameMap.get(rel.to);
+      if (fromFrame && toFrame && fromFrame.type === toFrame.type) {
+        warnings.push({
+          type: 'same_type_contrast',
+          message: `Contrasts between same type ${fromFrame.type} — verify this is intentional`,
+          location: `${rel.from}->${rel.to}`,
+        });
+      }
+    }
+  }
+
+  // 2. Contrasts + causes between same pair (A→B)
+  const contrastPairs = new Set<string>();
+  const causesPairs = new Set<string>();
+  for (const rel of content.relations) {
+    const key = `${rel.from}->${rel.to}`;
+    if (rel.type === 'contrasts') contrastPairs.add(key);
+    if (rel.type === 'causes') causesPairs.add(key);
+  }
+  for (const pair of contrastPairs) {
+    if (causesPairs.has(pair)) {
+      warnings.push({
+        type: 'contrast_causes_conflict',
+        message: `Both contrasts and causes between same frames — possible logical contradiction`,
+        location: pair,
+      });
+    }
+  }
+
+  return warnings;
 }
 
 function hasCycle(

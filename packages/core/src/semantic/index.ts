@@ -24,22 +24,30 @@ export {
 } from './schema';
 // Types
 export type {
+  BusinessGateResult,
+  BusinessRuleConfig,
   Delta,
   DeltaLogEntry,
   DeltaSource,
+  DimensionResult,
   Frame,
   FrameChange,
   FrameDiff,
   FrameMergeResult,
   FrameRelationType,
+  GateDimension,
+  GateResult,
   InlineFrame,
   MergeResolution,
   Relation,
   SemanticContent,
+  SemanticGateResult,
+  SemanticIssue,
   SlotConflict,
   SlotDiff,
   SlotRef,
   SlotValue,
+  StructureGateResult,
   ValidationError,
   ValidationResult,
   ValidationWarning,
@@ -47,4 +55,4 @@ export type {
 } from './types';
 export { FRAME_RELATION_TYPES } from './types';
 // Validation
-export { validateIntegrity } from './validate';
+export { checkRelationSanity, validateIntegrity } from './validate';

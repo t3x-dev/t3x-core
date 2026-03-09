@@ -97,7 +97,7 @@ export interface ValidationError {
 }
 
 export interface ValidationWarning {
-  type: 'orphan_frame' | 'low_confidence';
+  type: 'orphan_frame' | 'low_confidence' | 'same_type_contrast' | 'contrast_causes_conflict';
   message: string;
   location: string;
 }
@@ -175,3 +175,71 @@ export type WordDiffFn = (
   a: string,
   b: string
 ) => Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
+
+// ── Gate System Types ──
+
+export type GateDimension =
+  | 'completeness'
+  | 'accuracy'
+  | 'relations'
+  | 'granularity'
+  | 'hallucination';
+
+export interface DimensionResult {
+  score: number; // 0-1
+  details: string;
+}
+
+export interface SemanticIssue {
+  severity: 'error' | 'warning' | 'info';
+  frame_id?: string;
+  dimension: GateDimension;
+  description: string;
+  suggestion?: string;
+}
+
+export interface StructureGateResult {
+  passed: boolean;
+  checks: {
+    schema_valid: boolean;
+    refs_intact: boolean;
+    relations_valid: boolean;
+    no_cycles: boolean;
+    no_duplicate_ids: boolean;
+    no_self_relations: boolean;
+  };
+}
+
+export interface SemanticGateResult {
+  passed: boolean;
+  score: number; // 0-1 overall
+  dimensions: Record<GateDimension, DimensionResult>;
+  issues: SemanticIssue[];
+}
+
+export interface BusinessRuleConfig {
+  id: string;
+  type: 'rule' | 'llm';
+  rule?: string; // JavaScript expression for rule type
+  prompt?: string; // LLM prompt for llm type
+  message?: string;
+  severity: 'error' | 'warning';
+  scope?: 'commit' | 'project'; // default: commit
+}
+
+export interface BusinessGateResult {
+  passed: boolean;
+  results: {
+    rule_id: string;
+    passed: boolean;
+    message?: string;
+    severity: 'error' | 'warning';
+  }[];
+}
+
+export interface GateResult {
+  passed: boolean;
+  structure: StructureGateResult;
+  semantic?: SemanticGateResult;
+  business?: BusinessGateResult;
+}
