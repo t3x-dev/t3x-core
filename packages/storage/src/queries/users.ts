@@ -312,6 +312,7 @@ function rowToUser(row: UserRecord): User {
     email_verified: row.emailVerified,
     name: row.name ?? null,
     avatar_url: row.avatarUrl ?? null,
+    username: row.username ?? null,
     created_at: row.createdAt.toISOString(),
   };
 }

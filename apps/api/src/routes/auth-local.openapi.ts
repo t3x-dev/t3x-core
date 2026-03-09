@@ -43,6 +43,8 @@ const LoginRequest = z.object({
 const AuthResponse = z.object({
   id: z.string(),
   api_key: z.string(),
+  name: z.string().nullable(),
+  username: z.string().nullable(),
 });
 
 // ============================================================
@@ -111,7 +113,7 @@ authLocalRoutes.openapi(registerRoute, async (c) => {
 
     return c.json({
       success: true as const,
-      data: { id: user.id, api_key: rawKey },
+      data: { id: user.id, api_key: rawKey, name: user.name, username: user.username },
     });
   } catch (err) {
     pinoLogger.error({ err }, 'error in register');
@@ -187,7 +189,12 @@ authLocalRoutes.openapi(loginRoute, async (c) => {
 
     return c.json({
       success: true as const,
-      data: { id: userRecord.id, api_key: rawKey },
+      data: {
+        id: userRecord.id,
+        api_key: rawKey,
+        name: userRecord.name ?? null,
+        username: userRecord.username ?? null,
+      },
     });
   } catch (err) {
     pinoLogger.error({ err }, 'error in login');
