@@ -204,6 +204,10 @@ type DBType = Awaited<ReturnType<typeof getDB>>;
 const POLARITY_KEYS = /^(polarity|sentiment|preference|mood|attitude|valence)$/i;
 const NEGATIVE_VALUES = /^(negative|avoid|exclude|dislike|against|no|must.not|don.t|never)$/i;
 const NEGATIVE_FRAME_TYPES = /\b(dislike|avoid|exclude|negative|reject|ban)\b/i;
+// Slot KEY patterns that imply the value is something negative/unwanted
+// Uses (?:^|_) and (?:_|$) as boundaries since slot keys use snake_case
+const NEGATIVE_SLOT_KEYS =
+  /(?:^|_)(exclude|avoid|not_interested|dislike|reject|ban|allerg(?:en|y|ic)?|dont_want|must_not|negative)(?:_|$)/i;
 
 /**
  * Extract a flat string value from a SlotValue (skip refs, inline frames, arrays).
@@ -240,25 +244,21 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
       if (NEGATIVE_VALUES.test(str)) isNegative = true;
     }
 
-    // Collect content keywords from all non-polarity slots
-    const keywords: string[] = [];
+    // Collect and classify keywords from all non-polarity slots
     for (const [key, val] of Object.entries(slots)) {
       if (POLARITY_KEYS.test(key)) continue;
       const str = slotToString(val);
       if (!str || !isValueableKeyword(str)) continue;
-      keywords.push(str);
-    }
 
-    // Classify each keyword
-    for (const kw of keywords) {
-      const kwLower = kw.toLowerCase();
+      const kwLower = str.toLowerCase();
       if (seenLower.has(kwLower)) continue;
       seenLower.add(kwLower);
 
-      if (isNegative) {
-        mustNotHave.push(kw);
+      // Per-slot negative: slot key implies unwanted (e.g., exclude="hostels")
+      if (isNegative || NEGATIVE_SLOT_KEYS.test(key)) {
+        mustNotHave.push(str);
       } else {
-        mustHave.push(kw);
+        mustHave.push(str);
       }
     }
   }
