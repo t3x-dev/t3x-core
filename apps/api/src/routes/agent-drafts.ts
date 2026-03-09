@@ -200,9 +200,24 @@ function isValueableKeyword(keyword: string): boolean {
 
 type DBType = Awaited<ReturnType<typeof getDB>>;
 
+// Slot key patterns that indicate polarity/sentiment metadata (not content keywords)
+const POLARITY_KEYS = /^(polarity|sentiment|preference|mood|attitude|valence)$/i;
+const NEGATIVE_VALUES = /^(negative|avoid|exclude|dislike|against|no|must.not|don.t|never)$/i;
+const NEGATIVE_FRAME_TYPES = /\b(dislike|avoid|exclude|negative|reject|ban)\b/i;
+
+/**
+ * Extract a flat string value from a SlotValue (skip refs, inline frames, arrays).
+ */
+function slotToString(val: unknown): string | null {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return null;
+}
+
 /**
  * Extract must-have/must-not-have from Frame snapshot.
- * Looks at slot values for polarity/sentiment signals.
+ * Traverses ALL slot values (LLM-emergent names) instead of hardcoded slot names.
+ * Detects polarity from slot keys, slot values, and frame type.
  */
 function extractPreferencesFromFrames(snapshot: SemanticContent): {
   mustHave: string[];
@@ -214,24 +229,37 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
 
   for (const frame of snapshot.frames) {
     const slots = frame.slots;
-    const target = String(slots.target ?? slots.subject ?? slots.item ?? '');
-    if (!target || !isValueableKeyword(target)) continue;
 
-    const targetLower = target.toLowerCase();
-    if (seenLower.has(targetLower)) continue;
-    seenLower.add(targetLower);
+    // Determine frame-level polarity from metadata slots and frame type
+    let isNegative = NEGATIVE_FRAME_TYPES.test(frame.type);
 
-    if (slots.polarity === 'negative' || slots.sentiment === 'negative') {
-      mustNotHave.push(target);
-    } else if (
-      slots.polarity === 'positive' ||
-      slots.sentiment === 'positive' ||
-      slots.preference === 'must'
-    ) {
-      mustHave.push(target);
-    } else {
-      // Non-preference frames contribute as must-have keywords
-      mustHave.push(target);
+    for (const [key, val] of Object.entries(slots)) {
+      if (!POLARITY_KEYS.test(key)) continue;
+      const str = slotToString(val);
+      if (!str) continue;
+      if (NEGATIVE_VALUES.test(str)) isNegative = true;
+    }
+
+    // Collect content keywords from all non-polarity slots
+    const keywords: string[] = [];
+    for (const [key, val] of Object.entries(slots)) {
+      if (POLARITY_KEYS.test(key)) continue;
+      const str = slotToString(val);
+      if (!str || !isValueableKeyword(str)) continue;
+      keywords.push(str);
+    }
+
+    // Classify each keyword
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase();
+      if (seenLower.has(kwLower)) continue;
+      seenLower.add(kwLower);
+
+      if (isNegative) {
+        mustNotHave.push(kw);
+      } else {
+        mustHave.push(kw);
+      }
     }
   }
 
