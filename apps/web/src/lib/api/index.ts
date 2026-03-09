@@ -5,6 +5,7 @@
  * The original api.ts file is a shim that re-exports from this index.
  */
 
+export * from './auth';
 export * from './autopilot';
 export * from './branches';
 export * from './chat';
