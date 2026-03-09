@@ -278,7 +278,7 @@ export function registerGateCommands(program: Command): void {
         }
       ) => {
         if (!commitHash) {
-          error('Please provide a commit hash or conversation_id');
+          error('Please provide a commit hash');
           process.exit(1);
         }
 

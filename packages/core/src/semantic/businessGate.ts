@@ -58,8 +58,19 @@ export function evaluateRule(
   }
 
   try {
+    // Validate rule expression: reject dangerous patterns (code injection mitigation)
+    const expr = rule.rule;
+    const forbidden =
+      /\b(import|require|eval|Function|process|global|window|fetch|XMLHttpRequest)\b/;
+    if (forbidden.test(expr)) {
+      return {
+        passed: false,
+        message: `Rule "${rule.id}" contains forbidden keyword in expression`,
+      };
+    }
+
     // Create a sandboxed function that only exposes frames and relations
-    const fn = new Function('frames', 'relations', `"use strict"; return (${rule.rule});`);
+    const fn = new Function('frames', 'relations', `"use strict"; return (${expr});`);
     const result = fn(content.frames, content.relations);
     if (result) {
       return { passed: true };

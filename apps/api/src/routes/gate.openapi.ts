@@ -76,9 +76,16 @@ const StructureChecksSchema = z.object({
   no_self_relations: z.boolean(),
 });
 
+const ValidationWarningSchema = z.object({
+  type: z.string(),
+  message: z.string(),
+  location: z.string(),
+});
+
 const StructureGateResultSchema = z.object({
   passed: z.boolean(),
   checks: StructureChecksSchema,
+  warnings: z.array(ValidationWarningSchema).optional(),
 });
 
 const DimensionResultSchema = z.object({

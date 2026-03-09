@@ -64,7 +64,7 @@ export class GateRunner {
   private runStructureGate(content: SemanticContent): StructureGateResult {
     const validation = validateIntegrity(content);
     // Also run relation sanity (produces warnings, not errors — informational)
-    checkRelationSanity(content);
+    const warnings = checkRelationSanity(content);
 
     // Map validation results to StructureGateResult checks
     const checks = {
@@ -79,6 +79,7 @@ export class GateRunner {
     return {
       passed: validation.valid,
       checks,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
 }

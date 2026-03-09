@@ -208,6 +208,7 @@ export interface StructureGateResult {
     no_duplicate_ids: boolean;
     no_self_relations: boolean;
   };
+  warnings?: ValidationWarning[];
 }
 
 export interface SemanticGateResult {
