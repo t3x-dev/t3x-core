@@ -1,12 +1,14 @@
 /**
  * Fuzzy Quote Locator
  *
- * Three-tier strategy to locate an LLM-provided quote in turn content:
- * 1. Exact substring match (score = 1.0)
- * 2. Normalized substring match (collapse whitespace, case-insensitive) (score = 0.95)
- * 3. Sliding window Levenshtein (score = 1 - distance/windowLen)
+ * Five-tier strategy to locate an LLM-provided quote in turn content:
+ * 1.   Exact substring match (score = 1.0)
+ * 1.5  Markdown-stripped exact match (score = 0.97)
+ * 2.   Normalized substring match (collapse whitespace, case-insensitive) (score = 0.95)
+ * 2.5  Markdown-stripped + normalized match (score = 0.92)
+ * 3.   Sliding window Levenshtein (score = 1 - distance/windowLen)
  *
- * Returns null if best score < 0.8
+ * Returns null if best score < 0.6
  */
 
 export interface FuzzyLocateResult {
@@ -15,7 +17,7 @@ export interface FuzzyLocateResult {
   score: number;
 }
 
-const MIN_SCORE = 0.8;
+const MIN_SCORE = 0.6;
 
 export function fuzzyLocate(content: string, quote: string): FuzzyLocateResult | null {
   if (!content || !quote) return null;
@@ -26,6 +28,19 @@ export function fuzzyLocate(content: string, quote: string): FuzzyLocateResult |
     return { start: exactIdx, end: exactIdx + quote.length, score: 1.0 };
   }
 
+  // Tier 1.5: Markdown-stripped exact match
+  const { text: mdContent, offsetMap: mdMap } = stripMarkdownWithMap(content);
+  const mdQuote = stripMarkdown(quote);
+  if (mdQuote.length > 0) {
+    const mdIdx = mdContent.indexOf(mdQuote);
+    if (mdIdx !== -1) {
+      const start = mdMap[mdIdx];
+      const end =
+        mdIdx + mdQuote.length < mdMap.length ? mdMap[mdIdx + mdQuote.length] : content.length;
+      return { start, end, score: 0.97 };
+    }
+  }
+
   // Tier 2: Normalized substring (case + whitespace)
   const normContent = normalize(content);
   const normQuote = normalize(quote);
@@ -33,9 +48,27 @@ export function fuzzyLocate(content: string, quote: string): FuzzyLocateResult |
 
   const normIdx = normContent.indexOf(normQuote);
   if (normIdx !== -1) {
-    // Map normalized index back to original content
     const { start, end } = mapNormToOrig(content, normContent, normIdx, normQuote.length);
     return { start, end, score: 0.95 };
+  }
+
+  // Tier 2.5: Markdown-stripped + normalized match
+  const mdNormContent = normalize(mdContent);
+  const mdNormQuote = normalize(mdQuote);
+  if (mdNormQuote.length > 0) {
+    const mdNormIdx = mdNormContent.indexOf(mdNormQuote);
+    if (mdNormIdx !== -1) {
+      // Map: mdNorm position → md position → original position
+      const { offsetMap: mdNormMap } = normalizeWithMap(mdContent);
+      const mdPos = mdNormIdx < mdNormMap.length ? mdNormMap[mdNormIdx] : mdContent.length;
+      const mdPosEnd =
+        mdNormIdx + mdNormQuote.length < mdNormMap.length
+          ? mdNormMap[mdNormIdx + mdNormQuote.length]
+          : mdContent.length;
+      const start = mdPos < mdMap.length ? mdMap[mdPos] : content.length;
+      const end = mdPosEnd < mdMap.length ? mdMap[mdPosEnd] : content.length;
+      return { start, end, score: 0.92 };
+    }
   }
 
   // Tier 3: Sliding window Levenshtein
@@ -44,6 +77,128 @@ export function fuzzyLocate(content: string, quote: string): FuzzyLocateResult |
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Markdown patterns: [regex, replacement, captureGroupIndex] */
+const MD_PATTERNS: Array<[RegExp, string]> = [
+  [/\*\*(.+?)\*\*/g, '$1'],
+  [/\*(.+?)\*/g, '$1'],
+  [/__(.+?)__/g, '$1'],
+  [/_(.+?)_/g, '$1'],
+  [/`(.+?)`/g, '$1'],
+  [/^#{1,6}\s+/gm, ''],
+  [/^[-*+]\s+/gm, ''],
+  [/^\d+\.\s+/gm, ''],
+  [/\[([^\]]+)\]\([^)]+\)/g, '$1'],
+];
+
+/** Strip markdown formatting (simple version for quotes). */
+function stripMarkdown(s: string): string {
+  let result = s;
+  for (const [pattern, replacement] of MD_PATTERNS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+/**
+ * Strip markdown formatting and return an offset map.
+ * offsetMap[i] = index in original string that produced character i in the stripped string.
+ */
+function stripMarkdownWithMap(s: string): { text: string; offsetMap: number[] } {
+  // Build character-level offset map by applying each pattern sequentially
+  // Start with identity map
+  let current = s;
+  let map: number[] = Array.from({ length: s.length }, (_, i) => i);
+
+  for (const [pattern, replacement] of MD_PATTERNS) {
+    const nextChars: string[] = [];
+    const nextMap: number[] = [];
+    let lastIndex = 0;
+
+    // Reset regex state
+    const re = new RegExp(pattern.source, pattern.flags);
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(current)) !== null) {
+      // Copy characters before the match
+      for (let i = lastIndex; i < match.index; i++) {
+        nextChars.push(current[i]);
+        nextMap.push(map[i]);
+      }
+
+      // Determine the replacement text for this match
+      const replaced = match[0].replace(
+        new RegExp(pattern.source, pattern.flags.replace('g', '')),
+        replacement
+      );
+
+      // Map replacement chars to the original positions within the match
+      // Use the start of the first capture group if available, else start of match
+      const captureStart =
+        match[1] !== undefined ? match.index + match[0].indexOf(match[1]) : match.index;
+      for (let i = 0; i < replaced.length; i++) {
+        nextChars.push(replaced[i]);
+        nextMap.push(map[Math.min(captureStart + i, match.index + match[0].length - 1)]);
+      }
+
+      lastIndex = match.index + match[0].length;
+
+      // Prevent infinite loops on zero-length matches
+      if (match[0].length === 0) {
+        if (lastIndex < current.length) {
+          nextChars.push(current[lastIndex]);
+          nextMap.push(map[lastIndex]);
+        }
+        lastIndex++;
+      }
+    }
+
+    // Copy remaining characters
+    for (let i = lastIndex; i < current.length; i++) {
+      nextChars.push(current[i]);
+      nextMap.push(map[i]);
+    }
+
+    current = nextChars.join('');
+    map = nextMap;
+  }
+
+  return { text: current, offsetMap: map };
+}
+
+/**
+ * Normalize text (lowercase + collapse whitespace) and return an offset map.
+ * offsetMap[i] = index in the input string that produced character i in the normalized string.
+ */
+function normalizeWithMap(s: string): { text: string; offsetMap: number[] } {
+  const chars: string[] = [];
+  const map: number[] = [];
+  let inWhitespace = false;
+  let started = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (/\s/.test(ch)) {
+      if (!inWhitespace && started) {
+        chars.push(' ');
+        map.push(i);
+      }
+      inWhitespace = true;
+    } else {
+      inWhitespace = false;
+      started = true;
+      chars.push(ch.toLowerCase());
+      map.push(i);
+    }
+  }
+
+  // Trim trailing space
+  if (chars.length > 0 && chars[chars.length - 1] === ' ') {
+    chars.pop();
+    map.pop();
+  }
+
+  return { text: chars.join(''), offsetMap: map };
 }
 
 /**
@@ -95,7 +250,7 @@ function mapNormToOrig(
  * Window size = quote length ± 20%.
  */
 function slidingLevenshtein(content: string, quote: string): FuzzyLocateResult | null {
-  if (content.length > 10_000) return null;
+  if (content.length > 50_000) return null;
 
   const qLen = quote.length;
   const minWin = Math.max(1, Math.floor(qLen * 0.8));

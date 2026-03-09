@@ -26,6 +26,8 @@ interface KnowledgeGraphState {
   clearSelection: () => void;
 }
 
+let fetchGeneration = 0;
+
 export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => ({
   nodes: [],
   selectedNodeId: null,
@@ -38,11 +40,14 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   buildResult: null,
 
   fetchNodes: async (projectId) => {
+    const gen = ++fetchGeneration;
     set({ loading: true, error: null });
     try {
       const nodes = await kgApi.listKnowledgeNodes(projectId, 200);
+      if (gen !== fetchGeneration) return; // stale request — discard
       set({ nodes, loading: false });
     } catch (err) {
+      if (gen !== fetchGeneration) return;
       set({ error: err instanceof Error ? err : new Error(String(err)), loading: false });
     }
   },

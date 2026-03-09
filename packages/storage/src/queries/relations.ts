@@ -39,36 +39,40 @@ function rowToRelation(row: SentenceRelationRecord): SentenceRelation {
 export async function upsertRelations(db: AnyDB, relations: RelationInput[]): Promise<number> {
   if (relations.length === 0) return 0;
 
+  // Wrap in a transaction for atomicity — all relations succeed or none do.
   // Drizzle doesn't support batch onConflictDoUpdate with multiple values well,
   // so we use individual upserts. Performance is acceptable since this runs
   // asynchronously in fire-and-forget mode.
-  for (const rel of relations) {
-    await db
-      .insert(sentenceRelations)
-      .values({
-        id: rel.id,
-        projectId: rel.project_id,
-        commitHash: rel.commit_hash,
-        sourceId: rel.source_id,
-        targetId: rel.target_id,
-        type: rel.type,
-        confidence: rel.confidence,
-        reasoning: rel.reasoning,
-      })
-      .onConflictDoUpdate({
-        target: [
-          sentenceRelations.commitHash,
-          sentenceRelations.sourceId,
-          sentenceRelations.targetId,
-          sentenceRelations.type,
-        ],
-        set: {
+  // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
+  await (db as any).transaction(async (tx: AnyDB) => {
+    for (const rel of relations) {
+      await tx
+        .insert(sentenceRelations)
+        .values({
           id: rel.id,
+          projectId: rel.project_id,
+          commitHash: rel.commit_hash,
+          sourceId: rel.source_id,
+          targetId: rel.target_id,
+          type: rel.type,
           confidence: rel.confidence,
           reasoning: rel.reasoning,
-        },
-      });
-  }
+        })
+        .onConflictDoUpdate({
+          target: [
+            sentenceRelations.commitHash,
+            sentenceRelations.sourceId,
+            sentenceRelations.targetId,
+            sentenceRelations.type,
+          ],
+          set: {
+            id: rel.id,
+            confidence: rel.confidence,
+            reasoning: rel.reasoning,
+          },
+        });
+    }
+  });
 
   return relations.length;
 }

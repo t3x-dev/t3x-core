@@ -21,11 +21,13 @@ import {
 import {
   commitDraftV3,
   createCommitV4,
+  draftsV3,
   findDraftV3ById,
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
   updateAutopilotConfig,
 } from '@t3x/storage/pglite';
+import { eq } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -375,9 +377,12 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
     const sentences = qualifyingSPs.map((sp) => spToSentence(sp));
 
-    // 8. Re-check draft status to guard against concurrent auto-commit calls
-    const freshDraft = await findDraftV3ById(db, draftId);
-    if (!freshDraft || freshDraft.status !== 'editing') {
+    // 8. Atomically claim the draft (status WHERE guard prevents double-commit)
+    //    Must run BEFORE createCommitV4 to avoid orphan commits on race.
+    //    We pass a placeholder hash; it will be updated after commit creation.
+    const PLACEHOLDER_HASH = 'pending';
+    const claimed = await commitDraftV3(db, draftId, PLACEHOLDER_HASH);
+    if (!claimed) {
       return errorResponse(
         c,
         'ALREADY_COMMITTED',
@@ -385,7 +390,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       );
     }
 
-    // 9. Create commit
+    // 9. Create commit (only the winner of step 8 reaches here)
     const commit = await createCommitV4(
       db,
       {
@@ -399,15 +404,11 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       { strictParents: false }
     );
 
-    // 10. Mark draft as committed (status guard prevents double-commit)
-    const committed = await commitDraftV3(db, draftId, commit.hash);
-    if (!committed) {
-      return errorResponse(
-        c,
-        'ALREADY_COMMITTED',
-        'Draft was already committed by another request'
-      );
-    }
+    // 10. Update draft with the real commit hash
+    await db
+      .update(draftsV3)
+      .set({ committedAs: commit.hash, updatedAt: new Date() })
+      .where(eq(draftsV3.id, draftId));
 
     // 11. Push notification (fire-and-forget)
     pushNotification({
