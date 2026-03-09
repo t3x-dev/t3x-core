@@ -34,6 +34,7 @@ import {
   exportRoutes,
   extractRoutes,
   frameExtractRoutes,
+  gateRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
@@ -140,6 +141,7 @@ api.route('/', deployAgentRoutes); // /v1/deploy-agents
 api.route('/', draftsRoutes); // /v1/drafts
 api.route('/', extractRoutes); // /v1/extract
 api.route('/', frameExtractRoutes); // /v1/extract/frames
+api.route('/', gateRoutes); // /v1/gate/check
 api.route('/', runsRoutes); // /v1/runs
 api.route('/', leavesRoutes); // /v1/leaves
 api.route('/', pinsRoutes); // /v1/pins, /v1/projects/:projectId/pins
@@ -180,6 +182,7 @@ api.doc('/openapi.json', {
     { name: 'Delta Log', description: 'Semantic delta log (incremental frame changes)' },
     { name: 'Diff', description: 'Semantic diff operations' },
     { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
+    { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
     { name: 'Merge', description: 'Merge operations' },
     { name: 'Export', description: 'Export operations' },
     { name: 'Chat', description: 'LLM chat operations' },
