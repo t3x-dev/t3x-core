@@ -358,6 +358,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       branch TEXT,
       source_refs JSONB,
       merge_summary JSONB,
+      semantic JSONB,
       position_x REAL,
       position_y REAL,
 
@@ -370,6 +371,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add merge_summary column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
+    -- Migration: Add semantic column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (

@@ -63,7 +63,10 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(table.provider, table.providerId),
+    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(
+      table.provider,
+      table.providerId
+    ),
   })
 );
 
@@ -178,6 +181,13 @@ export const commitsV4 = pgTable(
         sections: Array<{ heading: string; items: string[] }>;
       };
     }>(),
+
+    /**
+     * Semantic content: { frames: Frame[], relations: Relation[] }
+     * Nullable — old commits have null.
+     * Second-class field: does NOT participate in hash calculation.
+     */
+    semantic: jsonb('semantic'),
 
     /** Canvas position */
     positionX: real('position_x'),

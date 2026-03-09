@@ -316,6 +316,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       branch TEXT,
       source_refs JSONB,
       merge_summary JSONB,
+      semantic JSONB,
       position_x REAL,
       position_y REAL,
 
@@ -398,6 +399,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add merge_summary column to existing commits_v4 tables (v4.1)
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
+    -- Migration: Add semantic column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
     -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
     ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;

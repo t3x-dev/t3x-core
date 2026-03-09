@@ -17,10 +17,13 @@ import type {
   CommitV4,
   CreateCommitV4Input,
   MergeSummaryData,
+  SemanticContent,
   SentenceV4,
 } from '@t3x/core';
 import { computeCommitV4Hash } from '@t3x/core';
+
 export { computeCommitV4Hash } from '@t3x/core';
+
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV4Record, commitsV4 } from '../schema-v4';
@@ -190,6 +193,7 @@ export async function createCommitV4(
       branch: input.branch ?? null,
       sourceRefs: input.source_refs ?? null,
       mergeSummary: input.merge_summary ?? null,
+      semantic: input.semantic ?? null,
       positionX: input.position_x ?? null,
       positionY: input.position_y ?? null,
     })
@@ -216,7 +220,12 @@ export async function createCommitV4Atomic(
   return db.transaction(async (tx) => {
     if (input.branch && input.project_id) {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.project_id || ''}))`);
-      await validateMainBranchLinearity(tx as AnyDB, input.project_id, input.branch, input.parents ?? []);
+      await validateMainBranchLinearity(
+        tx as AnyDB,
+        input.project_id,
+        input.branch,
+        input.parents ?? []
+      );
     }
     return createCommitV4(tx as AnyDB, input, options);
   });
@@ -520,6 +529,7 @@ function rowToCommitV4(row: CommitV4Record): CommitV4 {
     branch: row.branch ?? undefined,
     source_refs: row.sourceRefs as CommitSourceRef[] | undefined,
     merge_summary: (row.mergeSummary as MergeSummaryData) ?? undefined,
+    semantic: (row.semantic as SemanticContent) ?? undefined,
     position_x: row.positionX ?? undefined,
     position_y: row.positionY ?? undefined,
     created_at: row.createdAt.toISOString(),
