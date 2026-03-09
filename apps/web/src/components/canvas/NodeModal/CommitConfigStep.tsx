@@ -4,44 +4,20 @@
  * CommitConfigStep — left sidebar for the PendingCommitView modal.
  *
  * Contains:
- *  - Step 1: Configure (branch, template, extract intent, cosine slider, curate preview)
- *  - Step 2: Curate (stats, commit button, error display)
+ *  - Step 1: Configure (branch, template selection)
+ *  - Step 2: Extract & Review (LLM extraction status display)
  *
  * Extracted from PendingCommitView.tsx to reduce component size.
  */
 
-import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  GitCompare,
-  Loader2,
-  Lock,
-  MessageCircle,
-  RotateCcw,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle, Check, GitCompare, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useTerminology } from '@/hooks/useTerminology';
 import type * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type {
-  AnchorCandidate,
-  CanvasNodeData,
-  ConfirmedAnchor,
-  SourceTextBlock,
-} from '@/types/nodes';
-import {
-  bridgeTemplates,
-  type Phrase,
-  type PhraseKeyword,
-  renderPhraseWithKeywords,
-  type SourceBox,
-} from './helpers';
+import type { CanvasNodeData } from '@/types/nodes';
+import { bridgeTemplates } from './helpers';
 
 // ============================================================================
 // Props
@@ -53,52 +29,28 @@ export interface CommitConfigStepProps {
   // Config state
   template: string;
   setTemplate: (v: string) => void;
-  cosineThreshold: number;
-  setCosineThreshold: (v: number) => void;
-  extractIntent: string;
-  setExtractIntent: (v: string) => void;
   configLocked: boolean;
-  isCurateLoading: boolean;
-  curateError: string | null;
-  curatePreview: api.CuratePreviewResponse | null;
 
-  // Source state
-  sourceBoxes: SourceBox[];
-  textBlocks: SourceTextBlock[];
+  // Extraction state (LLM pipeline)
+  extractionLoading: boolean;
+  extractionError: string | null;
+  semanticPointsCount: number;
 
   // Commit state
-  isCommitting: boolean;
   commitError: string | null;
   branches: api.Branch[];
   branchesLoading: boolean;
   isMainBranchInvalid: boolean;
 
-  // Layout state
-  hoveredKeywordText: string | null;
-
   // Derived values
   isMergeDraft: boolean;
   shouldShowBranchSelect: boolean;
   requireBranchName: boolean;
-  includedPhrasesCount: number;
-  mustHaveKeywordsLegacy: PhraseKeyword[];
-  mustntHaveKeywordsLegacy: PhraseKeyword[];
-  hasNewSourceData: boolean;
-  mustHaveKeywordsNew: string[];
-  mustntHaveKeywordsNew: string[];
-  selectionsCount: number;
-  selectedChunksCount: number;
   hasSourceConversation: boolean;
-  hasSourceTurnWindow: boolean;
 
   // Callbacks
-  handleKeywordHover: (text: string | null) => void;
-  toggleSourceBoxExpand: (boxId: string) => void;
-  togglePhraseInclude: (phraseId: string) => void;
-  toggleKeywordMustnt: (phraseId: string, keywordId: string) => void;
   handleProceed: () => void;
   handleReset: () => void;
-  handleCommit: () => Promise<void>;
 
   // External props
   onBranchChange: ((branch: 'main' | 'branch') => void) | undefined;
@@ -113,42 +65,20 @@ export function CommitConfigStep({
   data,
   template,
   setTemplate,
-  cosineThreshold,
-  setCosineThreshold,
-  extractIntent,
-  setExtractIntent,
   configLocked,
-  isCurateLoading,
-  curateError,
-  curatePreview,
-  sourceBoxes,
-  textBlocks,
-  isCommitting,
+  extractionLoading,
+  extractionError,
+  semanticPointsCount,
   commitError,
   branches,
   branchesLoading,
   isMainBranchInvalid,
-  hoveredKeywordText,
   isMergeDraft,
   shouldShowBranchSelect,
   requireBranchName,
-  includedPhrasesCount,
-  mustHaveKeywordsLegacy,
-  mustntHaveKeywordsLegacy,
-  hasNewSourceData,
-  mustHaveKeywordsNew,
-  mustntHaveKeywordsNew,
-  selectionsCount,
-  selectedChunksCount,
   hasSourceConversation,
-  hasSourceTurnWindow,
-  handleKeywordHover,
-  toggleSourceBoxExpand,
-  togglePhraseInclude,
-  toggleKeywordMustnt,
   handleProceed,
   handleReset,
-  handleCommit,
   onBranchChange,
   onBranchNameChange,
 }: CommitConfigStepProps) {
@@ -293,84 +223,12 @@ export function CommitConfigStep({
               </select>
             </div>
 
-            {/* Extract Intent */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
-                What to extract
-              </label>
-              <Textarea
-                className="w-full text-sm min-h-[60px] resize-none"
-                placeholder="Describe what you want to extract from this conversation..."
-                value={extractIntent}
-                onChange={(e) => setExtractIntent(e.target.value)}
-              />
-              {!extractIntent.trim() && (
-                <span className="text-xs text-[var(--status-warning)]">
-                  Required: describe what to extract
-                </span>
-              )}
-            </div>
-
-            {/* Cosine Threshold */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
-                Filter Strictness
-              </label>
-              <input
-                type="range"
-                className="w-full h-1.5 rounded-sm bg-[var(--stroke-divider)] accent-indigo-500 dark:accent-indigo-400 cursor-pointer"
-                min="0"
-                max="1"
-                step="0.05"
-                value={cosineThreshold}
-                onChange={(e) => setCosineThreshold(Number.parseFloat(e.target.value))}
-              />
-              <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
-                <span>More content</span>
-                <span className="font-medium text-[var(--text-secondary)]">
-                  {(100 - cosineThreshold * 60).toFixed(0)}%
-                </span>
-                <span>Less content</span>
-              </div>
-            </div>
-
-            {/* Curate Preview Status */}
-            {(isCurateLoading || curatePreview || curateError) && (
-              <div className="flex flex-col gap-1.5 p-2 bg-[var(--surface-app)] rounded-md border border-[var(--stroke-divider)]">
-                <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
-                  Preview
-                </span>
-                {isCurateLoading ? (
-                  <div className="flex items-center gap-2 text-[0.8rem] text-[var(--text-tertiary)]">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>Computing embeddings...</span>
-                  </div>
-                ) : curateError ? (
-                  <div
-                    className="flex items-center gap-2 text-[0.8rem] text-[var(--status-error)]"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    <AlertCircle size={14} />
-                    <span>{curateError}</span>
-                  </div>
-                ) : curatePreview ? (
-                  <div className="flex items-center gap-2 text-[0.8rem] text-[var(--text-secondary)]">
-                    <span>Auto-selected:</span>
-                    <span className="font-medium text-[var(--status-success)]">
-                      {selectedChunksCount} / {curatePreview.chunks.length} sentences
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
             {/* Proceed Button */}
             <div className="flex gap-2 mt-2">
               <Button
                 onClick={handleProceed}
-                disabled={textBlocks.length === 0 && sourceBoxes.length === 0}
-                title="Lock configuration and proceed to curation"
+                disabled={!hasSourceConversation}
+                title="Lock configuration and start LLM extraction"
                 className="flex-1 gap-1.5 bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-500"
               >
                 <Check size={16} />
@@ -402,12 +260,6 @@ export function CommitConfigStep({
                 <span className="text-[var(--text-tertiary)] min-w-[70px]">Template:</span>
                 <span className="text-[var(--text-primary)] font-medium">{template}</span>
               </div>
-              <div className="flex items-center gap-2 text-[0.85rem]">
-                <span className="text-[var(--text-tertiary)] min-w-[70px]">Cosine:</span>
-                <span className="text-[var(--text-primary)] font-medium">
-                  {cosineThreshold.toFixed(2)}
-                </span>
-              </div>
             </div>
             <Button
               variant="outline"
@@ -424,7 +276,7 @@ export function CommitConfigStep({
 
       <div className="h-px bg-[var(--stroke-divider)] my-5" />
 
-      {/* STEP 2: Curate */}
+      {/* STEP 2: Extract & Review */}
       <div
         className={cn(
           'flex flex-col gap-[var(--space-group)]',
@@ -442,152 +294,55 @@ export function CommitConfigStep({
                 configLocked ? 'bg-emerald-500' : 'bg-[var(--stroke-divider)]'
               )}
             />
-            Curate
+            Extract & Review
           </span>
         </div>
 
         {!configLocked ? (
-          /* Disabled state: Show hint */
           <div className="flex items-center gap-2 p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg text-[var(--text-tertiary)] text-[0.85rem]">
             <Lock size={16} />
             <span>Complete Step 1 first</span>
           </div>
         ) : (
-          /* Enabled state: Show stats and commit button */
           <>
-            <div className="flex gap-4">
-              {hasNewSourceData ? (
-                <>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {selectionsCount} selections
-                  </span>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {mustHaveKeywordsNew.length} must
-                  </span>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {mustntHaveKeywordsNew.length} mustnt
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {includedPhrasesCount} phrases
-                  </span>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {mustHaveKeywordsLegacy.length} must
-                  </span>
-                  <span className="text-[0.85rem] text-[var(--text-secondary)]">
-                    {mustntHaveKeywordsLegacy.length} mustnt
-                  </span>
-                </>
-              )}
-            </div>
-
-            <p className="text-sm text-[var(--text-tertiary)]">
-              {hasNewSourceData
-                ? 'Drag to select text \u00b7 Click to mark keywords'
-                : 'Click phrases in SOURCE to toggle inclusion'}
-            </p>
-
-            {/* Source lineage summary */}
-            {hasNewSourceData && (
-              <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-2.5 text-xs">
-                <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1.5">
-                  Sources
-                </div>
-                <div className="space-y-1">
-                  {textBlocks.map((block) => (
-                    <div
-                      key={block.id}
-                      className="flex items-center gap-1.5 text-[var(--text-secondary)]"
-                    >
-                      <MessageCircle size={11} className="text-[var(--text-tertiary)] shrink-0" />
-                      <span className="truncate flex-1">
-                        {block.sourceNodeTitle || 'Unknown source'}
-                      </span>
-                      <span className="text-[var(--text-tertiary)] shrink-0">
-                        {block.selections.length} sel
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {data.pendingSource?.sentences && data.pendingSource.sentences.length > 0 && (
-                  <div className="mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)] flex items-center gap-1.5 text-[var(--text-tertiary)]">
-                    <FileText size={11} className="shrink-0" />
-                    <span>
-                      {data.pendingSource.sentences.length} sentence
-                      {data.pendingSource.sentences.length !== 1 ? 's' : ''} ready
-                    </span>
-                  </div>
-                )}
+            {extractionLoading && (
+              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)]">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Extracting semantic points...</span>
               </div>
             )}
 
-            {/* Commit error */}
+            {extractionError && (
+              <div
+                className="flex items-start gap-2 p-3 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-md text-[var(--status-error)] text-sm"
+                role="alert"
+              >
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <div className="flex flex-col gap-1">
+                  <span>{extractionError}</span>
+                  <span className="text-xs opacity-75">
+                    Ensure ANTHROPIC_API_KEY or GOOGLE_AI_STUDIO_KEY is configured.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!extractionLoading && !extractionError && semanticPointsCount > 0 && (
+              <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)]">
+                <Check size={14} className="text-emerald-500" />
+                <span>{semanticPointsCount} semantic points extracted</span>
+              </div>
+            )}
+
             {commitError && (
               <div
                 className="flex items-center gap-2 py-2 px-3 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-md text-[var(--status-error)] text-sm"
                 role="alert"
-                aria-live="polite"
               >
                 <AlertCircle size={14} />
                 <span>{commitError}</span>
               </div>
             )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 mt-2">
-              {isMergeDraft ? (
-                /* Legacy merge UI disabled - use MergePanel for two-way merge */
-                <div className="text-sm text-[var(--color-text-muted)] text-center py-2">
-                  Use MergePanel for merge operations
-                </div>
-              ) : hasSourceConversation || hasSourceTurnWindow ? (
-                /* Commit Button - directly enabled when selections are made */
-                <Button
-                  onClick={handleCommit}
-                  disabled={
-                    (hasNewSourceData ? selectionsCount === 0 : includedPhrasesCount === 0) ||
-                    isCommitting
-                  }
-                  title={
-                    hasNewSourceData
-                      ? selectionsCount === 0
-                        ? 'Select some text first'
-                        : ''
-                      : includedPhrasesCount === 0
-                        ? 'Include some phrases first'
-                        : ''
-                  }
-                  className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
-                >
-                  {isCommitting ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} />
-                      <span>{t('commitAction')}</span>
-                    </>
-                  )}
-                </Button>
-              ) : (
-                /* No valid source - cannot commit */
-                <div className="flex items-start gap-2 p-3 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25 rounded-md text-[var(--status-warning)]">
-                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium text-sm">Cannot commit</span>
-                    <span className="text-xs text-[var(--status-warning)]">
-                      {!data.sourceConversationId && !data.sourceTurnWindow
-                        ? 'Source commit is missing turn window data (legacy commit). Please create a new conversation from this commit first, then create a commit from that conversation.'
-                        : 'No source conversation or turn window available.'}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>

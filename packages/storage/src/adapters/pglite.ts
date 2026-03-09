@@ -59,15 +59,41 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
   }
 
   // Create PGLite client (with pgvector if available)
-  client = new PGlite(dataDir, {
-    ...(extensions ? { extensions } : {}),
-  });
+  // If WASM aborts (corrupted data from unclean shutdown), wipe and retry once.
+  try {
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+  } catch (err) {
+    const isWasmAbort =
+      err instanceof Error && (err.message.includes('Aborted()') || err.name === 'RuntimeError');
 
-  // Create Drizzle instance
-  db = drizzle(client, { schema });
+    if (!isWasmAbort || !dataDir) throw err;
 
-  // Run migrations/schema creation
-  await initializeSchema(client);
+    console.warn(
+      '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
+    );
+
+    // Skip client.close() on corrupted instance — calling close() on an
+    // aborted WASM runtime can trigger a second abort that crashes the process.
+    client = null;
+    db = null;
+
+    // Wipe corrupted data directory and recreate
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Retry once
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+
+    console.warn('[PGLite] Database recreated successfully. Previous local data was lost.');
+  }
 
   // Seed builtin templates
   await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
@@ -112,6 +138,9 @@ export async function closePGLiteStorage(): Promise<void> {
 async function initializeSchema(client: PGlite): Promise<void> {
   // Create tables if they don't exist
   await client.exec(`
+    -- Ensure plpgsql is available (required for DO $$ blocks in migrations)
+    CREATE EXTENSION IF NOT EXISTS plpgsql;
+
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
       project_id TEXT PRIMARY KEY,
