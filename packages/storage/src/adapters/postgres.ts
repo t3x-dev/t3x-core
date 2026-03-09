@@ -693,6 +693,19 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
+
+    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
+    CREATE TABLE IF NOT EXISTS delta_log (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      turn_hash TEXT,
+      delta JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)

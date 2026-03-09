@@ -727,6 +727,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 
+    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
+    CREATE TABLE IF NOT EXISTS delta_log (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      turn_hash TEXT,
+      delta JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+
   `);
 
   // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
