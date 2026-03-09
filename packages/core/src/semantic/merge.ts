@@ -115,9 +115,9 @@ function findSlotConflicts(base: Frame | undefined, src: Frame, tgt: Frame): Slo
 
     conflicts.push({
       key,
-      baseValue: baseVal as SlotValue,
-      sourceValue: srcVal as SlotValue,
-      targetValue: tgtVal as SlotValue,
+      baseValue: baseVal,
+      sourceValue: srcVal,
+      targetValue: tgtVal,
     });
   }
   return conflicts;

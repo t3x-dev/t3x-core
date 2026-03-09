@@ -52,6 +52,11 @@ export const RelationSchema = z.object({
 
 // ── SemanticContent ──
 
+/**
+ * Schema for committed SemanticContent (final state).
+ * Requires at least one frame. For intermediate/draft states
+ * (e.g. buildDraft result), use the SemanticContent TypeScript type directly.
+ */
 export const SemanticContentSchema = z.object({
   frames: z.array(FrameSchema).min(1),
   relations: z.array(RelationSchema),

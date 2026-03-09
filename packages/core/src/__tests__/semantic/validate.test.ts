@@ -39,6 +39,25 @@ describe('validateIntegrity', () => {
     expect(result.errors[0].type).toBe('broken_ref');
   });
 
+  it('detects broken ref inside nested InlineFrame', () => {
+    const content: SemanticContent = {
+      frames: [
+        {
+          id: 'f_001',
+          type: 'x',
+          slots: {
+            detail: { type: 'nested', slots: { link: { ref: 'f_999' } } },
+          },
+        },
+      ],
+      relations: [],
+    };
+    const result = validateIntegrity(content);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0].type).toBe('broken_ref');
+    expect(result.errors[0].location).toContain('detail');
+  });
+
   it('detects broken relation endpoint', () => {
     const content: SemanticContent = {
       frames: [frame('f_001')],

@@ -1,5 +1,12 @@
 import type { Delta, DeltaLogEntry, SemanticContent, SlotValue } from './types';
 
+/**
+ * Apply a delta to a semantic snapshot, returning a new snapshot.
+ * Pure function — does not mutate the input.
+ *
+ * Note: The result is NOT automatically validated. Callers should run
+ * `validateIntegrity()` on the result before committing to storage.
+ */
 export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticContent {
   const frames = snapshot.frames.map((f) => ({ ...f, slots: { ...f.slots } }));
   let relations = [...snapshot.relations];
