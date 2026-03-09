@@ -29,6 +29,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Git worktrees
+.worktrees/
+
 # Logs
 logs/
 *.log
