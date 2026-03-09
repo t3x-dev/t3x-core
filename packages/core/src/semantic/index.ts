@@ -7,6 +7,21 @@
  * @see docs/plans/core-engine/00-index.md
  */
 
+// Delta
+export { applyDelta, buildDraft } from './delta';
+// Diff
+export { frameDiff } from './diff';
+// Merge
+export { prepareFrameMerge } from './merge';
+// Zod Schemas
+export {
+  DeltaSchema,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  RelationSchema,
+  SemanticContentSchema,
+  SlotValueSchema,
+} from './schema';
 // Types
 export type {
   Delta,
@@ -30,27 +45,6 @@ export type {
   ValidationWarning,
   WordDiffFn,
 } from './types';
-
 export { FRAME_RELATION_TYPES } from './types';
-
-// Zod Schemas
-export {
-  DeltaSchema,
-  FrameRelationTypeSchema,
-  FrameSchema,
-  RelationSchema,
-  SemanticContentSchema,
-  SlotValueSchema,
-} from './schema';
-
 // Validation
 export { validateIntegrity } from './validate';
-
-// Delta
-export { applyDelta, buildDraft } from './delta';
-
-// Diff
-export { frameDiff } from './diff';
-
-// Merge
-export { prepareFrameMerge } from './merge';

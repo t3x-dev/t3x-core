@@ -129,11 +129,15 @@ describe('buildDraft', () => {
   it('builds from multiple deltas', () => {
     const log: DeltaLogEntry[] = [
       {
-        id: 'd1', source: 'llm_extraction', created_at: '2026-01-01T00:00:00Z',
+        id: 'd1',
+        source: 'llm_extraction',
+        created_at: '2026-01-01T00:00:00Z',
         delta: { changes: [{ action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } }] },
       },
       {
-        id: 'd2', source: 'user_graph_edit', created_at: '2026-01-01T00:01:00Z',
+        id: 'd2',
+        source: 'user_graph_edit',
+        created_at: '2026-01-01T00:01:00Z',
         delta: { changes: [{ action: 'update', target: 'f_001', slots: { a: 99 } }] },
       },
     ];

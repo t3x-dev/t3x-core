@@ -39,7 +39,10 @@ describe('prepareFrameMerge', () => {
     const result = prepareFrameMerge(base, source, target);
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts[0].slotConflicts[0]).toMatchObject({
-      key: 'a', baseValue: 1, sourceValue: 10, targetValue: 20,
+      key: 'a',
+      baseValue: 1,
+      sourceValue: 10,
+      targetValue: 20,
     });
   });
 
@@ -63,10 +66,12 @@ describe('prepareFrameMerge', () => {
     const frames = [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })];
     const base: SemanticContent = { frames, relations: [] };
     const source: SemanticContent = {
-      frames, relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
+      frames,
+      relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
     };
     const target: SemanticContent = {
-      frames, relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
+      frames,
+      relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
     };
     const result = prepareFrameMerge(base, source, target);
     expect(result.relationsOnlyInSource).toHaveLength(1);

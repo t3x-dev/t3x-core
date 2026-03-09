@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { validateIntegrity } from '../../semantic/validate';
 import type { SemanticContent } from '../../semantic/types';
+import { validateIntegrity } from '../../semantic/validate';
 
 const frame = (id: string, slots: Record<string, unknown> = { a: 1 }) => ({
-  id, type: 'test', slots,
+  id,
+  type: 'test',
+  slots,
 });
 
 describe('validateIntegrity', () => {
@@ -68,7 +70,7 @@ describe('validateIntegrity', () => {
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.type === 'cycle')).toBe(true);
+    expect(result.errors.some((e) => e.type === 'cycle')).toBe(true);
   });
 
   it('warns on orphan frame', () => {
@@ -78,7 +80,7 @@ describe('validateIntegrity', () => {
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(true);
-    expect(result.warnings.some(w => w.type === 'orphan_frame')).toBe(true);
+    expect(result.warnings.some((w) => w.type === 'orphan_frame')).toBe(true);
   });
 
   it('warns on low confidence', () => {
@@ -87,7 +89,7 @@ describe('validateIntegrity', () => {
       relations: [],
     };
     const result = validateIntegrity(content);
-    expect(result.warnings.some(w => w.type === 'low_confidence')).toBe(true);
+    expect(result.warnings.some((w) => w.type === 'low_confidence')).toBe(true);
   });
 
   it('no orphan warning for single frame', () => {
@@ -96,7 +98,7 @@ describe('validateIntegrity', () => {
       relations: [],
     };
     const result = validateIntegrity(content);
-    expect(result.warnings.filter(w => w.type === 'orphan_frame')).toHaveLength(0);
+    expect(result.warnings.filter((w) => w.type === 'orphan_frame')).toHaveLength(0);
   });
 
   it('detects follows cycle', () => {
@@ -108,6 +110,6 @@ describe('validateIntegrity', () => {
       ],
     };
     const result = validateIntegrity(content);
-    expect(result.errors.some(e => e.type === 'cycle')).toBe(true);
+    expect(result.errors.some((e) => e.type === 'cycle')).toBe(true);
   });
 });

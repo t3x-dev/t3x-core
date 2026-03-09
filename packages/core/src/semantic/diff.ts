@@ -13,7 +13,7 @@ const WORD_DIFF_THRESHOLD = 5;
 export function frameDiff(
   source: SemanticContent,
   target: SemanticContent,
-  wordDiffFn?: WordDiffFn,
+  wordDiffFn?: WordDiffFn
 ): FrameDiff {
   const sourceMap = new Map(source.frames.map((f) => [f.id, f]));
   const targetMap = new Map(target.frames.map((f) => [f.id, f]));
@@ -58,7 +58,7 @@ function relKey(r: Relation): string {
 function diffSlots(
   source: Record<string, SlotValue>,
   target: Record<string, SlotValue>,
-  wordDiffFn?: WordDiffFn,
+  wordDiffFn?: WordDiffFn
 ): SlotDiff[] {
   const diffs: SlotDiff[] = [];
   const allKeys = new Set([...Object.keys(source), ...Object.keys(target)]);
@@ -73,7 +73,12 @@ function diffSlots(
       diffs.push({ key, type: 'added', newValue: target[key] });
     } else if (hasSource && hasTarget) {
       if (!deepEqual(source[key], target[key])) {
-        const diff: SlotDiff = { key, type: 'changed', oldValue: source[key], newValue: target[key] };
+        const diff: SlotDiff = {
+          key,
+          type: 'changed',
+          oldValue: source[key],
+          newValue: target[key],
+        };
         if (
           wordDiffFn &&
           typeof source[key] === 'string' &&

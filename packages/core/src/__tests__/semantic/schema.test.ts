@@ -131,36 +131,28 @@ describe('SemanticContentSchema', () => {
 describe('DeltaSchema', () => {
   it('accepts add change', () => {
     const result = DeltaSchema.safeParse({
-      changes: [
-        { action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } },
-      ],
+      changes: [{ action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } }],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts update change with null slot (delete)', () => {
     const result = DeltaSchema.safeParse({
-      changes: [
-        { action: 'update', target: 'f_001', slots: { old_key: null } },
-      ],
+      changes: [{ action: 'update', target: 'f_001', slots: { old_key: null } }],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts remove change', () => {
     const result = DeltaSchema.safeParse({
-      changes: [
-        { action: 'remove', target: 'f_001', reason: 'user denied' },
-      ],
+      changes: [{ action: 'remove', target: 'f_001', reason: 'user denied' }],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts new_relations', () => {
     const result = DeltaSchema.safeParse({
-      changes: [
-        { action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } },
-      ],
+      changes: [{ action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } }],
       new_relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
     });
     expect(result.success).toBe(true);

@@ -12,24 +12,20 @@ const InlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown
 );
 
 export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    SlotRefSchema,
-    InlineFrameSchema,
-    z.array(SlotValueSchema),
-  ])
+  z.union([z.string(), z.number(), SlotRefSchema, InlineFrameSchema, z.array(SlotValueSchema)])
 );
 
 // ── Frame ──
 
 export const FrameSchema = z.object({
   id: z.string().regex(/^f_\d{3,}$/),
-  type: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
-  slots: z.record(SlotValueSchema).refine(
-    (s) => Object.keys(s).length >= 1,
-    { message: 'Frame must have at least one slot' }
-  ),
+  type: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_]*$/),
+  slots: z
+    .record(SlotValueSchema)
+    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' }),
   source: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });

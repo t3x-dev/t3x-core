@@ -10,7 +10,7 @@ import type {
 export function prepareFrameMerge(
   base: SemanticContent,
   source: SemanticContent,
-  target: SemanticContent,
+  target: SemanticContent
 ): FrameMergeResult {
   const baseMap = new Map(base.frames.map((f) => [f.id, f]));
   const srcMap = new Map(source.frames.map((f) => [f.id, f]));
@@ -28,8 +28,14 @@ export function prepareFrameMerge(
     const tgtFrame = tgtMap.get(id);
     const baseFrame = baseMap.get(id);
 
-    if (srcFrame && !tgtFrame) { onlyInSource.push(srcFrame); continue; }
-    if (!srcFrame && tgtFrame) { onlyInTarget.push(tgtFrame); continue; }
+    if (srcFrame && !tgtFrame) {
+      onlyInSource.push(srcFrame);
+      continue;
+    }
+    if (!srcFrame && tgtFrame) {
+      onlyInTarget.push(tgtFrame);
+      continue;
+    }
     if (!srcFrame || !tgtFrame) continue;
 
     if (framesEqual(srcFrame, tgtFrame)) {
@@ -39,7 +45,13 @@ export function prepareFrameMerge(
 
     if (!baseFrame) {
       const slotConflicts = findSlotConflicts(undefined, srcFrame, tgtFrame);
-      conflicts.push({ frameId: id, baseFrame: undefined, sourceFrame: srcFrame, targetFrame: tgtFrame, slotConflicts });
+      conflicts.push({
+        frameId: id,
+        baseFrame: undefined,
+        sourceFrame: srcFrame,
+        targetFrame: tgtFrame,
+        slotConflicts,
+      });
       continue;
     }
 
@@ -58,7 +70,13 @@ export function prepareFrameMerge(
         const merged = mergeNonConflicting(baseFrame, srcFrame, tgtFrame);
         autoKept.push(merged);
       } else {
-        conflicts.push({ frameId: id, baseFrame, sourceFrame: srcFrame, targetFrame: tgtFrame, slotConflicts });
+        conflicts.push({
+          frameId: id,
+          baseFrame,
+          sourceFrame: srcFrame,
+          targetFrame: tgtFrame,
+          slotConflicts,
+        });
       }
     }
   }
@@ -69,7 +87,15 @@ export function prepareFrameMerge(
   const relationsOnlyInSource = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
   const relationsOnlyInTarget = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
 
-  return { autoKept, conflicts, onlyInSource, onlyInTarget, relationsOnlyInSource, relationsOnlyInTarget, relationsInBoth };
+  return {
+    autoKept,
+    conflicts,
+    onlyInSource,
+    onlyInTarget,
+    relationsOnlyInSource,
+    relationsOnlyInTarget,
+    relationsInBoth,
+  };
 }
 
 function relKey(r: Relation): string {
@@ -97,14 +123,23 @@ function findSlotConflicts(base: Frame | undefined, src: Frame, tgt: Frame): Slo
     if (base && deepEqual(srcVal as SlotValue, baseVal as SlotValue)) continue;
     if (base && deepEqual(tgtVal as SlotValue, baseVal as SlotValue)) continue;
 
-    conflicts.push({ key, baseValue: baseVal as SlotValue, sourceValue: srcVal as SlotValue, targetValue: tgtVal as SlotValue });
+    conflicts.push({
+      key,
+      baseValue: baseVal as SlotValue,
+      sourceValue: srcVal as SlotValue,
+      targetValue: tgtVal as SlotValue,
+    });
   }
   return conflicts;
 }
 
 function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
   const slots: Record<string, SlotValue> = { ...base.slots };
-  const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots), ...Object.keys(base.slots)]);
+  const allKeys = new Set([
+    ...Object.keys(src.slots),
+    ...Object.keys(tgt.slots),
+    ...Object.keys(base.slots),
+  ]);
 
   for (const key of allKeys) {
     const baseVal = base.slots[key];
@@ -115,9 +150,17 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
     const tgtChanged = !deepEqual(tgtVal as SlotValue, baseVal as SlotValue);
 
     if (srcChanged) {
-      if (srcVal === undefined) { delete slots[key]; } else { slots[key] = srcVal; }
+      if (srcVal === undefined) {
+        delete slots[key];
+      } else {
+        slots[key] = srcVal;
+      }
     } else if (tgtChanged) {
-      if (tgtVal === undefined) { delete slots[key]; } else { slots[key] = tgtVal; }
+      if (tgtVal === undefined) {
+        delete slots[key];
+      } else {
+        slots[key] = tgtVal;
+      }
     }
   }
   return { ...src, slots };

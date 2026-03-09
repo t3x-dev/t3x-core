@@ -18,7 +18,12 @@ describe('frameDiff', () => {
     const b: SemanticContent = { frames: [f('f_001', 'x', { a: 99 })], relations: [] };
     const result = frameDiff(a, b);
     expect(result.modified).toHaveLength(1);
-    expect(result.modified[0].slotDiffs[0]).toMatchObject({ key: 'a', type: 'changed', oldValue: 1, newValue: 99 });
+    expect(result.modified[0].slotDiffs[0]).toMatchObject({
+      key: 'a',
+      type: 'changed',
+      oldValue: 1,
+      newValue: 99,
+    });
   });
 
   it('detects added slot', () => {
@@ -26,7 +31,9 @@ describe('frameDiff', () => {
     const b: SemanticContent = { frames: [f('f_001', 'x', { a: 1, b: 2 })], relations: [] };
     const result = frameDiff(a, b);
     expect(result.modified).toHaveLength(1);
-    expect(result.modified[0].slotDiffs).toContainEqual(expect.objectContaining({ key: 'b', type: 'added', newValue: 2 }));
+    expect(result.modified[0].slotDiffs).toContainEqual(
+      expect.objectContaining({ key: 'b', type: 'added', newValue: 2 })
+    );
   });
 
   it('detects removed slot', () => {
@@ -34,19 +41,27 @@ describe('frameDiff', () => {
     const b: SemanticContent = { frames: [f('f_001', 'x', { a: 1 })], relations: [] };
     const result = frameDiff(a, b);
     expect(result.modified).toHaveLength(1);
-    expect(result.modified[0].slotDiffs).toContainEqual(expect.objectContaining({ key: 'b', type: 'removed', oldValue: 2 }));
+    expect(result.modified[0].slotDiffs).toContainEqual(
+      expect.objectContaining({ key: 'b', type: 'removed', oldValue: 2 })
+    );
   });
 
   it('detects added frame', () => {
     const a: SemanticContent = { frames: [f('f_001', 'x', { a: 1 })], relations: [] };
-    const b: SemanticContent = { frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })], relations: [] };
+    const b: SemanticContent = {
+      frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
+      relations: [],
+    };
     const result = frameDiff(a, b);
     expect(result.onlyInTarget).toHaveLength(1);
     expect(result.onlyInTarget[0].id).toBe('f_002');
   });
 
   it('detects removed frame', () => {
-    const a: SemanticContent = { frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })], relations: [] };
+    const a: SemanticContent = {
+      frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
+      relations: [],
+    };
     const b: SemanticContent = { frames: [f('f_001', 'x', { a: 1 })], relations: [] };
     const result = frameDiff(a, b);
     expect(result.onlyInSource).toHaveLength(1);
@@ -54,7 +69,10 @@ describe('frameDiff', () => {
   });
 
   it('detects added relations', () => {
-    const a: SemanticContent = { frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })], relations: [] };
+    const a: SemanticContent = {
+      frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
+      relations: [],
+    };
     const b: SemanticContent = {
       frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
       relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
@@ -68,14 +86,23 @@ describe('frameDiff', () => {
       frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
       relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
     };
-    const b: SemanticContent = { frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })], relations: [] };
+    const b: SemanticContent = {
+      frames: [f('f_001', 'x', { a: 1 }), f('f_002', 'y', { b: 2 })],
+      relations: [],
+    };
     const result = frameDiff(a, b);
     expect(result.relationsRemoved).toHaveLength(1);
   });
 
   it('injects word diff for long string slots', () => {
-    const a: SemanticContent = { frames: [f('f_001', 'x', { text: 'The quick brown fox jumps over the lazy dog' })], relations: [] };
-    const b: SemanticContent = { frames: [f('f_001', 'x', { text: 'The slow brown fox jumps over the happy dog' })], relations: [] };
+    const a: SemanticContent = {
+      frames: [f('f_001', 'x', { text: 'The quick brown fox jumps over the lazy dog' })],
+      relations: [],
+    };
+    const b: SemanticContent = {
+      frames: [f('f_001', 'x', { text: 'The slow brown fox jumps over the happy dog' })],
+      relations: [],
+    };
     const mockWordDiff = (x: string, y: string) => [{ type: 'unchanged' as const, text: 'stub' }];
     const result = frameDiff(a, b, mockWordDiff);
     expect(result.modified[0].slotDiffs[0].wordDiff).toBeDefined();

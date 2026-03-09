@@ -19,12 +19,7 @@ export interface InlineFrame {
 }
 
 /** The 5 slot value types (+ array) */
-export type SlotValue =
-  | string
-  | number
-  | SlotRef
-  | InlineFrame
-  | SlotValue[];
+export type SlotValue = string | number | SlotRef | InlineFrame | SlotValue[];
 
 // ── Frame ──
 
@@ -176,4 +171,7 @@ export interface FrameMergeResult {
 }
 
 /** Word diff function interface — injected, not imported */
-export type WordDiffFn = (a: string, b: string) => Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
+export type WordDiffFn = (
+  a: string,
+  b: string
+) => Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;

@@ -18,7 +18,11 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   }
   for (const [id, count] of idCounts) {
     if (count > 1) {
-      errors.push({ type: 'duplicate_id', message: `Frame ID "${id}" appears ${count} times`, location: id });
+      errors.push({
+        type: 'duplicate_id',
+        message: `Frame ID "${id}" appears ${count} times`,
+        location: id,
+      });
     }
   }
 
@@ -32,13 +36,25 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   // 3. Relation endpoint checks
   for (const rel of content.relations) {
     if (!frameIds.has(rel.from)) {
-      errors.push({ type: 'broken_relation', message: `Relation from "${rel.from}" — no such frame`, location: `${rel.from}->${rel.to}` });
+      errors.push({
+        type: 'broken_relation',
+        message: `Relation from "${rel.from}" — no such frame`,
+        location: `${rel.from}->${rel.to}`,
+      });
     }
     if (!frameIds.has(rel.to)) {
-      errors.push({ type: 'broken_relation', message: `Relation to "${rel.to}" — no such frame`, location: `${rel.from}->${rel.to}` });
+      errors.push({
+        type: 'broken_relation',
+        message: `Relation to "${rel.to}" — no such frame`,
+        location: `${rel.from}->${rel.to}`,
+      });
     }
     if (rel.from === rel.to) {
-      errors.push({ type: 'self_relation', message: `Self-referencing relation on "${rel.from}"`, location: `${rel.from}->${rel.to}` });
+      errors.push({
+        type: 'self_relation',
+        message: `Self-referencing relation on "${rel.from}"`,
+        location: `${rel.from}->${rel.to}`,
+      });
     }
   }
 
@@ -53,7 +69,11 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   const inStack = new Set<string>();
   for (const node of graph.keys()) {
     if (!visited.has(node) && hasCycle(node, graph, visited, inStack)) {
-      errors.push({ type: 'cycle', message: `Causal/temporal cycle detected involving "${node}"`, location: node });
+      errors.push({
+        type: 'cycle',
+        message: `Causal/temporal cycle detected involving "${node}"`,
+        location: node,
+      });
     }
   }
 
@@ -66,7 +86,11 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
     }
     for (const frame of content.frames) {
       if (!connected.has(frame.id)) {
-        warnings.push({ type: 'orphan_frame', message: `Frame "${frame.id}" has no relations`, location: frame.id });
+        warnings.push({
+          type: 'orphan_frame',
+          message: `Frame "${frame.id}" has no relations`,
+          location: frame.id,
+        });
       }
     }
   }
@@ -74,7 +98,11 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   // 6. Low confidence
   for (const frame of content.frames) {
     if (frame.confidence !== undefined && frame.confidence < 0.5) {
-      warnings.push({ type: 'low_confidence', message: `Frame "${frame.id}" confidence: ${frame.confidence}`, location: frame.id });
+      warnings.push({
+        type: 'low_confidence',
+        message: `Frame "${frame.id}" confidence: ${frame.confidence}`,
+        location: frame.id,
+      });
     }
   }
 
@@ -99,7 +127,11 @@ function checkSlotRefs(
     if ('ref' in value && typeof (value as { ref: unknown }).ref === 'string') {
       const ref = (value as { ref: string }).ref;
       if (!frameIds.has(ref)) {
-        errors.push({ type: 'broken_ref', message: `"${path}" references "${ref}" — no such frame`, location: path });
+        errors.push({
+          type: 'broken_ref',
+          message: `"${path}" references "${ref}" — no such frame`,
+          location: path,
+        });
       }
     }
     if ('slots' in value && typeof (value as { slots: unknown }).slots === 'object') {
