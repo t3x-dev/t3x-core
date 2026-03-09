@@ -1,0 +1,179 @@
+/**
+ * T3X Semantic Frame Types
+ *
+ * Zero dependencies on other @t3x/core modules.
+ * This module can be extracted to a standalone package at any time.
+ */
+
+// ── Slot Values ──
+
+/** Reference to another Frame by id */
+export interface SlotRef {
+  ref: string;
+}
+
+/** Inline nested Frame (no id, not top-level) */
+export interface InlineFrame {
+  type: string;
+  slots: Record<string, SlotValue>;
+}
+
+/** The 5 slot value types (+ array) */
+export type SlotValue =
+  | string
+  | number
+  | SlotRef
+  | InlineFrame
+  | SlotValue[];
+
+// ── Frame ──
+
+export interface Frame {
+  /** Unique id within a commit, format: f_001, f_002, ... */
+  id: string;
+  /** Semantic type, LLM-named, snake_case */
+  type: string;
+  /** Key-value slots, at least one required */
+  slots: Record<string, SlotValue>;
+  /** Source turn reference (optional) */
+  source?: string;
+  /** Extraction confidence 0-1 (optional) */
+  confidence?: number;
+}
+
+// ── Relation ──
+
+export const FRAME_RELATION_TYPES = [
+  'causes',
+  'conditions',
+  'contrasts',
+  'elaborates',
+  'follows',
+  'depends',
+] as const;
+
+export type FrameRelationType = (typeof FRAME_RELATION_TYPES)[number];
+
+export interface Relation {
+  from: string;
+  to: string;
+  type: FrameRelationType;
+  confidence?: number;
+}
+
+// ── SemanticContent (a commit's semantic payload) ──
+
+export interface SemanticContent {
+  frames: Frame[];
+  relations: Relation[];
+}
+
+// ── Delta (incremental changes) ──
+
+export type FrameChange =
+  | { action: 'add'; frame: Frame }
+  | { action: 'update'; target: string; slots: Record<string, SlotValue | null> }
+  | { action: 'remove'; target: string; reason?: string };
+
+export interface Delta {
+  changes: FrameChange[];
+  new_relations?: Relation[];
+  remove_relations?: Relation[];
+}
+
+// ── Delta Log ──
+
+export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit';
+
+export interface DeltaLogEntry {
+  id: string;
+  source: DeltaSource;
+  turn_hash?: string;
+  delta: Delta;
+  created_at: string;
+}
+
+// ── Validation ──
+
+export interface ValidationError {
+  type: 'broken_ref' | 'broken_relation' | 'duplicate_id' | 'self_relation' | 'cycle';
+  message: string;
+  location: string;
+}
+
+export interface ValidationWarning {
+  type: 'orphan_frame' | 'low_confidence';
+  message: string;
+  location: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+}
+
+// ── Diff ──
+
+export interface SlotDiff {
+  key: string;
+  type: 'added' | 'removed' | 'changed';
+  oldValue?: SlotValue;
+  newValue?: SlotValue;
+  /** Word-level diff for long text values (injected externally) */
+  wordDiff?: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
+}
+
+export interface FrameDiff {
+  /** Frames present in both, with identical slots */
+  identical: Frame[];
+  /** Frames present in both, with slot-level differences */
+  modified: Array<{
+    frameId: string;
+    sourceFrame: Frame;
+    targetFrame: Frame;
+    slotDiffs: SlotDiff[];
+  }>;
+  /** Frames only in source (removed) */
+  onlyInSource: Frame[];
+  /** Frames only in target (added) */
+  onlyInTarget: Frame[];
+  /** Relation changes */
+  relationsAdded: Relation[];
+  relationsRemoved: Relation[];
+}
+
+// ── Merge ──
+
+export interface SlotConflict {
+  key: string;
+  baseValue?: SlotValue;
+  sourceValue?: SlotValue;
+  targetValue?: SlotValue;
+}
+
+export type MergeResolution = 'source' | 'target' | 'both' | { edit: Frame };
+
+export interface FrameMergeResult {
+  /** Auto-kept: identical in source and target */
+  autoKept: Frame[];
+  /** Conflicts: same frame modified differently in source and target */
+  conflicts: Array<{
+    frameId: string;
+    baseFrame?: Frame;
+    sourceFrame: Frame;
+    targetFrame: Frame;
+    slotConflicts: SlotConflict[];
+  }>;
+  /** Only in source: user decides keep/discard */
+  onlyInSource: Frame[];
+  /** Only in target: user decides keep/discard */
+  onlyInTarget: Frame[];
+  /** Relation conflicts */
+  relationsOnlyInSource: Relation[];
+  relationsOnlyInTarget: Relation[];
+  relationsInBoth: Relation[];
+}
+
+/** Word diff function interface — injected, not imported */
+export type WordDiffFn = (a: string, b: string) => Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;

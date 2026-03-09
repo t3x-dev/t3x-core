@@ -282,6 +282,46 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
+// ═══════════════════════════════════════════════════════════════════════════
+// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
+// @see docs/plans/core-engine/00-index.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyDelta,
+  buildDraft,
+  DeltaSchema,
+  frameDiff,
+  FRAME_RELATION_TYPES,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  prepareFrameMerge,
+  RelationSchema,
+  SemanticContentSchema,
+  SlotValueSchema,
+  validateIntegrity,
+} from './semantic';
+export type {
+  Delta,
+  DeltaLogEntry,
+  DeltaSource,
+  Frame,
+  FrameChange,
+  FrameDiff,
+  FrameMergeResult,
+  FrameRelationType,
+  InlineFrame,
+  MergeResolution,
+  Relation,
+  SemanticContent,
+  SlotConflict,
+  SlotDiff,
+  SlotRef,
+  SlotValue,
+  ValidationError as SemanticValidationError,
+  ValidationResult as SemanticValidationResult,
+  ValidationWarning as SemanticValidationWarning,
+  WordDiffFn,
+} from './semantic';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 export * from './storage';
