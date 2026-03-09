@@ -19,7 +19,7 @@ import {
   getDeltaLogEntry,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
-} from '@t3x/storage/pglite';
+} from '@t3x/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -43,10 +43,24 @@ const DeltaIdParam = z.object({
 
 const DeltaSourceSchema = z.enum(['llm_extraction', 'user_graph_edit', 'user_yaml_edit']);
 
+const FrameChangeSchema = z
+  .object({
+    action: z.enum(['add', 'update', 'remove']),
+  })
+  .passthrough();
+
+const RelationInputSchema = z
+  .object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    type: z.enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends']),
+  })
+  .passthrough();
+
 const DeltaSchema = z.object({
-  changes: z.array(z.any()),
-  new_relations: z.array(z.any()).optional(),
-  remove_relations: z.array(z.any()).optional(),
+  changes: z.array(FrameChangeSchema).min(1),
+  new_relations: z.array(RelationInputSchema).optional(),
+  remove_relations: z.array(RelationInputSchema).optional(),
 });
 
 const CreateDeltaRequest = z.object({
@@ -261,6 +275,16 @@ deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${conversationId}`
+      );
+    }
+
     const records = await listDeltaLogByConversation(db, conversationId);
 
     return c.json({ success: true as const, data: records.map(toApiDeltaEntry) }, 200);
@@ -276,6 +300,16 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${conversationId}`
+      );
+    }
+
     const records = await listDeltaLogByConversation(db, conversationId);
 
     // Convert storage records to DeltaLogEntry format for buildDraft
@@ -298,14 +332,14 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
 
 // DELETE /v1/conversations/:conversationId/deltas/:deltaId
 deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
-  const { deltaId } = c.req.valid('param');
+  const { conversationId, deltaId } = c.req.valid('param');
 
   try {
     const db = await getDB();
 
-    // Verify the entry exists before deleting
+    // Verify the entry exists and belongs to this conversation
     const existing = await getDeltaLogEntry(db, deltaId);
-    if (!existing) {
+    if (!existing || existing.conversationId !== conversationId) {
       return errorResponse(c, 'NOT_FOUND', `Delta log entry not found: ${deltaId}`);
     }
 

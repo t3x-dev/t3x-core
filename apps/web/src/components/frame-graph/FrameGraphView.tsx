@@ -51,15 +51,22 @@ function RelationTypeSelector({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
+  // Close on click outside or Escape key
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as HTMLElement)) {
         onCancel();
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [onCancel]);
 
   return (

@@ -20,7 +20,7 @@ import {
   findTurnsByConversation,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
-} from '@t3x/storage/pglite';
+} from '@t3x/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';

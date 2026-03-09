@@ -86,6 +86,8 @@ export {
   type AnchorType,
   // LLM Extraction
   buildExtractionPrompt,
+  // Frame Extraction (Phase 2)
+  buildFrameExtractionPrompt,
   // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   buildStyleSeed,
@@ -104,6 +106,12 @@ export {
   type ExtractorConfig,
   type Facet,
   type FacetType,
+  type FrameDeltaParseResult,
+  type FrameExtractionInput,
+  type FrameExtractionPromptResult,
+  type FrameExtractionResult,
+  type FrameExtractionTurn,
+  FrameExtractor,
   type FuzzyLocateResult,
   fuzzyLocate,
   type Keyword,
@@ -120,6 +128,7 @@ export {
   type PosTag,
   type PreferenceRelation,
   parseExtractionResponse,
+  parseFrameDelta,
   parseIncrementalResponse,
   type Ring1Output,
   type Ring2Output,
@@ -282,24 +291,6 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
-// ═══════════════════════════════════════════════════════════════════════════
-// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
-// @see docs/plans/core-engine/00-index.md
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  applyDelta,
-  buildDraft,
-  DeltaSchema,
-  frameDiff,
-  FRAME_RELATION_TYPES,
-  FrameRelationTypeSchema,
-  FrameSchema,
-  prepareFrameMerge,
-  RelationSchema,
-  SemanticContentSchema,
-  SlotValueSchema,
-  validateIntegrity,
-} from './semantic';
 export type {
   Delta,
   DeltaLogEntry,
@@ -321,6 +312,24 @@ export type {
   ValidationResult as SemanticValidationResult,
   ValidationWarning as SemanticValidationWarning,
   WordDiffFn,
+} from './semantic';
+// ═══════════════════════════════════════════════════════════════════════════
+// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
+// @see docs/plans/core-engine/00-index.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyDelta,
+  buildDraft,
+  DeltaSchema,
+  FRAME_RELATION_TYPES,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  frameDiff,
+  prepareFrameMerge,
+  RelationSchema,
+  SemanticContentSchema,
+  SlotValueSchema,
+  validateIntegrity,
 } from './semantic';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package

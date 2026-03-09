@@ -46,10 +46,16 @@ export class FrameExtractor {
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       // 2. Call LLM
-      const raw = await this.provider.generate(combinedPrompt, {
-        temperature: TEMPERATURE,
-        maxTokens: MAX_TOKENS,
-      });
+      let raw: string;
+      try {
+        raw = await this.provider.generate(combinedPrompt, {
+          temperature: TEMPERATURE,
+          maxTokens: MAX_TOKENS,
+        });
+      } catch (err) {
+        lastError = `LLM provider error: ${err instanceof Error ? err.message : String(err)}`;
+        continue;
+      }
 
       // 3. Parse delta
       const parseResult = parseFrameDelta(raw, input.snapshot);

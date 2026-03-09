@@ -1,4 +1,4 @@
-import type { Frame, FrameRelationType, Relation, SemanticContent, SlotValue } from '@t3x/core';
+import type { FrameRelationType, SemanticContent, SlotValue } from '@t3x/core';
 import type { Edge, Node } from '@xyflow/react';
 
 // ── Exported Types ──
@@ -50,13 +50,16 @@ export function semanticToFlowElements(content: SemanticContent): {
     },
   }));
 
-  const edges: Edge<RelationEdgeData>[] = content.relations.map((rel) => ({
-    id: `${rel.from}-${rel.to}-${rel.type}`,
-    source: rel.from,
-    target: rel.to,
-    type: 'relationEdge',
-    data: { relationType: rel.type },
-  }));
+  const frameIds = new Set(content.frames.map((f) => f.id));
+  const edges: Edge<RelationEdgeData>[] = content.relations
+    .filter((rel) => frameIds.has(rel.from) && frameIds.has(rel.to))
+    .map((rel) => ({
+      id: `${rel.from}-${rel.to}-${rel.type}`,
+      source: rel.from,
+      target: rel.to,
+      type: 'relationEdge',
+      data: { relationType: rel.type },
+    }));
 
   return { nodes, edges };
 }
