@@ -771,6 +771,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add autopilot_config column to projects (Knowledge Autopilot)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS autopilot_config JSONB;
 
+    -- Migration: Add business_rules column to projects (Gate Business Rules)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS business_rules JSONB DEFAULT '[]';
+
     -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
     ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;
 
