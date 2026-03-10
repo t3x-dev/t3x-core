@@ -78,36 +78,36 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <ErrorBoundary>
-          <div className="flex min-h-screen bg-background">
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
-            >
-              Skip to content
-            </a>
-            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-            <main
-              id="main-content"
-              aria-label="Main content"
-              className={cn(
-                'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-                sidebarCollapsed ? 'ml-16' : 'ml-52'
-              )}
-            >
-              <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
-                {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
-                <NotificationBell />
-              </div>
-              <div className="flex flex-1 flex-col min-h-0">{children}</div>
-            </main>
-            <Toaster position="bottom-right" richColors closeButton />
-            <CommandPalette />
-            <KeyboardShortcutsDialog />
-            <WelcomeModal />
-            <OnboardingDialog />
-          </div>
-        </ErrorBoundary>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <div className="flex min-h-screen bg-background">
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
+          >
+            Skip to content
+          </a>
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          <main
+            id="main-content"
+            aria-label="Main content"
+            className={cn(
+              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
+              sidebarCollapsed ? 'ml-16' : 'ml-52'
+            )}
+          >
+            <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
+              {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
+              <NotificationBell />
+            </div>
+            <div className="flex flex-1 flex-col min-h-0">{children}</div>
+          </main>
+          <Toaster position="bottom-right" richColors closeButton />
+          <CommandPalette />
+          <KeyboardShortcutsDialog />
+          <WelcomeModal />
+          <OnboardingDialog />
+        </div>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }

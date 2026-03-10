@@ -16,6 +16,7 @@ interface GateQualityTabProps {
   snapshot: SemanticContent | null;
   onLocateFrame?: (frameId: string) => void;
   onSwitchToFrames?: () => void;
+  onGateResult?: (result: GateCheckResult) => void;
 }
 
 export function GateQualityTab({
@@ -23,6 +24,7 @@ export function GateQualityTab({
   snapshot,
   onLocateFrame,
   onSwitchToFrames,
+  onGateResult,
 }: GateQualityTabProps) {
   const [result, setResult] = useState<GateCheckResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,7 @@ export function GateQualityTab({
       const res = await gateCheck(snapshot, { conversation_id: conversationId });
       setResult(res);
       setLastCheckAt(new Date());
+      onGateResult?.(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gate check failed');
     } finally {

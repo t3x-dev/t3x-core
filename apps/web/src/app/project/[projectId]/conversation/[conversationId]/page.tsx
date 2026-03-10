@@ -16,6 +16,7 @@ import { PinButton } from '@/components/ui/PinButton';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import type { Conversation, Turn } from '@/lib/api';
 import { extractFrames, getConversation, getSemanticDraft, listTurns } from '@/lib/api';
+import type { GateCheckResult } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -80,6 +81,7 @@ function ConversationPageContent() {
   const [deltaState, setDeltaState] = useState<Record<string, 'added' | 'updated' | 'removed'>>({});
   const [updatedSlots, setUpdatedSlots] = useState<Record<string, string[]>>({});
   const [extracting, setExtracting] = useState(false);
+  const [gateResult, setGateResult] = useState<GateCheckResult | null>(null);
 
   // Load conversation and turns data
   useEffect(() => {
@@ -319,6 +321,18 @@ function ConversationPageContent() {
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Quality
+              {gateResult && (
+                <span
+                  className={cn(
+                    'ml-1 h-1.5 w-1.5 rounded-full',
+                    gateResult.passed
+                      ? 'bg-emerald-500'
+                      : gateResult.semantic?.issues?.some((i) => i.severity === 'error')
+                        ? 'bg-red-500'
+                        : 'bg-amber-500'
+                  )}
+                />
+              )}
             </button>
           </div>
           <div className="flex-1 overflow-auto">
@@ -340,6 +354,7 @@ function ConversationPageContent() {
                 conversationId={conversationId}
                 snapshot={semanticSnapshot}
                 onSwitchToFrames={() => setActiveTab('frames')}
+                onGateResult={setGateResult}
               />
             )}
           </div>
