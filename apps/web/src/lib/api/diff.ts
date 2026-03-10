@@ -123,3 +123,37 @@ export async function getMergeSuggestion(
   const data = await handleResponse<{ suggestion: MergeSuggestion | null }>(res);
   return data.suggestion;
 }
+
+// ============================================================================
+// Frame Merge Suggestions
+// ============================================================================
+
+export interface FrameMergeSuggestion {
+  slots: Record<string, unknown>;
+  reasoning: string;
+}
+
+/**
+ * Get AI merge suggestion for a conflicting semantic frame in a merge draft
+ */
+export async function getFrameMergeSuggestion(
+  mergeId: string,
+  frameId: string,
+  sourceFrame: { type: string; slots: Record<string, unknown> },
+  targetFrame: { type: string; slots: Record<string, unknown> }
+): Promise<FrameMergeSuggestion | null> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/merge/drafts/${encodeURIComponent(mergeId)}/suggest-frame/${encodeURIComponent(frameId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_frame: sourceFrame,
+        target_frame: targetFrame,
+      }),
+    },
+    30_000
+  );
+  const data = await handleResponse<{ suggestion: FrameMergeSuggestion | null }>(res);
+  return data.suggestion;
+}

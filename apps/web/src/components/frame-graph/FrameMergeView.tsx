@@ -9,11 +9,21 @@ import type {
   SlotValue,
 } from '@t3x/core';
 import { prepareFrameMerge } from '@t3x/core';
-import { AlertTriangle, Check, ChevronDown, ChevronRight, GitMerge, Plus } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  GitMerge,
+  Loader2,
+  Plus,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { type FrameMergeSuggestion, getFrameMergeSuggestion } from '@/lib/api/diff';
 import { cn } from '@/lib/utils';
 
 // ── Props ──
@@ -23,6 +33,8 @@ export interface FrameMergeViewProps {
   source: SemanticContent;
   target: SemanticContent;
   onResolved: (result: SemanticContent) => void;
+  /** Merge draft ID – enables the AI suggestion button on conflict cards */
+  mergeId?: string;
   className?: string;
 }
 
@@ -36,6 +48,18 @@ interface ConflictResolution {
 }
 
 // ── Helpers ──
+
+/** Canonical JSON for order-independent comparison of slot values. */
+function canonicalJson(v: unknown): string {
+  if (v === undefined) return '"__undefined__"';
+  if (v === null) return 'null';
+  if (typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  const sorted = Object.keys(v as Record<string, unknown>)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonicalJson((v as Record<string, unknown>)[k])}`);
+  return `{${sorted.join(',')}}`;
+}
 
 function toTitleCase(s: string): string {
   return s
@@ -126,26 +150,77 @@ function ConflictCard({
   conflict,
   resolution,
   onSlotChoose,
+  mergeId,
 }: {
   conflict: FrameMergeResult['conflicts'][number];
   resolution: ConflictResolution;
   onSlotChoose: (frameId: string, slotKey: string, choice: SlotChoice) => void;
+  mergeId?: string;
 }) {
   const [expanded, setExpanded] = useState(true);
   const { frameId, sourceFrame, targetFrame, slotConflicts } = conflict;
+
+  // AI suggestion state
+  const [suggestion, setSuggestion] = useState<FrameMergeSuggestion | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   // Find agreed-upon slots (present in both, not conflicting)
   const conflictKeys = new Set(slotConflicts.map((c) => c.key));
   const allKeys = new Set([...Object.keys(sourceFrame.slots), ...Object.keys(targetFrame.slots)]);
   const agreedSlots: Array<{ key: string; value: SlotValue }> = [];
   for (const key of allKeys) {
-    if (!conflictKeys.has(key) && key in sourceFrame.slots) {
-      agreedSlots.push({ key, value: sourceFrame.slots[key] });
+    if (!conflictKeys.has(key)) {
+      const value = sourceFrame.slots[key] ?? targetFrame.slots[key];
+      if (value !== undefined) {
+        agreedSlots.push({ key, value });
+      }
     }
   }
 
   const resolvedCount = slotConflicts.filter((c) => resolution.slotChoices[c.key]).length;
   const allResolved = resolvedCount === slotConflicts.length;
+
+  const handleSuggest = useCallback(async () => {
+    if (!mergeId) return;
+    setSuggestLoading(true);
+    setSuggestError(null);
+    try {
+      const result = await getFrameMergeSuggestion(
+        mergeId,
+        frameId,
+        { type: sourceFrame.type, slots: sourceFrame.slots },
+        { type: targetFrame.type, slots: targetFrame.slots }
+      );
+      setSuggestion(result);
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : 'Failed to get suggestion');
+    } finally {
+      setSuggestLoading(false);
+    }
+  }, [mergeId, frameId, sourceFrame, targetFrame]);
+
+  const handleApplySuggestion = useCallback(() => {
+    if (!suggestion) return;
+    // Apply each suggested slot value by choosing source or target,
+    // based on which side matches the suggestion.
+    // Slots where the AI suggests a novel merged value are skipped
+    // (the user must choose manually).
+    for (const sc of slotConflicts) {
+      const suggestedValue = suggestion.slots[sc.key];
+      if (suggestedValue === undefined) continue;
+
+      const matchesSource = canonicalJson(suggestedValue) === canonicalJson(sc.sourceValue);
+      const matchesTarget = canonicalJson(suggestedValue) === canonicalJson(sc.targetValue);
+
+      if (matchesTarget) {
+        onSlotChoose(frameId, sc.key, 'target');
+      } else if (matchesSource) {
+        onSlotChoose(frameId, sc.key, 'source');
+      }
+      // Novel merged value — skip (user must choose manually)
+    }
+  }, [suggestion, slotConflicts, frameId, onSlotChoose]);
 
   return (
     <div
@@ -193,6 +268,82 @@ function ConflictCard({
               onChoose={(key, choice) => onSlotChoose(frameId, key, choice)}
             />
           ))}
+
+          {/* AI Suggestion */}
+          {mergeId && (
+            <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+              {!suggestion && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSuggest}
+                  disabled={suggestLoading}
+                  className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                >
+                  {suggestLoading ? (
+                    <Loader2 size={12} className="animate-spin mr-1" />
+                  ) : (
+                    <Sparkles size={12} className="mr-1" />
+                  )}
+                  AI Suggestion
+                </Button>
+              )}
+              {suggestError && <p className="text-xs text-red-500 mt-1">{suggestError}</p>}
+              {suggestion && (
+                <div className="text-xs space-y-2 p-2 rounded bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30">
+                  <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                    <Sparkles size={10} /> AI Suggestion
+                  </div>
+                  {/* Show suggested slot values (only for conflicting slots) */}
+                  <div className="space-y-0.5">
+                    {slotConflicts.map((sc) => {
+                      const value = suggestion.slots[sc.key];
+                      if (value === undefined) return null;
+                      const matchesSource = canonicalJson(value) === canonicalJson(sc.sourceValue);
+                      const matchesTarget = canonicalJson(value) === canonicalJson(sc.targetValue);
+                      const isNovel = !matchesSource && !matchesTarget;
+                      return (
+                        <div
+                          key={sc.key}
+                          className="flex items-start gap-1.5 font-mono text-foreground"
+                        >
+                          <span className="text-zinc-500 dark:text-zinc-400 shrink-0">
+                            {sc.key}:
+                          </span>
+                          <span>{formatSlotValue(value as SlotValue)}</span>
+                          {matchesSource && (
+                            <span className="text-[10px] text-blue-500 font-sans">(source)</span>
+                          )}
+                          {matchesTarget && (
+                            <span className="text-[10px] text-emerald-500 font-sans">(target)</span>
+                          )}
+                          {isNovel && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-sans">
+                              (merged — choose manually)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {suggestion.reasoning && (
+                    <div className="text-zinc-500 dark:text-zinc-400 italic">
+                      {suggestion.reasoning}
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleApplySuggestion}
+                    className="text-xs mt-1 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                  >
+                    <Check size={12} className="mr-1" />
+                    Apply Suggestion
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -306,6 +457,7 @@ export function FrameMergeView({
   source,
   target,
   onResolved,
+  mergeId,
   className,
 }: FrameMergeViewProps) {
   // Compute merge result
@@ -511,6 +663,7 @@ export function FrameMergeView({
               conflict={c}
               resolution={conflictResolutions[c.frameId]}
               onSlotChoose={handleSlotChoose}
+              mergeId={mergeId}
             />
           ))}
         </div>

@@ -55,6 +55,25 @@ export interface VerifyResult {
     parent_not_found: string[];
     other: string[];
   };
+  merkle_roots?: Record<string, string>;
+  merkle_mismatches?: string[];
+  truncated?: boolean;
+  verified_at: string;
+}
+
+/** Quick Merkle root verification result */
+export interface QuickVerifyResult {
+  valid: boolean;
+  checked: number;
+  mismatches: string[];
+  missing_roots: string[];
+  verified_at: string;
+}
+
+/** Merkle root backfill result */
+export interface BackfillResult {
+  updated: number;
+  remaining: boolean;
   verified_at: string;
 }
 
@@ -64,4 +83,21 @@ export interface VerifyResult {
 export async function verifyProjectHashChain(projectId: string): Promise<VerifyResult> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}/verify`);
   return handleResponse<VerifyResult>(res);
+}
+
+/** Quick verify — checks recent commits' Merkle roots (millisecond-level) */
+export async function quickVerifyProject(projectId: string): Promise<QuickVerifyResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/verify/quick`
+  );
+  return handleResponse<QuickVerifyResult>(res);
+}
+
+/** Backfill missing Merkle roots (batch, max 10K) */
+export async function backfillMerkle(projectId: string): Promise<BackfillResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/backfill-merkle`,
+    { method: 'POST' }
+  );
+  return handleResponse<BackfillResult>(res);
 }

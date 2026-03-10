@@ -1,5 +1,6 @@
 import type { FrameRelationType, SemanticContent, SlotValue } from '@t3x/core';
 import type { Edge, Node } from '@xyflow/react';
+import type { GateCheckResult } from '@/lib/api/frames';
 
 // ── Exported Types ──
 
@@ -10,6 +11,10 @@ export interface FrameNodeData {
   slots: Record<string, SlotValue>;
   source?: string;
   confidence?: number;
+  // Gate status fields
+  gateStatus?: 'passed' | 'warning' | 'error' | 'unchecked';
+  gateIssueCount?: number;
+  gateIssueSummary?: string;
   [key: string]: unknown;
 }
 
@@ -17,6 +22,8 @@ export interface RelationEdgeData {
   relationType: FrameRelationType;
   /** When true, the edge plays a stroke-dashoffset draw animation */
   isNew?: boolean;
+  /** Relation confidence score (0–1). Affects opacity and dash style. */
+  confidence?: number;
   [key: string]: unknown;
 }
 
@@ -60,7 +67,7 @@ export function semanticToFlowElements(content: SemanticContent): {
       source: rel.from,
       target: rel.to,
       type: 'relationEdge',
-      data: { relationType: rel.type },
+      data: { relationType: rel.type, confidence: rel.confidence },
     }));
 
   return { nodes, edges };
@@ -132,4 +139,54 @@ export function filterByZoomLevel(
     }
   }
   return filterContent(content, visible);
+}
+
+// ── Gate result mapping ──
+
+export function mapGateResultsToNodes(
+  nodes: Node<FrameNodeData>[],
+  gateResult: GateCheckResult | null
+): Node<FrameNodeData>[] {
+  if (!gateResult?.semantic?.issues) return nodes;
+
+  const issuesByFrame = new Map<
+    string,
+    { count: number; maxSeverity: 'error' | 'warning' | 'info'; summary: string }
+  >();
+  for (const issue of gateResult.semantic.issues) {
+    if (!issue.frame_id) continue;
+    const severity = issue.severity;
+    const existing = issuesByFrame.get(issue.frame_id);
+    if (!existing) {
+      issuesByFrame.set(issue.frame_id, {
+        count: 1,
+        maxSeverity: severity,
+        summary: `${issue.dimension}: ${issue.description}`,
+      });
+    } else {
+      existing.count++;
+      if (severity === 'error') existing.maxSeverity = 'error';
+      else if (severity === 'warning' && existing.maxSeverity !== 'error')
+        existing.maxSeverity = 'warning';
+    }
+  }
+
+  return nodes.map((node) => {
+    const frameIssues = issuesByFrame.get(node.id);
+    if (!frameIssues) {
+      return { ...node, data: { ...node.data, gateStatus: 'passed' as const } };
+    }
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        gateStatus:
+          frameIssues.maxSeverity === 'info'
+            ? ('passed' as const)
+            : (frameIssues.maxSeverity as 'warning' | 'error'),
+        gateIssueCount: frameIssues.count,
+        gateIssueSummary: frameIssues.summary,
+      },
+    };
+  });
 }

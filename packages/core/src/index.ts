@@ -264,6 +264,8 @@ export {
 export {
   executeMerge,
   executeThreeWayMerge,
+  type FrameMergeInput,
+  type FrameMergeSuggestion,
   type Merge2WayResult,
   type MergeCandidate,
   type MergeSimilarPair,
@@ -271,6 +273,7 @@ export {
   prepareMerge,
   prepareMergeWithEmbeddings,
   prepareThreeWayMerge,
+  suggestFrameMerge,
   suggestMerge,
   type ThreeWayConflict,
   type ThreeWayMergeResult,
