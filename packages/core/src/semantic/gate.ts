@@ -9,6 +9,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import type {
+  CoverageResult,
   DimensionResult,
   GateDimension,
   SemanticContent,
@@ -217,6 +218,86 @@ function buildDegradedResult(errorMessage: string): SemanticGateResult {
   };
 }
 
+// ── Coverage Prompt ──
+
+/**
+ * Build the system + user prompt for coverage checking.
+ */
+export function buildCoveragePrompt(
+  turns: { role: string; content: string }[],
+  content: SemanticContent
+): { systemPrompt: string; userPrompt: string } {
+  const systemPrompt = `你是一个语义提取覆盖度审查员。给你一段原始对话和从中提取的 Frame JSON。
+
+你的任务：检查原始对话中是否有重要信息被遗漏，没有被任何 Frame 覆盖。
+
+## 判断标准
+- 重要信息：意图、决定、事实、约束、数字、时间、人名、具体需求
+- 不重要（可忽略）：寒暄、重复、语气词、过程性讨论（如"嗯"、"好的"、"让我想想"）
+
+## 输出格式
+严格按照以下 JSON 格式输出（不要包含其他内容）：
+
+\`\`\`json
+{
+  "coverage_ratio": 0.85,
+  "uncovered_segments": ["原文中未被覆盖的重要文本片段1", "原文中未被覆盖的重要文本片段2"]
+}
+\`\`\`
+
+- coverage_ratio: 0-1，重要信息被覆盖的比例
+- uncovered_segments: 未被覆盖的重要原文片段（直接引用原文）
+- 如果全部覆盖，返回 coverage_ratio: 1.0, uncovered_segments: []`;
+
+  const turnsText = turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
+
+  const framesText = content.frames
+    .map((f) => {
+      const slotsStr = Object.entries(f.slots)
+        .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`)
+        .join('\n');
+      return `  - id: ${f.id}\n    type: ${f.type}\n${slotsStr}`;
+    })
+    .join('\n');
+
+  const userPrompt = `原始对话：
+${turnsText}
+
+提取的 Frames：
+${framesText}
+
+请判断覆盖度并输出 JSON。`;
+
+  return { systemPrompt, userPrompt };
+}
+
+// ── Coverage Parser ──
+
+/**
+ * Parse the LLM response into a CoverageResult.
+ * Returns zero coverage if parsing fails.
+ */
+export function parseCoverageResponse(raw: string): CoverageResult {
+  try {
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+    const parsed = JSON.parse(jsonStr);
+
+    const ratio =
+      typeof parsed.coverage_ratio === 'number'
+        ? Math.max(0, Math.min(1, parsed.coverage_ratio))
+        : 0;
+
+    const segments = Array.isArray(parsed.uncovered_segments)
+      ? parsed.uncovered_segments.filter((s: unknown) => typeof s === 'string')
+      : [];
+
+    return { coverage_ratio: ratio, uncovered_segments: segments };
+  } catch {
+    return { coverage_ratio: 0, uncovered_segments: [] };
+  }
+}
+
 // ── SemanticGate Class ──
 
 /**
@@ -253,6 +334,31 @@ export class SemanticGate {
       return parseSemanticGateResponse(raw);
     } catch {
       return buildDegradedResult('LLM provider call failed');
+    }
+  }
+
+  /**
+   * Check coverage of extracted frames against original conversation.
+   *
+   * @param turns - The original conversation turns
+   * @param content - The extracted semantic content (frames + relations)
+   * @returns Coverage result with ratio and uncovered segments
+   */
+  async checkCoverage(
+    turns: { role: string; content: string }[],
+    content: SemanticContent
+  ): Promise<CoverageResult> {
+    const { systemPrompt, userPrompt } = buildCoveragePrompt(turns, content);
+    const fullPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+    try {
+      const raw = await this.provider.generate(fullPrompt, {
+        temperature: 0.1,
+        maxTokens: 1500,
+      });
+      return parseCoverageResponse(raw);
+    } catch {
+      return { coverage_ratio: 0, uncovered_segments: [] };
     }
   }
 }
