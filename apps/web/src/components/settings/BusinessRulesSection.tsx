@@ -40,6 +40,13 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
     };
   }, [projectId]);
 
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
   // Debounced save
   const saveRules = useCallback(
     (updated: BusinessRuleConfig[]) => {
@@ -69,7 +76,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
 
   const handleAddRule = useCallback(() => {
     const newRule: BusinessRuleConfig = {
-      id: `rule_${Date.now()}`,
+      id: `rule_${crypto.randomUUID().slice(0, 8)}`,
       type: 'llm',
       prompt: '',
       message: 'Rule violation detected',
@@ -95,7 +102,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
 
   const handleAddFromTemplate = useCallback(
     (rule: BusinessRuleConfig) => {
-      const updated = [...rules, { ...rule, id: `rule_${Date.now()}` }];
+      const updated = [...rules, { ...rule, id: `rule_${crypto.randomUUID().slice(0, 8)}` }];
       setRules(updated);
       saveRules(updated);
     },

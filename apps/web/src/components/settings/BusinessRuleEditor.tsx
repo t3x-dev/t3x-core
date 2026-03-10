@@ -64,12 +64,15 @@ export function BusinessRuleEditor({ rule: initial, onSave, onCancel }: Business
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
       onClick={onCancel}
-      onKeyDown={undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onCancel();
+      }}
     >
       <div
         className="bg-background rounded-lg border shadow-lg w-[520px] max-w-[90vw] max-h-[85vh] overflow-auto"
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={undefined}
       >
         <div className="px-5 py-4 border-b">
           <h3 className="text-sm font-semibold">

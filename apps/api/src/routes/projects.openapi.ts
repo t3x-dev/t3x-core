@@ -10,7 +10,9 @@ import {
   deleteProject,
   findProjects,
   findProjectWithStats,
+  getBusinessRules,
   insertProject,
+  putBusinessRules,
   updateProject,
   verifyHashChain,
   verifyMerkleRoots,
@@ -679,5 +681,118 @@ projectRoutes.openapi(backfillMerkleRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'BACKFILL_FAILED', message } }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Business Rules
+// ═══════════════════════════════════════════════════════════════════════════
+
+const BusinessRuleSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['rule', 'llm']),
+  rule: z.string().optional(),
+  prompt: z.string().optional(),
+  message: z.string().optional(),
+  severity: z.enum(['error', 'warning']),
+});
+
+const getBusinessRulesRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{id}/business-rules',
+  tags: ['Projects'],
+  summary: 'Get project business rules',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Business rules',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ rules: z.array(BusinessRuleSchema) })),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+projectRoutes.openapi(getBusinessRulesRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  try {
+    const db = await getDB();
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+    const rules = await getBusinessRules(db, id);
+    return c.json({ success: true as const, data: { rules } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'GET_RULES_FAILED', message } }, 500);
+  }
+});
+
+const putBusinessRulesRoute = createRoute({
+  method: 'put',
+  path: '/v1/projects/{id}/business-rules',
+  tags: ['Projects'],
+  summary: 'Update project business rules',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ rules: z.array(BusinessRuleSchema) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated business rules',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ rules: z.array(BusinessRuleSchema) })),
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+projectRoutes.openapi(putBusinessRulesRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const { rules } = c.req.valid('json');
+  try {
+    const db = await getDB();
+    const project = await findProjectWithStats(db, id);
+    if (!project) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+        },
+        404
+      );
+    }
+    const updated = await putBusinessRules(db, id, rules);
+    return c.json({ success: true as const, data: { rules: updated } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'PUT_RULES_FAILED', message } }, 500);
   }
 });

@@ -374,8 +374,12 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
                       size="sm"
                       className="h-6 text-xs"
                       onClick={async () => {
-                        await backfillMerkle(projectId);
-                        handleQuickVerify();
+                        try {
+                          await backfillMerkle(projectId);
+                          await handleQuickVerify();
+                        } catch {
+                          // silently ignore — user can retry
+                        }
                       }}
                     >
                       Backfill
