@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/storage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "T3X Storage - PostgreSQL persistence layer with Drizzle ORM",
   "license": "MIT",
   "main": "dist/index.js",
@@ -76,7 +76,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/t3x.git",
+    "url": "https://github.com/t3x-dev/t3x.git",
     "directory": "packages/storage"
   },
   "publishConfig": {
