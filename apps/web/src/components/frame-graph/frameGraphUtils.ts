@@ -22,6 +22,8 @@ export interface RelationEdgeData {
   relationType: FrameRelationType;
   /** When true, the edge plays a stroke-dashoffset draw animation */
   isNew?: boolean;
+  /** Relation confidence score (0–1). Affects opacity and dash style. */
+  confidence?: number;
   [key: string]: unknown;
 }
 
@@ -65,7 +67,7 @@ export function semanticToFlowElements(content: SemanticContent): {
       source: rel.from,
       target: rel.to,
       type: 'relationEdge',
-      data: { relationType: rel.type },
+      data: { relationType: rel.type, confidence: rel.confidence },
     }));
 
   return { nodes, edges };

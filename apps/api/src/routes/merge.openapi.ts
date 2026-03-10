@@ -12,7 +12,7 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input, MergeSummaryData } from '@t3x/core';
+import type { CreateCommitV4Input, MergeSummaryData, SlotValue } from '@t3x/core';
 import {
   executeMerge,
   type FrameMergeInput,
@@ -1111,11 +1111,11 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   const input: FrameMergeInput = {
     sourceFrame: {
       type: body.source_frame.type,
-      slots: body.source_frame.slots as Record<string, never>,
+      slots: body.source_frame.slots as Record<string, SlotValue>,
     },
     targetFrame: {
       type: body.target_frame.type,
-      slots: body.target_frame.slots as Record<string, never>,
+      slots: body.target_frame.slots as Record<string, SlotValue>,
     },
     context: body.context,
   };

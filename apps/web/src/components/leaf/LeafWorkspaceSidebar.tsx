@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
+  BookOpen,
   CheckCircle,
   ChevronDown,
   Loader2,
@@ -11,13 +12,14 @@ import {
   Wrench,
 } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AssertionsSection } from '@/components/leaf/AssertionsSection';
 import { ConstraintsSection } from '@/components/leaf/ConstraintsSection';
 import { LeafConstraintSourceContext } from '@/components/leaf/LeafConstraintSourceContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Assertion, Constraint, Leaf } from '@/lib/api';
+import { listLeavesByProject } from '@/lib/api/leaves';
 import { cn } from '@/lib/utils';
 import type { SentenceWithSource } from '@/types/sourceContext';
 
@@ -230,6 +232,15 @@ export function LeafWorkspaceSidebar({
           }
         />
       </SidebarSection>
+
+      {/* Project Lessons */}
+      <SidebarSection
+        title="Project Lessons"
+        icon={<BookOpen className="h-3.5 w-3.5 text-[var(--accent-amber)]" />}
+        defaultOpen={false}
+      >
+        <ProjectLessons projectId={leaf.project_id} />
+      </SidebarSection>
     </aside>
   );
 }
@@ -294,5 +305,96 @@ function getRunnerBadge(assertions: Assertion[] | null | undefined): React.React
     <span className="rounded-full bg-[var(--status-info-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--status-info)] border border-[var(--status-info)]/25">
       {assertions.length} assertion{assertions.length !== 1 ? 's' : ''}
     </span>
+  );
+}
+
+// ============================================================================
+// Project Lessons — aggregated failed-assertion lessons across all leaves
+// ============================================================================
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const diffMs = Date.now() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function ProjectLessons({ projectId }: { projectId: string }) {
+  const [lessons, setLessons] = useState<
+    Array<{ lesson: string; count: number; lastSeen: string }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const leaves = await listLeavesByProject(projectId);
+        const lessonMap = new Map<string, { count: number; lastSeen: string }>();
+        for (const leaf of leaves) {
+          for (const a of leaf.assertions ?? []) {
+            if (!a.passed && a.lesson) {
+              const existing = lessonMap.get(a.lesson);
+              if (existing) {
+                existing.count++;
+                if (leaf.created_at && leaf.created_at > existing.lastSeen) {
+                  existing.lastSeen = leaf.created_at;
+                }
+              } else {
+                lessonMap.set(a.lesson, { count: 1, lastSeen: leaf.created_at ?? '' });
+              }
+            }
+          }
+        }
+        if (!cancelled) {
+          setLessons(
+            [...lessonMap.entries()]
+              .map(([lesson, data]) => ({ lesson, ...data }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5)
+          );
+        }
+      } catch {
+        // Silently fail — lessons are non-critical
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  if (loading || lessons.length === 0) return null;
+
+  return (
+    <>
+      {lessons.map((l) => (
+        <div
+          key={l.lesson}
+          className="py-1.5 border-b border-[var(--stroke-divider)] last:border-0"
+        >
+          <p className="text-xs text-[var(--text-primary)]">{l.lesson}</p>
+          <span className="text-[10px] text-[var(--text-tertiary)]">
+            {l.count}&times; &middot; {formatTimeAgo(l.lastSeen)}
+          </span>
+        </div>
+      ))}
+      <p className="text-[10px] text-[var(--text-tertiary)] mt-2">
+        These lessons are injected into future generations automatically.
+      </p>
+      <a
+        href="/insights"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] mt-1 block"
+      >
+        View all in Insights ↗
+      </a>
+    </>
   );
 }

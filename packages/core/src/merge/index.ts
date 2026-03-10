@@ -12,6 +12,12 @@
 // Two-way merge functions
 export { executeMerge } from './executeMerge';
 export { prepareMerge, prepareMergeWithEmbeddings } from './prepareMerge';
+// Frame-level merge suggestion
+export {
+  type FrameMergeInput,
+  type FrameMergeSuggestion,
+  suggestFrameMerge,
+} from './suggestFrameMerge';
 // Smart merge suggestion (#10)
 export { suggestMerge } from './suggestMerge';
 // Three-way merge types

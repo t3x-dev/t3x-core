@@ -49,6 +49,18 @@ interface ConflictResolution {
 
 // ── Helpers ──
 
+/** Canonical JSON for order-independent comparison of slot values. */
+function canonicalJson(v: unknown): string {
+  if (v === undefined) return '"__undefined__"';
+  if (v === null) return 'null';
+  if (typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  const sorted = Object.keys(v as Record<string, unknown>)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonicalJson((v as Record<string, unknown>)[k])}`);
+  return `{${sorted.join(',')}}`;
+}
+
 function toTitleCase(s: string): string {
   return s
     .split('_')
@@ -158,8 +170,11 @@ function ConflictCard({
   const allKeys = new Set([...Object.keys(sourceFrame.slots), ...Object.keys(targetFrame.slots)]);
   const agreedSlots: Array<{ key: string; value: SlotValue }> = [];
   for (const key of allKeys) {
-    if (!conflictKeys.has(key) && key in sourceFrame.slots) {
-      agreedSlots.push({ key, value: sourceFrame.slots[key] });
+    if (!conflictKeys.has(key)) {
+      const value = sourceFrame.slots[key] ?? targetFrame.slots[key];
+      if (value !== undefined) {
+        agreedSlots.push({ key, value });
+      }
     }
   }
 
@@ -188,23 +203,22 @@ function ConflictCard({
   const handleApplySuggestion = useCallback(() => {
     if (!suggestion) return;
     // Apply each suggested slot value by choosing source or target,
-    // based on which side matches the suggestion (or default to source)
+    // based on which side matches the suggestion.
+    // Slots where the AI suggests a novel merged value are skipped
+    // (the user must choose manually).
     for (const sc of slotConflicts) {
       const suggestedValue = suggestion.slots[sc.key];
       if (suggestedValue === undefined) continue;
 
-      // Compare suggested value to source and target to determine the choice
-      const matchesSource = JSON.stringify(suggestedValue) === JSON.stringify(sc.sourceValue);
-      const matchesTarget = JSON.stringify(suggestedValue) === JSON.stringify(sc.targetValue);
+      const matchesSource = canonicalJson(suggestedValue) === canonicalJson(sc.sourceValue);
+      const matchesTarget = canonicalJson(suggestedValue) === canonicalJson(sc.targetValue);
 
       if (matchesTarget) {
         onSlotChoose(frameId, sc.key, 'target');
       } else if (matchesSource) {
         onSlotChoose(frameId, sc.key, 'source');
-      } else {
-        // Default to source when AI suggests a value that matches neither exactly
-        onSlotChoose(frameId, sc.key, 'source');
       }
+      // Novel merged value — skip (user must choose manually)
     }
   }, [suggestion, slotConflicts, frameId, onSlotChoose]);
 
@@ -280,14 +294,37 @@ function ConflictCard({
                   <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
                     <Sparkles size={10} /> AI Suggestion
                   </div>
-                  {/* Show suggested slot values */}
+                  {/* Show suggested slot values (only for conflicting slots) */}
                   <div className="space-y-0.5">
-                    {Object.entries(suggestion.slots).map(([key, value]) => (
-                      <div key={key} className="flex items-start gap-1.5 font-mono text-foreground">
-                        <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{key}:</span>
-                        <span>{formatSlotValue(value as SlotValue)}</span>
-                      </div>
-                    ))}
+                    {slotConflicts.map((sc) => {
+                      const value = suggestion.slots[sc.key];
+                      if (value === undefined) return null;
+                      const matchesSource = canonicalJson(value) === canonicalJson(sc.sourceValue);
+                      const matchesTarget = canonicalJson(value) === canonicalJson(sc.targetValue);
+                      const isNovel = !matchesSource && !matchesTarget;
+                      return (
+                        <div
+                          key={sc.key}
+                          className="flex items-start gap-1.5 font-mono text-foreground"
+                        >
+                          <span className="text-zinc-500 dark:text-zinc-400 shrink-0">
+                            {sc.key}:
+                          </span>
+                          <span>{formatSlotValue(value as SlotValue)}</span>
+                          {matchesSource && (
+                            <span className="text-[10px] text-blue-500 font-sans">(source)</span>
+                          )}
+                          {matchesTarget && (
+                            <span className="text-[10px] text-emerald-500 font-sans">(target)</span>
+                          )}
+                          {isNovel && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-sans">
+                              (merged — choose manually)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   {suggestion.reasoning && (
                     <div className="text-zinc-500 dark:text-zinc-400 italic">

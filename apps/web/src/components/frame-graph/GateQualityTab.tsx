@@ -11,10 +11,11 @@ import { cn } from '@/lib/utils';
 import { GateCheckProgress } from './GateCheckProgress';
 import { GateDimensionBar } from './GateDimensionBar';
 import { GateIssueCard } from './GateIssueCard';
+import { QualityStrip } from './QualityStrip';
 
 interface GateQualityTabProps {
   conversationId: string;
-  projectId?: string;
+  projectId: string;
   snapshot: SemanticContent | null;
   onLocateFrame?: (frameId: string) => void;
   onSwitchToFrames?: () => void;
@@ -126,13 +127,14 @@ export function GateQualityTab({
     }
   }
 
-  const summaryColor = !semanticScore
-    ? 'bg-muted'
-    : semanticScore >= 0.9
-      ? 'bg-emerald-50 dark:bg-emerald-950/20'
-      : semanticScore >= 0.7
-        ? 'bg-amber-50 dark:bg-amber-950/20'
-        : 'bg-red-50 dark:bg-red-950/20';
+  const summaryColor =
+    semanticScore == null
+      ? 'bg-muted'
+      : semanticScore >= 0.9
+        ? 'bg-emerald-50 dark:bg-emerald-950/20'
+        : semanticScore >= 0.7
+          ? 'bg-amber-50 dark:bg-amber-950/20'
+          : 'bg-red-50 dark:bg-red-950/20';
 
   const handleLocate = (frameId: string) => {
     onLocateFrame?.(frameId);
@@ -141,6 +143,9 @@ export function GateQualityTab({
 
   return (
     <div className="flex flex-col h-full overflow-auto">
+      {/* Extraction quality strip */}
+      <QualityStrip projectId={projectId} />
+
       {/* Summary bar */}
       {semanticScore != null && (
         <div className={cn('px-3 py-2 border-b flex items-center gap-2', summaryColor)}>
@@ -201,6 +206,18 @@ export function GateQualityTab({
                   name={dim}
                   score={val.score}
                   isLowest={lowestDim?.[0] === dim}
+                  coverageRatio={
+                    dim === 'completeness'
+                      ? ((val as Record<string, unknown>).coverage_ratio as number | undefined)
+                      : undefined
+                  }
+                  uncoveredSegments={
+                    dim === 'completeness'
+                      ? ((val as Record<string, unknown>).uncovered_segments as
+                          | string[]
+                          | undefined)
+                      : undefined
+                  }
                 />
               ))}
             </div>
