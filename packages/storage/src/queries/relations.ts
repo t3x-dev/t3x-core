@@ -5,7 +5,7 @@
  * Relations are derivative data extracted at commit time.
  */
 
-import type { SentenceRelation } from '@t3x/core';
+import type { SentenceRelation } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type SentenceRelationRecord, sentenceRelations } from '../schema-v4';

@@ -17,8 +17,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CommitV4, ConflictReport, Sentence } from '@t3x/core';
-import { createRelationExtractor, detectConflicts } from '@t3x/core';
+import type { CommitV4, ConflictReport, Sentence } from '@t3x-dev/core';
+import { createRelationExtractor, detectConflicts } from '@t3x-dev/core';
 import {
   createCommitV4,
   deleteCommitV4,
@@ -38,7 +38,7 @@ import {
   upsertRelations,
   upsertSentenceVectorsBatch,
   validateMainBranchLinearity,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';

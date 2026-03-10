@@ -15,15 +15,15 @@ This is a pnpm monorepo managed by Turborepo:
 ```
 t3x/
 ├── packages/
-│   ├── core/           # @t3x/core - Deterministic semantic engine
-│   ├── storage/        # @t3x/storage - PostgreSQL persistence (Drizzle ORM)
-│   ├── api-client/     # @t3x/api-client - TypeScript API client
-│   └── runner/         # @t3x/runner - Shared runner library (schemas, evaluator, trace)
+│   ├── core/           # @t3x-dev/core - Deterministic semantic engine
+│   ├── storage/        # @t3x-dev/storage - PostgreSQL persistence (Drizzle ORM)
+│   ├── api-client/     # @t3x-dev/api-client - TypeScript API client
+│   └── runner/         # @t3x-dev/runner - Shared runner library (schemas, evaluator, trace)
 ├── apps/
 │   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
-│   ├── api/            # @t3x/api - Hono API server with OpenAPI
-│   ├── runner/         # @t3x/runner - Grey-box agent evaluation engine (server)
-│   ├── cli/            # @t3x/cli - Command line interface
+│   ├── api/            # @t3x-dev/api - Hono API server with OpenAPI
+│   ├── runner/         # @t3x-dev/runner - Grey-box agent evaluation engine (server)
+│   ├── cli/            # @t3x-dev/cli - Command line interface
 │   └── agent-demo/     # Demo agent for testing
 ├── biome.json          # Linting and formatting config
 ├── turbo.json          # Turborepo task config
@@ -45,16 +45,16 @@ pnpm check:fix                  # Biome check + auto-fix
 
 ### Package-specific builds
 ```bash
-pnpm build:core                 # Build @t3x/core
-pnpm build:storage              # Build @t3x/storage
+pnpm build:core                 # Build @t3x-dev/core
+pnpm build:storage              # Build @t3x-dev/storage
 pnpm build:webui                # Build t3x-webui
-pnpm build:api                  # Build @t3x/api
-pnpm build:runner               # Build @t3x/runner
+pnpm build:api                  # Build @t3x-dev/api
+pnpm build:runner               # Build @t3x-dev/runner
 
-pnpm test:core                  # Test @t3x/core
-pnpm test:storage               # Test @t3x/storage
+pnpm test:core                  # Test @t3x-dev/core
+pnpm test:storage               # Test @t3x-dev/storage
 pnpm test:webui                 # Test t3x-webui
-pnpm test:runner                # Test @t3x/runner
+pnpm test:runner                # Test @t3x-dev/runner
 ```
 
 ### Development servers
@@ -88,27 +88,27 @@ Ports: WebUI (3000), API (8000), PostgreSQL (5432), Runner (8080), Agent Demo (9
 
 ```
 apps/web (t3x-webui)
-  └─► packages/storage (@t3x/storage)
-        └─► packages/core (@t3x/core)
+  └─► packages/storage (@t3x-dev/storage)
+        └─► packages/core (@t3x-dev/core)
 
-apps/api (@t3x/api)
+apps/api (@t3x-dev/api)
   ├─► packages/storage
   ├─► packages/core
-  └─► apps/runner (@t3x/runner)
+  └─► apps/runner (@t3x-dev/runner)
 
-apps/cli (@t3x/cli)
+apps/cli (@t3x-dev/cli)
   ├─► packages/core
-  └─► packages/api-client (@t3x/api-client)
+  └─► packages/api-client (@t3x-dev/api-client)
 ```
 
 ### Three-Layer Design
 
 | Layer | Package | LLM Required? |
 |-------|---------|---------------|
-| **Framework Core** | `@t3x/core` | No (deterministic) |
-| **Storage Layer** | `@t3x/storage` | No |
+| **Framework Core** | `@t3x-dev/core` | No (deterministic) |
+| **Storage Layer** | `@t3x-dev/storage` | No |
 | **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
-| **Product Layer** | `t3x-webui`, `@t3x/api`, `@t3x/runner` | No |
+| **Product Layer** | `t3x-webui`, `@t3x-dev/api`, `@t3x-dev/runner` | No |
 
 ### Storage Architecture
 
@@ -167,7 +167,7 @@ Grey-box agent evaluation engine:
 
 ```typescript
 // Usage pattern
-import { observer, evalEngine } from '@t3x/runner';
+import { observer, evalEngine } from '@t3x-dev/runner';
 
 observer.registerAgent({ id: 'my-agent', endpoint: 'http://...', type: 'http' });
 const runId = observer.startRun('my-agent', { input: { query: 'hello' } });
@@ -434,8 +434,8 @@ Rule: Contract = Law, Implementation = Freedom
 ### Import Rules
 
 ```typescript
-// ✅ Correct: Import from @t3x/core
-import { CommitV4, Leaf, Pin, Constraint } from '@t3x/core';
+// ✅ Correct: Import from @t3x-dev/core
+import { CommitV4, Leaf, Pin, Constraint } from '@t3x-dev/core';
 
 // ❌ Wrong: Redefine types locally
 interface Leaf { ... }  // DON'T DO THIS
@@ -617,10 +617,10 @@ Then use the Read tool to view the screenshot image.
 After modifying lower-level packages, rebuild the dependency chain:
 
 ```
-After @t3x/core changes:
+After @t3x-dev/core changes:
   pnpm build:core && pnpm build:storage && pnpm build:api
 
-After @t3x/storage changes:
+After @t3x-dev/storage changes:
   pnpm build:storage && pnpm build:api
 
 After apps/api changes:

@@ -1,9 +1,9 @@
 /**
- * API client types - aligned with @t3x/storage schema
+ * API client types - aligned with @t3x-dev/storage schema
  */
 
 // Re-export external types used by consumers
-export type { Pin } from '@t3x/core';
+export type { Pin } from '@t3x-dev/core';
 export type {
   AnchorConstraint,
   AnchorType,
@@ -76,7 +76,7 @@ export interface Turn {
   created_at: string;
 }
 
-// Keyword from Ring 1 - aligned with @t3x/core Keyword
+// Keyword from Ring 1 - aligned with @t3x-dev/core Keyword
 export interface RingKeyword {
   text: string;
   lemma: string;
@@ -86,7 +86,7 @@ export interface RingKeyword {
   confidence: number;
 }
 
-// Facet from Ring 2 - aligned with @t3x/core Facet
+// Facet from Ring 2 - aligned with @t3x-dev/core Facet
 export interface RingFacet {
   facetType: 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
   key: string;
@@ -94,7 +94,7 @@ export interface RingFacet {
   confidence: number;
 }
 
-// Segment from Ring 3 - aligned with @t3x/core Segment
+// Segment from Ring 3 - aligned with @t3x-dev/core Segment
 export interface RingSegment {
   segmentId: string;
   text: string;
@@ -112,7 +112,7 @@ export interface RingAnchorCandidate {
   source: 'token' | 'entity' | 'phrase';
 }
 
-// Ring output structure - aligned with @t3x/core RingOutput
+// Ring output structure - aligned with @t3x-dev/core RingOutput
 export interface RingsData {
   ring1: {
     keywords: RingKeyword[];
@@ -252,7 +252,7 @@ export interface ApiCommitAnchors {
 // ============================================================================
 
 // Parsed commit for frontend use
-// Aligned with @t3x/core CommitV2Record
+// Aligned with @t3x-dev/core CommitV2Record
 export interface Commit {
   commit_hash: string;
   project_id: string;

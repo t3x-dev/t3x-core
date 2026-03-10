@@ -13,7 +13,7 @@
  * - Hover actions: copy, pin source
  */
 
-import type { WordDiffSegment } from '@t3x/core';
+import type { WordDiffSegment } from '@t3x-dev/core';
 import { Pin } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';

@@ -2,7 +2,7 @@
  * Templates Route Tests
  */
 
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -301,7 +301,7 @@ describe('Templates Routes', () => {
       const count1 = (json1.data as unknown[]).length;
 
       // Seed again (the PGLite adapter already seeded once during setup)
-      const { seedBuiltinTemplates } = await import('@t3x/storage/seed/templates');
+      const { seedBuiltinTemplates } = await import('@t3x-dev/storage/seed/templates');
       await seedBuiltinTemplates(mockDB as any);
 
       // List templates after

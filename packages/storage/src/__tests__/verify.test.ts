@@ -5,7 +5,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CommitAuthorV4, SentenceV4 } from '@t3x/core';
+import type { CommitAuthorV4, SentenceV4 } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';

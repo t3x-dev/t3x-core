@@ -1,6 +1,6 @@
 'use client';
 
-import type { PinType } from '@t3x/core';
+import type { PinType } from '@t3x-dev/core';
 import { Pin, PinOff } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

@@ -4,9 +4,9 @@
  * Tests for POST /v1/leaves/:id/suggest-constraints endpoint.
  */
 
-import { insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
-import { createCommitV4, createLeaf } from '@t3x/storage/pglite';
+import { insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import { createCommitV4, createLeaf } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -38,8 +38,8 @@ const { mockGenerateLeafOutput, mockIsGenerationConfigured } = vi.hoisted(() => 
   mockIsGenerationConfigured: vi.fn(),
 }));
 
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,

@@ -13,7 +13,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Common Schemas
@@ -220,7 +220,7 @@ export const ListCommitsV4Response = SuccessResponse(z.array(CommitV4Response));
 // Leaves API
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Use LEAF_TYPES from @t3x/core as single source of truth
+// Use LEAF_TYPES from @t3x-dev/core as single source of truth
 const LeafTypeEnum = z.enum(LEAF_TYPES);
 
 // All valid types stored in leaves table (generation + deploy)
@@ -356,7 +356,7 @@ export const ValidateLeafOutputResponse = SuccessResponse(
 // Leaf History API
 // ═══════════════════════════════════════════════════════════════════════════
 
-// LeafConfig schema (matches LeafConfig type from @t3x/core)
+// LeafConfig schema (matches LeafConfig type from @t3x-dev/core)
 const LeafConfigSchema = z
   .object({
     prompt_template: z.string().optional(),

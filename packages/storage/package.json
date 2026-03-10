@@ -1,5 +1,5 @@
 {
-  "name": "@t3x/storage",
+  "name": "@t3x-dev/storage",
   "version": "0.1.0",
   "description": "T3X Storage - PostgreSQL persistence layer with Drizzle ORM",
   "license": "MIT",
@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",
-    "@t3x/core": "workspace:*",
+    "@t3x-dev/core": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "postgres": "^3.4.5"
   },

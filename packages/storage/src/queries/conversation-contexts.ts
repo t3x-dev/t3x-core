@@ -12,7 +12,7 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import type { ConversationContext } from '@t3x/core';
+import type { ConversationContext } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type ConversationContextRecord, conversationContexts } from '../schema-v4';

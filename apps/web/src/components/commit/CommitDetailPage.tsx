@@ -74,7 +74,7 @@ interface EnrichedSentence {
   confidence: number | undefined;
   diffStatus: SentenceDiffStatus;
   oldText?: string;
-  wordDiff?: import('@t3x/core').WordDiffSegment[];
+  wordDiff?: import('@t3x-dev/core').WordDiffSegment[];
   sourceRef?: {
     conversation_id: string;
     turn_hash: string;
@@ -167,7 +167,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       {
         diffType: string;
         matchedText?: string;
-        wordDiff?: import('@t3x/core').WordDiffSegment[];
+        wordDiff?: import('@t3x-dev/core').WordDiffSegment[];
         similarity?: number;
       }
     >();
@@ -176,7 +176,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         diffMap.set(seg.segmentId, {
           diffType: seg.diffType,
           matchedText: seg.matchedText,
-          wordDiff: seg.wordDiff as import('@t3x/core').WordDiffSegment[],
+          wordDiff: seg.wordDiff as import('@t3x-dev/core').WordDiffSegment[],
           similarity: seg.similarity,
         });
       }

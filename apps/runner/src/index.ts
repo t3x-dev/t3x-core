@@ -5,7 +5,7 @@
 // - EvalEngine: Runs rule-based evaluation on RunRecord
 //
 // Usage:
-//   import { observer, evalEngine } from '@t3x/runner';
+//   import { observer, evalEngine } from '@t3x-dev/runner';
 //
 //   // Register an agent
 //   observer.registerAgent({

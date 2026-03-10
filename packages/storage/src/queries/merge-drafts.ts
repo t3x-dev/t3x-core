@@ -6,7 +6,7 @@
  * allowing users to save progress and resume later.
  */
 
-import { generateMergeDraftId } from '@t3x/core';
+import { generateMergeDraftId } from '@t3x-dev/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type MergeDraft, mergeDrafts, type NewMergeDraft } from '../schema';

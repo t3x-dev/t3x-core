@@ -33,14 +33,14 @@ T3X is a monorepo with the following structure:
 ```
 t3x/
 ├── packages/
-│   ├── core/           # @t3x/core - Deterministic semantic engine
-│   ├── storage/        # @t3x/storage - PostgreSQL persistence
-│   └── api-client/     # @t3x/api-client - TypeScript API client
+│   ├── core/           # @t3x-dev/core - Deterministic semantic engine
+│   ├── storage/        # @t3x-dev/storage - PostgreSQL persistence
+│   └── api-client/     # @t3x-dev/api-client - TypeScript API client
 ├── apps/
 │   ├── web/            # t3x-webui - Next.js frontend
-│   ├── api/            # @t3x/api - Hono API server
-│   ├── runner/         # @t3x/runner - Agent evaluation engine
-│   └── cli/            # @t3x/cli - Command line interface
+│   ├── api/            # @t3x-dev/api - Hono API server
+│   ├── runner/         # @t3x-dev/runner - Agent evaluation engine
+│   └── cli/            # @t3x-dev/cli - Command line interface
 ```
 
 ### Key Concepts

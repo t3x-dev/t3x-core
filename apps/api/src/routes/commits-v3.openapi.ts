@@ -7,14 +7,14 @@
  */
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { computeCommitV3Hash, getLocalAuthor } from '@t3x/core';
+import { computeCommitV3Hash, getLocalAuthor } from '@t3x-dev/core';
 import {
   type CommitV3Output,
   createCommitV3,
   getCommitV3,
   listCommitsV3,
   ParentNotFoundError,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import {
   CommitV3Schema,

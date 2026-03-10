@@ -14,7 +14,7 @@ import {
   updateProject,
   verifyHashChain,
   verifyMerkleRoots,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {

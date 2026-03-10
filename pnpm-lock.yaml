@@ -60,13 +60,13 @@ importers:
       '@scalar/hono-api-reference':
         specifier: ^0.9.30
         version: 0.9.30(hono@4.11.1)
-      '@t3x/core':
+      '@t3x-dev/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@t3x/runner':
+      '@t3x-dev/runner':
         specifier: workspace:*
         version: link:../runner
-      '@t3x/storage':
+      '@t3x-dev/storage':
         specifier: workspace:*
         version: link:../../packages/storage
       bcryptjs:
@@ -139,10 +139,10 @@ importers:
 
   apps/cli:
     dependencies:
-      '@t3x/api-client':
+      '@t3x-dev/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@t3x/core':
+      '@t3x-dev/core':
         specifier: workspace:*
         version: link:../../packages/core
       chalk:
@@ -179,7 +179,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.71.2
         version: 0.71.2(zod@4.2.1)
-      '@t3x/core':
+      '@t3x-dev/core':
         specifier: workspace:*
         version: link:../../packages/core
       cors:
@@ -279,10 +279,10 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@t3x/core':
+      '@t3x-dev/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@t3x/storage':
+      '@t3x-dev/storage':
         specifier: workspace:*
         version: link:../../packages/storage
       '@xyflow/react':
@@ -444,7 +444,7 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.3.14
         version: 0.3.14
-      '@t3x/core':
+      '@t3x-dev/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:

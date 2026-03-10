@@ -4,8 +4,8 @@
  * Integration tests for POST /v1/leaves/:id/generate endpoint.
  */
 
-import { createCommitV4, insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { createCommitV4, insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -43,10 +43,10 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock the @t3x/core generation functions
+// Mock the @t3x-dev/core generation functions
 // Use importOriginal to get LEAF_TYPES and other non-mocked exports
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,

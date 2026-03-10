@@ -1,5 +1,5 @@
 {
-  "name": "@t3x/api",
+  "name": "@t3x-dev/api",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -31,9 +31,9 @@
     "@hono/zod-validator": "^0.7.6",
     "@mozilla/readability": "^0.6.0",
     "@scalar/hono-api-reference": "^0.9.30",
-    "@t3x/core": "workspace:*",
-    "@t3x/runner": "workspace:*",
-    "@t3x/storage": "workspace:*",
+    "@t3x-dev/core": "workspace:*",
+    "@t3x-dev/runner": "workspace:*",
+    "@t3x-dev/storage": "workspace:*",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.38.3",
     "fflate": "^0.8.2",

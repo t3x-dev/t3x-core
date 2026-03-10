@@ -8,8 +8,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x/core';
-import { findUserById } from '@t3x/storage';
+import type { ApiKey } from '@t3x-dev/core';
+import { findUserById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';

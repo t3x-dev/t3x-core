@@ -12,8 +12,8 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX } from '@t3x/core';
-import { createApiKey, createLocalUser, findUserByUsername } from '@t3x/storage';
+import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
+import { createApiKey, createLocalUser, findUserByUsername } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';

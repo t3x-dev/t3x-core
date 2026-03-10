@@ -4,7 +4,7 @@
  * GET /v1/status - Detailed status with DB check
  */
 
-import { findProjects } from '@t3x/storage/pglite';
+import { findProjects } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';

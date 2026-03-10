@@ -8,13 +8,13 @@
  * - POST /v1/drafts/:draftId/auto-commit
  */
 
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import {
   insertDraftV3,
   insertProject,
   updateAutopilotConfig,
   updateDraftV3,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

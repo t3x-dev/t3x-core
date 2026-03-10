@@ -8,7 +8,7 @@
  * - GOOGLE_AI_STUDIO_KEY: Required for semantic validation
  */
 
-import { createGoogleAIEmbeddingProvider, type EmbeddingProvider } from '@t3x/core';
+import { createGoogleAIEmbeddingProvider, type EmbeddingProvider } from '@t3x-dev/core';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { pinoLogger } from '../middleware/logger';
 

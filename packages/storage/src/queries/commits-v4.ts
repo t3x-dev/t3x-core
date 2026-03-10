@@ -18,10 +18,10 @@ import type {
   CreateCommitV4Input,
   MergeSummaryData,
   SentenceV4,
-} from '@t3x/core';
-import { buildMerkleTree, computeCommitV4Hash } from '@t3x/core';
+} from '@t3x-dev/core';
+import { buildMerkleTree, computeCommitV4Hash } from '@t3x-dev/core';
 
-export { computeCommitV4Hash } from '@t3x/core';
+export { computeCommitV4Hash } from '@t3x-dev/core';
 
 import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';

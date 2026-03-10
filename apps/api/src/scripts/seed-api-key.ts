@@ -9,8 +9,8 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { API_KEY_VALUE_PREFIX } from '@t3x/core';
-import { createApiKey } from '@t3x/storage/pglite';
+import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
+import { createApiKey } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 
 async function main() {

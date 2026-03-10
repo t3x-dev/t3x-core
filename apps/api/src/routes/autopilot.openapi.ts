@@ -17,7 +17,7 @@ import {
   mergeAutopilotConfig,
   type SemanticPoint,
   spToSentence,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 import {
   commitDraftV3,
   createCommitV4,
@@ -26,7 +26,7 @@ import {
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
   updateAutopilotConfig,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { eq } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

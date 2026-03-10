@@ -6,7 +6,7 @@
  * PATCH /v1/agent/drafts/:id - Update draft with feedback
  */
 
-import { createClaudeProvider, LLMProviderError } from '@t3x/core';
+import { createClaudeProvider, LLMProviderError } from '@t3x-dev/core';
 import {
   findConversationById,
   findDraftById,
@@ -14,7 +14,7 @@ import {
   findTurnsByConversation,
   insertDraft,
   updateDraft,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { getLLMProvider } from '../lib/provider-registry';

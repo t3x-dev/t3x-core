@@ -13,7 +13,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { restoreFromCfpack } from '@t3x/storage/backup';
+import { restoreFromCfpack } from '@t3x-dev/storage/backup';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import {

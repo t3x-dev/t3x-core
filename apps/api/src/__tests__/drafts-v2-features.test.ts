@@ -9,8 +9,8 @@
  * 5. Preview stale detection (after update, preview should be stale)
  */
 
-import { insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -26,14 +26,14 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Partial mock of @t3x/core — keep real exports, mock only generation functions
+// Partial mock of @t3x-dev/core — keep real exports, mock only generation functions
 const { mockGenerateLeafOutput, mockIsGenerationConfigured } = vi.hoisted(() => ({
   mockGenerateLeafOutput: vi.fn(),
   mockIsGenerationConfigured: vi.fn(),
 }));
 
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,

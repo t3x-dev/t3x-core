@@ -4,7 +4,7 @@
  * Tests for extractChunksFromTurns with camelCase/snake_case compatibility
  */
 
-import { sha256 } from '@t3x/core';
+import { sha256 } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { extractChunksFromTurns } from '../routes/curate';
 

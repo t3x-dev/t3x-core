@@ -15,7 +15,7 @@ export type NodeKind = 'unit' | 'leaf';
 export type CommitStatus = 'staging' | 'committed' | 'draft';
 
 // Leaf node types for output destinations
-// Must match @t3x/core AnyLeafType from V4 schema
+// Must match @t3x-dev/core AnyLeafType from V4 schema
 export type LeafType =
   | 'tweet'
   | 'weibo'
@@ -73,10 +73,10 @@ export interface ConstraintDisplay {
 
 // ============================================
 // CommitV4 Display Types
-// Re-export from @t3x/core contract types
+// Re-export from @t3x-dev/core contract types
 // ============================================
 
-// Import contract types from @t3x/core (single source of truth)
+// Import contract types from @t3x-dev/core (single source of truth)
 import type {
   CommitAuthorV4,
   CommitSourceRef,
@@ -84,7 +84,7 @@ import type {
   CommitV4Content,
   SentenceSourceRef,
   SentenceV4,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 
 // Re-export contract types for convenience
 export type {

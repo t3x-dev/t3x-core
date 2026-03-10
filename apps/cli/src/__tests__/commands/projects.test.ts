@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock @t3x/api-client
+// Mock @t3x-dev/api-client
 const mockClient = {
   listProjects: vi.fn(),
   getProject: vi.fn(),
@@ -12,7 +12,7 @@ const mockClient = {
   deleteProject: vi.fn(),
 };
 
-vi.mock('@t3x/api-client', () => ({
+vi.mock('@t3x-dev/api-client', () => ({
   createClient: vi.fn(() => mockClient),
 }));
 

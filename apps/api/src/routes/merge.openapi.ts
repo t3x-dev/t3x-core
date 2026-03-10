@@ -12,8 +12,8 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input, MergeSummaryData } from '@t3x/core';
-import { executeMerge, type Merge2WayResult, prepareMerge, suggestMerge } from '@t3x/core';
+import type { CreateCommitV4Input, MergeSummaryData } from '@t3x-dev/core';
+import { executeMerge, type Merge2WayResult, prepareMerge, suggestMerge } from '@t3x-dev/core';
 import {
   commitMergeDraft,
   createCommitV4,
@@ -24,7 +24,7 @@ import {
   getMergeDraft,
   updateBranchHead,
   updateMergeDraft,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';

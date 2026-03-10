@@ -5,7 +5,7 @@
  * Uses pdf-parse and mammoth for binary formats.
  */
 
-import { sha256 } from '@t3x/core';
+import { sha256 } from '@t3x-dev/core';
 import { convertHtmlToMarkdown } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';
 import type { ImportMetadata, ParseResult } from './types';

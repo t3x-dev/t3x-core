@@ -1,5 +1,5 @@
 {
-  "name": "@t3x/runner",
+  "name": "@t3x-dev/runner",
   "version": "0.1.0",
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "MIT",
@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@t3x/core": "workspace:*",
+    "@t3x-dev/core": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "js-yaml": "^4.1.1",

@@ -4,7 +4,7 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
-import { generateProjectId } from '@t3x/core';
+import { generateProjectId } from '@t3x-dev/core';
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {

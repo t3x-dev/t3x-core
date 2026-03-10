@@ -9,8 +9,8 @@
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX } from '@t3x/core';
-import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x/storage/pglite';
+import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
+import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';

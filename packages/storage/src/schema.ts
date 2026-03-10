@@ -7,7 +7,7 @@
  * - Supabase (cloud)
  */
 
-import type { ContentBlock } from '@t3x/core';
+import type { ContentBlock } from '@t3x-dev/core';
 import {
   boolean,
   customType,

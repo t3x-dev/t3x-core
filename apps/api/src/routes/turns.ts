@@ -8,8 +8,8 @@
  * GET  /v1/turns/:hash/context - Get turn with surrounding context (for source tracing)
  */
 
-import type { ContentBlock } from '@t3x/core';
-import { createRingExtractor, textFromBlocks } from '@t3x/core';
+import type { ContentBlock } from '@t3x-dev/core';
+import { createRingExtractor, textFromBlocks } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnByHash,
@@ -17,7 +17,7 @@ import {
   findTurnsByConversation,
   insertTurn,
   type Turn,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { getNLPProvider } from '../lib/nlp';

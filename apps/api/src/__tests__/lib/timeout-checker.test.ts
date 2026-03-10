@@ -9,7 +9,7 @@ const mockGetTimedOutRuns = vi.fn().mockResolvedValue([]);
 const mockMarkRunAsTimeout = vi.fn().mockResolvedValue(undefined);
 const mockDB = {};
 
-vi.mock('@t3x/storage', () => ({
+vi.mock('@t3x-dev/storage', () => ({
   getTimedOutRuns: (...args: unknown[]) => mockGetTimedOutRuns(...args),
   markRunAsTimeout: (...args: unknown[]) => mockMarkRunAsTimeout(...args),
 }));

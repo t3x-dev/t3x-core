@@ -8,7 +8,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CreatePinInput } from '@t3x/core';
+import type { CreatePinInput } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';

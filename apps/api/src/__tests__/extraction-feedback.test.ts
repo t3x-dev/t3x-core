@@ -8,10 +8,10 @@
  * action response.
  */
 
-import type { SemanticPoint } from '@t3x/core';
-import { insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
-import { insertDraftV3, updateDraftV3 } from '@t3x/storage/pglite';
+import type { SemanticPoint } from '@t3x-dev/core';
+import { insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import { insertDraftV3, updateDraftV3 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -34,9 +34,9 @@ const { mockInsertExtractionFeedback, mockGenerateLeafOutput, mockIsGenerationCo
     mockIsGenerationConfigured: vi.fn(),
   }));
 
-// Mock @t3x/core generation functions (required by drafts.openapi.ts imports)
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+// Mock @t3x-dev/core generation functions (required by drafts.openapi.ts imports)
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,
@@ -45,8 +45,8 @@ vi.mock('@t3x/core', async (importOriginal) => {
 });
 
 // Mock insertExtractionFeedback while keeping all other storage functions real
-vi.mock('@t3x/storage/pglite', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/storage/pglite')>();
+vi.mock('@t3x-dev/storage/pglite', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/storage/pglite')>();
   return {
     ...actual,
     insertExtractionFeedback: mockInsertExtractionFeedback,
