@@ -494,6 +494,10 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
     CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 
+    -- Migration: Add default_constraints/semantic_threshold to existing templates tables
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS default_constraints JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS semantic_threshold JSONB;
+
     -- API Keys table (Authentication)
     CREATE TABLE IF NOT EXISTS api_keys (
       id TEXT PRIMARY KEY,
@@ -529,7 +533,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'webhooks' AND column_name = 'active' AND data_type = 'text'
       ) THEN
+        ALTER TABLE webhooks ALTER COLUMN active DROP DEFAULT;
         ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER USING CASE WHEN active = 'true' THEN 1 ELSE 0 END;
+        ALTER TABLE webhooks ALTER COLUMN active SET DEFAULT 1;
       END IF;
     END $$;
 
