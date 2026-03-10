@@ -290,6 +290,14 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
               </div>
             )}
 
+            {!fullResult && !quickResult && (
+              <div className="rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-2.5 text-xs mb-3">
+                <p className="text-red-700 dark:text-red-300">
+                  Verification failed. Try again or run a full verification.
+                </p>
+              </div>
+            )}
+
             {!developerMode && (
               <p className="text-xs text-muted-foreground mb-3">
                 This may be caused by a database migration or manual data modification. Contact your

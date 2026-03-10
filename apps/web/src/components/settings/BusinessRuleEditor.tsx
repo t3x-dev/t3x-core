@@ -153,8 +153,7 @@ export function BusinessRuleEditor({ rule: initial, onSave, onCancel }: Business
               />
               <p className="text-[10px] text-muted-foreground mt-1">
                 Available variables: <code className="font-mono">frames</code>,{' '}
-                <code className="font-mono">relations</code>,{' '}
-                <code className="font-mono">sentences</code>. Must return boolean.
+                <code className="font-mono">relations</code>. Must return boolean.
               </p>
             </div>
           )}

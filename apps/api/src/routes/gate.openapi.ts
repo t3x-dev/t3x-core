@@ -9,7 +9,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { GateRunner, type LLMProvider } from '@t3x/core';
-import { findConversationById, findTurnsByConversation } from '@t3x/storage';
+import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
@@ -35,7 +35,6 @@ const BusinessRuleSchema = z.object({
   prompt: z.string().optional(),
   message: z.string().optional(),
   severity: z.enum(['error', 'warning']),
-  scope: z.enum(['commit', 'project']).optional(),
 });
 
 const FrameSchema = z.object({
@@ -65,6 +64,7 @@ const GateCheckRequest = z.object({
     .optional()
     .default(['structure', 'semantic', 'business']),
   conversation_id: z.string().optional(),
+  project_id: z.string().optional(),
 });
 
 const StructureChecksSchema = z.object({
@@ -171,11 +171,14 @@ const gateCheckRoute = createRoute({
 
 gateRoutes.openapi(gateCheckRoute, async (c) => {
   const body = c.req.valid('json');
-  const { content, business_rules, gates } = body;
-  let { turns } = body;
+  const { content, gates } = body;
+  let { turns, business_rules } = body;
   const conversationId = body.conversation_id;
+  const projectId = body.project_id;
 
   try {
+    let resolvedProjectId = projectId;
+
     // If conversation_id provided and no turns, fetch turns from DB
     if (conversationId && (!turns || turns.length === 0)) {
       const db = await getDB();
@@ -188,6 +191,11 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
         );
       }
 
+      // Derive project_id from conversation if not explicitly provided
+      if (!resolvedProjectId) {
+        resolvedProjectId = conversation.projectId;
+      }
+
       const dbTurns = await findTurnsByConversation(db, {
         conversationId,
         limit: 500,
@@ -198,6 +206,15 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
           role: t.role,
           content: t.content,
         }));
+      }
+    }
+
+    // Auto-load business rules from project if none provided
+    if ((!business_rules || business_rules.length === 0) && resolvedProjectId) {
+      const db = await getDB();
+      const storedRules = await getBusinessRules(db, resolvedProjectId);
+      if (storedRules.length > 0) {
+        business_rules = storedRules;
       }
     }
 
