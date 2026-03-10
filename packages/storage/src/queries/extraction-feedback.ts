@@ -15,9 +15,11 @@ export interface InsertExtractionFeedbackInput {
   draft_id: string;
   sp_id: string;
   action: 'accept' | 'reject' | 'edit' | 'undo';
+  original_text?: string;
   inference_type?: string;
   confidence?: number;
   zone?: string;
+  low_coverage?: boolean;
   edited_text?: string;
 }
 
@@ -31,9 +33,11 @@ export async function insertExtractionFeedback(
     draftId: input.draft_id,
     spId: input.sp_id,
     action: input.action,
+    originalText: input.original_text,
     inferenceType: input.inference_type,
     confidence: input.confidence,
     zone: input.zone,
+    lowCoverage: input.low_coverage,
     editedText: input.edited_text,
   });
 }
@@ -65,6 +69,130 @@ export async function getExtractionFeedbackStats(
   }
 
   return { total: rows.length, by_action: byAction, by_inference_type: byType };
+}
+
+/**
+ * Aggregate feedback stats formatted for the adaptive learning API response.
+ *
+ * Returns per-inference-type totals (accepted, edited, rejected) and overall rates.
+ */
+export interface AdaptiveFeedbackStats {
+  byInferenceType: Record<
+    string,
+    { total: number; accepted: number; edited: number; rejected: number }
+  >;
+  overall: {
+    total: number;
+    acceptRate: number;
+    editRate: number;
+    rejectRate: number;
+  };
+}
+
+export async function getAdaptiveFeedbackStats(
+  db: AnyDB,
+  projectId: string
+): Promise<AdaptiveFeedbackStats> {
+  const rows = await db
+    .select()
+    .from(extractionFeedback)
+    .where(eq(extractionFeedback.projectId, projectId));
+
+  const byType: Record<
+    string,
+    { total: number; accepted: number; edited: number; rejected: number }
+  > = {};
+
+  let totalAccepted = 0;
+  let totalEdited = 0;
+  let totalRejected = 0;
+
+  for (const row of rows) {
+    const t = row.inferenceType ?? 'unknown';
+    if (!byType[t]) byType[t] = { total: 0, accepted: 0, edited: 0, rejected: 0 };
+    byType[t].total += 1;
+
+    // Map actions: accept/undo→accepted, edit→edited, reject/dismiss→rejected
+    if (row.action === 'accept') {
+      byType[t].accepted += 1;
+      totalAccepted += 1;
+    } else if (row.action === 'edit') {
+      byType[t].edited += 1;
+      totalEdited += 1;
+    } else if (row.action === 'reject') {
+      byType[t].rejected += 1;
+      totalRejected += 1;
+    }
+    // 'undo' is excluded from rate calculations (it's a retraction, not a judgment)
+  }
+
+  const total = totalAccepted + totalEdited + totalRejected;
+  return {
+    byInferenceType: byType,
+    overall: {
+      total,
+      acceptRate: total > 0 ? totalAccepted / total : 0,
+      editRate: total > 0 ? totalEdited / total : 0,
+      rejectRate: total > 0 ? totalRejected / total : 0,
+    },
+  };
+}
+
+/**
+ * Bucket feedback by confidence ranges for cosine-threshold analysis.
+ *
+ * Returns counts grouped into 0.1-wide confidence buckets:
+ * [0.0-0.1), [0.1-0.2), ..., [0.9-1.0]
+ */
+export interface CosineBucketRow {
+  bucket: string;
+  total: number;
+  accepted: number;
+  edited: number;
+  rejected: number;
+  accept_rate: number;
+}
+
+export async function getFeedbackByCosineBucket(
+  db: AnyDB,
+  projectId: string
+): Promise<CosineBucketRow[]> {
+  const rows = await db
+    .select()
+    .from(extractionFeedback)
+    .where(eq(extractionFeedback.projectId, projectId));
+
+  // 10 buckets: 0.0-0.1, 0.1-0.2, ..., 0.9-1.0
+  const buckets: Record<
+    string,
+    { total: number; accepted: number; edited: number; rejected: number }
+  > = {};
+
+  for (let i = 0; i < 10; i++) {
+    const label = `${(i / 10).toFixed(1)}-${((i + 1) / 10).toFixed(1)}`;
+    buckets[label] = { total: 0, accepted: 0, edited: 0, rejected: 0 };
+  }
+
+  for (const row of rows) {
+    const conf = row.confidence ?? 0;
+    const bucketIdx = Math.min(Math.floor(conf * 10), 9);
+    const label = `${(bucketIdx / 10).toFixed(1)}-${((bucketIdx + 1) / 10).toFixed(1)}`;
+    buckets[label].total += 1;
+
+    if (row.action === 'accept') {
+      buckets[label].accepted += 1;
+    } else if (row.action === 'edit') {
+      buckets[label].edited += 1;
+    } else if (row.action === 'reject') {
+      buckets[label].rejected += 1;
+    }
+  }
+
+  return Object.entries(buckets).map(([bucket, data]) => ({
+    bucket,
+    ...data,
+    accept_rate: data.total > 0 ? data.accepted / data.total : 0,
+  }));
 }
 
 export async function listExtractionFeedback(

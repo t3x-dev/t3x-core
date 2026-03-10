@@ -8,6 +8,8 @@
  * @see docs/specification/commit-source-context-presentation.md
  */
 
+import type { ContentBlock } from '@/components/shared/ContentBlockRenderer';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Core Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -135,6 +137,8 @@ export interface TurnBubbleData {
   highlights?: HighlightRange[];
   /** Multi-color highlights (each range has its own color, overrides highlightColor) */
   coloredHighlights?: ColoredHighlightRange[];
+  /** Multimodal content blocks (images, audio, files) */
+  content_blocks?: ContentBlock[];
 }
 
 /**

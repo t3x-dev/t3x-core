@@ -8,12 +8,14 @@ import {
   Home,
   LayoutGrid,
   Rocket,
+  Search,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
+import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -120,6 +122,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const isDeploy = pathname.startsWith('/deploy');
   const isInsights = pathname.startsWith('/insights');
+  const isSearch = pathname.startsWith('/search');
   const isTemplates = pathname.startsWith('/templates');
   const isSettings = pathname.startsWith('/settings');
   const isHome = pathname === '/' || pathname.startsWith('/project');
@@ -194,6 +197,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Home className="h-5 w-5" />
           </NavItem>
 
+          <NavItem href="/search" label="Search" isActive={isSearch} collapsed={collapsed}>
+            <Search className="h-5 w-5" />
+          </NavItem>
+
           <NavItem href="/templates" label="Templates" isActive={isTemplates} collapsed={collapsed}>
             <LayoutGrid className="h-5 w-5" />
           </NavItem>
@@ -225,10 +232,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
+        {/* User Menu */}
+        <div className={cn('mt-auto', collapsed ? 'flex justify-center' : '')}>
+          <UserMenu collapsed={collapsed} />
+        </div>
+
         {/* Collapse Toggle */}
         <div
           className={cn(
-            'mt-auto pt-3 border-t border-[var(--stroke-divider)]',
+            'pt-3 border-t border-[var(--stroke-divider)]',
             collapsed ? 'flex justify-center' : ''
           )}
         >

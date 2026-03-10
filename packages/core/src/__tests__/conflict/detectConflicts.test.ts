@@ -6,11 +6,11 @@ function makeMockEmbedder(embeddings: Map<string, number[]>): EmbeddingProvider 
   return {
     id: 'mock:test',
     dim: 3,
-    encode: vi.fn(async (texts: string[]) =>
-      texts.map((t) => embeddings.get(t) ?? [0, 0, 0]),
-    ),
+    encode: vi.fn(async (texts: string[]) => texts.map((t) => embeddings.get(t) ?? [0, 0, 0])),
     similarity: (a, b) => {
-      let dot = 0, na = 0, nb = 0;
+      let dot = 0,
+        na = 0,
+        nb = 0;
       for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
         na += a[i] * a[i];
@@ -35,20 +35,22 @@ describe('detectConflicts', () => {
 
     const result = await detectConflicts(
       [{ id: 's_new1', text: 'The user prefers dark themes' }],
-      [{
-        id: 's_old1',
-        text: 'Light mode is the preferred display setting',
-        commit_hash: 'sha256:commit1',
-        embedding: vecB,
-      }],
-      embedder,
+      [
+        {
+          id: 's_old1',
+          text: 'Light mode is the preferred display setting',
+          commit_hash: 'sha256:commit1',
+          embedding: vecB,
+        },
+      ],
+      embedder
     );
 
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts[0].new_sentence_id).toBe('s_new1');
     expect(result.conflicts[0].existing_sentence_id).toBe('s_old1');
-    expect(result.conflicts[0].cosine).toBeGreaterThanOrEqual(0.80);
-    expect(result.conflicts[0].jaccard).toBeLessThan(0.70);
+    expect(result.conflicts[0].cosine).toBeGreaterThanOrEqual(0.8);
+    expect(result.conflicts[0].jaccard).toBeLessThan(0.7);
   });
 
   it('does NOT flag when cosine < 0.80 (unrelated sentences)', async () => {
@@ -62,13 +64,15 @@ describe('detectConflicts', () => {
 
     const result = await detectConflicts(
       [{ id: 's_new1', text: 'I like pizza' }],
-      [{
-        id: 's_old1',
-        text: 'The weather is nice',
-        commit_hash: 'sha256:commit1',
-        embedding: vecUnrelated,
-      }],
-      embedder,
+      [
+        {
+          id: 's_old1',
+          text: 'The weather is nice',
+          commit_hash: 'sha256:commit1',
+          embedding: vecUnrelated,
+        },
+      ],
+      embedder
     );
 
     expect(result.conflicts).toHaveLength(0);
@@ -84,13 +88,15 @@ describe('detectConflicts', () => {
 
     const result = await detectConflicts(
       [{ id: 's_new1', text: 'user prefers dark mode' }],
-      [{
-        id: 's_old1',
-        text: 'user prefers dark mode setting',
-        commit_hash: 'sha256:commit1',
-        embedding: vec, // identical vector = cosine 1.0
-      }],
-      embedder,
+      [
+        {
+          id: 's_old1',
+          text: 'user prefers dark mode setting',
+          commit_hash: 'sha256:commit1',
+          embedding: vec, // identical vector = cosine 1.0
+        },
+      ],
+      embedder
     );
 
     // High cosine AND high jaccard = same statement, not a conflict
@@ -114,10 +120,20 @@ describe('detectConflicts', () => {
         { id: 's_new2', text: 'dogs are friendly animals' },
       ],
       [
-        { id: 's_old1', text: 'felines make terrible companions', commit_hash: 'sha256:c1', embedding: vec1Similar },
-        { id: 's_old2', text: 'something totally unrelated', commit_hash: 'sha256:c2', embedding: [0, 0, 1] },
+        {
+          id: 's_old1',
+          text: 'felines make terrible companions',
+          commit_hash: 'sha256:c1',
+          embedding: vec1Similar,
+        },
+        {
+          id: 's_old2',
+          text: 'something totally unrelated',
+          commit_hash: 'sha256:c2',
+          embedding: [0, 0, 1],
+        },
       ],
-      embedder,
+      embedder
     );
 
     // Only s_new1 vs s_old1 should conflict (high cosine, low jaccard)
@@ -130,11 +146,7 @@ describe('detectConflicts', () => {
   it('returns empty when no existing sentences', async () => {
     const embedder = makeMockEmbedder(new Map([['hello', [1, 0, 0]]]));
 
-    const result = await detectConflicts(
-      [{ id: 's_new1', text: 'hello' }],
-      [],
-      embedder,
-    );
+    const result = await detectConflicts([{ id: 's_new1', text: 'hello' }], [], embedder);
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.checked_count).toBe(1);
@@ -152,17 +164,31 @@ describe('detectConflicts', () => {
     // With default threshold (0.80) → would be a conflict
     const result1 = await detectConflicts(
       [{ id: 's_new1', text: 'the user likes coffee' }],
-      [{ id: 's_old1', text: 'tea is their preferred beverage', commit_hash: 'sha256:c1', embedding: vecSimilar }],
-      embedder,
+      [
+        {
+          id: 's_old1',
+          text: 'tea is their preferred beverage',
+          commit_hash: 'sha256:c1',
+          embedding: vecSimilar,
+        },
+      ],
+      embedder
     );
     expect(result1.conflicts).toHaveLength(1);
 
     // With higher cosine threshold (0.98) → not a conflict
     const result2 = await detectConflicts(
       [{ id: 's_new1', text: 'the user likes coffee' }],
-      [{ id: 's_old1', text: 'tea is their preferred beverage', commit_hash: 'sha256:c1', embedding: vecSimilar }],
+      [
+        {
+          id: 's_old1',
+          text: 'tea is their preferred beverage',
+          commit_hash: 'sha256:c1',
+          embedding: vecSimilar,
+        },
+      ],
       embedder,
-      { cosineThreshold: 0.98 },
+      { cosineThreshold: 0.98 }
     );
     expect(result2.conflicts).toHaveLength(0);
   });

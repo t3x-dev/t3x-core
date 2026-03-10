@@ -1,6 +1,16 @@
 'use client';
 
-import { BookOpen, Brain, Check, CheckCircle, FileText, Loader2, MessageSquare, Pin, XCircle } from 'lucide-react';
+import {
+  BookOpen,
+  Brain,
+  Check,
+  CheckCircle,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Pin,
+  XCircle,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { TurnBubble } from '@/components/shared/TurnBubble';
 import { Button } from '@/components/ui/button';
@@ -298,10 +308,14 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                               ) : (
                                 <XCircle className="h-3.5 w-3.5 text-[var(--status-error)]" />
                               )}
-                              <span className={cn(
-                                'text-xs font-medium',
-                                a.passed ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
-                              )}>
+                              <span
+                                className={cn(
+                                  'text-xs font-medium',
+                                  a.passed
+                                    ? 'text-[var(--status-success)]'
+                                    : 'text-[var(--status-error)]'
+                                )}
+                              >
                                 {a.passed ? 'Passed' : 'Failed'}
                               </span>
                               {isSelected && (
@@ -312,7 +326,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             {a.lesson && (
                               <div className="mt-1.5 flex items-start gap-1.5 rounded bg-amber-500/10 p-1.5 text-xs">
                                 <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
-                                <span className="text-amber-900 dark:text-amber-300">{a.lesson}</span>
+                                <span className="text-amber-900 dark:text-amber-300">
+                                  {a.lesson}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -324,11 +340,13 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
               })()}
 
               {/* No content */}
-              {(!leaf.constraints || leaf.constraints.length === 0) && !leaf.output && !(leaf.runner_assertions ?? leaf.assertions)?.length && (
-                <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
-                  No constraints or output yet
-                </p>
-              )}
+              {(!leaf.constraints || leaf.constraints.length === 0) &&
+                !leaf.output &&
+                !(leaf.runner_assertions ?? leaf.assertions)?.length && (
+                  <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
+                    No constraints or output yet
+                  </p>
+                )}
             </div>
           </ScrollArea>
         </div>
@@ -380,9 +398,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
         {/* Main content: Left-Right split */}
         <div className="flex flex-1 min-h-0 mt-2 border-t border-[var(--stroke-default)] overflow-hidden">
           {/* Left panel: List */}
-          <div
-            className="w-[320px] shrink-0 border-r border-[var(--stroke-default)] flex flex-col bg-[var(--surface-panel)]"
-          >
+          <div className="w-[320px] shrink-0 border-r border-[var(--stroke-default)] flex flex-col bg-[var(--surface-panel)]">
             <Tabs defaultValue="conversations" className="flex-1 min-h-0 flex flex-col">
               <TabsList className="w-full justify-start rounded-none border-b border-[var(--stroke-divider)] bg-transparent px-2 pt-2 h-auto">
                 <TabsTrigger

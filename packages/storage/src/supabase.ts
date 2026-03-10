@@ -27,6 +27,7 @@ export {
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
+export * from './schema-v4';
 
 // Type alias for Supabase database
 import type { SupabaseDB } from './adapters/supabase';

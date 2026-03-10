@@ -294,6 +294,105 @@ describe('Recipe Executor', () => {
     });
   });
 
+  describe('auto_commit_draft', () => {
+    it('commits draft successfully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { commit_hash: 'sha256:abc123', branch: 'main' },
+        }),
+      });
+
+      const results = await executeRecipe(
+        {
+          id: 'recipe_1',
+          name: 'Test Recipe',
+          steps: [{ action: 'auto_commit_draft', config: { draft_id: 'draft_xyz' } }],
+        },
+        { projectId: 'proj_1', event: 'draft.ready', payload: {} },
+        { apiBaseUrl: 'http://localhost:8000' }
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        action: 'auto_commit_draft',
+        success: true,
+        data: { commit_hash: 'sha256:abc123', branch: 'main' },
+      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/drafts/draft_xyz/auto-commit',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    });
+
+    it('fails without draft_id', async () => {
+      const results = await executeRecipe(
+        {
+          id: 'recipe_1',
+          name: 'Test Recipe',
+          steps: [{ action: 'auto_commit_draft', config: {} }],
+        },
+        { projectId: 'proj_1', event: 'draft.ready', payload: {} },
+        {}
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        action: 'auto_commit_draft',
+        success: false,
+        error: 'missing draft_id in step config',
+      });
+    });
+
+    it('handles API failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          success: false,
+          error: { code: 'DRAFT_NOT_FOUND', message: 'Not found' },
+        }),
+      });
+
+      const results = await executeRecipe(
+        {
+          id: 'recipe_1',
+          name: 'Test Recipe',
+          steps: [{ action: 'auto_commit_draft', config: { draft_id: 'draft_missing' } }],
+        },
+        { projectId: 'proj_1', event: 'draft.ready', payload: {} },
+        { apiBaseUrl: 'http://localhost:8000' }
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(false);
+    });
+
+    it('handles network error', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const results = await executeRecipe(
+        {
+          id: 'recipe_1',
+          name: 'Test Recipe',
+          steps: [{ action: 'auto_commit_draft', config: { draft_id: 'draft_xyz' } }],
+        },
+        { projectId: 'proj_1', event: 'draft.ready', payload: {} },
+        { apiBaseUrl: 'http://localhost:8000' }
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        action: 'auto_commit_draft',
+        success: false,
+        error: 'Connection refused',
+      });
+    });
+  });
+
   describe('sequential execution', () => {
     it('executes steps in order', async () => {
       const webhookDispatch = vi.fn().mockResolvedValue(undefined);

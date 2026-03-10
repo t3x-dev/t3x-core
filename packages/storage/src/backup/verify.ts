@@ -37,6 +37,8 @@ export interface VerifyChainResult {
   };
   /** Merkle root per commit: commit_hash → merkle_root */
   merkle_roots: Record<string, string>;
+  /** Commit hashes where stored merkle_root differs from recomputed root */
+  merkle_mismatches: string[];
   verified_at: string;
   /**
    * Fix 17: True when the fetch limit was hit and only a subset of commits was
@@ -84,6 +86,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       entry_points: 0,
       errors: { hash_mismatch: [], parent_not_found: [], other: [] },
       merkle_roots: {},
+      merkle_mismatches: [],
       verified_at: new Date().toISOString(),
       truncated: false,
     };
@@ -175,21 +178,38 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
-  // Step 4: Build Merkle tree for each commit's sentences
+  // Step 4: Build Merkle tree for each commit's sentences and compare with stored
   const merkleRoots: Record<string, string> = {};
+  const merkleMismatches: string[] = [];
   for (const commit of commits) {
-    const sentences = commit.content.sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-    }));
-    const tree = buildMerkleTree(sentences);
-    merkleRoots[commit.hash] = tree.root;
+    const sentences = commit.content.sentences ?? [];
+
+    // Skip empty-sentence commits — they store null merkle_root by design
+    if (sentences.length === 0) continue;
+
+    try {
+      const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
+      merkleRoots[commit.hash] = tree.root;
+
+      // Compare stored merkle_root with recomputed root
+      if (!commit.merkle_root) {
+        // Non-empty commit with missing stored root — flag as mismatch
+        merkleMismatches.push(commit.hash);
+      } else if (commit.merkle_root !== tree.root) {
+        merkleMismatches.push(commit.hash);
+      }
+    } catch (err) {
+      other.push(
+        `Commit ${commit.hash.slice(0, 16)}: merkle tree build failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
-  const allErrors = [...hashMismatch, ...parentNotFound, ...other];
-
   return {
-    valid: allErrors.length === 0,
+    valid:
+      hashMismatch.length === 0 &&
+      parentNotFound.length === 0 &&
+      merkleMismatches.length === 0,
     total: commits.length,
     verified_depth: maxDepth,
     entry_points: entryPoints,
@@ -199,6 +219,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
       other,
     },
     merkle_roots: merkleRoots,
+    merkle_mismatches: merkleMismatches,
     verified_at: new Date().toISOString(),
     truncated,
   };

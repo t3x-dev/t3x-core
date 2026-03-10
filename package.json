@@ -34,13 +34,18 @@
     "docker:up:n8n": "docker compose --profile n8n up",
     "docker:up:runner": "docker compose --profile runner up",
     "docker:down": "docker compose down",
-    "docker:build": "docker compose build"
+    "docker:build": "docker compose build",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "publish-packages": "pnpm build && changeset publish"
   },
   "engines": {
     "node": ">=20.9.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
+    "@changesets/cli": "^2.30.0",
+    "dotenv-cli": "^11.0.0",
     "turbo": "^2.7.2"
   }
 }

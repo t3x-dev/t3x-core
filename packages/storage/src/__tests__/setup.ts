@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS projects (
   owner_id TEXT,
   metadata_json TEXT,
   provider_config TEXT,
+  autopilot_config JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS turns_v2 (
   content TEXT NOT NULL,
   language TEXT,
   rings_json TEXT,
+  content_blocks JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -167,6 +169,7 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   message TEXT,
   branch TEXT,
   source_refs JSONB,
+  merkle_root TEXT,
   merge_summary JSONB,
   semantic JSONB,
   position_x REAL,
@@ -395,9 +398,11 @@ CREATE TABLE IF NOT EXISTS extraction_feedback (
   draft_id TEXT NOT NULL,
   sp_id TEXT NOT NULL,
   action TEXT NOT NULL,
+  original_text TEXT,
   inference_type TEXT,
   confidence REAL,
   zone TEXT,
+  low_coverage BOOLEAN DEFAULT FALSE,
   edited_text TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -488,6 +493,57 @@ CREATE TABLE IF NOT EXISTS delta_log (
 CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
+-- Sentence Relations (Ring 4 — Inter-sentence relationships)
+CREATE TABLE IF NOT EXISTS sentence_relations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  commit_hash TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  reasoning TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations (commit_hash);
+CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations (project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+
+-- Knowledge Graph (cross-conversation entity/topic graph)
+CREATE TABLE IF NOT EXISTS knowledge_nodes (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'topic',
+  summary TEXT,
+  member_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_node_members (
+  node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+  sentence_id TEXT NOT NULL,
+  commit_hash TEXT NOT NULL,
+  PRIMARY KEY (node_id, sentence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_edges (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+  target_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  weight REAL NOT NULL DEFAULT 0,
+  evidence JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
+CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
+CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
+
 `;
 
 /** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */
@@ -499,10 +555,13 @@ CREATE TABLE IF NOT EXISTS sentence_vectors (
   text TEXT NOT NULL,
   embedding vector(768) NOT NULL,
   model_id TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  tsv tsvector
 );
 CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
 CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
+CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
+UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;
 `;
 
 /**

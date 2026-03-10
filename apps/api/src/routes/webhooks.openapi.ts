@@ -20,7 +20,7 @@ import {
 } from '@t3x/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { isInternalUrl } from '../lib/ssrf';
+import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CreateWebhookRequest,
@@ -82,7 +82,7 @@ const createWebhookRoute = createRoute({
 webhooksRoutes.openapi(createWebhookRoute, async (c) => {
   const body = c.req.valid('json');
 
-  if (isInternalUrl(body.url)) {
+  if (await isInternalUrlResolved(body.url)) {
     return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
   }
 
@@ -208,7 +208,7 @@ webhooksRoutes.openapi(updateWebhookRoute, async (c) => {
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
 
-  if (body.url && isInternalUrl(body.url)) {
+  if (body.url && (await isInternalUrlResolved(body.url))) {
     return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
   }
 
@@ -339,7 +339,7 @@ webhooksRoutes.openapi(testWebhookRoute, async (c) => {
       headers['X-T3X-Signature'] = signature;
     }
 
-    if (isInternalUrl(webhook.url)) {
+    if (await isInternalUrlResolved(webhook.url)) {
       return errorResponse(c, 'INVALID_REQUEST', 'Webhook URL targets a blocked internal address');
     }
 

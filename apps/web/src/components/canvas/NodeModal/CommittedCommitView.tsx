@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FrameGraphView } from '@/components/frame-graph';
+import { RelationsTab } from '@/components/relations/RelationsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -419,6 +420,12 @@ export function CommittedCommitView({
                               Frame Graph
                             </TabsTrigger>
                           )}
+                        <TabsTrigger
+                          value="relations"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                        >
+                          Relations
+                        </TabsTrigger>
                       </TabsList>
 
                       <TabsContent
@@ -473,6 +480,20 @@ export function CommittedCommitView({
                             </div>
                           </TabsContent>
                         )}
+
+                      <TabsContent value="relations">
+                        <RelationsTab
+                          commitHash={data.commitHash || ''}
+                          sentences={
+                            isV4 && commit.content?.sentences
+                              ? commit.content.sentences.map((s: { id: string; text: string }) => ({
+                                  id: s.id,
+                                  text: s.text,
+                                }))
+                              : []
+                          }
+                        />
+                      </TabsContent>
                     </Tabs>
 
                     {/* Constraints and Leaves below tabs */}

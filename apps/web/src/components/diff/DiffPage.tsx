@@ -239,7 +239,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
           <h2 className="text-lg font-semibold text-red-600 mb-2">Failed to load diff</h2>
-          <p className="text-sm text-muted-foreground mb-4">{error || 'An unexpected error occurred'}</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {error || 'An unexpected error occurred'}
+          </p>
           <div className="flex gap-2">
             <button
               type="button"
@@ -295,6 +297,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       {/* Layer 2: Stats Bar + Keyboard Hints */}
       <DiffStatsBar
         identical={diffData.stats.sameCount}
+        equivalent={diffData.stats.equivalentCount ?? 0}
         modified={diffData.stats.modifiedCount}
         added={diffData.stats.addedCount}
         removed={diffData.stats.removedCount}

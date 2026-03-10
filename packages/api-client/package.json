@@ -35,5 +35,13 @@
     "client",
     "typescript"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/t3x.git",
+    "directory": "packages/api-client"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -1,0 +1,211 @@
+import { describe, expect, it } from 'vitest';
+import {
+  type AutoCommitCandidate,
+  type AutopilotConfig,
+  DEFAULT_AUTOPILOT_CONFIG,
+  evaluateAutoCommit,
+  mergeAutopilotConfig,
+} from '../autopilot/autoCommit';
+
+/** Helper to create a candidate with sensible defaults. */
+const makeCandidate = (
+  overrides: Partial<AutoCommitCandidate> & { id: string }
+): AutoCommitCandidate => ({
+  text: `sentence ${overrides.id}`,
+  confidence: 0.9,
+  zone: 'ready',
+  status: 'active',
+  staged: true,
+  ...overrides,
+});
+
+/** Enabled config with defaults. */
+const enabledConfig: AutopilotConfig = {
+  ...DEFAULT_AUTOPILOT_CONFIG,
+  enabled: true,
+};
+
+describe('evaluateAutoCommit', () => {
+  it('returns should_commit=false when autopilot disabled', () => {
+    const candidates = [makeCandidate({ id: 's_1' }), makeCandidate({ id: 's_2' })];
+    const plan = evaluateAutoCommit(candidates, {
+      ...DEFAULT_AUTOPILOT_CONFIG,
+      enabled: false,
+    });
+
+    expect(plan.should_commit).toBe(false);
+    expect(plan.reason).toBe('autopilot_disabled');
+    expect(plan.sentences).toHaveLength(0);
+    expect(plan.skipped).toHaveLength(2);
+    for (const s of plan.skipped) {
+      expect(s.reason).toBe('autopilot_disabled');
+    }
+  });
+
+  it('filters out review-zone candidates', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', zone: 'review' }),
+      makeCandidate({ id: 's_2', zone: 'ready' }),
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.sentences).toHaveLength(1);
+    expect(plan.sentences[0].id).toBe('s_2');
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0]).toEqual({ id: 's_1', reason: 'not_in_ready_zone' });
+  });
+
+  it('filters out undone candidates', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', status: 'undone' }),
+      makeCandidate({ id: 's_2' }),
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.sentences).toHaveLength(1);
+    expect(plan.sentences[0].id).toBe('s_2');
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0]).toEqual({ id: 's_1', reason: 'undone' });
+  });
+
+  it('filters out unstaged candidates', () => {
+    const candidates = [makeCandidate({ id: 's_1', staged: false }), makeCandidate({ id: 's_2' })];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.sentences).toHaveLength(1);
+    expect(plan.sentences[0].id).toBe('s_2');
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0]).toEqual({ id: 's_1', reason: 'not_staged' });
+  });
+
+  it('skips candidates below confidence threshold', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', confidence: 0.5 }),
+      makeCandidate({ id: 's_2', confidence: 0.9 }),
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.sentences).toHaveLength(1);
+    expect(plan.sentences[0].id).toBe('s_2');
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0]).toEqual({
+      id: 's_1',
+      reason: 'below_confidence_threshold',
+    });
+  });
+
+  it('returns should_commit=true when enough qualifying sentences', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', confidence: 0.9 }),
+      makeCandidate({ id: 's_2', confidence: 0.95 }),
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.reason).toBe('auto_commit_ready');
+    expect(plan.sentences).toHaveLength(2);
+    expect(plan.skipped).toHaveLength(0);
+  });
+
+  it('returns should_commit=false when insufficient sentences', () => {
+    const candidates = [makeCandidate({ id: 's_1', confidence: 0.9 })];
+    const config: AutopilotConfig = {
+      ...enabledConfig,
+      min_sentences: 3,
+    };
+    const plan = evaluateAutoCommit(candidates, config);
+
+    expect(plan.should_commit).toBe(false);
+    expect(plan.reason).toBe('insufficient_sentences');
+    // The single eligible candidate should appear in skipped with 'insufficient_total'
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0]).toEqual({ id: 's_1', reason: 'insufficient_total' });
+  });
+
+  it('returns all qualifying sentences in plan', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', text: 'alpha', confidence: 0.9 }),
+      makeCandidate({ id: 's_2', text: 'beta', confidence: 0.95 }),
+      makeCandidate({ id: 's_3', text: 'gamma', confidence: 0.88 }),
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.sentences).toHaveLength(3);
+    expect(plan.sentences).toEqual([
+      { id: 's_1', text: 'alpha', confidence: 0.9 },
+      { id: 's_2', text: 'beta', confidence: 0.95 },
+      { id: 's_3', text: 'gamma', confidence: 0.88 },
+    ]);
+  });
+
+  it('handles empty candidates array', () => {
+    const plan = evaluateAutoCommit([], enabledConfig);
+
+    expect(plan.should_commit).toBe(false);
+    expect(plan.reason).toBe('insufficient_sentences');
+    expect(plan.sentences).toHaveLength(0);
+    expect(plan.skipped).toHaveLength(0);
+  });
+
+  it('handles mixed candidates (some ready, some review, some low-confidence)', () => {
+    const candidates = [
+      makeCandidate({ id: 's_1', zone: 'ready', confidence: 0.95 }), // eligible
+      makeCandidate({ id: 's_2', zone: 'review', confidence: 0.99 }), // skipped: not_in_ready_zone
+      makeCandidate({ id: 's_3', zone: 'ready', confidence: 0.5 }), // skipped: below_confidence_threshold
+      makeCandidate({ id: 's_4', zone: 'ready', staged: false }), // skipped: not_staged
+      makeCandidate({ id: 's_5', zone: 'ready', status: 'undone' }), // skipped: undone
+      makeCandidate({ id: 's_6', zone: 'ready', confidence: 0.91 }), // eligible
+    ];
+    const plan = evaluateAutoCommit(candidates, enabledConfig);
+
+    expect(plan.should_commit).toBe(true);
+    expect(plan.reason).toBe('auto_commit_ready');
+    expect(plan.sentences).toHaveLength(2);
+    expect(plan.sentences.map((s) => s.id)).toEqual(['s_1', 's_6']);
+    expect(plan.skipped).toHaveLength(4);
+    expect(plan.skipped.map((s) => s.id).sort()).toEqual(['s_2', 's_3', 's_4', 's_5']);
+  });
+});
+
+describe('mergeAutopilotConfig', () => {
+  it('returns defaults for undefined input', () => {
+    const result = mergeAutopilotConfig(undefined);
+    expect(result).toEqual(DEFAULT_AUTOPILOT_CONFIG);
+  });
+
+  it('returns defaults for empty object', () => {
+    const result = mergeAutopilotConfig({});
+    expect(result).toEqual(DEFAULT_AUTOPILOT_CONFIG);
+  });
+
+  it('overrides specific fields while keeping defaults for others', () => {
+    const result = mergeAutopilotConfig({
+      enabled: true,
+      min_confidence: 0.7,
+    });
+    expect(result).toEqual({
+      enabled: true,
+      min_confidence: 0.7,
+      min_sentences: 1,
+      auto_create_leaf: false,
+      target_branch: 'main',
+    });
+  });
+
+  it('overrides all fields when all provided', () => {
+    const full: AutopilotConfig = {
+      enabled: true,
+      min_confidence: 0.6,
+      min_sentences: 5,
+      auto_create_leaf: true,
+      target_branch: 'develop',
+    };
+    const result = mergeAutopilotConfig(full);
+    expect(result).toEqual(full);
+  });
+});

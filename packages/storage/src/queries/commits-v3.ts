@@ -5,7 +5,7 @@
  * V3 commits use JSONB for author and content fields.
  */
 
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitV3, commitsV3 } from '../schema';
 
@@ -325,129 +325,181 @@ export async function getCommitsV3ByHashes(db: AnyDB, hashes: string[]): Promise
 // ============================================================
 
 /**
- * Get commit history using BFS traversal
+ * Walk the parent chain from a given commit using a recursive CTE.
  *
- * Traverses the parent chain starting from the given commit hash.
- * Returns commits in BFS order (breadth-first, newer commits first).
+ * Replaces the former in-memory BFS with a single PostgreSQL
+ * `WITH RECURSIVE` query that traverses the parents text[] array
+ * directly in SQL, eliminating N+1 queries.
  *
- * Note: Missing parent commits (dangling references) are logged as warnings
- * but don't fail the traversal. This can happen with imported commits that
- * reference external parents.
+ * Returns commits in BFS-like order (by depth).
+ * Missing parent commits (dangling references) are silently skipped
+ * by the JOIN condition.
  */
 export async function findCommitV3History(
   db: AnyDB,
   commitHash: string,
   limit = 50
 ): Promise<CommitV3Output[]> {
-  const history: CommitV3Output[] = [];
-  const visited = new Set<string>();
-  const queue: string[] = [commitHash];
-  const missingHashes: string[] = [];
+  const MAX_DEPTH = 1000;
 
-  while (queue.length > 0 && history.length < limit) {
-    const currentHash = queue.shift()!;
-    if (visited.has(currentHash)) continue;
-    visited.add(currentHash);
-
-    const commit = await getCommitV3(db, currentHash);
-    if (!commit) {
-      // Track missing commits for logging (may be external references)
-      missingHashes.push(currentHash);
-      continue;
+  const result = await (
+    db as unknown as {
+      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
     }
+  ).execute(sql`
+    WITH RECURSIVE history AS (
+      SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
+      FROM commits_v3 c
+      WHERE c.hash = ${commitHash}
 
-    history.push(commit);
+      UNION ALL
 
-    // Add parents to queue
-    queue.push(...commit.parents);
-  }
+      SELECT c.*, h.depth + 1, h.visited || c.hash
+      FROM history h,
+           unnest(h.parents) AS parent_hash
+      JOIN commits_v3 c ON c.hash = parent_hash
+      WHERE h.depth < ${MAX_DEPTH}
+        AND NOT (c.hash = ANY(h.visited))
+    ),
+    deduped AS (
+      SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
+             content, project_id, message, branch,
+             position_x, position_y, created_at, updated_at, depth
+      FROM history
+      ORDER BY hash, depth
+    )
+    SELECT * FROM deduped
+    ORDER BY depth, hash
+    LIMIT ${limit}
+  `);
 
-  // Log warning if we encountered missing commits (data integrity issue or external refs)
-  if (missingHashes.length > 0) {
-    console.warn(
-      `[findCommitV3History] Skipped ${missingHashes.length} missing commit(s) during traversal: ` +
-        `${missingHashes.slice(0, 3).join(', ')}${missingHashes.length > 3 ? '...' : ''}`
-    );
-  }
-
-  return history;
+  return result.rows.map(rawRowToCommitV3);
 }
 
-/** Default depth limit for common ancestor search to prevent infinite loops on deep histories */
-const DEFAULT_ANCESTOR_DEPTH_LIMIT = 10000;
-
 /**
- * Find common ancestor of two commits
+ * Find common ancestor of two commits using a recursive CTE.
  *
- * Collects all ancestors of the first commit, then finds the first
- * ancestor of the second commit that exists in that set.
+ * Walks both ancestor trees in SQL and uses INTERSECT to find
+ * the most recent common ancestor (by committed_at DESC).
  * Returns null if no common ancestor is found (disjoint histories).
- *
- * @param depthLimit Maximum number of commits to traverse (default 10000).
- *                   Prevents memory/time issues on very deep histories.
  */
 export async function findCommonAncestorV3(
   db: AnyDB,
   hash1: string,
-  hash2: string,
-  depthLimit = DEFAULT_ANCESTOR_DEPTH_LIMIT
+  hash2: string
 ): Promise<CommitV3Output | null> {
-  // Collect all ancestors of hash1
-  const ancestors1 = new Set<string>();
-  const queue1: string[] = [hash1];
-  let depth1 = 0;
+  const MAX_DEPTH = 1000;
 
-  while (queue1.length > 0 && depth1 < depthLimit) {
-    const h = queue1.shift()!;
-    if (ancestors1.has(h)) continue;
-    ancestors1.add(h);
-    depth1++;
-
-    const commit = await getCommitV3(db, h);
-    if (commit) {
-      queue1.push(...commit.parents);
+  const result = await (
+    db as unknown as {
+      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
     }
-  }
+  ).execute(sql`
+    WITH RECURSIVE
+      ancestors1 AS (
+        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
+        FROM commits_v3
+        WHERE hash = ${hash1}
 
-  if (depth1 >= depthLimit) {
-    console.warn(
-      `[findCommonAncestorV3] Depth limit (${depthLimit}) reached while collecting ancestors of ${hash1.slice(0, 16)}...`
-    );
-  }
+        UNION ALL
 
-  // Find first common ancestor from hash2
-  const queue2: string[] = [hash2];
-  const visited2 = new Set<string>();
-  let depth2 = 0;
+        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
+        FROM ancestors1 a,
+             unnest(a.parents) AS ph
+        JOIN commits_v3 c ON c.hash = ph
+        WHERE a.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(a.visited))
+      ),
+      ancestors2 AS (
+        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
+        FROM commits_v3
+        WHERE hash = ${hash2}
 
-  while (queue2.length > 0 && depth2 < depthLimit) {
-    const h = queue2.shift()!;
-    if (visited2.has(h)) continue;
-    visited2.add(h);
-    depth2++;
+        UNION ALL
 
-    if (ancestors1.has(h)) {
-      return getCommitV3(db, h);
-    }
+        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
+        FROM ancestors2 a,
+             unnest(a.parents) AS ph
+        JOIN commits_v3 c ON c.hash = ph
+        WHERE a.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(a.visited))
+      )
+    SELECT c.hash, c.schema, c.parents, c.author, c.committed_at,
+           c.content, c.project_id, c.message, c.branch,
+           c.position_x, c.position_y, c.created_at, c.updated_at
+    FROM commits_v3 c
+    WHERE c.hash IN (
+      SELECT a1.hash
+      FROM (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors1 GROUP BY hash) a1
+      JOIN (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors2 GROUP BY hash) a2
+        ON a1.hash = a2.hash
+      ORDER BY a1.min_depth + a2.min_depth
+      LIMIT 1
+    )
+    LIMIT 1
+  `);
 
-    const commit = await getCommitV3(db, h);
-    if (commit) {
-      queue2.push(...commit.parents);
-    }
-  }
-
-  if (depth2 >= depthLimit) {
-    console.warn(
-      `[findCommonAncestorV3] Depth limit (${depthLimit}) reached while searching ancestors of ${hash2.slice(0, 16)}...`
-    );
-  }
-
-  return null;
+  const rows = result.rows;
+  return rows.length > 0 ? rawRowToCommitV3(rows[0]) : null;
 }
 
 // ============================================================
 // Helpers
 // ============================================================
+
+/**
+ * Defensively parse a PostgreSQL text[] value that may arrive as a
+ * `{val1,val2}` string literal from some drivers, or as a JSON string.
+ */
+function parseArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    // PostgreSQL text[] literal: {val1,val2}
+    if (val.startsWith('{') && val.endsWith('}')) {
+      return val.slice(1, -1).split(',').filter(Boolean);
+    }
+    return JSON.parse(val);
+  }
+  return [];
+}
+
+/**
+ * Defensively parse a JSONB value that may arrive as a JSON string
+ * (e.g. from some PostgreSQL drivers or raw SQL results).
+ */
+function parseJsonb<T>(val: unknown): T {
+  return typeof val === 'string' ? JSON.parse(val) : (val as T);
+}
+
+/**
+ * Convert raw SQL result row to CommitV3Output type.
+ * Used for recursive CTE results where Drizzle ORM types are not available.
+ */
+function rawRowToCommitV3(row: Record<string, unknown>): CommitV3Output {
+  const positionX = row.position_x as number | null;
+  const positionY = row.position_y as number | null;
+  const position =
+    positionX != null && positionY != null ? { x: positionX, y: positionY } : undefined;
+
+  const committedAt = row.committed_at;
+  const createdAt = row.created_at;
+  const updatedAt = row.updated_at;
+
+  return {
+    hash: row.hash as string,
+    schema: row.schema as string,
+    parents: parseArray(row.parents),
+    author: parseJsonb<CommitV3Author>(row.author),
+    committedAt: committedAt instanceof Date ? committedAt.toISOString() : String(committedAt),
+    content: parseJsonb<CommitV3Content>(row.content),
+    projectId: (row.project_id as string) ?? null,
+    message: (row.message as string) ?? null,
+    branch: (row.branch as string) ?? null,
+    position,
+    createdAt: createdAt instanceof Date ? createdAt.toISOString() : String(createdAt),
+    updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
+  };
+}
 
 /**
  * Convert database row to output type (camelCase)

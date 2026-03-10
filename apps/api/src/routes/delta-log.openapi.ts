@@ -12,7 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type DeltaLogEntry } from '@t3x/core';
+import { buildDraft } from '@t3x/core';
 import {
   deleteDeltaLogEntry,
   findConversationById,
@@ -21,6 +21,7 @@ import {
   listDeltaLogByConversation,
 } from '@t3x/storage';
 import { getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -313,15 +314,7 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
     const records = await listDeltaLogByConversation(db, conversationId);
 
     // Convert storage records to DeltaLogEntry format for buildDraft
-    const entries: DeltaLogEntry[] = records.map((r) => ({
-      id: r.id,
-      source: r.source as DeltaLogEntry['source'],
-      turn_hash: r.turnHash ?? undefined,
-      delta: r.delta as DeltaLogEntry['delta'],
-      created_at: r.createdAt.toISOString(),
-    }));
-
-    const draft = buildDraft(entries);
+    const draft = buildDraft(toDeltaLogEntries(records));
 
     return c.json({ success: true as const, data: draft }, 200);
   } catch (err) {

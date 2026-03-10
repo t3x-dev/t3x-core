@@ -2,7 +2,12 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
-import { getEngineCallbackUrl, getEngineUrl, getRunByRunnerRunId, type ParsedRun } from './engine-client.js';
+import {
+  getEngineCallbackUrl,
+  getEngineUrl,
+  getRunByRunnerRunId,
+  type ParsedRun,
+} from './engine-client.js';
 import { evalEngine } from './evaluator/index.js';
 import { logger } from './lib/logger.js';
 import { triggerN8nWorkflow } from './n8n.js';
@@ -87,7 +92,10 @@ app.get('/ready', async (_req, res) => {
   } catch (err) {
     res.status(503).json({
       success: false,
-      error: { code: 'NOT_READY', message: `T3X API unreachable: ${err instanceof Error ? err.message : String(err)}` },
+      error: {
+        code: 'NOT_READY',
+        message: `T3X API unreachable: ${err instanceof Error ? err.message : String(err)}`,
+      },
     });
   }
 });

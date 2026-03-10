@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
+import * as api from '@/lib/api';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -162,6 +163,32 @@ function CanvasWorkspaceInner({
     }
   }, [getNodes, getEdges, setNodes, fitView, notify]);
 
+  // Auto-extract: create a draft from a conversation node via LLM extraction
+  const handleAutoExtract = useCallback(
+    async (nodeId: string) => {
+      const node = getNodes().find((n) => n.id === nodeId);
+      const conversationId = node?.data.conversationId as string | undefined;
+      if (!conversationId || !projectId) {
+        notify?.('No conversation found on this node', 'warning');
+        return;
+      }
+      try {
+        notify?.('Creating auto-draft...', 'success');
+        const draft = await api.createAutoDraft({
+          project_id: projectId,
+          conversation_id: conversationId,
+        });
+        // Reload canvas to pick up the new draft node, then navigate
+        await useCanvasStore.getState().loadProjectData(projectId);
+        router.push(`/project/${projectId}/draft/${draft.id}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Auto-extract failed';
+        notify?.(message, 'error');
+      }
+    },
+    [getNodes, projectId, notify, router]
+  );
+
   // Context menu (extracted hook)
   const { contextMenu, closeContextMenu, handleNodeContextMenu, handlePaneContextMenu } =
     useContextMenu({
@@ -173,6 +200,7 @@ function CanvasWorkspaceInner({
       projectId,
       fitView,
       handleAutoLayout,
+      onAutoExtract: handleAutoExtract,
     });
 
   // Path highlight (extracted hook)

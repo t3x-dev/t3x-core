@@ -24,54 +24,90 @@ import {
   real,
   text,
   timestamp,
+  primaryKey,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// users: Authentication (OAuth providers)
+// users: Authentication (identity, keyed by email)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Registered users via OAuth providers (e.g., GitHub).
+ * Registered users (identity records).
  *
+ * Provider-specific info lives in the `accounts` table (many-to-one).
  * In AUTH_DISABLED mode, no users exist. Projects with owner_id=null
  * are public/legacy data accessible to everyone.
  */
-export const users = pgTable(
-  'users',
+export const users = pgTable('users', {
+  /** Unique ID: "user_" + nanoid(12) */
+  id: text('id').primaryKey(),
+
+  /** Email address (may be null if provider doesn't expose it) */
+  email: text('email'),
+
+  /** True when at least one provider has confirmed the email */
+  emailVerified: boolean('email_verified').notNull().default(false),
+
+  /** Display name */
+  name: text('name'),
+
+  /** Avatar URL */
+  avatarUrl: text('avatar_url'),
+
+  /** Username for local auth (null for OAuth-only users) */
+  username: text('username').unique(),
+
+  /** Bcrypt password hash for local auth (null for OAuth-only users) */
+  passwordHash: text('password_hash'),
+
+  /** Creation time */
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type UserRecord = typeof users.$inferSelect;
+export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// accounts: OAuth Provider Records (many-to-one with users)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * OAuth provider accounts linked to users.
+ *
+ * Multiple accounts can map to the same user when emails match
+ * across providers (auto-linking).
+ */
+export const accounts = pgTable(
+  'accounts',
   {
-    /** Unique ID: "user_" + nanoid(12) */
+    /** Unique ID: "acct_" + nanoid(12) */
     id: text('id').primaryKey(),
 
-    /** OAuth provider name (e.g., 'github') */
+    /** The user this account belongs to */
+    userId: text('user_id').notNull(),
+
+    /** OAuth provider name (e.g., 'github', 'google') */
     provider: text('provider').notNull(),
 
     /** User ID from the OAuth provider */
-    providerId: text('provider_id').notNull(),
-
-    /** Email address (may be null) */
-    email: text('email'),
-
-    /** Display name */
-    name: text('name'),
-
-    /** Avatar URL */
-    avatarUrl: text('avatar_url'),
+    providerAccountId: text('provider_account_id').notNull(),
 
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    providerUniqueIdx: uniqueIndex('idx_users_provider_unique').on(
+    providerUniqueIdx: uniqueIndex('idx_accounts_provider').on(
       table.provider,
-      table.providerId
+      table.providerAccountId
     ),
+    userIdx: index('idx_accounts_user').on(table.userId),
   })
 );
 
-export type UserRecord = typeof users.$inferSelect;
-export type UserInsert = typeof users.$inferInsert;
+export type AccountRecord = typeof accounts.$inferSelect;
+export type AccountInsert = typeof accounts.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: Pure Knowledge Storage
@@ -163,6 +199,9 @@ export const commitsV4 = pgTable(
           assertion_lessons?: string[];
         }>
       >(),
+
+    /** Merkle tree root hash of commit sentences */
+    merkleRoot: text('merkle_root'),
 
     /** Merge summary statistics (only present on merge commits) */
     mergeSummary: jsonb('merge_summary').$type<{
@@ -908,7 +947,7 @@ export const recipes = pgTable('recipes', {
   }>(),
   steps: jsonb('steps').notNull().$type<
     Array<{
-      action: 'send_webhook' | 'run_eval' | 'export_report';
+      action: 'send_webhook' | 'run_eval' | 'export_report' | 'auto_commit_draft';
       config: Record<string, unknown>;
     }>
   >(),
@@ -1022,3 +1061,118 @@ export const deltaLog = pgTable(
 
 export type DeltaLogRecord = typeof deltaLog.$inferSelect;
 export type DeltaLogInsert = typeof deltaLog.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sentence Relations (Ring 4 — Inter-sentence relationships)
+// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const sentenceRelations = pgTable(
+  'sentence_relations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    commitHash: text('commit_hash').notNull(),
+    sourceId: text('source_id').notNull(),
+    targetId: text('target_id').notNull(),
+    type: text('type').notNull(),
+    confidence: real('confidence').notNull(),
+    reasoning: text('reasoning'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    commitIdx: index('idx_sr_commit').on(table.commitHash),
+    projectIdx: index('idx_sr_project').on(table.projectId),
+    pairUniq: uniqueIndex('idx_sr_pair').on(
+      table.commitHash,
+      table.sourceId,
+      table.targetId,
+      table.type
+    ),
+  })
+);
+
+export type SentenceRelationRecord = typeof sentenceRelations.$inferSelect;
+export type SentenceRelationInsert = typeof sentenceRelations.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Knowledge Graph (Cross-conversation entity/topic graph)
+// @see docs/plans/2026-03-05-knowledge-graph-design.md
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const knowledgeNodes = pgTable(
+  'knowledge_nodes',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    type: text('type').notNull().default('topic'),
+    summary: text('summary'),
+    memberCount: integer('member_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_kn_project').on(table.projectId),
+  })
+);
+
+export type KnowledgeNodeRecord = typeof knowledgeNodes.$inferSelect;
+export type KnowledgeNodeInsert = typeof knowledgeNodes.$inferInsert;
+
+export const knowledgeNodeMembers = pgTable(
+  'knowledge_node_members',
+  {
+    nodeId: text('node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    sentenceId: text('sentence_id').notNull(),
+    commitHash: text('commit_hash').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.nodeId, table.sentenceId] }),
+    sentenceIdx: index('idx_knm_sentence').on(table.sentenceId),
+  })
+);
+
+export type KnowledgeNodeMemberRecord = typeof knowledgeNodeMembers.$inferSelect;
+export type KnowledgeNodeMemberInsert = typeof knowledgeNodeMembers.$inferInsert;
+
+export const knowledgeEdges = pgTable(
+  'knowledge_edges',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    sourceNodeId: text('source_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    targetNodeId: text('target_node_id')
+      .notNull()
+      .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    weight: real('weight').notNull().default(0),
+    evidence: jsonb('evidence').$type<
+      Array<{
+        source_sentence_id: string;
+        target_sentence_id: string;
+        relation_type: string;
+        confidence: number;
+      }>
+    >(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectIdx: index('idx_ke_project').on(table.projectId),
+    sourceIdx: index('idx_ke_source').on(table.sourceNodeId),
+    targetIdx: index('idx_ke_target').on(table.targetNodeId),
+  })
+);
+
+export type KnowledgeEdgeRecord = typeof knowledgeEdges.$inferSelect;
+export type KnowledgeEdgeInsert = typeof knowledgeEdges.$inferInsert;

@@ -214,7 +214,11 @@ export type ApiAnchorType =
   | 'date'
   | 'entity'
   | 'term'
-  | 'phrase';
+  | 'phrase'
+  // CommitV4 / Frame extraction anchor types
+  | 'verbatim'
+  | 'paraphrase'
+  | 'inference';
 
 /** Confirmed anchor (snake_case API format) */
 export interface ApiConfirmedAnchor {
@@ -334,6 +338,7 @@ export interface DiffResultRaw {
   stats: {
     totalSegments: number;
     sameCount: number;
+    equivalentCount?: number;
     addedCount: number;
     removedCount: number;
     modifiedCount: number;

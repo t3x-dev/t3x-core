@@ -126,7 +126,12 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
       if (e.key === 'Escape' && !showReviewDialog) {
         // Don't cancel if user is typing in an input
         const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable'))) {
+        if (
+          active &&
+          (active.tagName === 'INPUT' ||
+            active.tagName === 'TEXTAREA' ||
+            active.getAttribute('contenteditable'))
+        ) {
           return; // let the input handle Escape
         }
         handleCancel();

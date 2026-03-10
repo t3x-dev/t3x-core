@@ -33,8 +33,6 @@ describe('MergeSimilarPairCard', () => {
         { type: 'removed', text: '$3000' },
         { type: 'added', text: '$3500' },
       ],
-      sourceConstraints: [],
-      targetConstraints: [],
       resolution: undefined,
     };
 
@@ -58,14 +56,11 @@ describe('MergeSimilarPairCard', () => {
         source: { type: 'turn', id: 't2' },
       },
       wordDiff: [],
-      sourceConstraints: [],
-      targetConstraints: [],
       resolution: undefined,
     };
 
     expect(pair.resolution).toBeUndefined();
-    expect(pair.sourceConstraints.length).toBe(0);
-    expect(pair.targetConstraints.length).toBe(0);
+    expect(pair.suggestion).toBeUndefined();
   });
 
   test('handles resolved pair with source choice', () => {
@@ -83,8 +78,6 @@ describe('MergeSimilarPairCard', () => {
         source: { type: 'turn', id: 't2' },
       },
       wordDiff: [],
-      sourceConstraints: [],
-      targetConstraints: [],
       resolution: 'source',
     };
 
@@ -106,15 +99,13 @@ describe('MergeSimilarPairCard', () => {
         source: { type: 'turn', id: 't2' },
       },
       wordDiff: [],
-      sourceConstraints: [],
-      targetConstraints: [],
       resolution: 'target',
     };
 
     expect(pair.resolution).toBe('target');
   });
 
-  test('handles constraints', () => {
+  test('handles suggestion field', () => {
     const pair: MergeSimilarPair = {
       source: {
         id: 's1',
@@ -129,31 +120,16 @@ describe('MergeSimilarPairCard', () => {
         source: { type: 'turn', id: 't2' },
       },
       wordDiff: [],
-      sourceConstraints: [
-        {
-          id: 'c1',
-          source_sentence_id: 's1',
-          type: 'require',
-          value: '$3000',
-          confidence: 0.9,
-        },
-      ],
-      targetConstraints: [
-        {
-          id: 'c2',
-          source_sentence_id: 's2',
-          type: 'require',
-          value: '$3500',
-          confidence: 0.9,
-        },
-      ],
+      suggestion: {
+        suggestion: 'Combined text',
+        reasoning: 'Merged both versions',
+      },
       resolution: undefined,
     };
 
-    expect(pair.sourceConstraints.length).toBe(1);
-    expect(pair.targetConstraints.length).toBe(1);
-    expect(pair.sourceConstraints[0].value).toBe('$3000');
-    expect(pair.targetConstraints[0].value).toBe('$3500');
+    expect(pair.suggestion).toBeDefined();
+    expect(pair.suggestion?.suggestion).toBe('Combined text');
+    expect(pair.suggestion?.reasoning).toBe('Merged both versions');
   });
 
   test('word diff segments have correct structure', () => {
@@ -175,8 +151,6 @@ describe('MergeSimilarPairCard', () => {
         { type: 'removed', text: 'old' },
         { type: 'added', text: 'new' },
       ],
-      sourceConstraints: [],
-      targetConstraints: [],
       resolution: undefined,
     };
 

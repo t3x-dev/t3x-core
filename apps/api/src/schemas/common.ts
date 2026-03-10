@@ -6,11 +6,25 @@
  */
 import { z } from '@hono/zod-openapi';
 
-// Pagination
+// Pagination (offset-based, legacy)
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+// Cursor-based pagination (keyset)
+export const CursorPaginationQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).default(50),
+  cursor: z.string().optional(),
+});
+
+// Cursor page response wrapper
+export const CursorPageResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+  z.object({
+    items: z.array(itemSchema),
+    next_cursor: z.string().nullable(),
+    has_more: z.boolean(),
+  });
 
 // Error response
 export const ErrorResponseSchema = z.object({

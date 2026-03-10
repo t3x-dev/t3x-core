@@ -3,7 +3,6 @@
  */
 
 export { agentDraftRoutes } from './agent-drafts';
-export { authCallbackRoutes } from './auth-callback.openapi';
 export { branchRoutes } from './branches';
 export { chatRoutes } from './chat';
 export { commitsV3Routes } from './commits-v3.openapi';
@@ -16,14 +15,16 @@ export { diffRoutes } from './diff';
 export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractRoutes } from './extract.openapi';
+export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { frameExtractRoutes } from './frame-extract.openapi';
 export { gateRoutes } from './gate.openapi';
 export { healthRoutes } from './health';
 export { leavesRoutes } from './leaves.openapi';
-export { mergeRoutes } from './merge';
+export { mergeRoutes } from './merge.openapi';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects';
 export { providersRoutes } from './providers.openapi';
+export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner';
 export { runsRoutes } from './runs.openapi';
 export { statusRoutes } from './status';

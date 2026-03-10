@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts --clean",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
@@ -21,6 +21,7 @@
     "@t3x/core": "workspace:*",
     "@t3x/runner": "workspace:*",
     "@t3x/storage": "workspace:*",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.38.3",
     "fflate": "^0.8.2",
     "hono": "^4.7.10",
@@ -36,6 +37,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.10.0",
     "@types/pdf-parse": "^1.1.4",
     "@types/turndown": "^5.0.6",

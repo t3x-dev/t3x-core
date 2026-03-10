@@ -16,9 +16,8 @@ import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4 } from '@/lib/api';
+import type { CommitV4, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached, getCommitV4 } from '@/lib/api';
-import type { TurnContextData } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -346,7 +345,13 @@ export function UnifiedDiffView({
 
   const openContextModal = useCallback(
     (conversationId: string, turnHash: string, hStart?: number, hEnd?: number) => {
-      setContextModal({ open: true, conversationId, turnHash, highlightStart: hStart, highlightEnd: hEnd });
+      setContextModal({
+        open: true,
+        conversationId,
+        turnHash,
+        highlightStart: hStart,
+        highlightEnd: hEnd,
+      });
       setModalLoading(true);
       setModalContextData(null);
 

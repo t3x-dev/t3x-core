@@ -9,12 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  buildDraft,
-  type DeltaLogEntry,
-  type FrameExtractionTurn,
-  FrameExtractor,
-} from '@t3x/core';
+import { buildDraft, type FrameExtractionTurn, FrameExtractor } from '@t3x/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -22,6 +17,7 @@ import {
   listDeltaLogByConversation,
 } from '@t3x/storage';
 import { getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -139,14 +135,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
 
     // 3. Fetch existing delta log and build current snapshot
     const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
-    const deltaLogEntries: DeltaLogEntry[] = deltaRecords.map((r) => ({
-      id: r.id,
-      source: r.source as DeltaLogEntry['source'],
-      turn_hash: r.turnHash ?? undefined,
-      delta: r.delta as DeltaLogEntry['delta'],
-      created_at: r.createdAt.toISOString(),
-    }));
-    const currentSnapshot = buildDraft(deltaLogEntries);
+    const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
     // 4. Convert turns to FrameExtractionTurn format
     const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({

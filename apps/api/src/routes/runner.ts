@@ -40,7 +40,7 @@ runnerRoutes.post('/runner/agents', async (c) => {
     const body = await c.req.json();
     const config = AgentConfigSchema.parse(body);
     observer.registerAgent(config);
-    pinoLogger.info({ agent_id: config.id }, "agent registered");
+    pinoLogger.info({ agent_id: config.id }, 'agent registered');
     return c.json({ success: true, agent_id: config.id });
   } catch (error) {
     return c.json({ success: false, error: String(error) }, 400);
@@ -79,7 +79,7 @@ runnerRoutes.post('/runner/run', async (c) => {
 
     // Start observing
     const runId = observer.startRun(input.agent_id, input);
-    pinoLogger.info({ run_id: runId, agent_id: input.agent_id }, "run started");
+    pinoLogger.info({ run_id: runId, agent_id: input.agent_id }, 'run started');
 
     try {
       // Forward to agent
@@ -104,7 +104,7 @@ runnerRoutes.post('/runner/run', async (c) => {
 
       // Complete the run
       const record = observer.completeRun(runId, output, 'completed');
-      pinoLogger.info({ run_id: runId, latency_ms: latencyMs }, "run completed");
+      pinoLogger.info({ run_id: runId, latency_ms: latencyMs }, 'run completed');
 
       return c.json({
         success: true,
@@ -119,7 +119,7 @@ runnerRoutes.post('/runner/run', async (c) => {
       observer.recordError(runId, errorMsg);
       const record = observer.completeRun(runId, null, 'failed');
 
-      pinoLogger.error({ run_id: runId, err: errorMsg }, "run failed");
+      pinoLogger.error({ run_id: runId, err: errorMsg }, 'run failed');
       return c.json(
         {
           success: false,
@@ -228,7 +228,10 @@ runnerRoutes.post('/runner/eval', async (c) => {
 
     // Run evaluation
     const result = evalEngine.evaluate(runRecord, rules);
-    pinoLogger.info({ run_id: result.run_id, passed: result.passed, score: result.score }, "eval completed");
+    pinoLogger.info(
+      { run_id: result.run_id, passed: result.passed, score: result.score },
+      'eval completed'
+    );
 
     return c.json({ success: true, data: result });
   } catch (error) {

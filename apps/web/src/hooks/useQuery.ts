@@ -19,6 +19,7 @@ interface UseQueryResult<T> {
 // Simple cache for deduplication (capped at 200 entries to prevent unbounded growth)
 const queryCache = new Map<string, { data: unknown; timestamp: number }>();
 const QUERY_CACHE_MAX_SIZE = 200;
+const STALE_CLEANUP_MS = 60_000; // Prune entries older than 60s
 
 function getCacheKey(queryKey: unknown[]): string {
   return JSON.stringify(queryKey);
@@ -59,12 +60,18 @@ export function useQuery<T>({
       const result = await queryFnRef.current();
       if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
       setData(result);
-      // Evict oldest entry if cache exceeds max size
+      // Prune stale entries before inserting, then evict oldest if still over limit
+      const now = Date.now();
+      if (queryCache.size >= QUERY_CACHE_MAX_SIZE) {
+        for (const [k, v] of queryCache) {
+          if (now - v.timestamp > STALE_CLEANUP_MS) queryCache.delete(k);
+        }
+      }
       if (queryCache.size >= QUERY_CACHE_MAX_SIZE) {
         const oldestKey = queryCache.keys().next().value;
         if (oldestKey !== undefined) queryCache.delete(oldestKey);
       }
-      queryCache.set(requestKey, { data: result, timestamp: Date.now() });
+      queryCache.set(requestKey, { data: result, timestamp: now });
     } catch (err) {
       if (!mountedRef.current || activeKeyRef.current !== requestKey) return;
       setError(err instanceof Error ? err : new Error(String(err)));

@@ -185,13 +185,7 @@ chatRoutes.post('/v1/chat', async (c) => {
   try {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
-      const result = await callClaudeNonStreaming(
-        messages,
-        model,
-        apiKey,
-        temperature,
-        maxTokens
-      );
+      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens);
       return jsonSuccess(c, result);
     } else {
       return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
@@ -204,6 +198,10 @@ chatRoutes.post('/v1/chat', async (c) => {
 
 /**
  * POST /v1/chat/stream - Streaming chat (SSE)
+ *
+ * Uses true streaming: calls Anthropic's API with stream=true and
+ * re-emits token chunks as they arrive, so the user sees text
+ * incrementally instead of waiting for the full response.
  */
 chatRoutes.post('/v1/chat/stream', async (c) => {
   let body: {
@@ -243,41 +241,146 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const temperature = body.temperature ?? 0.7;
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens)) || 4096, 1), 16384);
 
+  if (provider !== 'claude' && provider !== 'anthropic') {
+    return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
+  }
+
+  // Extract system message if present
+  const systemMessage = messages.find((m) => m.role === 'system');
+  const otherMessages = messages.filter((m) => m.role !== 'system');
+
   const stream = new ReadableStream({
     async start(controller) {
+      let anthropicResponse: Response | undefined;
       try {
-        if (provider === 'claude' || provider === 'anthropic') {
-          const result = await callClaudeNonStreaming(
-            messages,
+        const proxyFetch = getProxyFetch();
+        anthropicResponse = (await proxyFetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
             model,
-            apiKey,
+            max_tokens: maxTokens,
             temperature,
-            maxTokens
-          );
+            stream: true,
+            ...(systemMessage && { system: systemMessage.content }),
+            messages: otherMessages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          }),
+          signal: AbortSignal.timeout(120000),
+        })) as unknown as Response;
+
+        if (!anthropicResponse.ok) {
+          const errorText = await anthropicResponse.text();
+          throw new Error(`Claude API error: ${anthropicResponse.status} ${errorText}`);
+        }
+
+        const reader = anthropicResponse.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body from Claude API');
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let resolvedModel = model;
+        const usage: { input_tokens?: number; output_tokens?: number } = {};
+        let receivedMessageStop = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value as Uint8Array, { stream: true });
+
+          // Parse SSE events separated by double newlines
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+
+          for (const part of parts) {
+            const lines = part.split('\n');
+            let eventType = '';
+            let dataStr = '';
+
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                dataStr = line.slice(5).trim();
+              }
+            }
+
+            if (!dataStr) continue;
+
+            let parsed: Record<string, unknown>;
+            try {
+              parsed = JSON.parse(dataStr);
+            } catch {
+              continue;
+            }
+
+            if (eventType === 'message_start') {
+              // Extract model and initial usage from message_start
+              const msg = parsed.message as Record<string, unknown> | undefined;
+              if (msg?.model) resolvedModel = msg.model as string;
+              if (msg?.usage) {
+                const u = msg.usage as Record<string, number>;
+                usage.input_tokens = u.input_tokens;
+              }
+            } else if (eventType === 'content_block_delta') {
+              // Extract text delta and emit as token
+              const delta = parsed.delta as Record<string, unknown> | undefined;
+              if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+                controller.enqueue(
+                  encodeSseEvent(JSON.stringify({ type: 'token', content: delta.text }))
+                );
+              }
+            } else if (eventType === 'message_delta') {
+              // Extract final usage from message_delta
+              const u = parsed.usage as Record<string, number> | undefined;
+              if (u?.output_tokens) {
+                usage.output_tokens = u.output_tokens;
+              }
+            } else if (eventType === 'message_stop') {
+              // Stream complete — emit done
+              receivedMessageStop = true;
+              controller.enqueue(
+                encodeSseEvent(
+                  JSON.stringify({
+                    type: 'done',
+                    model: resolvedModel,
+                    usage,
+                  })
+                )
+              );
+              controller.enqueue(encodeSseEvent('[DONE]'));
+            }
+            // Ignore other event types (content_block_start, content_block_stop, ping)
+          }
+        }
+
+        // If Anthropic stream ended without message_stop, emit done anyway
+        // (safety net for abnormal stream termination)
+        if (!receivedMessageStop) {
           controller.enqueue(
             encodeSseEvent(
               JSON.stringify({
-                type: 'token',
-                content: result.content,
-                model: result.model,
+                type: 'done',
+                model: resolvedModel,
+                usage,
               })
             )
           );
-          controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'done' })));
           controller.enqueue(encodeSseEvent('[DONE]'));
-        } else {
-          throw new Error(`Provider ${provider} not implemented`);
         }
+        reader.releaseLock();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(
-          encodeSseEvent(
-            JSON.stringify({
-              type: 'error',
-              message,
-            })
-          )
-        );
+        controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'error', message })));
         controller.enqueue(encodeSseEvent('[DONE]'));
       } finally {
         controller.close();

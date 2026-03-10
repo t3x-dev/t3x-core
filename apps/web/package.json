@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev",
+    "dev": "rm -rf .next && dotenv -e ../../.env -- next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint src",
@@ -41,7 +41,6 @@
     "lucide-react": "^0.553.0",
     "motion": "^12.23.26",
     "next": "^16.1.1",
-    "next-auth": "5.0.0-beta.30",
     "next-themes": "^0.4.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

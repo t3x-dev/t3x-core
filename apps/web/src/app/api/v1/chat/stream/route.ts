@@ -21,6 +21,12 @@ export async function POST(request: NextRequest) {
     };
     if (API_KEY) {
       headers.Authorization = `Bearer ${API_KEY}`;
+    } else {
+      // Get API key from local auth session cookie
+      const sessionKey = request.cookies.get('t3x-session')?.value;
+      if (sessionKey) {
+        headers.Authorization = `Bearer ${sessionKey}`;
+      }
     }
     const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
       method: 'POST',

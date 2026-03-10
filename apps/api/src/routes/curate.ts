@@ -199,12 +199,12 @@ interface ExtractedData {
 }
 
 /**
- * Extract chunks from turns using Ring3 segments (rule-based sentence splitting)
- * Also extracts Ring1 anchor candidates for inline highlighting.
- * This reuses the sentence segmentation already computed by @t3x/core
+ * Extract chunks from turns using Ring3 segments or regex fallback.
+ * Also extracts Ring1 anchor candidates for inline highlighting when available.
  *
- * Note: Ring3 segments use `splitSentencesRuleBased()`, not Google NLP sentence boundaries.
- * @see CLAUDE.md "硬性规则：WebUI/API 必须复用 Core"
+ * When Ring data is unavailable (e.g., DISABLE_RING_EXTRACTION=true),
+ * automatically falls back to regex sentence splitting. Anchor candidates
+ * are not available in fallback mode.
  */
 function extractChunksFromTurns(
   turns: Array<{
@@ -254,11 +254,11 @@ function extractChunksFromTurns(
           chunks.push({
             id: `chunk-${chunkIdx++}`,
             start: globalOffset + prefix.length + match.index,
-            end: globalOffset + prefix.length + match.index + match[0].length,
+            end: globalOffset + prefix.length + match.index + sentence.length,
             text: sentence,
             turn_hash: turn.turn_hash,
             turn_start: match.index,
-            turn_end: match.index + match[0].length,
+            turn_end: match.index + sentence.length,
           });
           lastEnd = match.index + match[0].length;
         }

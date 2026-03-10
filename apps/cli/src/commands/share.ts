@@ -14,7 +14,7 @@ export function registerShareCommands(program: Command): void {
     .command('create')
     .description('Create a share link')
     .requiredOption('-p, --project <id>', 'Project ID')
-    .requiredOption('--entity-type <type>', 'Entity type (project, leaf, commit)')
+    .requiredOption('--entity-type <type>', 'Entity type (leaf, run, comparison)')
     .requiredOption('--entity-id <id>', 'Entity ID')
     .option('--expires <hours>', 'Expiration in hours')
     .option('--json', 'Output as JSON')

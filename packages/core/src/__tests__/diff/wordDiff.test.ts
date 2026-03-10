@@ -19,20 +19,20 @@ function createSentence(id: string, text: string): Sentence {
 }
 
 describe('tokenize', () => {
-  it('splits on whitespace', () => {
+  it('splits on word boundaries', () => {
     expect(tokenize('hello world')).toEqual(['hello', 'world']);
   });
 
-  it('lowercases', () => {
-    expect(tokenize('Hello World')).toEqual(['hello', 'world']);
+  it('preserves original case', () => {
+    expect(tokenize('Hello World')).toEqual(['Hello', 'World']);
   });
 
-  it('preserves punctuation on words', () => {
-    expect(tokenize('Hello, World!')).toEqual(['hello,', 'world!']);
+  it('strips punctuation via isWordLike', () => {
+    expect(tokenize('Hello, World!')).toEqual(['Hello', 'World']);
   });
 
-  it('preserves special characters like $', () => {
-    expect(tokenize('Budget is $3000')).toEqual(['budget', 'is', '$3000']);
+  it('strips currency symbols, keeps number', () => {
+    expect(tokenize('Budget is $3000')).toEqual(['Budget', 'is', '3000']);
   });
 
   it('handles multiple spaces', () => {
@@ -111,10 +111,10 @@ describe('wordDiff', () => {
   it('single word change', () => {
     const result = wordDiff('Budget is $3000', 'Budget is $3500');
     expect(result).toEqual([
-      { type: 'unchanged', text: 'budget' },
+      { type: 'unchanged', text: 'Budget' },
       { type: 'unchanged', text: 'is' },
-      { type: 'removed', text: '$3000' },
-      { type: 'added', text: '$3500' },
+      { type: 'removed', text: '3000' },
+      { type: 'added', text: '3500' },
     ]);
   });
 

@@ -98,11 +98,6 @@ export function MergeSimilarPairCard({ pair, index, mergeDraftId }: MergeSimilar
             </span>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">{pair.source.text}</div>
-          {pair.sourceConstraints.length > 0 && (
-            <div className="text-xs text-[var(--accent-commit)] mt-1">
-              Constraints: {pair.sourceConstraints.map((c) => c.value).join(', ')}
-            </div>
-          )}
         </div>
       </label>
 
@@ -124,11 +119,6 @@ export function MergeSimilarPairCard({ pair, index, mergeDraftId }: MergeSimilar
             </span>
           </div>
           <div className="text-sm text-[var(--text-secondary)]">{pair.target.text}</div>
-          {pair.targetConstraints.length > 0 && (
-            <div className="text-xs text-[var(--accent-commit)] mt-1">
-              Constraints: {pair.targetConstraints.map((c) => c.value).join(', ')}
-            </div>
-          )}
         </div>
       </label>
 

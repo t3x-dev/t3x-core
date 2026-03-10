@@ -41,7 +41,12 @@ import { SourceSentenceList } from '@/components/shared/SourceSentenceList';
 import type { Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 import { checkContentIntegrity } from '@/lib/truncationUtils';
-import type { ColoredHighlightRange, ContentIntegrityStatus, HighlightColor, SentenceWithSource } from '@/types/sourceContext';
+import type {
+  ColoredHighlightRange,
+  ContentIntegrityStatus,
+  HighlightColor,
+  SentenceWithSource,
+} from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types, keep local aliases for backward compatibility)
@@ -801,7 +806,6 @@ export function CommitSourceContext({
           toggleSection={toggleSection}
           compact={compact}
         />
-
 
         {/* Leaf sections */}
         {leafIdsToRender.map((leafId) => {

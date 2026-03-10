@@ -338,6 +338,7 @@ export interface SemanticPointAPI {
   inherited_from?: string;
   evidence: LocatedEvidenceAPI[];
   confidence?: number;
+  low_coverage?: boolean;
   position: number;
   staged: boolean;
 }
@@ -401,10 +402,13 @@ export async function reviewAction(
   action: 'accept' | 'dismiss' | 'undo' | 'edit',
   editedText?: string
 ): Promise<ReviewActionResult> {
-  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/review-action`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
-  });
+  const res = await fetchWithTimeout(
+    `${API_V1}/drafts/${encodeURIComponent(draftId)}/review-action`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sp_id: spId, action, edited_text: editedText }),
+    }
+  );
   return handleResponse<ReviewActionResult>(res);
 }

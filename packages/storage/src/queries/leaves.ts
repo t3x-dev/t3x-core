@@ -18,9 +18,10 @@ import type {
   LeafType,
 } from '@t3x/core';
 import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x/core';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type LeafRecord, leaves } from '../schema-v4';
+import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
 // Types
@@ -30,6 +31,8 @@ export interface ListLeavesOptions {
   limit?: number;
   offset?: number;
   type?: LeafType;
+  /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
+  cursor?: string;
 }
 
 /**
@@ -92,7 +95,17 @@ export async function findLeafById(db: AnyDB, id: string): Promise<Leaf | null> 
 }
 
 /**
- * Find all Leaves for a commit
+ * Find all Leaves for a commit (cursor mode)
+ *
+ * Returns a CursorPage when `cursor` is provided (empty string = first page).
+ */
+export async function findLeavesByCommit(
+  db: AnyDB,
+  commitHash: string,
+  options: ListLeavesOptions & { cursor: string }
+): Promise<CursorPage<Leaf>>;
+/**
+ * Find all Leaves for a commit (offset mode)
  *
  * Returns leaves ordered by createdAt descending.
  * Optionally filter by leaf type.
@@ -100,21 +113,54 @@ export async function findLeafById(db: AnyDB, id: string): Promise<Leaf | null> 
 export async function findLeavesByCommit(
   db: AnyDB,
   commitHash: string,
+  options?: Omit<ListLeavesOptions, 'cursor'>
+): Promise<Leaf[]>;
+export async function findLeavesByCommit(
+  db: AnyDB,
+  commitHash: string,
   options: ListLeavesOptions = {}
-): Promise<Leaf[]> {
+): Promise<Leaf[] | CursorPage<Leaf>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
   const conditions = [eq(leaves.commitHash, commitHash)];
   if (options.type) {
     conditions.push(eq(leaves.type, options.type));
   }
 
+  // Cursor mode: keyset pagination
+  if (options.cursor !== undefined) {
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      // ORDER BY createdAt DESC, id DESC → keyset: (created_at < t) OR (created_at = t AND id < k)
+      conditions.push(
+        or(
+          lt(leaves.createdAt, new Date(t)),
+          and(eq(leaves.createdAt, new Date(t)), lt(leaves.id, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(leaves)
+      .where(and(...conditions))
+      .orderBy(desc(leaves.createdAt), desc(leaves.id))
+      .limit(limit + 1);
+
+    return toCursorPage(rows.map(rowToLeaf), limit, (leaf) => ({
+      t: leaf.created_at,
+      k: leaf.id,
+    }));
+  }
+
+  // Offset mode (existing behavior)
+  const offset = options.offset ?? 0;
+
   const rows = await db
     .select()
     .from(leaves)
     .where(and(...conditions))
-    .orderBy(desc(leaves.createdAt), leaves.id)
+    .orderBy(desc(leaves.createdAt), desc(leaves.id))
     .limit(limit)
     .offset(offset);
 
@@ -122,7 +168,17 @@ export async function findLeavesByCommit(
 }
 
 /**
- * Find all Leaves for a project
+ * Find all Leaves for a project (cursor mode)
+ *
+ * Returns a CursorPage when `cursor` is provided (empty string = first page).
+ */
+export async function findLeavesByProject(
+  db: AnyDB,
+  projectId: string,
+  options: ListLeavesOptions & { cursor: string }
+): Promise<CursorPage<Leaf>>;
+/**
+ * Find all Leaves for a project (offset mode)
  *
  * Returns leaves ordered by createdAt descending.
  * Optionally filter by leaf type.
@@ -130,21 +186,54 @@ export async function findLeavesByCommit(
 export async function findLeavesByProject(
   db: AnyDB,
   projectId: string,
+  options?: Omit<ListLeavesOptions, 'cursor'>
+): Promise<Leaf[]>;
+export async function findLeavesByProject(
+  db: AnyDB,
+  projectId: string,
   options: ListLeavesOptions = {}
-): Promise<Leaf[]> {
+): Promise<Leaf[] | CursorPage<Leaf>> {
   const limit = options.limit ?? 100;
-  const offset = options.offset ?? 0;
 
   const conditions = [eq(leaves.projectId, projectId)];
   if (options.type) {
     conditions.push(eq(leaves.type, options.type));
   }
 
+  // Cursor mode: keyset pagination
+  if (options.cursor !== undefined) {
+    if (options.cursor !== '') {
+      const { t, k } = decodeCursor(options.cursor);
+      // ORDER BY createdAt DESC, id DESC → keyset: (created_at < t) OR (created_at = t AND id < k)
+      conditions.push(
+        or(
+          lt(leaves.createdAt, new Date(t)),
+          and(eq(leaves.createdAt, new Date(t)), lt(leaves.id, k))
+        )!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(leaves)
+      .where(and(...conditions))
+      .orderBy(desc(leaves.createdAt), desc(leaves.id))
+      .limit(limit + 1);
+
+    return toCursorPage(rows.map(rowToLeaf), limit, (leaf) => ({
+      t: leaf.created_at,
+      k: leaf.id,
+    }));
+  }
+
+  // Offset mode (existing behavior)
+  const offset = options.offset ?? 0;
+
   const rows = await db
     .select()
     .from(leaves)
     .where(and(...conditions))
-    .orderBy(desc(leaves.createdAt), leaves.id)
+    .orderBy(desc(leaves.createdAt), desc(leaves.id))
     .limit(limit)
     .offset(offset);
 

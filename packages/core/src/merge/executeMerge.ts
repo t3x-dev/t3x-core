@@ -65,13 +65,91 @@ export function executeMerge(
   projectId: string,
   committedAt?: string
 ): CommitV4 {
+  // Collect sentences with their sort position for order preservation
+  // 收集句子及其排序位置，用于保持原始文档顺序
+  const collected: Array<{
+    sentence: DiffableSentence;
+    sortPosition: number;
+    insertionOrder: number;
+  }> = [];
+  let insertionCounter = 0;
+
+  // Helper to get the position from a DiffableSentence (falls back to Infinity)
+  const getPosition = (s: DiffableSentence): number => s.position ?? Number.POSITIVE_INFINITY;
+
+  // 1. Collect identical sentences (use source position)
+  // 收集完全相同的句子（使用 source 位置）
+  for (const s of prepared.identical) {
+    collected.push({
+      sentence: s,
+      sortPosition: getPosition(s),
+      insertionOrder: insertionCounter++,
+    });
+  }
+
+  // 2. Collect resolved similar pairs
+  // 收集已解决的相似句子对
+  for (const pair of prepared.similarPairs) {
+    if (!pair.resolution) {
+      throw new Error(`Unresolved similar pair: "${pair.source.text}" vs "${pair.target.text}"`);
+    }
+
+    if (pair.resolution === 'source') {
+      collected.push({
+        sentence: pair.source,
+        sortPosition: getPosition(pair.source),
+        insertionOrder: insertionCounter++,
+      });
+    } else {
+      // Use target position for target resolution
+      collected.push({
+        sentence: pair.target,
+        sortPosition: getPosition(pair.target),
+        insertionOrder: insertionCounter++,
+      });
+    }
+  }
+
+  // 3. Collect kept sentences from source-only (use source position)
+  // 收集保留的仅在 source 中的句子（使用 source 位置）
+  for (const candidate of prepared.onlyInSource) {
+    if (candidate.keep) {
+      collected.push({
+        sentence: candidate.sentence,
+        sortPosition: getPosition(candidate.sentence),
+        insertionOrder: insertionCounter++,
+      });
+    }
+  }
+
+  // 4. Collect kept sentences from target-only (use target position + offset)
+  // Target-only sentences get position + 0.5 offset so they appear after
+  // source sentences at the same integer position (interleaving)
+  // 收集保留的仅在 target 中的句子（位置 + 0.5 偏移，穿插排列）
+  for (const candidate of prepared.onlyInTarget) {
+    if (candidate.keep) {
+      collected.push({
+        sentence: candidate.sentence,
+        sortPosition: getPosition(candidate.sentence) + 0.5,
+        insertionOrder: insertionCounter++,
+      });
+    }
+  }
+
+  // Sort by position, with stable tie-breaking by insertion order
+  // 按位置排序，位置相同时按插入顺序（稳定排序）
+  collected.sort((a, b) => {
+    if (a.sortPosition !== b.sortPosition) {
+      return a.sortPosition - b.sortPosition;
+    }
+    return a.insertionOrder - b.insertionOrder;
+  });
+
+  // Convert to SentenceV4 with deterministic V4 IDs
+  // 转换为 SentenceV4，使用确定性 V4 格式 ID
   const sentences: SentenceV4[] = [];
 
-  // Helper to convert DiffableSentence to SentenceV4 with deterministic V4 ID
-  // 辅助函数：将 DiffableSentence 转换为 SentenceV4，使用确定性 V4 格式 ID
-  // ID = s_ + sha256(sourceHash:targetHash:originalId).slice(0,12)
-  // Benefits: deterministic, traceable, unique within/across merges
-  const addSentence = (s: DiffableSentence) => {
+  for (const { sentence: s } of collected) {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
     const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
     const sentence: SentenceV4 = {
@@ -83,42 +161,6 @@ export function executeMerge(
       sentence.source_ref = s.source_ref;
     }
     sentences.push(sentence);
-  };
-
-  // 1. Add identical sentences (from source, arbitrary choice)
-  // 添加完全相同的句子（从 source 取，任意选择）
-  for (const s of prepared.identical) {
-    addSentence(s);
-  }
-
-  // 2. Add resolved similar pairs
-  // 添加已解决的相似句子对
-  for (const pair of prepared.similarPairs) {
-    if (!pair.resolution) {
-      throw new Error(`Unresolved similar pair: "${pair.source.text}" vs "${pair.target.text}"`);
-    }
-
-    if (pair.resolution === 'source') {
-      addSentence(pair.source);
-    } else {
-      addSentence(pair.target);
-    }
-  }
-
-  // 3. Add kept sentences from source-only
-  // 添加保留的仅在 source 中的句子
-  for (const candidate of prepared.onlyInSource) {
-    if (candidate.keep) {
-      addSentence(candidate.sentence);
-    }
-  }
-
-  // 4. Add kept sentences from target-only
-  // 添加保留的仅在 target 中的句子
-  for (const candidate of prepared.onlyInTarget) {
-    if (candidate.keep) {
-      addSentence(candidate.sentence);
-    }
   }
 
   const timestamp = committedAt ?? new Date().toISOString();

@@ -68,6 +68,17 @@ export interface TemplateVariable {
   defaultValue?: string;
 }
 
+export interface DefaultConstraint {
+  type: 'require' | 'exclude';
+  match_mode: 'exact' | 'semantic';
+  value: string;
+}
+
+export interface SemanticThreshold {
+  require: number;
+  exclude: number;
+}
+
 export interface Template {
   template_id: string;
   title: string;
@@ -79,6 +90,8 @@ export interface Template {
   variables: TemplateVariable[];
   tags: string[];
   is_builtin: boolean;
+  default_constraints: DefaultConstraint[];
+  semantic_threshold: SemanticThreshold | null;
   created_at: string;
   updated_at: string;
 }

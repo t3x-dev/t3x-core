@@ -40,11 +40,6 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
               <div className={candidate.keep ? '' : 'text-muted-foreground/70 line-through'}>
                 {candidate.sentence.text}
               </div>
-              {candidate.constraints.length > 0 && (
-                <div className="text-xs text-[var(--status-info)] mt-1">
-                  Constraints: {candidate.constraints.map((c) => c.value).join(', ')}
-                </div>
-              )}
             </div>
           </label>
         ))}
