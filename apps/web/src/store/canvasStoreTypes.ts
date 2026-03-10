@@ -122,4 +122,15 @@ export type CanvasState = MergeSlice &
     cancelDeletion: () => void;
     // Get direct upstream source nodes for a pending commit
     getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
+    // Conflict detection state
+    commitConflicts: Record<string, import('@/lib/api/commits').ConflictReport | null>;
+    dismissedConflicts: Set<string>;
+    showConflictPanel: string | null; // commit hash of the conflict panel being shown
+    setCommitConflicts: (
+      commitHash: string,
+      report: import('@/lib/api/commits').ConflictReport | null
+    ) => void;
+    dismissConflict: (commitHash: string) => void;
+    openConflictPanel: (commitHash: string) => void;
+    closeConflictPanel: () => void;
   };

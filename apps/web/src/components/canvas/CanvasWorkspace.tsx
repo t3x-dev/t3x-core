@@ -52,6 +52,8 @@ import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
+import { CommitConflictBanner } from './CommitConflictBanner';
+import { CommitConflictPanel } from './CommitConflictPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
@@ -125,6 +127,12 @@ function CanvasWorkspaceInner({
     openNodeModal,
     closeNodeModal,
   } = useCanvasStore();
+  const commitConflicts = useCanvasStore((s) => s.commitConflicts);
+  const dismissedConflicts = useCanvasStore((s) => s.dismissedConflicts);
+  const showConflictPanel = useCanvasStore((s) => s.showConflictPanel);
+  const dismissConflict = useCanvasStore((s) => s.dismissConflict);
+  const openConflictPanel = useCanvasStore((s) => s.openConflictPanel);
+  const closeConflictPanel = useCanvasStore((s) => s.closeConflictPanel);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -249,6 +257,10 @@ function CanvasWorkspaceInner({
     }
     return hasDownstreamPendingCommits(openNodeId);
   }, [openNodeId, modalNode, hasDownstreamPendingCommits]);
+
+  const activeConflictEntry = Object.entries(commitConflicts).find(
+    ([hash, report]) => report && report.conflicts.length > 0 && !dismissedConflicts.has(hash)
+  );
 
   const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {
     if (!modalNode) {
@@ -784,7 +796,25 @@ function CanvasWorkspaceInner({
             </Card>
           </div>
         )}
+
+        {/* Conflict detection banner */}
+        {activeConflictEntry && (
+          <CommitConflictBanner
+            conflicts={activeConflictEntry[1]!.conflicts}
+            onDismiss={() => dismissConflict(activeConflictEntry[0])}
+            onViewDetails={() => openConflictPanel(activeConflictEntry[0])}
+          />
+        )}
       </div>
+
+      {/* Conflict detail panel */}
+      {showConflictPanel && commitConflicts[showConflictPanel] && (
+        <CommitConflictPanel
+          conflicts={commitConflicts[showConflictPanel]!.conflicts}
+          onClose={closeConflictPanel}
+        />
+      )}
+
       {/* Right-click context menu */}
       {contextMenu && (
         <NodeContextMenu

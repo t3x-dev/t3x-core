@@ -655,6 +655,21 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
     cancelDeletion: () => set({ deletionConfirmation: null }),
 
+    // Conflict detection state
+    commitConflicts: {},
+    dismissedConflicts: new Set(),
+    showConflictPanel: null,
+    setCommitConflicts: (commitHash, report) =>
+      set((state) => ({
+        commitConflicts: { ...state.commitConflicts, [commitHash]: report },
+      })),
+    dismissConflict: (commitHash) =>
+      set((state) => ({
+        dismissedConflicts: new Set([...state.dismissedConflicts, commitHash]),
+      })),
+    openConflictPanel: (commitHash) => set({ showConflictPanel: commitHash }),
+    closeConflictPanel: () => set({ showConflictPanel: null }),
+
     // Get direct upstream source nodes (committed units) for a staging unit
     // Returns nodes that can provide source content for a staging unit
     getUpstreamSourceNodes: (nodeId) => {
